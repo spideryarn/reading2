@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2863.9500000000003" width="760" height="2863.9500000000003">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2863.9500000000003" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Chain: nature to imitation</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The article is a chain running from what silk is and how it behaves, through how spiders make it, to how humans</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">try to copy and use it — each stage building on the last.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Spider silk: from web to lab</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain down the page: silk's biology and properties lead to its natural production, then to artificial copying, then</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">to human application; research and references sit as apparatus alongside.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><path d="M380 100 L380 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,140 376.5,130 383.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L150 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,260 159.2524234365674,254.83834711061868 160.45181165982612,261.7348293943564" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L610 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="610,260 599.548188340174,261.7348293943564 600.7475765634326,254.83834711061868" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 330 L380 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,370 369.54818834017385,371.7348293943564 370.74757656343263,364.8383471106187" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 330 L380 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,370 389.25242343656737,364.8383471106187 390.45181165982615,371.7348293943564" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 450 L150 480" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="150,480 159.46331696762502,475.23600672017056 160.3686912560994,482.1772095984741" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 450 L380 580" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,580 376.5,570 383.5,570" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M500 620 L500 615" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="500,615 503.5,625 496.5,625" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 660 L380 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,700 376.5,690 383.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M610 650 L380 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,700 389.02825988406937,694.4555862829598 390.5152673943867,701.2958208304194" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 780 L380 820" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="380,820 376.5,810 383.5,810" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Silk's many jobs for spiders — prey, shelter, mating, food — → spya-gp4t9x</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="62.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Silk's many jobs for spiders</text>
+<text x="380" y="82.925" font-size="11.4" text-anchor="middle" fill="#8f8f8f">prey, shelter, mating, food</text>
+</g>
+<g>
+<title>Structure gives it strength and stretch — crystal sheets + stretchy matrix — → spya-py9zw6</title>
+<polygon points="300,140 460,140 500,180 460,220 300,220 260,180" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="168.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Structure gives it</text>
+<text x="380" y="186.84" font-size="15" text-anchor="middle" fill="#f7f7f7">strength and stretch</text>
+<text x="380" y="207.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">crystal sheets + stretchy…</text>
+</g>
+<g>
+<title>Many ecological uses — capture, dispersal, nests, signals — → spya-rty5kb</title>
+<rect x="40" y="260" width="220" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="150" y="292.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Many ecological uses</text>
+<text x="150" y="309.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">capture, dispersal, nests, signals</text>
+</g>
+<g>
+<title>Different glands, different silks — dragline, capture-spiral, wrap, glue — → spya-hg7j7e</title>
+<rect x="500" y="260" width="220" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="610" y="292.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Different glands, different silks</text>
+<text x="610" y="309.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">dragline, capture-spiral, wrap, glue</text>
+</g>
+<g>
+<title>Spun on demand through a tapering duct — liquid protein → solid fibre — → spya-g3h8qq</title>
+<polygon points="300,370 460,370 500,410 460,450 300,450 260,410" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="398.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Spun on demand through a</text>
+<text x="380" y="416.84" font-size="15" text-anchor="middle" fill="#f7f7f7">tapering duct</text>
+<text x="380" y="437.29999999999995" font-size="11.4" text-anchor="middle" fill="#8f8f8f">liquid protein → solid fibre</text>
+</g>
+<g>
+<title>One spider, hundreds of glands — garden cross spider example — → spya-zrcs7h</title>
+<path d="M40 480 L246 480 L260 494 L260 550 L40 550 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M246 480 L246 494 L260 494" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="150" y="512.972" font-size="12" text-anchor="middle" fill="#f7f7f7">One spider, hundreds of glands</text>
+<text x="150" y="529.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">garden cross spider example</text>
+</g>
+<g>
+<title>Copying silk is still hard — feedstock + duct both needed — → spya-d7d7m8</title>
+<polygon points="300,580 460,580 500,620 460,660 300,660 260,620" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="617.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Copying silk is still hard</text>
+<text x="380" y="637.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">feedstock + duct both needed</text>
+</g>
+<g>
+<title>Decades of mapping silk's science — chemistry, genes, mechanics — → spya-jvxbb8</title>
+<path d="M500 580 L706 580 L720 594 L720 650 L500 650 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 580 L706 594 L720 594" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="610" y="612.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Decades of mapping silk's science</text>
+<text x="610" y="629.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">chemistry, genes, mechanics</text>
+</g>
+<g>
+<title>Human uses: cloth, medicine, tech — rare textile, wound dressing, optics — → spya-chy97m</title>
+<rect x="260" y="700" width="240" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="728.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Human uses: cloth, medicine,</text>
+<text x="380" y="746.84" font-size="15" text-anchor="middle" fill="#f7f7f7">tech</text>
+<text x="380" y="767.3000000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">rare textile, wound dressing, optics</text>
+</g>
+<g>
+<title>References &amp; related topics — → spya-jdybu5</title>
+<path d="M260 820 L486 820 L500 834 L500 875 L260 875 Z" fill="rgba(86,180,233,0.09)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M486 820 L486 834 L500 834" fill="none" stroke="rgba(86,180,233,0.5)" stroke-width="1"/>
+<text x="380" y="850.75" font-size="10" text-anchor="middle" fill="#f7f7f7">References &amp; related topics</text>
+</g></g>
+</g>
+<g transform="translate(0 1341.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Properties: structure, mechanics, glue</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">One starting point, molecular structure, fanning into the three kinds of performance it explains.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PROPERTIES</text>
+<g transform="translate(0 50.95)"><path d="M390 100 L165 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="165,180 173.2496130659996,173.35215190747496 175.59468073958323,179.94765473942894" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 L390 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,180 386.5,170 393.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 L620 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="620,180 609.4052098456439,180.02053253905882 611.7048542202328,173.4090549621157" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 260 L295 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="295,320 301.58591356045173,311.7008589255118 305.32386450016764,317.6192812467286" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 260 L495 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="495,320 484.5810822945065,318.07746161386723 488.05405486300435,311.99975961899605" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 260 L295 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="295,400 297.71884897300146,389.759987291902 303.5111793937438,393.69049722026284" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 260 L495 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="495,400 486.2,394.1 491.8,389.9" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Hierarchical protein structure — beta-sheets + amorphous matrix — → spya-p263u9</title>
+<ellipse cx="390" cy="65" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="53.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Hierarchical protein</text>
+<text x="390" y="71.84" font-size="15" text-anchor="middle" fill="#f7f7f7">structure</text>
+<text x="390" y="92.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">beta-sheets + amorphous…</text>
+</g>
+<g>
+<title>Models of the fibre's architecture — Termonia's 1994 model, refined — → spya-ns50b2</title>
+<rect x="60" y="180" width="210" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="165" y="205.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Models of the fibre's</text>
+<text x="165" y="220.472" font-size="12" text-anchor="middle" fill="#f7f7f7">architecture</text>
+<text x="165" y="236.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Termonia's 1994 model, refined</text>
+</g>
+<g>
+<title>Strength, toughness, elasticity — tougher than Kevlar, lighter than steel — → spya-nwva2u</title>
+<rect x="280" y="180" width="220" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="390" y="217.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Strength, toughness, elasticity</text>
+<text x="390" y="234.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">tougher than Kevlar, lighter than steel</text>
+</g>
+<g>
+<title>Adhesive attachment discs — instant cure, biodegradable — → spya-k8bh7d</title>
+<rect x="520" y="180" width="200" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="620" y="212.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Adhesive attachment discs</text>
+<text x="620" y="229.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">instant cure, biodegradable</text>
+</g>
+<g>
+<title>Stiffness (Young's modulus) — → spya-w9q80j</title>
+<path d="M200 320 L376 320 L390 334 L390 380 L200 380 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M376 320 L376 334 L390 334" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="295" y="353.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Stiffness (Young's modulus)</text>
+</g>
+<g>
+<title>Tensile strength &amp; toughness — → spya-mhe2r5</title>
+<path d="M400 320 L576 320 L590 334 L590 380 L400 380 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M576 320 L576 334 L590 334" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="495" y="353.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Tensile strength &amp; toughness</text>
+</g>
+<g>
+<title>Stretch &amp; supercontraction in water — → spya-qdjb0x</title>
+<path d="M200 400 L376 400 L390 414 L390 460 L200 460 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M376 400 L376 414 L390 414" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="295" y="427" font-size="10" text-anchor="middle" fill="#f7f7f7">Stretch &amp; supercontraction in</text>
+<text x="295" y="439.5" font-size="10" text-anchor="middle" fill="#f7f7f7">water</text>
+</g>
+<g>
+<title>Darwin's bark spider: toughest known — → spya-ug9bz2</title>
+<path d="M400 400 L576 400 L590 414 L590 460 L400 460 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M576 400 L576 414 L590 414" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="495" y="427" font-size="10" text-anchor="middle" fill="#f7f7f7">Darwin's bark spider: toughest</text>
+<text x="495" y="439.5" font-size="10" text-anchor="middle" fill="#f7f7f7">known</text>
+</g></g>
+</g>
+<g transform="translate(0 2070.05)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Artificial synthesis: two problems at once</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Two columns running together: getting the right protein, and getting it to form a fibre, before either reaches</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">real-world use.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-SYNTHESIS</text>
+<g transform="translate(0 65.9)"><path d="M390 100 L190 160" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,160 198.5725452527293,153.77412914606253 200.58398045169372,160.47891314261057" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 100 L570 160" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,160 559.4063698384359,160.15811388300844 561.6199642005538,153.51733079665482" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 240 L190 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,280 199.57865778340093,275.4723830695946 200.31145127502722,282.4339212400445" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 240 L380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 370.09641290858974,396.2358317355819 374.60536312906925,390.88145334876253" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 240 L380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 385.39463687093075,390.88145334876253 389.90358709141026,396.2358317355819" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 480 L380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Two tasks: protein + spinning conditions — → spya-wgee6t</title>
+<ellipse cx="390" cy="65" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Two tasks: protein +</text>
+<text x="390" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">spinning conditions</text>
+</g>
+<g>
+<title>Feedstock from E. coli, silkworms, goats, plants — results vary in strength — → spya-rw0wtg</title>
+<rect x="60" y="160" width="260" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="190" y="190.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Feedstock from E. coli, silkworms,</text>
+<text x="190" y="205.472" font-size="12" text-anchor="middle" fill="#f7f7f7">goats, plants</text>
+<text x="190" y="221.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">results vary in strength</text>
+</g>
+<g>
+<title>Reproducing the spinning duct — syringe, microfluidics, electrospinning — → spya-x4bwhf</title>
+<rect x="440" y="160" width="260" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="570" y="197.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Reproducing the spinning duct</text>
+<text x="570" y="214.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">syringe, microfluidics, electrospinning</text>
+</g>
+<g>
+<title>Also used for capsules, sheets, nanowires — → spya-r4r9au</title>
+<path d="M60 280 L306 280 L320 294 L320 340 L60 340 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M306 280 L306 294 L320 294" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="190" y="313.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Also used for capsules, sheets, nanowires</text>
+</g>
+<g>
+<title>Synthetic silk still thinner, weaker than natural — wet-spun fibres from engineered organisms — → spya-j7hems</title>
+<rect x="220" y="400" width="320" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="430.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Synthetic silk still thinner, weaker than</text>
+<text x="380" y="445.472" font-size="12" text-anchor="middle" fill="#f7f7f7">natural</text>
+<text x="380" y="461.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">wet-spun fibres from engineered organisms</text>
+</g>
+<g>
+<title>Commercial efforts — AMSilk, Bolt Threads, Spiber, Nexia — → spya-m99ub7</title>
+<rect x="220" y="520" width="320" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="552.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Commercial efforts</text>
+<text x="380" y="569.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">AMSilk, Bolt Threads, Spiber, Nexia</text>
+</g></g>
+</g>
+</svg>

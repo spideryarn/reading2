@@ -519,13 +519,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      a stored `sourceHash`, so a moved article re-runs without being forced.
      And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
   "faq",
-  /* The same two reasons, and a third that is about the clock rather than the
-     money. `sketch` is the slowest call here — 194s measured on the
-     constitution — and every step self-aborts at 400s inside an 800s
-     invocation that must also fit a `hierarchy` measured at 320s. A positional
-     cascade that swept this in beside `hierarchy` would not merely waste a call, it
-     would run the invocation out of time, and the way that fails is a platform
-     kill that takes the whole job rather than a recorded failure. */
+  /* The same two reasons: it reads the blocks and tree, and nothing except the
+     separately requested `illustrated` stage reads what it writes, so a
+     positional cascade would buy a model call the reader did not ask for. At
+     `high`, its 194-second measured maximum supplied a third, timeout-specific
+     reason; the move to `low` (42 seconds on average) removes that reason, not
+     the two ordinary ones. */
   "sketch",
   /* All three of `sketch`'s reasons and it is dearer than any of them: $0.27 to
      $0.40 an article measured, of which 86–89% is the brief call, plus one

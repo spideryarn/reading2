@@ -1,0 +1,325 @@
+{
+  "startedAt": "2026-10-01T21:04:27.006Z",
+  "commit": "59fc48a0491882d78cab14acda66ae4d166872b0",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off-repeat",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "incumbent",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "replication-crisis-spya-hrjamq"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "spider-silk-spya-ge30uz"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "cargocult-spya-rz663q"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "replication-crisis-spya-hrjamq",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 192596,
+      "blocksSha256": {
+        "measured": "95ca164f169c4b3739061190a9af458a44f8a203ef387fc1dab700c16c28f5a6",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "replication-crisis-spya-hrjamq",
+        "blocks": 551,
+        "bodyBlocks": 274,
+        "headingBlocks": 37,
+        "fragmentBlocks": 40,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 265
+        },
+        "parts": {
+          "count": 10,
+          "words": [
+            1371,
+            1363,
+            982,
+            2663,
+            3223,
+            653,
+            1246,
+            677,
+            844,
+            282
+          ],
+          "balanceCv": 0.6600231347591006
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.349206349206349,
+          "max": 19,
+          "within5to9": 0.47619047619047616
+        },
+        "headings": {
+          "boundaries": 51,
+          "boundariesOnHeadings": 0.6666666666666666,
+          "headingsCut": 0.9444444444444444,
+          "l1OnHeadings": 0.6666666666666666,
+          "sourceHeadingShare": 0.5555555555555556,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 53,
+            "words": 2732
+          }
+        },
+        "titles": {
+          "count": 63,
+          "meanWords": 3.7936507936507935,
+          "within2to6": 0.9523809523809523,
+          "copiedHeadings": 35,
+          "retention": 0.6994047619047619
+        },
+        "gists": {
+          "count": 63,
+          "coverage": 1,
+          "meanWords": 28.333333333333332,
+          "multiSentence": 0,
+          "templateRepetition": 0.031746031746031744,
+          "retention": 0.5453724435442799
+        }
+      },
+      "calls": [
+        {
+          "ms": 192534,
+          "inputTokens": 34986,
+          "outputTokens": 23470,
+          "reasoningTokens": 15597,
+          "generationId": "gen-1790888667-h4jfRsH6SqIl9myNNXeB",
+          "costUsd": 0.304672,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 192536,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 10,
+        "blocks": 35,
+        "largest": 18,
+        "where": [
+          "root > child 3 (gap, 1)",
+          "root > child 6 (gap, 2)",
+          "root > child 7 (gap, 4)",
+          "root > child 2 > child 5 (short, 1)",
+          "root > child 4 > child 6 (overlap, 18)",
+          "root > child 5 > child 7 (overlap, 1)",
+          "root > child 5 > child 9 (short, 2)",
+          "root > child 6 > child 5 (gap, 1)",
+          "root > child 6 > child 5 (short, 4)",
+          "root > child 8 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 10,
+        "partCountB": 9,
+        "l1Boundaries": 0.4166666666666667,
+        "allBoundaries": 0.7857142857142857,
+        "boundaryDistance": {
+          "mean": 0.25,
+          "within1Block": 0.92
+        }
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ]
+}

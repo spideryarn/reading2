@@ -223,8 +223,8 @@ function OwnerSketch({
         </p>
         {/* **What it costs, before the press rather than after it** — the same
             rule the chips' hover cards follow, and it matters more here than
-            anywhere: this is a two-minute wait, and a reader who presses a
-            button and then watches a spinner for two minutes with no idea why
+            anywhere: this is about a minute's wait, and a reader who presses a
+            button and then watches a spinner with no idea why
             is owed the sentence. */}
         <p className="sk-empty-why">
           A model reads the whole article, works out what shape the argument is, and draws that. It
@@ -236,8 +236,8 @@ function OwnerSketch({
               this state means — so the freshness check will agree, and it has
               to be the identical request the automatic run makes: a forced
               press landing inside the auto-start window is a different
-              `work_key`, is not de-duplicated, and buys a second two-minute
-              $0.20 job. useSketch.ts § `ensure`. */}
+              `work_key`, is not de-duplicated, and buys a second model call.
+              useSketch.ts § `ensure`. */}
           <JobProgress
             job={view.job}
             starting={view.starting}
@@ -278,15 +278,15 @@ function OwnerSketch({
      2026-09-04; a visitor has neither.
 
      Not `JobProgress`: that row carries a Stop button and, with no job, a Draw
-     button — and offering a $0.20 redraw beside a picture that is already there
+     button — and offering a paid redraw beside a picture that is already there
      is a product decision this is not. Greg asked only that a redraw in flight
      be visible: *"the diagram/sketch modes show loading spinners if they're
      generating"*.
 
      **And the spinner going away is not the same as the work succeeding.** A
      redraw that came back failed left the picture standing and said nothing,
-     which reads as a completed run that changed nothing — after two minutes and
-     $0.20. The server's own words, per copy.md. ⟨Sol⟩. */
+     which reads as a completed run that changed nothing — after a long wait.
+     The server's own words, per copy.md. ⟨Sol⟩. */
   const progress = (
     <>
       {view.job && (
@@ -1020,12 +1020,12 @@ function SketchBody({
           reads the queue rather than remembering a click, precisely so a run
           started from the CLI, the shelf or another tab shows up — and this was
           the surface that then did nothing with the answer, so the picture
-          changed under the reader two minutes later with nothing having said it
+          changed under the reader later with nothing having said it
           was going to. Greg, 2026-08-30: *"Make sure the diagrams in Diagram
           mode show loading spinners if they're generating."*
 
           Not `JobProgress`: that row carries a Stop button and, with no job, the
-          Draw button — and offering a $0.20 redraw beside a picture that is
+          Draw button — and offering a paid redraw beside a picture that is
           already there is a product decision this is not. This says what is
           happening and nothing else. The step's own label, off the server, so
           the words are the words the shelf shows for the same run. */}

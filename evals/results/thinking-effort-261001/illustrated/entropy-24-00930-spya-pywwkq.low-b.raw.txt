@@ -1,0 +1,208 @@
+{
+  "style": "An illuminated manuscript page — the article is a chain of reasoning about neurons as scribes exchanging messages, which suits the hand-drawn, labelled-vignette treatment of an old natural-philosophy codex",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Spine: From Question to Discovery",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-rxcze4",
+          "quote": "brains take in sensory signals from the environment and use that information to generate adaptive behavior",
+          "depicts": "A figure standing at the mouth of a cave, receiving beams of light (sensory signals) from outside and turning to walk a path toward an unseen destination.",
+          "title": "SIGNALS INTO BEHAVIOR"
+        },
+        {
+          "node": "n2",
+          "block": "spya-qjdbvj",
+          "quote": "Information-theoretic tools such as mutual information [10] and transfer entropy [11] are well suited to this purpose",
+          "depicts": "Two scribes at separate desks, one holding up two matching scrolls side by side (mutual information), the other watching an hourglass as a message is carried from one desk to the next (transfer entropy).",
+          "title": "TWO MEASURING TOOLS"
+        },
+        {
+          "node": "n3",
+          "block": "spya-s0db2g",
+          "quote": "limited in its ability to reveal how different streams of information \u201cinteract\u201d and how neurons produce novel or modified information from multiple sources",
+          "depicts": "A single messenger running along a road carrying one letter, while two other letters lie unread at a crossroads where they ought to combine into something new.",
+          "title": "FLOW IS NOT ENOUGH"
+        },
+        {
+          "node": "n4",
+          "block": "spya-wer4cd",
+          "quote": "This parsing is accomplished using the partial information decomposition (PID) framework",
+          "depicts": "A master cutter at a workbench slicing a single glowing loaf of bread into labelled portions, with FIGURE A rendered as an illuminated diagram pinned above the bench showing the overlapping ovals.",
+          "title": "CUTTING THE WHOLE"
+        },
+        {
+          "node": "n5",
+          "block": "spya-rc76qn",
+          "quote": "close to a dozen competing redundancy functions",
+          "depicts": "A council of twelve robed scholars arguing around a round table, each holding a different scale for weighing the same coin.",
+          "title": "TWELVE RIVAL RULERS"
+        },
+        {
+          "node": "n6",
+          "block": "spya-sw5ukx",
+          "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices",
+          "depicts": "A thin slice of tissue laid on a wide grid of fine needles, each needle pricking up a thread of light, with FIGURE C drawn as the laboratory bench and dish beside it.",
+          "title": "THE NEEDLED SLICE"
+        },
+        {
+          "node": "s1",
+          "block": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club",
+          "depicts": "A small cluster of brightly lit houses on a hill, fattened and gleaming, overlooking a wide scattered village of dim ordinary houses below.",
+          "title": "THE WEALTHY HILL"
+        },
+        {
+          "node": "s2",
+          "block": "spya-sd9fzd",
+          "quote": "triads with more recurrent connections also had greater synergy",
+          "depicts": "Two messengers tied to each other by a looping rope, passing letters back and forth between themselves before either reaches the master's door.",
+          "title": "THE LOOPED ROPE"
+        },
+        {
+          "node": "s3",
+          "block": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A single candle burning brightest at a middle distance on a long table, dimmer both close and far from a lit lamp beside it.",
+          "title": "THE CANDLE'S PEAK"
+        },
+        {
+          "node": "s4",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A hand reaching for a cup while many identical copies of the same scrolled order are stuffed into many messengers' pouches, all riding out at once.",
+          "title": "MANY COPIES, ONE GRASP"
+        },
+        {
+          "node": "n7",
+          "block": "spya-aby2dp",
+          "quote": "in the case of six parent neurons, there are 7,828,354 distinct PI atoms",
+          "depicts": "A mapmaker buried under an impossibly tall, teetering stack of small labelled tiles, holding a quill and giving up on labelling the topmost ones, with FIGURE D drawn as a scattered chart on the floor beside him.",
+          "title": "THE DROWNED TALLY"
+        },
+        {
+          "node": "n9",
+          "block": "spya-sp50v3",
+          "quote": "neurons do not appear to blindly sum the number of inputs and fire in response to the total",
+          "depicts": "A gatekeeper reading the pattern of several banners arriving together, rather than merely counting how many banners there are, before deciding whether to open the gate.",
+          "title": "READING THE PATTERN"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum-toned parchment with faded gold leaf accents, ink-and-wash figures in a medieval hand, arranged in a single column of eleven framed vignettes running top to bottom in strict reading order, connected by a thin flowing ribbon-path (like a river on an old map) that forks into four parallel branches at the middle and rejoins into one at the bottom. At the top: SIGNALS INTO BEHAVIOR shows a robed figure at a cave mouth with beams of light entering and a path leading onward. Below: TWO MEASURING TOOLS, two scribes at desks, one comparing matching scrolls, one watching an hourglass as a message passes. Next: FLOW IS NOT ENOUGH, a lone messenger on a road past an unread crossroads of letters. Next: CUTTING THE WHOLE, a master cutter slicing a glowing loaf at a workbench, with FIGURE A rendered as a small illuminated diagram of overlapping ovals pinned above. Next: TWELVE RIVAL RULERS, a council of twelve robed scholars arguing with scales. Next: THE NEEDLED SLICE, a tissue slice on a grid of fine needles each pricking up light, with FIGURE C as a small laboratory dish-and-bench scene beside it. Here the ribbon forks into four scenes side by side: THE WEALTHY HILL (bright houses on a hill above a dim village), THE LOOPED ROPE (two messengers tied together passing letters), THE CANDLE'S PEAK (a candle brightest at mid-distance on a table), MANY COPIES, ONE GRASP (a reaching hand amid many identical messenger pouches). The four branches rejoin into: THE DROWNED TALLY, a mapmaker buried under a teetering stack of labelled tiles, with FIGURE D as a small scattered chart at his feet. Final vignette at the bottom: READING THE PATTERN, a gatekeeper studying the arrangement of several banners before opening a gate. Palette restricted to sepia ink, faded blue-grey wash, and small touches of tarnished gold leaf. No lettering anywhere except the eleven capitalized titles, each lettered plainly beneath its vignette in an antique serif hand. Generous bare parchment margins; scenes large enough to read clearly, using the full width of the page, not crowded into a narrow column."
+    },
+    {
+      "sceneId": "pid-framework",
+      "title": "Building the Partial Information Decomposition",
+      "vignettes": [
+        {
+          "node": "a1",
+          "block": "spya-h5dz45",
+          "quote": "it cannot be assumed that the joint mutual information (the \u201cwhole\u201d) is reducible to a sum of all its component marginal \u201cparts\u201d",
+          "depicts": "A merchant weighing a single large sack of grain on one scale against several small sacks stacked on another scale, the two sides refusing to balance.",
+          "title": "THE SACKS DON'T BALANCE"
+        },
+        {
+          "node": "a2",
+          "block": "spya-e94ury",
+          "quote": "the target neuron can be thought of as performing a kind of integrating \u201ccomputation\u201d on all of its inputs considered jointly",
+          "depicts": "A robed figure at a desk gathering several separate threads into one hand and weaving them into a single new cord.",
+          "title": "WEAVING THE THREADS"
+        },
+        {
+          "node": "a3",
+          "block": "spya-t02v4p",
+          "quote": "the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information",
+          "depicts": "Two scholars named in a cartouche presenting an open ledger to a gathered court, the ledger's page showing the same loaf-cutting diagram from before now drawn as exact sums.",
+          "title": "WILLIAMS AND BEER'S LEDGER"
+        },
+        {
+          "node": "a4",
+          "block": "spya-h5jzvm",
+          "quote": "Red(X\u2081, X\u2082;Y) is the information about Y that could be learned by observing X\u2081 or X\u2082",
+          "depicts": "Two wells feeding the same single bucket, with FIGURE A drawn small and precise beside them as the overlapping-ovals diagram, labelled portions visible within it as plain shapes.",
+          "title": "TWO WELLS, ONE BUCKET"
+        },
+        {
+          "node": "a5",
+          "block": "spya-bgsd4n",
+          "quote": "If any of the unknown terms can be defined, then the other three emerge \u201cfor free\u201d",
+          "depicts": "A locksmith holding up one of four linked keys on a ring, showing that turning this one key releases the other three latches at once.",
+          "title": "ONE KEY, FOUR LOCKS"
+        },
+        {
+          "node": "a6",
+          "block": "spya-q9gytb",
+          "quote": "the resulting system of equations is not as constrained as in the two-element case",
+          "depicts": "A builder who managed a simple two-plank bridge now facing a sprawling unsupported scaffold with many more planks and no clear brace between them.",
+          "title": "THE SCAFFOLD GROWS"
+        },
+        {
+          "node": "a7",
+          "block": "spya-m37w5y",
+          "quote": "it is possible to recursively quantify the value of every partial information atom",
+          "depicts": "A stonemason carving small labelled stones one at a time and setting each into its place on a climbing lattice of stone steps, with FIGURE B rendered as the lattice itself, drawn as a scaffold of interconnected nodes.",
+          "title": "THE CLIMBING LATTICE"
+        }
+      ],
+      "prompt": "An illuminated manuscript page in the same sepia-and-gold-leaf hand as the overview, a single vertical column of seven framed vignettes connected by a thin gold ribbon running straight down the page in strict order. Top: THE SACKS DON'T BALANCE, a merchant at a two-pan scale, one large sack opposing several small sacks that will not level. Next: WEAVING THE THREADS, a robed figure gathering loose threads into one new cord. Next: WILLIAMS AND BEER'S LEDGER, two scholars presenting an open ledger to a seated court, the ledger page showing a simple diagram of overlapping shapes rendered as exact sums. Next: TWO WELLS, ONE BUCKET, two wells pouring into a single bucket, with FIGURE A drawn faithfully as a small inset diagram of overlapping ovals held in a scroll beside the wells. Next: ONE KEY, FOUR LOCKS, a locksmith holding one key on a ring of four latches, three of them already clicking open. Next: THE SCAFFOLD GROWS, a builder staring up at an unsupported sprawling wooden scaffold far larger than the simple bridge he built before. Bottom: THE CLIMBING LATTICE, a stonemason setting small carved stones one by one into a tall climbing lattice of stone steps, with FIGURE B rendered faithfully as the lattice structure itself, drawn in thin ink lines as an architectural scaffold of interconnected nodes. Palette: sepia ink, faded blue-grey wash, small gold-leaf highlights on the ledger and the keys. No lettering anywhere on the page except the seven capitalized titles lettered beneath each vignette in an antique serif hand. Wide bare parchment margins, scenes spaced generously using the full width of the page, not cramped into a narrow strip."
+    },
+    {
+      "sceneId": "empirical-findings",
+      "title": "What the Needled Slice Revealed",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-sw5ukx",
+          "quote": "identified all triads consisting of two source neurons connecting to a common target neuron (totalling thousands of triads)",
+          "depicts": "A cartographer surveying a dish of fine needled threads, marking with a quill every place where two threads converge on a third, with FIGURE C drawn as the dish and recording apparatus itself.",
+          "title": "THOUSANDS OF MEETING POINTS"
+        },
+        {
+          "node": "e2",
+          "block": "spya-kqkb58",
+          "quote": "synergy was strongly correlated (\u03c1 \u226b 0.57 for all recordings and timescales",
+          "depicts": "A ferryman rowing a boat whose speed rises and falls in exact step with the current beneath it, the two bound together by a visible cord.",
+          "title": "THE BOUND CURRENT"
+        },
+        {
+          "node": "e3",
+          "block": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy",
+          "depicts": "A cluster of grand, brightly lit houses on a hill, each glowing nearly three times as bright as the modest houses scattered in the valley below.",
+          "title": "THE HILL'S BRIGHT HOUSES"
+        },
+        {
+          "node": "e4",
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "Two messengers bound by a double rope exchanging letters rapidly between themselves, their shared lantern burning half again as bright as a nearby unroped pair.",
+          "title": "THE DOUBLE-ROPED PAIR"
+        },
+        {
+          "node": "e5",
+          "block": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A single candle burning at its brightest at a modest distance along a table, with dimmer flames both very near and very far from the master lamp.",
+          "title": "THE MODEST DISTANCE"
+        },
+        {
+          "node": "e6",
+          "block": "spya-j4cy9j",
+          "quote": "bivariate analyses overestimate the significance of bivariate edges",
+          "depicts": "A surveyor's compass casting an exaggerated shadow far longer than the actual pole it measures, misleading the mapmaker beside it.",
+          "title": "THE EXAGGERATED SHADOW"
+        },
+        {
+          "node": "e7",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A trained monkey reaching for a cup while many identical scrolled orders are stuffed into many riders' pouches, all setting out together along the same road.",
+          "title": "THE REACHING HAND'S MANY RIDERS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, same sepia-ink and faded-gold-leaf hand as the previous plates, a single column of seven framed vignettes down the page joined by a thin ribbon-path that briefly forks into three side-by-side scenes at the middle and rejoins. Top: THOUSANDS OF MEETING POINTS, a cartographer marking convergence points on a dish of needled threads, with FIGURE C drawn faithfully as the laboratory dish and recording apparatus. Next: THE BOUND CURRENT, a ferryman rowing in a boat whose speed is tied by a visible cord to the river current. Here the path forks into three scenes: THE HILL'S BRIGHT HOUSES (grand glowing houses on a hill above dimmer valley houses), THE DOUBLE-ROPED PAIR (two messengers bound by a double rope with a brighter shared lantern beside an unroped pair), THE MODEST DISTANCE (a candle brightest at a middle point on a table, dimmer near and far). The three rejoin into: THE EXAGGERATED SHADOW, a surveyor's compass casting a shadow far longer than the pole it measures, with FIGURE D rendered faithfully as a small inset chart beside the surveyor. Bottom: THE REACHING HAND'S MANY RIDERS, a trained monkey reaching for a cup while many identical scrolls are loaded onto many departing riders. Palette: sepia ink, faded blue-grey wash, small gold-leaf touches on the lanterns and compass. No lettering anywhere on the page except the seven capitalized titles lettered beneath each vignette in an antique serif hand. Wide bare parchment margins, each scene large and clear, using the full width of the page rather than a narrow crowded strip."
+    }
+  ]
+}

@@ -1,0 +1,345 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page, fitting an article that reads like a chronicle of scholars, warnings, and reckonings across centuries of science",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Chronicle of the Replication Crisis",
+      "prompt": "An illuminated manuscript page on aged parchment, drawn in the hand of a medieval chronicle with gold leaf accents, deep blue and red ink, and fine black linework, no borders of dense foliage, scenes large enough to read clearly, arranged top to bottom in a single flowing column of eleven framed roundels and rectangles connected by thin inked arrows showing the story's path. At the top, a monk-scholar holds a stone tablet of findings crumbling to dust as he tries to repeat the experiment carved on it (COLLAPSING RESULTS). Beside it, a scribe at a lectern arranges a balance-scale, an hourglass, and a measuring rod, each a precise instrument for a precise term (PRECISE MEANINGS). Below, a robed scholar points his staff at four small roundels each showing a different distant event (FOUR PRECURSORS), leading to a gathering of robed scholars raising their hands in alarm as an elder proclaims before them (CRISIS OF CONFIDENCE DECLARED), then three robed figures standing apart holding warning scrolls that no one reads (EARLY WARNINGS UNHEEDED). The page then opens into a wider band of evidence: ninety-seven small sealed jars in rows, only thirty-six glowing gold (36 OF 97 REPLICATE), beside fifty-three specimen jars of cancer research with only a handful still lit (11 OF 53 CONFIRMED), both arrows converging downward into a great crowd of robed researchers raising empty hands together in admission (70 PERCENT ADMIT FAILURE). From that crowd the path forks into two: a heavy wooden drawer stuffed with discarded scrolls never shown to anyone (THE FILE DRAWER), and a scholar peeking at his result before quietly rewriting his original plan to match it (REWRITING AFTER THE FACT). These two paths rejoin at the bottom in a dawn scene where scholars throw open scriptorium shutters and lay their ledgers open on a long table for all to see (CREDIBILITY REVOLUTION DAWNING). No lettering appears anywhere in the scenes themselves; only the eleven short capitalized titles are lettered beneath their roundels, nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "A monk-scholar holds up a stone tablet of recorded findings that is crumbling into dust as he tries to repeat the experiment carved on it.",
+          "title": "COLLAPSING RESULTS",
+          "node": "n1"
+        },
+        {
+          "block": "spya-xrc2re",
+          "quote": "Certain terms commonly used in discussions of the replication crisis have technically precise meanings",
+          "depicts": "A scribe at a lectern arranges a balance-scale, an hourglass, and a measuring rod on his desk, each a precise instrument for a precise term.",
+          "title": "PRECISE MEANINGS",
+          "node": "n2"
+        },
+        {
+          "block": "spya-yru28f",
+          "quote": "Felipe Romero identified four precursors to the crisis",
+          "depicts": "A robed scholar points a staff at four small roundels set in a row, each showing a different distant event.",
+          "title": "FOUR PRECURSORS",
+          "node": "n3"
+        },
+        {
+          "block": "spya-dg8j93",
+          "quote": "declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A gathering of robed scholars raise their hands in alarm as one elder scholar stands and proclaims before them.",
+          "title": "CRISIS OF CONFIDENCE DECLARED",
+          "node": "n4"
+        },
+        {
+          "block": "spya-u3tg84",
+          "quote": "the works of Paul Meehl, Jacob Cohen, and Tversky and Kahneman in the 1960s-70s were early warnings of replication crisis",
+          "depicts": "Three robed figures stand apart from the crowd, each holding a scroll of warning that no one around them is reading.",
+          "title": "EARLY WARNINGS UNHEEDED",
+          "node": "n5"
+        },
+        {
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "Ninety-seven small sealed jars stand in rows; only thirty-six glow with gold light, the rest sit dark and unlit.",
+          "title": "36 OF 97 REPLICATE",
+          "node": "n6"
+        },
+        {
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "Fifty-three specimen jars of cancer research sit on a shelf; a scholar counts, finding only a handful still glowing.",
+          "title": "11 OF 53 CONFIRMED",
+          "node": "n7"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great crowd of robed researchers, seven in every ten, raise open empty hands together admitting they could not repeat another's work.",
+          "title": "70 PERCENT ADMIT FAILURE",
+          "node": "n9"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "creates the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A heavy wooden drawer is pulled open, stuffed to bursting with discarded scrolls that were never shown to anyone.",
+          "title": "THE FILE DRAWER",
+          "node": "n10"
+        },
+        {
+          "block": "spya-kqvxfb",
+          "quote": "PARKing (pre-registering after results are known), and conducting inappropriate power analyses",
+          "depicts": "A scholar peeks at the outcome of his experiment first, then quietly rewrites his original plan on a fresh parchment to match it.",
+          "title": "REWRITING AFTER THE FACT",
+          "node": "n12"
+        },
+        {
+          "block": "spya-qthy2u",
+          "quote": "a \"credibility revolution\", where changes in standards by which psychological science are evaluated",
+          "depicts": "At dawn, scholars throw open the shutters of a scriptorium and lay their ledgers open on a long table for all to examine.",
+          "title": "CREDIBILITY REVOLUTION DAWNING",
+          "node": "n15"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A monk-scholar holds up a stone tablet of recorded findings that is crumbling into dust as he tries to repeat the experiment carved on it.",
+          "title": "COLLAPSING RESULTS"
+        },
+        {
+          "where": "A scribe at a lectern arranges a balance-scale, an hourglass, and a measuring rod on his desk, each a precise instrument for a precise term.",
+          "title": "PRECISE MEANINGS"
+        },
+        {
+          "where": "A robed scholar points a staff at four small roundels set in a row, each showing a different distant event.",
+          "title": "FOUR PRECURSORS"
+        },
+        {
+          "where": "A gathering of robed scholars raise their hands in alarm as one elder scholar stands and proclaims before them.",
+          "title": "CRISIS OF CONFIDENCE DECLARED"
+        },
+        {
+          "where": "Three robed figures stand apart from the crowd, each holding a scroll of warning that no one around them is reading.",
+          "title": "EARLY WARNINGS UNHEEDED"
+        },
+        {
+          "where": "Ninety-seven small sealed jars stand in rows; only thirty-six glow with gold light, the rest sit dark and unlit.",
+          "title": "36 OF 97 REPLICATE"
+        },
+        {
+          "where": "Fifty-three specimen jars of cancer research sit on a shelf; a scholar counts, finding only a handful still glowing.",
+          "title": "11 OF 53 CONFIRMED"
+        },
+        {
+          "where": "A great crowd of robed researchers, seven in every ten, raise open empty hands together admitting they could not repeat another's work.",
+          "title": "70 PERCENT ADMIT FAILURE"
+        },
+        {
+          "where": "A heavy wooden drawer is pulled open, stuffed to bursting with discarded scrolls that were never shown to anyone.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "where": "A scholar peeks at the outcome of his experiment first, then quietly rewrites his original plan on a fresh parchment to match it.",
+          "title": "REWRITING AFTER THE FACT"
+        },
+        {
+          "where": "At dawn, scholars throw open the shutters of a scriptorium and lay their ledgers open on a long table for all to examine.",
+          "title": "CREDIBILITY REVOLUTION DAWNING"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "Many Fields, One Finding",
+      "prompt": "An illuminated manuscript page in the same antique hand as before: aged parchment, gold leaf, deep blue and red ink, fine black linework, no crowding of marginal ornament. Across the top of the page runs a long scholar's table bearing a row of eight framed scenes, each a different field of study, side by side: ninety-seven sealed jars of psychological findings with thirty-six glowing (PSYCHOLOGY: 36 OF 97); a crowd of thousands of tiny figures gathered around one drawn brain diagram (THOUSANDS NEEDED FOR BRAIN STUDIES); a row of mostly dark cancer-research jars with scholars shaking their heads (CANCER STUDIES MOSTLY UNREPLICABLE); an open cookbook with fifty ingredients drawn around its border, forty tied with a ribbon marking cancer-risk claims (50 INGREDIENTS, 80% FLAGGED); a merchant's scale weighing coins, the replicated pile lighter than the original (ECONOMICS: EFFECTS SHRINK); a long trough of water-study vials with only one or two glowing among hundreds (WATER STUDIES: FEW REPRODUCE); and a mechanical oracle giving a different carved answer to the same question asked twice (UNSTABLE MACHINE ANSWERS). Thin inked arrows from all eight scenes converge downward to a single wide scene beneath the table: all the scholars from every shelf, stepped down together into one crowd, raising empty hands in shared admission (MOST HAVE FAILED TO REPRODUCE). From that crowd a final arrow leads to the bottom of the page, where a dark, unlit jar of a failed study is crowned with a laurel wreath by a line of admiring readers bowing before it (UNREPLICATED YET MORE CITED). The scenes should be large and legible, using the full width of the page rather than a narrow column, with bare parchment left visible rather than crowded borders. No lettering appears in the scenes themselves; only the nine short capitalized titles are lettered beneath their roundels, and nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "Ninety-seven sealed jars of psychological findings, only thirty-six glowing, set on the leftmost shelf of a long table of disciplines.",
+          "title": "PSYCHOLOGY: 36 OF 97",
+          "node": "e1"
+        },
+        {
+          "block": "spya-ekg3fe",
+          "quote": "the replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A crowd of thousands of tiny figures gathers around a single drawn brain diagram, needed just to confirm one faint signal.",
+          "title": "THOUSANDS NEEDED FOR BRAIN STUDIES",
+          "node": "e2"
+        },
+        {
+          "block": "spya-d8g53k",
+          "quote": "Results from The Reproducibility Project: Cancer Biology suggest most studies of the cancer research sector may not be replicable",
+          "depicts": "A row of cancer-research specimen jars on the table, most of them dark and unlit, a few scholars shaking their heads over them.",
+          "title": "CANCER STUDIES MOSTLY UNREPLICABLE",
+          "node": "e3"
+        },
+        {
+          "block": "spya-d977mu",
+          "quote": "out of a random sample of 50 ingredients from a cookbook, 80% had articles reporting on their cancer risk",
+          "depicts": "A cook's open recipe book with fifty ingredients drawn around its border, forty of them tied with a small ribbon marking a cancer-risk claim.",
+          "title": "50 INGREDIENTS, 80% FLAGGED",
+          "node": "e5"
+        },
+        {
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A merchant's scale weighing coins of economic findings, the replicated pile visibly lighter than the original pile beside it.",
+          "title": "ECONOMICS: EFFECTS SHRINK",
+          "node": "e6"
+        },
+        {
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A long trough of water-study vials stretching into the distance, with only one or two faintly glowing among hundreds.",
+          "title": "WATER STUDIES: FEW REPRODUCE",
+          "node": "e7"
+        },
+        {
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A mechanical oracle on the table gives a different carved answer each time the same question is asked of it twice.",
+          "title": "UNSTABLE MACHINE ANSWERS",
+          "node": "e8"
+        },
+        {
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "All the scholars from every shelf step down together into one great crowd, raising empty hands in shared admission below the table.",
+          "title": "MOST HAVE FAILED TO REPRODUCE",
+          "node": "e9"
+        },
+        {
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "Beneath the crowd, a dark unlit jar of a failed study is nonetheless crowned with a laurel wreath by a line of admiring readers.",
+          "title": "UNREPLICATED YET MORE CITED",
+          "node": "e10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Ninety-seven sealed jars of psychological findings, only thirty-six glowing, set on the leftmost shelf of a long table of disciplines.",
+          "title": "PSYCHOLOGY: 36 OF 97"
+        },
+        {
+          "where": "A crowd of thousands of tiny figures gathers around a single drawn brain diagram, needed just to confirm one faint signal.",
+          "title": "THOUSANDS NEEDED FOR BRAIN STUDIES"
+        },
+        {
+          "where": "A row of cancer-research specimen jars on the table, most of them dark and unlit, a few scholars shaking their heads over them.",
+          "title": "CANCER STUDIES MOSTLY UNREPLICABLE"
+        },
+        {
+          "where": "A cook's open recipe book with fifty ingredients drawn around its border, forty of them tied with a small ribbon marking a cancer-risk claim.",
+          "title": "50 INGREDIENTS, 80% FLAGGED"
+        },
+        {
+          "where": "A merchant's scale weighing coins of economic findings, the replicated pile visibly lighter than the original pile beside it.",
+          "title": "ECONOMICS: EFFECTS SHRINK"
+        },
+        {
+          "where": "A long trough of water-study vials stretching into the distance, with only one or two faintly glowing among hundreds.",
+          "title": "WATER STUDIES: FEW REPRODUCE"
+        },
+        {
+          "where": "A mechanical oracle on the table gives a different carved answer each time the same question is asked of it twice.",
+          "title": "UNSTABLE MACHINE ANSWERS"
+        },
+        {
+          "where": "All the scholars from every shelf step down together into one great crowd, raising empty hands in shared admission below the table.",
+          "title": "MOST HAVE FAILED TO REPRODUCE"
+        },
+        {
+          "where": "Beneath the crowd, a dark unlit jar of a failed study is nonetheless crowned with a laurel wreath by a line of admiring readers.",
+          "title": "UNREPLICATED YET MORE CITED"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Faults in the Foundation",
+      "prompt": "An illuminated manuscript page continuing the same hand: aged parchment, gold leaf, deep blue and red ink, fine black linework, generous bare parchment rather than crowded borders. The page is divided into two parallel columns running top to bottom, left and right, each framed by a thin inked rule, with faint gold dividers marking the two columns but no banners or headings. The left column, the publishing house: at the top, a monk writes frantically by candlelight, hunched over his desk amid a towering unstable stack of scrolls (DESPERATION TO PUBLISH); below him, a heavy wooden drawer stuffed with discarded scrolls of negative results is pushed shut beneath a writing desk (FILE DRAWER OF SILENCE); below that, a scribe copies numbers onto parchment but his smudged calculations do not match the figures beside him (INCONGRUENT CALCULATIONS); and at the foot of the column, a locked chest of labelled vials sits just out of reach as a scholar reaches for it, unable to open it without asking for the key (MISSING KEY REAGENTS). The right column, the laboratory bench: at the top, a scholar peeks at the outcome of his experiment, then quietly rewrites his original plan on a fresh parchment to match it (REWRITING THE PLAN AFTER); below, a balance-scale holds a single faint candle on one side and a heavy stone on the other, tipped far from level (WEAK STATISTICAL POWER); below that, an archer's target struck by many arrows scattered wildly across its face rather than near the center (HETEROGENEITY OF 74 PERCENT); and at the foot, a carpenter presses a precise iron square against a lump of soft wet clay, the tool's straight edge unable to measure the yielding material (WRONG TOOL FOR SOFT SCIENCE). Thin arrows run down each column connecting its four scenes in order, with no arrows crossing between the two columns. No lettering appears within the scenes themselves; only the eight short capitalized titles are lettered beneath their panels, and nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-v697nj",
+          "quote": "leads to \"desperation to publish or perish\" and failure to adhere to good scientific practice",
+          "depicts": "A monk writes frantically by candlelight, hunched over his desk, surrounded by a towering unstable stack of unfinished scrolls.",
+          "title": "DESPERATION TO PUBLISH",
+          "node": "c1"
+        },
+        {
+          "block": "spya-y782zn",
+          "quote": "creates the \"file drawer effect\", where negative results remain unpublished",
+          "depicts": "A heavy wooden drawer stuffed with discarded scrolls of negative results, pushed shut and hidden beneath a writing desk.",
+          "title": "FILE DRAWER OF SILENCE",
+          "node": "c2"
+        },
+        {
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A scribe copies numbers onto parchment, but his calculations are smudged and do not match the figures on the page beside him.",
+          "title": "INCONGRUENT CALCULATIONS",
+          "node": "c3"
+        },
+        {
+          "block": "spya-gjx6ut",
+          "quote": "replicating 70% of experiments required asking for key reagents",
+          "depicts": "A locked chest of labelled vials sits just out of reach; a scholar reaches toward it, unable to open it without asking for the key himself.",
+          "title": "MISSING KEY REAGENTS",
+          "node": "c5"
+        },
+        {
+          "block": "spya-kqvxfb",
+          "quote": "PARKing (pre-registering after results are known), and conducting inappropriate power analyses",
+          "depicts": "A scholar peeks at the outcome of his experiment, then quietly rewrites his original plan on a fresh parchment to match what he saw.",
+          "title": "REWRITING THE PLAN AFTER",
+          "node": "d1"
+        },
+        {
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A balance-scale holds a single faint candle on one side and a heavy stone on the other, the scale tipped far from level.",
+          "title": "WEAK STATISTICAL POWER",
+          "node": "d2"
+        },
+        {
+          "block": "spya-x02d6v",
+          "quote": "found a median percent of heterogeneity of I-squared = 74%",
+          "depicts": "An archer's target is struck by many arrows scattered wildly across its face rather than clustered near the center.",
+          "title": "HETEROGENEITY OF 74 PERCENT",
+          "node": "d5"
+        },
+        {
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A carpenter presses a precise iron square against a lump of soft wet clay, the tool's straight edge unable to measure the yielding material.",
+          "title": "WRONG TOOL FOR SOFT SCIENCE",
+          "node": "d6"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A monk writes frantically by candlelight, hunched over his desk, surrounded by a towering unstable stack of unfinished scrolls.",
+          "title": "DESPERATION TO PUBLISH"
+        },
+        {
+          "where": "A heavy wooden drawer stuffed with discarded scrolls of negative results, pushed shut and hidden beneath a writing desk.",
+          "title": "FILE DRAWER OF SILENCE"
+        },
+        {
+          "where": "A scribe copies numbers onto parchment, but his calculations are smudged and do not match the figures on the page beside him.",
+          "title": "INCONGRUENT CALCULATIONS"
+        },
+        {
+          "where": "A locked chest of labelled vials sits just out of reach; a scholar reaches toward it, unable to open it without asking for the key himself.",
+          "title": "MISSING KEY REAGENTS"
+        },
+        {
+          "where": "A scholar peeks at the outcome of his experiment, then quietly rewrites his original plan on a fresh parchment to match what he saw.",
+          "title": "REWRITING THE PLAN AFTER"
+        },
+        {
+          "where": "A balance-scale holds a single faint candle on one side and a heavy stone on the other, the scale tipped far from level.",
+          "title": "WEAK STATISTICAL POWER"
+        },
+        {
+          "where": "An archer's target is struck by many arrows scattered wildly across its face rather than clustered near the center.",
+          "title": "HETEROGENEITY OF 74 PERCENT"
+        },
+        {
+          "where": "A carpenter presses a precise iron square against a lump of soft wet clay, the tool's straight edge unable to measure the yielding material.",
+          "title": "WRONG TOOL FOR SOFT SCIENCE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "replication-crisis-spya-hrjamq",
+  "profileHash": null
+}

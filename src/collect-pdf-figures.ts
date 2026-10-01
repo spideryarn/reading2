@@ -98,7 +98,13 @@ import { imageDimensions, sniffImage } from "./assets.js";
 import { describeStorageFailure } from "./collect-assets.js";
 import { readPdfPageLayouts } from "./pdf-figure-layout.js";
 import { type FigurePage, type FigurePages, openFigurePages } from "./pdf-figure-page.js";
-import { type DrawnFigureVerdict, locateDrawnFigure, type PageLayout } from "./pdf-figure-region.js";
+import {
+  type DrawnFigureVerdict,
+  judgeLocatedRegion,
+  locateDrawnFigure,
+  type PageBox,
+  type PageLayout,
+} from "./pdf-figure-region.js";
 import { type RenderFailure, renderPdfRegion } from "./pdf-figure-render.js";
 import {
   classifyRaster,
@@ -111,6 +117,8 @@ import {
 } from "./pdf-figures.js";
 import { readPdfRasters } from "./pdf-figure-read.js";
 import {
+  answeredBox,
+  COMPOSITE_REFUSALS,
   type FigureLocator,
   judgeLocatedBox,
   type LocatePage,
@@ -281,7 +289,7 @@ export interface CollectPdfFiguresOptions {
    * docs/plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md § Stage 2.
    */
   locate: FigureLocator | null;
-  /** At most this many locator calls for the article. `MAX_LOCATE_CALLS` by default. */
+  /** At most this many locator calls for the article; may lower, never widen, `MAX_LOCATE_CALLS`. */
   maxLocateCalls?: number;
   blobs?: RawSourceStore;
   signal?: AbortSignal;
@@ -755,8 +763,15 @@ async function readRasters(
  * many figures the article has (GPT Sol, stage 2 plan review, finding 7).
  * `MAX_LOCATE_LOOKS` bounds how many windows are read at all, and the call cap
  * how many are asked about. A page is shown only if it is unrotated and PDFium
- * draws it at pdf.js's size, and a window with no usable picture nobody has is
- * never asked about — which is what keeps a paper of vector figures free.
+ * draws it at pdf.js's size. Since 2026-10-01 every held marker is asked
+ * about, a window with no picture included — the composite route can use an
+ * answer about a drawing — so a paper of vector figures costs up to the call
+ * cap where it used to cost nothing.
+ *
+ * **An answer about several things is rendered, not refused**, since
+ * 2026-10-01: when `judgeLocatedBox` refuses for what is in the box
+ * (`COMPOSITE_REFUSALS`), `compositeRegion` asks `judgeLocatedRegion` whether
+ * the box is this caption's figure, and renders it. docs/plans/261001q § Stage 2.
  *
  * **Two markers pointing at one picture get it neither**: one of the two
  * answers is wrong, and nothing here can say which.
@@ -775,8 +790,28 @@ async function locatedRoute(
   } catch {
     return [];
   }
-  const maxCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
-  const choices: { marker: PdfFigureMarker; identity: string; raster: DecodedRaster }[] = [];
+  /* The override exists to make a smaller ceiling testable; it may not widen
+     the production policy. Normalise hostile/accidental numeric values too,
+     so NaN cannot turn the comparison below off. */
+  const requestedCalls = options.maxLocateCalls ?? MAX_LOCATE_CALLS;
+  const maxCalls = Number.isFinite(requestedCalls)
+    ? Math.max(0, Math.min(MAX_LOCATE_CALLS, Math.floor(requestedCalls)))
+    : MAX_LOCATE_CALLS;
+  const choices: {
+    marker: PdfFigureMarker;
+    identity: string;
+    raster: DecodedRaster;
+    page: number;
+    box: PageBox | null;
+  }[] = [];
+  const regions: {
+    marker: PdfFigureMarker;
+    raster: DecodedRaster;
+    identity: string;
+    pictureIdentities: readonly string[];
+    page: number;
+    box: PageBox;
+  }[] = [];
   let looks = 0;
 
   for (const marker of [...held].sort((a, b) => a.page - b.page)) {
@@ -803,10 +838,11 @@ async function locatedRoute(
         usable.push({ page: candidate.page, key: candidate.key, identity: pictureIdentity(verdict.raster), raster: verdict.raster });
       } else if (verdict.status === "blank") blank.push({ page: candidate.page, key: candidate.key });
     }
-    /* Against what the other routes gave only: a picture another *located*
-       marker chose is still worth asking about, because two markers choosing
-       it is how a wrong answer shows itself (below). */
-    if (!usable.some((u) => !taken.includes(u.identity))) continue;
+    /* **Every held marker is asked about**, since 2026-10-01 — until then only
+       one with a usable picture nobody had nearby, which kept a paper of vector
+       figures free and also kept every vector composite unasked. The composite
+       route below can use an answer about a drawing, so the gate went; the call
+       cap still bounds the spend, at ~$0.002 a call. docs/plans/261001q § Stage 2. */
 
     const sent: (SentPage & LocatePage)[] = [];
     for (const page of window) {
@@ -839,12 +875,160 @@ async function locatedRoute(
          markers pointing at one picture must both be seen doing it, below. */
       taken,
     });
-    if (verdict.status !== "chosen") continue;
-    const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
-    if (picture) choices.push({ marker, identity: picture.identity, raster: picture.raster });
+    if (verdict.status === "chosen") {
+      const picture = usable.find((u) => u.page === verdict.page && u.key === verdict.key);
+      const paint = read.paints.find((p) => p.page === verdict.page && p.key === verdict.key);
+      if (picture) {
+        const view = read.views.get(verdict.page);
+        choices.push({
+          marker,
+          identity: picture.identity,
+          raster: picture.raster,
+          page: verdict.page,
+          box: paint && view ? visiblePaintBox(paint, view) : null,
+        });
+      }
+      continue;
+    }
+    if (!COMPOSITE_REFUSALS.has(verdict.reason)) continue;
+    const composite = await compositeRegion(marker, answer.answer, sent, read, usable, taken, cuts, options, signal);
+    if (composite) regions.push({ marker, ...composite });
   }
 
-  return choices.filter((c) => choices.filter((o) => o.identity === c.identity).length === 1);
+  /* Two markers choosing one picture, two regions that overlap, or a region
+     holding a picture another marker chose: one of the answers is wrong and
+     nothing here can say which, so neither is kept. */
+  const overlaps = (a: { page: number; box: PageBox }, b: { page: number; box: PageBox | null }) =>
+    a.page === b.page && b.box !== null && overlapArea(a.box, b.box) > 0;
+  const sharesPicture = (a: { pictureIdentities: readonly string[] }, identity: string) =>
+    a.pictureIdentities.includes(identity);
+  const regionsConflict = (a: (typeof regions)[number], b: (typeof regions)[number]) =>
+    overlaps(a, b) ||
+    a.identity === b.identity ||
+    a.pictureIdentities.some((identity) => b.pictureIdentities.includes(identity));
+  const keptPictures = choices.filter((c) =>
+    choices.filter((o) => o.identity === c.identity).length === 1 &&
+    !regions.some((r) => overlaps(r, c) || sharesPicture(r, c.identity)),
+  );
+  const keptRegions = regions.filter(
+    (r) =>
+      !regions.some((o) => o !== r && regionsConflict(r, o)) &&
+      !choices.some((c) => overlaps(r, c) || sharesPicture(r, c.identity)),
+  );
+  return [...keptPictures, ...keptRegions].map(({ marker, raster }) => ({ marker, raster }));
+}
+
+/**
+ * **The composite route: render the model's box, once the page shows it is
+ * this caption's figure** — `judgeLocatedRegion`, src/pdf-figure-region.ts,
+ * decides; this reads the answered page's layout, renders the region with
+ * PDFium, and refuses a region that mostly holds a picture another route
+ * already gave a figure. `null` for every refusal: the marker keeps the reason
+ * it had. docs/plans/261001q-pdf-tables-and-composite-figures.md § Stage 2.
+ */
+async function compositeRegion(
+  marker: PdfFigureMarker,
+  answer: unknown,
+  sent: readonly SentPage[],
+  read: Awaited<ReturnType<typeof readPdfRasters>>,
+  usable: readonly (UsablePicture & { raster: DecodedRaster })[],
+  taken: readonly string[],
+  cuts: FigurePages,
+  options: CollectPdfFiguresOptions,
+  signal: AbortSignal,
+): Promise<{
+  raster: DecodedRaster;
+  identity: string;
+  pictureIdentities: readonly string[];
+  page: number;
+  box: PageBox;
+} | null> {
+  const answered = answeredBox(answer, sent);
+  if (!answered) return null;
+  let layout: PageLayout | null | undefined;
+  try {
+    const layouts = await (options.readLayouts ?? readPdfPageLayouts)({
+      data: options.pdf,
+      pages: [answered.page],
+      signal,
+    });
+    layout = layouts.get(answered.page);
+  } catch {
+    return null;
+  }
+  if (!layout || signal.aborted) return null;
+  const paints = read.paints.filter((p) => p.page === answered.page);
+  const verdict = judgeLocatedRegion({
+    layout,
+    pictures: paints,
+    box: answered.box,
+    caption: options.captions.get(marker.ref) ?? "",
+  });
+  if (!verdict.ok) return null;
+  const crop = verdict.containment[0]?.box ?? verdict.region;
+  /* Which decoded pictures this region mostly holds. The identities travel
+     with the choice so a repeat on another page cannot be stored under a
+     second caption merely because its page-space boxes do not overlap. */
+  const pictureIdentities = new Set<string>();
+  for (const picture of usable) {
+    if (picture.page !== answered.page) continue;
+    const visible = paints
+      .filter((p) => p.key === picture.key)
+      .map((p) => visiblePaintBox(p, viewFromLayout(layout)))
+      .filter((box): box is PageBox => box !== null);
+    if (visible.some((box) => overlapArea(box, crop) >= 0.5 * overlapArea(box, box))) {
+      pictureIdentities.add(picture.identity);
+    }
+  }
+  if ([...pictureIdentities].some((identity) => taken.includes(identity))) return null;
+  const [vx0, vy0, vx1, vy1] = layout.view;
+  try {
+    if (signal.aborted) return null;
+    const page = await cuts.cut(answered.page);
+    if (signal.aborted) return null;
+    const rendered = await renderPdfRegion({
+      onePagePdf: page.bytes,
+      region: verdict.region,
+      containment: verdict.containment,
+      view: { width: vx1 - vx0, height: vy1 - vy0 },
+    });
+    return rendered.ok
+      ? {
+          raster: rendered.raster,
+          identity: pictureIdentity(rendered.raster),
+          pictureIdentities: [...pictureIdentities],
+          page: answered.page,
+          box: crop,
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The area two boxes share. */
+function overlapArea(a: PageBox, b: PageBox): number {
+  return Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+}
+
+function viewFromLayout(layout: PageLayout): PageBox {
+  const [x0, y0, x1, y1] = layout.view;
+  return { x0, y0, x1, y1 };
+}
+
+/** The part of a paint the page can show; the located judge uses this same geometry. */
+function visiblePaintBox(
+  paint: { box: PageBox; clip: PageBox | null },
+  view: PageBox,
+): PageBox | null {
+  if (!paint.clip) return null;
+  const box = {
+    x0: Math.max(paint.box.x0, paint.clip.x0, view.x0),
+    y0: Math.max(paint.box.y0, paint.clip.y0, view.y0),
+    x1: Math.min(paint.box.x1, paint.clip.x1, view.x1),
+    y1: Math.min(paint.box.y1, paint.clip.y1, view.y1),
+  };
+  return box.x1 > box.x0 && box.y1 > box.y0 ? box : null;
 }
 
 /**

@@ -1,0 +1,1561 @@
+{
+  "version": "toc/9",
+  "generator": "claude-sonnet-5",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0016",
+        "n0039",
+        "n0058",
+        "n0083",
+        "n0108",
+        "n0122"
+      ],
+      "range": [
+        "spya-tvk8zz",
+        "spya-rkyy37"
+      ],
+      "title": "After Work, We'll Have Each Other",
+      "gist": "If AI takes over all necessary labor, status and meaning will come from personal relationships instead of jobs, reviving older, more constrained social worlds.",
+      "question": "Work — what happens to human meaning and status once AI makes work unnecessary? (an argument from historical case studies)",
+      "sourceHeading": "After Work, We'll Have Each Other"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007"
+      ],
+      "range": [
+        "spya-tvk8zz",
+        "spya-y97uqa"
+      ],
+      "title": "The Relational Future",
+      "gist": "Thinkers predict that once AI does all necessary labor, status will come from personal relationships rather than jobs, reviving a pre-industrial social order.",
+      "question": "Relational sector — what will replace work as the source of status and identity? (a prediction stated and accepted)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-tvk8zz",
+        "spya-h7tya2"
+      ],
+      "title": "Byline and Author",
+      "gist": "Byline and author credit for the piece."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-tvk8zz",
+        "spya-tvk8zz"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-s00ms9",
+        "spya-s00ms9"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-h7tya2",
+        "spya-h7tya2"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014",
+        "n0015"
+      ],
+      "range": [
+        "spya-eq7rkm",
+        "spya-y97uqa"
+      ],
+      "title": "Relationships as What's Left",
+      "gist": "Commentators like economist Alex Imas argue that once machines replace most paid work, status and livelihood will flow through personal connections, echoing pre-industrial life where work carried no special dignity; the author fears this prediction is correct."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-eq7rkm",
+        "spya-eq7rkm"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-skmyu6",
+        "spya-skmyu6"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-k44gdt",
+        "spya-k44gdt"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-ssae5k",
+        "spya-ssae5k"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-b3re57",
+        "spya-b3re57"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-zy53n3",
+        "spya-zy53n3"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-vq3bvr",
+        "spya-vq3bvr"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-y97uqa",
+        "spya-y97uqa"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0022",
+        "n0027",
+        "n0033"
+      ],
+      "range": [
+        "spya-y827zc",
+        "spya-y0d85v"
+      ],
+      "title": "Power and sex among apes",
+      "gist": "Historical case studies of aristocrats at Versailles and the Russian court show that societies without paid work organize life around status games, gossip, and primate-like dominance hierarchies rather than dignified leisure.",
+      "question": "Aristocrats — what did people without work actually spend their time on? (two court case studies)",
+      "sourceHeading": "Power and sex among apes"
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021"
+      ],
+      "range": [
+        "spya-y827zc",
+        "spya-c4s3en"
+      ],
+      "title": "Aristocrats and relational life",
+      "gist": "18th-century aristocrats, wealthy and freed from labor, gained resources through court connections rather than work, and courtiers like Saint-Simon give us detailed records of how they actually lived."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-y827zc",
+        "spya-y827zc"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-ca6ub9",
+        "spya-ca6ub9"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-xcg5en",
+        "spya-xcg5en"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-c4s3en",
+        "spya-c4s3en"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026"
+      ],
+      "range": [
+        "spya-w7jf25",
+        "spya-x4w0zk"
+      ],
+      "title": "Saint-Simon's Versailles",
+      "gist": "Saint-Simon's memoirs of Louis XIV's court reveal a brilliant society whose leading chronicler was petty and obsessed with status and precedence rather than ideas or virtue."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-w7jf25",
+        "spya-w7jf25"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-r62wzn",
+        "spya-r62wzn"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-gs52t3",
+        "spya-gs52t3"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-x4w0zk",
+        "spya-x4w0zk"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032"
+      ],
+      "range": [
+        "spya-as4b6e",
+        "spya-f90g2h"
+      ],
+      "title": "Court life as intrigue",
+      "gist": "Beneath the entertainments of Versailles and the salons, daily life for aristocrats and even reform-minded figures like Catherine the Great was dominated by gossip, factional positioning, and the pursuit of favor."
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-as4b6e",
+        "spya-as4b6e"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-bm2xyv",
+        "spya-bm2xyv"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-wue7zn",
+        "spya-wue7zn"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-k0yet6",
+        "spya-k0yet6"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-f90g2h",
+        "spya-f90g2h"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038"
+      ],
+      "range": [
+        "spya-de69sf",
+        "spya-y0d85v"
+      ],
+      "title": "Aristocrats as primates",
+      "gist": "Aristocratic dignity rested on honor and family status rather than productivity, and this behavior resembles primate dominance hierarchies shaped by specific historical institutions, not an inevitable return to instinct."
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-de69sf",
+        "spya-de69sf"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-cz0cgg",
+        "spya-cz0cgg"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-k26ath",
+        "spya-k26ath"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-zvpebu",
+        "spya-zvpebu"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-y0d85v",
+        "spya-y0d85v"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0040",
+        "n0046",
+        "n0051"
+      ],
+      "range": [
+        "spya-uum3xk",
+        "spya-ujwh6h"
+      ],
+      "title": "Ladies who lunch",
+      "gist": "An ethnography of 1980s upper-class women who never needed to work shows that without paid labor, people devote themselves to maintaining class status through socially mandatory, often ineffective volunteer work.",
+      "question": "Upper-class women — what do people without work choose to do with their time? (one ethnographic case study)",
+      "sourceHeading": "Ladies who lunch"
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 2,
+      "parent": "n0039",
+      "children": [
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045"
+      ],
+      "range": [
+        "spya-uum3xk",
+        "spya-a94czy"
+      ],
+      "title": "Women of the Upper Class",
+      "gist": "Susan Ostrander's study of upper-class women not expected to work shows their lives are structured around preserving class standing rather than ambition or personal fulfillment."
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-uum3xk",
+        "spya-uum3xk"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-m2tuja",
+        "spya-m2tuja"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-pjnh37",
+        "spya-pjnh37"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-udyc09",
+        "spya-udyc09"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-a94czy",
+        "spya-a94czy"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0039",
+      "children": [
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050"
+      ],
+      "range": [
+        "spya-xn6rzj",
+        "spya-mc24jb"
+      ],
+      "title": "Volunteering as class duty",
+      "gist": "These women's volunteer work on nonprofit boards is really fundraising among their own wealthy social circle, done less for practical impact than for a felt sense of giving back."
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-xn6rzj",
+        "spya-xn6rzj"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-tcr77a",
+        "spya-tcr77a"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-mdncme",
+        "spya-mdncme"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-mc24jb",
+        "spya-mc24jb"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0039",
+      "children": [
+        "n0052",
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057"
+      ],
+      "range": [
+        "spya-r7r7ap",
+        "spya-ujwh6h"
+      ],
+      "title": "Status over outcomes",
+      "gist": "Volunteering functions mainly to separate upper-class women from those below them and to keep their exclusive social network intact, producing a comfortable but narrow life much like aristocratic court society."
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-r7r7ap",
+        "spya-r7r7ap"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-f6f8d4",
+        "spya-f6f8d4"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-j3vvp7",
+        "spya-j3vvp7"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-jv6yrp",
+        "spya-jv6yrp"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-embbun",
+        "spya-embbun"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-ujwh6h",
+        "spya-ujwh6h"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0059",
+        "n0066",
+        "n0071",
+        "n0077"
+      ],
+      "range": [
+        "spya-y02mr5",
+        "spya-buapzt"
+      ],
+      "title": "The working classes",
+      "gist": "Mid-century ethnographies of close-knit, low-income urban communities show that even where people do work, a job matters less than loyalty to one's peer group, which enforces conformity and blocks collective action.",
+      "question": "Working-class communities — what replaces career ambition as a source of meaning among people who must still work? (three ethnographic case studies)",
+      "sourceHeading": "The working classes"
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065"
+      ],
+      "range": [
+        "spya-y02mr5",
+        "spya-ghqg2t"
+      ],
+      "title": "The Urban Villagers",
+      "gist": "Herbert Gans's study of working-class Italian Americans in Boston's West End found that unskilled, precarious jobs were not central to identity; life instead revolved around a persistent peer group inherited from rural peasant traditions."
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-y02mr5",
+        "spya-y02mr5"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-ftk9a7",
+        "spya-ftk9a7"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-yzuczw",
+        "spya-yzuczw"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-wv0tft",
+        "spya-wv0tft"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-urfe43",
+        "spya-urfe43"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-ghqg2t",
+        "spya-ghqg2t"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070"
+      ],
+      "range": [
+        "spya-z9g0je",
+        "spya-tyj2mt"
+      ],
+      "title": "Peer group over career",
+      "gist": "Like aristocrats and society ladies, West Enders drew no status from work, prized loyalty within a tight, exclusive circle of lifelong acquaintances, and distrusted outsiders."
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-z9g0je",
+        "spya-z9g0je"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-j337dx",
+        "spya-j337dx"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-xnesxg",
+        "spya-xnesxg"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-tyj2mt",
+        "spya-tyj2mt"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076"
+      ],
+      "range": [
+        "spya-weazcy",
+        "spya-ft9x9b"
+      ],
+      "title": "Conformity and lost institutions",
+      "gist": "West End culture harshly policed deviation from group norms and lacked civic institutions like unions or clubs, leaving residents unable to organize even to save their own neighborhood from demolition."
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-weazcy",
+        "spya-weazcy"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-vyxdgv",
+        "spya-vyxdgv"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-stduxr",
+        "spya-stduxr"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-dma27v",
+        "spya-dma27v"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-ft9x9b",
+        "spya-ft9x9b"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082"
+      ],
+      "range": [
+        "spya-sd6cmd",
+        "spya-buapzt"
+      ],
+      "title": "Amoral familism and change",
+      "gist": "Drawing on Banfield's concept of amoral familism, Gans argues that distrust of outsiders was a rational response to poverty and corrupt institutions, and that this clannishness recedes as economic conditions and opportunities improve."
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-sd6cmd",
+        "spya-sd6cmd"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-x5hb7k",
+        "spya-x5hb7k"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-b3pf45",
+        "spya-b3pf45"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-t4xpae",
+        "spya-t4xpae"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-buapzt",
+        "spya-buapzt"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0084",
+        "n0090",
+        "n0096",
+        "n0101"
+      ],
+      "range": [
+        "spya-s2680p",
+        "spya-dhj4jr"
+      ],
+      "title": "Friendship was invented in 18th-century Scotland",
+      "gist": "Work gives ordinary people impersonal respect and independence that relational societies cannot, since status based purely on group membership tends to become exclusionary and clannish rather than free.",
+      "question": "Work and respect — why does paid work matter for dignity even though relational living is the historical norm? (survey and oral-history evidence)",
+      "sourceHeading": "Friendship was invented in 18th-century Scotland"
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 2,
+      "parent": "n0083",
+      "children": [
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089"
+      ],
+      "range": [
+        "spya-s2680p",
+        "spya-t9qyhk"
+      ],
+      "title": "Reputation and group dignity",
+      "gist": "Relational societies are humanity's default, but because personal dignity there depends on group membership, people constantly police each other's behavior to protect collective reputation rather than chase individual meaning."
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-s2680p",
+        "spya-s2680p"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-a8mx0b",
+        "spya-a8mx0b"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-qsfkqr",
+        "spya-qsfkqr"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-zd83ts",
+        "spya-zd83ts"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-t9qyhk",
+        "spya-t9qyhk"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 2,
+      "parent": "n0083",
+      "children": [
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-sw09bu",
+        "spya-v3gz3q"
+      ],
+      "title": "Why workers like their jobs",
+      "gist": "Surveys and studies of American workers show most are satisfied with ordinary jobs not because the work itself is thrilling but because it offers purpose, routine, and a sense of being useful, especially evident when pandemic furloughs were lifted."
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-sw09bu",
+        "spya-sw09bu"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-nm9v43",
+        "spya-nm9v43"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-zjn6v8",
+        "spya-zjn6v8"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-nh2e8p",
+        "spya-nh2e8p"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-v3gz3q",
+        "spya-v3gz3q"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 2,
+      "parent": "n0083",
+      "children": [
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100"
+      ],
+      "range": [
+        "spya-a5pt8y",
+        "spya-ms0vr5"
+      ],
+      "title": "Respect earned through skill",
+      "gist": "Oral histories from the Federal Writers' Project and Studs Terkel's Working show that across eras and occupations, people value work mainly for the impersonal respect, skill, and recognition it earns from peers and bosses."
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-a5pt8y",
+        "spya-a5pt8y"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-vrn5m8",
+        "spya-vrn5m8"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-n00hd0",
+        "spya-n00hd0"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-ms0vr5",
+        "spya-ms0vr5"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 2,
+      "parent": "n0083",
+      "children": [
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107"
+      ],
+      "range": [
+        "spya-hdbtc0",
+        "spya-dhj4jr"
+      ],
+      "title": "Markets freed friendship",
+      "gist": "Because relational societies restrict and exclude, modern markets that let people support themselves independently have allowed friendship to become freer and less transactional, a shift the Scottish Enlightenment thinkers like Adam Smith first recognized, though this independence may be fragile."
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-hdbtc0",
+        "spya-hdbtc0"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-y0xcuz",
+        "spya-y0xcuz"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-tmepex",
+        "spya-tmepex"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-hb8vvc",
+        "spya-hb8vvc"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-d6v2bb",
+        "spya-d6v2bb"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-dhj4jr",
+        "spya-dhj4jr"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0109",
+        "n0114"
+      ],
+      "range": [
+        "spya-j88mrj",
+        "spya-taz7j0"
+      ],
+      "title": "Notes",
+      "gist": "Supporting citations and clarifications for sources used throughout the essay."
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113"
+      ],
+      "range": [
+        "spya-j88mrj",
+        "spya-h0nyqj"
+      ],
+      "title": "Notes on aristocrats and salons",
+      "gist": "Citations covering the economist Alex Imas, the industrial work ethic, Saint-Simon's memoirs, and Antoine Lilti's study of Parisian salons."
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-j88mrj",
+        "spya-j88mrj"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-r6y44z",
+        "spya-r6y44z"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-bb4mgt",
+        "spya-bb4mgt"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-h0nyqj",
+        "spya-h0nyqj"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 2,
+      "parent": "n0108",
+      "children": [
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-djb2zp",
+        "spya-taz7j0"
+      ],
+      "title": "Notes on ethnographies",
+      "gist": "Citations covering Ostrander's study of upper-class women, Gans's Urban Villagers, Claudia Strauss's work on meaning, and Allan Silver on commercial-society friendship."
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-djb2zp",
+        "spya-djb2zp"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-b4rfqh",
+        "spya-b4rfqh"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-hfxxpp",
+        "spya-hfxxpp"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-exke0m",
+        "spya-exke0m"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-en0z8f",
+        "spya-en0z8f"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-v6ct9m",
+        "spya-v6ct9m"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-taz7j0",
+        "spya-taz7j0"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0123",
+        "n0124"
+      ],
+      "range": [
+        "spya-u4ztzw",
+        "spya-rkyy37"
+      ],
+      "title": "Further Reading",
+      "gist": "A pointer to related material on forecasting culture.",
+      "sourceHeading": "Further Reading"
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-u4ztzw",
+        "spya-u4ztzw"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-rkyy37",
+        "spya-rkyy37"
+      ],
+      "title": ""
+    }
+  }
+}

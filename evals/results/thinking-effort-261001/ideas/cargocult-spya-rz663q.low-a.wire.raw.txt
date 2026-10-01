@@ -1,0 +1,53 @@
+{"ideas": [
+  {
+    "name": "Following correct-looking procedure guarantees nothing",
+    "provenance": "introduced",
+    "statement": "A process can reproduce every outward form and ritual of a successful method while omitting the one thing that actually makes it work, so imitation of appearance is no guarantee of result.",
+    "whyYouNeedIt": "This is the core claim the cargo cult image is built to deliver.",
+    "analogy": "A fake storefront can have a working cash register, shelves, and a sign, and still sell nothing because there are no real goods behind it.",
+    "occurrences": [
+      {"blockId": "spya-fd2muf", "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work.", "reasoning": "States the central idea directly."},
+      {"blockId": "spya-rub3a2", "quote": "That’s why the planes don’t land—but they don’t land.", "reasoning": "Reaffirms that form without substance fails regardless of difficulty excuses."}
+    ]
+  },
+  {
+    "name": "Scientific integrity means disclosing evidence against yourself",
+    "provenance": "introduced",
+    "statement": "Real scientific honesty requires actively reporting the flaws, alternative explanations, and contrary data in your own work, not merely avoiding outright lies.",
+    "whyYouNeedIt": "This idea is what separates genuine science from Cargo Cult Science in Feynman's argument, and the advertising/Wesson Oil example only makes sense as showing a non-lie that is still not science.",
+    "occurrences": [
+      {"blockId": "spya-afgs74", "quote": "if you’re doing an experiment, you should report everything that you think might make it invalid", "reasoning": "Direct statement of the idea."},
+      {"blockId": "spya-bpyx8n", "quote": "it’s a matter of scientific integrity, which is another level... the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with", "reasoning": "Distinguishes truthful statement from honest disclosure, requiring this idea to make the distinction meaningful."},
+      {"blockId": "spya-jk7mj4": "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.", "reasoning": "Extends the same principle to publication practice."}
+    ]
+  },
+  {
+    "name": "Selective filtering of data is self-deception, not fraud",
+    "provenance": "introduced",
+    "statement": "Researchers can unconsciously bias results toward an expected answer by scrutinizing only inconvenient data points, without ever intending to deceive anyone.",
+    "whyYouNeedIt": "The Millikan oil-drop history only illustrates Feynman's point if the reader accepts that gradual, unconscious filtering — not conscious cheating — is what happened.",
+    "occurrences": [
+      {"blockId": "spya-uj9v2h", "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.", "reasoning": "Shows the mechanism of unintentional selective scrutiny."},
+      {"blockId": "spya-s9msxy", "quote": "you find that one is a little bigger than Millikan’s, and the next one’s a little bit bigger than that... until finally they settle down to a number which is higher", "reasoning": "Presents the data pattern that only makes sense as evidence of this bias."}
+    ]
+  },
+  {
+    "name": "You are the easiest person to fool",
+    "provenance": "introduced",
+    "statement": "The hardest and most important discipline in science is catching your own errors and wishful thinking before worrying about deceiving anyone else.",
+    "occurrences": [
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "States the idea directly as the foundation of the talk's advice."},
+      {"blockId": "spya-bvx2u8", "quote": "this long history of learning how to not fool ourselves—of having utter scientific integrity", "reasoning": "Reinforces that avoiding self-deception, not just honesty toward others, is the key discipline."}
+    ]
+  },
+  {
+    "name": "Ruling out alternative explanations is what makes a result trustworthy",
+    "provenance": "assumed",
+    "statement": "A result only counts as established once every plausible alternative cause for the observed effect has been actively tested and eliminated, not merely left unconsidered.",
+    "whyYouNeedIt": "Feynman praises Young's rat experiment as an exemplary A-Number-1 piece of science without stating why systematically eliminating cues is what makes it exemplary; the reader must already value elimination of confounds as the mark of a sound result to see why painting doors, masking smell, and sanding the floor matter more than just getting rats to find food.",
+    "occurrences": [
+      {"blockId": "spya-npdc6n", "quote": "So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door.", "reasoning": "The praise for this procedure only follows if eliminating alternative explanations is itself the standard of good evidence."},
+      {"blockId": "spya-yzzxkw", "quote": "That is the experiment that uncovers the clues that the rat is really using—not what you think it’s using.", "reasoning": "Assumes the reader already grants that identifying and removing confounds is what validates an experiment."}
+    ]
+  }
+]}

@@ -1,0 +1,94 @@
+{"ideas": [
+  {
+    "name": "Intelligence and consciousness are separate properties",
+    "provenance": "introduced",
+    "statement": "Being able to do things (solve problems, use language, achieve goals) is a different property from there being 'something it is like' to be a system. A thing can have one without the other.",
+    "occurrences": [
+      {"blockId": "spya-nj888h", "quote": "Intelligence and consciousness are different things.", "reasoning": "States the core distinction directly."},
+      {"blockId": "spya-j0a9rq", "quote": "Consciousness, in contrast to intelligence, is mostly about being.", "reasoning": "Defines consciousness against intelligence to keep the two from collapsing into one."},
+      {"blockId": "spya-xm96be", "quote": "AI systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT.", "reasoning": "Applies the distinction directly to AI to block the inference from smart to sentient."}
+    ]
+  },
+  {
+    "name": "Computational functionalism is an unproven assumption",
+    "provenance": "introduced",
+    "statement": "The belief that running the right kind of information processing is enough to produce consciousness is a substantive philosophical assumption, not an established fact, and the whole case for possible machine consciousness depends on it being true.",
+    "occurrences": [
+      {"blockId": "spya-wepmnr", "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.", "reasoning": "Names the hidden load-bearing premise of the entire debate."},
+      {"blockId": "spya-cv97j7", "quote": "I'll summarize four related arguments that undermine the idea that computation, at least of the sort implemented in standard digital computers, is sufficient for consciousness.", "reasoning": "Frames the essay's whole middle section as an attack on this one assumption."},
+      {"blockId": "spya-ymbpwn", "quote": "Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky", "reasoning": "Restates the assumption as the target the preceding arguments were built to weaken."}
+    ]
+  },
+  {
+    "name": "A brain's material substrate may be inseparable from its function",
+    "provenance": "introduced",
+    "statement": "Unlike software running on hardware, what a brain does and what a brain is made of may not be cleanly separable, which means a thing's function cannot necessarily be carried over to a different material (like silicon) while preserving its properties.",
+    "occurrences": [
+      {"blockId": "spya-zw2m7u", "quote": "Unlike computers, even computers running neural network algorithms, brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are.", "reasoning": "States the inseparability claim directly as the crux of the brain-as-computer critique."},
+      {"blockId": "spya-p4vmm0", "quote": "If you cannot separate what brains do from what they are, the mathematical marriage of convenience starts to fall apart", "reasoning": "Shows how this inseparability, if true, breaks the premise that lets Turing computation explain the brain."},
+      {"blockId": "spya-ahtr6e", "quote": "the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.", "reasoning": "Uses substrate-inseparability to defeat a famous thought experiment for machine consciousness."}
+    ]
+  },
+  {
+    "name": "Simulating a process does not create that process",
+    "provenance": "introduced",
+    "statement": "A computer model of something, however detailed, reproduces its described behavior but not its actual causal powers — a simulated storm does not get anything wet — so simulating a brain would only produce consciousness if consciousness is itself a computational process to begin with.",
+    "occurrences": [
+      {"blockId": "spya-npjt4j", "quote": "A simulation of a rainstorm does not make anything actually wet. If we simulate a living creature, we have not created life.", "reasoning": "States the simulation/instantiation gap with concrete examples."},
+      {"blockId": "spya-cepmwf", "quote": "An algorithmic simulation of a continuous process is just that — a simulation, not the process itself.", "reasoning": "Generalizes the gap to any non-computational process, which is what makes it apply to the brain."},
+      {"blockId": "spya-xvm37k", "quote": "you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.", "reasoning": "Applies the idea to mind-uploading, showing what breaks without it."}
+    ]
+  },
+  {
+    "name": "Consciousness may require being alive, not just processing information",
+    "provenance": "introduced",
+    "statement": "Conscious experience, especially of emotion and selfhood, may be tied to the body's continual work of regulating itself to stay alive, down to the level of cell metabolism — meaning a system could not be conscious without being a living, self-sustaining organism.",
+    "occurrences": [
+      {"blockId": "spya-hj5y6s", "quote": "properties of life are necessary, though not necessarily sufficient, for consciousness", "reasoning": "States the biological naturalism thesis directly."},
+      {"blockId": "spya-vys3vj", "quote": "Within these whirls of metabolic activity, the ubiquitous process of prediction error minimization becomes inseparable from the materiality of life itself.", "reasoning": "Grounds conscious experience in literal biochemical self-maintenance rather than abstract computation."},
+      {"blockId": "spya-pfkhtt", "quote": "Perhaps it is life, rather than information processing, that breathes fire into the equations of experience.", "reasoning": "Summarizes the idea as an alternative candidate explanation of consciousness."}
+    ]
+  },
+  {
+    "name": "Three baked-in biases make us over-attribute minds to machines",
+    "provenance": "introduced",
+    "statement": "Anthropocentrism (judging everything by the human case), human exceptionalism (ranking humans above all else), and anthropomorphism (projecting human qualities onto superficially similar things) combine to make people see consciousness in AI whether or not it is there.",
+    "occurrences": [
+      {"blockId": "spya-h4mwb2", "quote": "The first is anthropocentrism. This is the tendency to see things through the lens of being human", "reasoning": "Names the first bias explicitly."},
+      {"blockId": "spya-her4zk", "quote": "The second is human exceptionalism... And the third is anthropomorphism.", "reasoning": "Names the remaining two biases that together form the mechanism of over-attribution."},
+      {"blockId": "spya-nxxnrj", "quote": "when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too.", "reasoning": "Shows how the three biases jointly produce the false inference from intelligence to consciousness."}
+    ]
+  },
+  {
+    "name": "AI that merely seems conscious poses its own distinct dangers",
+    "provenance": "introduced",
+    "statement": "Separately from whether an AI actually has experiences, a convincingly conscious-seeming AI creates real ethical problems — either we wrongly extend moral concern and rights to something with no stake in them, or we train ourselves to treat apparently feeling things as empty, which damages us either way.",
+    "occurrences": [
+      {"blockId": "spya-x63ycg", "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not.", "reasoning": "States the actual/seeming distinction as a separate ethical category."},
+      {"blockId": "spya-n0bnf9", "quote": "either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds.", "reasoning": "Lays out the dilemma that exists even when actual consciousness is absent."},
+      {"blockId": "spya-kqs33c", "quote": "there aren't any definitive tests for deciding whether an AI is actually conscious", "reasoning": "Explains why the seeming/actual gap cannot simply be resolved by testing, making it a persistent practical problem."}
+    ]
+  },
+  {
+    "name": "Genuine uncertainty about moral status justifies caution, not creation",
+    "provenance": "assumed",
+    "statement": "When we cannot tell whether an action might bring into existence a being capable of suffering, the responsible default is to avoid that action rather than proceed and investigate afterward.",
+    "whyYouNeedIt": "The recommendation 'nobody should be deliberately setting out to create conscious AI' only follows from uncertainty about consciousness if one already accepts that uncertain risk of suffering should block an action; the essay never argues for this precautionary standard, it simply applies it.",
+    "occurrences": [
+      {"blockId": "spya-yverz7", "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason. Creating conscious machines would be an ethical disaster.", "reasoning": "The jump from 'we don't know if it's possible' to 'don't attempt it' requires an unstated precautionary rule about acting under moral uncertainty."},
+      {"blockId": "spya-e68t9h", "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights.", "reasoning": "Treats the mere possibility of moral status as enough to generate obligations, which presumes a precautionary stance toward uncertain sentience."},
+      {"blockId": "spya-qu7j89", "quote": "I've made a case against conscious AI, but I might be wrong.", "reasoning": "Acknowledging fallibility while still urging restraint only makes sense if uncertainty itself, not proof, is the trigger for caution."}
+    ]
+  },
+  {
+    "name": "Consciousness cannot be directly observed, only inferred from theory",
+    "provenance": "assumed",
+    "statement": "There is no direct way to check whether any system other than oneself has experiences; claims about another mind, biological or artificial, always rest on theoretical inference rather than observation.",
+    "whyYouNeedIt": "The repeated insistence that the question is 'fraught with uncertainty' and that 'nobody can know for sure' only makes sense if consciousness is in principle unobservable from outside, so that even perfect knowledge of a system's behavior or structure cannot settle the matter.",
+    "occurrences": [
+      {"blockId": "spya-zajp75", "quote": "All theories of consciousness are fraught with uncertainty, and anyone who claims to know for sure what it would take to create real artificial consciousness... is overstepping what can reasonably be said.", "reasoning": "The claim that even certainty is unreachable presumes consciousness is not directly checkable, only theorized about."},
+      {"blockId": "spya-kqs33c", "quote": "because there's no consensus over the necessary or sufficient conditions for consciousness, there aren't any definitive tests for deciding whether an AI is actually conscious", "reasoning": "Explains the absence of tests by appeal to lack of theoretical consensus, which only matters if direct observation is impossible in the first place."},
+      {"blockId": "spya-mxxutn", "quote": "The 'Garland test,' as it's come to be known, is not a test of machine consciousness itself. It is a test of what it takes for a human to be persuaded that a machine is conscious.", "reasoning": "Distinguishing a persuasion-test from a consciousness-test presumes that consciousness itself remains unobservable even when persuasion succeeds."}
+    ]
+  }
+]}

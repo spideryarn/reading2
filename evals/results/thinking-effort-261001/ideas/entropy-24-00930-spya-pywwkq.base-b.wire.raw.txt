@@ -1,0 +1,96 @@
+{"ideas": [
+  {
+    "name": "Synergy as the signature of real computation",
+    "provenance": "introduced",
+    "statement": "When the joint information that several neurons' past activity carries about a target's future exceeds the sum of what each neuron carries alone, the extra amount (synergy) marks a case where the target is genuinely combining its inputs rather than just adding up separate signals.",
+    "statement_note": null,
+    "occurrences": [
+      {"blockId": "spya-h5dz45", "quote": "I(X;Y) 6= ∑ i=1 |X| I(Xi;Y).", "reasoning": "States the inequality between the whole and the sum of parts that makes synergy detectable."},
+      {"blockId": "spya-e94ury", "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.", "reasoning": "Directly defines synergy as the gap between joint and summed marginal information."},
+      {"blockId": "spya-sp50v3", "quote": "We have focused particularly on statistical synergy, i.e., the information about the future of a target neuron that is disclosed by the higher-order patterns instantiated by multiple upstream neurons and is irreducible to any single source, as a measure of processing or computation.", "reasoning": "Restates synergy as the paper's chosen proxy for computation, the idea the whole review is built on."}
+    ]
+  },
+  {
+    "name": "Mutual information shows correlation, transfer entropy shows directed flow",
+    "provenance": "introduced",
+    "statement": "Mutual information captures an undirected statistical dependency between two signals (a kind of functional connectivity), while transfer entropy captures how much a source's past specifically reduces uncertainty about a target's future beyond what the target's own past already tells you (effective connectivity, i.e. directed information flow).",
+    "occurrences": [
+      {"blockId": "spya-f6sbgx", "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as “transfer” or “flow.”", "reasoning": "Explicitly separates mutual information from transfer/flow."},
+      {"blockId": "spya-p4pyuy", "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation.", "reasoning": "States the functional-vs-effective distinction directly."}
+    ]
+  },
+  {
+    "name": "PID's four-way split is mathematically underdetermined without a chosen redundancy rule",
+    "provenance": "introduced",
+    "statement": "Splitting joint mutual information into redundant, unique, and synergistic pieces gives more unknowns than equations, so no decomposition is possible until one first defines, by some extra assumption, how to measure redundancy; different reasonable choices of that definition can give different answers.",
+    "occurrences": [
+      {"blockId": "spya-bgsd4n", "quote": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms). If any of the unknown terms can be defined, then the other three emerge “for free”. Unfortunately, classical Shannon information theory provides no unique solution to any of these", "reasoning": "States plainly that the decomposition requires an externally chosen redundancy measure to be solvable at all."},
+      {"blockId": "spya-rc76qn", "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks... There are, at present, close to a dozen competing redundancy functions", "reasoning": "Shows the practical consequence of the underdetermination: many competing, non-equivalent definitions exist."}
+    ]
+  },
+  {
+    "name": "Rich clubs are synergy-dense computational cores",
+    "provenance": "introduced",
+    "statement": "The small set of densely interconnected, highly active neurons that make up a network's 'rich club' do disproportionately more of the circuit's synergistic information processing than their numbers would predict.",
+    "occurrences": [
+      {"blockId": "spya-fud8q3", "quote": "Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club", "reasoning": "Gives the core empirical finding defining the idea."},
+      {"blockId": "spya-fud8q3", "quote": "Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy.", "reasoning": "Quantifies the disproportionate concentration of computation in the rich club."}
+    ]
+  },
+  {
+    "name": "Synergy peaks at intermediate input similarity, then gives way to redundancy",
+    "provenance": "introduced",
+    "statement": "As two input neurons' activity becomes more correlated, the synergy between them and a shared target first rises, but past a certain point further correlation increase causes synergy to fall while redundancy keeps climbing, so synergy is maximized at intermediate rather than maximal similarity.",
+    "occurrences": [
+      {"blockId": "spya-ybmve2", "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease", "reasoning": "States the non-monotonic relationship directly."},
+      {"blockId": "spya-cs9fdy", "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.", "reasoning": "Explains the mechanism behind the non-monotonic pattern."}
+    ]
+  },
+  {
+    "name": "Recurrent wiring boosts synergy more than feedback wiring",
+    "provenance": "introduced",
+    "statement": "Triads where the two source neurons are themselves connected to each other (recurrent connections) show higher synergy, whereas connections running back from the target to the sources (feedback) do not reliably increase synergy and may even reduce it.",
+    "occurrences": [
+      {"blockId": "spya-sd9fzd", "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.", "reasoning": "States the asymmetric effect of recurrent versus feedback connections on synergy."},
+      {"blockId": "spya-sd9fzd", "quote": "Finally, feedback connections were not significantly related to synergy.", "reasoning": "Confirms feedback's null relationship with synergy, contrasting with recurrent connections."}
+    ]
+  },
+  {
+    "name": "Statistical dependency is not the same as mechanistic explanation",
+    "provenance": "introduced",
+    "statement": "Finding that neurons show redundant, unique, or synergistic statistical relationships tells you a pattern exists, but it does not by itself explain what biological machinery (neurotransmitters, wiring, cell type) produces that pattern.",
+    "occurrences": [
+      {"blockId": "spya-spdx0y", "quote": "while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.", "reasoning": "States directly that statistical findings and mechanistic understanding are separate things."}
+    ]
+  },
+  {
+    "name": "Decomposition can be localized to single moments, not just averaged over all data",
+    "provenance": "introduced",
+    "statement": "Instead of only computing redundancy, uniqueness, and synergy as long-run averages over an entire dataset, the same decomposition can in principle be computed for each individual observed configuration of activity, producing a moment-by-moment trace of how information-sharing mode changes over time.",
+    "occurrences": [
+      {"blockId": "spya-mczhkp", "quote": "The local PID framework allows us to perform the same decomposition, but for every individual possible configuration of specific source and target states. In the context of neural recordings, the obvious application of this is the construction of a time-resolved, “informational time series”", "reasoning": "States the move from expected/averaged values to per-instant local values."},
+      {"blockId": "spya-j6s6fp", "quote": "the PID framework itself can also be localized to single configurations", "reasoning": "Introduces the general possibility of localizing the decomposition."}
+    ]
+  },
+  {
+    "name": "Inferred effective-connectivity networks are treated as stand-ins for real circuit wiring",
+    "provenance": "assumed",
+    "statement": "To talk about a triad as having 'feedforward', 'feedback', or 'recurrent' connections, and to interpret synergy in terms of those motifs, one has to treat the network of statistically-inferred directed dependencies (built from transfer entropy) as if it reflected the actual wiring pattern among the recorded neurons.",
+    "whyYouNeedIt": "Without taking the inferred transfer-entropy network as a stand-in for genuine circuit connectivity, labeling triads by their feedforward/feedback/recurrent 'connections' and drawing conclusions about how wiring shapes computation would not be a meaningful move.",
+    "occurrences": [
+      {"blockId": "spya-sw5ukx", "quote": "We then rendered the single-unit-level functional recording into an effective network, capturing the microcircuit dynamics using transfer entropy.", "reasoning": "Builds the network used for all later motif analysis purely from statistical inference, which only supports circuit-motif claims if that network stands in for real wiring."},
+      {"blockId": "spya-xs5660", "quote": "Connectivity motifs characterize and describe the different ways a fixed number of nodes can be connected. For example, in a three-element triad, the connectivity can be parsed into feedforward, feedback, and recurrent types.", "reasoning": "Talks about the inferred edges as if they were literal circuit connections, which requires the inferred network to track real wiring."},
+      {"blockId": "spya-j4cy9j", "quote": "the functional networks from which triads were drawn and against which the synergy values were compared were generated from bivariate transfer entropy analyses. This matters because it has been shown that bivariate analyses overestimate the significance of bivariate edges", "reasoning": "This later caveat only matters because the motif-based conclusions had been quietly relying on the inferred network being an accurate picture of real connectivity."}
+    ]
+  },
+  {
+    "name": "Which information-sharing mode dominates shifts with task demands",
+    "provenance": "introduced",
+    "statement": "The balance between synergy and redundancy in a brain region is not fixed but shifts according to what the behavior currently requires, for instance favoring redundancy (duplicated, failure-resistant signaling) during motor execution and favoring synergy during integrative epochs like planning or cueing.",
+    "occurrences": [
+      {"blockId": "spya-t8fayf", "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically. This increase in relative redundancy was interpreted as a response to the practical requirements of the task", "reasoning": "States the task-driven shift from synergy toward redundancy during motor execution."},
+      {"blockId": "spya-t8fayf", "quote": "AIP (a pre-motor region) had the highest synergy during the fixation/cueing epoch, which then dropped off during movement, while M1 (the primary motor region) had the lowest synergy during the memory epoch, which then exploded during movement execution.", "reasoning": "Shows that the dominant information mode varies by both region and behavioral epoch."},
+      {"blockId": "spya-b32ecw", "quote": "synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.", "reasoning": "Summarizes the general claim that information-sharing mode tracks behavioral state."}
+    ]
+  }
+]}

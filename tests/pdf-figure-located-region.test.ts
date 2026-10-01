@@ -126,6 +126,43 @@ describe("a composite figure the model boxed", () => {
     );
     expect(beside).toMatchObject({ ok: true });
   });
+
+  it("snaps through a chain to a fixpoint", () => {
+    const chained = judge(
+      {
+        box: { x0: 60, y0: 375, x1: 180, y1: 500 },
+        pictures: [],
+      },
+      {
+        ink: [
+          { x0: 180, y0: 380, x1: 300, y1: 490 },
+          { x0: 120, y0: 380, x1: 240, y1: 490 },
+        ],
+      },
+    );
+    expect(chained.ok).toBe(true);
+    if (!chained.ok) return;
+    expect(chained.region.x1).toBe(300);
+  });
+
+  it("keeps prose-like text inside isolated flowchart nodes", () => {
+    const nodeText = "Each node contains ordinary prose words for careful readers";
+    const boxes: InkBox[] = [];
+    const labels: PageTextItem[] = [text(CAPTION, 60, 360)];
+    for (const x of [55, 310]) {
+      for (const y of [500, 385]) {
+        const x0 = x;
+        const y0 = y;
+        boxes.push({ x0, y0, x1: x0 + 230, y1: y0 + 80, rect: true });
+        for (let line = 0; line < 5; line++) labels.push(text(nodeText, x0 + 5, y0 + 60 - line * 12, 8));
+      }
+    }
+    const flowchart = judge(
+      { box: { x0: 50, y0: 380, x1: 545, y1: 585 }, pictures: [] },
+      { ink: boxes, text: labels },
+    );
+    expect(flowchart).toMatchObject({ ok: true });
+  });
 });
 
 describe("a region that is not this caption's figure", () => {
@@ -142,15 +179,64 @@ describe("a region that is not this caption's figure", () => {
     expect(table).toEqual({ ok: false, detail: "another-caption" });
   });
 
+  it("is refused when a captionless ruled table is boxed beside the figure caption", () => {
+    const rules: InkBox[] = [400, 465, 530, 600]
+      .flatMap((y) => [{ x0: 80, y0: y, x1: 480, y1: y + 1 }])
+      .concat([80, 210, 345, 480].map((x) => ({ x0: x, y0: 400, x1: x + 1, y1: 600 })));
+    const cells = [
+      text("Group A", 100, 555),
+      text("Group B", 235, 555),
+      text("Group C", 370, 555),
+      text("12", 100, 490),
+      text("18", 235, 490),
+      text("21", 370, 490),
+      text("14", 100, 425),
+      text("17", 235, 425),
+      text("25", 370, 425),
+    ];
+    const table = judge(
+      { box: { x0: 75, y0: 395, x1: 485, y1: 605 }, pictures: [] },
+      { ink: rules, text: [text(CAPTION, 60, 360), ...cells] },
+    );
+    expect(table).toEqual({ ok: false, detail: "mostly-table" });
+  });
+
+  it("is refused when a captionless borderless table is the whole box", () => {
+    const cells = [520, 480].flatMap((y, row) => [
+      text(`Group ${row + 1}`, 100, y),
+      text(String(12 + row), 300, y),
+    ]);
+    const table = judge(
+      { box: { x0: 75, y0: 425, x1: 485, y1: 585 }, pictures: [] },
+      { ink: [], text: [text(CAPTION, 60, 400), ...cells] },
+    );
+    expect(table).toEqual({ ok: false, detail: "mostly-table" });
+  });
+
   it("is refused when another figure's caption is as near as its own", () => {
     const between = judge({}, { text: [...PAGE_TEXT, text("Fig 2. Something else entirely.", 60, 630)] });
     expect(between).toEqual({ ok: false, detail: "another-caption" });
+  });
+
+  it("is refused when the target caption is repeated in a running header or list", () => {
+    const repeated = judge({}, { text: [text(CAPTION, 60, 810), ...PAGE_TEXT] });
+    expect(repeated).toEqual({ ok: false, detail: "caption-ambiguous" });
   });
 
   it("is refused when the box is mostly prose", () => {
     const lines = Array.from({ length: 12 }, (_, i) => text(PROSE, 60, 340 - i * 12, 10));
     const prose = judge(
       { box: { x0: 55, y0: 200, x1: 535, y1: 352 }, pictures: [] },
+      { ink: [], text: [text(CAPTION, 60, 360), ...lines] },
+    );
+    expect(prose).toEqual({ ok: false, detail: "mostly-prose" });
+  });
+
+  it("recognises a narrow prose column relative to the proposed crop", () => {
+    const narrowText = "Eight short words fill this narrow prose column now";
+    const lines = Array.from({ length: 12 }, (_, i) => text(narrowText, 60, 340 - i * 12, 6));
+    const prose = judge(
+      { box: { x0: 55, y0: 200, x1: 215, y1: 352 }, pictures: [] },
       { ink: [], text: [text(CAPTION, 60, 360), ...lines] },
     );
     expect(prose).toEqual({ ok: false, detail: "mostly-prose" });
@@ -174,5 +260,13 @@ describe("a region that is not this caption's figure", () => {
     expect(other.ok).toBe(true);
     if (!other.ok) return;
     expect(other.region.y1).toBeLessThan(700);
+  });
+
+  it("refuses runaway snap growth once the region covers most of the page", () => {
+    const huge = judge(
+      { box: { x0: 0, y0: 0, x1: 595, y1: 700 }, pictures: [] },
+      { ink: [], text: [text(CAPTION, 60, 710)] },
+    );
+    expect(huge).toEqual({ ok: false, detail: "too-large" });
   });
 });

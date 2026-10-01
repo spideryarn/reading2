@@ -1,0 +1,357 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page: gilded vignettes in small framed scenes running top to bottom down the sheet, with the cortex itself drawn as a glowing tidal sea across which the argument unfolds.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "From the Fixed Neuron to the Unified Sea",
+      "prompt": "An illuminated manuscript page, vellum-toned, with gold leaf accents, laid out as one continuous composition running top to bottom in strict reading order. At the very top: MILLIONS MUSTERED IN AN INSTANT, a crowd of tiny robed figures snapping into formation under golden rays. Below it: THE NICHE THAT NEVER CHANGES, a lantern-bearing figure fixed in a wall-niche beside a small gilded cartouche holding FIGURE A, redrawn in the manuscript's own hand as a miniature panel (no pasted photograph). Next, a walled courtyard encloses two scenes side by side: FIRST OBJECT, SECOND OBJECT (two objects on a scroll, a seated figure studying their order) and TREES THAT SYNC WITHOUT TOUCHING (glowing branching cells tilting their neighbours by light alone, no wires). Below that courtyard, a second walled enclosure holds three scenes in a row: THE STENCIL OVER THE CORTEX (a hand holding a cut stencil over the glowing sea, with FIGURE C as a small cartouche), THE TIDE THAT MOVES THE STENCIL (the stencil's light sliding like a tide-front leaving a wake), and TWO RIPPLES BECOME ONE PATTERN (two ripple-sets merging into a braided new pattern). Beneath both enclosures: THREE POTIONS, ONE SLOW TIDE, three sealed jars with distinct sigils each poured onto the sea, each producing the same slow swell. Below that: THE LOOM BENEATH THE TIDE, a weaver at a loom under the glowing sea, with FIGURE H as a nearby cartouche. To one side, slightly offset, a smaller scene: NOT A HOT ZONE, A WIDE TIDE, an old map with one small region struck through, the rest of the land glowing instead. At the very bottom, where the loom and the side-scene both lead, the full page's sea comes together in: THE CORTEX AS ONE SEA, one unbroken glowing swell with small figures at its shore. Use warm gold, faded indigo, and rust-red ink throughout, hand-drawn linework, aged vellum texture, modest gold leaf highlights on the wave-crests. The only lettering anywhere on the page is the eleven vignette titles given above, each lettered in small capitals directly beneath its scene; no other words, banners, labels, or inscriptions appear anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-p6hwth",
+          "quote": "each neuron serves a stable, specialized function, i.e., a given neuron’s spikes always “mean” the same unique thing",
+          "depicts": "A single lantern-bearing figure stands fixed in a niche along a rising processional stair, wearing one badge that never changes, with FIGURE A set into a small gilded cartouche beside him showing the hierarchy climbing from simple lines up to a finished creature's likeness.",
+          "title": "THE NICHE THAT NEVER CHANGES",
+          "node": "n2"
+        },
+        {
+          "block": "spya-d6h3pv",
+          "quote": "two objects and their order (first vs second) must be remembered",
+          "depicts": "Inside a walled courtyard labelled by its border alone (no text), two small objects rest on a scroll marked by their place in a short line, with a seated figure studying which came first and which came second.",
+          "title": "FIRST OBJECT, SECOND OBJECT",
+          "node": "n3"
+        },
+        {
+          "block": "spya-bzqaf5",
+          "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells",
+          "depicts": "Still within the same walled courtyard, small branching tree-shaped cells glow and throw out rings of light that tilt their neighbouring trees into step, with no threads or wires drawn between them.",
+          "title": "TREES THAT SYNC WITHOUT TOUCHING",
+          "node": "n4"
+        },
+        {
+          "block": "spya-gkfdys",
+          "quote": "They function as temporary inhibitory “stencils” across the surface of cortex.",
+          "depicts": "A second walled enclosure opens: a hand holds a carved stencil plate over the glowing cortical sea, letting light through certain cut shapes and blocking it elsewhere; FIGURE C sits in a cartouche beside it showing the stencil's own pattern.",
+          "title": "THE STENCIL OVER THE CORTEX",
+          "node": "n5"
+        },
+        {
+          "block": "spya-uqt5yf",
+          "quote": "sweep across the cortical surface, tracing complex, but highly organized, spatiotemporal patterns",
+          "depicts": "Within the same enclosure, the stencil's light is shown sliding like a tide-front across the sea, leaving a wake of pattern behind it as it travels.",
+          "title": "THE TIDE THAT MOVES THE STENCIL",
+          "node": "n7"
+        },
+        {
+          "block": "spya-vp5h33",
+          "quote": "they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "depicts": "Two sets of ripples cross within the enclosure's sea, their crests and troughs merging into one braided new pattern where they meet.",
+          "title": "TWO RIPPLES BECOME ONE PATTERN",
+          "node": "n8"
+        },
+        {
+          "block": "spya-wnqgmn",
+          "quote": "propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects",
+          "depicts": "Outside the enclosures, three sealed jars marked only by different coloured sigils are each poured onto the same cortical sea, and in every case the sea slows into the same smeared, sluggish swell.",
+          "title": "THREE POTIONS, ONE SLOW TIDE",
+          "node": "n9"
+        },
+        {
+          "block": "spya-f0dqyd",
+          "quote": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns",
+          "depicts": "Beneath the whole glowing sea, a weaver sits at a loom whose threads (synapses) set the shapes the tide above is free to take; FIGURE H rests in a cartouche nearby showing the full hybrid system.",
+          "title": "THE LOOM BENEATH THE TIDE",
+          "node": "n10"
+        },
+        {
+          "block": "spya-m3dn2u",
+          "quote": "we locate its mechanisms not in a “hot zone,” but in the large‑scale wave dynamics",
+          "depicts": "Set a little to the side, an old map shows one small circled region struck through with ink, labelled by nothing but the strike itself, while the whole surrounding land instead glows faintly with the same tide pattern spread wide.",
+          "title": "NOT A HOT ZONE, A WIDE TIDE",
+          "node": "n11"
+        },
+        {
+          "block": "spya-m9exy5",
+          "quote": "these dynamic wave patterns bring the cortex into an organized, globally integrated state",
+          "depicts": "At the foot of the page, the entire sea glows as one unbroken, synchronized swell, all the earlier separate ripples now merged, with small figures standing at its shore looking out over the single unified water.",
+          "title": "THE CORTEX AS ONE SEA",
+          "node": "n12"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "At the top of the page, a vast illuminated crowd of tiny robed figures (neurons) fills a field, all snapping into one formation at once under unseen golden rays streaming down from above.",
+          "title": "MILLIONS MUSTERED IN AN INSTANT"
+        },
+        {
+          "where": "A single lantern-bearing figure stands fixed in a niche along a rising processional stair, wearing one badge that never changes, with FIGURE A set into a small gilded cartouche beside him showing the ",
+          "title": "THE NICHE THAT NEVER CHANGES"
+        },
+        {
+          "where": "Inside a walled courtyard labelled by its border alone (no text), two small objects rest on a scroll marked by their place in a short line, with a seated figure studying which came first and which cam",
+          "title": "FIRST OBJECT, SECOND OBJECT"
+        },
+        {
+          "where": "Still within the same walled courtyard, small branching tree-shaped cells glow and throw out rings of light that tilt their neighbouring trees into step, with no threads or wires drawn between them.",
+          "title": "TREES THAT SYNC WITHOUT TOUCHING"
+        },
+        {
+          "where": "A second walled enclosure opens: a hand holds a carved stencil plate over the glowing cortical sea, letting light through certain cut shapes and blocking it elsewhere; FIGURE C sits in a cartouche bes",
+          "title": "THE STENCIL OVER THE CORTEX"
+        },
+        {
+          "where": "Within the same enclosure, the stencil's light is shown sliding like a tide-front across the sea, leaving a wake of pattern behind it as it travels.",
+          "title": "THE TIDE THAT MOVES THE STENCIL"
+        },
+        {
+          "where": "Two sets of ripples cross within the enclosure's sea, their crests and troughs merging into one braided new pattern where they meet.",
+          "title": "TWO RIPPLES BECOME ONE PATTERN"
+        },
+        {
+          "where": "Outside the enclosures, three sealed jars marked only by different coloured sigils are each poured onto the same cortical sea, and in every case the sea slows into the same smeared, sluggish swell.",
+          "title": "THREE POTIONS, ONE SLOW TIDE"
+        },
+        {
+          "where": "Beneath the whole glowing sea, a weaver sits at a loom whose threads (synapses) set the shapes the tide above is free to take; FIGURE H rests in a cartouche nearby showing the full hybrid system.",
+          "title": "THE LOOM BENEATH THE TIDE"
+        },
+        {
+          "where": "Set a little to the side, an old map shows one small circled region struck through with ink, labelled by nothing but the strike itself, while the whole surrounding land instead glows faintly with the ",
+          "title": "NOT A HOT ZONE, A WIDE TIDE"
+        },
+        {
+          "where": "At the foot of the page, the entire sea glows as one unbroken, synchronized swell, all the earlier separate ripples now merged, with small figures standing at its shore looking out over the single uni",
+          "title": "THE CORTEX AS ONE SEA"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE A",
+          "block": "spya-hec5rz",
+          "sha256": "72af7829ae0422f45d28ba2a65de2b189ba666f755339d368d83d33c6b116d8d",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE C",
+          "block": "spya-vzew3p",
+          "sha256": "8cf6a5ad96d86e7971aeced04d0d69e946af51fd85ffb8b32e0b7cf6fc938f92",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE H",
+          "block": "spya-e9rw5j",
+          "sha256": "e42d8dbebb8c1ec87d006cffd37876b31a74726659f21183130f2da0340b71d2",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-mechanism",
+      "title": "Why the Flexible Neuron Needs a Field",
+      "prompt": "An illuminated manuscript page, same vellum tone, gold leaf and hand ink-work as the overview, now a single close-up plate stepping inside the courtyard marked 'MULTIFUNCTIONAL NEURONS NEED A ROUTER'. At the top, reopen with the same framed scene as before: FIRST OBJECT, SECOND OBJECT, two objects on a scroll beside a seated figure studying their order — this is the doorway into the zoomed detail. Beneath it, a wider courtyard scene: ONE THIRD LIT FOR ONE TASK, rows of robed scholar-figures with only a third glowing. Below that, within the same ground: FIRST A, THEN B, NEVER BOTH, one figure lighting differently to two staged objects depending on their order, with FIGURE B set in a small gilded cartouche beside it redrawn in the manuscript's hand. Next, a cluster of adjoining halls: ONE GUILD MEMBER, MANY HALLS, small figures crossing between overlapping guild-chambers, badges shifting colour. Beside it: THE CARTOGRAPHER LOST IN THE WEB, a robed figure tracing tangled threads with a finger, unable to fix a single path. Below these two: RIPPLES DIRECTING THE SPARKS, concentric rings of light steering small sparks into orderly lanes across the tangled halls. Then: A HALO, NOT A WIRE, a glowing nimbus spreading from one figure and tilting its neighbours with no wire drawn between them. At the foot of the page: THE CONDUCTOR OF THE NETWORKS, a conductor shape of the same glow standing over the guild-halls with baton raised, cueing which glow and which dim. Palette: warm gold, faded indigo, rust-red ink, aged vellum grain, modest gilding on the halo-light. The only words on the page are the eight vignette titles lettered in small capitals beneath their scenes; nothing else is lettered anywhere.",
+      "vignettes": [
+        {
+          "block": "spya-d6h3pv",
+          "quote": "two objects and their order (first vs second) must be remembered",
+          "depicts": "Opening the plate exactly as before: a walled courtyard holds two objects on a scroll marked by their order, with a seated figure studying which came first and which came second.",
+          "title": "FIRST OBJECT, SECOND OBJECT",
+          "node": "n3"
+        },
+        {
+          "block": "spya-amx5qf",
+          "quote": "any given task engages around a third of all neurons in the prefrontal cortex",
+          "depicts": "A courtyard of many robed scholar-figures stands in rows; only a third of them glow for the task at hand, while the rest wait unlit, badges blank, ready for other work.",
+          "title": "ONE THIRD LIT FOR ONE TASK",
+          "node": "a1"
+        },
+        {
+          "block": "spya-x5m34h",
+          "quote": "spike to object A, but only when it was seen first, and to object B",
+          "depicts": "One of the scholar-figures lights up and points only to object A when it stands first in a short staged line of two objects, and only to object B when it stands second.",
+          "title": "FIRST A, THEN B, NEVER BOTH",
+          "node": "a3"
+        },
+        {
+          "block": "spya-fnm872",
+          "quote": "cortical neurons have the capacity to participate in multiple networks, shifting membership as needed",
+          "depicts": "A web of overlapping guild-halls stands side by side; the same small figures move between the halls, their badges changing colour as they cross each threshold.",
+          "title": "ONE GUILD MEMBER, MANY HALLS",
+          "node": "a5"
+        },
+        {
+          "block": "spya-dtnkkk",
+          "quote": "a dense web of overlapping networks, allowing the same neurons to contribute to different computations",
+          "depicts": "A cartographer stands before the tangled web of halls from the previous scene, tracing thread after thread with a finger, unable to find a fixed path through the overlap.",
+          "title": "THE CARTOGRAPHER LOST IN THE WEB",
+          "node": "a6"
+        },
+        {
+          "block": "spya-trb3jf",
+          "quote": "organizing information, routing it between circuits, and coordinating memory and control processes",
+          "depicts": "Concentric rings of light ripple outward over the tangled web, nudging small sparks of activity into orderly lanes between the halls.",
+          "title": "RIPPLES DIRECTING THE SPARKS",
+          "node": "a7"
+        },
+        {
+          "block": "spya-f59f0p",
+          "quote": "align spike timing, activate or suppress ensembles, and flexibly route information across overlapping networks",
+          "depicts": "A conductor figure made of the same glowing halo stands above the overlapping guild-halls, baton raised, cueing which halls light and which fall quiet.",
+          "title": "THE CONDUCTOR OF THE NETWORKS",
+          "node": "a10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Opening the plate exactly as before: a walled courtyard holds two objects on a scroll marked by their order, with a seated figure studying which came first and which came second.",
+          "title": "FIRST OBJECT, SECOND OBJECT"
+        },
+        {
+          "where": "A courtyard of many robed scholar-figures stands in rows; only a third of them glow for the task at hand, while the rest wait unlit, badges blank, ready for other work.",
+          "title": "ONE THIRD LIT FOR ONE TASK"
+        },
+        {
+          "where": "One of the scholar-figures lights up and points only to object A when it stands first in a short staged line of two objects, and only to object B when it stands second.",
+          "title": "FIRST A, THEN B, NEVER BOTH"
+        },
+        {
+          "where": "A web of overlapping guild-halls stands side by side; the same small figures move between the halls, their badges changing colour as they cross each threshold.",
+          "title": "ONE GUILD MEMBER, MANY HALLS"
+        },
+        {
+          "where": "A cartographer stands before the tangled web of halls from the previous scene, tracing thread after thread with a finger, unable to find a fixed path through the overlap.",
+          "title": "THE CARTOGRAPHER LOST IN THE WEB"
+        },
+        {
+          "where": "Concentric rings of light ripple outward over the tangled web, nudging small sparks of activity into orderly lanes between the halls.",
+          "title": "RIPPLES DIRECTING THE SPARKS"
+        },
+        {
+          "where": "A translucent glowing halo spreads out from one scholar-figure and tilts the posture of several neighbours, with no connecting thread or wire drawn between any of them.",
+          "title": "A HALO, NOT A WIRE"
+        },
+        {
+          "where": "A conductor figure made of the same glowing halo stands above the overlapping guild-halls, baton raised, cueing which halls light and which fall quiet.",
+          "title": "THE CONDUCTOR OF THE NETWORKS"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE B",
+          "block": "spya-x7vunr",
+          "sha256": "33b2a3895c3699fda06f44e608398db500b86e347f6b58fea8f4550b1a9747af",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-spatial-computing",
+      "title": "The Stencil, the Tide, and the Sea That Computes",
+      "prompt": "An illuminated manuscript page, same vellum, gold leaf and ink-work as the other plates, now a close-up stepping inside the enclosure marked 'SPATIAL COMPUTING & TRAVELING WAVES'. At the top, reopen with the same framed scene as the overview: THE STENCIL OVER THE CORTEX, a hand holding a carved stencil over the glowing sea, FIGURE C in a small gilded cartouche beside it, redrawn in the manuscript's own hand. Below it: BETA, THE BRAKE ON MOVEMENT, a straining horse held by a wave-marked lever-brake, sparks flying as the lever eases. Next: WATCHED IN A MONKEY'S CORTEX, a robed observer with a lens over a glowing cortical surface, marking a small ledger where the light-pattern slips. Beside it: THE RULER OF JUST RIGHT SIZE, a surveyor laying three grids of different coarseness over the sea and setting his compass on the middle one. Further down: A SINGLE ROAD THROUGH ALL PATHS, a narrow lit road carved by the stencil's light through a mountain of scattered paths, with FIGURE D in a nearby cartouche. Below that: THE TIDE DRAGS THE ROAD ANEW, the stencil's tide-front sliding across the sea and pulling the lit road into a new course, FIGURE E set in a cartouche showing the shift. At the foot of the page: ALL AT ONCE, NOT THREAD BY THREAD, the entire sea settling into one finished woven pattern in a single instant, like a self-weaving tapestry. Palette: warm gold, faded indigo, rust-red ink, aged vellum grain, modest gilding on the wave-crests and the stencil's cut edges. The only words on the page are the seven vignette titles lettered in small capitals beneath their scenes; nothing else is lettered anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-gkfdys",
+          "quote": "They function as temporary inhibitory “stencils” across the surface of cortex.",
+          "depicts": "Opening the plate exactly as before: a hand holds a carved stencil plate over the glowing cortical sea, letting light through certain cut shapes and blocking it elsewhere, FIGURE C set in a small cartouche beside it.",
+          "title": "THE STENCIL OVER THE CORTEX",
+          "node": "n5"
+        },
+        {
+          "block": "spya-thnz7b",
+          "quote": "beta acts like a brake on movement execution. When alpha/beta decreases locally, gamma and spiking increase",
+          "depicts": "A horse strains against a lever-brake marked by slow pulsing waves; as the lever eases, bright sparks fly and the horse leaps forward.",
+          "title": "BETA, THE BRAKE ON MOVEMENT",
+          "node": "b1"
+        },
+        {
+          "block": "spya-azz3c8",
+          "quote": "Alpha/beta rhythms reflected learned, internally generated contextual and categorical information, organized into spatial patterns across the cortical surface",
+          "depicts": "A robed observer peers through a lens at a monkey's cortical surface, watching patches of light shift to match each task's context, marking a small ledger where the pattern slips and an error follows.",
+          "title": "WATCHED IN A MONKEY'S CORTEX",
+          "node": "b3"
+        },
+        {
+          "block": "spya-q606tk",
+          "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters",
+          "depicts": "A surveyor lays three measuring grids over the cortical sea side by side — one very fine, one very broad, and one of middling size — and sets his compass on the middle one.",
+          "title": "THE RULER OF JUST RIGHT SIZE",
+          "node": "b4"
+        },
+        {
+          "block": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional “subspace” or “manifold” within the high-dimensional space",
+          "depicts": "The stencil's light carves a single narrow winding road through a vast mountain of scattered possible paths, with FIGURE D set in a cartouche showing the stencil pattern that produces it.",
+          "title": "A SINGLE ROAD THROUGH ALL PATHS",
+          "node": "b5"
+        },
+        {
+          "block": "spya-mrsvfu",
+          "quote": "alpha/beta waves can alter which subsets of neurons are permitted to spike and their correlational structure",
+          "depicts": "The tide-front from the stencil slides across the sea, dragging the narrow lit road into a new course, with FIGURE E in a cartouche showing the transition between two such roads.",
+          "title": "THE TIDE DRAGS THE ROAD ANEW",
+          "node": "b7"
+        },
+        {
+          "block": "spya-mgnqxk",
+          "quote": "the physical medium itself evolves all at once",
+          "depicts": "The whole cortical sea settles into one finished combined pattern in a single instant, like a vast tapestry weaving itself all at once rather than thread by thread.",
+          "title": "ALL AT ONCE, NOT THREAD BY THREAD",
+          "node": "b9"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Opening the plate exactly as before: a hand holds a carved stencil plate over the glowing cortical sea, letting light through certain cut shapes and blocking it elsewhere, FIGURE C set in a small cart",
+          "title": "THE STENCIL OVER THE CORTEX"
+        },
+        {
+          "where": "A horse strains against a lever-brake marked by slow pulsing waves; as the lever eases, bright sparks fly and the horse leaps forward.",
+          "title": "BETA, THE BRAKE ON MOVEMENT"
+        },
+        {
+          "where": "A robed observer peers through a lens at a monkey's cortical surface, watching patches of light shift to match each task's context, marking a small ledger where the pattern slips and an error follows.",
+          "title": "WATCHED IN A MONKEY'S CORTEX"
+        },
+        {
+          "where": "A surveyor lays three measuring grids over the cortical sea side by side — one very fine, one very broad, and one of middling size — and sets his compass on the middle one.",
+          "title": "THE RULER OF JUST RIGHT SIZE"
+        },
+        {
+          "where": "The stencil's light carves a single narrow winding road through a vast mountain of scattered possible paths, with FIGURE D set in a cartouche showing the stencil pattern that produces it.",
+          "title": "A SINGLE ROAD THROUGH ALL PATHS"
+        },
+        {
+          "where": "The tide-front from the stencil slides across the sea, dragging the narrow lit road into a new course, with FIGURE E in a cartouche showing the transition between two such roads.",
+          "title": "THE TIDE DRAGS THE ROAD ANEW"
+        },
+        {
+          "where": "The whole cortical sea settles into one finished combined pattern in a single instant, like a vast tapestry weaving itself all at once rather than thread by thread.",
+          "title": "ALL AT ONCE, NOT THREAD BY THREAD"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE C",
+          "block": "spya-vzew3p",
+          "sha256": "8cf6a5ad96d86e7971aeced04d0d69e946af51fd85ffb8b32e0b7cf6fc938f92",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE D",
+          "block": "spya-az9405",
+          "sha256": "afe03e0052ffa8f569bf933634a9a4a9eef2dad4050ab510b48145a0d9b70952",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE E",
+          "block": "spya-gbpnax",
+          "sha256": "f73874d7056e605551a95eb83d6c7b850ed84249d70b7ee689b9a7d89418e884",
+          "ext": "png"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "profileHash": null
+}

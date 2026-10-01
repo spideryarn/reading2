@@ -693,7 +693,7 @@ export { checkpointKey as structureKey } from "./source-hash.js";
  * One structure answer, kept so a later attempt does not buy it again.
  *
  * **The raw text, not the tree.** Everything between the answer and the tree —
- * `parseJson`, `buildTree`, `appendSupplement`, the repairs — is this stage's
+ * `parseStructureAnswer`, `buildTree`, `appendSupplement`, the repairs — is this stage's
  * code, and storing its output would freeze a version of it into the row. The
  * answer is the thing that was paid for; the rest is free and re-runs.
  */
@@ -738,7 +738,7 @@ function usableStructure(value: unknown, fingerprint: string): string | null {
    * different fact from "the answer still builds".
    */
   try {
-    parseJson(entry.answer);
+    parseStructureAnswer(entry.answer);
   } catch {
     return null;
   }
@@ -857,8 +857,15 @@ export function checkCoverage(
  * the leak, and again on 2026-09-03, when a model put 8,138 characters after a
  * complete tree and the step died where `stripFence` plus `parseJsonFrom` used
  * to be. That is what `parseJsonAnswer` exists for.
+ *
+ * **Exported so the evals call this rather than copy it**, the way
+ * `structureRequest` is exported for the request. Until 2026-10-01 the
+ * structure eval and the plain-words eval kept their own copy of the
+ * pre-2026-09-03 recipe, and the structure eval refused a thinking-off answer
+ * this function accepts —
+ * docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md.
  */
-function parseJson(raw: string): { root: ModelNode } {
+export function parseStructureAnswer(raw: string): { root: ModelNode } {
   return parseJsonAnswer(raw, "the table-of-contents response");
 }
 
@@ -2355,7 +2362,7 @@ export async function generateHierarchy(opts: {
    * docs/postmortems/260830a-the-article-with-one-heading.md.
    */
   const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
-    const { root } = parseJson(answer);
+    const { root } = parseStructureAnswer(answer);
     const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
     /**
@@ -2577,7 +2584,7 @@ export async function generateHierarchy(opts: {
   /**
    * **Kept only now, and the lateness is the design.**
    *
-   * An answer stored before `parseJson` and `buildTree` had agreed with it would
+   * An answer stored before `parseStructureAnswer` and `buildTree` had agreed with it would
    * be a malformed-but-complete answer replayed for ever — every later attempt
    * "resuming" straight onto the same throw, with no call left to make that
    * could come out differently. So the write is after every check that an answer

@@ -1,0 +1,105 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-bt5030",
+      "name": "Institutional incentives quietly erode scientific integrity",
+      "provenance": "assumed",
+      "statement": "Pressures to secure funding, status, or program renewal push researchers to privilege results that look good over the rigorous checks that might undercut them, without anyone consciously choosing dishonesty.",
+      "whyYouNeedIt": "Without this assumption, the anecdotes about NAL's accelerator, the parapsychology institute's new director, and the radio astronomer read as isolated lapses rather than a connected pattern the talk is building toward a warning about.",
+      "occurrences": [
+        {
+          "blockId": "spya-m95kqm",
+          "quote": "the men in charge of programs at NAL are so anxious for new results, in order to get more money to keep the thing going for public relations purposes, they are destroying—possibly—the value of the experiments themselves",
+          "reasoning": "Only makes sense as an example of a general corrupting pressure, not a one-off mistake.",
+          "start": 677
+        },
+        {
+          "blockId": "spya-mjty2q",
+          "quote": "Yes, but then we won’t get support for more research of this kind.",
+          "reasoning": "The friend's worry only explains the dishonesty if funding pressure is assumed to generally distort honesty.",
+          "start": 268
+        },
+        {
+          "blockId": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity I have described, and where you do not feel forced by a need to maintain your position in the organization, or financial support",
+          "reasoning": "The closing wish presumes institutional pressure is the ordinary threat to integrity, not an occasional anomaly.",
+          "start": 70
+        }
+      ]
+    },
+    {
+      "id": "spya-ttag0z",
+      "name": "Form can be copied while substance is missing",
+      "provenance": "introduced",
+      "statement": "A practice can reproduce every outward step and ritual of a working process while lacking the hidden element that actually makes it function.",
+      "whyYouNeedIt": "This is the core claim naming 'Cargo Cult Science' itself.",
+      "occurrences": [
+        {
+          "blockId": "spya-fd2muf",
+          "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.",
+          "reasoning": "States the central proposition directly.",
+          "start": 581
+        },
+        {
+          "blockId": "spya-afgs74",
+          "quote": "That is the idea that we all hope you have learned in studying science in school—we never explicitly say what this is, but just hope that you catch on by all the examples of scientific investigation.",
+          "reasoning": "Names the missing element as something unstated but required.",
+          "start": 393
+        }
+      ]
+    },
+    {
+      "id": "spya-jv4nd4",
+      "name": "Honest reporting means disclosing against your own interest",
+      "provenance": "introduced",
+      "statement": "Real scientific integrity requires volunteering the evidence and reasoning that could undermine your own conclusion, not just presenting what supports it.",
+      "occurrences": [
+        {
+          "blockId": "spya-rxj5wa",
+          "quote": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it.",
+          "reasoning": "Direct statement of the norm.",
+          "start": 184
+        },
+        {
+          "blockId": "spya-bpyx8n",
+          "quote": "So it’s the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.",
+          "reasoning": "Extends the norm to misleading-by-omission even when statements are literally true.",
+          "start": 533
+        },
+        {
+          "blockId": "spya-jk7mj4",
+          "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.",
+          "reasoning": "Applies the norm to publication practice.",
+          "start": 185
+        }
+      ]
+    },
+    {
+      "id": "spya-w708s3",
+      "name": "Self-deception precedes deception of others",
+      "provenance": "introduced",
+      "statement": "The primary discipline of science is guarding against fooling yourself; only after that does honesty toward others become straightforward.",
+      "occurrences": [
+        {
+          "blockId": "spya-ed9mzv",
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.",
+          "reasoning": "States the principle explicitly as foundational.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-s9msxy",
+          "quote": "It’s interesting to look at the history of measurements of the charge of the electron, after Millikan.",
+          "reasoning": "Uses the Millikan drift as the paradigm case of unconscious self-deception.",
+          "start": 334
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T17:43:14.885Z",
+  "elapsedMs": 18434
+}

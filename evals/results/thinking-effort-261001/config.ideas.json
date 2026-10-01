@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "mode": "ideas",
+  "promptVersion": "ideas/3",
+  "model": "anthropic/claude-sonnet-5",
+  "power": "standard",
+  "productionEffort": "high",
+  "arms": {
+    "base-a": {
+      "override": null,
+      "expectedOnWire": "high"
+    },
+    "base-b": {
+      "override": null,
+      "expectedOnWire": "high"
+    },
+    "low-a": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "low-b": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "medium-a": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    },
+    "medium-b": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    }
+  },
+  "cacheArticle": false,
+  "profile": null,
+  "previous": null
+}

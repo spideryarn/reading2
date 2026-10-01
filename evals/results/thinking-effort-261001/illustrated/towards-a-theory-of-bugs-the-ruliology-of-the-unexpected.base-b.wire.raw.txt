@@ -1,0 +1,222 @@
+{
+  "style": "An illuminated manuscript page — small painted roundel scenes linked by hand-drawn connecting lines on aged parchment, fitting an article whose argument is itself a chain of specific, named little failures and rescues",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Book of Bugs: an overview",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-dh7pah",
+          "quote": "And for it to fit in our minds this has to be computationally quite simple.",
+          "depicts": "A small simple geometric shape (a stand-in for the program we imagine) sitting neatly inside a drawn outline of a human head, at the top of the page as the opening frame.",
+          "title": "FITS IN THE MIND"
+        },
+        {
+          "node": "n2",
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "A ribbon of tape marked with a run of 7 small marks feeding into a machine, whose output panel shows 9 instead of the expected 8, with a thin crack of ink breaking the panel's border.",
+          "title": "SEVEN BECOMES NINE"
+        },
+        {
+          "node": "n3",
+          "block": "spya-gp6xya",
+          "quote": "the machine goes “out of control” making a wider and wider pattern forever",
+          "depicts": "A machine's tape-pattern spreading wider and wider, bursting past a drawn boundary line at the edge of its own frame and trailing off the page's margin.",
+          "title": "OUT OF CONTROL"
+        },
+        {
+          "node": "n4",
+          "block": "spya-b6uxy4",
+          "quote": "Sometimes it looks as if a particular rule is going to do the job—and then, suddenly there’s a “bug”—like here at n = 14",
+          "depicts": "A neat row of cells doubling evenly step by step, then fraying into an irregular tangle of marks exactly at the fourteenth step.",
+          "title": "GLITCH AT FOURTEEN"
+        },
+        {
+          "node": "n5",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A scholar's magnifying lens held over a complicated tangled pattern, revealing within it a small, simple nested triangular pattern.",
+          "title": "HIDDEN RULE 122"
+        },
+        {
+          "node": "n6",
+          "block": "spya-ypka68",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "A branching tree of paths drawn like a maze, every branch trailing into blank parchment with no path ever reaching a marked goal.",
+          "title": "NO PROOF FOUND"
+        },
+        {
+          "node": "n7",
+          "block": "spya-gj554s",
+          "quote": "“lurking at the edges” is computational irreducibility",
+          "depicts": "A shadowy, half-hidden creature crouched at the margins of a central patterned roundel, the hub where all the paths above converge.",
+          "title": "LURKING AT THE EDGES"
+        },
+        {
+          "node": "n8",
+          "block": "spya-xrvkvy",
+          "quote": "one might whimsically call a wily weasel machine",
+          "depicts": "A sly weasel hiding deep inside a maze of tape symbols, barely visible, while a hand holds a magnifying glass searching nearby without finding it.",
+          "title": "THE WILY WEASEL"
+        },
+        {
+          "node": "n9",
+          "block": "spya-zbsh70",
+          "quote": "there was rule 30, with all its complexity",
+          "depicts": "A plain orderly row of cells beside it suddenly erupting into a chaotic triangular pattern unlike any of its orderly neighbors.",
+          "title": "RULE THIRTY ERUPTS"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y7q6q3",
+          "quote": "you try x105 – 1. And suddenly there’s something different—a coefficient of 2",
+          "depicts": "A page of factored expressions each showing only small plain marks, until one equation shows a doubled mark, circled in surprise by a scholar's hand.",
+          "title": "COEFFICIENT OF TWO"
+        },
+        {
+          "node": "n11",
+          "block": "spya-s0e3qm",
+          "quote": "it’s the short program that’s the one that does what you want",
+          "depicts": "A short, clean scroll of neat marks glowing calmly beside a long tangled scroll knotted with crossed-out corrections and blots.",
+          "title": "THE SHORT PROGRAM"
+        },
+        {
+          "node": "n12",
+          "block": "spya-j4tprn",
+          "quote": "Because in effect we’ve discovered something we didn’t expect.",
+          "depicts": "A robed figure at the bottom of the page looking down at an unexpected mark on a tape with delight rather than dismay, a looping line curling from this scene back up to the head-shape at the top of the page.",
+          "title": "AN UNEXPECTED DISCOVERY"
+        }
+      ],
+      "prompt": "An illuminated-manuscript page on aged cream parchment, ink line work with muted pigments (ochre, soft blue, dull red) and sparing gold leaf, scenes held in round or scalloped medallions linked by thin hand-drawn connecting lines, like a bestiary chart of an argument. No lettering anywhere except the small capitalized titles beneath each medallion. At the very top, a medallion titled FITS IN THE MIND shows a small simple shape resting inside an outline of a human head. From it three lines fan down into a wide framed region labeled by its own enclosure (no words, just a bordered zone) containing three medallions side by side: SEVEN BECOMES NINE (a tape reading toward 7 feeding a machine whose panel shows 9), OUT OF CONTROL (a pattern bursting past its own frame edge), and GLITCH AT FOURTEEN (an even doubling pattern fraying into tangle). Below, their lines gather into a second bordered zone with two medallions: HIDDEN RULE 122 (a lens revealing a hidden simple nested pattern inside a complex one) and NO PROOF FOUND (a maze of branching paths all trailing into blankness). These converge into a single larger central medallion, LURKING AT THE EDGES, a shadowy creature crouched at the rim of a patterned roundel — the hub of the page. From this hub four lines fan outward into a third bordered zone with medallions in a row: THE WILY WEASEL (a weasel hidden in a maze of tape-marks), RULE THIRTY ERUPTS (an orderly row suddenly chaotic), COEFFICIENT OF TWO (a page of equations with one circled anomaly), and THE SHORT PROGRAM (a short clean scroll beside a long tangled one). All four lines gather at the bottom into a final medallion, AN UNEXPECTED DISCOVERY, a robed figure smiling down at a strange mark — from which a long looping line curls back up the left margin of the page to touch the first medallion at the top, closing the loop. Keep ample bare parchment between zones; scenes should be large and clear, not crowded into a thin column."
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "Where bugs are caught in the act",
+      "vignettes": [
+        {
+          "node": "d1",
+          "block": "spya-scjxv8",
+          "quote": "we’d probably conclude that the Turing machine is computing the function",
+          "depicts": "A scribe watching a tidy row of outputs from a small machine, nodding in satisfied agreement at the pattern he sees.",
+          "title": "IT COMPUTES N PLUS ONE"
+        },
+        {
+          "node": "d2",
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "The same machine's tape now showing input 7 leading to an output of 9 instead of 8, a thin crack marking the break in the pattern.",
+          "title": "SEVEN BECOMES NINE"
+        },
+        {
+          "node": "d4",
+          "block": "spya-pt0hmz",
+          "quote": "The “most insidious” bugs do not occur until n = 15.",
+          "depicts": "A long corridor of correct outputs stretching far down the page before a hidden trapdoor swings open very late, at the fifteenth step.",
+          "title": "INSIDIOUS AT FIFTEEN"
+        },
+        {
+          "node": "d5",
+          "block": "spya-g2jw29",
+          "quote": "but then suddenly at n = 63 doesn’t give 64 but instead gives 72",
+          "depicts": "A larger, more elaborate machine running flawlessly through many steps until it abruptly displays an output far from what was expected.",
+          "title": "SIXTY-FOUR BECOMES SEVENTY-TWO"
+        },
+        {
+          "node": "d7",
+          "block": "spya-txuteu",
+          "quote": "but then suddenly, at n = 27, do something different",
+          "depicts": "Two machines that look identical, running side by side in lockstep, whose tapes suddenly branch into two different patterns partway down the page.",
+          "title": "DIVERGING AT TWENTY-SEVEN"
+        },
+        {
+          "node": "d8",
+          "block": "spya-fmdw58",
+          "quote": "something pathological happens—and the machine goes into an infinite loop",
+          "depicts": "A machine's tape curling back on itself into an endless closed circular track, trapped forever in a spiral.",
+          "title": "TRAPPED IN A LOOP"
+        },
+        {
+          "node": "d9",
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "A row of neat even-numbered outputs broken by a single odd mark popping up out of the tape like a jack-in-the-box.",
+          "title": "AN ODD NINE APPEARS"
+        },
+        {
+          "node": "d10",
+          "block": "spya-b6uxy4",
+          "quote": "Sometimes it looks as if a particular rule is going to do the job—and then, suddenly there’s a “bug”—like here at n = 14",
+          "depicts": "A field of cells doubling correctly step after step, then fraying into an irregular tangle precisely at the fourteenth step.",
+          "title": "GLITCH AT FOURTEEN"
+        }
+      ],
+      "prompt": "An illuminated-manuscript page, same hand as before: aged parchment, ink line work with muted ochre, soft blue and dull red pigment, scenes in round medallions linked by thin lines, sparing gold leaf, no lettering beyond the small capitalized titles under each scene. At the very top, re-establish the opening vignette from the overview — IT COMPUTES N PLUS ONE — a scribe nodding approvingly at a tidy row of machine outputs, as the frame through which this plate is entered. Beneath it, in a bordered zone labeled only by its enclosure, a chain of medallions reading top to bottom and slightly left-to-right as a winding path: SEVEN BECOMES NINE (a tape showing 7 leading to output 9 with a crack of ink), then INSIDIOUS AT FIFTEEN (a long corridor of correctness broken by a trapdoor late on), then forking into two paths — SIXTY-FOUR BECOMES SEVENTY-TWO (an elaborate machine breaking very late) on one side. The path continues into a second bordered zone: DIVERGING AT TWENTY-SEVEN (two identical machines whose tapes suddenly split into different patterns), which forks again into TRAPPED IN A LOOP (a tape curling into an endless spiral) and AN ODD NINE APPEARS (an even row broken by a single odd mark popping up). From AN ODD NINE APPEARS a line descends into a third bordered zone containing GLITCH AT FOURTEEN (a doubling cell-pattern fraying into tangle at its fourteenth step), placed at the bottom of the page. Keep generous bare parchment between the three bordered zones so the three stages — Turing-machine failures, specification-dependent failures, cellular-automaton failures — read as distinct enclosures connected by a single descending path, not a cramped column. Scenes large enough that the tape-marks and machine details are legible."
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "Where proof succeeds or fails",
+      "vignettes": [
+        {
+          "node": "p1",
+          "block": "spya-qm284b",
+          "quote": "patterns that are simple enough that it’s “visually obvious” that they’ll “correctly double” for all input sizes",
+          "depicts": "A simple, orderly pattern of cells doubling in width, easily read at a glance, with a figure looking on confidently, arms folded.",
+          "title": "VISUALLY OBVIOUS DOUBLING"
+        },
+        {
+          "node": "p2",
+          "block": "spya-asw9eq",
+          "quote": "if we run this case up to n = 100000, no bugs appear",
+          "depicts": "A long unrolled scroll of a complex, chaotic-looking pattern being checked step by step by a scholar with a tally counter, showing no breaks anywhere along its length.",
+          "title": "TESTED TO 100,000"
+        },
+        {
+          "node": "p4",
+          "block": "spya-hcdcqp",
+          "quote": "it looks at the whole process of computation—which is easy to do for a cellular automaton",
+          "depicts": "A scholar unrolling an entire scroll of a pattern's full history, laid out step by step, studying it as one continuous picture rather than isolated moments.",
+          "title": "THE WHOLE COMPUTATION"
+        },
+        {
+          "node": "p6",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "Within the unrolled scroll, the scholar's finger points to a smaller, simpler nested triangular pattern hidden inside the larger complex one.",
+          "title": "HIDDEN RULE 122"
+        },
+        {
+          "node": "p7",
+          "block": "spya-n5acnw",
+          "quote": "as soon as there’s ever a cell, there must be cells on all subsequent steps",
+          "depicts": "A single dark cell persisting unbroken down through a long column of steps on the scroll, like a seed-mark that can never be erased.",
+          "title": "A CELL THAT NEVER DIES"
+        },
+        {
+          "node": "p9",
+          "block": "spya-jqmftv",
+          "quote": "we need a notation that can encompass both the behavior of the Turing machine",
+          "depicts": "A different scribe inventing a chain of linked beads on a string to stand for the cells and head-position of a Turing machine's tape.",
+          "title": "A NOTATION FOR THE TAPE"
+        },
+        {
+          "node": "p10",
+          "block": "spya-muu0c5",
+          "quote": "we’ve been able to prove that for all inputs n the machine correctly computes n + 1",
+          "depicts": "A finished chain of symbolic proof-steps ending in a sealed stamp, with the machine shown running cleanly for an endless row of inputs beneath it.",
+          "title": "PROVED FOR ALL N"
+        },
+        {
+          "node": "p11",
+          "block": "spya-ypka68",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "The same branching maze of theorem-paths as before, searched endlessly, every branch trailing into blank parchment with no sealed stamp ever reached.",
+          "title": "NO PROOF FOUND"
+        }
+      ],
+      "prompt": "An illuminated-manuscript page, same hand throughout: aged parchment, ink line work with muted ochre, soft blue and dull red pigment, round medallion scenes linked by thin hand-drawn lines, sparing gold leaf, no lettering beyond the small capitalized titles beneath each scene. At the top, re-establish the overview's HIDDEN RULE 122 medallion — a lens revealing a simple nested pattern inside a complex one — as the frame through which this plate is entered. Below it, in a first bordered zone, a descending chain: VISUALLY OBVIOUS DOUBLING (a simple doubling pattern watched confidently), then TESTED TO 100,000 (a scholar checking a long scroll with a tally counter, no breaks found), then THE WHOLE COMPUTATION (a scholar unrolling the full history of a pattern as one continuous scroll), which forks into HIDDEN RULE 122 again, placed here within its proper chain, pointing to A CELL THAT NEVER DIES (a single dark mark persisting unbroken down a long column of steps) — these two joining back together lower on the page. From that joining, a line crosses into a second bordered zone below: A NOTATION FOR THE TAPE (a scribe stringing linked beads to represent a machine's tape), leading down to PROVED FOR ALL N (a sealed scroll of proof-steps with the machine running cleanly), and finally to NO PROOF FOUND at the very bottom (the same branching maze trailing into blankness, now for a machine where the search never ends). Keep the two bordered zones — visual-and-structural reasoning above, symbolic proof below — visually distinct with generous bare parchment between them, each scene large enough that its internal detail (tape marks, scroll pattern, proof-chain) is legible, using the full width of the page rather than a narrow central column."
+    }
+  ]
+}

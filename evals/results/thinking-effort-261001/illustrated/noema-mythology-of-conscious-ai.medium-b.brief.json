@@ -1,0 +1,298 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — gold-leaf capitals, vellum, small painted scenes in roundels linked by vine-scroll borders — fitting an essay that ends at the soul, breath, and psychē.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Mythology of Conscious AI — Overview",
+      "prompt": "An illuminated manuscript page on aged vellum, gold leaf and muted earth pigments, bordered by a running vine-scroll with small painted beasts in the margins — but the margins stay sparse, leaving the page to the scenes themselves. Down the center, in vertical reading order, painted roundels connected by thin gilt rule-lines (not words): at the top, three storybook figures in a row — a stitched creature, a glowing red eye-lens, and a pale humanoid woman — walking out of an open book, captioned beneath 'FRANKENSTEIN, HAL, AVA'. Below, a kneeling robed figure before a scale with loose chains, captioned 'MORAL STATUS, WEIGHED'. Below that, three hooded figures at a crossroads each bearing a different sigil, captioned 'THREE BAKED-IN BIASES', with two lines branching from it: left to a table bearing a mouth-shaped device and a protein-ribbon device, onlookers pointing only at the mouth, captioned 'THE TALKING ONE, NOT THE RIBBON'; right to a climber on a steep etched curve looking toward an ever-receding ridge, captioned 'ALWAYS ON THE CUSP'. Beneath these, gathered into a bordered enclosure representing the four arguments: a half-wet-tissue half-collapsing-machine brain captioned 'NOT A MACHINE MADE OF MEAT', and beside it an old steam-engine governor with weighted balls swinging outward closing a valve, captioned 'THE STEAM GOVERNOR'. Both lines converge below into a cracked stone archway with brain-matter showing through the crack, captioned 'THE SHAKY ARCHWAY'. From the archway, two paths fork downward: left to a hooded figure restraining a hand reaching for a glowing automaton on a workbench, captioned 'HOLDING BACK THE HAND'; right to a crowd pressed close around a glowing breathing mask, captioned 'THE MASK THAT SEEMS ALIVE'. Both paths curve together at the bottom into a final roundel of a single figure exhaling a spiraling breath, with a faint gilt line looping that breath back up toward the top of the page to the storybook figures, captioned 'SOUL AS BREATH'. No lettering anywhere on the page except the captions under each roundel, lettered in small illuminated capitals.",
+      "vignettes": [
+        {
+          "block": "spya-d9a0wr",
+          "quote": "Mary Shelley’s “Frankenstein,” HAL 9000 in “2001: A Space Odyssey,” Ava in “Ex Machina,”",
+          "depicts": "A procession of three figures in a row: a stitched creature, a glowing red eye-lens, and a pale humanoid woman, walking out of an old storybook.",
+          "title": "FRANKENSTEIN, HAL, AVA",
+          "node": "n1"
+        },
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "A small robed figure kneeling before a scale, with chains loosely draped nearby, suggesting status and possible rights being weighed.",
+          "title": "MORAL STATUS, WEIGHED",
+          "node": "n2"
+        },
+        {
+          "block": "spya-cvaqgs",
+          "quote": "three baked-in psychological biases",
+          "depicts": "Three small hooded figures standing shoulder to shoulder at a crossroads, each wearing a different sigil, representing the three biases bundled together.",
+          "title": "THREE BAKED-IN BIASES",
+          "node": "n3"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "Two devices side by side on a table: one shaped like a mouth speaking words, the other shaped like a twisting protein ribbon, with onlookers pointing only at the mouth.",
+          "title": "THE TALKING ONE, NOT THE RIBBON",
+          "node": "n4"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "it’s tempting to feel like we are always on the cusp of a major transition",
+          "depicts": "A climber standing on a steep rising curve etched into a hillside, looking up at a ridge that always seems just ahead no matter how far they have climbed.",
+          "title": "ALWAYS ON THE CUSP",
+          "node": "n5"
+        },
+        {
+          "block": "spya-uwxe4h",
+          "quote": "The brain is not a Turing machine made of meat.",
+          "depicts": "A brain rendered half as wet tissue, half as a gear-and-tape machine, with the mechanical half crumbling away.",
+          "title": "NOT A MACHINE MADE OF MEAT",
+          "node": "b1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve",
+          "depicts": "An old steam-engine governor, its two weighted balls flung outward, closing a small valve, with no calculating device anywhere near it.",
+          "title": "THE STEAM GOVERNOR",
+          "node": "b2"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view",
+          "depicts": "A stone archway labeled with gears cracking down the middle, brain-matter visible through the widening crack.",
+          "title": "THE SHAKY ARCHWAY",
+          "node": "concl"
+        },
+        {
+          "block": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI",
+          "depicts": "A hooded figure holding back another's hand that reaches toward a glowing half-built automaton on a workbench.",
+          "title": "HOLDING BACK THE HAND",
+          "node": "d1"
+        },
+        {
+          "block": "spya-x63ycg",
+          "quote": "conscious-seeming systems are much, much closer",
+          "depicts": "A crowd gathered close around a glowing mask that merely seems to breathe, their faces lit as if it were alive.",
+          "title": "THE MASK THAT SEEMS ALIVE",
+          "node": "d2"
+        },
+        {
+          "block": "spya-fyrb7m",
+          "quote": "the Greek concept of psychē linked the idea of a soul to breath",
+          "depicts": "A single figure standing with mouth open, a thin visible stream of breath curling upward into a spiral, looping back toward the top of the page where the Frankenstein procession began.",
+          "title": "SOUL AS BREATH",
+          "node": "loop"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A procession of three figures in a row: a stitched creature, a glowing red eye-lens, and a pale humanoid woman, walking out of an old storybook.",
+          "title": "FRANKENSTEIN, HAL, AVA"
+        },
+        {
+          "where": "A small robed figure kneeling before a scale, with chains loosely draped nearby, suggesting status and possible rights being weighed.",
+          "title": "MORAL STATUS, WEIGHED"
+        },
+        {
+          "where": "Three small hooded figures standing shoulder to shoulder at a crossroads, each wearing a different sigil, representing the three biases bundled together.",
+          "title": "THREE BAKED-IN BIASES"
+        },
+        {
+          "where": "Two devices side by side on a table: one shaped like a mouth speaking words, the other shaped like a twisting protein ribbon, with onlookers pointing only at the mouth.",
+          "title": "THE TALKING ONE, NOT THE RIBBON"
+        },
+        {
+          "where": "A climber standing on a steep rising curve etched into a hillside, looking up at a ridge that always seems just ahead no matter how far they have climbed.",
+          "title": "ALWAYS ON THE CUSP"
+        },
+        {
+          "where": "A brain rendered half as wet tissue, half as a gear-and-tape machine, with the mechanical half crumbling away.",
+          "title": "NOT A MACHINE MADE OF MEAT"
+        },
+        {
+          "where": "An old steam-engine governor, its two weighted balls flung outward, closing a small valve, with no calculating device anywhere near it.",
+          "title": "THE STEAM GOVERNOR"
+        },
+        {
+          "where": "A stone archway labeled with gears cracking down the middle, brain-matter visible through the widening crack.",
+          "title": "THE SHAKY ARCHWAY"
+        },
+        {
+          "where": "A hooded figure holding back another's hand that reaches toward a glowing half-built automaton on a workbench.",
+          "title": "HOLDING BACK THE HAND"
+        },
+        {
+          "where": "A crowd gathered close around a glowing mask that merely seems to breathe, their faces lit as if it were alive.",
+          "title": "THE MASK THAT SEEMS ALIVE"
+        },
+        {
+          "where": "A single figure standing with mouth open, a thin visible stream of breath curling upward into a spiral, looping back toward the top of the page where the Frankenstein procession began.",
+          "title": "SOUL AS BREATH"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-case",
+      "title": "Four Arguments Against Computational AI",
+      "prompt": "An illuminated manuscript page, same vellum and gilt-and-earth palette as before, continuing the enclosure labeled by its vignettes rather than any banner. At the top, a single roundel: a locked chest inscribed with gears, assumed to hold a small light inside though unopened, captioned 'THE UNOPENED CHEST'. Four gilt lines fork downward from it to four roundels set side by side across the width of the page: first, two hands straining to pull apart a single fused lump of wet tissue and wiring, captioned 'MINDWARE FUSED TO WETWARE'; second, the Watt governor spinning with weighted arms flying outward closing a steam valve, captioned 'THE GOVERNOR'S PLAIN MECHANICS'; third, a seated figure with closed eyes, arrows flowing out toward a coffee cup and back again, meeting and adjusting, captioned 'PREDICTIONS MEETING THE WORLD'; fourth, a painted diagram of a stomach beside an untouched loaf of bread, captioned 'THE PARCHMENT STOMACH'. All four send thin ribbons downward that braid into a single cord in one roundel, captioned 'FOUR ARGUMENTS, ONE CORD'. Below that, a final roundel: a cart pulled uphill by mechanical oxen with an empty seat behind it, captioned 'THE EMPTY SEAT'. The page keeps wide vine-scroll margins sparse and uncluttered so the seven roundels read clearly, large enough to make out each scene, using the full width of the page rather than a narrow central column. No lettering anywhere except the seven captions, in small illuminated capitals beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-b0086e",
+          "quote": "there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware",
+          "depicts": "Two hands trying to pull apart a single fused lump of wet tissue and metal wiring that will not separate into two pieces.",
+          "title": "MINDWARE FUSED TO WETWARE",
+          "node": "b1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve, reducing steam flow",
+          "depicts": "The Watt steam-engine governor spinning, its weighted arms flying outward and closing a steam valve by plain mechanics alone.",
+          "title": "THE GOVERNOR'S PLAIN MECHANICS",
+          "node": "b2"
+        },
+        {
+          "block": "spya-xhvztm",
+          "quote": "a top-down inside-out perceptual inference in which the brain’s predictions about what’s going on are continually calibrated by sensory signals",
+          "depicts": "A seated figure with closed eyes, painted arrows flowing both outward from the head toward a coffee cup and inward from the cup back to the head, meeting and adjusting each other.",
+          "title": "PREDICTIONS MEETING THE WORLD",
+          "node": "b3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything.",
+          "depicts": "A painted diagram of a stomach on parchment, beside it a real loaf of bread untouched and whole, showing nothing has been digested.",
+          "title": "THE PARCHMENT STOMACH",
+          "node": "b4"
+        },
+        {
+          "block": "spya-nv6tp0",
+          "quote": "Questioning computational functionalism reinforces the importance of distinguishing simulation from instantiation",
+          "depicts": "Four ribbons, each trailing from one of the four prior roundels, braiding together into a single cord.",
+          "title": "FOUR ARGUMENTS, ONE CORD",
+          "node": "c"
+        },
+        {
+          "block": "spya-c5ve5t",
+          "quote": "consciousness is very unlikely to simply come along for the ride as AI gets smarter",
+          "depicts": "A cart being pulled uphill by mechanical oxen, with an empty seat behind it where a passenger was expected but is absent.",
+          "title": "THE EMPTY SEAT",
+          "node": "d"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A locked chest inscribed with gears and circuits, assumed (without being opened) to hold a small flickering light inside.",
+          "title": "THE UNOPENED CHEST"
+        },
+        {
+          "where": "Two hands trying to pull apart a single fused lump of wet tissue and metal wiring that will not separate into two pieces.",
+          "title": "MINDWARE FUSED TO WETWARE"
+        },
+        {
+          "where": "The Watt steam-engine governor spinning, its weighted arms flying outward and closing a steam valve by plain mechanics alone.",
+          "title": "THE GOVERNOR'S PLAIN MECHANICS"
+        },
+        {
+          "where": "A seated figure with closed eyes, painted arrows flowing both outward from the head toward a coffee cup and inward from the cup back to the head, meeting and adjusting each other.",
+          "title": "PREDICTIONS MEETING THE WORLD"
+        },
+        {
+          "where": "A painted diagram of a stomach on parchment, beside it a real loaf of bread untouched and whole, showing nothing has been digested.",
+          "title": "THE PARCHMENT STOMACH"
+        },
+        {
+          "where": "Four ribbons, each trailing from one of the four prior roundels, braiding together into a single cord.",
+          "title": "FOUR ARGUMENTS, ONE CORD"
+        },
+        {
+          "where": "A cart being pulled uphill by mechanical oxen, with an empty seat behind it where a passenger was expected but is absent.",
+          "title": "THE EMPTY SEAT"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-ethics",
+      "title": "Real Versus Seeming Consciousness",
+      "prompt": "An illuminated manuscript page, same vellum, gilt, and earth-pigment palette, continuing the composition without any banner heading. At the top, a roundel: a hooded figure halting another's hand reaching for a glowing half-built automaton, captioned 'HALTING THE BUILDER'S HAND'. Two gilt lines fork downward from it. The left line leads to a small glass vessel on a shelf holding a faintly glowing brain-like growth, captioned 'THE GROWTH IN THE VESSEL', then down to two figures in a glass-walled room, one revealing machinery beneath the other's skin while still looking convinced, captioned 'THE EX MACHINA ROOM'. The right line leads to a crowd pressed near a glowing mask that seems to breathe, reaching toward it, captioned 'THE MASK ALREADY NEAR', then down to two arrow-tipped lines of equal length that nonetheless look unequal, captioned 'THE MÜLLER-LYER LINES'. From the Ex Machina roundel, a line continues down to two robed figures at a lectern pointing with concern toward the distant glowing mask, captioned 'TWO VOICES RAISING ALARM'. Both the Müller-Lyer roundel and the two-voices roundel send lines down to a final shared roundel: a scale with a talking mask outweighing a small living creature, tipped the wrong way, captioned 'THE MISWEIGHTED SCALE'. Keep the vine-scroll borders light and the page uncluttered, the seven roundels large and spaced across the full width of the page so each scene is easy to read, not crowded into a narrow column. No lettering anywhere except the seven captions in small illuminated capitals beneath their roundels.",
+      "vignettes": [
+        {
+          "block": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI",
+          "depicts": "A hooded figure standing between two paths, one hand raised to halt another figure reaching toward a glowing half-built automaton.",
+          "title": "HALTING THE BUILDER'S HAND",
+          "node": "e0"
+        },
+        {
+          "block": "spya-vs0vpj",
+          "quote": "the accidental emergence of consciousness in cerebral organoids",
+          "depicts": "A small glass vessel on a shelf holding a tiny brain-like growth, unattended, with a faint glow seeping from it.",
+          "title": "THE GROWTH IN THE VESSEL",
+          "node": "f1"
+        },
+        {
+          "block": "spya-x63ycg",
+          "quote": "conscious-seeming systems are much, much closer",
+          "depicts": "A crowd pressed near a glowing mask that appears to breathe, reaching toward it as though it were already alive.",
+          "title": "THE MASK ALREADY NEAR",
+          "node": "f2"
+        },
+        {
+          "block": "spya-kqs33c",
+          "quote": "The plot of “Ex Machina” revolves around exactly this dilemma.",
+          "depicts": "Two figures in a glass-walled room, one revealing machinery beneath the other's skin, while the first still cannot help looking convinced.",
+          "title": "THE EX MACHINA ROOM",
+          "node": "g2"
+        },
+        {
+          "block": "spya-xk9gne",
+          "quote": "The two lines in the Müller-Lyer illusion (Figure 5) are the same length, but they will always look different.",
+          "depicts": "Two arrow-tipped lines of equal length on parchment, one looking longer than the other no matter how carefully they are measured.",
+          "title": "THE MÜLLER-LYER LINES",
+          "node": "g1"
+        },
+        {
+          "block": "spya-fdefb5",
+          "quote": "Mustafa Suleyman (CEO of Microsoft AI) and Yoshua Bengio",
+          "depicts": "Two robed figures standing at a lectern, pointing with concern at the glowing mask in the distance.",
+          "title": "TWO VOICES RAISING ALARM",
+          "node": "k"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A hooded figure standing between two paths, one hand raised to halt another figure reaching toward a glowing half-built automaton.",
+          "title": "HALTING THE BUILDER'S HAND"
+        },
+        {
+          "where": "A small glass vessel on a shelf holding a tiny brain-like growth, unattended, with a faint glow seeping from it.",
+          "title": "THE GROWTH IN THE VESSEL"
+        },
+        {
+          "where": "A crowd pressed near a glowing mask that appears to breathe, reaching toward it as though it were already alive.",
+          "title": "THE MASK ALREADY NEAR"
+        },
+        {
+          "where": "Two figures in a glass-walled room, one revealing machinery beneath the other's skin, while the first still cannot help looking convinced.",
+          "title": "THE EX MACHINA ROOM"
+        },
+        {
+          "where": "Two arrow-tipped lines of equal length on parchment, one looking longer than the other no matter how carefully they are measured.",
+          "title": "THE MÜLLER-LYER LINES"
+        },
+        {
+          "where": "Two robed figures standing at a lectern, pointing with concern at the glowing mask in the distance.",
+          "title": "TWO VOICES RAISING ALARM"
+        },
+        {
+          "where": "A scale with a talking mask on one side outweighing a small living creature on the other, the balance tipped the wrong way.",
+          "title": "THE MISWEIGHTED SCALE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

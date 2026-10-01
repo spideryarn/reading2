@@ -1,0 +1,55 @@
+{"ideas": [
+  {
+    "name": "Following correct-looking procedure guarantees nothing",
+    "provenance": "introduced",
+    "statement": "A process can reproduce every visible form and ritual of a successful method while lacking the inner substance that made the original work, and so it fails even though it looks identical.",
+    "whyYouNeedIt": "This is the core claim that lets Feynman call failed research 'Cargo Cult Science' even when it mimics real science in every outward way.",
+    "analogy": "A photocopy of a key looks exactly like the original but won't turn the lock, because the copier captured the shape, not the metal's precise cut.",
+    "occurrences": [
+      {"blockId": "spya-fd2muf", "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work.", "reasoning": "States the central proposition that surface imitation of method does not reproduce the result."},
+      {"blockId": "spya-afgs74", "quote": "That is the idea that we all hope you have learned in studying science in school—we never explicitly say what this is, but just hope that you catch on by all the examples of scientific investigation.", "reasoning": "Frames the missing ingredient as something separate from visible procedure."}
+    ]
+  },
+  {
+    "name": "Honest reporting means volunteering evidence against yourself",
+    "provenance": "introduced",
+    "statement": "Real scientific integrity requires actively disclosing facts, alternative explanations, and counter-evidence that weaken your own claim, not merely avoiding false statements.",
+    "whyYouNeedIt": "This separates 'not lying' from genuine integrity, which is the distinction the Wesson Oil and tobacco examples depend on.",
+    "analogy": "It's like a used-car seller who, instead of just not lying about the odometer, volunteers that the transmission slips in cold weather.",
+    "occurrences": [
+      {"blockId": "spya-rxj5wa", "quote": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it.", "reasoning": "States the obligation to disclose disconfirming evidence, not just confirming."},
+      {"blockId": "spya-bpyx8n", "quote": "it’s a matter of scientific integrity, which is another level. ... So it’s the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.", "reasoning": "Distinguishes technical truth from honest implication, requiring the assumed idea to make sense of why a true statement can still be dishonest."},
+      {"blockId": "spya-s05sub": "s05sub", "quote": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.", "reasoning": "Shows selective publication as a violation of the disclosure obligation."}
+    ]
+  },
+  {
+    "name": "You are your own easiest mark",
+    "provenance": "introduced",
+    "statement": "The most dangerous source of error in investigation is not outside deception but the investigator's own tendency to believe what they want to believe.",
+    "whyYouNeedIt": "This underlies why Millikan's successors kept producing biased results even without any dishonest intent toward others.",
+    "occurrences": [
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "States the proposition directly as the foundation for the rest of the integrity discussion."},
+      {"blockId": "spya-uj9v2h", "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.", "reasoning": "Shows self-deception operating through selective scrutiny rather than deliberate fraud."}
+    ]
+  },
+  {
+    "name": "An uncontrolled result is unexplained, not confirmed",
+    "provenance": "assumed",
+    "statement": "A finding only counts as understood once every alternative cue or cause that could produce it has been deliberately ruled out, not merely left unexamined.",
+    "whyYouNeedIt": "Without this, the Young rat-corridor story would just be an anecdote about a careful researcher; the idea is what makes it count as 'the experiment that makes rat-running experiments sensible' rather than a repeatable curiosity.",
+    "occurrences": [
+      {"blockId": "spya-yzzxkw", "quote": "That is the experiment that uncovers the clues that the rat is really using—not what you think it’s using.", "reasoning": "This praise only makes sense if ruling out alternative causes is what makes a result trustworthy, a standard never stated outright."},
+      {"blockId": "spya-npdc6n", "quote": "So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door.", "reasoning": "The narrative's point depends on the reader accepting that nothing short of eliminating every alternative cue counts as proof."}
+    ]
+  },
+  {
+    "name": "A result that cannot be repeated was never established",
+    "provenance": "assumed",
+    "statement": "A claimed effect only has scientific standing if it can be reliably reproduced under the same conditions; an effect that shrinks or vanishes on improved repetition was never real.",
+    "whyYouNeedIt": "This silently underlies Feynman's dismissal of ESP research and the parapsychologist's demand to not require repeatability — without assuming repeatability is the test of reality, that demand wouldn't seem absurd.",
+    "occurrences": [
+      {"blockId": "spya-rbpppq", "quote": "And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?", "reasoning": "The rhetorical question only lands if the reader already treats repeatability as the non-negotiable mark of a real scientific result."},
+      {"blockId": "spya-g203mu", "quote": "be sure they only train students who have shown their ability to get PSI results to an acceptable extent—not to waste their time on those ambitious and interested students who get only chance results", "reasoning": "Calling this policy dangerous relies on the unstated premise that selecting for a desired outcome rather than reproducibility invalidates the result."}
+    ]
+  }
+]}

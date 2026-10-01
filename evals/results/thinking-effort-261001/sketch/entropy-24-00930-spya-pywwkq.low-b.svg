@@ -1,0 +1,248 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2898.9" width="760" height="2898.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2898.9" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Chain with two expansions</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The article runs as one long chain—from motivation through method to evidence to limits and future—with two dense</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">stretches (the PID math, and the empirical findings) pulled out as zooms.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain from the problem of neural information processing, through the PID method, to empirical tests, practical</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">limits, and future extensions.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="140" y="340" width="480" height="220" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="120" y="600" width="520" height="340" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<path d="M380 100 L380 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,140 376.5,130 383.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 210 L380 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,250 376.5,240 383.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 310 L380 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,380 376.5,370 383.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 450 L380 480" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,480 376.5,470 383.5,470" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 540 L260 640" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="260,640 265.4415673971481,630.9093815247644 269.92285819479946,636.2869304819461" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 540 L500 640" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="500,640 490.07714180520054,636.2869304819461 494.5584326028519,630.9093815247644" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 700 L390 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,850 380.8057828260572,844.7353660565642 386.09560640558595,840.1508522876394" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M500 700 L390 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,850 393.0912191507802,839.8661772187467 398.7360541217701,844.0057228641393" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 800 L390 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,850 379.4101171603883,849.676918828622 381.92297071555043,843.1434995852006" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M500 810 L390 850" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,850 398.2018335140809,843.2932923869234 400.59403495568785,849.8718463513426" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 910 L380 960" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,960 378.52912898646366,949.5077867701071 385.39319371630006,950.8805997160745" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 1030 L380 1060" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1060 376.5,1050 383.5,1050" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Neural information processing: open problem — → spya-yb735k</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Neural information</text>
+<text x="380" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">processing: open problem</text>
+</g>
+<g>
+<title>Tracking info: mutual information &amp; transfer entropy — → spya-ygkzd8</title>
+<rect x="260" y="140" width="240" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Tracking info: mutual information &amp;</text>
+<text x="380" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">transfer entropy</text>
+</g>
+<g>
+<title>Transfer alone can't show how inputs combine — → spya-dhy39x</title>
+<rect x="260" y="250" width="240" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="276.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Transfer alone can't show how inputs</text>
+<text x="380" y="291.4" font-size="12" text-anchor="middle" fill="#f7f7f7">combine</text>
+</g>
+<g>
+<title>Partial information decomposition — Splits joint information into redundant, unique, synergistic parts — → spya-u0wm5e</title>
+<polygon points="295,380 465,380 500,415 465,450 295,450 260,415" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="410.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Partial information</text>
+<text x="380" y="429.25" font-size="15" text-anchor="middle" fill="#f7f7f7">decomposition</text>
+</g>
+<g>
+<title>Lattice + redundancy measure needed — → spya-k378fv</title>
+<rect x="260" y="480" width="240" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="513.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Lattice + redundancy measure needed</text>
+</g>
+<g>
+<title>Synergy concentrated in rich clubs — → spya-e3ghxj</title>
+<rect x="160" y="640" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="260" y="666.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy concentrated in rich</text>
+<text x="260" y="681.4" font-size="12" text-anchor="middle" fill="#f7f7f7">clubs</text>
+</g>
+<g>
+<title>Recurrent links raise synergy — → spya-p8by2y</title>
+<rect x="400" y="640" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="500" y="673.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Recurrent links raise synergy</text>
+</g>
+<g>
+<title>Synergy peaks at mid correlation — → spya-zfs2z7</title>
+<rect x="160" y="740" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="260" y="766.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy peaks at mid</text>
+<text x="260" y="781.4" font-size="12" text-anchor="middle" fill="#f7f7f7">correlation</text>
+</g>
+<g>
+<title>In monkeys, redundancy rises during movement — → spya-aqcngt</title>
+<rect x="400" y="740" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="500" y="771.4" font-size="12" text-anchor="middle" fill="#f7f7f7">In monkeys, redundancy rises</text>
+<text x="500" y="786.4" font-size="12" text-anchor="middle" fill="#f7f7f7">during movement</text>
+</g>
+<g>
+<title>Caveats: cultures, bivariate bias — → spya-vjzxxm</title>
+<path d="M280 850 L486 850 L500 864 L500 910 L280 910 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M486 850 L486 864 L500 864" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="390" y="883.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Caveats: cultures, bivariate bias</text>
+</g>
+<g>
+<title>Practical limits: data type, sampling, tools — → spya-kmgwhs</title>
+<rect x="260" y="960" width="240" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="991.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Practical limits: data type,</text>
+<text x="380" y="1006.4" font-size="12" text-anchor="middle" fill="#f7f7f7">sampling, tools</text>
+</g>
+<g>
+<title>Future: local &amp; multi-target PID — → spya-zz5xxs</title>
+<rect x="260" y="1060" width="240" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1093.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Future: local &amp; multi-target PID</text>
+</g></g>
+</g>
+<g transform="translate(0 1371.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">The PID method</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A funnel: joint mutual information is split, first by intuition with two sources, then generalized via a lattice that</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">needs a chosen redundancy measure.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PID</text>
+<g transform="translate(0 65.9)"><path d="M390 110 L390 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,140 386.5,130 393.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 220 L180 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="180,260 189.1684932866098,254.6906939386214 190.47827804183973,261.56706390357874" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 220 L580 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="580,260 569.493465466458,261.3648194369552 570.935538833807,254.51497094204794" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M180 320 L390 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,360 379.52172195816024,361.56706390357874 380.83150671339024,354.6906939386214" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M580 320 L390 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,360 399.06446116619304,354.5149709420479 400.506534533542,361.3648194369552" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 430 L390 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,460 386.5,450 393.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 530 L390 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,560 386.5,550 393.5,550" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 620 L390 640" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,640 386.5,630 393.5,630" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Joint mutual information (the whole) — → spya-h5dz45</title>
+<ellipse cx="390" cy="75" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="70.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Joint mutual information</text>
+<text x="390" y="89.25" font-size="15" text-anchor="middle" fill="#f7f7f7">(the whole)</text>
+</g>
+<g>
+<title>Whole vs sum of parts — → spya-e94ury</title>
+<polygon points="390,140 500,180 390,220 280,180" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="183.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Whole vs sum of parts</text>
+</g>
+<g>
+<title>Whole &gt; parts: synergy — → spya-e94ury</title>
+<rect x="80" y="260" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="180" y="293.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Whole &gt; parts: synergy</text>
+</g>
+<g>
+<title>Whole &lt; parts: redundancy — → spya-e94ury</title>
+<rect x="480" y="260" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="580" y="293.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Whole &lt; parts: redundancy</text>
+</g>
+<g>
+<title>Two-parent case: 4 unknowns, 3 equations — → spya-y7wdb7</title>
+<rect x="280" y="360" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="391.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Two-parent case: 4 unknowns, 3</text>
+<text x="390" y="406.4" font-size="12" text-anchor="middle" fill="#f7f7f7">equations</text>
+</g>
+<g>
+<title>General lattice of info atoms — → spya-k378fv</title>
+<polygon points="315,460 465,460 500,495 465,530 315,530 280,495" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="498.9" font-size="12" text-anchor="middle" fill="#f7f7f7">General lattice of info atoms</text>
+</g>
+<g>
+<title>Atoms solved via Mobius inversion — → spya-t8mg0s</title>
+<rect x="280" y="560" width="220" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="593.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Atoms solved via Mobius inversion</text>
+</g>
+<g>
+<title>No single accepted redundancy measure — → spya-d2quz5</title>
+<path d="M280 640 L486 640 L500 654 L500 700 L280 700 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M486 640 L486 654 L500 654" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="390" y="666.4" font-size="12" text-anchor="middle" fill="#f7f7f7">No single accepted redundancy</text>
+<text x="390" y="681.4" font-size="12" text-anchor="middle" fill="#f7f7f7">measure</text>
+</g></g>
+</g>
+<g transform="translate(0 2165)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">PID in action</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Several independent findings from cortical cultures and behaving animals converge on one picture: synergy tracks</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">network structure and task demands.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-EVIDENCE</text>
+<g transform="translate(0 65.9)"><path d="M390 90 L150 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="150,140 159.07596430798404,134.53402598979838 160.50364408676805,141.38688892796162" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 90 L370 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,140 370.46423834544265,129.41536572390805 376.96357518163944,132.01510045838677" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 90 L600 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="600,140 589.4612660075752,141.08861647833837 591.0826096987175,134.27897297554082" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M150 200 L270 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="270,260 259.490480505751,258.65835921350015 262.6209756742507,252.39736887650074" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 200 L390 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,370 385.35556040919596,360.47743832325716 392.3076146394561,359.65954959028534" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M600 200 L390 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,370 395.570254906737,360.98766066584415 399.9746425074127,366.4283747607966" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M270 330 L390 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,370 379.4063698384359,370.1581138830084 381.6199642005538,363.5173307966548" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 440 L390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 530 L410 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,560 401.5408220075652,553.6209477434099 407.3651740679302,549.7380463698332" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Cultured cortex, thousands of triads — → spya-cc282b</title>
+<ellipse cx="390" cy="60" rx="110" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="55.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Cultured cortex,</text>
+<text x="390" y="74.25" font-size="15" text-anchor="middle" fill="#f7f7f7">thousands of triads</text>
+</g>
+<g>
+<title>Synergy tracks feedforward strength — → spya-kqkb58</title>
+<rect x="60" y="140" width="180" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="150" y="166.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy tracks feedforward</text>
+<text x="150" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">strength</text>
+</g>
+<g>
+<title>Rich club: 88% of synergy — → spya-fud8q3</title>
+<rect x="280" y="140" width="180" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="370" y="173.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Rich club: 88% of synergy</text>
+</g>
+<g>
+<title>Recurrent links boost, feedback doesn't — → spya-sd9fzd</title>
+<rect x="500" y="140" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="600" y="166.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Recurrent links boost,</text>
+<text x="600" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">feedback doesn't</text>
+</g>
+<g>
+<title>Synergy peaks at intermediate source correlation — → spya-ybmve2</title>
+<rect x="160" y="260" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="270" y="291.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy peaks at intermediate</text>
+<text x="270" y="306.4" font-size="12" text-anchor="middle" fill="#f7f7f7">source correlation</text>
+</g>
+<g>
+<title>Synergy is concentrated, structured — → spya-e3ghxj</title>
+<polygon points="390,370 500,405 390,440 280,405" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="401.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy is concentrated,</text>
+<text x="390" y="416.4" font-size="12" text-anchor="middle" fill="#f7f7f7">structured</text>
+</g>
+<g>
+<title>In vitro, bivariate TE caveats — → spya-vjzxxm</title>
+<path d="M280 470 L486 470 L500 484 L500 530 L280 530 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M486 470 L486 484 L500 484" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="390" y="503.9" font-size="12" text-anchor="middle" fill="#f7f7f7">In vitro, bivariate TE caveats</text>
+</g>
+<g>
+<title>Macaques: redundancy rises in motor execution — → spya-t8fayf</title>
+<rect x="280" y="560" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="591.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Macaques: redundancy rises in motor</text>
+<text x="410" y="606.4" font-size="12" text-anchor="middle" fill="#f7f7f7">execution</text>
+</g></g>
+</g>
+</svg>

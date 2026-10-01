@@ -1,0 +1,338 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — ink-drawn vignettes in small framed compartments linked by hairline rubrication, fitting an article built on court memoirs, parish ethnographies, and Enlightenment philosophes.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "After Work: Three Courts Converge",
+      "prompt": "An illuminated manuscript page, ink linework on aged parchment with muted washes of ochre, madder red, and verdigris and small touches of gold leaf, divided top to bottom into a reading path of framed roundels linked by thin rubricated lines, no lettering anywhere on the page except the twelve short capitalized titles printed beneath their own roundels. At the very top, a single roundel: TWO CHEERS FOR WORK, two workers toasting at a bench. A thin line forks into three vertical columns of two stacked roundels each, each column drawn like a small gothic arcade panel but with no label on the arch itself. Left column, top to bottom: HERALDIC EMBLEM DISPUTE (a courtier and clerk arguing over a heraldic shield), then COURTIERS AS CHIMPANZEES (a line of courtiers crouched like apes in a dominance row). Middle column: BOARDS OF THE OPERA AND SYMPHONY (three women at a table with an opera mask, an instrument, a hospital cross), then THE ILLUSION OF USEFULNESS (a woman holding an empty glass bubble over her ledger). Right column: PEER GROUP OVER THE JOB (a crowded tenement room with cards and coins, work clothes on pegs), then FREE TO CHOOSE A HUSBAND (a young woman walking arm in arm with a man she has chosen). All three columns' lower roundels send thin lines downward, converging into one roundel below the arcade: PRINCES AND DAY LABORERS GOSSIP, a fur-coated prince and a laborer back to back whispering to listeners. From this convergence point the line forks again into two roundels side by side: DIGNITY FROM THE WORK ITSELF (a craftsman handed a medal at his bench) and WAITRESS AND OFFICE ASSISTANT (a waitress with a tray beside an office assistant at a desk). Both feed down into a single roundel: SMITH, HUME, AND FERGUSON, three coated men in conversation before market stalls. From there the line runs down to the final roundel: I LIKE MY JOB, a figure writing contentedly at a desk. A dashed line curls from this final roundel back up the margin to the first roundel at the top, closing the loop. Keep every roundel large enough to read clearly, leave generous bare parchment between columns, and restrict decoration to a thin foliate border at the page edge only.",
+      "vignettes": [
+        {
+          "block": "spya-eq7rkm",
+          "quote": "you’ll be giving two cheers for the American work ethic.",
+          "depicts": "Two small figures in plain working clothes at a workbench, raising their hands in a toast of exactly two cheers, tools laid on the bench beside them.",
+          "title": "TWO CHEERS FOR WORK",
+          "node": "thesis"
+        },
+        {
+          "block": "spya-x4w0zk",
+          "quote": "incomprehensible litigation over which families might be entitled to a certain heraldic emblem",
+          "depicts": "A wigged courtier and a clerk argue over a shield bearing a heraldic emblem, genealogical scrolls spread between them on a table.",
+          "title": "HERALDIC EMBLEM DISPUTE",
+          "node": "a1"
+        },
+        {
+          "block": "spya-cz0cgg",
+          "quote": "highly social, cunning, at all times hyperaware of their strict internal dominance hierarchy",
+          "depicts": "A line of courtiers in court dress arranged in a rising hierarchy, their postures and gestures drawn with ape-like crouches and bared-teeth glances at one another.",
+          "title": "COURTIERS AS CHIMPANZEES",
+          "node": "a2"
+        },
+        {
+          "block": "spya-xn6rzj",
+          "quote": "served on the boards of prominent nonprofit institutions — the opera, the symphony, hospitals",
+          "depicts": "Three well-dressed women seated at a long table bearing an opera mask, a stringed instrument, and a hospital cross, each presenting a ledger.",
+          "title": "BOARDS OF THE OPERA AND SYMPHONY",
+          "node": "b1"
+        },
+        {
+          "block": "spya-mc24jb",
+          "quote": "It’s that illusion of being useful that’s satisfying.",
+          "depicts": "A flushed, embarrassed woman holds a thin glass bubble above her ledger of good works, the bubble empty and about to pop.",
+          "title": "THE ILLUSION OF USEFULNESS",
+          "node": "b2"
+        },
+        {
+          "block": "spya-ghqg2t",
+          "quote": "West Enders worked just enough to support their lifestyle, which revolved around what Gans calls the peer group",
+          "depicts": "A crowded tenement room after dark, men and women gathered around a table with cards and coins, work clothes hung on pegs by the door.",
+          "title": "PEER GROUP OVER THE JOB",
+          "node": "c1"
+        },
+        {
+          "block": "spya-b3pf45",
+          "quote": "West End girls enjoyed significantly more freedom to go where they wanted and marry who they chose",
+          "depicts": "A young woman walks an open street arm in arm with a man of her own choosing, away from an older woman watching from a tenement window.",
+          "title": "FREE TO CHOOSE A HUSBAND",
+          "node": "c2"
+        },
+        {
+          "block": "spya-qsfkqr",
+          "quote": "Russian princes and Bostonian Italian day laborers spent most of their time gossiping",
+          "depicts": "A fur-coated Russian prince and an Italian day laborer in work clothes stand back to back at a crossroads, each leaning toward a listener to whisper.",
+          "title": "PRINCES AND DAY LABORERS GOSSIP",
+          "node": "pattern"
+        },
+        {
+          "block": "spya-zd83ts",
+          "quote": "we can earn respect and dignity as adults from what we do, not who we know, or who we are",
+          "depicts": "A craftsman at a workbench is handed a small medal by a fellow worker, for the object he has just finished making.",
+          "title": "DIGNITY FROM THE WORK ITSELF",
+          "node": "d1"
+        },
+        {
+          "block": "spya-ms0vr5",
+          "quote": "a waitress in Chicago or an office assistant in Grand Rapids can still feel that work matters.",
+          "depicts": "A waitress balancing a tray and, beside her, an office assistant at a desk, both drawn mid-task with small marks of pride on their faces.",
+          "title": "WAITRESS AND OFFICE ASSISTANT",
+          "node": "d2"
+        },
+        {
+          "block": "spya-tmepex",
+          "quote": "The possibility of friendship in a commercial society was a serious concern for Adam Smith, David Hume, and Adam Ferguson.",
+          "depicts": "Three men in eighteenth-century coats sit together in conversation on a bench, a row of market stalls visible behind them.",
+          "title": "SMITH, HUME, AND FERGUSON",
+          "node": "d3"
+        },
+        {
+          "block": "spya-dhj4jr",
+          "quote": "I like my job, and I like liberal individualism.",
+          "depicts": "A single figure at a writing desk, quill in hand, looking up contentedly from a half-finished page.",
+          "title": "I LIKE MY JOB",
+          "node": "final"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Two small figures in plain working clothes at a workbench, raising their hands in a toast of exactly two cheers, tools laid on the bench beside them.",
+          "title": "TWO CHEERS FOR WORK"
+        },
+        {
+          "where": "A wigged courtier and a clerk argue over a shield bearing a heraldic emblem, genealogical scrolls spread between them on a table.",
+          "title": "HERALDIC EMBLEM DISPUTE"
+        },
+        {
+          "where": "A line of courtiers in court dress arranged in a rising hierarchy, their postures and gestures drawn with ape-like crouches and bared-teeth glances at one another.",
+          "title": "COURTIERS AS CHIMPANZEES"
+        },
+        {
+          "where": "Three well-dressed women seated at a long table bearing an opera mask, a stringed instrument, and a hospital cross, each presenting a ledger.",
+          "title": "BOARDS OF THE OPERA AND SYMPHONY"
+        },
+        {
+          "where": "A flushed, embarrassed woman holds a thin glass bubble above her ledger of good works, the bubble empty and about to pop.",
+          "title": "THE ILLUSION OF USEFULNESS"
+        },
+        {
+          "where": "A crowded tenement room after dark, men and women gathered around a table with cards and coins, work clothes hung on pegs by the door.",
+          "title": "PEER GROUP OVER THE JOB"
+        },
+        {
+          "where": "A young woman walks an open street arm in arm with a man of her own choosing, away from an older woman watching from a tenement window.",
+          "title": "FREE TO CHOOSE A HUSBAND"
+        },
+        {
+          "where": "A fur-coated Russian prince and an Italian day laborer in work clothes stand back to back at a crossroads, each leaning toward a listener to whisper.",
+          "title": "PRINCES AND DAY LABORERS GOSSIP"
+        },
+        {
+          "where": "A craftsman at a workbench is handed a small medal by a fellow worker, for the object he has just finished making.",
+          "title": "DIGNITY FROM THE WORK ITSELF"
+        },
+        {
+          "where": "A waitress balancing a tray and, beside her, an office assistant at a desk, both drawn mid-task with small marks of pride on their faces.",
+          "title": "WAITRESS AND OFFICE ASSISTANT"
+        },
+        {
+          "where": "Three men in eighteenth-century coats sit together in conversation on a bench, a row of market stalls visible behind them.",
+          "title": "SMITH, HUME, AND FERGUSON"
+        },
+        {
+          "where": "A single figure at a writing desk, quill in hand, looking up contentedly from a half-finished page.",
+          "title": "I LIKE MY JOB"
+        }
+      ]
+    },
+    {
+      "sceneId": "zoom-aristocrats",
+      "title": "Versailles, Salons, and Apes",
+      "prompt": "An illuminated manuscript page in the same hand as the overview: ink linework on aged parchment, muted ochre, madder red, and verdigris washes, gold leaf accents, roundels linked by thin rubricated lines, no lettering anywhere except the eight short capitalized titles beneath their roundels. At the top, a wide cartouche gateway roundel titled FOUR GREAT AGES OF LIGHT, a grand palace hall with four tiny distant scenes of Athens, Rome, Florence, and the palace nested in its archway — this is the plate's opening frame. A line runs down from it into the first full scene, the same vignette the overview showed for this part of the story: HERALDIC EMBLEM DISPUTE, a wigged courtier and a clerk disputing over a shield, genealogical scrolls on the table between them, marking this as the Versailles chapter. The line continues down into SALON CONVERSATION WAS GOSSIP, an elegant room of whispering figures trading folded notes beside an untouched book of poetry. From this scene the line forks briefly sideways into a small secondary roundel, A STACK OF ARISTOCRATIC MEMOIRS, a reader at a table beside a tall pile of bound volumes, before rejoining the main line, which carries on down to WHO SPOKE TO WHOM AT COURT, a crowned woman encircled by pointing, whispering courtiers. The line continues to HONOR FROM FAMILY DISTINCTION, a nobleman adjusting his collar before a mounted family crest, then down to TRACKING ALLIANCES LIKE APES, courtiers crouched and circling like primates, one baring its teeth. Finally the line descends to the last roundel, WEBS OF FEUDAL CEREMONY, an infant courtier held aloft inside a tangle of ceremonial ribbons strung between palace columns, ending the chain. Keep every roundel large and legible, arrange them in a single descending column with generous bare parchment between each, and confine ornament to a thin foliate border at the very edge of the page.",
+      "vignettes": [
+        {
+          "block": "spya-gs52t3",
+          "quote": "the greatest of the four great ages of light, surpassing Athens, Rome, and Florence at their peaks",
+          "depicts": "A grand palace hall framed like a small cartouche gateway, with four tiny distant vignettes of Athens, Rome, Florence, and the palace itself set in its archway.",
+          "title": "FOUR GREAT AGES OF LIGHT",
+          "node": "n1"
+        },
+        {
+          "block": "spya-x4w0zk",
+          "quote": "incomprehensible litigation over which families might be entitled to a certain heraldic emblem",
+          "depicts": "A wigged courtier and a clerk argue over a shield bearing a heraldic emblem, genealogical scrolls spread between them on a table.",
+          "title": "HERALDIC EMBLEM DISPUTE",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wue7zn",
+          "quote": "it is clear that their conversation consisted overwhelmingly of political gossip",
+          "depicts": "An elegant drawing room where seated figures lean close, trading folded notes and whispers, a closed book of poetry lying untouched on a side table.",
+          "title": "SALON CONVERSATION WAS GOSSIP",
+          "node": "n3"
+        },
+        {
+          "block": "spya-k0yet6",
+          "quote": "I’m no Lilti, but I’ve read a lot of aristocratic memoirs, and all of them are like this.",
+          "depicts": "A reader at a small writing table surrounded by a tall stack of bound memoirs, one lying open before them.",
+          "title": "A STACK OF ARISTOCRATIC MEMOIRS",
+          "node": "aside"
+        },
+        {
+          "block": "spya-f90g2h",
+          "quote": "who was seen speaking to whom, who’s too religious or not religious enough, who’s having an affair",
+          "depicts": "A crowned woman at the center of a Russian court, surrounded by courtiers each pointing or leaning toward another in a web of sidelong glances.",
+          "title": "WHO SPOKE TO WHOM AT COURT",
+          "node": "n4"
+        },
+        {
+          "block": "spya-de69sf",
+          "quote": "Aristocratic dignity comes from honor, which is to say it comes from maintaining distinctions of family and class.",
+          "depicts": "A nobleman stands before a family crest mounted on a wall, adjusting his collar with evident pride, no tools or ledger in sight.",
+          "title": "HONOR FROM FAMILY DISTINCTION",
+          "node": "n5"
+        },
+        {
+          "block": "spya-cz0cgg",
+          "quote": "constantly, obsessively tracking alliances, challenges, displays of prowess, and attempts to get ahead",
+          "depicts": "A cluster of courtiers drawn with ape-like crouching stances, circling one another warily, one baring teeth in a challenge.",
+          "title": "TRACKING ALLIANCES LIKE APES",
+          "node": "n6"
+        },
+        {
+          "block": "spya-k26ath",
+          "quote": "born into centuries-old webs of feudal institutions and court ceremonials",
+          "depicts": "An infant courtier held up inside a great tangled web of ribbons and ceremonial chains strung between palace columns, already bound at birth.",
+          "title": "WEBS OF FEUDAL CEREMONY",
+          "node": "n7"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A grand palace hall framed like a small cartouche gateway, with four tiny distant vignettes of Athens, Rome, Florence, and the palace itself set in its archway.",
+          "title": "FOUR GREAT AGES OF LIGHT"
+        },
+        {
+          "where": "A wigged courtier and a clerk argue over a shield bearing a heraldic emblem, genealogical scrolls spread between them on a table.",
+          "title": "HERALDIC EMBLEM DISPUTE"
+        },
+        {
+          "where": "An elegant drawing room where seated figures lean close, trading folded notes and whispers, a closed book of poetry lying untouched on a side table.",
+          "title": "SALON CONVERSATION WAS GOSSIP"
+        },
+        {
+          "where": "A reader at a small writing table surrounded by a tall stack of bound memoirs, one lying open before them.",
+          "title": "A STACK OF ARISTOCRATIC MEMOIRS"
+        },
+        {
+          "where": "A crowned woman at the center of a Russian court, surrounded by courtiers each pointing or leaning toward another in a web of sidelong glances.",
+          "title": "WHO SPOKE TO WHOM AT COURT"
+        },
+        {
+          "where": "A nobleman stands before a family crest mounted on a wall, adjusting his collar with evident pride, no tools or ledger in sight.",
+          "title": "HONOR FROM FAMILY DISTINCTION"
+        },
+        {
+          "where": "A cluster of courtiers drawn with ape-like crouching stances, circling one another warily, one baring teeth in a challenge.",
+          "title": "TRACKING ALLIANCES LIKE APES"
+        },
+        {
+          "where": "An infant courtier held up inside a great tangled web of ribbons and ceremonial chains strung between palace columns, already bound at birth.",
+          "title": "WEBS OF FEUDAL CEREMONY"
+        }
+      ]
+    },
+    {
+      "sceneId": "zoom-work-matters",
+      "title": "Why Work Gives Respect",
+      "prompt": "An illuminated manuscript page in the same hand as the other plates: ink linework on aged parchment, muted ochre, madder red, and verdigris washes, gold leaf accents, roundels linked by thin rubricated lines, no lettering anywhere except the eight short capitalized titles beneath their roundels. At the top, the plate opens with the same scene the overview used for this part of the story: DIGNITY FROM WHAT WE DO, a craftsman at a bench receiving a small medal from a fellow worker, serving as the frame that announces this chapter. A line descends and forks into four roundels arranged in a row across the width of the page: 85% SATISFIED WITH THEIR JOBS, a row of varied workers smiling faintly at their tasks; TREATED LIKE A 'ROBOT', a field laborer and a suited executive both drawn with stiff mechanical limbs; CRIED FOR JOY, BACK AT WORK, a woman at a visitor center counter wiping a tear of joy; and WORK RANKED WITH FAMILY, an elderly narrator speaking to a note-taking writer with a hearth and a tool balanced evenly between them. Thin lines gather all four down into a single roundel: WHEN WE GET CLANNISH, a tight ring of linked figures turning away one more knocking at its edge. From there the line continues down into SMITH, HUME, AND FERGUSON, three coated men in conversation before market stalls. The line finishes at the bottom roundel, A CASUALTY OF PROGRESS?, a seated figure holding fading work tools in one hand and a steady open book in the other. Keep the four-across row wide and evenly spaced so each scene is clearly legible, keep the converging and descending lines visible as thin ink paths, and confine all ornament to a narrow foliate border at the very edge of the page, leaving the central field uncluttered.",
+      "vignettes": [
+        {
+          "block": "spya-zd83ts",
+          "quote": "we can earn respect and dignity as adults from what we do, not who we know, or who we are",
+          "depicts": "A craftsman at a workbench is handed a small medal by a fellow worker, for the object he has just finished making.",
+          "title": "DIGNITY FROM WHAT WE DO",
+          "node": "hub"
+        },
+        {
+          "block": "spya-sw09bu",
+          "quote": "about 85% of us are “somewhat” or “completely” satisfied with our jobs.",
+          "depicts": "A long row of varied workers at their tasks — a cook, a clerk, a driver — most of them smiling faintly as if counted in a tally.",
+          "title": "85% SATISFIED WITH THEIR JOBS",
+          "node": "s1"
+        },
+        {
+          "block": "spya-n00hd0",
+          "quote": "Everyone from migrant farm laborers to ad executives complained about being treated like a “robot.”",
+          "depicts": "A field laborer and a suited executive stand on opposite sides of the frame, each drawn with stiff, mechanical limbs and a blank expression.",
+          "title": "TREATED LIKE A 'ROBOT'",
+          "node": "s4"
+        },
+        {
+          "block": "spya-a5pt8y",
+          "quote": "work featured just as prominently as family and community involvement",
+          "depicts": "An elderly narrator speaks to a seated writer taking notes, a small hearth and a small tool resting equally balanced on the table between them.",
+          "title": "WORK RANKED WITH FAMILY",
+          "node": "s3"
+        },
+        {
+          "block": "spya-hdbtc0",
+          "quote": "When humans get relational, we get clannish.",
+          "depicts": "A tight ring of figures stands linking arms, shoulders turned outward, as one more figure knocks unanswered at the edge of the circle.",
+          "title": "WHEN WE GET CLANNISH",
+          "node": "equality"
+        },
+        {
+          "block": "spya-tmepex",
+          "quote": "a serious concern for Adam Smith, David Hume, and Adam Ferguson",
+          "depicts": "Three men in eighteenth-century coats sit together in conversation on a bench, a row of market stalls visible behind them.",
+          "title": "SMITH, HUME, AND FERGUSON",
+          "node": "commercial"
+        },
+        {
+          "block": "spya-dhj4jr",
+          "quote": "If the former will one day be a casualty of progress, I hope the latter will survive it.",
+          "depicts": "A seated figure holds a set of work tools in one hand, fading into mist, while the other hand holds an open book steady and intact.",
+          "title": "A CASUALTY OF PROGRESS?",
+          "node": "final2"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A craftsman at a workbench is handed a small medal by a fellow worker, for the object he has just finished making.",
+          "title": "DIGNITY FROM WHAT WE DO"
+        },
+        {
+          "where": "A long row of varied workers at their tasks — a cook, a clerk, a driver — most of them smiling faintly as if counted in a tally.",
+          "title": "85% SATISFIED WITH THEIR JOBS"
+        },
+        {
+          "where": "A field laborer and a suited executive stand on opposite sides of the frame, each drawn with stiff, mechanical limbs and a blank expression.",
+          "title": "TREATED LIKE A 'ROBOT'"
+        },
+        {
+          "where": "A woman behind a visitor center counter wipes a tear of joy from her eye as she greets a visitor again.",
+          "title": "CRIED FOR JOY, BACK AT WORK"
+        },
+        {
+          "where": "An elderly narrator speaks to a seated writer taking notes, a small hearth and a small tool resting equally balanced on the table between them.",
+          "title": "WORK RANKED WITH FAMILY"
+        },
+        {
+          "where": "A tight ring of figures stands linking arms, shoulders turned outward, as one more figure knocks unanswered at the edge of the circle.",
+          "title": "WHEN WE GET CLANNISH"
+        },
+        {
+          "where": "Three men in eighteenth-century coats sit together in conversation on a bench, a row of market stalls visible behind them.",
+          "title": "SMITH, HUME, AND FERGUSON"
+        },
+        {
+          "where": "A seated figure holds a set of work tools in one hand, fading into mist, while the other hand holds an open book steady and intact.",
+          "title": "A CASUALTY OF PROGRESS?"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "profileHash": null
+}

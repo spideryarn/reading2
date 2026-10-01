@@ -1,0 +1,264 @@
+{
+  "style": "An illuminated manuscript page — small framed panels of machine-creatures and scribal diagrams linked by painted pathways, suited to a piece that treats bugs as a bestiary of the computational universe",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Bestiary of Bugs",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-d46wsq",
+          "quote": "My Program Did the Wrong Thing!",
+          "depicts": "A scribe at a lectern stares aghast at a scroll where the numbers written do not match the numbers he expected, his quill dropped.",
+          "title": "MY PROGRAM DID THE WRONG THING"
+        },
+        {
+          "node": "n2",
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "A small mechanical tape-creature with a head sweeping along a ribbon of cells, scratching the wrong mark onto the tape at one cell.",
+          "title": "OUTPUTS 9 INSTEAD OF 8"
+        },
+        {
+          "node": "n3",
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "The same tape-creature further along its ribbon, producing an odd number where only even ones were expected, drawn with a small shock-mark above it.",
+          "title": "SUDDENLY GIVES 9 AT N=32"
+        },
+        {
+          "node": "n4",
+          "block": "spya-htqcgc",
+          "quote": "suddenly there’s a “bug”—like here at n = 14",
+          "depicts": "A triangular grid pattern of painted cells meant to double in width, shown splitting into a jagged, broken edge partway down.",
+          "title": "BUG AT N=14"
+        },
+        {
+          "node": "n5",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A monk pointing with a stylus into the heart of the jagged grid pattern, revealing a smaller, orderly nested pattern hidden inside it.",
+          "title": "RULE 122 INSIDE THE RIND"
+        },
+        {
+          "node": "n6",
+          "block": "spya-ypka68",
+          "quote": "we never find a proof",
+          "depicts": "A scribe endlessly unrolling a long chain of linked scroll-fragments that never joins up to the sealed tablet of the proof he seeks.",
+          "title": "NO PROOF EVER FOUND"
+        },
+        {
+          "node": "n7",
+          "block": "spya-s247px",
+          "quote": "with a bounded amount of computational work it’s always possible for the system to surprise us",
+          "depicts": "At the page's center, a single great wheel-and-gear hub from which all the small ribbons, grids and scrolls above converge, with a crack of light bursting from its rim.",
+          "title": "BOUNDED WORK, UNBOUNDED SURPRISE"
+        },
+        {
+          "node": "n8",
+          "block": "spya-xrvkvy",
+          "quote": "one might whimsically call a wily weasel machine",
+          "depicts": "A small weasel-headed mechanical tape-creature hiding its bug behind its back, slipping past a row of testers who do not notice it.",
+          "title": "THE WILY WEASEL MACHINE"
+        },
+        {
+          "node": "n9",
+          "block": "spya-zbsh70",
+          "quote": "there was rule 30, with all its complexity",
+          "depicts": "A tangled, richly textured triangular pattern of black and white cells, unlike the plain orderly grids beside it, radiating outward in disorder.",
+          "title": "RULE 30'S COMPLEXITY"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y7q6q3",
+          "quote": "you try x105 – 1. And suddenly there’s something different—a coefficient of 2",
+          "depicts": "A mathematician's ledger of neat rows of plus-one and minus-one marks, with one strange doubled mark standing out in a circle of red ink.",
+          "title": "COEFFICIENT OF 2 AT X^105"
+        },
+        {
+          "node": "n11",
+          "block": "spya-p2f2cx",
+          "quote": "Language design, I believe, is key.",
+          "depicts": "A craftsman at a bench shaping small wooden blocks (primitives) into a fitted frame, so that only well-shaped pieces can be set into it.",
+          "title": "LANGUAGE DESIGN IS KEY"
+        },
+        {
+          "node": "n12",
+          "block": "spya-j4tprn",
+          "quote": "the progress of ruliology as being precisely about the discovery of a long sequence of “bugs”",
+          "depicts": "At the foot of the page, a traveler holds up a lantern over the same broken tape-ribbon from the top, now framed and displayed like a found relic rather than a ruin.",
+          "title": "BUGS AS DISCOVERIES"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged parchment, warm cream with foxing at the edges, painted in muted pigments (ochre, verdigris, iron-gall brown, a little lapis) and fine ink line-work, in the style of a medieval bestiary crossed with a scholar's technical notebook. Compose top to bottom in a loose vertical procession of framed rectangular panels linked by thin painted connecting paths (like gold-leaf filament roads on an old map), fanning and converging as described. At the top, a single panel: a scribe at a lectern aghast at a scroll of mismatched numbers, quill dropped. Below it, three paths fan out to a trio of panels side by side: first a small mechanical tape-creature scratching a wrong mark onto a ribbon of cells; second, the same creature further along producing an odd mark where an even one was due, a small shock-burst above it; third, a triangular grid of cells meant to double, breaking into a jagged edge. From the third panel, a path descends to a monk pointing a stylus into the broken grid, revealing a small orderly nested pattern inside it. From the first and second, paths descend to a scribe endlessly unrolling scroll-fragments that never quite join into a sealed tablet. All these paths converge into one large central panel: a great painted gear-wheel hub, cracked with a burst of light, labelled only by its picture, at the page's vertical center. From this hub, four paths fan outward to: a weasel-headed little machine slipping past unseeing testers; a tangled richly-patterned triangular field of cells, far busier than the orderly grids above; a mathematician's ledger of plus/minus marks with one doubled mark ringed in red; and a craftsman shaping wooden blocks into a fitted frame. These four paths converge at the bottom into one final panel: a traveller holding a lantern over the same broken ribbon from the very top, now displayed like a framed relic. Each panel is bordered with a thin double ink line and small foliate corner flourishes, generously sized so the scene inside is legible, with open parchment between them rather than crowding. Letter one short capitalized title beneath each panel exactly as given, in a plain serif-like manuscript hand, and place no other words, banners, or inscriptions anywhere on the page."
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "Where Bugs Are Caught in the Act",
+      "vignettes": [
+        {
+          "node": "d1",
+          "block": "spya-scjxv8",
+          "quote": "we’d probably conclude that the Turing machine is computing the function",
+          "depicts": "A scribe nodding in satisfaction over a tidy row of numbers produced by a small tape-creature, each one neatly one greater than the last.",
+          "title": "THE MACHINE SEEMS TO COMPUTE N+1"
+        },
+        {
+          "node": "d2",
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "The same tape-creature, now with its head scratching a plainly wrong mark onto the seventh cell of its ribbon, a small crack in the frame around it.",
+          "title": "OUTPUTS 9 INSTEAD OF 8"
+        },
+        {
+          "node": "d3",
+          "block": "spya-ak7n5c",
+          "quote": "a summary of where the “first bugs” occur",
+          "depicts": "A cartographer's chart showing many small tape-creatures scattered at different distances along a single road, each marked where it first stumbles.",
+          "title": "SUMMARY OF FIRST BUGS"
+        },
+        {
+          "node": "d4",
+          "block": "spya-pt0hmz",
+          "quote": "The “most insidious” bugs do not occur until n = 15.",
+          "depicts": "One tape-creature walking confidently past fourteen milestones before suddenly tripping at the fifteenth.",
+          "title": "INSIDIOUS BUG AT N=15"
+        },
+        {
+          "node": "d5",
+          "block": "spya-n58qub",
+          "quote": "suddenly at n = 63 doesn’t give 64 but instead gives 72",
+          "depicts": "A larger, more elaborate tape-creature walking a much longer road of milestones before stumbling far out near its end, scratching a wildly wrong mark.",
+          "title": "FAILS AT N=63, GIVES 72"
+        },
+        {
+          "node": "d6",
+          "block": "spya-u3d2ws",
+          "quote": "the “highest risk” values of n for bugs are those of the form",
+          "depicts": "A row of milestones along the road picked out with a hazard-red wash, each one bearing a run of identical binary marks, all 1s.",
+          "title": "RISK IN ALL-ONES BINARY"
+        },
+        {
+          "node": "d7",
+          "block": "spya-txuteu",
+          "quote": "but then suddenly, at n = 27, do something different",
+          "depicts": "Two tape-creatures walking side by side in perfect step, then abruptly splitting apart at one milestone, scratching different marks.",
+          "title": "DIVERGING AT N=27"
+        },
+        {
+          "node": "d8",
+          "block": "spya-fmdw58",
+          "quote": "something pathological happens—and the machine goes into an infinite loop",
+          "depicts": "A tape-creature caught circling endlessly around the same cell on its ribbon, its path forming a tight spiral with no exit.",
+          "title": "INFINITE LOOP AT N=151"
+        },
+        {
+          "node": "d9",
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "A tape-creature producing a column of even-numbered marks, then one odd mark standing out, circled in red further down the ribbon.",
+          "title": "GIVES 9 AT N=32"
+        },
+        {
+          "node": "d10",
+          "block": "spya-htqcgc",
+          "quote": "suddenly there’s a “bug”—like here at n = 14",
+          "depicts": "A doubling grid-pattern of painted cells, orderly at first, breaking into a jagged edge partway along.",
+          "title": "BUG AT N=14"
+        },
+        {
+          "node": "d11",
+          "block": "spya-sk8qh9",
+          "quote": "the first “bug” shows up at n = 24",
+          "depicts": "A second, differently patterned doubling grid, holding its shape longer than the first before it too breaks apart at a later point.",
+          "title": "FIRST BUG AT N=24"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, aged cream parchment with ink line-work and muted pigments (ochre, iron-gall brown, verdigris, small touches of hazard-red wash), matching the style and palette of a scholar's bestiary of mechanical creatures. Open at the top with the overview's own hub-panel redrawn small as a frame-heading: a great cracked gear-wheel with light bursting from its rim, unlabeled apart from its caption. Below it, arrange eleven framed panels in a descending, branching procession down the page, generously sized, using the full width. First: a scribe nodding over a tidy row of numbers from a small tape-creature. A path leads down to: the same creature scratching a wrong mark on its seventh cell, a crack in its frame. From there a path spreads to a cartographer's chart of many tape-creatures scattered along one road, each marked where it stumbles; which forks into two panels side by side — one creature tripping at its fifteenth milestone, and a larger, more elaborate creature stumbling much further out near its sixty-third. From the larger creature's panel, a path descends to a row of milestones washed hazard-red, each marked with a run of identical binary digits. That path leads to two panels of two tape-creatures walking in step then suddenly splitting apart at one milestone, which itself forks into: a creature spiralling forever around one cell of its ribbon, and a creature producing a column of even marks broken by one red-circled odd one. Below these, two final panels show doubling grid-patterns of painted cells — one breaking into jagged ruin early along its length, the other holding its shape longer before breaking apart further down. Border every panel with a thin double ink line and small foliate corners, leaving open parchment between them. Letter one short capitalized title beneath each panel exactly as given, in a plain manuscript hand, and place no other words anywhere on the page."
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "Where Proof Succeeds or Fails",
+      "vignettes": [
+        {
+          "node": "p1",
+          "block": "spya-qm284b",
+          "quote": "patterns that are simple enough that it’s “visually obvious” that they’ll “correctly double”",
+          "depicts": "A monk gazing at a plain, orderly grid-pattern of cells doubling in width, nodding with evident certainty, no doubt in his posture.",
+          "title": "VISUALLY OBVIOUS DOUBLING"
+        },
+        {
+          "node": "p2",
+          "block": "spya-asw9eq",
+          "quote": "if we run this case up to n = 100000, no bugs appear.",
+          "depicts": "The same monk now beside a far longer, more tangled grid-pattern, counting on a string of beads that reaches one hundred thousand without finding any flaw.",
+          "title": "NO BUGS AFTER 100,000 TESTS"
+        },
+        {
+          "node": "p3",
+          "block": "spya-f89kx4",
+          "quote": "no obvious way to be sure—and to guarantee that nothing crazy will ever happen",
+          "depicts": "The monk frowning at a wavering line chart of jagged little peaks drawn beside the grid-pattern, his certainty now shaken.",
+          "title": "FLUCTUATIONS LEAVE IT UNCERTAIN"
+        },
+        {
+          "node": "p4",
+          "block": "spya-hcdcqp",
+          "quote": "it looks at the whole process of computation—which is easy to do for a cellular automaton",
+          "depicts": "The monk steps back to view the entire grid-pattern at once, unrolled across a long table rather than studied cell by cell.",
+          "title": "THE WHOLE COMPUTATION, MADE CLEAR"
+        },
+        {
+          "node": "p5",
+          "block": "spya-r7ty6m",
+          "quote": "the white “rind” always either stays in the same place, or moves to the left",
+          "depicts": "A close view of the pattern's pale outer border, marked with small arrows showing it only ever holding still or creeping leftward, never rightward.",
+          "title": "THE RIND MOVES LEFT"
+        },
+        {
+          "node": "p6",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "The monk's stylus parting the pattern's outer border to reveal a smaller, cleaner nested pattern hidden within it.",
+          "title": "RULE 122 INSIDE"
+        },
+        {
+          "node": "p7",
+          "block": "spya-n5acnw",
+          "quote": "the underlying cellular automaton must always correctly “double its input”, with no bugs.",
+          "depicts": "The monk closing a sealed tablet over the whole pattern, satisfied that it must always finish correctly.",
+          "title": "ALWAYS CORRECTLY DOUBLES"
+        },
+        {
+          "node": "p8",
+          "block": "spya-ycgxn9",
+          "quote": "But can we formally prove this?",
+          "depicts": "A second scribe, separately, sets down his quill beside a small tape-creature, pausing to ask whether its correctness can be set down as a proof.",
+          "title": "CAN WE FORMALLY PROVE THIS"
+        },
+        {
+          "node": "p9",
+          "block": "spya-jqmftv",
+          "quote": "a notation that can encompass both the behavior of the Turing machine",
+          "depicts": "The scribe drawing a ribbon of linked cells as a chain of small beads strung on a cord, a notation for the tape itself.",
+          "title": "A NOTATION FOR THE TAPE"
+        },
+        {
+          "node": "p10",
+          "block": "spya-muu0c5",
+          "quote": "we’ve been able to prove that for all inputs n the machine correctly computes n + 1",
+          "depicts": "The scribe sealing a finished tablet of linked proof-fragments, each one joined cleanly to the next in an unbroken chain down to a final seal.",
+          "title": "PROVED CORRECT FOR ALL N"
+        },
+        {
+          "node": "p11",
+          "block": "spya-ypka68",
+          "quote": "we never find a proof",
+          "depicts": "The same scribe, beside a different tape-creature, endlessly laying down proof-fragments that never join into a chain, the end of the cord trailing off unsealed.",
+          "title": "NEVER FINDING A PROOF"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, aged cream parchment, ink line-work and muted pigments (ochre, iron-gall brown, verdigris, faint lapis), continuing the same scholar's-bestiary register. Open at the top with a small heading-panel repeating the overview's proof-search vignette: a scribe endlessly unrolling scroll-fragments that never join a sealed tablet, captioned as before. Below it, arrange two linked columns of framed panels descending the page, each generously sized with open parchment between them. Left-hand sequence, top to bottom: a monk gazing contentedly at a plain orderly doubling grid-pattern; the same monk beside a far longer, more tangled grid-pattern, counting beads up to a great number without finding fault; the monk frowning at a wavering chart of little peaks beside the pattern; the monk stepping back to view the whole pattern unrolled across a table; a close view of the pattern's pale outer border marked with small arrows showing it holding still or creeping only leftward; the monk's stylus parting that border to reveal a smaller clean nested pattern hidden inside; and finally the monk closing a sealed tablet over the whole pattern. A connecting path leads from this sealed tablet across to the right-hand sequence, which begins with a second scribe pausing beside a small tape-creature to ask whether its correctness can be proved; below him, the scribe drawing a chain of linked beads on a cord as a notation for the creature's ribbon of cells; below that, the same scribe sealing a finished chain of proof-fragments into a tablet, joined unbroken link to link; and beside it, as a counterpoint, the scribe beside a different tape-creature laying down proof-fragments that never join, the cord's end trailing off bare and unsealed. Border every panel with a thin double ink line and small foliate corner flourishes. Letter one short capitalized title beneath each panel exactly as given, in a plain manuscript hand, and place no other words, banners, or inscriptions anywhere on the page."
+    }
+  ]
+}

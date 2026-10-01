@@ -1,0 +1,215 @@
+{
+  "style": "An illuminated manuscript page — spider silk's layered, hand-spun, biological subject suits vellum, gold leaf and small painted scenes more than a hard-edged technical diagram",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Spinning of the Thread: Spider Silk from Web to Workshop",
+      "vignettes": [
+        {
+          "node": "intro",
+          "block": "spya-gp4t9x",
+          "quote": "to suspend themselves from height, to float through the air, or to glide away from predators",
+          "depicts": "A spider hangs from a single thread at the top of the page, another thread drifting it sideways through the air as if floating, a third thread trailing behind it as it flees a shadowy bird shape above.",
+          "title": "SUSPENDED, FLOATING, GLIDING"
+        },
+        {
+          "node": "propHub",
+          "block": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function",
+          "depicts": "A spider at the centre of a rosette of threads, each thread rendered in a visibly different texture — coiled, taut, glistening — to show many kinds of silk branching from one creature.",
+          "title": "EACH SILK, ITS OWN JOB"
+        },
+        {
+          "node": "structural",
+          "block": "spya-p263u9",
+          "quote": "the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties",
+          "depicts": "A close-up woven panel showing small hard tile-like blocks set into a soft looping mesh, like masonry embedded in knotted rope.",
+          "title": "HARD TILES IN A SOFT MESH"
+        },
+        {
+          "node": "mechanical",
+          "block": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking",
+          "depicts": "A single thread stretched taut between two hands, visibly elongated into a thin curve, just short of snapping.",
+          "title": "STRETCHED TO THE BREAK"
+        },
+        {
+          "node": "uses",
+          "block": "spya-jyg3uw",
+          "quote": "single thread used by the Bolas spiders for \"fishing\"",
+          "depicts": "A spider dangles from a branch holding a single thread tipped with a sticky ball, swinging it out like a fisherman's line toward a moth.",
+          "title": "BOLAS SPIDER FISHING"
+        },
+        {
+          "node": "silktypes",
+          "block": "spya-gu2z3s",
+          "quote": "Aggregate silk - Sticky coating for the capture spiral",
+          "depicts": "A spiral strand of a web studded with small glistening droplets along its length, distinct from the plain straight spokes around it.",
+          "title": "STICKY COATING ON THE SPIRAL"
+        },
+        {
+          "node": "spinning",
+          "block": "spya-g2gw42",
+          "quote": "the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir",
+          "depicts": "A spider's hind leg drawing a thread away from its own body, the thread visibly hardening from a soft droplet into a taut line as it is pulled.",
+          "title": "PULLED, NOT SQUEEZED"
+        },
+        {
+          "node": "synthHub",
+          "block": "spya-wgee6t",
+          "quote": "Few strategies have produced silk that can efficiently be synthesised into fibres",
+          "depicts": "A workshop bench split in two: on one side a vial of pale liquid protein, on the other a small mechanical spinning device with a narrow nozzle, both under one roof.",
+          "title": "PROTEIN AND MACHINE, BOTH NEEDED"
+        },
+        {
+          "node": "feedstock",
+          "block": "spya-gjan3e",
+          "quote": "Genetically modified to secrete silk proteins in their milk",
+          "depicts": "A goat standing beside a milking pail, the milk in the pail catching a faint silken sheen.",
+          "title": "SILK PROTEIN IN GOAT MILK"
+        },
+        {
+          "node": "syntheticsilk",
+          "block": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk",
+          "depicts": "Two threads side by side on a cloth: one thin and gleaming, one thicker and duller, held up for comparison by a hand.",
+          "title": "STILL SIMPLER THAN THE REAL THING"
+        },
+        {
+          "node": "humanuses",
+          "block": "spya-jj2arg",
+          "quote": "wove silk derived from spider's egg cocoons into stockings and gloves",
+          "depicts": "A seated figure at an old wooden loom, threads from a pile of silken egg cocoons feeding into woven stockings and gloves on the frame before them.",
+          "title": "STOCKINGS FROM SPIDER COCOONS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on aged parchment, painted in muted earth tones — ochre, bone-white, rust-brown, faded gold leaf — with fine black ink outlines in the style of a medieval bestiary or herbal. The composition runs top to bottom in a single winding vine-like border that threads between ten framed vignettes, each a small painted scene in its own round or arched frame, like roundels on an illuminated page. At the very top, a spider hangs suspended from a thread, another thread carrying it sideways through drawn wind-lines, a third trailing from it as it flees a shadowy bird overhead — titled SUSPENDED, FLOATING, GLIDING. Below, enclosed within a painted border labelled by a gold-leaf frame marking the area 'PROPERTIES', three scenes cluster together: a spider at the centre of a rosette of many different-textured threads (EACH SILK, ITS OWN JOB), beneath it a woven panel of hard tiles set in soft looping mesh (HARD TILES IN A SOFT MESH), and beside that a taut thread stretched near breaking between two painted hands (STRETCHED TO THE BREAK). The spine continues downward: a bolas spider swinging a sticky-tipped thread at a moth (BOLAS SPIDER FISHING), a spiral web strand studded with glistening droplets (STICKY COATING ON THE SPIRAL), and a spider's leg drawing out a hardening thread (PULLED, NOT SQUEEZED). The path then enters a second gold-bordered area labelled 'ARTIFICIAL SYNTHESIS', containing a split workshop bench with a vial of liquid and a small spinning device (PROTEIN AND MACHINE, BOTH NEEDED), a goat beside a milking pail with silken-sheened milk (SILK PROTEIN IN GOAT MILK), and two compared threads held up by a hand, one fine and one coarse (STILL SIMPLER THAN THE REAL THING). The page ends with a seated weaver at an old loom, threading spider-cocoon silk into stockings and gloves (STOCKINGS FROM SPIDER COCOONS). Each vignette has its capitalised title lettered directly beneath its frame in plain ink script; nothing else on the page is lettered — no banners, no scrolls, no other text. Scenes are large and legible, filling the width of the page, with only thin decorative vine borders as filler, never crowding the vignettes."
+    },
+    {
+      "sceneId": "inside-properties",
+      "title": "Inside Properties: The Grain of the Thread",
+      "vignettes": [
+        {
+          "node": "z-structural",
+          "block": "spya-p263u9",
+          "quote": "the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties",
+          "depicts": "A woven panel, repeated from the overview, showing hard tile-like blocks set into a soft looping mesh, opening this plate as the overview's own image of silk's structure.",
+          "title": "CRYSTAL AND STRETCH, INTERWOVEN"
+        },
+        {
+          "node": "z-mechHub",
+          "block": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking",
+          "depicts": "A thread stretched into a long curve between two hands, clearly elongated but unbroken, holding a hung weight.",
+          "title": "ABSORBING ENERGY BEFORE IT SNAPS"
+        },
+        {
+          "node": "z-stiffness",
+          "block": "spya-dq9b7q",
+          "quote": "spider silk is ductile and elastic, having a lower Young's modulus",
+          "depicts": "A silk strand bending into a soft curve beside a rigid steel rod standing perfectly straight.",
+          "title": "BENDS WHERE STEEL STAYS STIFF"
+        },
+        {
+          "node": "z-strength",
+          "block": "spya-mhe2r5",
+          "quote": "A dragline silk's tensile strength is comparable to that of high-grade alloy steel",
+          "depicts": "A balance scale with a silk thread on one side holding a weighted bar equal to a steel bar on the other side.",
+          "title": "AS STRONG AS HIGH-GRADE STEEL"
+        },
+        {
+          "node": "z-density",
+          "block": "spya-hng89u",
+          "quote": "a strand long enough to circle the Earth would weigh about 2 kilograms",
+          "depicts": "A thin silk thread looped entirely around a small painted globe of the Earth, with a tiny weight marked beside it.",
+          "title": "A THREAD AROUND THE EARTH"
+        },
+        {
+          "node": "z-toughness",
+          "block": "spya-gfykz5",
+          "quote": "\"equals that of commercial polyaramid (aromatic nylon) filaments, which themselves are benchmarks of modern polymer fibre technology\"",
+          "depicts": "Two threads stretched side by side at equal tautness, one labelled by texture as silk, the other as a manufactured synthetic strand, matched in strength.",
+          "title": "MATCHING SYNTHETIC POLYARAMID FIBRE"
+        },
+        {
+          "node": "z-supercontract",
+          "block": "spya-qdjb0x",
+          "quote": "dragline silks undergo supercontraction, shrinking up to 50% in length and behaving like a weak rubber under tension",
+          "depicts": "A wet thread drooping and visibly shortened, hanging slack like a loose rubber band, droplets of water painted along it.",
+          "title": "SHRINKING TO A WEAK RUBBER"
+        },
+        {
+          "node": "z-adhesive",
+          "block": "spya-k8bh7d",
+          "quote": "The pyriform threads polymerise under ambient conditions, become functional immediately, and are usable indefinitely",
+          "depicts": "A spider's legs pressing a small disc of silk onto a leaf surface, the disc shown bonding instantly with fine radiating lines.",
+          "title": "GLUE THAT BONDS INSTANTLY"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, same palette and hand as the overview — parchment ground, muted ochre and bone-white paint, fine black ink line, touches of faded gold leaf — continuing the vine-bordered roundel scheme. At the top, framed exactly as it appeared in the overview, the woven panel of hard tiles set into soft looping mesh opens the plate (CRYSTAL AND STRETCH, INTERWOVEN), marking this as the inside of the Properties hub. Below it a single wide roundel shows a thread stretched taut between two hands bearing a hung weight (ABSORBING ENERGY BEFORE IT SNAPS), and from this scene five smaller roundels fan outward in a cluster, arranged two-two-one down the page: a bending silk strand beside a rigid steel rod (BENDS WHERE STEEL STAYS STIFF); a balance scale weighing silk against steel (AS STRONG AS HIGH-GRADE STEEL); a silk thread looped around a small painted globe with a tiny weight marked beside it (A THREAD AROUND THE EARTH); two threads of equal tautness, one silk one synthetic (MATCHING SYNTHETIC POLYARAMID FIBRE); and a wet thread hanging slack and shortened with painted water droplets (SHRINKING TO A WEAK RUBBER). From the globe-thread roundel a single line of vine border leads further down the page to a final, separate roundel: a spider's legs pressing a small silk disc onto a leaf, bonding instantly with fine radiating ink lines (GLUE THAT BONDS INSTANTLY), set apart from the cluster above to show it as its own thread of the story. Each roundel carries its capitalised title lettered beneath it in plain ink script. Nothing else on the page is lettered — no banners, no scrolls, no inscriptions. The vine border stays thin and decorative, never crowding the scenes, which are large enough to read clearly and spread across the full width of the page."
+    },
+    {
+      "sceneId": "inside-synthesis",
+      "title": "Inside Artificial Synthesis: Two Workshops, One Verdict",
+      "vignettes": [
+        {
+          "node": "z-hub",
+          "block": "spya-wgee6t",
+          "quote": "synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions",
+          "depicts": "The same split workbench from the overview, repeated to open this plate: a vial of pale liquid protein on one side, a small mechanical spinning device on the other, under one roof.",
+          "title": "TWO TASKS: PROTEIN AND DUCT"
+        },
+        {
+          "node": "z-feedHead",
+          "block": "spya-rw0wtg",
+          "quote": "The molecular structure of unspun silk is both complex and long",
+          "depicts": "A long tangled strand of molecules being examined by a scholar through a hand lens, on the left-hand column of the page.",
+          "title": "A LONG, COMPLEX MOLECULE"
+        },
+        {
+          "node": "z-geoHead",
+          "block": "spya-up6vkg",
+          "quote": "Spider silks with comparatively simple molecular structure need complex ducts to be able to form an effective fibre",
+          "depicts": "A simple drop of liquid entering an elaborate winding duct apparatus with narrow coiled channels, on the right-hand column of the page.",
+          "title": "SIMPLE PROTEIN, COMPLEX DUCT"
+        },
+        {
+          "node": "z-ecoli",
+          "block": "spya-f399m7",
+          "quote": "researchers from the Korea Advanced Institute of Science & Technology succeeded in making spider silk directly using E. coli",
+          "depicts": "A small glass dish of bacteria with a fine silken thread rising from it, a robed scholar bending close to observe.",
+          "title": "BACTERIA SPINNING SPIDER SILK"
+        },
+        {
+          "node": "z-goats",
+          "block": "spya-brz8bx",
+          "quote": "the milk produced by the goats contained significant quantities of the protein",
+          "depicts": "A goat being milked into a pail, the milk within faintly shimmering with threads.",
+          "title": "SILK PROTEIN IN GOAT'S MILK"
+        },
+        {
+          "node": "z-syringe",
+          "block": "spya-y4ay23",
+          "quote": "Feedstock is forced through a hollow needle using a syringe",
+          "depicts": "A hand pressing down a syringe plunger, forcing pale liquid through a hollow needle that trails a thin thread.",
+          "title": "FORCED THROUGH A HOLLOW NEEDLE"
+        },
+        {
+          "node": "z-microfluidics",
+          "block": "spya-qbrkma",
+          "quote": "Microfluidics have the advantage of being controllable and able to test spin small volumes of unspun fibre",
+          "depicts": "A small precise device etched with fine channels, a delicate thread emerging from its narrow outlet.",
+          "title": "PRECISE, SMALL-SCALE SPINNING"
+        },
+        {
+          "node": "z-result",
+          "block": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk",
+          "depicts": "Two threads laid side by side at the bottom of the page, one fine and gleaming, the other visibly thicker and duller, both converging beneath the two columns above.",
+          "title": "OFFERING HALF THE STRENGTH"
+        }
+      ],
+      "prompt": "An illuminated manuscript page in the same hand and palette as the previous plates — parchment ground, muted ochre, bone-white and rust-brown paint, fine black ink outlines, touches of faded gold leaf, vine-scroll borders. At the top, the split workbench scene from the overview opens this plate, repeated exactly: a vial of liquid protein and a small mechanical spinning device under one roof (TWO TASKS: PROTEIN AND DUCT), marking this as the inside of the Artificial Synthesis hub. Below it the page divides into two parallel columns separated by a painted vine. The left column begins with a scholar examining a long tangled molecule through a hand lens (A LONG, COMPLEX MOLECULE), then descends to two roundels: bacteria in a glass dish producing a silken thread while a robed figure observes (BACTERIA SPINNING SPIDER SILK), and a goat being milked into a shimmering pail (SILK PROTEIN IN GOAT'S MILK). The right column begins with a drop of liquid entering an elaborate coiled duct apparatus (SIMPLE PROTEIN, COMPLEX DUCT), then descends to two roundels: a hand pressing a syringe plunger, forcing liquid through a needle into a thread (FORCED THROUGH A HOLLOW NEEDLE), and a small precise device etched with fine channels producing a delicate thread (PRECISE, SMALL-SCALE SPINNING). All four lower roundels in both columns funnel downward with converging vine-lines to a single wide roundel at the foot of the page: two threads laid side by side, one fine and gleaming, one thicker and duller (OFFERING HALF THE STRENGTH). Each roundel carries its capitalised title lettered beneath it in plain ink script. Nothing else on the page is lettered — no banners, scrolls, or inscriptions. Keep the vine border thin and decorative, never crowding the scenes, and let the two columns and the final convergence use the full width and height of the page so every scene reads clearly."
+    }
+  ]
+}

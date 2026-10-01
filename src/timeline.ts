@@ -1109,8 +1109,8 @@ story in time should come back with an empty list, and that is a real answer.`;
  *
  * **The publication date goes here, in the user prompt, and not in the article
  * block.** `articleWithIds` writes TITLE / BY / PUBLISHED IN / URL and no date,
- * which is what keeps this stage's article bytes identical to `ideas`' and
- * `sketch`'s so the three can share one cached prefix
+ * which is what keeps this stage's article bytes identical to `ideas`' so the
+ * two can share one cached prefix
  * (`ARTICLE_RENDERER` in src/models.ts). A date in the head would break that
  * for every article, to save nothing.
  */

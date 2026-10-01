@@ -1,0 +1,259 @@
+```json
+{"root": {
+  "title": "Cargo Cult Science",
+  "gist": "Science demands a strict honesty about one's own possible errors that merely following its outward rituals, as pseudoscience does, can never supply.",
+  "question": "Cargo Cult Science — what is missing from fields that imitate science but never produce real results? (a named principle)",
+  "range": ["spya-arxt8r", "spya-ndyj3t"],
+  "sourceHeading": "Cargo Cult Science",
+  "children": [
+    {
+      "title": "Byline and framing",
+      "gist": "A short note frames the piece as Feynman's 1974 Caltech commencement remarks on science, pseudoscience, and the discipline of not fooling oneself.",
+      "question": "Cargo Cult Science — who gave this talk and in what setting? (a byline and framing note)",
+      "range": ["spya-hwqz3q", "spya-wv9g0v"],
+      "children": [
+        {
+          "title": "Byline",
+          "gist": "The piece is credited to Richard P. Feynman with a short reading-time note.",
+          "range": ["spya-hwqz3q", "spya-f6b5fs"],
+          "children": []
+        },
+        {
+          "title": "Occasion stated",
+          "gist": "The remarks are introduced as a 1974 Caltech commencement address about science, pseudoscience, and self-deception.",
+          "range": ["spya-wv9g0v", "spya-wv9g0v"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Widespread belief in pseudoscience",
+      "gist": "Science arose by testing and discarding failed ideas, yet modern people still believe many untested things, which Feynman set out to investigate firsthand.",
+      "question": "pseudoscience — why do so many people still believe things that don't actually work? (several personal encounters)",
+      "range": ["spya-ddrr9m", "spya-mmhbvn"],
+      "children": [
+        {
+          "title": "From witch doctors to science",
+          "gist": "Science emerged when people began testing ideas and discarding the ones that failed, making it strange that earlier eras trusted cures like rhinoceros horn or witch doctors whose remedies never worked at all.",
+          "range": ["spya-ddrr9m", "spya-ddrr9m"],
+          "children": []
+        },
+        {
+          "title": "Modern mysticism persists",
+          "gist": "Despite the scientific age, Feynman still meets people absorbed in UFOs, astrology, ESP, and similar beliefs, leading him to conclude the world is not truly scientific.",
+          "range": ["spya-bcgpc3", "spya-bcgpc3"],
+          "children": []
+        },
+        {
+          "title": "Investigating mystic experiences",
+          "gist": "Curious why so many people believe strange things, Feynman personally explored isolation tanks and the Esalen retreat, finding far more mystical belief than he expected and feeling overwhelmed by its scale.",
+          "range": ["spya-q4502k", "spya-q4502k"],
+          "children": []
+        },
+        {
+          "title": "A reflexology anecdote",
+          "gist": "A bathhouse scene where a man probing a woman's foot mistakes her toe for the pituitary gland, and calls it reflexology, illustrates the casual, unverified claims Feynman found everywhere.",
+          "range": ["spya-xm9a87", "spya-xm9a87"],
+          "children": []
+        },
+        {
+          "title": "Testing Uri Geller",
+          "gist": "Feynman attended a demonstration by Uri Geller, famed for claiming to bend keys and read minds by touch, and watched both feats fail completely under his observation, including underwater.",
+          "range": ["spya-mmhbvn", "spya-mmhbvn"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Witch-doctor remedies in social science",
+      "gist": "Everyday fields like education and criminal reform claim scientific status yet show no real improvement over time, intimidating ordinary people who have better instincts into deferring to unproven experts.",
+      "question": "pseudoscience — which respected fields quietly behave like the witch doctors who never actually cured anyone? (two examples and their social cost)",
+      "range": ["spya-aww976", "spya-wc4h5s"],
+      "children": [
+        {
+          "title": "Education and crime unimproved",
+          "gist": "Despite elaborate theories about teaching reading and handling criminals, reading scores stay flat and crime does not decrease, showing these fields behave like the witch doctors whose remedies never actually worked.",
+          "range": ["spya-aww976", "spya-aww976"],
+          "children": []
+        },
+        {
+          "title": "Experts override common sense",
+          "gist": "Because such fields are labeled scientific, ordinary teachers and parents with sound instincts are pressured by the system into abandoning their own good judgment for unproven expert methods.",
+          "range": ["spya-re4634", "spya-re4634"],
+          "children": []
+        },
+        {
+          "title": "A test for pseudoscience",
+          "gist": "Feynman proposes that topics freely and comfortably discussed at a cocktail party, without anyone objecting that you're talking shop, are reliably ones where nobody actually knows anything solid.",
+          "range": ["spya-g2cwvy", "spya-wc4h5s"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Naming Cargo Cult Science",
+      "gist": "Like South Sea islanders who built fake runways and control towers hoping planes would land again, some fields copy science's outward form perfectly while missing the essential thing that makes it actually work.",
+      "question": "Cargo Cult Science — what does the South Seas cargo cult reveal about fields that mimic science's form? (an extended analogy)",
+      "range": ["spya-ankp3d", "spya-afgs74"],
+      "children": [
+        {
+          "title": "More unexamined fields",
+          "gist": "Using his cocktail-party test, Feynman adds psychotherapy to his list of under-examined topics, noting he has found far more material than one talk can cover and may need a future series.",
+          "range": ["spya-ankp3d", "spya-ankp3d"],
+          "children": []
+        },
+        {
+          "title": "The cargo cult parable",
+          "gist": "Feynman names educational and psychological research Cargo Cult Science after islanders who built runways and bamboo antennas copying wartime airfields, performing every outward form perfectly yet never making a plane land.",
+          "range": ["spya-fd2muf", "spya-fd2muf"],
+          "children": []
+        },
+        {
+          "title": "The missing ingredient hinted",
+          "gist": "Feynman admits explaining the missing ingredient is as hard as advising the islanders, but names it as a kind of total scientific honesty, a leaning-over-backwards to report anything that might undercut one's own result.",
+          "range": ["spya-afgs74", "spya-afgs74"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "The discipline of scientific honesty",
+      "gist": "Real scientific integrity means reporting every doubt, disagreeing fact, and alternative explanation against your own result, not merely avoiding outright lies as ordinary advertising does.",
+      "question": "scientific integrity — what exactly must a scientist disclose beyond simply avoiding lies? (contrasted with advertising)",
+      "range": ["spya-rxj5wa", "spya-az6z7k"],
+      "children": [
+        {
+          "title": "Disclosing every doubt",
+          "gist": "A scientist must report all details that could cast doubt on a result or theory, including disagreeing facts, and must show that a theory's success predicts things beyond what inspired it in the first place.",
+          "range": ["spya-rxj5wa", "spya-qpwryx"],
+          "children": []
+        },
+        {
+          "title": "Contrast with advertising",
+          "gist": "A truthful claim like 'Wesson Oil doesn't soak through food' is still misleading by implication, since that is true of any oil below a certain temperature, showing integrity demands more than avoiding outright falsehood.",
+          "range": ["spya-bpyx8n", "spya-bpyx8n"],
+          "children": []
+        },
+        {
+          "title": "Reputation rests on care",
+          "gist": "Because other experimenters will eventually repeat your work and nature itself will agree or disagree, only careful, self-doubting researchers earn lasting scientific reputation rather than fleeting fame.",
+          "range": ["spya-az6z7k", "spya-az6z7k"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Fooling ourselves with data",
+      "gist": "The history of measuring the electron's charge shows scientists unconsciously discarding results too far from an accepted but mistaken value, a bias careful method now guards against.",
+      "question": "self-deception — how did a whole field drift away from an error for years without noticing? (a historical case)",
+      "range": ["spya-rub3a2", "spya-bvx2u8"],
+      "children": [
+        {
+          "title": "Millikan's drifting number",
+          "gist": "Robert Millikan's early measurement of the electron's charge was slightly wrong due to a bad value for air viscosity, and later measurements crept upward toward the true value only gradually over many years rather than correcting at once.",
+          "range": ["spya-rub3a2", "spya-s9msxy"],
+          "children": []
+        },
+        {
+          "title": "Discarding inconvenient results",
+          "gist": "Scientists unconsciously hunted for errors only when their results strayed far from Millikan's number and stopped checking when results agreed with it, a bias since recognized and guarded against but never formally taught in any course.",
+          "range": ["spya-uj9v2h", "spya-bvx2u8"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Honesty toward other scientists",
+      "gist": "Beyond not fooling yourself first, a scientist owes colleagues and the public full disclosure, including publishing results that run against one's hopes, funding, or a questioner's preferred answer.",
+      "question": "scientific integrity — what extra honesty does a scientist owe to colleagues, laymen, and funders? (three illustrative cases)",
+      "range": ["spya-ed9mzv", "spya-s05sub"],
+      "children": [
+        {
+          "title": "Not fooling yourself first",
+          "gist": "The first and hardest principle is refusing to fool yourself, since you are the easiest person to deceive, and only after that does honesty toward other scientists become straightforward.",
+          "range": ["spya-ed9mzv", "spya-ed9mzv"],
+          "children": []
+        },
+        {
+          "title": "Honesty toward laymen",
+          "gist": "Feynman argues scientists owe the public a special extra honesty, bending over backwards to show where they might be wrong, separate from ordinary personal morality which he leaves to each person's own conscience.",
+          "range": ["spya-c46yyu", "spya-mjty2q"],
+          "children": []
+        },
+        {
+          "title": "Publishing against yourself",
+          "gist": "Scientific and political advice must be published whichever way it comes out, since selectively publishing only favorable results, as cigarette ads or convenient political findings do, is not honest guidance.",
+          "range": ["spya-jk7mj4", "spya-s05sub"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Poor practice across disciplines",
+      "gist": "From an uncontrolled rat study to a physics experiment rushed for funding, failing to repeat prior results or verify conditions undermines findings even in respected, mainstream research.",
+      "question": "poor science — how do even mainstream researchers skip the checks that would expose their errors? (two case studies)",
+      "range": ["spya-w9nnq6", "spya-m95kqm"],
+      "children": [
+        {
+          "title": "A flawed rat proposal",
+          "gist": "A Cornell psychology student planned to change one condition in a rat experiment without first confirming she could reproduce the original result herself, which Feynman says was necessary to know her new variable truly mattered.",
+          "range": ["spya-w9nnq6", spya-v0xcd7".replace('spya-v0xcd7"','"spya-v0xcd7"') ,"spya-v0xcd7"],
+          "children": []
+        },
+        {
+          "title": "Pressure for new results",
+          "gist": "At a major accelerator lab, a physicist compared his own heavy-hydrogen results to someone else's old light-hydrogen data rather than rerunning it himself, because program managers eager for newsworthy results would not allot the needed time.",
+          "range": ["spya-m95kqm", "spya-m95kqm"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Young's rat-corridor experiment",
+      "gist": "A 1937 experiment by Young painstakingly eliminated every sensory clue, down to floor sound, that let rats detect a food door, producing a rare model of truly careful experimental control that later researchers simply ignored.",
+      "question": "good experimental control — what did one overlooked rat study get right that most others miss? (a single detailed case)",
+      "range": ["spya-fvenms", "spya-yzzxkw"],
+      "children": [
+        {
+          "title": "Eliminating every clue",
+          "gist": "Young systematically ruled out texture, smell, and sight as cues letting rats find the correct door, only succeeding when he silenced the sound of the floor itself by using sand.",
+          "range": ["spya-fvenms", "spya-npdc6n"],
+          "children": []
+        },
+        {
+          "title": "A model experiment",
+          "gist": "By uncovering the actual clue rats used rather than assuming which one mattered, Young's experiment shows exactly what conditions any rat-running study must control to be scientifically meaningful.",
+          "range": ["spya-yzzxkw", "spya-yzzxkw"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Ignored lessons and closing wish",
+      "gist": "Young's rigorous method was ignored by later rat researchers just as parapsychologists dismiss vanishing effects and demand not to be held to repeatable results, the very traits Feynman hopes his audience will resist.",
+      "question": "Cargo Cult Science — what happens to fields that refuse to learn from their own failed replications? (two closing examples)",
+      "range": ["spya-wye8g6", "spya-ndyj3t"],
+      "children": [
+        {
+          "title": "Young's work forgotten",
+          "gist": "Later rat researchers never cited Young or adopted his sand-covered corridor, ignoring the one experiment that showed how to control for hidden clues, which Feynman calls characteristic of Cargo Cult Science.",
+          "range": ["spya-wye8g6", "spya-wye8g6"],
+          "children": []
+        },
+        {
+          "title": "ESP's vanishing effects",
+          "gist": "Parapsychology researchers see their statistical effects shrink toward nothing as techniques improve, yet one leader calls repeatability an irrelevant demand and proposes training only students who already produce the desired results.",
+          "range": ["spya-rbpppq", "spya-g203mu"],
+          "children": []
+        },
+        {
+          "title": "A wish for integrity",
+          "gist": "Feynman closes by wishing his audience the freedom to keep scientific integrity without career or funding pressure to abandon it, adding a last piece of advice about never promising a talk without knowing its content.",
+          "range": ["spya-ndyj3t", "spya-ndyj3t"],
+          "children": []
+        }
+      ]
+    }
+  ]
+}}
+```

@@ -1,0 +1,44 @@
+Do not ship the evidence package unchanged. Sketch, Illustrated, and Ideas are defensible as decided, but the Hierarchy conclusion is invalid: its smoke used a stricter parser than production.
+
+## Findings
+
+- **D1 — P0: Hierarchy’s hard-gate failure is false.** The eval parses responses with `stripFence` + `parseJsonFrom` ([model-arms.ts](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/hierarchy-structure/model-arms.ts:791)). Production Hierarchy uses `parseJsonAnswer`, specifically to accept a JSON object after a prose preamble ([hierarchy.ts](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/hierarchy.ts:848), [parse-json.ts](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/parse-json.ts:464)). The retained “failed” answer has one prose sentence followed by JSON ([failed answer](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/results/hierarchy-structure/2026-10-01-17-41-52-smart-off/trees/smart-off.cargocult-spya-rz663q.failed.txt:1)). I ran that raw answer through production’s `parseJsonAnswer` and `buildTree`; it produced a valid 85-node tree with zero repairs or drops. Therefore “the shipping parser refused them” is materially false ([write-up](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:184)). Only one of the two supposedly retained failed answers is actually on disk. Re-run the smoke with the production parser and, if it passes, run the planned panel. Keep production at `low` meanwhile, but mark the eval outcome undecided.
+
+- **D2 — P1: Illustrated-medium’s committed tally reports the low arm’s operational metrics.** The quality U values are correct, but the tally’s savings/validity section says `low`, 91% thinking reduction, and one invalid draw ([tally.md](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/results/thinking-effort-261001/judging/illustrated/tally.md:31)). The cause is that the tool selects `low` whenever any low rows exist in the shared JSONL ([tally.ts](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/tally.ts:197)). Correct medium figures are: 67% median typical-article thinking reduction, zero invalid, 7,344.875 mean thinking tokens, $0.181682, 121.900 seconds. This does not change the decision—Opus already fails medium on quality—but the reproducible evidence is wrong.
+
+- **D3 — P1: “The decision rule [was] fixed before the results” is too broad.** The possible-loss adoption rule and standardisation clause really were present before the full run: `git show 61f78bb1d:docs/plans/...` contains them, and that commit predates the first full-run draw. But the literal validity gate was “every low draw validated” ([plan](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:197)); it was changed after partial results to candidate-invalids ≤ base-invalids ([plan](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:220)). The standardisation clause was then explicitly overridden after results. Both departures are disclosed, but the opener still calls the whole rule pre-fixed ([write-up](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:3)). State instead that the quality thresholds were fixed; validity was amended mid-run; standardisation was a later product-policy override.
+
+- **D4 — P2: the write-up turns a sample count into a production failure rate.** “Roughly one Sketch or Ideas press in sixteen fails” ([write-up](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:242)) is not supported by one failure in sixteen per mode. The plan itself notes that 1/16 has an upper confidence bound around 30% ([plan](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:243)). Say “the eval observed 1 of 16” rather than estimating today’s press-level rate.
+
+- **D5 — P2: the Illustrated validity threshold’s calibration is understated.** For 32 draws, failing at ≥3 has a 7.0% false-fail probability at a 3% true failure rate, but 13.5% at 4%, and 14.7% at the observed pooled high rate of 2/48. Thus “about 3–4% … about 7%” is only true at the bottom of its stated range ([plan](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:250)). The test became moot after four valid draws, so no mode decision changes. Also, the threshold note was committed only after those four draws; its claimed earlier timing is plausible from timestamps but not independently preregistered in Git.
+
+- **D6 — P2: some account-spend claims are not supported by the supplied files.** The three 402 attempts are present ([outage rows](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/results/thinking-effort-261001/outage-402/runs.illustrated.402.jsonl:1)), but `$309.13 of $310`, the `$410` top-up, and `$17 of $50.89` exist only in the prose ([write-up](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md:287)). Attribute all three explicitly to the Overseer/account UI or attach the evidence.
+
+- **D7 — P3: minor rounding.** Raw rows give 57.6446% Sketch savings, so conventional rounding is 58%, not 57%. Applying that exact ratio gives $2.686 saved, 6.11¢ per normal article, and 5.54% of normal spend. Total evidenced spend is $22.237738, better written as about $22.24 or $22.2 rather than $22.30. None is materially wrong.
+
+## Independent numerical audit
+
+Using the tally code against a temporary copy, plus direct `jq` aggregation:
+
+- Sketch U arrays and every per-article table cell reproduce exactly: Sol 1.5625, Opus 1.6875. Means reproduce as 13,033/965 thinking, 18,489/4,931 output, $0.235187/$0.099615, 176.23/41.80 seconds; invalids are 1/16 versus 1/16.
+- Ideas reproduces: invalids 1/16 high, 10/16 medium, 10/16 low; median thinking 7,079, 1,354.5, 0; costs $0.153332, $0.091078, $0.069151; median latency 112.69, 42.30, 26.59 seconds.
+- Illustrated-low reproduces: Sol 1.0625, Opus 0.3125.
+- Illustrated-medium reproduces: Sol 1.5625, Opus 1.0625. The write-up’s mean thinking, cost, latency and invalid counts are correct despite D2.
+- The four stopped validity draws are all valid and cost $0.689628.
+- The corpus character/block/figure counts all match.
+- Spend reconciles as $20.426 main runs + $0.699664 smoke + $0.689628 validity + $0.218246 Hierarchy + $0.2042 plates = $22.237738.
+- The 138 count is correct for recorded successful harness generations: 128 main + 6 smoke + 4 validity. It excludes the three 402 attempts.
+
+## Rule assessment and verdicts
+
+- **Sketch — ship as decided: `low`, after fixing D3’s wording.** Both judges are above the pre-fixed 1.5 line, and the pre-result rule explicitly says even a possible loss adopts. Sol’s four complete losses and two complete wins show high article-level variance, not a contradiction of the chosen aggregate rule. The amended validity comparison passes 1–1 and the saving gate passes at 99%.
+
+- **Illustrated — ship as decided: remain `high`.** Medium’s Opus U is 1.0625, below the fixed 1.1 clear-loss line. The worse-judge rule therefore rejects medium even though Sol is at 1.5625. “Keep high” is exactly what the rule says.
+
+- **Ideas — ship as decided: remain `high`.** Both cheaper levels fail the amended and literal validity standards badly, 10 invalid against one. No quality panel was needed.
+
+- **Hierarchy — do not ship this conclusion.** Leave production at `low`, but report the eval as undecided and rerun it through the shipping parser before deciding whether `off` passes.
+
+On standardisation specifically: setting it aside is a legitimate reading of Greg’s instruction, not merely a post-hoc escape. His condition was “if it makes them cheaper”; standardising both at `high` saves nothing, and Illustrated cannot share Sketch’s cache at any effort ([models.ts](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/models.ts:1555)). Given his separate “use your judgment” instruction, I would ship Sketch `low` rather than ship nothing or require another call—while describing it honestly as an override of the plan’s standardisation clause, not an outcome produced by every pre-fixed rule.
+
+No files were changed.

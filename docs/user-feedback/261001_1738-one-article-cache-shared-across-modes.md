@@ -1,6 +1,6 @@
 ---
 reports: none
-ending: awaiting
+ending: shipped
 ---
 # One article cache shared across modes: measured per article, options to Greg
 
@@ -15,7 +15,28 @@ article first in every prompt, so that modes share one cached copy? He said:
 
 The time in the file name is when this session wrote the note.
 
-**Ending: Awaiting Greg.** Nothing is built. The plan is
+**Ending: Shipped, 2026-10-01, on `dev` as `1d96f5722`.** Greg answered the recommendation:
+
+> A yes, might as well. and make sure this is written up (e.g. in docs/research ). use your
+> judgment on how to proceed
+>
+> — Greg, 2026-10-01
+
+So the effort-vs-quality eval was run
+([plan 261001p](../plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md),
+[research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)).
+Eight full-length articles, two draws per arm, two blind judges, about $26 of API spend.
+
+- **Sketch: `high` → `low`.** Neither judge saw a loss. Each call is 58% cheaper and four times
+  faster, about 6¢ (5.5%) off a normal article.
+- **Illustrated: stays `high`.** Both judges found `low` clearly worse, and `medium` was a split
+  call that the rule keeps at `high`.
+- **Ideas: stays `high`.** Below `high` it wrote malformed JSON in 10 of 16 draws.
+- **Hierarchy: stays `low`.** With thinking off, 5 of 16 trees failed outright.
+
+The caching plumbing (option B) is not built, as recommended; it can be raised again on its own.
+
+Everything below is the original note, kept. The plan it pointed to is
 [261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md) and the
 measurement is
 [research 261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).

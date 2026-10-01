@@ -1,0 +1,352 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — gold-leaf borders, hand-lettered capitals, small painted vignettes in roundels connected by a climbing vine or chain, suited to an article that presents itself as a single climbing argument toward a theory of consciousness",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "From fixed neurons to conscious waves",
+      "prompt": "An illuminated manuscript page, 2:3 portrait, vellum-toned parchment with gold leaf accents and a hand-drawn vine climbing the full height of the page, linking twelve small painted roundels top to bottom in reading order. At the very top, FIGURE A (the connectionist hierarchy of feature-cells rising toward a cat's face) sits as a cartouche above the first roundel: a monk-scribe straining to pull threads tied to a crowd of neuron-figures within a flickering hourglass (MILLIONS, IN AN INSTANT). Below it, a walled city roundel with one-third of its houses lamp-lit (A THIRD OF THE CITY LIT), beside which FIGURE B is drawn as a small side panel showing the two sequence orders. Next, a robed figure raising a banner only when first in a procession (FIRST IN LINE, NOT SECOND). Then golden concentric rings passing through neuron-figures with no threads between them (RINGS WITHOUT THREADS). A carved stencil plate over a field of lamps, some smothered, some burning (THE STENCIL OVER THE LAMPS) — with FIGURE C inset as a small painted panel of blue and purple regions. The same robed figure shown twice, once shadowed once lit, changing its raised banner (ONE FIGURE, TWO SHADOWS), FIGURE D as a tiny inset diagram beside it. A long ribbon of light sweeping across a wheat-like field, dragging a dark patch (THE SWEEPING RIBBON). Two crossing sine-wave ribbons glowing brighter and darker where they overlap (TWO RIBBONS CROSSING), FIGURE F inset nearby. A sleeping figure under a slow heavy dark wave with guttering lamps (THE SLOW DARK WAVE). A circular ring of three linked hands holding a loom, a spark, and a ribbon (THE THREE-HANDED RING), with FIGURE H as a small cartouche beside it. Branching slightly off the main vine near the bottom, a side-chapel roundel of three other robed scholars pointing at a shared tapestry (THE OTHER SCHOLARS). At the very bottom, the full cortex-field glowing as one unified rose-window of light (THE UNIFIED ROSE). Palette: aged parchment gold, deep blue, burnt umber, rose-red accents. No lettering anywhere except the twelve titles in capitals beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-amx5qf",
+          "quote": "any given task engages around a third of all neurons in the prefrontal cortex",
+          "depicts": "A roundel of a walled city (prefrontal cortex) where one-third of the houses glow lamps lit for a single task, echoing FIGURE A's hierarchy of feature-cells climbing toward a cat's face.",
+          "title": "A THIRD OF THE CITY LIT",
+          "node": "n2"
+        },
+        {
+          "block": "spya-x5m34h",
+          "quote": "A neuron might spike to object A, but only when it was seen first",
+          "depicts": "A single robed figure (the neuron) shown twice, raising a banner for object A only when standing first in a procession, as in FIGURE B's two sequence panels.",
+          "title": "FIRST IN LINE, NOT SECOND",
+          "node": "n3"
+        },
+        {
+          "block": "spya-gkfdys",
+          "quote": "function as temporary inhibitory “stencils” across the surface of cortex",
+          "depicts": "A carved wooden stencil plate laid over a field of lamps, some lamps smothered dark under the stencil's shape, others left burning, echoing FIGURE C's painted blue and purple regions.",
+          "title": "THE STENCIL OVER THE LAMPS",
+          "node": "n5"
+        },
+        {
+          "block": "spya-ee45vr",
+          "quote": "mixed selectivity arises from the interaction between broadly responsive neurons and mesoscale wave patterns",
+          "depicts": "The same robed neuron-figure from before, shown once inside the stencil's shadow and once in its light, changing which banner it raises, as in FIGURE D.",
+          "title": "ONE FIGURE, TWO SHADOWS",
+          "node": "n6"
+        },
+        {
+          "block": "spya-wnqgmn",
+          "quote": "high-power slow delta (~1–4 Hz) oscillations across frontal, parietal, and sensory regions",
+          "depicts": "A sleeping figure under a slow, heavy, misaligned dark wave rolling across the whole cortex-field, lamps guttering out in disorder.",
+          "title": "THE SLOW DARK WAVE",
+          "node": "n9"
+        },
+        {
+          "block": "spya-f0dqyd",
+          "quote": "Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking",
+          "depicts": "A circular chain of three linked hands — one holding a loom (synapses), one holding a spark (spikes), one holding a ribbon (waves) — forming an unbroken ring, echoing FIGURE H.",
+          "title": "THE THREE-HANDED RING",
+          "node": "n10"
+        },
+        {
+          "block": "spya-m9exy5",
+          "quote": "bring the cortex into an organized, globally integrated state",
+          "depicts": "The whole cortex-field shown bathed in one unified glow, every lamp and ribbon now moving together in a single great rose-window pattern.",
+          "title": "THE UNIFIED ROSE",
+          "node": "n12"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A monk-scribe figure straining to pull hundreds of tiny threads tied to a crowd of neuron-figures, all at once, within a single flickering hourglass.",
+          "title": "MILLIONS, IN AN INSTANT"
+        },
+        {
+          "where": "A roundel of a walled city (prefrontal cortex) where one-third of the houses glow lamps lit for a single task, echoing FIGURE A's hierarchy of feature-cells climbing toward a cat's face.",
+          "title": "A THIRD OF THE CITY LIT"
+        },
+        {
+          "where": "A single robed figure (the neuron) shown twice, raising a banner for object A only when standing first in a procession, as in FIGURE B's two sequence panels.",
+          "title": "FIRST IN LINE, NOT SECOND"
+        },
+        {
+          "where": "Rippling golden rings passing through a cluster of neuron-figures with no connecting threads between them, their postures bending in response to the rings alone.",
+          "title": "RINGS WITHOUT THREADS"
+        },
+        {
+          "where": "A carved wooden stencil plate laid over a field of lamps, some lamps smothered dark under the stencil's shape, others left burning, echoing FIGURE C's painted blue and purple regions.",
+          "title": "THE STENCIL OVER THE LAMPS"
+        },
+        {
+          "where": "The same robed neuron-figure from before, shown once inside the stencil's shadow and once in its light, changing which banner it raises, as in FIGURE D.",
+          "title": "ONE FIGURE, TWO SHADOWS"
+        },
+        {
+          "where": "A long ribbon of light sweeping bodily across the cortex-field like a wind moving wheat, dragging the stencil's dark patch from one place to another as in FIGURE E.",
+          "title": "THE SWEEPING RIBBON"
+        },
+        {
+          "where": "Two sine-wave ribbons painted crossing each other over the cortex-field, their overlap glowing brighter or darker at each crossing point, as in FIGURE F.",
+          "title": "TWO RIBBONS CROSSING"
+        },
+        {
+          "where": "A sleeping figure under a slow, heavy, misaligned dark wave rolling across the whole cortex-field, lamps guttering out in disorder.",
+          "title": "THE SLOW DARK WAVE"
+        },
+        {
+          "where": "A circular chain of three linked hands — one holding a loom (synapses), one holding a spark (spikes), one holding a ribbon (waves) — forming an unbroken ring, echoing FIGURE H.",
+          "title": "THE THREE-HANDED RING"
+        },
+        {
+          "where": "A side-chapel scene of three other robed scholars (global workspace, integrated information, higher-order) pointing at different parts of a shared tapestry, set apart from the main chain.",
+          "title": "THE OTHER SCHOLARS"
+        },
+        {
+          "where": "The whole cortex-field shown bathed in one unified glow, every lamp and ribbon now moving together in a single great rose-window pattern.",
+          "title": "THE UNIFIED ROSE"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE A",
+          "block": "spya-hec5rz",
+          "sha256": "72af7829ae0422f45d28ba2a65de2b189ba666f755339d368d83d33c6b116d8d",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE B",
+          "block": "spya-x7vunr",
+          "sha256": "33b2a3895c3699fda06f44e608398db500b86e347f6b58fea8f4550b1a9747af",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE C",
+          "block": "spya-vzew3p",
+          "sha256": "8cf6a5ad96d86e7971aeced04d0d69e946af51fd85ffb8b32e0b7cf6fc938f92",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-mechanism",
+      "title": "Why mixed selectivity needs a router",
+      "prompt": "An illuminated manuscript page, 2:3 portrait, matching the overview's gold-and-parchment register, opening with a repeated cartouche of the walled city from the overview now filling with exactly three lit banners before going dark (ONLY THREE BANNERS), signalling this plate is the inside of that scene. Below it, a robed figure wearing several overlapping half-masks each bearing a different small symbol (THE OVERLAPPING MASKS). Beneath that, the same figure shown twice in a two-panel procession raising banner A when leading and banner B when following (A FIRST, B SECOND). Next a granary roundel: small sacks each holding mixed grains beside a row of empty single-grain bins (MIXED SACKS, EMPTY BINS). Then a guild-hall interior where craftsmen move between overlapping workshops swapping tools (GUILDSMEN WHO SWITCH ROOMS). Below, the same guild-hall now strung with tangled ropes between the workshop doors, a blindfolded controller pulling at them (THE TANGLED ROPES). Beneath that, golden rippling rings replacing the ropes, calmly opening and closing the same doors (RINGS REPLACE ROPES). Then a glowing robed figure (styled after a Purkinje cell) causing nearby figures to sway in time with no cord between them (SWAY WITHOUT A ROPE). Below, a beam of light crossing the whole hall instantly beside a slow foot-courier with one sealed letter (LIGHT VERSUS THE COURIER). At the bottom, the golden rings directing light into open doors while shut doors fall into shadow, the blindfolded controller now standing idle (THE RINGS TAKE CHARGE). All roundels linked by a single gold vine running top to bottom. Palette: parchment gold, umber, deep blue, small red accents. No lettering anywhere except the ten titles in capitals beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-amx5qf",
+          "quote": "we can only learn about three different cognitive functions before essentially all prefrontal neurons have been “assigned a function”",
+          "depicts": "Opening cartouche matching the overview's walled city, but now shown filling up with exactly three banners planted before all its lamps go dark.",
+          "title": "ONLY THREE BANNERS",
+          "node": "a1"
+        },
+        {
+          "block": "spya-njs6ff",
+          "quote": "information is multiplexed across many multifunctional neurons rather than segregated into specialist neurons",
+          "depicts": "A granary scene where many small sacks each hold a mix of several grains, contrasted with a row of empty single-grain bins.",
+          "title": "MIXED SACKS, EMPTY BINS",
+          "node": "a4"
+        },
+        {
+          "block": "spya-fnm872",
+          "quote": "cortical neurons have the capacity to participate in multiple networks, shifting membership as needed",
+          "depicts": "A guild-hall scene where the same craftsmen move between several overlapping workshops within one building, swapping tools as they go.",
+          "title": "GUILDSMEN WHO SWITCH ROOMS",
+          "node": "a5"
+        },
+        {
+          "block": "spya-dtnkkk",
+          "quote": "dynamically routing signals through a dense web of overlapping networks",
+          "depicts": "A tangle of ropes strung between the workshop-doors of the guild-hall, with a blindfolded controller trying to pull the right ropes.",
+          "title": "THE TANGLED ROPES",
+          "node": "a6"
+        },
+        {
+          "block": "spya-j7k4hu",
+          "quote": "spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous",
+          "depicts": "A beam of light crossing the whole guild-hall in a single instant, against a slow courier on foot carrying a single sealed letter.",
+          "title": "LIGHT VERSUS THE COURIER",
+          "node": "a9"
+        },
+        {
+          "block": "spya-f59f0p",
+          "quote": "flexibly route information across overlapping networks to support adaptive top-down control",
+          "depicts": "The golden rings now shown directing light into open workshop-doors while shadow falls on closed ones, the blindfolded controller now unneeded.",
+          "title": "THE RINGS TAKE CHARGE",
+          "node": "a10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Opening cartouche matching the overview's walled city, but now shown filling up with exactly three banners planted before all its lamps go dark.",
+          "title": "ONLY THREE BANNERS"
+        },
+        {
+          "where": "A robed figure wearing several overlapping half-masks at once, each half showing a different symbol, blending sensory, motor, and context.",
+          "title": "THE OVERLAPPING MASKS"
+        },
+        {
+          "where": "The same figure from the overview's roundel shown in a two-panel procession, raising banner A when leading, banner B when following.",
+          "title": "A FIRST, B SECOND"
+        },
+        {
+          "where": "A granary scene where many small sacks each hold a mix of several grains, contrasted with a row of empty single-grain bins.",
+          "title": "MIXED SACKS, EMPTY BINS"
+        },
+        {
+          "where": "A guild-hall scene where the same craftsmen move between several overlapping workshops within one building, swapping tools as they go.",
+          "title": "GUILDSMEN WHO SWITCH ROOMS"
+        },
+        {
+          "where": "A tangle of ropes strung between the workshop-doors of the guild-hall, with a blindfolded controller trying to pull the right ropes.",
+          "title": "THE TANGLED ROPES"
+        },
+        {
+          "where": "A set of golden rippling rings now replacing the tangled ropes, calmly sorting the same workshop-doors open and shut.",
+          "title": "RINGS REPLACE ROPES"
+        },
+        {
+          "where": "A Purkinje-robed figure glowing and causing nearby figures to sway in rhythm though no rope or thread joins them.",
+          "title": "SWAY WITHOUT A ROPE"
+        },
+        {
+          "where": "A beam of light crossing the whole guild-hall in a single instant, against a slow courier on foot carrying a single sealed letter.",
+          "title": "LIGHT VERSUS THE COURIER"
+        },
+        {
+          "where": "The golden rings now shown directing light into open workshop-doors while shadow falls on closed ones, the blindfolded controller now unneeded.",
+          "title": "THE RINGS TAKE CHARGE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-spatial-computing",
+      "title": "Spatial Computing, traveling waves, analog computation",
+      "prompt": "An illuminated manuscript page, 2:3 portrait, same gold-leaf and parchment register as the earlier plates, opening with a cart-wheel pressed by a wooden brake-shoe, a foot poised to move only when the brake lifts (THE BRAKE ON THE WHEEL), echoing the overview's stencil roundel to mark this as its interior. Below, a stencil plate lowered over a field of lamps, some smothered, some still lit (THE STENCIL DESCENDS). Next, a scribe comparing two painted patterns within a monkey-brain-shaped frame, marking a mismatch (WHERE THE PATTERNS MISMATCH). Then three concentric rings of differing size over a small map, a compass set precisely on the middle ring (THE MIDDLE RING CHOSEN). Beneath, a robed figure standing half in, half out of the stencil's shadow, its raised banner changing with its footing (HALF IN THE SHADOW), with FIGURE D inset as a small companion diagram. Next, a flock of small birds constrained along one narrow ribbon of sky instead of scattering (THE FLOCK ON ONE RIBBON). Below that, the stencil plate shown mid-slide across the lamp-field with a trailing motion-line (THE STENCIL ON THE MOVE), FIGURE E inset beside it as a small panel. Then the same bird-flock shifting onto a second ribbon of sky as the sliding stencil passes beneath them (THE FLOCK CHANGES RIBBONS). Below, two ribbon-waves crossing over the lamp-field, brightening and darkening at their overlaps (WAVES MEETING, WAVES MERGING), FIGURE F inset as a small cartouche. At the bottom, a single great wheel turning in one motion across the whole field, beside a small figure working step by step along a counting-frame, visibly slower (ONE TURN, NOT MANY STEPS). All roundels linked top to bottom by a continuous gold vine. Palette: parchment gold, deep blue, umber, muted rose accents. No lettering anywhere except the ten titles in capitals beneath each roundel.",
+      "vignettes": [
+        {
+          "block": "spya-thnz7b",
+          "quote": "beta acts like a brake on movement execution",
+          "depicts": "Opening cartouche: a cart-wheel with a carved wooden brake-shoe pressed against it, matching the overview's stencil roundel, with a figure's foot poised to move only once the brake lifts.",
+          "title": "THE BRAKE ON THE WHEEL",
+          "node": "b1"
+        },
+        {
+          "block": "spya-gkfdys",
+          "quote": "Alpha/beta rhythms thus dampen or suppress gamma and associated spiking in targeted locations",
+          "depicts": "A stencil plate lowered over a field of small lamps, smothering some while others remain lit in the gaps.",
+          "title": "THE STENCIL DESCENDS",
+          "node": "b2"
+        },
+        {
+          "block": "spya-azz3c8",
+          "quote": "predicted behavioral errors through mismatches in contextual representation",
+          "depicts": "A scribe comparing two painted patterns side by side, marking an error where they fail to match, in a monkey-brain-shaped frame.",
+          "title": "WHERE THE PATTERNS MISMATCH",
+          "node": "b3"
+        },
+        {
+          "block": "spya-ee45vr",
+          "quote": "mixed selectivity arises from the interaction between broadly responsive neurons and mesoscale wave patterns",
+          "depicts": "A robed figure standing half inside, half outside the stencil's shadow, its raised banner changing with its footing.",
+          "title": "HALF IN THE SHADOW",
+          "node": "b5"
+        },
+        {
+          "block": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional “subspace” or “manifold”",
+          "depicts": "A flock of small bird-figures constrained to fly along a narrow painted ribbon of sky rather than scattering freely across the whole page.",
+          "title": "THE FLOCK ON ONE RIBBON",
+          "node": "b6"
+        },
+        {
+          "block": "spya-uqt5yf",
+          "quote": "sweep across the cortical surface, tracing complex, but highly organized, spatiotemporal patterns",
+          "depicts": "The stencil plate now shown mid-slide, dragging its dark patch bodily across the lamp-field, a trailing motion-line behind it.",
+          "title": "THE STENCIL ON THE MOVE",
+          "node": "b7"
+        },
+        {
+          "block": "spya-mrsvfu",
+          "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+          "depicts": "The bird-flock from before shown shifting from one ribbon of sky to a second ribbon as the sliding stencil passes beneath them.",
+          "title": "THE FLOCK CHANGES RIBBONS",
+          "node": "b8"
+        },
+        {
+          "block": "spya-mgnqxk",
+          "quote": "the physical medium itself evolves all at once",
+          "depicts": "A single great wheel turning in one motion across the whole lamp-field at once, beside a small figure laboring step by step along a counting-frame, clearly slower.",
+          "title": "ONE TURN, NOT MANY STEPS",
+          "node": "b10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Opening cartouche: a cart-wheel with a carved wooden brake-shoe pressed against it, matching the overview's stencil roundel, with a figure's foot poised to move only once the brake lifts.",
+          "title": "THE BRAKE ON THE WHEEL"
+        },
+        {
+          "where": "A stencil plate lowered over a field of small lamps, smothering some while others remain lit in the gaps.",
+          "title": "THE STENCIL DESCENDS"
+        },
+        {
+          "where": "A scribe comparing two painted patterns side by side, marking an error where they fail to match, in a monkey-brain-shaped frame.",
+          "title": "WHERE THE PATTERNS MISMATCH"
+        },
+        {
+          "where": "Three concentric rings of different sizes drawn over a map, with a measuring compass set exactly on the middle ring as the chosen scale.",
+          "title": "THE MIDDLE RING CHOSEN"
+        },
+        {
+          "where": "A robed figure standing half inside, half outside the stencil's shadow, its raised banner changing with its footing.",
+          "title": "HALF IN THE SHADOW"
+        },
+        {
+          "where": "A flock of small bird-figures constrained to fly along a narrow painted ribbon of sky rather than scattering freely across the whole page.",
+          "title": "THE FLOCK ON ONE RIBBON"
+        },
+        {
+          "where": "The stencil plate now shown mid-slide, dragging its dark patch bodily across the lamp-field, a trailing motion-line behind it.",
+          "title": "THE STENCIL ON THE MOVE"
+        },
+        {
+          "where": "The bird-flock from before shown shifting from one ribbon of sky to a second ribbon as the sliding stencil passes beneath them.",
+          "title": "THE FLOCK CHANGES RIBBONS"
+        },
+        {
+          "where": "Two painted ribbon-waves crossing over the lamp-field, their overlap brightening and darkening at each crossing, as in FIGURE F.",
+          "title": "WAVES MEETING, WAVES MERGING"
+        },
+        {
+          "where": "A single great wheel turning in one motion across the whole lamp-field at once, beside a small figure laboring step by step along a counting-frame, clearly slower.",
+          "title": "ONE TURN, NOT MANY STEPS"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE D",
+          "block": "spya-az9405",
+          "sha256": "afe03e0052ffa8f569bf933634a9a4a9eef2dad4050ab510b48145a0d9b70952",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE E",
+          "block": "spya-gbpnax",
+          "sha256": "f73874d7056e605551a95eb83d6c7b850ed84249d70b7ee689b9a7d89418e884",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE F",
+          "block": "spya-evzx4h",
+          "sha256": "dc2dda0f3511bfd9a4f95a2cb2ccd52c3a0c89b38ccab49185f2c9111b87c3c6",
+          "ext": "png"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "profileHash": null
+}
