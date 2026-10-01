@@ -1,0 +1,834 @@
+diff --git a/drizzle/20261001015331_citation_investigation_no_extract_with_paper.sql b/drizzle/20261001015331_citation_investigation_no_extract_with_paper.sql
+new file mode 100644
+index 00000000..cdfd8d99
+--- /dev/null
++++ b/drizzle/20261001015331_citation_investigation_no_extract_with_paper.sql
+@@ -0,0 +1,2 @@
++ALTER TABLE "spideryarn"."citation_investigations" DROP CONSTRAINT "citation_investigations_counts";--> statement-breakpoint
++ALTER TABLE "spideryarn"."citation_investigations" ADD CONSTRAINT "citation_investigations_counts" CHECK ("spideryarn"."citation_investigations"."extracts_read" >= 0 and ("spideryarn"."citation_investigations"."extracts_read" >= 1 or coalesce("spideryarn"."citation_investigations"."paper_state" = 'read', false)) and "spideryarn"."citation_investigations"."longest_extract_words" >= 0 and ("spideryarn"."citation_investigations"."searches" is null or "spideryarn"."citation_investigations"."searches" >= 0));
+\ No newline at end of file
+diff --git a/src/bibliographic.ts b/src/bibliographic.ts
+index 8be999d2..47319d6d 100644
+--- a/src/bibliographic.ts
++++ b/src/bibliographic.ts
+@@ -180,7 +180,25 @@ export interface LookupDeps {
+ const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
+ const MAX_ID_LENGTH = 300;
+ 
+-function doiId(doi: string): WorkId | null {
++/**
++ * A publisher's page suffix glued onto a DOI by a copied address —
++ * `10.1101/2020.06.26.174482v2.full.pdf` from bioRxiv, `….1.full` from a
++ * journal. Neither registry knows those spellings (both 404'd in the 261001a
++ * probe). Only these whole suffixes, and a version only on bioRxiv/medRxiv's
++ * `10.1101/` whose DOIs never carry one: a DOI that merely ends `-v2` or
++ * `.fuller` is left alone. A wrong strip is still caught downstream, where the
++ * registry's title must agree with the citation's.
++ */
++const DOI_PAGE_SUFFIX = /\.(?:full\.pdf|full-text|full|abstract|short|pdf)$/i;
++const BIORXIV_VERSION = /^(10\.1101\/(?:\d{4}\.\d{2}\.\d{2}\.)?\d+)v\d+$/i;
++
++function withoutPageSuffix(doi: string): string {
++  const bare = doi.replace(DOI_PAGE_SUFFIX, "");
++  return bare.replace(BIORXIV_VERSION, "$1");
++}
++
++function doiId(raw: string): WorkId | null {
++  const doi = withoutPageSuffix(raw);
+   const m = DOI_SHAPE.exec(doi);
+   if (!m?.[1] || !PRINTABLE_ASCII.test(m[1])) return null;
+   const id = `doi:${m[1].toLowerCase()}`;
+diff --git a/src/citation-investigate.ts b/src/citation-investigate.ts
+index dddcd5eb..64c1e96c 100644
+--- a/src/citation-investigate.ts
++++ b/src/citation-investigate.ts
+@@ -1014,7 +1014,14 @@ export function makeInvestigateCitation(
+       }
+ 
+       const provenance = provenanceOf(end.evidence ?? [], matched?.url ?? null);
+-      if (provenance.extractsRead === 0) {
++      /* **No extract is a refusal only when the paper was not read.** With the
++         paper read, the model may answer from it alone and search nothing — in
++         3 of 3 paid presses on 2026-10-01 it did — and that answer has
++         something to stand on: the paper's own text, which code confirmed and
++         the row names. Kept with `extractsRead: 0`; the view says the search
++         returned nothing. The DB check `citation_investigations_counts` allows
++         exactly this case. */
++      if (provenance.extractsRead === 0 && paper.stored.state !== "read") {
+         line.warn({ model: end.model, ms: since(started), searches: end.searches, searchesFrom: end.searchesFrom }, "investigation had no extract to read");
+         throw new Error(CITATION_INVESTIGATE_NOTHING_READ.message);
+       }
+diff --git a/src/citation-registry.ts b/src/citation-registry.ts
+index 08580bba..5763d916 100644
+--- a/src/citation-registry.ts
++++ b/src/citation-registry.ts
+@@ -7,10 +7,12 @@
+  * at most `MAX_REGISTRY_LOOKUPS`, two at a time, the cache first because
+  * `lookupWork` reads it first. What it may add, and nothing else:
+  *
+- * - **`found`** — the registry's title agrees with the article's title for the
+- *   work, by stage 2's rule (`registryTitleAgrees`, src/paper-evidence.ts), and
+- *   is distinctive enough to establish identity, so a mistyped DOI cannot
+- *   lend a row somebody else's authors;
++ * - **`found`** — the registry's record names the article's work, by stage 2's
++ *   rule (`registryIdentifiesCitation`, src/paper-evidence.ts: the titles agree,
++ *   or the article's "title" is only an author–year label and the record's
++ *   first author and year match it), and its title is distinctive enough to
++ *   establish identity, so a mistyped DOI cannot lend a row somebody else's
++ *   authors;
+  * - **`conflict`** — it does not: the article's identifier points at a
+  *   different work, and the row says so;
+  * - **nothing** — not found, unavailable, ambiguous, over the cap or time
+@@ -27,7 +29,7 @@
+  */
+ import { doiFor, lookupWork, parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
+ import { tokens } from "./citation-lookup.js";
+-import { registryTitleAgrees } from "./paper-evidence.js";
++import { registryIdentifiesCitation } from "./paper-evidence.js";
+ import { registryWorkOf } from "./registry-work.js";
+ import type { CitationRegistry, Citations, CitedWork } from "./types.js";
+ 
+@@ -121,10 +123,15 @@ export function titlesDifferByObjectQualifier(a: string, b: string): boolean {
+ }
+ 
+ /** What one answer puts on the row, judged against the article's own title. */
+-export function registryFor(work: Pick<CitedWork, "title">, result: LookupResult): CitationRegistry | null {
++export function registryFor(work: Pick<CitedWork, "title" | "year">, result: LookupResult): CitationRegistry | null {
+   if (result.kind !== "found") return null;
+-  if (!registryTitleAgrees(result.record.title, work.title)) {
+-    return { kind: "conflict", source: result.record.source };
++  const agreed = registryIdentifiesCitation(result.record, work);
++  if (agreed === null) return { kind: "conflict", source: result.record.source };
++  /* An author–year label has no words to be weak or qualified: the record's
++     first author and year matched it, and the record's own title must still
++     be distinctive enough to lend the row. */
++  if (agreed === "label") {
++    return registryTitleIsDistinctive(result.record.title) ? { kind: "found", ...registryWorkOf(result.record) } : null;
+   }
+   /* A weak exact title is not a disagreement, so it gets no alarming conflict
+      message; it is simply not enough evidence to lend metadata to the row. */
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 6e08595c..4f1a231e 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -3893,9 +3893,14 @@ export const citationInvestigations = spideryarn.table(
+       "citation_investigations_entry_id_format",
+       sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+     ),
++    /* At least one extract — unless the paper itself was read, when the model
++       may answer from it alone and search nothing (the P0 of 2026-10-01).
++       `coalesce`, because a CHECK that evaluates to NULL passes: a bare
++       `paper_state = 'read'` would let a pre-stage-3 row (state NULL) through
++       with no extract. */
+     check(
+       "citation_investigations_counts",
+-      sql`${t.extractsRead} >= 1 and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
++      sql`${t.extractsRead} >= 0 and (${t.extractsRead} >= 1 or coalesce(${t.paperState} = 'read', false)) and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
+     ),
+     check("citation_investigations_answer", sql`char_length(${t.answer}) > 0`),
+   ],
+diff --git a/src/paper-evidence.ts b/src/paper-evidence.ts
+index bf9c1d18..4f1f3c78 100644
+--- a/src/paper-evidence.ts
++++ b/src/paper-evidence.ts
+@@ -188,7 +188,9 @@ export function paperAddress(workUrl: string, matchedPageUrl?: string | null): P
+   /* `identityOf`'s DOI has no `?`, `#` or whitespace, so it is already a path. */
+   if (id.doi) {
+     const workId = parseWorkId(`doi:${id.doi}`);
+-    if (workId) return { url: `https://doi.org/${id.doi}`, from: "doi", id: workId };
++    /* From the normalised id, not the row's: `parseWorkId` drops a publisher's
++       path suffix (`….full`, `….abstract`), which doi.org does not resolve. */
++    if (workId) return { url: `https://doi.org/${workId.slice("doi:".length)}`, from: "doi", id: workId };
+   }
+   if (id.arxiv) {
+     /* `arxivPdfUrl` keeps a version the article cited (`v1`); `identityOf` does not. */
+@@ -400,6 +402,67 @@ export function registryTitleAgrees(registryTitle: string, citationTitle: string
+   return want.filter((w) => have.has(w)).length / want.length >= 0.8;
+ }
+ 
++/** Lower-cased, diacritics dropped: "Gödel" and "GODEL" are one surname. */
++function folded(value: string): string {
++  return tokens(value.normalize("NFKD").replace(/\p{M}/gu, "")).join(" ");
++}
++
++const SURNAME_PARTICLE = "(?:(?:van|von|de|der|den|del|della|di|da|du|dos|le|la|ter|ten)\\s+)*";
++/** One capitalised surname, hyphen or apostrophe allowed inside — no digits, no second word. */
++const SURNAME = `${SURNAME_PARTICLE}\\p{Lu}[\\p{L}'’\\-]*\\p{L}`;
++const LABEL_YEAR = "(?:1[5-9]|20)\\d{2}[a-z]?";
++/**
++ * The whole title is `X et al YYYY`, `X et al. (YYYY)`, `X & Y YYYY`,
++ * `X and Y YYYY` or `X YYYY`. Anchored at both ends, so a real title that
++ * merely contains a year ("Deep Learning in 2016") is not one.
++ */
++const AUTHOR_YEAR_LABEL = new RegExp(
++  `^(${SURNAME})(?:,?\\s+et\\s+al\\.?|\\s+(?:&|and)\\s+${SURNAME})?,?\\s+(\\(${LABEL_YEAR}\\)|${LABEL_YEAR})$`,
++  "u",
++);
++
++/**
++ * **A citation "title" that is only an author–year label** — gwern's
++ * `Santoro et al 2016` — as its first surname (folded) and year, or null.
++ * Such a title names no words a registry title could share, so title agreement
++ * cannot judge it; `registryIdentifiesCitation` judges it by author and year.
++ */
++export function authorYearLabel(title: string): { surname: string; year: number } | null {
++  const m = AUTHOR_YEAR_LABEL.exec(title.trim());
++  if (!m?.[1] || !m[2]) return null;
++  return { surname: folded(m[1]), year: Number(m[2].replace(/\D/g, "")) };
++}
++
++function yearIn(year: string | null | undefined): number | null {
++  const m = year?.match(/\b(?:1[5-9]|20)\d{2}\b/)?.[0];
++  return m ? Number(m) : null;
++}
++
++/**
++ * **Does a registry record name the cited work?** One rule for every caller
++ * that stores or acts on the answer (this file's read, and
++ * src/citation-registry.ts's row field):
++ *
++ * - `"title"` — the titles agree, by `registryTitleAgrees`;
++ * - `"label"` — the citation's title is only an author–year label, and the
++ *   record's first author's family name is the label's surname (case and
++ *   diacritics folded) and its year is the label's or the row's own;
++ * - `null` — neither: the identifier points at another work.
++ *
++ * A record with no year never agrees by label: the surname alone is too weak.
++ */
++export function registryIdentifiesCitation(
++  record: RegistryRecord,
++  citation: { title: string; year?: string | null },
++): "title" | "label" | null {
++  if (registryTitleAgrees(record.title, citation.title)) return "title";
++  const label = authorYearLabel(citation.title);
++  const first = record.authors[0]?.family;
++  if (!label || !first || record.year === undefined) return null;
++  if (folded(first) !== label.surname) return null;
++  return record.year === label.year || record.year === yearIn(citation.year) ? "label" : null;
++}
++
+ /** arXiv's own DOI (`10.48550/arxiv.1706.03762`) is an arXiv id by another name. */
+ function arxivOfDoi(doi: string): string | null {
+   return /^10\.48550\/arxiv\.(.+)$/i.exec(doi)?.[1]?.toLowerCase() ?? null;
+@@ -408,12 +471,19 @@ function arxivOfDoi(doi: string): string | null {
+ const bareArxiv = (id: string) => id.toLowerCase().replace(/v\d+$/, "");
+ 
+ export interface IdentityInput {
+-  /** The citation's title and authors, as the article gives them. */
++  /** The citation's title and authors, as the article gives them — the title the page-1 check looks for. */
+   title: string;
++  /**
++   * The registry's title, when the registry record has agreed with the
++   * citation (`registryIdentifiesCitation`): accepted on page 1 as well as
++   * `title`, because an article may shorten a title ("…for CNNs") or give only
++   * an author–year label. Never set from a record that did not agree.
++   */
++  registryTitle?: string;
+   authors: string | null;
+   /** The row's identifier, when it has one. */
+   id: WorkIdentifier | null;
+-  /** The PDF's first-page lines, preserving the boundary that distinguishes its title from prose about another work. */
++  /** The PDF's first-page lines, running headers kept (a template's header is often the title), preserving the boundary that distinguishes its title from prose about another work. */
+   firstPageLines: readonly string[];
+   /** Where the PDF came from, after redirects. */
+   finalUrl: string;
+@@ -454,9 +524,10 @@ function titleInFirstPageHeading(lines: readonly string[], title: string): boole
+  *
+  * 1. a different identifier on the document — the landing page's DOI, or the
+  *    arXiv id of the final address — refuses, whatever the title says;
+- * 2. the citation's title must be a heading-shaped run near the top of the
+- *    first page, or be the landing page's `citation_title` — not merely occur
+- *    in prose where a different paper cites it;
++ * 2. the citation's title — or the registry's, once the registry record has
++ *    agreed with the citation — must be a heading-shaped run near the top of
++ *    the first page, or be the landing page's `citation_title` — not merely
++ *    occur in prose where a different paper cites it;
+  * 3. and then an identifier agreeing, or
+  * 4. the first author's surname in the same window.
+  *
+@@ -483,8 +554,9 @@ export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: Ma
+   /* Keep this window physically inside page one. The first 2,000 characters
+      of the whole document can reach page two when the title page is sparse. */
+   const window = tokens(input.firstPageLines.join(" ").slice(0, IDENTITY_WINDOW_CHARS));
+-  const titleOnPage = titleInFirstPageHeading(input.firstPageLines, input.title);
+-  const titleInMeta = titleNamesWork(input.meta?.title, input.title) === "whole";
++  const titles = [input.title, ...(input.registryTitle ? [input.registryTitle.replace(/<[^>]*>/g, " ")] : [])];
++  const titleOnPage = titles.some((title) => titleInFirstPageHeading(input.firstPageLines, title));
++  const titleInMeta = titles.some((title) => titleNamesWork(input.meta?.title, title) === "whole");
+   const surname =
+     surnameOf(input.authors) ??
+     (input.registry?.authors[0] ? surnameOf(input.registry.authors[0].family) : null);
+@@ -505,7 +577,7 @@ export function confirmIdentity(input: IdentityInput): { ok: true; matchedBy: Ma
+ 
+ export interface PaperEvidenceInput {
+   /** The work as *Investigate* describes it — its title, authors, link, `why` and citing passages. */
+-  work: Pick<InvestigateContext, "title" | "authors" | "url" | "why" | "passages">;
++  work: Pick<InvestigateContext, "title" | "authors" | "url" | "why" | "passages"> & { year?: string | null };
+   /** The page the quick check matched, when it matched one. */
+   matchedPageUrl?: string | null;
+ }
+@@ -562,7 +634,8 @@ export async function readPaperEvidence(
+   const requestedUrl = address.url;
+ 
+   const registry = await askRegistry(deps.lookup, address.id);
+-  if (registry?.kind === "found" && address.id && !registryTitleAgrees(registry.record.title, work.title)) {
++  const agreed = registry?.kind === "found" ? registryIdentifiesCitation(registry.record, work) : null;
++  if (registry?.kind === "found" && address.id && agreed === null) {
+     return logged(
+       {
+         state: "identity-conflict",
+@@ -593,10 +666,11 @@ export async function readPaperEvidence(
+     title: work.title,
+     authors: work.authors,
+     id: address.id,
+-    firstPageLines: paper.pages[0]?.lines ?? [],
++    firstPageLines: paper.pages[0]?.linesWithFurniture ?? paper.pages[0]?.lines ?? [],
+     finalUrl: paper.url,
+     ...(paper.meta ? { meta: paper.meta } : {}),
+     ...(registry?.kind === "found" ? { registry: registry.record } : {}),
++    ...(registry?.kind === "found" && agreed !== null ? { registryTitle: registry.record.title } : {}),
+   });
+   if (!identity.ok) {
+     return logged(
+diff --git a/src/paper-text.ts b/src/paper-text.ts
+index 22ad594d..30a570f0 100644
+--- a/src/paper-text.ts
++++ b/src/paper-text.ts
+@@ -87,6 +87,14 @@ export interface PaperPage {
+   /** 1-based, the PDF's own page index. */
+   page: number;
+   lines: string[];
++  /**
++   * **Page 1 only: its lines with the running headers and footers kept.** A
++   * conference template repeats the paper's title as a running header, so
++   * `pass0` calls it furniture and `lines` loses the title from the top of
++   * page 1 too. The identity check (src/paper-evidence.ts § confirmIdentity)
++   * reads these; everything chunked, sent, hashed or searched reads `lines`.
++   */
++  linesWithFurniture?: string[];
+ }
+ 
+ export type PaperText =
+@@ -273,7 +281,16 @@ async function pdfText(bytes: Uint8Array, signal: AbortSignal): Promise<PdfOutco
+   /* `isScan` judges the content pages and needs more than one of them; a
+      one-page scan (or a file of blank pages) is caught by the total. */
+   if (pass.isScan || words < SCAN_WORDS_PER_PAGE) return { ok: false, why: "scan", detail: `${words} words` };
+-  return { ok: true, text, words, pages: pass.pages.map((p) => ({ page: p.page, lines: pageLines(pass, p.page) })) };
++  return {
++    ok: true,
++    text,
++    words,
++    pages: pass.pages.map((p, i) => ({
++      page: p.page,
++      lines: pageLines(pass, p.page),
++      ...(i === 0 ? { linesWithFurniture: p.text.split("\n").filter((line) => line.trim()) } : {}),
++    })),
++  };
+ }
+ 
+ /** The first DOI-shaped string in a meta value — `doi:10…`, `https://doi.org/10…` and a bare `10…` all qualify. */
+diff --git a/src/web/CitationInvestigation.tsx b/src/web/CitationInvestigation.tsx
+index ed1952db..062e987a 100644
+--- a/src/web/CitationInvestigation.tsx
++++ b/src/web/CitationInvestigation.tsx
+@@ -184,6 +184,23 @@ export function investigationProvenance(
+   inv: InvestigationProvenanceInput,
+   lookup?: Pick<CitationLookup, "state" | "host"> | null,
+ ): string {
++  const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
++  /* **No extract, the paper read** (the P0 of 2026-10-01): the model may
++     answer from the paper alone and search nothing, and the answer is kept.
++     Never "extracts for 0 results"; the paper's own sentence
++     (`paperReadSentence`) says what was read. No "could not confirm any
++     result": there was no result, and the paper's identity was confirmed by
++     code. The only other case the server keeps is extractsRead >= 1. */
++  if (inv.extractsRead === 0 && inv.paper?.state === "read") {
++    return [
++      "Web search returned no extracts, so of the work itself the AI was shown only the parts of the paper we read.",
++      "It was asked to base what it says about the work on them, and used this article to relate them.",
++      "It was instructed not to quote the paper.",
++      ...(firstCheckHost !== null
++        ? [`An earlier quick check matched a page on ${firstCheckHost}; this search did not return an extract from it.`]
++        : []),
++    ].join(" ");
++  }
+   const one = inv.extractsRead === 1;
+   const hosts = sourceHosts(inv.sources);
+   const where = hosts.length > 0 ? ` (${hosts.join(", ")})` : "";
+@@ -192,7 +209,6 @@ export function investigationProvenance(
+     ? `Web search returned an extract for one result${where}, ${words}.`
+     : `Web search returned extracts for ${inv.extractsRead} results${where}, the longest ${words}.`;
+   const [them, it] = one ? ["that extract", "it"] : ["those extracts", "them"];
+-  const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
+   const identity =
+     inv.matchedHost !== null
+       ? `One result (${inv.matchedHost}) is the page an earlier quick check matched to the work.`
+diff --git a/tests/bibliographic.test.ts b/tests/bibliographic.test.ts
+index 3b9232ad..aef84b4d 100644
+--- a/tests/bibliographic.test.ts
++++ b/tests/bibliographic.test.ts
+@@ -77,6 +77,28 @@ describe("parseWorkId", () => {
+     expect(parseWorkId("https://arxiv.org/abs/math.GT/0309136")).toBe("arxiv:math.gt/0309136");
+   });
+ 
++  it("drops a landing-page suffix a publisher address left on the DOI", () => {
++    /* The free probe's real rows (261001a): Crossref and DataCite both 404'd
++       these, because `.full` is bioRxiv's / the publisher's page, not the DOI. */
++    expect(parseWorkId("https://doi.org/10.1101/2020.06.26.174482.full")).toBe("doi:10.1101/2020.06.26.174482");
++    expect(parseWorkId("https://doi.org/10.1636/JoA-S-17-093.1.full")).toBe("doi:10.1636/joa-s-17-093.1");
++    for (const input of [
++      "10.1101/2020.06.26.174482v2.full.pdf",
++      "10.1101/2020.06.26.174482v1",
++      "https://doi.org/10.1101/2020.06.26.174482.full-text",
++      "doi:10.1101/2020.06.26.174482.abstract",
++      "10.1101/2020.06.26.174482.short",
++      "10.1101/2020.06.26.174482.pdf",
++    ]) {
++      expect(parseWorkId(input), input).toBe("doi:10.1101/2020.06.26.174482");
++    }
++    /* Conservative: only those whole suffixes, and the version only on bioRxiv's prefix. */
++    expect(parseWorkId("10.1000/report.fuller")).toBe("doi:10.1000/report.fuller");
++    expect(parseWorkId("10.1000/abc-v2")).toBe("doi:10.1000/abc-v2");
++    expect(parseWorkId("10.1000/x.v2")).toBe("doi:10.1000/x.v2");
++    expect(parseWorkId("10.1000/.full")).toBeNull();
++  });
++
+   it("refuses what is not an identifier", () => {
+     for (const input of [
+       "",
+diff --git a/tests/citation-investigate-route.test.ts b/tests/citation-investigate-route.test.ts
+index 7113f7c2..738d4266 100644
+--- a/tests/citation-investigate-route.test.ts
++++ b/tests/citation-investigate-route.test.ts
+@@ -55,6 +55,7 @@ await pgReady({
+ 
+ const { handleApi } = await import("../src/routes.js");
+ const { investigateCitation } = await import("../src/store/index.js");
++const { pgCitationInvestigationStore } = await import("../src/store/pg-citation-investigations.js");
+ 
+ let article: ScratchArticle | undefined;
+ const realFetch = globalThis.fetch;
+@@ -439,3 +440,57 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
+     expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
+   });
+ });
++
++/* The P0 of 2026-10-01: with the paper read, the model may answer from it and
++   search nothing. The CHECK `citation_investigations_counts` must take that
++   row, and only that one — an answer with no extract and no paper read stays
++   refused by the database as well as by the code. Its own entry id, so the
++   rows above are untouched. */
++describe("the store's CHECK on extracts", () => {
++  const ZERO = "spya-zerex2";
++  const BASE = {
++    answer: "From the paper's own text.",
++    sources: [],
++    extractsRead: 0,
++    longestExtractWords: 0,
++    matchedHost: null,
++    searches: 0,
++    searchesFrom: "server_tool_use_details",
++    model: "test/model",
++    at: "2026-10-01T12:00:00.000Z",
++    contextHash: "0123456789abcdef",
++    promptVersion: "citation-investigate/test",
++  };
++  const save = async (inv: Parameters<typeof pgCitationInvestigationStore.save>[2]) =>
++    runAsOwner(TEST_OWNER, () => pgCitationInvestigationStore.save(SLUG, ZERO, inv));
++
++  it("keeps an answer with no extract when the paper was read", async () => {
++    await save({
++      ...BASE,
++      paper: {
++        state: "read",
++        requestedUrl: "https://arxiv.org/pdf/2001.08361",
++        finalUrl: "https://arxiv.org/pdf/2001.08361v1",
++        host: "arxiv.org",
++        words: 11200,
++        sentWords: 4900,
++        chunks: ["c1", "c2"],
++        matchedBy: "arxiv",
++        evidenceSha: "e".repeat(64),
++        selectionVersion: "paper-selection/1",
++        readAt: "2026-10-01T12:00:00.000Z",
++        passages: [],
++      },
++    });
++    const [row] = await getDb()
++      .select({ extractsRead: citationInvestigations.extractsRead, paperState: citationInvestigations.paperState })
++      .from(citationInvestigations)
++      .where(and(eq(citationInvestigations.articleId, article?.articleId ?? ""), eq(citationInvestigations.entryId, ZERO)));
++    expect(row).toEqual({ extractsRead: 0, paperState: "read" });
++  });
++
++  it("refuses an answer with no extract when the paper was not read", async () => {
++    await expect(save({ ...BASE, paper: { state: "no-address", readAt: "2026-10-01T12:00:00.000Z" } })).rejects.toThrow();
++    await expect(save(BASE)).rejects.toThrow();
++  });
++});
+diff --git a/tests/citation-investigate.test.ts b/tests/citation-investigate.test.ts
+index eed624e9..96cc5a5f 100644
+--- a/tests/citation-investigate.test.ts
++++ b/tests/citation-investigate.test.ts
+@@ -1152,6 +1152,43 @@ describe("the paper itself (plan 261001a stage 3)", () => {
+     }
+   });
+ 
++  /* The P0 of 2026-10-01: in 3 of 3 paid presses with the paper read, the
++     model answered from the paper and searched nothing, and the press threw
++     NOTHING_READ after the money was spent. Every test above defaulted the
++     stream's evidence to EVIDENCE, so this never ran. */
++  it.each([
++    ["no extract", [EVIDENCE[2] as SearchEvidence]],
++    ["no search at all", []],
++    ["no evidence reported", null],
++  ] as const)("keeps an answer written from the paper read when the web search gave %s", async (_, evidence) => {
++    const h = harness({ deltas: ["An answer from the paper."], paper: paperRead(), evidence: evidence as SearchEvidence[] | null });
++    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
++    expect(error).toBeNull();
++    expect(events.at(-1)?.type).toBe("done");
++    expect(h.saved).toHaveLength(1);
++    expect(h.saved[0]).toMatchObject({ extractsRead: 0, sources: [], longestExtractWords: 0, matchedHost: null });
++    expect(h.saved[0]?.paper?.state).toBe("read");
++  });
++
++  it.each([
++    { state: "no-address" } as PaperEvidence,
++    { state: "unreadable", requestedUrl: "https://doi.org/10.1038/x", host: "nature.com", why: "refused" } as PaperEvidence,
++    { state: "not-the-full-text", requestedUrl: "https://doi.org/10.1/y", finalUrl: "https://pub.example/y", host: "pub.example" } as PaperEvidence,
++    {
++      state: "not-confirmed",
++      requestedUrl: "https://arxiv.org/pdf/1",
++      finalUrl: "https://arxiv.org/pdf/1",
++      host: "arxiv.org",
++      why: "title-not-found",
++    } as PaperEvidence,
++  ])("still refuses an answer with no extract when the paper is $state", async (paper) => {
++    const h = harness({ deltas: ["An answer from memory."], paper, evidence: [] });
++    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
++    expect((error as Error).message).toMatch(/\[cite-no-extract\]$/);
++    expect(events.some((e) => e.type === "done")).toBe(false);
++    expect(h.saved).toHaveLength(0);
++  });
++
+   it("fails the press when the paper reader throws a fault of ours", async () => {
+     const bug = new Error("paper reader invariant failed");
+     const h = harness({ deltas: ["An answer."], paperError: bug });
+diff --git a/tests/citation-investigation-view.test.ts b/tests/citation-investigation-view.test.ts
+index 6f870976..1385d832 100644
+--- a/tests/citation-investigation-view.test.ts
++++ b/tests/citation-investigation-view.test.ts
+@@ -286,6 +286,25 @@ describe("what was read of the paper itself, in words (plan 261001a stage 3)", (
+     expect(without).not.toContain("the paper it was shown");
+   });
+ 
++  /* The P0 of 2026-10-01: with the paper read, the model may search nothing,
++     and the answer is kept with no extract. The paper's own sentence already
++     says what was read; this one says the search gave nothing. */
++  it("no extract and the paper read: says the search returned nothing and the answer is from the paper", () => {
++    const none = { sources: [], extractsRead: 0, longestExtractWords: 0, matchedHost: null, paper: READ };
++    expect(investigationProvenance(none)).toBe(
++      "Web search returned no extracts, so of the work itself the AI was shown only the parts of the paper we read. " +
++        "It was asked to base what it says about the work on them, and used this article to relate them. " +
++        "It was instructed not to quote the paper.",
++    );
++    expect(investigationProvenance(none, { state: "assessed", host: "arxiv.org" })).toBe(
++      "Web search returned no extracts, so of the work itself the AI was shown only the parts of the paper we read. " +
++        "It was asked to base what it says about the work on them, and used this article to relate them. " +
++        "It was instructed not to quote the paper. " +
++        "An earlier quick check matched a page on arxiv.org; this search did not return an extract from it.",
++    );
++    expect(investigationProvenance(none)).not.toMatch(/0 results|extracts for|We did not fetch/);
++  });
++
+   it("captions a passage with its page and the AI's reading, and never calls none found a failure or the reverse", () => {
+     expect(passageCaption({ page: 3, bears: "partly" })).toBe("page 3 · the AI's reading: partly supports it");
+     expect(noPassagesSentence([])).toBe("The AI found no passage it could point to in what it was shown.");
+diff --git a/tests/citation-registry.test.ts b/tests/citation-registry.test.ts
+index 6f64f21c..8586fb54 100644
+--- a/tests/citation-registry.test.ts
++++ b/tests/citation-registry.test.ts
+@@ -130,6 +130,81 @@ describe("what an answer puts on the row", () => {
+     expect(out.counts.conflict).toBe(1);
+   });
+ 
++  describe("a title that is only an author–year label (gwern's 'Santoro et al 2016')", () => {
++    const SANTORO = work({
++      id: "santoro",
++      title: "Santoro et al 2016",
++      authors: "Santoro et al",
++      year: "2016",
++      url: "https://arxiv.org/abs/1605.06065",
++      linkFrom: "arxiv",
++    });
++    const santoroRecord = (over: Partial<WorkRecord> = {}) =>
++      record("arxiv:1605.06065", "One-shot Learning with Memory-Augmented Neural Networks", {
++        source: "datacite",
++        authors: [{ family: "Santoro", given: "Adam" }, { family: "Bartunov", given: "Sergey" }],
++        year: 2016,
++        doi: "10.48550/arxiv.1605.06065",
++        ...over,
++      });
++
++    it("is found when the record's first author and year match the label — the free probe's real rows", async () => {
++      /* SEEN RED 2026-10-01: both came out `conflict`, telling the reader the
++         identifier points at a different title. */
++      const THOMPSON = work({
++        id: "thompson",
++        title: "Thompson et al 2020",
++        authors: "Thompson et al",
++        year: "2020",
++        url: "https://arxiv.org/abs/2007.05558",
++        linkFrom: "arxiv",
++      });
++      const reg = fake({
++        "arxiv:1605.06065": { kind: "found", record: santoroRecord() },
++        "arxiv:2007.05558": {
++          kind: "found",
++          record: record("arxiv:2007.05558", "The Computational Limits of Deep Learning", {
++            authors: [{ family: "Thompson", given: "Neil C." }, { family: "Greenewald", given: "Kristjan" }],
++            year: 2020,
++            doi: "10.48550/arxiv.2007.05558",
++          }),
++        },
++      });
++      const out = await attachCitationRegistry(list([SANTORO, THOMPSON]), reg);
++      expect(out.citations.citations.map((r) => r.registry?.kind)).toEqual(["found", "found"]);
++      expect(out.citations.citations[0]?.registry).toMatchObject({
++        title: "One-shot Learning with Memory-Augmented Neural Networks",
++      });
++    });
++
++    it("is still a conflict when the label's author disagrees", async () => {
++      const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ authors: [{ family: "Graves" }] }) } });
++      const out = await attachCitationRegistry(list([SANTORO]), reg);
++      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
++    });
++
++    it("is still a conflict when the label's year disagrees", async () => {
++      const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ year: 2019 }) } });
++      const { year: _rowYear, ...noRowYear } = SANTORO;
++      const out = await attachCitationRegistry(list([noRowYear]), reg);
++      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
++    });
++
++    it("is a conflict for a mistyped DOI whose real title disagrees, whatever the authors", async () => {
++      const row = work({
++        id: "real",
++        title: "Slow Reading Improves Long Term Recall",
++        authors: "Santoro et al",
++        year: "2016",
++        url: "https://doi.org/10.5555/slow",
++        linkFrom: "doi",
++      });
++      const reg = fake({ "doi:10.5555/slow": { kind: "found", record: santoroRecord({ id: "doi:10.5555/slow" as WorkId, doi: "10.5555/slow" }) } });
++      const out = await attachCitationRegistry(list([row]), reg);
++      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
++    });
++  });
++
+   it("does not treat a generic exact title as enough identity evidence", async () => {
+     const row = work({ id: "editorial", title: "Editorial", url: "https://doi.org/10.1000/editorial", linkFrom: "doi" });
+     const reg = fake({
+diff --git a/tests/citations-investigate-client.test.tsx b/tests/citations-investigate-client.test.tsx
+index c14441a3..416db0be 100644
+--- a/tests/citations-investigate-client.test.tsx
++++ b/tests/citations-investigate-client.test.tsx
+@@ -270,6 +270,8 @@ describe("investigate", () => {
+     };
+     for (const [sent, kept] of [
+       [{ ...investigation("2026-10-01T10:00:00.000Z"), paper }, true],
++      /* The P0 of 2026-10-01: the paper read and no web extract is a kept answer. */
++      [{ ...investigation("2026-10-01T10:00:00.000Z"), sources: [], extractsRead: 0, longestExtractWords: 0, paper }, true],
+       /* A read paper with no word count is not drawn as read. */
+       [{ ...investigation("2026-10-01T10:00:00.000Z"), paper: { ...paper, words: undefined } }, false],
+       /* A passage with an unknown bearing is not drawn. */
+diff --git a/tests/paper-evidence.test.ts b/tests/paper-evidence.test.ts
+index da2c2fc2..757a909d 100644
+--- a/tests/paper-evidence.test.ts
++++ b/tests/paper-evidence.test.ts
+@@ -17,12 +17,14 @@ import type { FetchLike } from "../src/fetch.js";
+ import {
+   canonicalPaper,
+   chunkPaper,
++  authorYearLabel,
+   isReferencesHeading,
+   type LookupWork,
+   type PaperEvidence,
+   type PaperRead,
+   paperAddress,
+   readPaperEvidence,
++  registryIdentifiesCitation,
+   SENT_WORDS_BUDGET,
+   selectChunks,
+   verifyPassage,
+@@ -216,6 +218,116 @@ describe("readPaperEvidence — is it the work?", () => {
+     expect(calls).toEqual([]);
+   });
+ 
++  describe("a citation titled only by an author–year label, and a citation's shortened title", () => {
++    const SANTORO_TITLE = "One-shot Learning with Memory-Augmented Neural Networks";
++    const SANTORO_ARXIV = "https://arxiv.org/pdf/1605.06065";
++    const SANTORO_WORK = {
++      ...WORK,
++      title: "Santoro et al 2016",
++      authors: "Santoro et al",
++      year: "2016",
++      url: "https://arxiv.org/abs/1605.06065",
++    };
++    const santoro = (record: Partial<{ title: string; authors: { family: string }[]; year: number }> = {}) =>
++      registry({
++        "arxiv:1605.06065": {
++          kind: "found",
++          record: { title: SANTORO_TITLE, authors: [{ family: "Santoro" }], year: 2016, ...record },
++        },
++      });
++
++    it("reads the paper when the registry's first author and year match the label — the free probe's real row", async () => {
++      /* SEEN RED 2026-10-01: `identity-conflict`, before fetching anything. */
++      const { impl } = scripted({
++        [SANTORO_ARXIV]: pdfReply(await thePaper({ title: SANTORO_TITLE, byline: "Adam Santoro and Sergey Bartunov" })),
++      });
++      const got = mustRead(await readPaperEvidence({ work: SANTORO_WORK }, { lookup: santoro().lookup, fetch: seams(impl) }));
++      expect(got).toMatchObject({ matchedBy: "arxiv", registry: "agrees" });
++    });
++
++    it("is an identity conflict when the label's first author disagrees with the registry's", async () => {
++      const { impl, calls } = scripted({});
++      const got = await readPaperEvidence(
++        { work: SANTORO_WORK },
++        { lookup: santoro({ authors: [{ family: "Graves" }] }).lookup, fetch: seams(impl) },
++      );
++      expect(got).toMatchObject({ state: "identity-conflict", registryTitle: SANTORO_TITLE });
++      expect(calls).toEqual([]);
++    });
++
++    it("is an identity conflict when the label's year disagrees with the registry's", async () => {
++      const { impl } = scripted({});
++      const { year: _rowYear, ...noRowYear } = SANTORO_WORK;
++      const got = await readPaperEvidence({ work: noRowYear }, { lookup: santoro({ year: 2019 }).lookup, fetch: seams(impl) });
++      expect(got).toMatchObject({ state: "identity-conflict" });
++    });
++
++    it("accepts the registry's title on page 1 when the citation shortened it — the free probe's EfficientNet row", async () => {
++      /* SEEN RED 2026-10-01: `not-confirmed`, `title-not-found` — the page-1
++         check looked only for the citation's "…for CNNs". */
++      const full = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
++      const { impl } = scripted({
++        "https://arxiv.org/pdf/1905.11946": pdfReply(await thePaper({ title: full, byline: "Mingxing Tan and Quoc V. Le" })),
++      });
++      const reg = registry({
++        "arxiv:1905.11946": { kind: "found", record: { title: full, authors: [{ family: "Tan" }], year: 2019 } },
++      });
++      const got = mustRead(
++        await readPaperEvidence(
++          {
++            work: {
++              ...WORK,
++              title: "EfficientNet: Rethinking Model Scaling for CNNs",
++              authors: "Tan & Le",
++              url: "https://arxiv.org/abs/1905.11946",
++            },
++          },
++          { lookup: reg.lookup, fetch: seams(impl) },
++        ),
++      );
++      expect(got).toMatchObject({ matchedBy: "arxiv", registry: "agrees" });
++    });
++
++    it("finds a page-1 title that the template repeats as a running header on every later page", async () => {
++      /* SEEN RED 2026-10-01: `title-not-found` — pass0 called the title
++         furniture and stripped it from page 1 too (the probe's three arXiv
++         rows, ICML-style templates). */
++      const header = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
++      const bytes = await buildPdf([
++        [header, "Mingxing Tan and Quoc V. Le", "Abstract", ...filler(21, 300)],
++        [header, ...filler(22, 300)],
++        [header, TARGET, ...filler(23, 300)],
++        [header, ...filler(24, 300)],
++      ]);
++      const { impl } = scripted({ "https://arxiv.org/pdf/1905.11946": pdfReply(bytes) });
++      const reg = registry({
++        "arxiv:1905.11946": { kind: "found", record: { title: header, authors: [{ family: "Tan" }], year: 2019 } },
++      });
++      const got = mustRead(
++        await readPaperEvidence(
++          { work: { ...WORK, title: header, authors: "Tan & Le", url: "https://arxiv.org/abs/1905.11946" } },
++          { lookup: reg.lookup, fetch: seams(impl) },
++        ),
++      );
++      expect(got).toMatchObject({ matchedBy: "arxiv" });
++      /* Only the identity check keeps furniture: what is chunked and sent still strips the header everywhere. */
++      expect(got.sentText.split(header).length - 1).toBe(0);
++    });
++
++    it("does not let the registry's title stand in when the registry was not asked to agree", async () => {
++      /* Without a registry, the shortened citation title is all there is. */
++      const full = "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks";
++      const { impl } = scripted({
++        "https://arxiv.org/pdf/1905.11946": pdfReply(await thePaper({ title: full, byline: "Mingxing Tan and Quoc V. Le" })),
++      });
++      const got = await readPaperEvidence(
++        { work: { ...WORK, title: "EfficientNet: Rethinking Model Scaling for CNNs", url: "https://arxiv.org/abs/1905.11946" } },
++        { lookup: async () => ({ kind: "not-found" }), fetch: seams(impl) },
++      );
++      expect(got).toMatchObject({ state: "not-confirmed", why: "title-not-found" });
++    });
++  });
++
+   it("does not confirm a mistyped DOI merely because the wrong paper cites the target near its start", async () => {
+     /* SEEN RED 2026-10-01: the DOI agreed with the wrong document and the
+        target's title appeared inside the first 2,000 characters, so the old
+@@ -369,6 +481,9 @@ describe("readPaperEvidence — is it the work?", () => {
+       state: "no-address",
+     });
+     expect(paperAddress("https://doi.org/10.1234/ABC.5")?.url).toBe("https://doi.org/10.1234/abc.5");
++    /* A publisher's suffix on the row's link is not part of the DOI, and doi.org 404s on it (the real run, 261001a). */
++    expect(paperAddress("https://doi.org/10.1101/2020.06.26.174482.full")?.url).toBe("https://doi.org/10.1101/2020.06.26.174482");
++    expect(paperAddress("https://doi.org/10.1636/JoA-S-17-093.1.full")?.url).toBe("https://doi.org/10.1636/joa-s-17-093.1");
+     expect(paperAddress("https://arxiv.org/abs/2401.01234v2")?.url).toBe("https://arxiv.org/pdf/2401.01234v2");
+   });
+ });
+@@ -573,3 +688,42 @@ describe("the read is bounded", () => {
+     expect(got).toMatchObject({ kind: "unreadable", why: "too-large", detail: `over ${PAPER_MAX_CHARS} characters` });
+   }, 30_000);
+ });
++
++// ---------------------------------------------------------- author–year labels
++
++describe("authorYearLabel", () => {
++  it("reads the shapes an article uses for a work it names only by author and year", () => {
++    expect(authorYearLabel("Santoro et al 2016")).toEqual({ surname: "santoro", year: 2016 });
++    expect(authorYearLabel("Thompson et al. (2020)")).toEqual({ surname: "thompson", year: 2020 });
++    expect(authorYearLabel("Kaplan & McCandlish 2020a")).toEqual({ surname: "kaplan", year: 2020 });
++    expect(authorYearLabel("Hutter and Legg 2007")).toEqual({ surname: "hutter", year: 2007 });
++    expect(authorYearLabel("Schmidhuber 1992")).toEqual({ surname: "schmidhuber", year: 1992 });
++    expect(authorYearLabel("van der Maaten et al 2008")).toEqual({ surname: "van der maaten", year: 2008 });
++    expect(authorYearLabel("Gödel 1931")).toEqual({ surname: "godel", year: 1931 });
++  });
++
++  it("does not treat a real title that merely contains a year as a label", () => {
++    for (const title of [
++      "Deep Learning in 2016",
++      "The State of AI 2020",
++      "Vision 2020: A Roadmap for Research",
++      "AlphaGo Zero 2017 Results and Analysis",
++      "Attention Is All You Need",
++      "Language Models are Few-Shot Learners",
++    ]) {
++      expect(authorYearLabel(title), title).toBeNull();
++    }
++  });
++
++  it("agrees with a record only on the first author's family name and the year", () => {
++    const rec = { title: "One-shot Learning with Memory-Augmented Neural Networks", authors: [{ family: "Santoro" }], year: 2016 };
++    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2016" })).toBe("label");
++    expect(registryIdentifiesCitation({ ...rec, authors: [{ family: "SANTORÓ" }] }, { title: "Santoro et al 2016" })).toBe("label");
++    expect(registryIdentifiesCitation(rec, { title: "Graves et al 2016" })).toBeNull();
++    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2017" })).toBeNull();
++    /* The row's own year may carry it when the label's is another edition's. */
++    expect(registryIdentifiesCitation(rec, { title: "Santoro et al 2017", year: "2016" })).toBe("label");
++    expect(registryIdentifiesCitation({ title: rec.title, authors: rec.authors }, { title: "Santoro et al 2016" })).toBeNull();
++    expect(registryIdentifiesCitation(rec, { title: "One-shot learning with memory-augmented neural networks" })).toBe("title");
++  });
++});

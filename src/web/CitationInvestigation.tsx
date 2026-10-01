@@ -50,6 +50,9 @@ export const INVESTIGATION_LABEL = "the AI's reading of web search extracts";
 /** The same label when the AI was also shown parts of the paper itself (plan 261001a stage 3). */
 export const INVESTIGATION_LABEL_WITH_PAPER = "the AI's reading of parts of the paper and web search extracts";
 
+/** A paper-backed answer for which web search returned no extract (the 2026-10-01 P0). */
+export const INVESTIGATION_LABEL_PAPER_ONLY = "the AI's reading of parts of the paper";
+
 /** Over the paper's passages: whose words, found how, and whose reading `bears` is. */
 export const PAPER_PASSAGES_LABEL =
   "The paper's own words, found by code in the text we read; each one's bearing is the AI's reading";
@@ -78,8 +81,9 @@ export type InvestigationProvenanceInput = Pick<
 >;
 
 /** The label over a kept answer: the paper is named only when the AI was shown it. */
-export function investigationLabel(inv: Pick<CitationInvestigation, "paper">): string {
-  return inv.paper?.state === "read" ? INVESTIGATION_LABEL_WITH_PAPER : INVESTIGATION_LABEL;
+export function investigationLabel(inv: Pick<CitationInvestigation, "paper" | "extractsRead">): string {
+  if (inv.paper?.state !== "read") return INVESTIGATION_LABEL;
+  return inv.extractsRead === 0 ? INVESTIGATION_LABEL_PAPER_ONLY : INVESTIGATION_LABEL_WITH_PAPER;
 }
 
 /** A dated snapshot (Sol P-10): the day it was read, never "current". */
@@ -184,6 +188,23 @@ export function investigationProvenance(
   inv: InvestigationProvenanceInput,
   lookup?: Pick<CitationLookup, "state" | "host"> | null,
 ): string {
+  const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
+  /* **No extract, the paper read** (the P0 of 2026-10-01): the model may
+     answer from the paper alone and search nothing, and the answer is kept.
+     Never "extracts for 0 results"; the paper's own sentence
+     (`paperReadSentence`) says what was read. No "could not confirm any
+     result": there was no result, and the paper's identity was confirmed by
+     code. The only other case the server keeps is extractsRead >= 1. */
+  if (inv.extractsRead === 0 && inv.paper?.state === "read") {
+    return [
+      "No web-search extract was returned, so of the work itself the AI was shown only the parts of the paper we read.",
+      "It was asked to base what it says about the work on them, and used this article to relate them.",
+      "It was instructed not to quote the paper.",
+      ...(firstCheckHost !== null
+        ? [`An earlier quick check matched a page on ${firstCheckHost}; this investigation did not return an extract from it.`]
+        : []),
+    ].join(" ");
+  }
   const one = inv.extractsRead === 1;
   const hosts = sourceHosts(inv.sources);
   const where = hosts.length > 0 ? ` (${hosts.join(", ")})` : "";
@@ -192,7 +213,6 @@ export function investigationProvenance(
     ? `Web search returned an extract for one result${where}, ${words}.`
     : `Web search returned extracts for ${inv.extractsRead} results${where}, the longest ${words}.`;
   const [them, it] = one ? ["that extract", "it"] : ["those extracts", "them"];
-  const firstCheckHost = lookup?.state === "assessed" || lookup?.state === "unreadable" ? lookup.host : null;
   const identity =
     inv.matchedHost !== null
       ? `One result (${inv.matchedHost}) is the page an earlier quick check matched to the work.`

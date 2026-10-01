@@ -15,6 +15,7 @@ import type { Citation, InvestigatedPaper } from "../src/types.js";
 import {
   INVESTIGATION_LABEL,
   INVESTIGATION_LABEL_WITH_PAPER,
+  INVESTIGATION_LABEL_PAPER_ONLY,
   investigationLabel,
   investigationParts,
   investigationProvenance,
@@ -264,9 +265,10 @@ describe("what was read of the paper itself, in words (plan 261001a stage 3)", (
   });
 
   it("names the paper in the label only when the AI was shown it", () => {
-    expect(investigationLabel({ paper: READ })).toBe(INVESTIGATION_LABEL_WITH_PAPER);
-    expect(investigationLabel({ paper: { state: "no-address", readAt: AT } })).toBe(INVESTIGATION_LABEL);
-    expect(investigationLabel({})).toBe(INVESTIGATION_LABEL);
+    expect(investigationLabel({ paper: READ, extractsRead: 1 })).toBe(INVESTIGATION_LABEL_WITH_PAPER);
+    expect(investigationLabel({ paper: READ, extractsRead: 0 })).toBe(INVESTIGATION_LABEL_PAPER_ONLY);
+    expect(investigationLabel({ paper: { state: "no-address", readAt: AT }, extractsRead: 1 })).toBe(INVESTIGATION_LABEL);
+    expect(investigationLabel({ extractsRead: 1 })).toBe(INVESTIGATION_LABEL);
   });
 
   it("an answer from before the paper was read is said exactly as before; with a paper, never 'we did not fetch any page'", () => {
@@ -284,6 +286,25 @@ describe("what was read of the paper itself, in words (plan 261001a stage 3)", (
     const without = investigationProvenance({ ...base, paper: { state: "no-address", readAt: AT } });
     expect(without).not.toContain("We did not fetch any page");
     expect(without).not.toContain("the paper it was shown");
+  });
+
+  /* The P0 of 2026-10-01: with the paper read, the model may search nothing,
+     and the answer is kept with no extract. The paper's own sentence already
+     says what was read; this one says the search gave nothing. */
+  it("no extract and the paper read: says the search returned nothing and the answer is from the paper", () => {
+    const none = { sources: [], extractsRead: 0, longestExtractWords: 0, matchedHost: null, paper: READ };
+    expect(investigationProvenance(none)).toBe(
+      "No web-search extract was returned, so of the work itself the AI was shown only the parts of the paper we read. " +
+        "It was asked to base what it says about the work on them, and used this article to relate them. " +
+        "It was instructed not to quote the paper.",
+    );
+    expect(investigationProvenance(none, { state: "assessed", host: "arxiv.org" })).toBe(
+      "No web-search extract was returned, so of the work itself the AI was shown only the parts of the paper we read. " +
+        "It was asked to base what it says about the work on them, and used this article to relate them. " +
+        "It was instructed not to quote the paper. " +
+        "An earlier quick check matched a page on arxiv.org; this investigation did not return an extract from it.",
+    );
+    expect(investigationProvenance(none)).not.toMatch(/0 results|extracts for|We did not fetch/);
   });
 
   it("captions a passage with its page and the AI's reading, and never calls none found a failure or the reverse", () => {
