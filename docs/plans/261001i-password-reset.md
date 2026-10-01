@@ -155,6 +155,11 @@ case (link opened in a fresh context shows `[auth-nosession]`). Screenshots at d
      (`takeReturn`) on its timeout, no-session and thrown paths. Sol is right that this contradicts
      `auth-return.ts`'s stated promise, and fixing it would only strengthen it — but it is an edit to
      an existing defence, which this brief said not to make. The new recovery paths do consume it.
+     **Then done, the same day, on Greg's approval via the Overseer** ("Use your judgment. If there's
+     a clearly better way, and it's not too complex, go for it"): AuthCallback now has one `fail()`
+     exit, the only caller of `setError`, which always consumes the stored return. Red-first tests
+     for `[auth-slow]`, `[auth-nosession]` and `[auth-finish]`, and a source test that `setError` has
+     one call site. security-map.md gained the row for this defence.
   4. An `App`-level test that the form survives the session arriving
      (`tests/recovery-form-survives-the-session.test.tsx`), seen red by making `App` remount the
      callback on a user change.
