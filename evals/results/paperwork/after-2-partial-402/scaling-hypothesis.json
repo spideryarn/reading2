@@ -1,0 +1,39 @@
+{
+  "arm": "after-2",
+  "slug": "scaling-hypothesis",
+  "at": "2026-10-01T19:07:41.881Z",
+  "sourceSha256": {
+    "hierarchy.ts": "be8ec11b0875a55886eba9ec1b525753ee3627de1e11c2d559e3fbc9cca3a3f9",
+    "simple-summary.ts": "0b0501b333f9b6e9b604a8503cb90ef0b43c73aa0799a5d2f272c4622e75e22e",
+    "tweets.ts": "14a6167b8e17d64620d432cc06cee679695676d8aecb0b326f664f9f0e2a9a9c",
+    "paperwork.ts": "3eb8b4c90cd68cc9b50412f810f6646c998dbfe9a8e24a7bfe9ff89040da2961"
+  },
+  "versions": {
+    "toc": "toc/10",
+    "tweets": "tweets/6",
+    "simple": "simple/2"
+  },
+  "gists": {
+    "error": "paperwork structure answer is not valid JSON: it breaks at position 1472 of 13538 characters"
+  },
+  "simple": {
+    "error": "Anthropic SDK request failed, status 402. [ai-no-credit]"
+  },
+  "tweets": [
+    "GPT-3, released by OpenAI in 2020 as a 175-billion-parameter model (117x GPT-2), used the same old 2018 architecture yet learned to follow instructions and perform new tasks from a few examples - meta-learning nobody built in, Gwern writes.",
+    "Gwern notes GPT-3's scaling curves for prediction loss kept following the same smooth trend seen in far smaller models, with no sign of bending - implying much larger, more capable models remain affordable to train.",
+    "GPT-3 was expensive by machine-learning standards, but Gwern estimates its training compute was only about twice what AlphaGo Zero used in 2017 - \"not even that much compute\" against national research budgets.",
+    "Across language, images, games, and robotics, Gwern observes the same pattern: simply scaling up model size, data, and compute reliably produces stability, generalization, and meta-learning that nobody deliberately designed in.",
+    "A large enough model, Gwern writes, behaves like an ensemble of countless sub-models biased toward simple solutions. With enough data, memorizing shortcuts stop working, and the simplest surviving sub-model encodes a real, generalizable algorithm.",
+    "This pattern motivates what Gwern calls the scaling hypothesis: given a sufficiently general architecture, increasingly sophisticated behavior - even general intelligence - may emerge just from training ever-larger networks on more data and compute.",
+    "The 'pretraining thesis' holds that training a model to predict text forces it, as loss falls, through letter frequencies, then real words, then word associations, then sentence-level sense, then subtler things like consistent pronoun use.",
+    "Gwern argues the last fractions of a bit of loss are the hardest and most valuable: mistakes no human would make, like flipping a pronoun's gender, cost far more loss than their rarity suggests - closing that gap requires genuine understanding.",
+    "He's candid about the limits: nobody predicted in advance how far GPT-3's loss would fall, and nobody can say what a further 100-1000x compute scale-up would unlock, or whether this path leads anywhere near human-level performance.",
+    "Whether a broader AI race starts now isn't blocked by hardware, Gwern argues - DeepMind and Google Brain already have the compute and money. What's missing is organizational conviction that scale itself is the answer.",
+    "He contrasts DeepMind's 'weak scaling hypothesis' - build each cognitive capacity separately, like reverse-engineering a brain - with OpenAI's bet that simple algorithms on huge uniform networks yield intelligence directly, a bet it restructured itself to fund.",
+    "Looking back a decade, Gwern notes that credentialed experts confidently declared deep learning's fundamental limits and predicted 'AI winters' throughout 2014-2016 - and were wrong every time, with few since admitting it.",
+    "He pushes back on dismissing any working system as 'just' statistics or pattern-matching: if intelligence is ever built from simpler mechanisms, that reduction to 'just X' is exactly what success has to look like, not a debunking of it.",
+    "Agency, Gwern argues, isn't on/off but a continuum - a model trained on huge amounts of human-generated text, full of agents planning and acting, picks up real agentic capability as a byproduct, with consequences once given tools or robots to act through.",
+    "He pushes further: training even on abstract systems like Conway's Game of Life, or random Turing machines whose rules a model must infer, can push toward agent-like, intention-inferring reasoning - leaving no training data clearly safe from this."
+  ]
+}

@@ -118,6 +118,7 @@ const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came fro
 /** A generated artefact that both export formats must carry whole. */
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
+  promptVersion: "simple-prompt/export-fixture",
   generator: "fixture-model",
   slug: SLUG,
   sourceHash: "0123456789abcdef",

@@ -15,7 +15,7 @@ import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
-import { SHAPE, whyUnusable } from "../src/store/artifacts.js";
+import { SHAPE, stampOf, whyUnusable } from "../src/store/artifacts.js";
 import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../src/types.js";
 import {
   ANSWER_TOKENS,
@@ -1031,6 +1031,10 @@ describe("the prompt version (plan 261001p)", () => {
     expect(out.version).toBe("simple/2");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
+    /* Pipeline freshness and artefact copies read this generic stamp. If they
+       see the shape's `simple/2` here, a new summary is permanently
+       not-current and a copy carrying its real prompt stamp is refused. */
+    expect(stampOf(out).promptVersion).toBe(SIMPLE_PROMPT_VERSION);
   });
 
   it("reads a row from before the field as the first prompt: usable, and outdated", () => {
@@ -1044,5 +1048,14 @@ describe("the prompt version (plan 261001p)", () => {
   it("refuses an empty prompt version rather than reading it as the first", () => {
     const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
     expect(isUsableSimpleSummary({ ...out, promptVersion: "" })).toBe(false);
+  });
+
+  it("pins the changed ask, not merely its new stamp", () => {
+    expect(SIMPLE_SYSTEMS.brief).toContain("About 80 words");
+    for (const system of Object.values(SIMPLE_SYSTEMS)) {
+      expect(system).toContain("PAPERWORK IS NOT THE PIECE");
+      expect(system).toContain("any implication it\n  states itself");
+      expect(system).toContain("Never advice or a consequence it does not give");
+    }
   });
 });

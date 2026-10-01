@@ -169,13 +169,85 @@ Budget: under $5.
   Debate, Illustrated. Each writes from the whole article and may pick up the paperwork. v1 is the
   three he named; the shared `paperwork()` makes each of them a one-line import plus its own
   measurement.
-- **The deepening cascade's gists** (`EXPAND_SYSTEM`, `src/hierarchy-expand.ts`). A paperwork
-  range is rarely long enough to be deepened; the stamp still moves with `toc/10`.
 - **Marking paperwork blocks as supplement at stage 3**, so no model sees them — see *The bigger
   option passed over*.
-- **A prompt stamp for Simple separate from its stored-shape version**, so a wording change can
-  mark summaries outdated without making them unreadable.
+- **A generation-only cap on Brief's length.** Sol suggested refusing a Brief over 130 words at
+  generation while reads keep accepting 240. Not taken in v1: a level that fails validation is asked
+  once more and then fails the whole three-level press (`LEVEL_ATTEMPTS`, "all or none"), so a cap
+  the model overshoots costs the reader all three summaries, not a long one. The measurement
+  decides whether the ask alone is enough.
+
+## What GPT Sol's plan review changed
+
+[261001p-summaries-skip-the-paperwork-plan-review-sol.md](261001p-summaries-skip-the-paperwork-plan-review-sol.md),
+no P0, five P1s. The sections above are the plan as first written; the code differs from them in
+these places, all taken from the review:
+
+- **P1-1, paperwork by role, not label.** "It tells a reader nothing" and "never summarise" were too
+  categorical: a sponsor's role can qualify the evidence, an ethics rule can shape the method. The
+  rule now says paperwork is what *only records how the piece was produced and published*, and
+  anything the piece uses as evidence, reasoning, method or a limit is content
+  (`src/paperwork.ts`).
+- **P1-2, Structure's exception made whole.** A paperwork range's gist is the sole exception to
+  "a CLAIM or a MOVE" and to the word floor, it is asked **no question at any depth** (an absent
+  question is already a valid stored state, `questionFor`), and every other gist ignores it. The
+  deepening cascade is **no longer deferred**: `EXPAND_SYSTEM` carries the same section, and
+  `expand/6` → `expand/7`, so the stamp is `toc/10+expand/7`.
+- **P1-3, a prompt stamp for Simple, now rather than later.** Not bumping the shape was right, but
+  with no prompt stamp at all `outdated` could never be true and Metadata would call every old
+  summary current, so the change would reach no existing article. `SimpleSummary` gains an optional
+  `promptVersion`, written as `SIMPLE_PROMPT_VERSION = "simple-prompt/2"`; a row without it reads
+  as `simple-prompt/1`, usable and outdated (`simplePromptVersion`). The pipeline's stamp,
+  Metadata and the owner's `outdated` compare it; `isUsableSimpleSummary` still requires
+  `simple/2` exactly.
+- **P1-5, Metadata's Tweets row asks about the prompt.** It compared only the article, so a
+  `tweets/5` thread was "current" for ever and `tweets/6` would have reached nobody. It now asks
+  `sameStamp` for the prompt version and model as its neighbours do. Held by a new case in
+  `tests/store-tweets-stale.test.ts`, seen red with the comparison removed.
+- **P2-7, takeaway wording.** "What that means for a reader" invited invented advice. Summary now
+  ends *"on the takeaway: the piece's main conclusion, and any implication it states itself. Never
+  advice or a consequence it does not give."* Tweets' last post *"Ends on the piece's conclusion …
+  If it deliberately reaches no conclusion, end on the central question it leaves open."*
+- **P2-9, authors.** When the structured `meta.authors` has more than two, the prompt says how many
+  and asks for "the authors" or the first author and "colleagues", rather than asking the model to
+  count a free-text byline. Without the list it is asked to count.
+- **P2-8, not taken:** adding `BLOCK_ID_NOTE` to the hierarchy at this bump. Its first line
+  ("Each block below starts with its id") is not true of the hierarchy's `[i] id <tag>:` lines and
+  no leak has been seen; `src/article-prompt.ts` and prompting-guide.md now say so rather than
+  promising the next bump. The other half of P2-8 was right: the `PAPERWORK` section sits after
+  OUTPUT, outside the GISTS and QUESTIONS slices, so `evals/summaries`' live arm does **not** move.
+- **P1-4, the measurement**: two draws of the new prompt, and a fourth article that is not a
+  paper (`scaling-hypothesis`, a gwern essay where OpenAI's funding is part of the argument) as
+  the boundary case. The intended boundary, `replication-crisis-spya-hrjamq`, belongs to another
+  local owner and the harness could not load it.
 
 ## Ledger
 
-(filled in as the work lands)
+**2026-10-01, measurement paused: the development OpenRouter key ran out of credit.**
+
+- `before` and `before-2` ran in full on all four articles (on this commit's parent, by writing the
+  parent's files back for the run). $1.05 + $0.87 + $0.41 + $0.44.
+- `after` and `after-2` (two draws of the new prompts) ran at the same time and most of their
+  calls came back `402 … [ai-no-credit]` — *"This request would exceed your available credits"*.
+  Only `analog-cognition` came back whole, once. The partial runs are kept, renamed
+  `evals/results/paperwork/after-partial-402/` and `after-2-partial-402/`, so nothing reads them
+  as a result. The key is the box's **development** key; production's key (in `.env.prod`) is a
+  different key, compared by hash only.
+- Two `after` structure answers for `scaling-hypothesis` failed the eval's parse. The eval
+  borrowed `evals/plain-words`' strict parse rather than production's `parseJsonAnswer`, which
+  extracts a wrapped document and mends a trailing comma, so these may be failures production
+  would not see — or a real regression. Nothing was kept to tell. The harness now uses
+  production's parse and saves the raw answer when it fails. **This has to be settled before the
+  structure change is trusted.**
+
+What the one whole article showed (a screen, not the evidence):
+
+| `analog-cognition` | before | before-2 | after |
+|---|---|---|---|
+| Brief | 154 words, 3 paragraphs | 146, 3 | **86, 2** |
+| Structure paperwork gists | detail: grant agencies named | detail | **labels**: "The funding sources and institutional support for this work." |
+| Tweet 1 | "Miller, Brincat, and Roy (MIT) propose…" | "…at MIT's Picower Institute… The authors report no conflicts of interest." | "Miller, Brincat, and Roy argue…" (no affiliation; still three names) |
+| Last post | what it leaves open | — | **"They conclude: …"** |
+
+Across the before arms, Brief was 121–154 words and always three paragraphs: the 186 words on
+the reported article is the high end of a consistent overshoot of the 100-word ask.

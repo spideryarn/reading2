@@ -142,7 +142,7 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
 export const SIMPLE_PROMPT_VERSION = "simple-prompt/2";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
-export function simplePromptVersion(simple: Pick<SimpleSummary, "promptVersion">): string {
+export function simplePromptVersion(simple: SimpleSummary): string {
   return simple.promptVersion ?? "simple-prompt/1";
 }
 
@@ -336,8 +336,8 @@ export function renderPrompt(profile: string | null): string {
  * compute the same value (Sol's plan review, P1-1). The tree is here only for
  * the fallback head title `articleWithIds` prints when there is no metadata.
  *
- * The instructions have their own `SIMPLE_VERSION`; the model has its own
- * stamp field.
+ * The instructions have their own `SIMPLE_PROMPT_VERSION`; the stored shape
+ * has `SIMPLE_VERSION`, and the model has its own stamp field.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],

@@ -345,6 +345,8 @@ describe("the constants a scoped call is made with", () => {
    */
   it("is at expand/7, since the prompt carries the paperwork rule", () => {
     expect(EXPAND_PROMPT_VERSION).toBe("expand/7");
+    expect(EXPAND_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
+    expect(EXPAND_SYSTEM).toContain('Send no "question" on it, at any\ndepth');
   });
 
   /**

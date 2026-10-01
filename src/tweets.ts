@@ -231,7 +231,7 @@ export function suggestedLength(words: number): number {
   return Math.min(15, Math.max(4, Math.round(words / 700)));
 }
 
-const SYSTEM = `You are writing a NUMBERED THREAD: one long article compressed into a short
+export const TWEETS_SYSTEM = `You are writing a NUMBERED THREAD: one long article compressed into a short
 sequence of standalone posts, each a few sentences long.
 
 It is a READING AID. Someone reads the thread to decide whether to read the
@@ -672,7 +672,7 @@ export async function generateTweets(opts: {
           text: articleWithIds(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
-        { type: "text" as const, text: SYSTEM },
+        { type: "text" as const, text: TWEETS_SYSTEM },
       ],
       messages: [{ role: "user", content: renderPrompt({ meta: realMeta, tree, posts, profile }) }],
     }, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
