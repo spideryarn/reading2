@@ -279,6 +279,11 @@ contract, and it wants its own plan and postmortem. **It should not be lost**: i
 a failed ingest at a few per cent of articles. Raised with Greg in the feedback note and the
 hand-off.
 
+**One thing the measurement did not see.** A peer's work that landed the same evening
+(`ef04cfd5a`, plan name shared by the collision the plan-name tool allows) moved Simple to the
+high-power model for every article. Every Summary call above ran at `power: "standard"`, on Sonnet.
+The prompt's direction should carry over; the word counts on Opus are not measured.
+
 ### What happened along the way
 
 - `before` and `before-2` ran first, on the parent's prompt files written back for the run.

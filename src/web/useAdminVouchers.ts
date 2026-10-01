@@ -1,20 +1,26 @@
 /**
- * The gift vouchers, and the two writes — the data layer of `/admin/vouchers`.
+ * The gift vouchers, and the writes — the data layer of `/admin/vouchers`.
  *
- * One `GET /api/admin/vouchers`, `POST` to create, `PATCH /:id` to change one;
+ * One `GET /api/admin/vouchers`, `POST` to create, `PATCH /:id` to change one,
+ * `POST /api/admin/voucher-emails/:id/retry` to send one of their emails again;
  * every write is followed by a fresh read, so what is on screen is always what
  * the server last said rather than an optimistic guess about it. Plan 261001m;
- * docs/project/admin.md § `/admin/vouchers`.
+ * the emails are 261001p; docs/project/admin.md § `/admin/vouchers`.
  *
  * Shaped like useAdminUsers.ts — one `reload`, an effect that calls it once, an
  * error that is surfaced rather than swallowed — and it adds the one thing
  * those pages never needed: a write that can be refused (a 409 on changing a
  * claimed voucher's address, a 400 on a typo), whose sentence is the server's
  * own `{ error }` through `readJson`.
+ *
+ * **A write that queues an email reads twice**: straight away, and once more
+ * four seconds later. The email goes after the server's response, so the first
+ * read usually shows it *waiting to send*; the second usually shows how it
+ * went. The Refresh button covers anything slower.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AdminVoucher } from "../admin-vouchers.js";
+import type { AdminVoucher, VoucherCreated } from "../admin-vouchers.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
@@ -34,6 +40,11 @@ export interface VoucherPatchInput {
   readonly revoked?: boolean;
 }
 
+/** What a create came to: made now (its email queued), already made, or refused in a sentence. */
+export type CreateAnswer =
+  | { readonly kind: "created"; readonly email: VoucherCreated["email"] }
+  | { readonly kind: "refused"; readonly message: string };
+
 export interface UseAdminVouchers {
   /** `null` while the first request is in flight — not "no vouchers". */
   vouchers: AdminVoucherRow[] | null;
@@ -41,13 +52,26 @@ export interface UseAdminVouchers {
   error: string | null;
   loading: boolean;
   reload: () => Promise<void>;
+  /** Never rejects. */
+  create: (input: NewVoucherInput) => Promise<CreateAnswer>;
   /** Resolves to null on success, or the server's sentence on refusal. Never rejects. */
-  create: (input: NewVoucherInput) => Promise<string | null>;
-  /** As `create`. */
   update: (id: string, patch: VoucherPatchInput) => Promise<string | null>;
+  /** Send one voucher email again, by its id. As `update`. */
+  retry: (emailId: string) => Promise<string | null>;
 }
 
 const PATH = "/api/admin/vouchers";
+const EMAILS_PATH = "/api/admin/voucher-emails";
+
+/** Long enough for an after-response send to have usually finished. Plan 261001p. */
+const SECOND_READ_MS = 4_000;
+
+type Written = { readonly ok: true; readonly body: unknown } | { readonly ok: false; readonly message: string };
+
+/** The `email` field of a write's answer, when it is a string — `queued`, `replayed`, `sending`. */
+function emailField(body: unknown): unknown {
+  return typeof body === "object" && body !== null ? (body as { email?: unknown }).email : undefined;
+}
 
 export function useAdminVouchers(): UseAdminVouchers {
   const [vouchers, setVouchers] = useState<AdminVoucherRow[] | null>(null);
@@ -56,6 +80,14 @@ export function useAdminVouchers(): UseAdminVouchers {
   /* An initial read can still be in flight when the create form writes. Its
      older answer must not overwrite the fresh read that follows the write. */
   const generation = useRef(0);
+  /* **The id a create is sent under** — minted in the browser so a resubmit
+     after a lost answer is the same create, which the server answers with the
+     original rather than a second voucher (261001p, Sol F2). Kept with the
+     exact input it was minted for: the same form sent again reuses it, a
+     changed form or a success lets it go. */
+  const pendingCreate = useRef<{ readonly key: string; readonly id: string } | null>(null);
+  const laterReads = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const mounted = useRef(true);
 
   const reload = useCallback(() => {
     const mine = ++generation.current;
@@ -79,32 +111,83 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   useEffect(() => void reload(), [reload]);
 
+  /* The second reads die with the page. */
+  useEffect(() => {
+    mounted.current = true;
+    const timers = laterReads.current;
+    return () => {
+      mounted.current = false;
+      for (const t of timers) clearTimeout(t);
+      timers.clear();
+    };
+  }, []);
+
+  const readAgainLater = useCallback(() => {
+    if (!mounted.current) return;
+    const timer = setTimeout(() => {
+      laterReads.current.delete(timer);
+      if (mounted.current) void reload();
+    }, SECOND_READ_MS);
+    laterReads.current.add(timer);
+  }, [reload]);
+
   /** One write, then a fresh read whatever happened — a refusal may mean the row moved. */
   const write = useCallback(
-    (path: string, method: "POST" | "PATCH", body: unknown): Promise<string | null> =>
+    (path: string, method: "POST" | "PATCH", body?: unknown): Promise<Written> =>
       apiFetch(path, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        ...(body === undefined
+          ? {}
+          : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
       })
         .then((r) => readJson<unknown>(r))
         .then(
-          () => null,
-          (e: Error) => describeFetchFailure(e),
+          (answer): Written => ({ ok: true, body: answer }),
+          (e: Error): Written => ({ ok: false, message: describeFetchFailure(e) }),
         )
-        .then(async (refusal) => {
-          await reload();
-          return refusal;
+        .then(async (written) => {
+          if (mounted.current) await reload();
+          return written;
         }),
     [reload],
   );
 
-  const create = useCallback((input: NewVoucherInput) => write(PATH, "POST", input), [write]);
-  const update = useCallback(
-    (id: string, patch: VoucherPatchInput) =>
-      write(`${PATH}/${encodeURIComponent(id)}`, "PATCH", patch),
-    [write],
+  const create = useCallback(
+    async (input: NewVoucherInput): Promise<CreateAnswer> => {
+      const key = JSON.stringify([input.email, input.articles, input.note]);
+      const pending =
+        pendingCreate.current?.key === key ? pendingCreate.current : { key, id: crypto.randomUUID() };
+      pendingCreate.current = pending;
+      const written = await write(PATH, "POST", { id: pending.id, ...input });
+      if (!written.ok) return { kind: "refused", message: written.message };
+      if (pendingCreate.current === pending) pendingCreate.current = null;
+      const email = emailField(written.body) === "replayed" ? "replayed" : "queued";
+      if (email === "queued") readAgainLater();
+      return { kind: "created", email };
+    },
+    [write, readAgainLater],
   );
 
-  return { vouchers, error, loading, reload, create, update };
+  const update = useCallback(
+    async (id: string, patch: VoucherPatchInput) => {
+      const written = await write(`${PATH}/${encodeURIComponent(id)}`, "PATCH", patch);
+      if (!written.ok) return written.message;
+      /* Only a real change of address queues an email (261001p). */
+      if (emailField(written.body) === "queued") readAgainLater();
+      return null;
+    },
+    [write, readAgainLater],
+  );
+
+  const retry = useCallback(
+    async (emailId: string) => {
+      const written = await write(`${EMAILS_PATH}/${encodeURIComponent(emailId)}/retry`, "POST");
+      if (!written.ok) return written.message;
+      readAgainLater();
+      return null;
+    },
+    [write, readAgainLater],
+  );
+
+  return { vouchers, error, loading, reload, create, update, retry };
 }

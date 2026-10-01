@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **What a *Check the web* answer says about where it came from**, in plain
+ * **What a *Dig deeper* answer (was *Check the web*) says about where it came from**, in plain
  * words. Greg, 2026-09-05 (`spya-puyb6d`): *"it added some section called asked
  * not checked. I didn't understand what asked not checked means."*
  * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 4.
@@ -61,18 +61,18 @@ const BASE: GlossaryLookup = {
 it("says an answer that searched came from a web search", () => {
   const text = label(BASE);
   expect(text).toBe("from a web search");
-  // The sources it cited, as links that open in a new tab.
+  // The sources it found, as links that open in a new tab.
   const a = host.querySelector<HTMLAnchorElement>(".gloss-sources a");
   expect(a?.getAttribute("href")).toBe("https://example.org/a");
   expect(a?.getAttribute("target")).toBe("_blank");
 });
 
-it("does not promise a source list when a searched answer cited nothing", async () => {
+it("does not promise a source list when a searched answer found nothing", async () => {
   expect(label({ ...BASE, citations: [] })).toBe("from a web search");
   const globe = host.querySelector<HTMLElement>(".gloss-globe");
   await act(async () => globe?.focus());
   const card = document.querySelector<HTMLElement>('[role="tooltip"]');
-  expect(card?.textContent).toContain("It cited no sources, so there are none to link to.");
+  expect(card?.textContent).toContain("It found no sources, so there are none to link to.");
   expect(card?.textContent).not.toContain("sources below");
   expect(host.querySelector(".gloss-sources")).toBeNull();
 });

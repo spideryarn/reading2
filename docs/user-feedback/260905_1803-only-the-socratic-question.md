@@ -16,7 +16,7 @@ ending: shipped
 ## What we did
 
 `question ?? gist`, one line per row —
-[`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx). The styling moved with it: `.summ-question` was
+`SummaryPanel.tsx` (deleted with Summary's outline on 2026-10-01, plan 261001p; in git history). The styling moved with it: `.summ-question` was
 0.87rem italic `--ink-faint` as a second line, and would have made every row's only sentence look
 like a footnote to a claim no longer above it. It now takes `.summ-text`'s weight exactly, and the
 italic went with the demotion — it marked the question as a different kind of thing from the sentence
@@ -42,7 +42,7 @@ instead of joining it — the panel stopped saying what the article says"*. It w
 which is exactly what it was for. It is **inverted rather than relaxed** — the gists must now be
 *gone* — because "either would do" is how a rule stops holding anything.
 
-New: [`tests/summary-question-replaces-gist.test.tsx`](../../tests/summary-question-replaces-gist.test.tsx),
+New: `tests/summary-question-replaces-gist.test.tsx` (deleted with the outline, 2026-10-01),
 five cases. Every one asserts a presence **and** an absence, because a panel that dropped both lines
 would pass any test that only asked whether the question appears. Watched red first against the
 restored old render: *"expected [ Array(2) ] to not include 'The gist of First part.'"*

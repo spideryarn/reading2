@@ -503,6 +503,13 @@ const SHARED_WITH_READER = [
   "src/web/JobProgress.tsx",
   "src/web/Link.tsx",
   "src/web/LogoGlyphs.tsx",
+  /* Arrived 2026-10-01 (docs/plans/261001q-logo-loading-spinner.md). Eager
+     because it *is* the article page's wait: it has to be in the bundle before
+     the fetch it stands in for, so a lazy chunk would be a second wait in front
+     of the spinner. `/design` draws a live specimen so a reviewer can see it
+     without a slow fetch. About 200 lines, importing only `logo-animation.ts`
+     and `LogoGlyphs`, which the reader already has. */
+  "src/web/LogoLoader.tsx",
   "src/web/ShelfEntry.tsx",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",

@@ -431,7 +431,9 @@ destination stands to the piece being read
 `quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
 nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07,
 and `simple-check` — Simple's fidelity guard, measured against Sonnet before it was built
-([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01.
+([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01, and
+`dig-deeper-search` — *Dig deeper*'s forced search, which writes nothing a reader reads
+([the plan](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md)) — the same day.
 That distinction is the whole of the policy: a new job may be born on the quick tier by judgment, and
 **moving an existing one still means running an eval under [`evals/`](../../evals/README.md) first
 and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
@@ -508,6 +510,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
 | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
+| `SPIDERYARN_DIG_DEEPER_SEARCH_MODEL` | *Dig deeper*'s forced web search, run before the answer: it keeps the search's results and writes a keyword query for the reader's library (`src/dig-deeper.ts`). A quick-tier job; the answer the reader reads is always the high-power model, which this does not change |
 | `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies — read it

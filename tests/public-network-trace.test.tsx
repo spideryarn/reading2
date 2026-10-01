@@ -197,16 +197,15 @@ const PDF_META = {
 };
 
 /**
- * The one sentence a visitor's summary band must put on screen — and it is the
- * **tree's own gist**, not an artefact.
- *
- * Stage 5e is gone (docs/plans/260831s-gist-only-summaries.md), so summary mode is now
- * free for a visitor the way the table of contents is. That is worth a rendered
- * assertion rather than a unit test: the mode used to be gated on a
- * `summary.json` the payload might not carry, and a gate left behind would show
- * *"Nobody has built a summary"* over a panel that has everything it needs.
+ * What a visitor's Summary band says when the payload carries no plain-words
+ * version — **in Summary's own band**, beside its slider, and not the generic
+ * *"Nobody has built"* boundary. Summary drew the tree's own gists, free, until
+ * 2026-10-01; it is the plain-words levels alone now (plan 261001p), and
+ * visitor.ts keeps it `available` so this sentence is what an empty one says.
+ * Written out rather than imported from SimplePanel.tsx, so a change to it is
+ * a change somebody made here on purpose.
  */
-const PUBLIC_GIST = "What the piece says.";
+const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this piece yet.";
 
 /**
  * **A drawing, because the fixture's diagram band is a visitor's default now.**
@@ -871,8 +870,9 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      is the network trace, which is the question this file is actually about.
      GPT Sol's review of the plan, finding 8. */
   structure: { where: ".mode-band.struct", says: OUTLINE_ROW },
-  /* Free since 2026-08-31 — the gist, with no summary artefact behind it. */
-  summary: { where: ".mode-band.summ", says: PUBLIC_GIST },
+  /* No plain-words version on the payload, so its own empty sentence, in its
+     own band — not the boundary (visitor.ts keeps Summary `available`). */
+  summary: { where: ".mode-band.summ", says: PUBLIC_NO_SIMPLE },
   /* The payload carries a glossary, so the visitor gets the real thing. */
   glossary: { where: ".mode-band.gloss", says: PUBLIC_TERM },
   /* And a list of ideas — the fixture is asymmetric on purpose. */
@@ -1115,24 +1115,27 @@ describe("a signed-out browser on a shared document", () => {
    * deleting the visitor's summary band from App.tsx left the whole suite
    * green, because nothing ever put one on screen.
    *
-   * **What it asserts changed on 2026-08-31, and the change is the point.** It
-   * used to prove the band drew the *artefact* — `?len=long`, so the assertion
-   * could not be satisfied by the tree's own gist. Stage 5e is gone
-   * (docs/plans/260831s-gist-only-summaries.md) and the gist is now the whole of what
-   * this mode shows, so the thing worth proving is the opposite one: a visitor
-   * gets summary mode **for free**, on a payload carrying no summary artefact
-   * of any kind, with no *"nobody has built"* boundary in the way. A gate left
-   * behind in `visitorGap` is exactly what this reddens.
+   * **What it asserts has changed twice.** It proved the band drew the
+   * *artefact* until 2026-08-31, then that a visitor got the tree's own gists
+   * for free (docs/plans/260831s-gist-only-summaries.md). The gists' outline
+   * went on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md),
+   * so what is worth proving now: an old outline link, on a payload carrying
+   * no plain-words version, still opens **Summary's own band** — its slider on
+   * the default level and its own empty sentence — with no *"nobody has
+   * built"* boundary in the way, no Parts | Sections, and no request beyond
+   * the public one. A gate added to `visitorGap` is exactly what this reddens.
    */
-  it("gives a visitor the summary outline, with no artefact behind it", async () => {
-    await open("?mode=summary");
+  it("gives a visitor Summary's own band on an old outline link, with nothing behind it", async () => {
+    await open("?mode=summary&summary=gists&deep=2");
 
-    expect(host.textContent).toContain(PUBLIC_GIST);
+    const band = host.querySelector(".mode-band.summ");
+    expect(band, "the Summary band is open").not.toBeNull();
+    expect(readable(band as Element)).toContain(PUBLIC_NO_SIMPLE);
     expect(host.textContent).not.toContain("Nobody has built");
-    /* And the Parts | Sections control, which is the one thing the outline
-       offers — so this cannot pass on a band that rendered its heading and
-       nothing else. (It was labelled "Depth" until plan 261001b.) */
-    expect(host.querySelector(".summ-seg .summ-pill")?.textContent).toBe("Parts");
+    /* The slider, on the default level — so this cannot pass on a band that
+       rendered its surface and nothing else. */
+    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Simple");
+    expect(band?.querySelector(".summ-pill"), "no Parts | Sections").toBeNull();
     expect(outsidePublic()).toEqual([]);
   });
 
@@ -1653,7 +1656,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?mode=glossary");
     expect(host.textContent).toContain(PUBLIC_TERM);
     for (const control of [
-      "Check the web",
+      "Dig deeper",
       "Find more",
       "Start again",
       "Find the terms",
@@ -2335,7 +2338,7 @@ describe("a signed-out browser on a shared document", () => {
    * **Opening one gives the answer and none of the verbs.**
    *
    * The dialog is where every owner capability lives — edit, delete, retry,
-   * "search the web", the follow-up composer — and `CommentAccess`'s visitor
+   * "dig deeper", the follow-up composer — and `CommentAccess`'s visitor
    * arm carries none of them. Asserted by *label*, because that is what a
    * reader would press; a query on a class name would pass over a button whose
    * text changed.
@@ -2344,7 +2347,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?panel=questions&note=spya-cmt23z");
 
     expect(host.textContent, "the answer").toContain(PUBLIC_ANSWER);
-    for (const verb of ["Delete", "Try again", "Search the web"]) {
+    for (const verb of ["Delete", "Try again", "Dig deeper"]) {
       const found = [...host.querySelectorAll("button")].some(
         (b) => (b.textContent ?? "").trim() === verb,
       );
@@ -3472,9 +3475,13 @@ describe("an owner's reading view, left alone", () => {
     entries: [{ range: ["spya-bbbbbb", "spya-cccccc"], text: "Where the piece goes." }],
   };
 
-  /* Two modes, because a subscriber mounted only inside Summary would pass a
-     Plain-only guard. */
-  it.each(["plain", "summary"] as const)("asks for the job list once, then nothing for a minute, in %s", async (mode) => {
+  /* Two modes, because a subscriber mounted only inside a band would pass a
+     Plain-only guard. Structure rather than Summary since 2026-10-01: Summary
+     was the gists' outline, which watched nothing, and is now the plain-words
+     levels, an artefact band whose `useSimple` watches the queue exactly as
+     Glossary's does below (plan 261001p). Structure is the band that reads
+     only the tree. */
+  it.each(["plain", "structure"] as const)("asks for the job list once, then nothing for a minute, in %s", async (mode) => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     owned = () => json({ ...OWNED, arc: OWNED_ARC });
     await open(`?mode=${mode}`);

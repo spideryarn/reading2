@@ -629,7 +629,7 @@
    check. Deliberately quiet — they are punctuation in a sentence, not buttons —
    and they light up on hover, where the tooltip also says where they go.
 
-   Not chat's any more: the summary panel draws the same chips from the same
+   Not chat's any more: Quiz and Candidates draw the same chips from the same
    component (Cited.tsx), so the class lost its `chat-` prefix rather than
    growing a second copy under a different one. */
 .cite {

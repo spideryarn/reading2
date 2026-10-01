@@ -78,7 +78,7 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
-import { ADMIN_USERS_PATH } from "../urls.js";
+import { ADMIN_USERS_PATH, ADMIN_VOUCHERS_PATH } from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
   canStamp,
@@ -634,7 +634,7 @@ export const ADMIN_HREF = "/admin";
 export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 /* Gift vouchers — docs/project/admin.md § `/admin/vouchers`. */
-export const ADMIN_VOUCHERS_HREF = "/admin/vouchers";
+export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**
@@ -1309,7 +1309,7 @@ export function onAddressChange(listener: () => void): () => void {
  * subscribed to nothing is not woken at all.
  *
  * That was invisible until `TableView` was memoised. Ten reading parameters are
- * owned by child components — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`,
+ * owned by child components — `rank`, `bar`, `run`, `conf`, `summary`, `diagram`,
  * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
  * only that child. `blockHref` reads the query to build 551 permalinks, and it
  * used to get away with it because `?at=` re-rendered the whole reading view

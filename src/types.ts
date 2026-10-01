@@ -160,11 +160,11 @@ export interface TreeNode {
    * **One Socratic question the node's prose answers**, on the root and depth-1
    * nodes only, and only where the tree was built after 2026-09-05.
    *
-   * Shown in **Summary mode alone**, under the gist — see
-   * docs/project/summaries.md § Socratic questions. It is a second field rather
-   * than a change to `gist` because the gist is rendered in ten places and is
-   * also fed back to the later structure waves as context; the argument is in
-   * `questionFor` (src/hierarchy.ts) and the plan doc.
+   * Shown in **Marginalia**, beside the first paragraph of each part. It is a
+   * second field rather than a change to `gist` because the gist is rendered in
+   * several places and is also fed back to the later structure waves as
+   * context; the argument is in `questionFor` (src/hierarchy.ts) and the plan
+   * doc.
    *
    * **Absence is ordinary**, unlike a missing `gist`: every tree built before
    * this existed has none, and nothing renders a gap. Do not add it to

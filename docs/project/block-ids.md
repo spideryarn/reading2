@@ -472,11 +472,12 @@ discover this by accident.
 
 ## Showing an id
 
-Ids are on screen in four places: both ends of the block range under a gist, in a table cell and in
-a column panel; the same range under each entry of the summary panel; and the ids the model cites
-inside a chat answer or a summary. All of them draw
-[`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that come out of
-model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+Ids were on screen in four places when this was written: both ends of the block range under a gist,
+in a table cell and in a column panel (gone with Hierarchy mode, 2026-09-29); the same range under
+each entry of the summary panel (gone with Summary's outline, 2026-10-01); and the ids the model
+cites inside a chat answer. Every id chip still draws [`BlockRef`](../../src/web/BlockRef.tsx), so
+they cannot drift apart, and the ones that come out of model prose share
+[`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
 
 **The fifth place was the gutter beside every paragraph, and since 2026-08-31 it is not text.** The
 id there is now a permalink icon, with the id itself in the `title` and in the `aria-label` — so

@@ -3,7 +3,7 @@
  * everyday words saying what the piece is about, why it matters and its key
  * ideas, each followed by the passages it rests on.
  * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
- * docs/project/summaries.md § Simple.
+ * docs/project/summaries.md § Simple — a plain-words orientation.
  *
  * Drawn inside the Summary band, below the one row of controls
  * (SummaryMode.tsx § `SummaryControls`), so there is no `ModeSurface` here —

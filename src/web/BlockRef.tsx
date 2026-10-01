@@ -2,12 +2,10 @@
  * A block id, drawn the way you want to read one and behaving the way you want
  * to click one — **the one block link**, for an id or for a phrase.
  *
- * Ids are drawn as characters in four places — the range under a gist in both
- * the table's cells and a column panel, the same range under each entry of the
- * summary panel, and the ids the model cites inside a chat answer or a summary
- * (Cited.tsx) — and every panel that lists where something occurs (Glossary,
- * Quotes, Timeline, …) links to it the same way. One component rather than
- * spans that drift apart.
+ * Ids are drawn as characters under gists in structural views and inside model
+ * citations in Chat, Quiz, and Candidates (Cited.tsx). Every panel that lists
+ * where something occurs (Glossary, Quotes, Timeline, …) links to it the same
+ * way. One component rather than spans that drift apart.
  *
  * **The gutter beside every paragraph is not one of them.** Since 2026-08-31 it
  * is a permalink icon (BlockGutter.tsx), which uses `blockHref` below and

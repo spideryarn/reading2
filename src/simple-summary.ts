@@ -628,7 +628,10 @@ export async function generateSimpleSummary(opts: {
    * three calls can cache, so this cannot override the selected model's floor.
    */
   cacheArticle?: boolean;
-  /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+  /**
+   * Which capable model writes it. Production passes
+   * `powerFor("simple", articlePower)`; evals choose directly.
+   */
   power: ModelPower;
   /**
    * Run the fidelity guard (src/simple-check.ts). Defaults to the switch,

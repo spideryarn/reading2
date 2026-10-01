@@ -245,12 +245,13 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
 /**
- * **The high-power model — the capable tier's replacement on one article, when
- * its owner has switched High-powered AI on.** Two literals, like the capable
- * tier's: the stored name (what a `generator` stamp says) and the OpenRouter
- * address (what goes on the wire). Not derived from each other, for the reason
- * § Do not derive one spelling from the other gives — and this pair is the proof
- * of it: dashes in the name, a dot in the slug.
+ * **The high-power model — the capable tier's stronger model.** Most tasks use
+ * it when an article's owner has switched High-powered AI on; `powerFor` also
+ * selects it for the few tasks deliberately run high on every article. Two
+ * literals, like the capable tier's: the stored name (what a `generator` stamp
+ * says) and the OpenRouter address (what goes on the wire). Not derived from
+ * each other, for the reason § Do not derive one spelling from the other gives
+ * — and this pair is the proof of it: dashes in the name, a dot in the slug.
  *
  * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's $2 / $10 —
  * exactly twice, which is what Greg asked for ("broadly double"). Checked for
@@ -267,9 +268,9 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 export { HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, isHighPowerModel };
 
 /**
- * **Which of the two capable models an article's calls go to.** `"high"` only
- * for an article whose `high_power_since` is set. The caller decides that;
- * this file only answers what each value means.
+ * **A choice between the two capable models.** `articlePower` returns `"high"`
+ * only for an article whose `high_power_since` is set; `powerFor` may then
+ * replace that article setting for a task with an explicit policy exception.
  *
  * **A required argument everywhere it is taken, never ambient state**
  * (decision 5): a call site that has not decided does not compile, where an
@@ -335,8 +336,9 @@ export function sameGenerator(a: string, b: string): boolean {
 }
 
 /**
- * **The power an article's calls run at**: high exactly when its
- * `high_power_since` is set.
+ * **The power selected by an article's own switch**: high exactly when its
+ * `high_power_since` is set. A task's effective power may differ; `powerFor`
+ * applies those explicit exceptions.
  *
  * Until 2026-09-30 this also required the owner to be an administrator, because
  * only an administrator could set the column and nothing charged a reader for
@@ -754,6 +756,16 @@ export type Task =
    * job so the ledger shows what reading the paper adds to a press; no tools.
    */
   | "citation-paper-passages"
+  /**
+   * ***Dig deeper*'s forced search** (src/dig-deeper.ts, plan 261001p): one
+   * web search with `tool_choice: "required"`, run before the answer because
+   * the high-power model that writes the answer cannot be made to search. It
+   * reads nothing back to the reader — it keeps the search's results and writes
+   * a keyword query for the reader's library — so it is born on the quick tier.
+   * Its own job so the ledger shows what forcing the search costs beside the
+   * answer it feeds.
+   */
+  | "dig-deeper-search"
   | "link-summary";
 
 /**
@@ -781,7 +793,15 @@ export type NonTaskAiJob =
      `Task`, for the PDF reader's reason: a tier is a judgment about how much
      reasoning a job needs, and this job's model was chosen by an eval rather
      than by a tier (`SHELF_TOPICS_MODEL` below). */
-  | "shelf-topics";
+  | "shelf-topics"
+  /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
+     (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
+     is not a tier decision and must not be overridable. It is always the
+     high-power model (`DIG_DEEPER_MODEL`), and a `Task` would bring a
+     `MODEL_ENV_VAR` row that could quietly put it back on Sonnet — Sol's F2
+     on the plan. Its own job, apart from `explain`, so the ledger can say
+     what a dug answer costs; its search step is the `dig-deeper-search` task. */
+  | "dig-deeper";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -951,6 +971,10 @@ export const TASK_TIER: Record<Task, Tier> = {
   "quiz-mark": "capable",
   "quiz-verdict": "quick",
   "simple-check": "quick",
+  /* Quick by judgment, at birth (setup-dev.md § the quick tier): it writes a
+     search query and a keyword line, never words a reader reads. Measured on
+     2026-10-01 against Sonnet: the same five sources at a third of the price. */
+  "dig-deeper-search": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -1014,6 +1038,32 @@ export const TASK_TIER: Record<Task, Tier> = {
    */
   "link-summary": "quick",
 };
+
+/**
+ * **The tasks written on the high-power model for every article**, whatever
+ * its High-powered AI setting. `powerFor` is the one place that applies it:
+ * the pipeline step that runs the task and `GET /api/models`, which reports
+ * it, both ask it, so the page cannot name one model while the call sends
+ * another.
+ *
+ * `simple` (plan 261001p): measured on the PID paper with its fidelity guard
+ * off, Sonnet named the paper's recurrent connections "feedback loops", the
+ * paper's word for the kind with the opposite effect, in 5 levels of 18; Opus
+ * in none of 36, and a blind read found 3 major faults in 27 Sonnet levels
+ * against none in 27 Opus ones. About $0.05 a press more and ~2.5 s. The guard
+ * stays: Opus still made a fault only it caught.
+ * docs/plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md.
+ *
+ * Removing a task puts it back on the article's setting. A stored artefact
+ * stays fresh either way, because `generationKey` treats the two models as one
+ * generation.
+ */
+export const ALWAYS_HIGH_POWER: ReadonlySet<Task> = new Set<Task>(["simple"]);
+
+/** The power `task` runs at on an article whose own setting is `articlePower`. */
+export function powerFor(task: Task, articlePower: ModelPower): ModelPower {
+  return ALWAYS_HIGH_POWER.has(task) ? "high" : articlePower;
+}
 
 /**
  * **The OpenRouter model id for a tier.** Private, and it is private on purpose.
@@ -1209,6 +1259,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citation-investigate": "chat",
   /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
   "citation-paper-passages": "chat",
+  /* Chat, for `citations-find`'s reason — the web-search server tool — and
+     the quick tier's only wire. */
+  "dig-deeper-search": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1236,6 +1289,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "pdf-figure-locate": "chat",
   /* A strict JSON schema back, on chat/completions like the eval that chose it. */
   "shelf-topics": "chat",
+  /* Explain's wire: it is an explain call with a different job name. */
+  "dig-deeper": "chat",
   dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
@@ -1323,6 +1378,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      measured on the quick tier's model, and a different one is a new
      measurement. */
   "simple-check": "SPIDERYARN_SIMPLE_CHECK_MODEL",
+  /* For a comparison run: does another model write as good a search, for the
+     price. The answer the reader reads is not this — it is `DIG_DEEPER_MODEL`. */
+  "dig-deeper-search": "SPIDERYARN_DIG_DEEPER_SEARCH_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -1491,6 +1549,9 @@ export const NON_TASK_MODELS: readonly {
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
+  /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
+     by its source because that file imports this one. */
+  { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },
 ];
 
 /**

@@ -326,8 +326,8 @@ const TASKS: readonly InteractionTask[] = [
     note:
       "One explanation of a selection, through `explain`. It has a real per-article cache " +
       "breakpoint, so round 2 explains a *different* quote from the same article and should " +
-      "read the prefix warm. `deep` is off — the web-search extra is a thing the reader asks " +
-      "for, and pricing it is a separate question.",
+      "read the prefix warm. No `dig` — *Dig deeper* is the glossary-lookup row below, on " +
+      "the high-power model with a forced search first, so it is priced there.",
     rounds: { kind: "cold-then-warm" },
     async run({ article, round }) {
       const block = quotableBlock(article.blocks.slice(round === 1 ? 0 : 1));
@@ -344,11 +344,13 @@ const TASKS: readonly InteractionTask[] = [
   {
     name: "glossary-lookup",
     note:
-      "One glossary term checked on the web, through the production `lookUpTerm` " +
-      "(src/term-lookup.ts). **It is `explain` with a different selection, deliberately** — the " +
-      "glossary was built as the same mechanism rather than a second one — so this number " +
-      "should come out at `explain`'s, and the point of running it is that we have never " +
-      "checked. The glossary entry is fabricated rather than generated: a term is a name plus " +
+      "One glossary term dug into, through the production `lookUpTerm` (src/term-lookup.ts) — " +
+      "*Dig deeper* since plan 261001p: a forced quick-tier search (`dig-deeper-search`), then " +
+      "`explain` with the findings on the high-power model, billed as its own `dig-deeper` job. " +
+      "So this is no longer explain's " +
+      "number: it is the search step plus an Opus answer, and the point of running it is the " +
+      "plan's cost line. The allowance always admits and the library finds nothing, because " +
+      "this run is not the article's reader. The glossary entry is fabricated rather than generated: a term is a name plus " +
       "the block it appears in, so a real word out of a real block is a real anchor, and " +
       "running the `glossary` mode here would put an article cost inside an interaction. The " +
       "store it writes to is a sink, so the eval owner's article is left as it was found.",
@@ -370,6 +372,8 @@ const TASKS: readonly InteractionTask[] = [
            means a repeated run measures the same thing every time, and it is the
            model call that costs money, not the row. */
         lookups: { load: async (): Promise<LookupsByTerm> => ({}), save: async (): Promise<LookupsByTerm> => ({}) },
+        allowance: { take: async () => ({ kind: "allowed", id: "eval" }), finish: async () => {} },
+        library: async () => ({ hits: [] }),
       });
       /* The route streams since 2026-09-10; a cost run wants the one `done`. */
       let lookup: GlossaryLookup | undefined;

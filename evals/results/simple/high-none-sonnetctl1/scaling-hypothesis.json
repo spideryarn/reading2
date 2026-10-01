@@ -1,0 +1,116 @@
+{
+  "arm": "high-none-sonnetctl1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:32:21.109Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 82941,
+  "costUsd": 0.216997,
+  "tokens": {
+    "input": 5517,
+    "output": 12804,
+    "reasoning": 11122
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 188,
+  "fullerWords": 316,
+  "briefWords": 147,
+  "paragraphs": [
+    {
+      "text": "This piece is an essay about GPT-3, a huge AI language model released in 2020. It argues for the \"scaling hypothesis\": that making neural networks—computer systems loosely modeled on brain cells—much bigger is enough to make them much smarter. The key ingredient is simply far more data and far more computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "GPT-3 was trained only to predict the next word in text. Yet it learned to follow new instructions and solve unfamiliar tasks from just a few examples, a skill called meta-learning: learning how to learn. This surprised its own creators, since GPT-3's design is old and far from ideal. Its performance kept improving smoothly as it grew bigger, suggesting far larger models are possible.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The piece calls this pattern the \"blessings of scale.\" Unlike most research, where small problems are easy and big ones nearly impossible, hard problems in deep learning often get easier as models grow. It also describes the \"pretraining thesis\": predicting text accurately requires a model to learn real facts, grammar and reasoning, not just copy surface patterns. Measured \"scaling laws\" show that performance improves predictably as size, data and computing power increase.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-rjwfkb",
+        "spya-sctj6d"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is an essay by Gwern about GPT-3, a huge language model (a program trained to predict the next word in text) released by OpenAI in 2020. It argues that simply making neural networks much bigger, with more data and more computing power, produced abilities nobody expected, like learning new tasks from just a few examples instead of needing special training for each one.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece says this matters because training GPT-3 was expensive by ordinary research standards, yet still small next to government or military budgets, meaning far larger models are affordable. Its success came from raw, unlabeled text, suggesting huge general-purpose models could become building blocks for other AI systems, including robotics. More broadly, the piece treats this as evidence for the \"scaling hypothesis\": that intelligence might just need simple learning methods run at enormous scale, which has unsettling implications for how soon powerful AI could arrive.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": the essay argues hard problems actually get easier for neural networks as they grow, with stability, generalizing to new situations, and meta-learning (learning how to learn new tasks) showing up across many different kinds of systems once they are made big enough. Another key idea is the pretraining thesis: predicting text one character at a time starts with simple patterns like letter frequency, then moves to grammar and facts, and to keep shrinking its remaining errors the model is pushed toward real reasoning and knowledge of the world.",
+      "ids": [
+        "spya-jwq3zr",
+        "spya-sfkxh8",
+        "spya-ce0ts7"
+      ]
+    },
+    {
+      "text": "The essay also criticizes AI experts and institutions, arguing most dismissed scaling for years despite it working, and that their public reassurances come with no testable predictions, making them an unreliable guide. An appendix explores whether big models trained on human-written text inevitably learn \"agency\"-acting like a goal-pursuing entity-even without being designed to, since data about humans, actions, and even some physical systems can all be understood through that lens.",
+      "ids": [
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant computer program that learned to predict text, and a bigger idea called the scaling hypothesis: that making neural networks (brain-like learning programs) much bigger, with more data and computing power, is enough to make them much smarter.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised researchers. It did not just learn facts better than earlier versions, it learned to follow instructions and pick up brand new tasks from just a few examples, without being specially trained for them.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author calls this the blessings of scale: hard problems actually get easier for these programs as they grow bigger, unlike most research where bigger problems get harder. The piece argues nobody fully understands why this happens, but it may come from the network trying out many small solutions and settling on the simplest one that truly works, rather than one that just memorizes answers.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-wq498y"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

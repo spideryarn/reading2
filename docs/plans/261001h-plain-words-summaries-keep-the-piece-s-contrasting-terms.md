@@ -5,7 +5,9 @@ probe provenance are built; the guard is a proposal, not built. It was measured 
 (§ Measuring the guard): Luna catches 24 of the 30 known faults for about $0.0027 per complete
 three-level press. The recommendation is to build an instrumented first version, store the retry
 after a second flag, and fail open if the checker itself fails. **Built that way the same day:
-[261001i](261001i-simple-fidelity-guard-built.md).**
+[261001i](261001i-simple-fidelity-guard-built.md).** Whether a bigger model does better was measured the same evening: Opus made the
+fault in none of 36 levels, so Simple is written on Opus and the guard kept —
+[261001p](261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 
 A fidelity bug in Simple (Summary's Brief · Simple · Fuller), dispatched by the Overseer, recorded in
 [261001b § Fidelity](261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md):
