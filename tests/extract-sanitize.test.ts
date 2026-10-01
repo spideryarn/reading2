@@ -26,6 +26,7 @@ import { Readability } from "@mozilla/readability";
 import { beforeAll, describe, expect, it } from "vitest";
 import { runExtract } from "../src/extract.js";
 import { splitIntoBlocks } from "../src/blocks.js";
+import { RESERVED_ATTRS } from "../src/reserved.js";
 import { sanitizeHtml } from "../src/sanitize.js";
 
 /**
@@ -48,7 +49,7 @@ const PAGE = `<!doctype html>
 <title>Real&lt;/title&gt;&lt;img src=x onerror=alert("TITLEPAYLOAD")&gt;</title>
 <meta name="author" content="Ann Author&quot;&gt;&lt;img src=x onerror=alert('BYLINEPAYLOAD')&gt;">
 </head>
-<body><article>
+<body><article ${RESERVED_ATTRS.sourceRef}="publisher-forgery">
 ${prose(8)}
 <p>a <img src="/nope.png" onerror="alert('IMGPAYLOAD')"> b</p>
 <p>a <span onmouseover="alert('SPANPAYLOAD')">x</span> b</p>
@@ -140,6 +141,10 @@ describe("the debug page stage 2 writes", () => {
   it("strips the handlers out of the body", () => {
     expect(page).not.toContain("IMGPAYLOAD");
     expect(page).not.toContain("SPANPAYLOAD");
+  });
+
+  it("scrubs the provenance stamp that only extraction instrumentation may write", () => {
+    expect(page).not.toContain(RESERVED_ATTRS.sourceRef);
   });
 
   it("drops a lookalike embed, and keeps the real one", () => {
