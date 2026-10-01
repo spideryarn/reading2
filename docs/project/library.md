@@ -22,8 +22,8 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 **Where to look**, since this page is long:
 
 - **Every file and what it does** — [§ Where the code is](#where-the-code-is).
-- **Dates and times** — "added 3 days ago", then a real date past a month, and the exact time on
-  hover — are formatted in one place, [`src/web/relative-time.ts`](../../src/web/relative-time.ts)
+- **Dates and times** — "added 3 days ago", then a real date past a month, and the exact time where
+  a tooltip carries it (not every date has one: § The tooltip says which) — are formatted in one place, [`src/web/relative-time.ts`](../../src/web/relative-time.ts)
   (`timeAgo`, `relativeAgo`, `exactly`), against one clock, [`useNow`](../../src/web/useNow.ts).
   What the shelf shows is in [§ Sorting the shelf](#sorting-the-shelf) and
   [§ The tooltip](#the-tooltip).

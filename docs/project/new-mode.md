@@ -32,10 +32,12 @@ For things this checklist does not hold:
   `role="status"` — is [web-client.md § The waiting state](web-client.md#the-waiting-state); the
   empty and failed states beside it are the rest of
   [§ Empty is not the same as not asked yet](web-client.md#empty-is-not-the-same-as-not-asked-yet).
-- **What a signed-out visitor sees of the mode** on a public article is decided in two places: the
-  client's `POLICY` in [`src/web/visitor.ts`](../../src/web/visitor.ts) (which band they get) and
-  the server's `REVISION_READ_POLICY` in [`src/store/pg.ts`](../../src/store/pg.ts) (which stored
-  columns a public read may select). The rule — a visitor sees whatever is already stored, and never
+- **What a signed-out visitor sees of the mode** on a public article is decided in three places: the
+  client's `POLICY` in [`src/web/visitor.ts`](../../src/web/visitor.ts) (which band they get),
+  `PUBLIC_PROJECTIONS` in [`src/store/public-reader.ts`](../../src/store/public-reader.ts) (which
+  fields a public read selects at all), and the
+  server's `REVISION_READ_POLICY` in [`src/store/pg.ts`](../../src/store/pg.ts) (which stored
+  columns each kind of read may touch). The rule — a visitor sees whatever is already stored, and never
   starts a paid call — is Greg's, quoted in
   [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md); the threat
   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`

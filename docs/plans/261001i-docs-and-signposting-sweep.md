@@ -203,6 +203,19 @@ No P0; three P1s.
   Sol. Its fixes are unreviewed code by somebody else; nothing in them went to a second round because
   nothing in them is a rule or a P0/P1 left open.
 
+- **Stage 5, done.** After round on `b4f4e9f4` (before any merge of `dev`), scored blind; then,
+  because the per-task swings looked like noise, a second after run scored blind against the first
+  to measure it. **[results.md](261001i-probes/results.md)** has the numbers;
+  **[diagnosis.md](261001i-probes/diagnosis.md)** has why. In short: run-to-run noise is ~1.5
+  points per task, before→after differences average 1.3, so the aggregate shows nothing at one run
+  per arm (in-sample 10.58 → 10.10–10.56; held-out 11.03 → 11.53–11.58). Second copies of existing
+  code went from 2 of 12 runs to 0 of 24, but most of that came through a leak-shaped `quotes.md`
+  sentence. The stable misses are the useful output: no "already built" status line in feature
+  docs, facts at the bottom of long files, ambiguous tasks with no doc listing the candidates, and
+  short signposts that end a search before the MUST doc. Two signposts the diagnosis showed were
+  wrong or weak were fixed (`library.md`'s hover claim, `new-mode.md`'s visitor line now names
+  `PUBLIC_PROJECTIONS`). `documentation-policy.md` now also says to repeat runs.
+
 ## Code-duplication candidates, for the Overseer
 
 From [trawl-A-duplication.md](261001i-probes/trawl-A-duplication.md), ranked by ease × value. None

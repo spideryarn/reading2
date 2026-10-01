@@ -140,7 +140,9 @@ task, and an instruction to plan the work without doing it. Have it report the d
 existing code it would reuse, the rules it would follow, and where it got lost — then compare that
 with what the task really needed. Where it got lost is the list of signposts to write. Keep some
 tasks back, unseen, to measure the result: an agent fixing the docs for the tasks it has read is
-writing the answers down.
+writing the answers down. And run each task more than once: two runs of the same agent on the same
+docs can disagree by more than the docs changed, so a single before and a single after measure
+mostly which way each agent happened to read the task.
 
 ## The kinds of doc, and how to write each
 

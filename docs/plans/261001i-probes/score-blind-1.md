@@ -1,0 +1,24 @@
+# Blind score 1: P01–P08, A and B
+
+Scored against `key-PNN.md` with the current `scoring.md`. Each file was scored on its own content, with no attempt to work out which round it came from. Barred plans (260929…, 260930…, 2610…) are left out of the Docs denominator: P01 drops 260930i, P03 drops 260930i and 261001b, P04 drops 261001e, and P07 drops 260930c. A MUST bullet that names several docs counts each doc separately, and a doc counts as opened only if the probe lists it, or quotes its decisive section from a grep. Conditional reuse items ("if a key is added", "if it shows an artefact") stay in the denominator and get credit when the probe names them conditionally. No probe stated a tool-call count. Fractions are rounded to one decimal.
+
+| File | Docs /4 | Reuse /4 | Rules /3 | Disp. /2 | Precision | Traps /2 | Total /15 | Confidence | Biggest miss |
+|---|---|---|---|---|---|---|---|---|---|
+| P01-A | 4.0 (1/1) | 3.0 (3/4) | 0.8 (1/4) | 2 | 0 | 1.3 (2/3) | 11.1 | 8/10 | It floats a native `title` on the table's Added cell, which the `ControlTip` rule rejects, and it never names `Tooltip.tsx`. |
+| P01-B | 4.0 (1/1) | 2.0 (2/4) | 0.8 (1/4) | 2 | 0 | 0.7 (1/3) | 9.4 | 8/10 | It names `library-columns.tsx` only by line number, with no `ADDED_NOTE`/`rowCardFacts`, and misses the 260928a decision that took the hover off the Added cell. |
+| P02-A | 3.0 (3/4) | 3.2 (4/5) | 2.4 (4/5) | 2 | 0 | 0.4 (1/5) | 11.0 | 7/10 | It does not see that Simple's second paragraph already says "why it matters", and it uses `src/arc.ts` as the template instead of `simple-summary.ts`/`faq.ts`. |
+| P02-B | 2.0 (2/4) | 4.0 (5/5) | 1.8 (3/5) | 2 | 0 | 0.4 (1/5) | 10.2 | 6/10 | It never opens `prompting-guide.md` or `vision.md`, and it would decide the `DEFAULT_INGEST_STEPS` question itself instead of naming it for Greg. |
+| P03-A | 4.0 (3/3) | 3.2 (4/5) | 3.0 (3/3) | 2 | 0 | 1.3 (2/3) | 13.5 | 6/10 | It misses at-most-once: nothing stops a retried or re-run job mailing twice. It also names `noteArrival` instead of `notifyUpgrade` as the template. |
+| P03-B | 4.0 (3/3) | 3.2 (4/5) | 3.0 (3/3) | 2 | 0 | 0.7 (1/3) | 12.9 | 6/10 | It misses at-most-once and the `skipped`-in-production trap. It also misses `notifyUpgrade` as the template. |
+| P04-A | 1.3 (1/3) | 4.0 (3/3) | 3.0 (3/3) | 2 | 0 | 1.0 (2.5/5) | 11.3 | 5/10 | It opens neither `browser-testing.md` (the phone-width iframe) nor `browser-control.md`. It also misses the `nowrap`/`inline-block` trap. |
+| P04-B | 2.7 (2/3) | 2.7 (2/3) | 2.5 (2.5/3) | 2 | -1 | 0.6 (1.5/5) | 9.4 | 5/10 | It prefers a Citations-only fix that copies the shared `.gloss-sort` wrap pattern, and it plans a CSS-reading test instead of the real-Chrome `masthead-facts-wrap-in-chrome` pattern with its control. |
+| P05-A | 3.2 (4/5) | 1.6 (2/5) | 2.1 (5/7) | 2 | 0 | 1.2 (3/5) | 10.1 | 6/10 | It misses `icons.md`, the existing copy implementations (`CopyQuote`, `onCopy`), `keynav.ts` § `useArrowNav` and the shadcn `Button`. It also leans towards inventing a shortcut. |
+| P05-B | 2.4 (3/5) | 0.4 (3/5, -2) | 1.7 (4/7) | 2 | -1 | 1.2 (3/5) | 6.7 | 5/10 | It misses `Tweets.tsx` § `CopyButton` and says it "would write a small one", which would be a third copy-to-clipboard helper. |
+| P06-A | 3.2 (4/5) | 2.3 (4/7) | 2.1 (3.5/5) | 1 | 0 | 0.8 (2/5) | 9.4 | 7/10 | It sees the overlap with FAQ, Quiz and Chat's alias, but picks its own reading of "Questions" and builds, instead of asking Greg first. It also never opens `quiz.md`. |
+| P06-B | 3.2 (4/5) | 4.0 (7/7) | 2.7 (4.5/5) | 2 | 0 | 0.4 (1/5) | 12.3 | 6/10 | It misses the traps: `question` is Chat's alias, the `MODE_CONTAINMENT` `WITNESS`, the switch-off-stays-open behaviour and `generates`-marker equality. It also never opens `quiz.md`. |
+| P07-A | 2.0 (2/4) | 2.7 (4/6) | 2.6 (4.25/5) | 2 | 0 | 1.2 (3/5) | 10.4 | 8/10 | It never opens `experimental-features.md` or `new-mode.md` § "Moving a mode in or out of the switch", so route (a)'s side of the choice goes unread. |
+| P07-B | 3.0 (3/4) | 2.0 (3/6) | 2.6 (4.25/5) | 2 | 0 | 0.8 (2/5) | 10.4 | 7/10 | It misses `activation.ts` § `modeStep`, `useFaq`/`useAutoRun` and `POST /api/jobs`. It also misses the `STEP_READS` copy and StrictMode traps. |
+| P08-A | 3.3 (5/6) | 3.3 (5/6) | 2.1 (2.75/4) | 1 | 0 | 0.3 (1/6) | 10.1 | 6/10 | It sees that "summary depth" is undefined but plans to build anyway, without asking Greg which axis or offering the simpler `localStorage` default. It also never opens `url-state.md`. |
+| P08-B | 2.7 (4/6) | 3.3 (5/6) | 2.1 (2.75/4) | 1 | 0 | 0.3 (1/6) | 9.4 | 7/10 | It builds without asking which "depth" is meant. It never opens `sql.md` or `url-state.md`, and misses the rule that an explicit URL or the last view must beat the stored default. |
+
+Mean of all 16 files is 10.5 / 15. The A/B labels are shuffled for each probe and do not map to rounds, so no mean per round is given.
