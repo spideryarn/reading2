@@ -69,8 +69,8 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
 saying what we have read. Usually that is nothing: *We have not read this work, only the article that
 cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
-of a matching page, and never the work itself. Once *Investigate* has read the paper itself
-(§ [Investigate](#investigate-a-closer-look-at-one-work-on-demand)), the line says that instead,
+of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
+(§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), the line says that instead,
 with the host, the length and the day. `readNoteOf` in
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
@@ -248,8 +248,9 @@ no card section.
 
 ## Look it up on the web
 
-**Since 2026-09-30 there is no *Look it up* button: it is the first step of *Investigate*'s one
-press** (§ [Investigate](#investigate-a-closer-look-at-one-work-on-demand)), asked for through the
+**Since 2026-09-30 there is no *Look it up* button: it is a step of *Dig deeper*'s one press**
+(*Investigate* until 2026-10-01; § [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)),
+asked for through the
 Feedback button (SPIDERYARN-READING2-75):
 
 > In Citations mode, can we amalgamate "Look it up" and "Investigate" buttons to get the best of
@@ -310,8 +311,8 @@ the abstract — against what the article uses the work for (`why` and the first
 *supports*, *partly*, or *the extract doesn't show it, though the full work might*. There is no
 *does not support*: an extract is not the work. Greg's clarification set the scope — *"I was
 basically thinking of ways to tweak that prompt/UI"* — so this rides on the retrieval Citations
-already had rather than fetching the paper. Reading the paper itself came later, in *Investigate*
-(plan 261001a).
+already had rather than fetching the paper. Reading the paper itself came later, in what is now
+*Dig deeper* (plan 261001a).
 
 What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 
@@ -348,7 +349,9 @@ allowance or the store, has a second caller: an uploaded paper's guessed web add
 ([ingest-queue.md § A guessed web address](ingest-queue.md#a-guessed-web-address-looked-for-once)),
 which brings its own job id and allowance and judges the page more strictly than `pageNamesTitle`.
 
-## Investigate: a closer look at one work, on demand
+<a id="investigate-a-closer-look-at-one-work-on-demand"></a>
+
+## Dig deeper: a closer look at one work, on demand
 
 Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), following 5G:
 
@@ -357,22 +360,41 @@ Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), fo
 > deeper dive, i.e. don't do it automatically for every single paper every time we run Citations
 > mode.
 
-Every owner row has **Investigate**, the one button since 2026-09-30
-([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)). A press
-first runs *Look it up*'s quick check — unless the row already has a current reading that checked
-out — so code, not the model, decides which search result is the work, and the row's link and
-checked quote land first. A provider failure there stops the press before the larger call is paid
-for; finding nothing does not, and the reading goes on unconfirmed. The row and the article are
-then read again, and the reading is written from that. The quick check can land while the reading
-fails, and the row says so. One allowance covers both calls: one at a time, 8 an hour and 20 a day
-per reader, 50 a day across everyone. Then, as before, one streamed answer, written
-from a few web searches and kept on the row: *does it back the claim*, *how else it bears on this
-article*, and *for you* when the reader has written a profile or *why you're reading this one*.
-Nothing runs for every row. The design, its two plan reviews, the probe and the code reviews are
-[260930a](../plans/260930a-citations-investigate-one-work-on-demand.md); this says what is built.
+Every owner row has **Dig deeper** — *Dig deeper again* once it has an answer, and the kept answer's
+footer reads *Researched <date> · Dig deeper again*. It was **Investigate** until 2026-10-01, when
+it became the same action as the glossary's and a comment's: always a web search, and always the
+bigger model ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term) has
+Greg's words and the shared half). The code and the route keep the old name
+(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`). One press, in order:
+
+1. **The forced web search** — `searchFirst` from [`src/dig-deeper.ts`](../../src/dig-deeper.ts),
+   aimed with the work's title, authors, year and its own link when the article gave one, and the
+   first paragraph that cites it (*Searching the web…*). Its pages, and any matching passages from
+   the reader's other articles, go after the cache breakpoint in `investigatePart`. A search that
+   fails stops the press before anything else is spent, and the row keeps what it had.
+2. ***Look it up*'s quick check** — unless the row already has a current reading that checked out —
+   so code, not the model, decides which search result is the work, and the row's link and checked
+   quote land first ([260930d](../plans/260930d-citations-one-button-look-it-up-and-investigate-merged.md)).
+   A provider failure there stops the press before the larger call is paid for; finding nothing
+   does not, and the reading goes on unconfirmed.
+3. **The paper itself**, when it can be read (below).
+4. **One streamed answer**, from the row and the article read again, kept on the row: *does it back
+   the claim*, *how else it bears on this article*, and *for you* when the reader has written a
+   profile or *why you're reading this one*. The quick check can land while this fails, and the row
+   says so.
+
+**Every call whose output the reader reads is on `DIG_DEEPER_MODEL`** — the quick check's verdict,
+the paper's passages and the answer — whatever the article's
+[High-powered AI](high-powered-ai.md) switch says, and whatever `SPIDERYARN_CITATIONS_FIND_MODEL` or
+`SPIDERYARN_CITATION_INVESTIGATE_MODEL` is set to. Only the search step is on the quick tier, and it
+writes nothing the reader reads. Nothing runs for every row. The design, its two plan reviews, the
+probe and the code reviews are
+[260930a](../plans/260930a-citations-investigate-one-work-on-demand.md); the move to Dig deeper is
+[261001p](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md) stage 2; this says
+what is built.
 
 **It never quotes a source, and code makes sure of that before a word is sent.** Verbatim evidence
-belongs to *Look it up*, the one path whose quotes code has found in an extract. Investigate
+belongs to *Look it up*, the one path whose quotes code has found in an extract. Dig deeper
 paraphrases and names the host. The server holds back anything in quotation marks (`"`, `“`, `‘`, and the marks other languages quote with, such as `«…»` and `„…“`)
 or on a `>` line until code finds it in the article, the work's title or reference, or *Look it up*'s
 verified quotes. Anything else stops the answer, nothing is kept, and the reader's screen is
@@ -432,17 +454,22 @@ quote, so a harmless lapse does not stop an answer.
 **Kept, private, and hidden when out of date.** One row per work in `citation_investigations`,
 replaced by a second press. It is attached to an owner row only while its fingerprint matches.
 The fingerprint covers everything sent: the article, the work's fields and link, `why` and the
-citing passages, the reader's profile, *Look it up*'s match, the prompt version and the model. It
-never reaches a visitor, and it is in all three exports. A failed *Investigate again* leaves the
-earlier answer in place, and the row says so.
+citing passages, the reader's profile, *Look it up*'s match, the prompt version and the model — and
+the model is `DIG_DEEPER_MODEL` on both the write and the read, so an environment override cannot
+make the two disagree and hide a kept answer. Dig deeper bumped `CITATION_INVESTIGATE_VERSION`, so an
+answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. It never
+reaches a visitor, and it is in all three exports. A failed *Dig deeper again* leaves the earlier
+answer in place, and the row says so.
 
-**Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
-day per reader, and 50 a day across everyone. The probe measured $0.12 a press on average and $0.15
-at worst, budgeted at $0.30; the quick check added ~3¢ and the 3,000-token answer ceiling ~1.5¢, and
-reading the paper adds ~5¢ at worst (the passages call and the same chunks again in the answer), so
-`INVESTIGATE_PRESS_BUDGET_USD` is $0.395 and 50 × that is about $19.75, under a $20-a-day ceiling.
-The lease covers every deadline in a press — the quick check, the registry and the paper's 25
-seconds, the passages call, the answer — plus a margin. Exa is pinned, with 8 results of at most
+**Bounded** by its own allowance bucket, `citation-investigate` — not the `dig-deeper` one the
+glossary and comments share, so a press here is never charged twice and a dig running there does
+not refuse this one. The figures are `INVESTIGATE_RATE_POLICY` in
+[`citation-investigate.ts`](../../src/citation-investigate.ts): one at a time, a per-reader hourly
+and daily count, and a global daily fuse sized so that fuse × `INVESTIGATE_PRESS_BUDGET_USD` (a
+press's worst case, now on Opus with the search) stays under a $20-a-day ceiling. The comment on
+that constant carries the arithmetic and says which figures are estimated and which measured. The
+lease covers every deadline in a press — the forced search, the quick check, the registry and the
+paper's 25 seconds, the passages call, the answer — plus a margin. Exa is pinned, with 8 results of at most
 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)). It is the
 `citation-investigate` job on the gateway, with `citation-paper-passages` inside it.
 
@@ -490,7 +517,7 @@ three things 260930b deferred:
 
 It does not change *what we have read*: a copy here is not a reading of the work, so the row still
 says we have not read it. It is attached in the owner's `GET /api/citations` only — not in
-`loadCitations`, which chat, *Look it up* and *Investigate* also call — and never stored.
+`loadCitations`, which chat, *Look it up* and *Dig deeper* also call — and never stored.
 
 ## Chat can read it
 
@@ -526,7 +553,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -535,7 +562,7 @@ the cap; real influence from a citation database; searching every unlinked row a
 [`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
-[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Investigate's row) ·
+[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Dig deeper's row) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·

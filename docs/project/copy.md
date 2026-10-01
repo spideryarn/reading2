@@ -129,8 +129,8 @@ dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
 and will answer "no" again. A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
-`jb-` is a job. `gl-` is the glossary's *Check the web* refusing — `[gl-not-quoted]` because the
-article names the term rather than quoting it, `[gl-stale]` because the list was written for an
+`jb-` is a job. `gl-` is the glossary's *Dig deeper* (was *Check the web*) refusing —
+`[gl-not-quoted]` because the article names the term rather than quoting it, `[gl-stale]` because the list was written for an
 older version of the piece
 ([glossary.md § The two ways it refuses](glossary.md#the-two-ways-it-refuses-and-why-they-used-to-be-one)).
 `up-` is the upload record — a file the server took delivery of and then refused — and `pick-` is
@@ -140,7 +140,11 @@ matters when somebody quotes one at you
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
 server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is a citation's *Find it* refusing
-(`[cite-resting]`, its daily allowance spent).
+(`[cite-resting]`, its daily allowance spent). `dig-` is *Dig deeper*'s shared half:
+`[dig-no-search]` when the web search it promises did not run, in any of its three modes, and
+`[dig-resting]` when the glossary's and comments' shared daily allowance is spent across every
+reader — Citations' own is `[cite-investigate-resting]`
+([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term)).
 
 **The `mic-` family is the exception to the paragraph after next.** Its
 sentences are not declared in `src/messages.ts`; they live beside the code that raises them —
