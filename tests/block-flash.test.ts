@@ -328,7 +328,7 @@ describe("flashBlock with a passage", () => {
     expect(style$("#n").backgroundColor, "the moving wash is the animation's, not a rule's").toBe(
       "rgba(0, 0, 0, 0)",
     );
-    expect(css).toMatch(/td\.text mark\.hit\.passage-flash\s*\{\s*animation:\s*passage-flash 1\.2s/);
+    expect(css).toMatch(/td\.text mark\.hit\.passage-flash\s*\{\s*animation:\s*passage-flash var\(--flash-ms\)/);
     expect(css).toMatch(/@keyframes passage-flash\s*\{[^}]*background-color: rgb\(1, 2, 3\)/);
     style.remove();
   });
@@ -355,10 +355,43 @@ describe("flashBlock with a cited work", () => {
     expect(washed()).toEqual(["[1,2]", "[3–5]"]);
   });
 
+  /* SPIDERYARN-READING2-7X: "a little bit too subtle and quick, so I often
+     don't quite spot the flash". Longer and stronger on a cited work's words
+     only — a few words are a small patch; a paragraph and Trajectory's every
+     step keep the old wash (Sol, plan 261001m review). */
+  it("holds a cited work's flash for longer than a paragraph's", async () => {
+    const { citePassageKey } = await import("../src/web/rows.js");
+    const { CITE_FLASH_MS } = await import("../src/web/flash.js");
+    expect(CITE_FLASH_MS).toBeGreaterThanOrEqual(2 * FLASH_MS);
+    layOut();
+    const td = prose("spya-aaaaaa");
+    if (td) td.innerHTML = `<p>Lab tasks <mark class="cite" data-cite="spya-waaaaa">[1]</mark>.</p>`;
+    flashBlock("spya-aaaaaa", { passage: citePassageKey("spya-waaaaa") });
+    const mark = () => document.querySelector("mark.cite");
+    vi.advanceTimersByTime(CITE_FLASH_MS - 1);
+    expect(mark()?.classList.contains("passage-flash")).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(mark()?.classList.contains("passage-flash")).toBe(false);
+  });
+
+  it("keeps each animation's length in one token the timers match", async () => {
+    const { CITE_FLASH_MS } = await import("../src/web/flash.js");
+    const tokens = readFileSync("src/web/styles/tokens.css", "utf8");
+    const prose = readFileSync("src/web/styles/prose.css", "utf8");
+    expect(tokens).toMatch(new RegExp(`--flash-ms:\\s*${FLASH_MS}ms;`));
+    expect(tokens).toMatch(new RegExp(`--cite-flash-ms:\\s*${CITE_FLASH_MS}ms;`));
+    expect(tokens).toMatch(/--flash-wash-strong:/);
+    /* No literal length left anywhere a flash animates. */
+    expect(prose).not.toMatch(/flash[\w-]* \d+(\.\d+)?m?s/);
+    expect(prose).toMatch(/td\.text mark\.cite\.passage-flash\s*\{\s*animation:\s*cite-flash var\(--cite-flash-ms\)/);
+    expect(prose).toMatch(/@keyframes cite-flash\s*\{[^}]*var\(--flash-wash-strong\)/);
+    expect(prose).toMatch(/td\.text mark\.cite\.passage-flash-still\s*\{\s*background-color:\s*var\(--flash-wash-strong\)/);
+  });
+
   it("has a wash for a cite mark in the stylesheet", () => {
     const proseCss = readFileSync("src/web/styles/prose.css", "utf8");
     const css = `${proseCss}\n${readFileSync("src/web/styles/annotations.css", "utf8")}`
-      .replaceAll("var(--highlight-wash)", "rgb(1, 2, 3)")
+      .replaceAll("var(--flash-wash-strong)", "rgb(1, 2, 3)")
       /* jsdom's shorthand cascade bug is documented by the passage test above. */
       .replaceAll("background: none;", "background-color: transparent;");
     const style = document.createElement("style");
@@ -373,7 +406,6 @@ describe("flashBlock with a cited work", () => {
     );
     /* jsdom does not reliably expand this animation shorthand in the combined
        production sheets; the source assertion below owns the moving half. */
-    expect(css).toMatch(/td\.text mark\.cite\.passage-flash\s*\{\s*animation:\s*passage-flash 1\.2s/);
     expect(css).toMatch(/td\.text mark\.cite\.passage-flash-still\s*\{\s*background-color:/);
     style.remove();
   });

@@ -23,6 +23,14 @@ where the link came from, and **first cited**, a jump to the passage
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
 
+**No by-line that only repeats the title.** When the article gives a work only as an author–year
+label, the label is the title, and `Bartlett (1932)` over `Bartlett · 1932` said it twice
+(SPIDERYARN-READING2-7W). `byLineRepeatsTitle` folds only the known presentation differences —
+brackets, the middle dot, `&`, `et al.` — and the line is left off; never when the registry filled a
+field, whose *from Crossref* mark must stay. Its hover card, with the reference-list entry, then
+opens from the title, the link itself on a linked title, with reveal-then-commit on touch —
+[261001m](../plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md).
+
 **The registry's record** (since 2026-10-01,
 [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
 stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most 80 — is
@@ -92,6 +100,10 @@ the stored offset ([block-ids.md](block-ids.md)). A work reached only through a 
 a visitor, who has no marks, keeps the old behaviour — the block id, or a wash of the whole
 paragraph. The key names a work, not an occurrence: two cites of one work in one paragraph flash
 together, accepted.
+**That flash is longer and stronger than a paragraph's** — 2.4 s, a stronger wash, and a pulse
+near the start, since on a few words the paragraph's 1.2 s was too faint to spot
+(SPIDERYARN-READING2-7X): `CITE_FLASH_MS` in [`flash.ts`](../../src/web/flash.ts) and
+`--cite-flash-ms` in `tokens.css`, held equal by `tests/block-flash.test.ts`.
 
 **A PDF's reference list is read from its text layer.** Stage 2 does not render a PDF's
 bibliography (`RENDERED` in [`pdf.ts`](../../src/pdf.ts)), so before this the stage saw `[8]` and

@@ -29,6 +29,7 @@ const {
   citingWordsOf,
   quotedCitingWords,
   byLineOf,
+  byLineRepeatsTitle,
   shortAuthors,
   canPrioritise,
   citeReadAssessed,
@@ -616,6 +617,72 @@ describe("CitationsPanel", () => {
     expect(link?.textContent).toBe("k3m9qt");
     await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
     expect(jumps).toEqual([[FIRST, undefined]]);
+  });
+});
+
+/* SPIDERYARN-READING2-7W: "If they're the same, don't show the bottom line" —
+   an author–year label as the title, and the by-line saying it again.
+   docs/plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md. */
+describe("a by-line that repeats the title", () => {
+  it("is the same words, whatever the punctuation", () => {
+    expect(byLineRepeatsTitle("Bartlett (1932)", "Bartlett · 1932")).toBe(true);
+    expect(byLineRepeatsTitle("Santoro et al 2016", "Santoro et al. · 2016")).toBe(true);
+    expect(byLineRepeatsTitle("Smith & Jones (2001)", "Smith and Jones · 2001")).toBe(true);
+    expect(byLineRepeatsTitle("Gödel (1931)", "Godel · 1931")).toBe(true);
+  });
+
+  it("is different when any word differs, and never matches an empty line", () => {
+    expect(byLineRepeatsTitle("Bartlett (1932)", "Bartlett · 1933")).toBe(false);
+    expect(byLineRepeatsTitle("Remembering (1932)", "Bartlett · 1932")).toBe(false);
+    expect(byLineRepeatsTitle("Bartlett (1932) Remembering", "Bartlett · 1932")).toBe(false);
+    /* One author is not two: hyphens, apostrophes and name commas stay (Sol). */
+    expect(byLineRepeatsTitle("Smith-Jones (2001)", "Smith, Jones · 2001")).toBe(false);
+    expect(byLineRepeatsTitle("O’Neil (2001)", "O, Neil · 2001")).toBe(false);
+    expect(byLineRepeatsTitle("Bartlett, 1932", "Bartlett · 1932")).toBe(true);
+    expect(byLineRepeatsTitle("Bartlett (1932)", "")).toBe(false);
+    expect(byLineRepeatsTitle("", "")).toBe(false);
+  });
+
+  it("is not drawn under a label title, and its card opens from the title instead", async () => {
+    const entry = "Bartlett, F. C. (1932). Remembering: A study in experimental and social psychology. CUP.";
+    const label = work({ id: "spya-b2a3r4", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
+    const titled = work({ id: "spya-t2i3t4", title: "Remembering", authors: "Bartlett", year: "1932", relevance: 0.9, influence: 0.9 });
+    await draw(owner({ citations: artefact([label, titled]) }));
+    expect(row(label.id).querySelector(".cite-by")).toBeNull();
+    expect(row(titled.id).querySelector(".cite-by")?.textContent).toBe("Bartlett · 1932");
+    /* The entry is where an author–year work's real title lives: kept. */
+    const title = row(label.id).querySelector(".cite-title") as Element;
+    const link = title.querySelector("a") as HTMLAnchorElement;
+    expect(link.getAttribute("title")).toBeNull();
+    /* The link itself is described by the entry, not a paragraph around it (Sol). */
+    const described = (link.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id));
+    expect(described.map((n) => n?.textContent).join("")).toContain(entry);
+    const card = await cardFor(link);
+    expect(card.what).toBe(entry);
+    expect(card.body).toContain("opens doi.org in a new tab");
+    /* A titled row's link keeps its native title and has no card. */
+    expect(row(titled.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
+  });
+
+  it("on a finger, the first tap on the title shows the card and the second follows the link", async () => {
+    const entry = "Bartlett, F. C. (1932). Remembering. CUP.";
+    const label = work({ id: "spya-b2a3r5", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
+    await draw(owner({ citations: artefact([label]) }));
+    const link = row(label.id).querySelector(".cite-title a") as HTMLAnchorElement;
+    const tap = async () => {
+      await act(async () => {
+        fire(link, "pointerdown", "touch");
+      });
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+      Object.defineProperty(click, "pointerType", { value: "touch" });
+      await act(async () => {
+        link.dispatchEvent(click);
+      });
+      return click.defaultPrevented;
+    };
+    expect(await tap(), "the first tap opens the card, not the link").toBe(true);
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("Tap again to open the link.");
+    expect(await tap(), "the second tap follows the link").toBe(false);
   });
 });
 
