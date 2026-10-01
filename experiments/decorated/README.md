@@ -10,6 +10,11 @@ node experiments/decorated/verify.mjs    # checks the promise below, and checks 
 open experiments/decorated/decorated.html
 ```
 
+`build.mjs` reads `data/noema-mythology-of-conscious-ai/`, a snapshot from the old filesystem
+store. It is gitignored, and only the primary checkout on the box has it whole (a fresh worktree
+lacks `comments.json`), so rebuild there, or copy the folder across. The committed
+`decorated.html` is the built page, and needs none of it.
+
 The output is one self-contained file. No server, no build step, no dependencies — `file://` is
 enough.
 
@@ -22,8 +27,10 @@ deliberately broken copy, because a check nobody has watched fail is not evidenc
 1. Every block on the page matches the stored block, character for character.
 2. No heading of ours repeats a heading of the author's. *(This one was failing. Every span the
    author titled had its title printed twice, and it looked like a styling choice.)*
-3. Every piece of apparatus is `user-select: none`, so a reader who copies three paragraphs gets
-   three paragraphs of the author and none of our gutter.
+3. Every piece of apparatus is `user-select: none` *and* in the copy handler's strip list, so a
+   reader who copies three paragraphs gets three paragraphs of the author and none of our gutter.
+   *(The CSS half alone was not enough: the handler clones the selection, cloning ignores
+   `user-select`, and a multi-paragraph copy carried every rhetorical-role label with it.)*
 4. Every mark the page adds can say what it is — a tooltip, or a card. *(Fourteen kinds. The page
    shipped with logic symbols in the gutter whose only explanation was `title="and-also"`.)*
 

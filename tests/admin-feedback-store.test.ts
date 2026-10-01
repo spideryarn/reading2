@@ -31,9 +31,10 @@
  * Skips loudly when there is no database — tests/helpers/pg-ready.ts.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { feedback as feedbackTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -450,5 +451,69 @@ describe("the admin feedback read on Postgres", () => {
       expect(Array.isArray(got.reports), String(limit)).toBe(true);
     }
     expect((await listFeedbackAcrossOwners(0, null)).reports.length).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * **Readers only** — Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"show only
+   * non-admin suggestions (i.e. suggestions from people other than me)."* The
+   * administrator here is the local one, `ADMIN_USER_ID_LOCAL`, whose own rows
+   * this leaves alone: only the report it adds is removed afterwards.
+   * docs/plans/261001l-….
+   */
+  it("leaves the administrators' own reports out of the readers' inbox, page after page", async () => {
+    await seedAuthUser(getDb(), {
+      id: ADMIN_USER_ID_LOCAL,
+      email: ADMIN_EMAIL_LOCAL,
+      onConflictDoNothing: true,
+    });
+    const mine = mintId();
+    const theirs: string[] = [];
+    try {
+      for (let i = 0; i < 3; i++) {
+        const id = mintId();
+        theirs.push(id);
+        await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id })));
+      }
+      /* **The administrator's report last, so it is the newest**: the walk
+         below stops once it has seen Alice's three, and a report older than
+         them would never be reached — a `not.toContain` that passed by not
+         looking. */
+      await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () =>
+        pgFeedbackStore.submit(report({ id: mine })),
+      );
+
+      /* Everyone: both. The default is everyone, said and unsaid. */
+      for (const page of [
+        await listFeedbackAcrossOwners(ADMIN_FEEDBACK_MAX, null),
+        await listFeedbackAcrossOwners(ADMIN_FEEDBACK_MAX, null, "everyone"),
+      ]) {
+        const ids = page.reports.map((r) => r.id);
+        expect(ids).toContain(mine);
+        expect(ids).toEqual(expect.arrayContaining(theirs));
+      }
+
+      /* Readers: walked in pages of one, so the filter has to survive the
+         cursor. Every report kept is one `isAdmin` refuses — the same list,
+         so the two cannot drift apart. */
+      const walked: string[] = [];
+      let cursor = null as Awaited<ReturnType<typeof listFeedbackAcrossOwners>>["nextCursor"];
+      for (let n = 0; n < ADMIN_FEEDBACK_MAX; n++) {
+        const got = await listFeedbackAcrossOwners(1, cursor, "readers");
+        for (const r of got.reports) {
+          expect(isAdmin(r.ownerId), r.ownerId).toBe(false);
+          walked.push(r.id);
+        }
+        cursor = got.nextCursor;
+        if (!cursor) break;
+        /* The table is shared; three of Alice's are all this needs to see. */
+        if (theirs.every((id) => walked.includes(id))) break;
+      }
+      expect(walked).not.toContain(mine);
+      expect(walked).toEqual(expect.arrayContaining(theirs));
+    } finally {
+      await getDb()
+        .delete(feedbackTable)
+        .where(and(eq(feedbackTable.ownerId, ADMIN_USER_ID_LOCAL), eq(feedbackTable.id, mine)));
+    }
   });
 });

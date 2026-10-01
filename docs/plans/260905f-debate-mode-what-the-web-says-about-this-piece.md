@@ -265,7 +265,7 @@ accounting and abort lifecycle, and treat only the web-search and annotation dif
 *subset* of `StepName` covering the Messages-wire stages that share a byte-exact cached article
 prefix. Debate shares no such prefix, so it takes no row in either, and none in
 `cacheArticleForStep`. That exception is documented rather than discovered, because
-[new-mode.md](../project/new-mode.md) lists both tables among the ones the compiler asks for and a
+[mode.md](../project/mode.md) lists both tables among the ones the compiler asks for and a
 reader will otherwise go looking for the missing rows.
 
 ## Attribution: every row shows words that actually came from the page

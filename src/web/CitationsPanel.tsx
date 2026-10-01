@@ -32,6 +32,8 @@
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
  */
+import type { ReactNode } from "react";
+import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
@@ -52,6 +54,7 @@ import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
+import { BandAbout } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { citePassageKey } from "./rows.js";
@@ -235,6 +238,36 @@ export function workByLine(work: Pick<ShownWork, "authors" | "year" | "registry"
 export function byLineOf(work: Pick<ShownWork, "authors" | "year" | "registry">): string {
   const line = workByLine(work);
   return [line.authors ? shortAuthors(line.authors) : undefined, line.year].filter(Boolean).join(" · ");
+}
+
+/**
+ * **Does the by-line only say the title again?** When the article gives a work
+ * only as an author–year label (`Bartlett (1932)`, gwern's `Santoro et al
+ * 2016`), that label is the row's title, and `authors · year` under it is the
+ * same words with other punctuation — SPIDERYARN-READING2-7W, plan 261001m.
+ * Folded only of the differences a label and a by-line are known to have: case
+ * and accents, brackets round the year, the middle dot, a comma before the
+ * year, `&` for `and`, and the stop in `et al.`. Hyphens, apostrophes and the
+ * commas between names stay, so `Smith-Jones (2001)` is not `Smith, Jones ·
+ * 2001` (Sol, plan review). Anything else is "different" and both lines show —
+ * the safe side, since a hidden line that said something new is a loss and a
+ * repeated one is only clutter.
+ */
+export function byLineRepeatsTitle(title: string, by: string): boolean {
+  const words = (s: string) =>
+    s
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[()·]/g, " ")
+      .replace(/&/g, " and ")
+      .replace(/\bet al\./g, "et al")
+      .replace(/,(?=\s*\d{4}[a-z]?\s*$)/, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(" ");
+  const said = words(by);
+  return said !== "" && said === words(title);
 }
 
 /** What a by-line the registry filled in says about it: *Authors and year from Crossref …* */
@@ -613,6 +646,24 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = citations !== null && (owner === null || owner.status === "ready");
   const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* Empty with fewer than two works or two orders, and then there is no order
+     row and the head row carries the count and the (i) instead. */
+  const orders = citations && all.length > 1 ? orderOptions(all) : [];
+  const count = citations && (
+    <span className="gloss-count">
+      {all.length} {all.length === 1 ? "work" : "works"}
+    </span>
+  );
+  /* The two sentences about the whole list, behind an (i) — only once the list
+     is ready and has something in it, which is when the foot used to draw
+     them. */
+  const about =
+    ready && all.length > 0 ? (
+      <BandAbout label="About this list">
+        {citations.capped && <p>{CAPPED_NOTE}</p>}
+        <p>{INFLUENCE_NOTE}</p>
+      </BandAbout>
+    ) : null;
 
   const run = (label: string, again = false) =>
     owner === null ? null : (
@@ -634,18 +685,30 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
     <ModeSurface
       label="Citations"
       feature="gloss citations"
-      /* A fragment, so the row stays put while the list loads — the choice
-         Timeline and Glossary make, for the count that is its only child. */
+      /* **No head row while the order row is drawn**, since 2026-10-01 — the
+          move Glossary made (plan 260929a), for Greg's *"it says at the top how
+          many works there are. I feel like that's maybe there's a more
+          space-efficient way to say that"* (`spya-nca765`). The count goes to
+          the order row's end, and only outside *prioritised*, whose threshold
+          row already says "8 of 24". With one work, or one order on offer,
+          there is no order row, so the head row stays and carries both.
+
+          Otherwise a fragment, not a conditional, so the row stays put while
+          the list loads — the choice Timeline and Glossary make. Plan 261001l. */
       head={
-        <>
-          {citations && (
-            <span className="gloss-count">
-              {all.length} {all.length === 1 ? "work" : "works"}
-            </span>
-          )}
-        </>
+        orders.length > 0 ? null : (
+          <>
+            {count}
+            {about}
+          </>
+        )
       }
-      /* Pinned under the scroller: the two sentences about the whole list.
+      /* Pinned under the scroller, and **only a job's status now**. The two
+         sentences about the whole list that were here went behind the (i) on
+         2026-10-01 — Greg: *"at the bottom, there's an explanation of what
+         citations mode is, and that could be inside an information icon
+         tooltip"* (`spya-nca765`, plan 261001l).
+
          **No re-run here.** The first draft had *Find them again* in this foot,
          and the browser check found it the largest control in the band and the
          one press that costs money, under a list that was fine. Greg took the
@@ -654,19 +717,22 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
          A stale list still offers it, in the banner above, which is the case
          where asking again buys something; an outdated one is not announced
          (plan 260929c). A job started from Metadata still needs its progress,
-         Stop and failure here, so that transient status shares this one footer
-         with the permanent list notes. */
-      foot={
-        ready && (all.length > 0 || showJob) ? (
-          <div className="cite-foot">
-            {all.length > 0 && citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
-            {all.length > 0 && <p className="cite-note">{INFLUENCE_NOTE}</p>}
-            {showJob && run("Find them again", true)}
-          </div>
-        ) : null
-      }
+         Stop and failure here. */
+      foot={showJob ? <div className="cite-foot">{run("Find them again", true)}</div> : null}
     >
-      {citations && all.length > 1 && <OrderBar works={all} order={order} onOrder={onOrder} />}
+      {orders.length > 0 && (
+        <OrderBar
+          options={orders}
+          order={order}
+          onOrder={onOrder}
+          trailing={
+            <>
+              {order !== "prioritised" && count}
+              {about}
+            </>
+          }
+        />
+      )}
 
       {/* Only in the order it belongs to: a number that means nothing in the
           other three would be furniture. */}
@@ -745,18 +811,14 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
 
 /* --------------------------------------------------------------- controls -- */
 
-function OrderBar({
-  works,
-  order,
-  onOrder,
-}: {
-  works: readonly ShownWork[];
-  order: CiteOrder;
-  onOrder(order: CiteOrder): void;
-}) {
-  /* Each option only once the list can honour it — a control that would
-     visibly do nothing is worse than one that is not there. GlossaryPanel.tsx
-     § SortBar. */
+/**
+ * The orders a list can honour — each option only once the list can honour
+ * it, because a control that would visibly do nothing is worse than one that is
+ * not there (GlossaryPanel.tsx § SortBar). Empty when fewer than two are on
+ * offer, which is how the panel knows there is no order row to fold the head
+ * row into.
+ */
+function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: string; title: string }[] {
   const options: { key: CiteOrder; label: string; title: string }[] = [
     ...(canPrioritise(works)
       ? [
@@ -788,24 +850,45 @@ function OrderBar({
         ]
       : []),
   ];
-  if (options.length < 2) return null;
+  return options.length < 2 ? [] : options;
+}
 
+/**
+ * The order buttons, and at the right-hand end whatever the panel hands
+ * `trailing`: the count and the (i), which came here from the head row and the
+ * foot on 2026-10-01 (plan 261001l). **Beside the group, not in it**, for the
+ * reason GlossaryPanel.tsx § SortBar gives.
+ */
+function OrderBar({
+  options,
+  order,
+  onOrder,
+  trailing,
+}: {
+  options: readonly { key: CiteOrder; label: string; title: string }[];
+  order: CiteOrder;
+  onOrder(order: CiteOrder): void;
+  trailing: ReactNode;
+}) {
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-       list, not form controls — GlossaryPanel.tsx § SortBar says why. */
-    <div className="gloss-sort" role="group" aria-label="Order the citations by">
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
-          aria-pressed={order === option.key}
-          title={option.title}
-          onClick={() => onOrder(option.key)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="gloss-sort">
+      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
+      <div className="gloss-sort-group" role="group" aria-label="Order the citations by">
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
+            aria-pressed={order === option.key}
+            title={option.title}
+            onClick={() => onOrder(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <span className="gloss-sort-trail">{trailing}</span>
     </div>
   );
 }
@@ -919,25 +1002,9 @@ function WorkRow({
       data-citation-id={work.id}
       {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
     >
-      <p className="cite-title">
-        {source?.kind === "address" ? (
-          /* Every link that leaves the app opens a new tab — docs/project/links.md
-             — and `noreferrer noopener`, as everything outbound here is. */
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={`${source.how}${foundAs} — opens ${source.host} in a new tab`}
-          >
-            {work.title}
-            <ExternalLink size={11} aria-hidden="true" className="cite-out" />
-          </a>
-        ) : (
-          work.title
-        )}
-      </p>
+      <CiteTitle work={work} source={source} foundAs={foundAs} by={by} />
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
-      {by && <ByLine work={work} by={by} />}
+      {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
@@ -1037,35 +1104,166 @@ function WorkRow({
  * Masthead.tsx's idiom for a tooltip on a line of text.
  */
 function ByLine({ work, by }: { work: ShownWork; by: string }) {
-  const entry = work.entry;
-  const line = workByLine(work);
-  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
-  const filled = line.filled;
-  if (!entry && !shortened && !filled) return <p className="cite-by">{by}</p>;
+  const card = byLineCard(work);
+  if (card === null) return <p className="cite-by">{by}</p>;
+  const filled = workByLine(work).filled;
   return (
-    <Tooltip
-      placement="bottom"
-      keepSide
-      className="tip-soon"
-      content={
-        <>
-          <div className="tip-soon-head">{[line.authors, line.year].filter(Boolean).join(" · ")}</div>
-          {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
-          {entry && <p className="cite-entry">{entry}</p>}
-          {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
-        </>
-      }
-    >
+    <Tooltip placement="bottom" keepSide className="tip-soon" content={card.content}>
       <p className="cite-by cite-by-more">
         {by}
         {/* The registry's words are never drawn as the article's: a visible
             mark, and the whole sentence in the tooltip (plan 261001a stage 5). */}
         {filled && <span className="cite-by-from"> · {registryFilledMark(filled)}</span>}
+        {card.spoken}
+      </p>
+    </Tooltip>
+  );
+}
+
+/**
+ * **What the by-line's hover card says, and its words for a screen reader** —
+ * or null when it has nothing beyond the line itself. One source for the two
+ * places it can open from: the by-line, and the title when the by-line only
+ * repeats it (`byLineFolds`), so the two cannot drift.
+ */
+function byLineCard(
+  work: ShownWork,
+  link?: ReactNode,
+  titleTrigger = false,
+): { content: ReactNode; spoken: ReactNode } | null {
+  const entry = work.entry;
+  const line = workByLine(work);
+  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
+  const filled = line.filled;
+  if (!entry && !shortened && !filled) return null;
+  return {
+    content: (
+      <>
+        {/* A folded title already says this short line. Hide that repetition
+            from assistive technology while keeping it in the visual card; a
+            shortened by-line is the exception because the head then supplies
+            the full author list the visible title omits. */}
+        <div className="tip-soon-head" aria-hidden={titleTrigger && !shortened ? true : undefined}>
+          {[line.authors, line.year].filter(Boolean).join(" · ")}
+        </div>
+        {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
+        {entry && <p className="cite-entry">{entry}</p>}
+        {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
+        {link}
+      </>
+    ),
+    spoken: (
+      <>
         {shortened && <span className="sr-only"> — authors: {line.authors}</span>}
         {filled && <span className="sr-only"> — {registryFilledNote(filled)}</span>}
         {entry && <span className="sr-only"> — {entry}</span>}
+      </>
+    ),
+  };
+}
+
+/**
+ * **The by-line is left off when it only repeats the title** (7W) — but never
+ * when the registry filled a field, since then it carries the visible *from
+ * Crossref* mark, which must stay (plan 261001a stage 5).
+ */
+function byLineFolds(work: ShownWork, by: string): boolean {
+  return workByLine(work).filled === null && byLineRepeatsTitle(work.title, by);
+}
+
+/**
+ * **The row's title**, a link out when the article gave an address. When the
+ * by-line has folded into it, the by-line's hover card opens from here instead
+ * — for an author–year work the reference-list entry in that card is often the
+ * only place its real title is.
+ *
+ * A linked title is then the card's trigger itself, so the link is what
+ * `aria-describedby` names, and its native `title` goes (two popups on one
+ * hover) with its words, `foundAs` included, as the card's last line. A finger
+ * gets reveal-then-commit (useTapReveal.ts, docs/project/touch.md): the first
+ * tap opens the card, the second follows the link — otherwise the entry would
+ * be out of a phone's reach. Sol, plan 261001m review.
+ */
+function CiteTitle({
+  work,
+  source,
+  foundAs,
+  by,
+}: {
+  work: ShownWork;
+  source: ReturnType<typeof sourceOf> | null;
+  foundAs: string;
+  by: string;
+}) {
+  const reveal = useTapReveal(true);
+  const linkSays = source?.kind === "address" ? `${source.how}${foundAs} — opens ${source.host} in a new tab` : null;
+  const card =
+    by && byLineFolds(work, by)
+      ? byLineCard(
+          work,
+          <>
+            {linkSays && <p className="tip-soon-how">{linkSays}</p>}
+            {reveal.tap && <p className="tip-soon-tap">Tap again to open the link.</p>}
+          </>,
+          true,
+        )
+      : null;
+  if (source?.kind !== "address") {
+    if (card === null) return <p className="cite-title">{work.title}</p>;
+    return (
+      <Tooltip placement="bottom" keepSide className="tip-soon" content={card.content}>
+        <p className="cite-title">
+          {work.title}
+          {card.spoken}
+        </p>
+      </Tooltip>
+    );
+  }
+  /* Every link that leaves the app opens a new tab — docs/project/links.md
+     — and `noreferrer noopener`, as everything outbound here is. */
+  const inner = (
+    <>
+      {work.title}
+      <ExternalLink size={11} aria-hidden="true" className="cite-out" />
+    </>
+  );
+  if (card === null) {
+    return (
+      <p className="cite-title">
+        <a href={source.url} target="_blank" rel="noreferrer noopener" title={linkSays ?? undefined}>
+          {inner}
+        </a>
       </p>
-    </Tooltip>
+    );
+  }
+  return (
+    <p className="cite-title">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={card.content}
+        open={reveal.open}
+        onOpenChange={reveal.onOpenChange}
+      >
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          onPointerDown={reveal.onPointerDown}
+          onPointerCancel={reveal.onPointerCancel}
+          onClick={(e) => {
+            if (!reveal.commit(e)) e.preventDefault();
+          }}
+        >
+          {inner}
+        </a>
+      </Tooltip>
+      {/* In the reading flow for a screen reader browsing the row, as the
+          by-line's own was. Not the link's `aria-describedby`: focus opens the
+          card, which already describes it, and naming both read it twice. */}
+      {card.spoken}
+    </p>
   );
 }
 

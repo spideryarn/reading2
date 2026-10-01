@@ -130,7 +130,7 @@ dependency on that copy, and would invert the dependency that makes `modes.ts` s
 `Record<Mode, …>` and the compiler checks it, which is the same totality guarantee with the arrow
 pointing the right way.
 
-This also keeps [`new-mode.md`](../project/new-mode.md)'s standing rule true: **nothing counts the
+This also keeps [`mode.md`](../project/mode.md)'s standing rule true: **nothing counts the
 modes, anywhere.**
 
 ## The command bar
@@ -252,7 +252,7 @@ still be an improvement — the discovery facts out of a contested component and
 - [x] Test: `tests/client-imports.test.ts` still holds — the catalog must not pull `src/web/` into
   the server's import graph. **`mode-catalog.js` needs adding to that file's shared-module
   allowlist**; a new shared module is not admitted by default.
-- [x] Docs: `new-mode.md` gains the catalog row in its totals table; `web-client.md` gains the file.
+- [x] Docs: `mode.md` gains the catalog row in its totals table; `web-client.md` gains the file.
 - [x] Mutation check: flip one `experimental` in the catalog and confirm the suite goes red.
 
 Done looks like: the Dock renders identically, `npm test` and `npm run typecheck` green, and nothing

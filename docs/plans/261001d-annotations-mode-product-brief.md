@@ -2,7 +2,7 @@
 
 You are advising on a product/design choice. Do NOT edit any files. Read whatever you like in the repo
 (/home/greg/code/spideryarn2/.claude/worktrees/fb7e-annotations-mode): CLAUDE.md, docs/project/vision.md,
-docs/project/reading-view-overview.md, docs/project/new-mode.md, docs/research/260828c-decorated-mode-ideas.md,
+docs/project/reading-view-overview.md, docs/project/mode.md, docs/research/260828c-decorated-mode-ideas.md,
 experiments/decorated/README.md.
 
 ## What Greg asked (admin, two reports, 2026-09-30/10-01, verbatim)

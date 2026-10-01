@@ -29,6 +29,7 @@
  * setting is off. That is the silent default in its most direct form, and it is
  * invisible to everybody testing with their eyes.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -540,9 +541,9 @@ describe("the fit signature", () => {
 /**
  * **The drawn switch** — SPIDERYARN-READING2-4F, Greg asking for the button to
  * read "more visibly a toggle". Where its knob sits is `SWITCH_LOOK` in
- * Dock.tsx, and it is *not* the lit frame's rule: the frame goes dark for any
- * failure, but after a failed save the store has already restored the real
- * value and `aria-pressed` reports it, so the knob must agree with that, and
+ * Dock.tsx, and it is *not* `broken`, which covers any failure: after a failed
+ * save the store has already restored the real value and `aria-pressed`
+ * reports it, so the knob must agree with that, and
  * where nothing has been read at all the knob must not draw "off". GPT Sol,
  * plan review, 2026-09-29.
  */
@@ -598,5 +599,38 @@ describe("the drawn switch", () => {
     expect(stateNote()).toMatch(/Press to turn it on\.$/);
     reading({ experimental: experimental({ on: true }) });
     expect(stateNote()).toMatch(/Press to turn it off\.$/);
+  });
+});
+
+/**
+ * **Quiet when on.** Greg, 2026-10-01 (SPIDERYARN-READING2-80): *"when it's
+ * toggled on, it's too visible/emphasised somehow - the whole "Experimental"
+ * button is orange, and the toggle is an even brighter orange."* The drawn
+ * switch is the whole on/off signal; the button never wears the bar's selected
+ * look (`.dock-btn.on`, which says *you are here*), and the switch's on-track is
+ * the button's own ink rather than the brand orange. docs/plans/261001l-….
+ */
+describe("quiet when on", () => {
+  it("never paints the button as selected, in any state", () => {
+    for (const over of [
+      { on: true },
+      { on: true, saving: true },
+      { on: true, loaded: false, stale: true },
+      { on: false },
+    ]) {
+      reading({ experimental: experimental(over) });
+      expect(theSwitch().classList.contains("on"), JSON.stringify(over)).toBe(false);
+    }
+    /* The state is still there, for a screen reader and in the knob. */
+    reading({ experimental: experimental({ on: true }) });
+    expect(theSwitch().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("fills the on-track with the button's own ink, not the brand orange", () => {
+    const css = readFileSync("src/web/styles/dock.css", "utf8");
+    const rule = css.match(/\.dock-switch\.is-on\s*\{([^}]*)\}/);
+    if (!rule?.[1]) throw new Error("dock.css has no .dock-switch.is-on rule");
+    expect(rule[1]).not.toMatch(/highlight/);
+    expect(rule[1]).toMatch(/background:\s*currentColor/);
   });
 });

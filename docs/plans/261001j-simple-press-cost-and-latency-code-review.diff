@@ -176,7 +176,7 @@ index 4d35bad0..e5946557 100644
 +  streaming question for Greg.
  - **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
    `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
-   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
+   the Summary button itself arms nothing ([mode.md](mode.md), `useAutoRun`). A visitor on a
 diff --git a/evals/simple/fanout-spike.ts b/evals/simple/fanout-spike.ts
 new file mode 100644
 index 00000000..be5f1f6c

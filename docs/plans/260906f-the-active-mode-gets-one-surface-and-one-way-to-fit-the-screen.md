@@ -649,7 +649,7 @@ not have the bug.
 
 Docs move with the stage that changes what they describe: [touch](../project/touch.md),
 [tooltips](../project/tooltips.md), [reading-view-overview](../project/reading-view-overview.md),
-[design-css-overview](../project/design-css-overview.md), [new-mode](../project/new-mode.md). Rule
+[design-css-overview](../project/design-css-overview.md), [new-mode](../project/mode.md). Rule
 wording follows [edit-important-docs.md](../reusable/edit-important-docs.md); signposting does not.
 
 ### Stage 5 — the rest of A6: Tab, click-away, and the focus that comes back
@@ -1046,7 +1046,7 @@ is about the stage's **evidence**, not its behaviour — which is the right plac
 | ID | Finding | Disposition |
 |----|---------|-------------|
 | F25 | Quiz's own trap is not pinned: the oracle always supplies `subMode`, and `tests/quiz-panel.test.tsx` omits it but never looks at `.band-head` — so `head={subMode}` deletes the row with the whole suite green | **Accepted, and the best finding of the round**, because it is the regression this stage's headline fix exists to prevent, left unguarded. `QUIZ_NO_SUBMODE` now pins it. Watched: with `head={subMode}`, that one test goes red and the other 31 stay green — exactly as described. The first attempt used a default parameter and caught *itself*: `mountQuiz(QUIZ, undefined)` selects the default, so it pinned the wrong shape. |
-| F26 | `new-mode.md` turns a migration exception into a universal rule, and would tell a future mode whose header genuinely belongs in one state only to manufacture a blank row in every other | **Accepted.** My wording, and it contradicted the very next rule in the same file. Rewritten as a question rather than an instruction: a row that must persist while its contents come and go takes a fragment; a header that should not exist takes the conditional. Also corrected there — it is four bands that empty *while loading*, plus Diagram's ordinary state, not five loading bands. |
+| F26 | `mode.md` turns a migration exception into a universal rule, and would tell a future mode whose header genuinely belongs in one state only to manufacture a blank row in every other | **Accepted.** My wording, and it contradicted the very next rule in the same file. Rewritten as a question rather than an instruction: a row that must persist while its contents come and go takes a fragment; a header that should not exist takes the conditional. Also corrected there — it is four bands that empty *while loading*, plus Diagram's ordinary state, not five loading bands. |
 | F27 | The circuit-breaker test is untracked, and so is the review prompt — so the protection this stage claims would not have shipped | **Accepted, and it is the second time I have misdeclared untracked files to a review** (Sol caught the same thing on the round-2 plan prompt). Both are in this commit. An untracked test protects nothing, and "untracked: nothing" is a claim to check rather than assert. |
 | F28 | Diagram's fragment rationale overclaims: a conditional `head` would not undo the 2026-08-30 fix, because the caveat still builds a `.band-head` whenever it exists — it removes only the *empty* row | **Accepted.** The fragment is still right, for the plainer reason that this stage preserves the DOM the band already had. Corrected in the file. |
 | F29 | The raw-band inventory is stale: two preview files hand-copy band markup, not five, and the oracle's stage-2 describe still says the bands "have not migrated yet" | **Accepted.** `preview-colour`, `preview-timeline` and `preview-diagram-wait` mount the real panels and only name `.mode-band` in a comment or an override; `preview-illustrated` has no band. Corrected in the plan, the describe and `preview-diagram-wait`'s own comment. |
@@ -1077,7 +1077,7 @@ standing guard for the `ModeSurface` seam — root, exact class and name, attrib
 sibling structure, ordered direct children, loose text, header contents — and it is **not** a full-DOM
 oracle. It cannot see descendants below a non-header direct child, attribute values on children, a
 branch no fixture mounts, portals, or geometry. That is the right boundary for what this seam is, and
-`new-mode.md` now says "surface shape" rather than "every band's markup", which was mine and overstated
+`mode.md` now says "surface shape" rather than "every band's markup", which was mine and overstated
 it.
 
 Sol also judged, reasoned, that this stage neither complicates nor helps A6, and that **Escape

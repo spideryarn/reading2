@@ -23,7 +23,7 @@ The house rule is *simplest version that works end to end, name the deferred res
 
 Start with these; they do not limit your scope:
 
-- `docs/project/new-mode.md` — the checklist for adding a mode, both halves.
+- `docs/project/mode.md` — the checklist for adding a mode, both halves.
 - `docs/project/glossary.md` § The scores… through § It hides what is below it — the order and bar
   this copies; § Checking a term on the web — the per-entry web search precedent.
 - `docs/project/quotes.md`, `src/quotes.ts`, `src/ideas.ts` (`validateOccurrences`),
@@ -48,7 +48,7 @@ An independent attack on the plan first:
 3. **Stage 3's rule** that a found URL must be one of the search results' own annotation URLs — is
    that enforceable on the wire as `src/explain.ts` / `src/referee-candidates.ts` receive results?
 4. **Anything simpler** that gets most of the value — a stage worth cutting, merging or reordering.
-5. Anything in `new-mode.md`'s checklist the plan will trip over that it does not mention.
+5. Anything in `mode.md`'s checklist the plan will trip over that it does not mention.
 
 Then, labelled as my own suspicions and worth less — spend most of the run elsewhere:
 

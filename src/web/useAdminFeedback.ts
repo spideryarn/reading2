@@ -14,7 +14,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AdminFeedbackPage, AdminFeedbackReport, FeedbackCursor } from "../types.js";
+import type {
+  AdminFeedbackPage,
+  AdminFeedbackReport,
+  FeedbackCursor,
+  FeedbackFrom,
+} from "../types.js";
 import { encodeFeedbackCursor } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -32,7 +37,17 @@ export interface UseAdminFeedback {
   loadMore: () => Promise<void>;
 }
 
-export function useAdminFeedback(): UseAdminFeedback {
+/**
+ * `from` is fixed for the life of one hook. **A caller that lets the reader
+ * change it remounts the component that holds this hook** (`key={from}`,
+ * AdminPage.tsx § `AdminFeedbackPage`) rather than passing a new value in:
+ * the in-flight guard would drop the reload a switch asked for while a *Load
+ * older* was in flight, and that older page would then land under the new
+ * filter. A fresh hook has its own guard, cursor and reports, and cleanup aborts
+ * the old request rather than leaving its response to a component that is gone.
+ * GPT Sol, plan review, docs/plans/261001l-….
+ */
+export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedback {
   const [reports, setReports] = useState<AdminFeedbackReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,27 +60,52 @@ export function useAdminFeedback(): UseAdminFeedback {
    * between them — and both would fetch the same cursor, appending one page
    * twice. A ref is written synchronously.
    */
-  const busy = useRef(false);
+  /* The controller is also the synchronous in-flight guard. Keeping the request
+     itself here matters when `key={from}` unmounts this hook: the fresh inbox
+     has already made the old answer irrelevant, so cleanup frees its connection
+     and response body rather than merely relying on React to ignore setState on
+     an unmounted component.
 
-  const fetchPage = useCallback(async (from: FeedbackCursor | null) => {
-    if (busy.current) return;
-    busy.current = true;
+     Identity is load-bearing under StrictMode. Its synthetic cleanup aborts and
+     clears the first controller before the effect starts again; when that first
+     promise reaches `finally`, it must not clear the second request's guard or
+     loading state. */
+  const inFlight = useRef<AbortController | null>(null);
+
+  const fetchPage = useCallback(async (before: FeedbackCursor | null) => {
+    if (inFlight.current) return;
+    const stop = new AbortController();
+    inFlight.current = stop;
     setLoading(true);
     try {
       /* No `?limit=`. The server's default is the one number, and a client that
          named its own would be a second opinion about how big a page is. */
-      const query = from ? `?before=${encodeURIComponent(encodeFeedbackCursor(from))}` : "";
-      const body = await readJson<AdminFeedbackPage>(await apiFetch(`/api/admin/feedback${query}`));
+      /* `from` on every page, because the cursor carries no filter: a *Load
+         older* without it would page on through everyone's. */
+      const params = new URLSearchParams();
+      if (before) params.set("before", encodeFeedbackCursor(before));
+      if (from !== "everyone") params.set("from", from);
+      const qs = params.toString();
+      const query = qs ? `?${qs}` : "";
+      const body = await readJson<AdminFeedbackPage>(
+        await apiFetch(`/api/admin/feedback${query}`, { signal: stop.signal }),
+      );
+      /* A test double can resolve after an abort even though browser `fetch`
+         rejects. The signal, not the transport's manners, decides whether this
+         hook still owns the answer. */
+      if (stop.signal.aborted) return;
       /* Appended when there was a cursor, replaced when there was not — so
          `reload` and `loadMore` are one request with one difference, rather
          than two code paths that can come to disagree about the shape. */
-      setReports((held) => (from && held ? [...held, ...body.reports] : body.reports));
+      setReports((held) => (before && held ? [...held, ...body.reports] : body.reports));
       setHasMore(body.hasMore);
       setCursor(body.nextCursor);
       /* Cleared on success: an error on screen beside fresh data is worse than
          no error at all. */
       setError(null);
     } catch (e) {
+      /* A keyed remount or unmount is this hook leaving, not a failed inbox. */
+      if (stop.signal.aborted) return;
       /* Through the one rule the shelf uses — see `describeFetchFailure`. */
       setError(describeFetchFailure(e instanceof Error ? e : new Error(String(e))));
       /* What is already held is left alone rather than blanked, the same call
@@ -73,10 +113,14 @@ export function useAdminFeedback(): UseAdminFeedback {
          says, and replacing it with nothing throws away the only reports we
          have. */
     } finally {
-      busy.current = false;
-      setLoading(false);
+      /* An aborted predecessor may settle after StrictMode has started a fresh
+         request. Only the request still holding the slot may release it. */
+      if (inFlight.current === stop) {
+        inFlight.current = null;
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [from]);
 
   const reload = useCallback(() => fetchPage(null), [fetchPage]);
   const loadMore = useCallback(async () => {
@@ -84,7 +128,16 @@ export function useAdminFeedback(): UseAdminFeedback {
     await fetchPage(cursor);
   }, [cursor, fetchPage]);
 
-  useEffect(() => void reload(), [reload]);
+  useEffect(() => {
+    void reload();
+    return () => {
+      const stop = inFlight.current;
+      /* Clear synchronously before aborting, so StrictMode's repeated setup can
+         start the replacement instead of seeing the abandoned request as busy. */
+      inFlight.current = null;
+      stop?.abort();
+    };
+  }, [reload]);
 
   return { reports, error, loading, hasMore, reload, loadMore };
 }

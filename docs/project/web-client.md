@@ -19,7 +19,7 @@ Why the feature exists and what a gist may and may not be:
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, and nothing else: route choice, the session, and the services that must outlive whichever page is mounted (`useJobSession`, above every early return). 5,920 lines until 2026-09-06 — [260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md) took the modes, the reading view and the article out of it, and [`tests/reader-import-direction.test.ts`](../../tests/reader-import-direction.test.ts) is what stops them coming back |
 | [`src/web/article/`](../../src/web/article/) | **who may read this article, and on what footing.** `access.ts` is the two-step — the owned route, then the public one — and the one doorway `sanitizeArticle` stands in; `ArticlePage.tsx` fetches `/api/article/<slug>` **once for all of an article's views** and then branches into `OwnedArticle`/`OwnedReader` or `VisitorArticle`. Those boundaries are the capability seam and not a tidy-up: a hook cannot be skipped conditionally, so *a visitor does not do this* has to be a component that does not exist — [`reader-capability.ts`](../../src/web/reader-capability.ts) |
-| [`src/web/reader/`](../../src/web/reader/) | **the reading view.** `Reader.tsx` composes the prose, the spine, the granularity zoom, the dock and the band the modes take turns in — one component for the owner and for a visitor, differing by the `capability` prop. Beside it, `useReadingPosition.ts` (`?at=` both ways) and `measure.ts` (the window's usable width and the root font size, both state because both move while the page is open), and `passages.ts` — **which of the five passage slots the prose, the ring and the rail are drawn from**, one function total over `Mode` so a new mode cannot silently inherit the last one's marks ([new-mode.md](new-mode.md)) |
+| [`src/web/reader/`](../../src/web/reader/) | **the reading view.** `Reader.tsx` composes the prose, the spine, the granularity zoom, the dock and the band the modes take turns in — one component for the owner and for a visitor, differing by the `capability` prop. Beside it, `useReadingPosition.ts` (`?at=` both ways) and `measure.ts` (the window's usable width and the root font size, both state because both move while the page is open), and `passages.ts` — **which of the five passage slots the prose, the ring and the rail are drawn from**, one function total over `Mode` so a new mode cannot silently inherit the last one's marks ([mode.md](mode.md)) |
 | [`src/web/passage-lifecycle.ts`](../../src/web/passage-lifecycle.ts) | the other half of that: **the three rules every band that marks passages follows** — publish before paint, drop an open key that names nothing, and take the marks with you on the way out. Six producers held six copies until 2026-09-06, and the copies disagreed about the third; the clear is a *layout* cleanup, because two bands share Referee's slot and a passive one ran after the incoming band had already published — [260906d](../postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md) |
 | [`src/web/AppBoundary.tsx`](../../src/web/AppBoundary.tsx) | the last thing between a throw during render and a blank white page: `main.tsx` wraps the whole app in it. Hand-written rather than Sentry's, because reporting is optional and the fallback is not; it reports through `captureClientFailure` and `recordLog` and shows the reader `[render]` and no `error.message` — [260826p-error-boundary.md](../plans/260826p-error-boundary.md) |
 | [`src/web/FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) | **the smaller one**, around one mode's controller and panel, so a broken mode leaves the article readable — [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) |
@@ -107,7 +107,7 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   [comments.md § streaming](comments.md#streaming).
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's
   artefact read, its job, running on arrival, and the progress card. The state glue around them is
-  still copied hook to hook — [new-mode.md](new-mode.md).
+  still copied hook to hook — [mode.md](mode.md).
 - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
   "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
   private copy with neither the switch to a date nor the clock.
@@ -176,7 +176,7 @@ value in `MODES`, a component, and a width; it is deliberately not a new negotia
 
 ## Adding a mode
 
-The checklist lives in **[new-mode.md](new-mode.md)** since 2026-09-03 — both halves, the client
+The checklist lives in **[mode.md](mode.md)** since 2026-09-03 — both halves, the client
 and the artefact, in one place at Greg's request. This heading stays so links to it keep working.
 
 ## A mode that breaks does not take the article with it

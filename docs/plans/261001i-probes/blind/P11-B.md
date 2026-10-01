@@ -4,7 +4,7 @@
 - `CLAUDE.md` (AGENTS) — pointed to reading-view-overview and security-map; signpost only.
 - `docs/project/ideas.md` — helped: names code files, incl. `VisitorIdeasBand`; says nothing about public/visitor policy beyond that.
 - `docs/project/public-shelf.md` — partly wrong doc (listing, not article read); skimmed, little use.
-- `docs/project/new-mode.md` (§ PUBLIC_PROJECTIONS / visitor, ~l.225-265) — the most useful: says a stored mode is shown to visitors by default, names `public-reader.ts`, `dto.ts`, `visitor.ts` POLICY, the pinning tests, and the 260929a postmortem.
+- `docs/project/mode.md` (§ PUBLIC_PROJECTIONS / visitor, ~l.225-265) — the most useful: says a stored mode is shown to visitors by default, names `public-reader.ts`, `dto.ts`, `visitor.ts` POLICY, the pinning tests, and the 260929a postmortem.
 - I did not open `public-readable-sharing.md` fully (headings only).
 
 ## 2. Code files you would edit
@@ -25,7 +25,7 @@ Plan: verify each hop end to end (row -> reader -> dto -> `PublicArtefactSet` ->
 No new helper needed.
 
 ## 4. Rules/policies
-- Visitor sees stored output by default; `owners-only` only for reader's own writing — `new-mode.md`, postmortem 260929a.
+- Visitor sees stored output by default; `owners-only` only for reader's own writing — `mode.md`, postmortem 260929a.
 - Public graph must not import writer modules (`src/ideas.ts`): no `stale`/`outdated` on the wire — `src/public-types.ts` header, `tests/public-imports.test.ts`.
 - Absent is the only "no"; empty `{ideas: []}` is ready-but-empty — `src/public-types.ts`.
 - Leaving a column out of the public select silently fails — `public-reader.ts` comment; `tests/public-reads.test.ts`.

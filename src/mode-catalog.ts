@@ -70,7 +70,7 @@
  * hand-maintained, and `ModesMissingFromDock` keeps it exhaustive.
  *
  * See docs/plans/260906h-mode-catalog-and-a-command-bar.md § The catalog, and
- * docs/project/new-mode.md for the checklist a fifteenth mode has to satisfy.
+ * docs/project/mode.md for the checklist a fifteenth mode has to satisfy.
  */
 import type { Mode } from "./modes.js";
 
@@ -200,7 +200,7 @@ export interface ModeCatalogEntry {
    *
    * **Required on every row, and not an optional flag on five.** The
    * `Record<Mode, …>` proves each mode has an entry; only a required field
-   * proves each entry *made the decision*, and docs/project/new-mode.md says
+   * proves each entry *made the decision*, and docs/project/mode.md says
    * the author must make it. An optional flag would quietly enrol mode fifteen
    * among the polished ones. (GPT Sol, finding 8, written when this field lived
    * on a `MODES_UI` row; the argument is about the field and moved with it.)
@@ -375,7 +375,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   citations: {
     description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass … written once and then stored": the `citations` step,
          one messages-wire call over `articleWithIds`, written to the
@@ -413,7 +413,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          written from search extracts (plan 260930a).
        The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No
-       price — new-mode.md § The card on the button.
+       price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
     how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Investigate any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then it writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
@@ -429,7 +429,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        would have contradicted. */
     description: "The document's shape — every part, and the sections of the one you are in",
     /* Checked against the code rather than written from the plan, which is the
-       failure this field has already had twice (docs/project/new-mode.md § The
+       failure this field has already had twice (docs/project/mode.md § The
        card on the button). "Nothing to generate" is true: the tree arrives in
        the page's own payload and this mode reaches no artefact and makes no
        request. The rest is the one thing a press does not tell you — that what
@@ -457,7 +457,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   faq: {
     description: "The questions a careful reader would ask this piece, and where it responds",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass over the article, written once and stored": the `faq`
          step, one messages-wire call over `articleWithIds`, written to the `faq`
@@ -486,7 +486,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   trajectory: {
     description: "A route through the piece's quotes, a little deeper each time round",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "a short model pass over its quotes": the `trajectory` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
@@ -514,7 +514,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* `NOT_A_MODE.tweets` in src/web/Dock.tsx until 2026-09-29, when the thread
        page became this mode (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md). */
     description: "The article as a numbered thread of short posts",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass over the whole article": the `tweets` step, one
          messages-wire call over `articleWithIds` (src/tweets.ts § generateTweets).
@@ -537,7 +537,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   annotations: {
     description: "Notes in a column right of the text, each level with the passage it is about",
-    /* **Checked against the source** (docs/project/new-mode.md § The card on
+    /* **Checked against the source** (docs/project/mode.md § The card on
        the button): the questions are `TreeNode.question` on the root and the
        top-level parts (src/hierarchy.ts § `questionFor`), the sentence at the
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read

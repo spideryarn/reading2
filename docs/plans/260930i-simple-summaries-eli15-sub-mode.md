@@ -79,11 +79,11 @@ orient**, before reading, not instead of it. Three things keep it on the right s
   `?remember=` and `?referee=` are. `?deep=` keeps its meaning and is simply unused under Simple.
 - **Owner, nothing stored:** pressing the Simple chip runs the job
   ([`useAutoRun.ts`](../../src/web/useAutoRun.ts)); arriving on a URL with `?summary=simple` does
-  not (the rule in [new-mode.md](../project/new-mode.md)). While it runs, the band says so, the way
+  not (the rule in [mode.md](../project/mode.md)). While it runs, the band says so, the way
   FAQ's does.
 - **Visitor on a public article:** sees a stored one; with none stored, a line saying none has been
   made. A generated artefact is readable by a visitor by default
-  ([new-mode.md § The artefact](../project/new-mode.md#the-artefact-if-the-mode-shows-one)).
+  ([mode.md § The artefact](../project/mode.md#the-artefact-if-the-mode-shows-one)).
 - **Not behind the experimental switch.** Summary is a core mode and Greg asked for this inside it.
   The call is cheap (see *Cost*) and only made on a press.
 - **Plain text.** No markdown, rendered as text ([security.md](../project/security.md)).
@@ -128,9 +128,9 @@ type SimpleSummary = {
     made and offers to try again.
 - **Stamped** with one exported `SIMPLE_VERSION` (`simple/1`), used both in the artefact and the
   expected stamp. The owner GET returns `stale` (the article moved: a notice) apart from `outdated`
-  (an older prompt: silent) — [new-mode.md](../project/new-mode.md).
+  (an older prompt: silent) — [mode.md](../project/mode.md).
 - **Every total the compiler asks for**, and the residue nothing checks, from
-  [new-mode.md](../project/new-mode.md): the GET route, the export put-chain, the public projection
+  [mode.md](../project/mode.md): the GET route, the export put-chain, the public projection
   and DTO (rebuilt as `{ paragraphs: [{ text, ids }] }` only, no stamp), `JOB_DISPOSITION`,
   Metadata's re-run list, the Messages-wire prompt inventory in
   [ai-gateway.md](../project/ai-gateway.md). FAQ's stage-1 commit (`b31d8b87`) is the template,

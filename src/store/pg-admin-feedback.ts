@@ -56,7 +56,9 @@
  * hand, never a join. docs/project/admin.md states the same boundary.
  */
 
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, notInArray, or, sql } from "drizzle-orm";
+
+import { ADMIN_USER_IDS } from "../admin.js";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
@@ -66,6 +68,7 @@ import type {
   AdminFeedbackReport,
   FeedbackCursor,
   FeedbackDiagnosticsPayload,
+  FeedbackFrom,
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
@@ -223,6 +226,7 @@ function after(cursor: FeedbackCursor) {
 export async function listFeedbackAcrossOwners(
   limit: number,
   cursor: FeedbackCursor | null,
+  from: FeedbackFrom = "everyone",
 ): Promise<AdminFeedbackPage> {
   /* Clamped rather than trusted, and floored before the compare so a fractional
      `?limit=1.5` off a query string cannot reach the driver. A limit of 0 is
@@ -233,9 +237,19 @@ export async function listFeedbackAcrossOwners(
   const rows = await getDb()
     .select(LIST_COLUMNS)
     .from(feedbackTable)
-    /* **The only predicate is the cursor.** No `owner_id` — which is what makes
-       this file what it is, and why it is a file rather than a method. */
-    .where(cursor ? after(cursor) : undefined)
+    /* **The cursor, and the one owner predicate this file has: who is not an
+       administrator.** Still no "this owner only" — which is what makes this
+       file what it is, and why it is a file rather than a method. The list is
+       `ADMIN_USER_IDS`, the one `isAdmin` reads, so the two cannot disagree
+       about who Greg is (tests/admin-feedback-store.test.ts pins it). A keyset
+       under a filter is still a keyset: the cursor is the last row *returned*,
+       which passed the filter. */
+    .where(
+      and(
+        cursor ? after(cursor) : undefined,
+        from === "readers" ? notInArray(feedbackTable.ownerId, [...ADMIN_USER_IDS]) : undefined,
+      ),
+    )
     /* Newest first, then the whole primary key, so the order is *total*.
        `created_at` alone is not: two reports can share a millisecond, and two
        owners can share a report id, so both columns are needed before the

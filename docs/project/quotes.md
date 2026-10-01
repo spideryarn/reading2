@@ -288,6 +288,13 @@ default, display them in order."* The glossary defaults to `prioritised`; copyin
 first version, and a cross-family review pointed out that the glossary's later override is not
 permission to override an explicit decision about a different feature.
 
+**There is no head row while the order row is drawn**, since 2026-10-01 — Greg, on a landscape
+iPhone (`spya-gcdwps`). The count and the profile badge (an icon, as Glossary's is) sit at the order
+row's right-hand end, the count only outside *prioritised*, whose bar row already says "5 of 14";
+the "order" word in front of the buttons went too. The Glossary move
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)), made here in
+[261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md).
+
 ### Every visible quote is marked, in every mode, and the bar is how many
 
 **In every mode since 2026-09-08**, which is [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md).

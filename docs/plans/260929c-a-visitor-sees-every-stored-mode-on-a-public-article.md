@@ -42,7 +42,7 @@ POST — and nothing asked whether a visitor with a stored route could see it. T
 - [260904c-more-modes-on-a-shared-link.md](260904c-more-modes-on-a-shared-link.md) — **the recipe**:
   Timeline went from `owners-only` to `{ kind: "artefact" }` by the nine steps in its § *What every
   stage owes*, and every stage below follows them.
-- [new-mode.md](../project/new-mode.md) § the residue — `PUBLIC_PROJECTIONS`, the DTO, and the tests
+- [mode.md](../project/mode.md) § the residue — `PUBLIC_PROJECTIONS`, the DTO, and the tests
   that pin each.
 - [`src/store/public-reader.ts`](../../src/store/public-reader.ts) § `PUBLIC_PROJECTIONS` — the
   columns a public read selects; forgetting one is the silent failure.

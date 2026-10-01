@@ -464,7 +464,7 @@ function StepTip({
  * no read state (it arrived with the page), no job, no verb. A union rather
  * than a `readOnly` flag beside `owner`, so a visitor's panel has nothing to
  * press that could plan a route — the shape `TimelinePanel`'s access has, and
- * new-mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
+ * mode.md asks for. Since 2026-09-29, SPIDERYARN-READING2-56.
  */
 export type TrajectoryAccess =
   | { kind: "owner"; owner: UseTrajectory }
@@ -580,7 +580,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
       feature="gloss trajectory"
       /* **A head that stays put**: the stepper and the depth control, pinned
          above the scroller. Present only when there is a route to step — no
-         empty row over the loading sentence (new-mode.md § the header row). */
+         empty row over the loading sentence (mode.md § the header row). */
       head={
         ready && total > 0 && view.depth !== null ? (
           <RouteHead

@@ -5,7 +5,7 @@ worktree-fb7e-annotations-mode. Review the diff `git diff 1a60d690..07ef6ce6` (t
 the build a6631c60, the design pass 07ef6ce6). 1a60d690 is the origin/dev it branched from.
 
 Read first: CLAUDE.md (house rules), the plan docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md
-(including the sections recording your own plan review and GPT Astra's design pass), docs/project/new-mode.md.
+(including the sections recording your own plan review and GPT Astra's design pass), docs/project/mode.md.
 
 ## You may fix
 
@@ -43,8 +43,8 @@ and `npm run typecheck` (judge it by exit code).
    shell.css — is it inert in every other mode, including when `--marg-reserve` is unset?
 5. marginalia.css: `.marg-head` fixed at `--bar-bottom` — on a phone/when the bar hides, is that right? z-index vs
    the dock, tooltips, dialogs. `all: unset` on buttons — focus ring still visible?
-6. The mode-catalog `how` card text: true against the code? (new-mode.md § The card on the button.)
-7. Anything in the new-mode.md checklist missed (e.g. tests/mode-surface-changes-no-markup, shared-inventory,
+6. The mode-catalog `how` card text: true against the code? (mode.md § The card on the button.)
+7. Anything in the mode.md checklist missed (e.g. tests/mode-surface-changes-no-markup, shared-inventory,
    command-bar GENERATES, the Dock's mode page, docs).
 
 Severity: P0 ships broken/unsafe, P1 must fix before landing, P2 should fix, P3 nit. ID every finding (C1, C2…),

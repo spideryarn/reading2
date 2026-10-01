@@ -1924,7 +1924,7 @@ export function Reader({
    * default that would silently accept a fifteenth mode.
    *
    * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
-   * § Stage 4b, and docs/project/new-mode.md.
+   * § Stage 4b, and docs/project/mode.md.
    *
    * **And every band it returns is inside one error boundary**, put there by
    * `band()` below rather than case by case — ModeBoundary.tsx.

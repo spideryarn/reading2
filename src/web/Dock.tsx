@@ -148,7 +148,7 @@
  * The rule itself, and why the current mode is retained rather than dropped, is
  * `visibleModes` below. The manual is
  * docs/project/experimental-features.md; the checklist is
- * docs/project/new-mode.md.
+ * docs/project/mode.md.
  *
  * `Thread` became `Tweets` in the same breath, matching the page's own name
  * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
@@ -613,7 +613,7 @@ interface Props {
  *    Citations, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
  *    conversation, what they took from it (Search, Chat, Remember) — the
- *    same category docs/project/new-mode.md already names.
+ *    same category docs/project/mode.md already names.
  *
  * Six runs became five later the same day, when Greg moved Glossary, Ideas
  * and Timeline in with Trajectory and Search in with Chat
@@ -3569,8 +3569,8 @@ function DockExperimentalSwitch({
   variant: ExperimentalVariant;
 }) {
   const press = PRESS[variant];
-  /* The two states with something wrong to show. Kept as one name because three
-     things key on it: the marker, the on-state, and `aria-invalid`. */
+  /* The two states with something wrong to show. Kept as one name because two
+     things key on it: the warning marker and `aria-invalid`. */
   const broken = variant === "load-failed" || variant === "save-failed";
   const state = SWITCH_STATE[variant](setting.on);
   /* Saving cannot accept another press, but it is still a toggle whose current
@@ -3602,12 +3602,13 @@ function DockExperimentalSwitch({
            to change. `dock-mode` next door is the same idea doing real work for
            the fit ladder.
 
-           **Not painted as on while something is wrong.** A failed load has told
-           us nothing, and a failed save has already sprung the value back — in
-           both cases the highlighted "on" frame would be the button asserting a
-           state we do not have. `soon` is the dim that goes with
-           `aria-disabled`. */
-        className={`dock-btn dock-experimental${setting.on && !broken ? " on" : ""}${press === "nothing" ? " soon" : ""}`}
+           **Never `.on`.** That is the bar's *selected* look — wash, top rule,
+           orange ink — and this button is a toggle, not a place you are; the
+           drawn switch already says on or off. It wore it until Greg, 2026-10-01
+           (SPIDERYARN-READING2-80): *"too visible/emphasised … Please
+           de-emphasise."* dock.css § the experimental switch.
+           `soon` is the dim that goes with `aria-disabled`. */
+        className={`dock-btn dock-experimental${press === "nothing" ? " soon" : ""}`}
         /* **Where this is a toggle whose value is known.** Ready and
            save-failed accept a toggle press. Saving remains the same toggle and
            retains its known value while `aria-disabled` separately says that it
@@ -3673,8 +3674,7 @@ function DockExperimentalSwitch({
 
             **Drawn in every variant**, so the row's width never changes with
             the state and `fitSignature` has nothing new to learn. Where the
-            knob sits is `SWITCH_LOOK`, not the frame's `broken` rule — see
-            there. Presentation only — `aria-pressed` and the description above
+            knob sits is `SWITCH_LOOK` — see there. Presentation only — `aria-pressed` and the description above
             carry the state — and never dropped by the fit ladder, because once
             the label is gone this is what says "toggle". dock.css § the
             experimental switch. */}
@@ -3693,9 +3693,8 @@ function DockExperimentalSwitch({
  * **Where the drawn switch's knob sits**, per appearance — the class on
  * `.dock-switch` (dock.css § the experimental switch).
  *
- * Not the frame's rule. The frame goes unlit for a failed load *and* a failed
- * save, which is right for a lit frame and wrong for a knob: after a failed
- * save the store has already put the value back (experimental-store.ts §
+ * Not `broken`. That covers a failed load *and* a failed save, and only the
+ * first has no value to draw: after a failed save the store has already put the value back (experimental-store.ts §
  * `set`), so the position is known and `aria-pressed` reports it — a knob
  * forced left there would contradict the button's own state. And where there
  * is no answer at all, a knob on the left is the silent-default mistake in its
