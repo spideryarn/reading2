@@ -83,7 +83,7 @@ function extraName(step: StepName): string {
   return isExtra(step) ? RESET_EXTRA_NAME[step] : step;
 }
 
-/** Extras with no row of their own in Metadata's *Re-run AI processing* section. */
+/** Extras with no row of their own in Metadata's *AI processing* section. */
 const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
 const RESET_ONLY_PROGRESS = extraSteps().filter((step) => !METADATA_RERUN_STEP_SET.has(step));
 const RESET_ONLY_PROGRESS_SET = new Set<StepName>(RESET_ONLY_PROGRESS);
@@ -478,7 +478,7 @@ function ResetOnlyRegeneration({
 /**
  * The row: its name and button, what it does, the checkbox — and, after one
  * press, the confirm that says what is kept, what is lost, and what it costs.
- * The first row of *Re-run AI processing*'s card since 2026-09-30, above the
+ * The first row of *AI processing*'s re-run card since 2026-09-30, above the
  * modes, rather than a subheading and a card of its own (Greg,
  * SPIDERYARN-READING2-65: *"amalgamate the "Start the whole article again" into
  * the run-it-again section above, e.g. as a button at the top"*).

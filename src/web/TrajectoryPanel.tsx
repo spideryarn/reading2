@@ -598,7 +598,7 @@ export function TrajectoryPanel({ access, view, away }: Props) {
            (SPIDERYARN-READING2-52), and the standing *Plan it again* went —
            Greg, 2026-09-29 (SPIDERYARN-READING2-53): *"remove the "Plan it
            again" button … let's just rely on the Metadata mode for that."*
-           Metadata's *Re-run AI processing* has a Trajectory row, and the
+           Metadata's *AI processing* has a Trajectory row, and the
            stale and profile-changed banners keep their own button, which
            carries the job there — hence the gate on those two. What is left is
            a job's progress, Stop and failure while one is starting, running or

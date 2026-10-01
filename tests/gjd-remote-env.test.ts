@@ -2,10 +2,11 @@
  * What `gjd-remote push-env` is allowed to put on the remote box.
  *
  * The box is shared by many autonomous agents running as one user with
- * passwordless sudo, so anything that reaches it reaches all of them. Two keys
+ * passwordless sudo, so anything that reaches it reaches all of them. One key
  * in Greg's real .env.local must never travel: HETZNER_CLOUD_API_TOKEN can
- * delete the box itself, and SUPABASE_ACCESS_TOKEN is a management PAT that can
- * delete the production Supabase project.
+ * delete the box itself. SUPABASE_ACCESS_TOKEN, a management PAT that can
+ * delete the production Supabase project, was forbidden too until Greg chose
+ * to send it, 2026-10-01.
  *
  * These run against fixtures, never against the real .env.local — a test that
  * reads Greg's file would pass or fail for reasons that have nothing to do with
@@ -30,24 +31,30 @@ const FIXTURE = [
   "OPENROUTER_API_KEY=sk-or-fixture",
   "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54362/postgres",
   "",
-  "# these two must never leave the laptop",
+  "# this one must never leave the laptop",
   "HETZNER_CLOUD_API_TOKEN=hetzner-fixture-token",
+  "# and this one travels, by Greg's choice",
   "SUPABASE_ACCESS_TOKEN=sbp-fixture-token",
   "export SOME_FUTURE_SECRET=whatever-greg-adds-next",
 ].join("\n");
 
 describe("the allowlist", () => {
-  it("keeps the two production credentials off the box", () => {
+  it("keeps the box's own deletion credential off the box", () => {
     const { text, pushed, skipped } = buildEnvPayload(FIXTURE, SPIDERYARN_ALLOWANCE);
-    for (const forbidden of ["HETZNER_CLOUD_API_TOKEN", "SUPABASE_ACCESS_TOKEN"]) {
-      expect(ALLOWLIST).not.toContain(forbidden);
-      expect(pushed.has(forbidden)).toBe(false);
-      expect(skipped).toContain(forbidden);
-      // The key name and its value are both absent from the bytes that travel.
-      expect(text).not.toContain(forbidden);
-    }
+    const forbidden = "HETZNER_CLOUD_API_TOKEN";
+    expect(ALLOWLIST).not.toContain(forbidden);
+    expect(pushed.has(forbidden)).toBe(false);
+    expect(skipped).toContain(forbidden);
+    // The key name and its value are both absent from the bytes that travel.
+    expect(text).not.toContain(forbidden);
     expect(text).not.toContain("hetzner-fixture-token");
-    expect(text).not.toContain("sbp-fixture-token");
+  });
+
+  it("sends the Supabase management token, which Greg chose to put on the box", () => {
+    const { text, pushed, skipped } = buildEnvPayload(FIXTURE, SPIDERYARN_ALLOWANCE);
+    expect(pushed.has("SUPABASE_ACCESS_TOKEN")).toBe(true);
+    expect(skipped).not.toContain("SUPABASE_ACCESS_TOKEN");
+    expect(text).toContain("SUPABASE_ACCESS_TOKEN=sbp-fixture-token");
   });
 
   it("skips a key nobody has thought about yet, rather than sending it", () => {
@@ -61,7 +68,7 @@ describe("the allowlist", () => {
 
   it("sends the allowlisted keys, and reports the ones it could not find", () => {
     const { pushed, missing } = buildEnvPayload(FIXTURE, SPIDERYARN_ALLOWANCE);
-    expect([...pushed.keys()]).toEqual(["OPENROUTER_API_KEY", "DATABASE_URL"]);
+    expect([...pushed.keys()]).toEqual(["OPENROUTER_API_KEY", "DATABASE_URL", "SUPABASE_ACCESS_TOKEN"]);
     expect(pushed.get("DATABASE_URL")).toContain("54362");
     expect(missing).toContain("SUPABASE_URL");
     expect(missing).not.toContain("DATABASE_URL");

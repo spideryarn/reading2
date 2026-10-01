@@ -721,24 +721,26 @@
    direction when it shrank the bar to 2.2rem for a landscape phone.
 
    So: 52px tall, past Apple's 44pt minimum in the axis that has room, and a
-   40px floor on the width, which is where the arithmetic below leaves it.
+   44px floor on the width (40 until 2026-10-01 — see the floor itself).
 
    ## The arithmetic, and it does not fit on a phone
 
    **Do the sum, do not trust a remembered count.** This note said "nine
    buttons" when it was written, GPT Sol counted eleven the same afternoon, and
    a ninth mode (`outline`) landed hours later making it twelve. The count is
-   `MODES_UI.length + 2` — the modes, then Comments and Metadata (it was `+ 3`
-   until Tweets became a mode on 2026-09-29, which left the total unchanged) — and
-   it only ever goes up.
+   `MODES_UI.length` for the segment, plus the loose controls the particular
+   page draws, and it only ever goes up.
 
    At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
-   costs 40px** (the floor below) and each mode costs a further 1px of hairline;
-   `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
-   modes the row is roughly `40 × (m + 2) + m + 9` (the figures below are from
-   when it was `m + 3`, so read them one mode on). At m=8 that is 457px, at m=9
-   it is 498, at m=10 it is 539, at m=12 it is 621, and the bar is 384. **A phone
-   in portrait scrolls, and every new mode makes it scroll by another 41px.**
+   costs at least 44px** (the floor below); `.dock-modes` adds a frame and
+   0.25rem of margin each side. The
+   fullest signed-in row has six loose controls — Home, Commands, Comments,
+   Metadata, Experimental and Feedback — as well as *m* modes, then about 50px
+   of top-level gaps, segment frame/margins and trailing gutter. So its floor is
+   roughly `44 × (m + 6) + 50`, before Plain's surviving word. At m=12 that is
+   already 842px against a 384px bar, close to the 853px browser measurement
+   above. **A phone in portrait scrolls, and every new mode adds at least another
+   44px.**
 
    **`plain` is the twelfth (2026-08-31), and it is the one that had to be
    leftmost.** A scrolling row means the buttons past the fold are found by
@@ -796,8 +798,8 @@
      Fable's item 4. */
   .dock > .dock-home { flex: 1 0 auto; }
 
-  /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
-     neighbour — and the centring that makes growth look deliberate: without it
+  /* The floor — 44px, Apple's 44pt minimum (it was 40, that less the hairline
+     it shares with its neighbour, until the note below) — and the centring that makes growth look deliberate: without it
      a button that grew would hold its icon at the left and the row would read
      as ragged rather than as spread out. A min-width is a floor and not a cap,
      which is what lets the Comments button carry a two-digit count without
@@ -805,9 +807,14 @@
 
      `.dock-home` takes both, for the reason above: a grown box that held its
      glyph at the left would be the one ragged thing in a spread-out row. */
+  /* **2.75rem since 2026-10-01**, up from 2.5: on a phone this floor, not the
+     rung's padding, is what sets the space between icons, so it is the only
+     way Greg's "especially when collapsed" reaches a thumb (spya-ng89zf,
+     docs/plans/261001j-…). 44px, Apple's own number; the row was already
+     scrolling and scrolls about 4px further per button. */
   .dock-btn,
   .dock-home {
-    min-width: 2.5rem;
+    min-width: 2.75rem;
     justify-content: center;
   }
 

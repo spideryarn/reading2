@@ -1,0 +1,636 @@
+diff --git a/docs/project/design-css-overview.md b/docs/project/design-css-overview.md
+index f11eac39..00b8928f 100644
+--- a/docs/project/design-css-overview.md
++++ b/docs/project/design-css-overview.md
+@@ -178,6 +178,19 @@ One trap worth repeating here because it is invisible: **mix colours in `oklab`,
+ polar interpolation drags a mix round to 11.7° and the result is quietly pink instead of warm.
+ `--highlight-wash` escapes only by using `in oklab`.
+ 
++## Dates
++
++- **Every date a reader sees carries both forms**: the exact timestamp and how long ago it was
++  (`3d ago`), one of them in a tooltip if space is short. Greg, 2026-09-30 (spya-d9xdhs):
++
++  > make a note in a relevant doc that whenever we show a date we should include that kind of
++  > human-readable `... ago` version, as well as a timestamp, even if only in a tooltip.
++
++  [`src/web/relative-time.ts`](../../src/web/relative-time.ts) has both (`exactly`, and
++  `relativeAgo`/`timeAgo`). **One exception, for now:** past 30 days it gives no relative form,
++  because "43 days ago" is worse than the date (that file's header), so an old date shows only the
++  timestamp. A coarser `2mo ago` would make the rule hold everywhere; nobody has built it yet.
++
+ ## The stacking order, which is real even though it is not a scale
+ 
+ **Do not read a number off this list and reuse it.** The values are not a scale and were not
+diff --git a/src/web/App.tsx b/src/web/App.tsx
+index 6c637a98..c18e613b 100644
+--- a/src/web/App.tsx
++++ b/src/web/App.tsx
+@@ -72,6 +72,32 @@ function drawsShelf(route: Exclude<Route, { kind: "callback" }>, user: User): bo
+   return route.kind === "library" || (adminOnly(route) && !isAdmin(user.id));
+ }
+ 
++/**
++ * **The signed-in pages that wear `SiteNav`**, which carries its own Feedback
++ * trigger for a signed-in reader (SiteBits.tsx, `FEEDBACK_SHAPE.nav`) — so the
++ * corner one must not be drawn over it. Until 2026-10-01 it was, on top of the
++ * nav's right-hand link (spya-xgn06m, docs/plans/261001j-…).
++ *
++ * A list of route kinds, and it has to be the same list as the branches below
++ * that mount one of these four pages; tests/dock-corner-controls.test.tsx walks
++ * them and counts.
++ */
++function drawsSiteNav(route: Route): boolean {
++  return (
++    route.kind === "features" ||
++    route.kind === "public-sharing" ||
++    route.kind === "pricing" ||
++    route.kind === "public-library"
++  );
++}
++
++/** Every page except those with a chrome row of their own to put Feedback in:
++ *  the bottom bar, the shelf's masthead, the site nav. Argued where it is
++ *  used, in `App`. */
++function drawsCornerFeedback(route: Exclude<Route, { kind: "callback" }>, user: User): boolean {
++  return route.kind !== "read" && !drawsShelf(route, user) && !drawsSiteNav(route);
++}
++
+ /**
+  * Which page you are on, and nothing else.
+  *
+@@ -291,7 +317,7 @@ export function App() {
+   return (
+     <FeedbackHost>
+       <SignedIn route={route} user={user} />
+-      {route.kind !== "read" && !drawsShelf(route, user) && <FeedbackTrigger variant="corner" />}
++      {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
+     </FeedbackHost>
+   );
+ }
+diff --git a/src/web/FeedbackButton.tsx b/src/web/FeedbackButton.tsx
+index 51a88b0d..bbcf3230 100644
+--- a/src/web/FeedbackButton.tsx
++++ b/src/web/FeedbackButton.tsx
+@@ -219,7 +219,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
+ }
+ 
+ /**
+- * Which of the three shapes a trigger wears.
++ * Which of the four shapes a trigger wears.
+  *
+  * **`corner`** is the original: `position: fixed` in the top-right of the
+  * window, `--feedback-w` wide. Every page that does not mount a `Dock` draws
+@@ -241,16 +241,19 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
+  * reason `dock` does one page further on: the shelf has a chrome cluster of its
+  * own, and a fixed corner beside it reads as a second one. The row above
+  * `FEEDBACK_SHAPE.masthead` has the report that prompted it.
++ *
++ * **`nav`** is the same move again, for the marketing nav (`SiteNav`) on the
++ * four pages a signed-in reader can see it on, since 2026-10-01.
+  */
+-export type FeedbackVariant = "corner" | "dock" | "masthead";
++export type FeedbackVariant = "corner" | "dock" | "masthead" | "nav";
+ 
+ /**
+- * **The three shapes, as a table rather than as ternaries in the markup.**
++ * **The shapes, as a table rather than as ternaries in the markup.**
+  *
+- * Everything that differs between them is here, and it is six things: the class
++ * Everything that differs between them is here, and it is seven things: the class
+  * a test counts this trigger by, the classes the button wears, the class its
+- * word wears, how big its glyph is, which way its card opens, and whether that
+- * card may flip onto the cross axis.
++ * word wears, how big its glyph is, which way its card opens, whether that card
++ * may flip onto the cross axis, and whether the glyph has a ring of its own.
+  *
+  * A table because each row is a claim somebody has to be able to check, and two
+  * of them are claims a browser is needed to falsify — `placement` and
+@@ -287,6 +290,7 @@ export const FEEDBACK_SHAPE = {
+        would otherwise be thrown onto the cross axis and land *left* of the
+        button, over the article's title. */
+     keepSide: true,
++    ring: "",
+   },
+   dock: {
+     hook: "dock-feedback",
+@@ -298,6 +302,14 @@ export const FEEDBACK_SHAPE = {
+     placement: "top",
+     /* Inside the row, with room either side, so the ordinary flip is right. */
+     keepSide: false,
++    /* **The glyph in a circle of its own**, Greg, 2026-09-30 (spya-xgqv50):
++       *"move the Feedback icon all the way to the right, and perhaps wrap it in
++       its own circle or something to show it's something a little different
++       from the other modes."* The circle is round the glyph rather than the
++       button, so it stays a circle on the rung where the word shows beside it
++       and on a tablet where the button grows to share the bar. dock.css §
++       the Feedback circle. */
++    ring: "dock-feedback-ring",
+   },
+   /**
+    * **The shelf's own masthead row**, since 2026-09-08 — the third shape, and
+@@ -364,10 +376,50 @@ export const FEEDBACK_SHAPE = {
+        last control, so a 22rem card that cannot centre would otherwise flip
+        onto the cross axis and land over the shelf's own heading. */
+     keepSide: true,
++    ring: "",
++  },
++  /**
++   * **The site nav's last entry**, on `/features`, `/pricing`, `/read/public`
++   * and the public-sharing page when signed in — the fourth shape, 2026-10-01.
++   *
++   * Greg, 2026-09-05 (spya-xgn06m): *"The Feedback and Logo get in the way at
++   * the top of /read/public."* The logo half came off in
++   * docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md;
++   * this is the other half. The corner trigger sat over the nav's own
++   * right-hand link — *Home* at 390px, *Privacy* at 1280 — on all four pages.
++   * The masthead's answer for the same reason: a page with a chrome row of its
++   * own takes the trigger into the row, and App.tsx stops drawing the corner.
++   *
++   * Styled as the nav's own links (SiteBits.tsx § `SiteNav`'s `link`), so it
++   * reads as one of them. **The word goes below `sm`**, where the nav was
++   * measured to fit at 320px with one link and the plain-text *Sign in*; the
++   * icon is narrower than *Sign in*, and a signed-in nav has no *Sign in*.
++   * GPT Sol, plan review of docs/plans/261001j-….
++   */
++  nav: {
++    hook: "fb-nav",
++    button:
++      "fb-nav tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-sm tw:text-muted-foreground tw:transition-colors tw:pointer-coarse:min-h-10 tw:hover:text-foreground",
++    word: "tw:hidden tw:sm:inline",
++    icon: 14,
++    /* Downwards and kept there, the masthead's settings and reasons: the top
++       of the page, and the last control in a right-aligned row. */
++    placement: "bottom",
++    keepSide: true,
++    ring: "",
+   },
+ } as const satisfies Record<
+   FeedbackVariant,
+-  { hook: string; button: string; word: string; icon: number; placement: Placement; keepSide: boolean }
++  {
++    hook: string;
++    button: string;
++    word: string;
++    icon: number;
++    placement: Placement;
++    keepSide: boolean;
++    /** A class for a box drawn round the glyph alone, or `""` for none. */
++    ring: string;
++  }
+ >;
+ 
+ /**
+@@ -459,7 +511,13 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
+            a `word` class staying non-empty. */
+         aria-label="Feedback"
+       >
+-        <MessageSquareWarning size={shape.icon} />
++        {shape.ring === "" ? (
++          <MessageSquareWarning size={shape.icon} />
++        ) : (
++          <span className={shape.ring}>
++            <MessageSquareWarning size={shape.icon} />
++          </span>
++        )}
+         {/* Given up when the space runs out, the way the wordmark gives up its
+             word — styles.css § feedback for the corner, § the bar's fit ladder
+             for the bar. The icon and the `aria-label` carry it from there.
+diff --git a/src/web/FeedbackDialog.tsx b/src/web/FeedbackDialog.tsx
+index fb103e6e..c501b1d3 100644
+--- a/src/web/FeedbackDialog.tsx
++++ b/src/web/FeedbackDialog.tsx
+@@ -1033,11 +1033,11 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
+             with two minutes here.
+           </p>
+ 
+-          {/* **One sentence, and it does not name an address.** It said "It is
+-              sent as <your address>, so we can reply" until 2026-09-05 — see
+-              `Props` above for Greg's report and for where a reader is still
+-              told the address goes. */}
+-          <p className="fb-intro">A rough note is worth far more than nothing.</p>
++          {/* **No second sentence under the thanks.** It said "It is sent as
++              <your address>, so we can reply" until 2026-09-05 (`Props` above
++              says where a reader is still told the address goes), and then "A
++              rough note is worth far more than nothing" until Greg asked for
++              it to go, 2026-09-30 (spya-yvwpek, docs/plans/261001j-…). */}
+ 
+           {/* **Two buttons rather than radios**, so that pressing the pressed one
+               puts it back to unset — Greg asked for the toggle to start on
+diff --git a/src/web/FeedbackEarlier.tsx b/src/web/FeedbackEarlier.tsx
+index 4a11ee7c..5ffcb894 100644
+--- a/src/web/FeedbackEarlier.tsx
++++ b/src/web/FeedbackEarlier.tsx
+@@ -56,6 +56,7 @@ import {
+   type FeedbackKind,
+ } from "../types.js";
+ import { apiFetch } from "./lib/api.js";
++import { exactly, relativeAgo } from "./relative-time.js";
+ 
+ export type EarlierState =
+   | { kind: "idle" }
+@@ -176,12 +177,18 @@ const SHIPPED_TITLE = "We shipped a change for this, and it is in the version of
+  *  declined, waiting, on its way, or — with a missing note — already here. */
+ const UNSHIPPED_TITLE = "This isn't marked as shipped in the version of Spideryarn you're using.";
+ 
+-function when(iso: string): string {
+-  return new Date(iso).toLocaleDateString(undefined, {
+-    day: "numeric",
+-    month: "short",
+-    year: "numeric",
+-  });
++/**
++ * `12 Sept 2026, 10:45 · 3d ago` — the exact time and how long ago, both.
++ * Greg, 2026-09-30 (spya-d9xdhs): *"can we include the exact timestamp and
++ * maybe a human-readable `3d ago` or `3h ago`?"* The narrow form is his;
++ * past relative-time.ts's 30-day threshold it is left off and the exact time
++ * stands alone. `createdAt` is checked parseable on the way in (above), so the
++ * `?? iso` is unreachable rather than a fallback anyone sees.
++ */
++function when(iso: string, now: number): string {
++  const exact = exactly(iso) ?? iso;
++  const ago = relativeAgo(iso, now, "narrow");
++  return ago === undefined ? exact : `${exact} · ${ago}`;
+ }
+ 
+ /**
+@@ -247,6 +254,8 @@ export function EarlierList({
+       );
+     case "loaded": {
+       const { reports, more } = earlier.page;
++      /* Once per render, so every row is measured from the same moment. */
++      const now = Date.now();
+       if (reports.length === 0) {
+         return <p className="fb-earlier-status">{EMPTY[show]}</p>;
+       }
+@@ -256,7 +265,7 @@ export function EarlierList({
+             {reports.map((report) => (
+               <li key={report.id} className="fb-earlier-item">
+                 <p className="fb-earlier-meta">
+-                  <time dateTime={report.createdAt}>{when(report.createdAt)}</time>
++                  <time dateTime={report.createdAt}>{when(report.createdAt, now)}</time>
+                   {report.kind === null ? null : ` · ${KIND_WORD[report.kind]}`}
+                   {report.shipped ? (
+                     <>
+diff --git a/src/web/SiteBits.tsx b/src/web/SiteBits.tsx
+index 3b284167..4f71a52a 100644
+--- a/src/web/SiteBits.tsx
++++ b/src/web/SiteBits.tsx
+@@ -37,6 +37,7 @@
+  */
+ import { ArrowRight } from "lucide-react";
+ import type { ReactNode } from "react";
++import { FeedbackTrigger } from "./FeedbackButton.js";
+ import { libraryHomeTitle } from "./library-home-title.js";
+ import { Link } from "./Link.js";
+ import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
+@@ -305,6 +306,12 @@ export function SiteNav({
+               Sign in
+             </a>
+           )}
++          {/* **Feedback, last, and only signed in** — the slot *Sign in* holds
++              for a stranger. It was the fixed corner button until 2026-10-01,
++              drawn on top of this row's last link (spya-xgn06m); App.tsx §
++              `drawsSiteNav` now leaves the corner off these pages. Its word
++              goes below `sm` — `FEEDBACK_SHAPE.nav` says why. */}
++          {signedIn && <FeedbackTrigger variant="nav" />}
+         </div>
+       </div>
+     </nav>
+diff --git a/src/web/dock-fit.ts b/src/web/dock-fit.ts
+index d7d1929f..a4a59667 100644
+--- a/src/web/dock-fit.ts
++++ b/src/web/dock-fit.ts
+@@ -80,8 +80,8 @@ import { onFontsChanged } from "./fonts.js";
+  *  - `dock-fit-1`: **the app cluster's words only** — the wordmark's and
+  *    Feedback's (`.dock-home`, `.dock-feedback`). Every mode keeps its label.
+  *  - `dock-fit-2`: the modes lose their labels too (all but `keepLabel`), and
+- *    close up to 0.6rem. The old `max-width: 1100px` rule.
+- *  - `dock-fit-3`: *every* button loses its label and closes to 0.45rem. What
++ *    close up to 0.7rem. The old `max-width: 1100px` rule.
++ *  - `dock-fit-3`: *every* button loses its label and closes to 0.55rem. What
+  *    § a narrow window did at 731px.
+  *
+  * **Rung 1 is new on 2026-09-06 and the rungs below it shifted down one**, when
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index 376d9aa6..6b0b4838 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -211,12 +211,21 @@
+ .dock.dock-fit-2 .dock-modes .dock-btn-label,
+ .dock.dock-fit-2 .dock-mode .dock-btn-label { display: none; }
+ .dock.dock-fit-2 .dock-modes .dock-btn,
+-.dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
+-
+-/* Rung 3 — every button in the bar, not just the modes. Tighter than rung 2 by
+-   0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
+-   brought the row to 401px against 390 of bar, and closing an 11px gap exactly
+-   would have reopened it the moment the Comments count reached three digits.
++.dock.dock-fit-2 .dock-mode { padding-inline: 0.7rem; }
++
++/* **0.7rem and 0.55rem rather than 0.6 and 0.45, since 2026-10-01.** Greg,
++   twice in a day (spya-bumjmy, spya-ng89zf): *"Add a teeny bit more horizontal
++   space between the buttons in the Reading view bottom-bar (especially when
++   collapsed/without-labels)."* Inside the segment the buttons touch, so their
++   own padding *is* the space between icons — `.dock`'s `gap` reaches only the
++   loose controls. The ladder is measured, so the cost is that each rung arrives
++   at a slightly wider window than before. docs/plans/261001j-….
++
++   Rung 3 — every button in the bar, not just the modes. Tighter than rung 2 by
++   0.15rem. It was written when 0.55rem brought thirteen icons to 401px against
++   390 of bar and this rung was what made a phone fit; the modes have outgrown
++   that (853px against 390, measured 2026-10-01), so a phone scrolls either way
++   and the rung now only has to be narrower than rung 2.
+ 
+    `.dock-home` is named beside `.dock-btn` because it is not one — see
+    `.dock-home` in § the mode switch for why it stays out of that class.
+@@ -227,7 +236,7 @@
+ /* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
+ .dock.dock-fit-3 .dock-btn-label { display: none; }
+ .dock.dock-fit-3 .dock-btn,
+-.dock.dock-fit-3 .dock-home { padding-inline: 0.45rem; }
++.dock.dock-fit-3 .dock-home { padding-inline: 0.55rem; }
+ /* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
+ 
+ /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
+diff --git a/src/web/styles/dock.css b/src/web/styles/dock.css
+index d432e9c6..2998fb08 100644
+--- a/src/web/styles/dock.css
++++ b/src/web/styles/dock.css
+@@ -51,7 +51,9 @@
+   z-index: 96;
+   display: flex;
+   align-items: stretch;
+-  gap: 0.15rem;
++  /* 0.3rem, doubled from 0.15 on 2026-10-01 for Greg's "a teeny bit more
++     horizontal space" (dock-fit.css § rung 2 has the rest of that change). */
++  gap: 0.3rem;
+   /* The bottom term is `--safe-bottom`, and it is in the shorthand rather than
+      in a `padding-bottom` of its own on purpose: a longhand declared *before*
+      this line is silently reset by it, which is how the home indicator got its
+@@ -413,6 +415,41 @@
+   box-shadow: inset 0 2px 0 var(--highlight);
+ }
+ 
++/* -------------------------------------------------- the Feedback circle --
++   Greg, 2026-09-30 (spya-xgqv50): *"move the Feedback icon all the way to the
++   right, and perhaps wrap it in its own circle or something to show it's
++   something a little different from the other modes."* docs/plans/261001j-….
++
++   **Right by an auto margin**, which takes whatever room the row has spare
++   and is zero when the row overflows, so on a phone it is simply last, as it
++   was. On a coarse pointer the buttons grow to share a wide bar instead, and
++   there the growth takes the room first; it is still the last thing in the
++   row.
++
++   **The circle is round the glyph, not the button** (`ring` in
++   FeedbackButton.tsx's shape table), so the word can sit beside it on rung 0
++   and the button can grow on a tablet without the circle becoming a pill. The
++   button keeps its whole box as the target and its own focus ring; the hover
++   wash moves from the box onto the circle, because a square wash behind a
++   round outline reads as two controls. */
++.dock-feedback { margin-inline-start: auto; }
++.dock-feedback:hover { background: transparent; }
++.dock-feedback-ring {
++  display: inline-flex;
++  flex: none;
++  align-items: center;
++  justify-content: center;
++  width: 1.75rem;
++  height: 1.75rem;
++  border: 1px solid var(--rule-strong);
++  border-radius: 50%;
++  transition: border-color 0.12s, background-color 0.12s;
++}
++.dock-feedback:hover .dock-feedback-ring {
++  border-color: var(--highlight);
++  background: var(--panel);
++}
++
+ /* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
+    IS the content, so a button the pointer slides off would have nothing to say.
+    `aria-disabled` rather than `disabled` for the same reason: `disabled` would
+diff --git a/src/web/styles/feedback.css b/src/web/styles/feedback.css
+index 1d76c903..fbe78761 100644
+--- a/src/web/styles/feedback.css
++++ b/src/web/styles/feedback.css
+@@ -269,15 +269,10 @@
+ .fb-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+ .fb-close:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+ 
+-.fb-intro {
+-  margin: 0;
+-  font-size: 0.8rem;
+-  line-height: 1.5;
+-  color: var(--ink-soft);
+-}
+-/* `.fb-email` was here. It set the reader's own address in mono inside the
+-   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
+-   § Props. */
++/* `.fb-intro` and `.fb-email` were here: the one-line intro under the thanks
++   and the reader's address set in mono inside it. The address went on
++   2026-09-05 (FeedbackDialog.tsx § Props) and the line itself on 2026-10-01,
++   docs/plans/261001j-…. */
+ 
+ .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
+ .fb-label { font-size: 0.78rem; font-weight: 600; }
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 3b1cfdaf..5abc22af 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -721,7 +721,7 @@
+    direction when it shrank the bar to 2.2rem for a landscape phone.
+ 
+    So: 52px tall, past Apple's 44pt minimum in the axis that has room, and a
+-   40px floor on the width, which is where the arithmetic below leaves it.
++   44px floor on the width (40 until 2026-10-01 — see the floor itself).
+ 
+    ## The arithmetic, and it does not fit on a phone
+ 
+@@ -733,7 +733,7 @@
+    it only ever goes up.
+ 
+    At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
+-   costs 40px** (the floor below) and each mode costs a further 1px of hairline;
++   costs 44px** (the floor below; the sums here were done at its old 40) and each mode costs a further 1px of hairline;
+    `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
+    modes the row is roughly `40 × (m + 2) + m + 9` (the figures below are from
+    when it was `m + 3`, so read them one mode on). At m=8 that is 457px, at m=9
+@@ -796,8 +796,8 @@
+      Fable's item 4. */
+   .dock > .dock-home { flex: 1 0 auto; }
+ 
+-  /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
+-     neighbour — and the centring that makes growth look deliberate: without it
++  /* The floor — 44px, Apple's 44pt minimum (it was 40, that less the hairline
++     it shares with its neighbour, until the note below) — and the centring that makes growth look deliberate: without it
+      a button that grew would hold its icon at the left and the row would read
+      as ragged rather than as spread out. A min-width is a floor and not a cap,
+      which is what lets the Comments button carry a two-digit count without
+@@ -805,9 +805,14 @@
+ 
+      `.dock-home` takes both, for the reason above: a grown box that held its
+      glyph at the left would be the one ragged thing in a spread-out row. */
++  /* **2.75rem since 2026-10-01**, up from 2.5: on a phone this floor, not the
++     rung's padding, is what sets the space between icons, so it is the only
++     way Greg's "especially when collapsed" reaches a thumb (spya-ng89zf,
++     docs/plans/261001j-…). 44px, Apple's own number; the row was already
++     scrolling and scrolls about 4px further per button. */
+   .dock-btn,
+   .dock-home {
+-    min-width: 2.5rem;
++    min-width: 2.75rem;
+     justify-content: center;
+   }
+ 
+diff --git a/tests/dock-corner-controls.test.tsx b/tests/dock-corner-controls.test.tsx
+index 6b1f7832..ab30c3d8 100644
+--- a/tests/dock-corner-controls.test.tsx
++++ b/tests/dock-corner-controls.test.tsx
+@@ -410,6 +410,15 @@ describe("the route walk: one branded home control, never two triggers", () => {
+     expect(document.querySelector(".site-nav"), `${path} lost its bar`).not.toBeNull();
+     expect(document.querySelector(".logo-home"), `${path} drew the corner too`).toBeNull();
+     expect(feedbackTriggers()).toHaveLength(1);
++    /* **And Feedback is in the bar, not over it**, since 2026-10-01: the corner
++       button sat on the nav's last link (spya-xgn06m, docs/plans/261001j-…).
++       Naming both classes, for the shelf's reason below — a count of one is
++       satisfied by the wrong one. */
++    expect(
++      document.querySelector(".site-nav .fb-nav"),
++      `${path} has no Feedback in its nav`,
++    ).not.toBeNull();
++    expect(document.querySelector(".fb-button"), `${path} drew the corner button too`).toBeNull();
+     expect(document.querySelector(".dock")).toBeNull();
+   });
+ 
+diff --git a/tests/feedback-button-tooltip.test.tsx b/tests/feedback-button-tooltip.test.tsx
+index f5bb62f2..78a07235 100644
+--- a/tests/feedback-button-tooltip.test.tsx
++++ b/tests/feedback-button-tooltip.test.tsx
+@@ -234,13 +234,25 @@ describe("the Feedback button, in the bar", () => {
+ 
+   it("puts its word under the fit ladder rather than under the 731px query", () => {
+     mount("dock");
+-    const word = theButton().querySelector("span");
++    /* The button's last child, since the first is the glyph's ring. */
++    const word = theButton().lastElementChild;
+     expect(word?.textContent).toBe("Feedback");
+     /* `.dock-btn-label` is what every rung's selector is written against;
+        `.fb-button-text` is what the narrow-window query hides. GPT Sol, G7. */
+     expect(word?.className).toBe("dock-btn-label");
+   });
+ 
++  /* spya-xgqv50, Greg 2026-09-30: "wrap it in its own circle". Round the glyph
++     rather than the button, so the word and a grown button leave it a circle;
++     dock.css § the Feedback circle draws it. */
++  it("draws its glyph inside a ring of its own, and the word outside it", () => {
++    mount("dock");
++    const ring = theButton().querySelector(".dock-feedback-ring");
++    expect(ring?.querySelector("svg"), "no glyph in the ring").not.toBeNull();
++    expect(ring?.textContent).toBe("");
++    expect(ring?.parentElement).toBe(theButton());
++  });
++
+   /**
+    * **The one thing here jsdom cannot see, asserted against the table
+    * instead.**
+@@ -377,6 +389,42 @@ describe("the Feedback button, in the shelf masthead", () => {
+   });
+ });
+ 
++/**
++ * **The site nav's** — the fourth shape, 2026-10-01 (spya-xgn06m,
++ * docs/plans/261001j-…). It replaces the corner button on the four signed-in
++ * pages that wear `SiteNav`, where the corner sat over the nav's last link.
++ */
++describe("the Feedback button, in the site nav", () => {
++  it("wears the nav links' classes and none of the corner's", () => {
++    mount("nav");
++    const btn = theButton();
++    /* SiteBits.tsx's `link`, the class string every nav entry wears. */
++    for (const cls of ["tw:text-sm", "tw:text-muted-foreground", "tw:hover:text-foreground"])
++      expect(btn.classList.contains(cls), `missing ${cls}`).toBe(true);
++    /* The masthead's two reasons, unchanged: the UA's button padding, and a
++       finger's floor once it is gone. */
++    expect(btn.classList.contains("tw:p-0")).toBe(true);
++    expect(btn.classList.contains("tw:pointer-coarse:min-h-10")).toBe(true);
++    expect(btn.classList.contains("fb-button")).toBe(false);
++    expect(host.querySelector(".fb-button")).toBeNull();
++  });
++
++  it("gives up its word below sm, and keeps its name", () => {
++    mount("nav");
++    const word = theButton().lastElementChild;
++    expect(word?.textContent).toBe("Feedback");
++    /* The nav was measured to fit at 320px with one link and *Sign in*; the
++       icon alone is narrower than *Sign in*, and the word is not. GPT Sol. */
++    expect(word?.className).toBe("tw:hidden tw:sm:inline");
++    expect(theButton().getAttribute("aria-label")).toBe("Feedback");
++  });
++
++  it("is declared to open downwards, and not to flip", () => {
++    expect(FEEDBACK_SHAPE.nav.placement).toBe("bottom");
++    expect(FEEDBACK_SHAPE.nav.keepSide).toBe(true);
++  });
++});
++
+ /**
+  * **`hook` is what a count of triggers is written against, so it has to be true
+  * of the rendered element** — and that is not something the compiler can say,
+diff --git a/tests/feedback-dialog.test.tsx b/tests/feedback-dialog.test.tsx
+index e561cae4..c5040b97 100644
+--- a/tests/feedback-dialog.test.tsx
++++ b/tests/feedback-dialog.test.tsx
+@@ -22,6 +22,7 @@ import { ADMIN_EMAIL } from "../src/admin.js";
+ import { isSpideryarnId } from "../src/ids.js";
+ import { CONTACT_EMAIL } from "../src/site-text.js";
+ import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
++import { exactly } from "../src/web/relative-time.js";
+ 
+ const posts: { input: string; init: RequestInit }[] = [];
+ let answer: () => Promise<Response>;
+@@ -1278,6 +1279,44 @@ describe("the Earlier tab", () => {
+     expect(items[1]?.querySelector(".fb-earlier-shipped")).toBeNull();
+   });
+ 
++  /* spya-yvwpek, Greg 2026-09-30: "remove the text that says 'A rough note is
++     worth far more than nothing'". Here because the Write panel is mounted. */
++  it("no longer says a rough note is worth more than nothing", async () => {
++    mount();
++    await act(async () => {});
++    expect(panelOf("Write").textContent).toContain("Thank you");
++    expect(host.textContent).not.toContain("rough note");
++  });
++
++  /* spya-d9xdhs, Greg 2026-09-30: "can we include the exact timestamp and maybe
++     a human-readable `3d ago` or `3h ago`?" Past relative-time.ts's 30-day
++     threshold the relative half goes and the exact time stands alone. */
++  it("dates each report exactly, and says how long ago while that is still relative", async () => {
++    const now = Date.parse("2026-09-15T10:45:00.000Z");
++    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
++    try {
++      listAnswer = page({
++        reports: [
++          { ...REPORTS.reports[0], createdAt: "2026-09-12T10:45:00.000Z" },
++          { ...REPORTS.reports[1], createdAt: "2026-07-01T08:00:00.000Z" },
++        ],
++        more: false,
++      });
++      mount();
++      click(tab("Earlier"));
++      await act(async () => {});
++      const times = [...panelOf("Earlier").querySelectorAll("li time")];
++      expect(times[0]?.textContent).toBe(`${exactly("2026-09-12T10:45:00.000Z")} · 3d ago`);
++      /* Not only "whatever `exactly` says": a time of day, which the date
++         alone this replaced did not have. */
++      expect(times[0]?.textContent).toMatch(/\d{1,2}:\d{2}/);
++      expect(times[0]?.getAttribute("dateTime")).toBe("2026-09-12T10:45:00.000Z");
++      expect(times[1]?.textContent).toBe(exactly("2026-07-01T08:00:00.000Z"));
++    } finally {
++      clock.mockRestore();
++    }
++  });
++
+   /* SPIDERYARN-READING2-7D: "In Feedback / Earlier / All, add the indicator
+      for whether each suggestion has shipped or not." An absence is not an
+      indicator, so in All a not-shipped row says so. */

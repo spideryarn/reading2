@@ -22,16 +22,9 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * the pipeline needs to do anything at all, and the deliberately approved
  * sending-only Resend key.
  *
- * Deliberately NOT on it, and neither may be added without Greg saying so:
+ * Deliberately NOT on it, and not to be added without Greg saying so:
  *  - HETZNER_CLOUD_API_TOKEN — it can destroy this very box. A box that holds
  *    the credential for its own deletion is one bad agent away from gone.
- *  - SUPABASE_ACCESS_TOKEN — a Supabase *management* PAT. `.env.example` says
- *    in its own comment that it can create and delete projects, which includes
- *    the production one. Nothing on the box needs it: the Supabase MCP is
- *    pointed at the LOCAL stack on a loopback address, which is what makes the
- *    box able to do without this key at all. It has no --read-only mode — an
- *    earlier version of this comment said it did — so two of its eleven tools
- *    write; they just cannot write anywhere that matters.
  *
  * And one that is not here to be added by symmetry: **the local administrator's
  * password**. It is generated per machine into `~/.config/spideryarn/`
@@ -43,7 +36,7 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * passwordless sudo, so "on the box" means "reachable by all of them".
  */
 /**
- * **The two names that may never travel, whoever asks.**
+ * **The names that may never travel, whoever asks.**
  *
  * The reasoning is in the docblock above — each of these can destroy
  * infrastructure, and the box is shared by autonomous agents running as one
@@ -61,7 +54,6 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  */
 export const FORBIDDEN_NAMES: readonly string[] = [
   "HETZNER_CLOUD_API_TOKEN",
-  "SUPABASE_ACCESS_TOKEN",
 ];
 
 /**
@@ -174,6 +166,14 @@ export const ALLOWLIST: readonly string[] = [
      in docs/project/ai-gateway.md, not a routing choice. Greg asked for it on
      the box and in Vercel, 2026-09-29. */
   "GOOGLE_API_KEY",
+  /* The Supabase *management* PAT. It can create and delete projects — the
+     production one included — and has no read-only scope, so every agent on
+     the box can now do that. It was on FORBIDDEN_NAMES until Greg moved it,
+     2026-10-01: "I know there is risk, but I think it'll be fine." What it
+     buys is the remote project's settings (scripts/supabase-auth-config.ts)
+     and the management API from the box, which had no way to reach either.
+     The box's Supabase MCP stays pointed at the LOCAL stack regardless. */
+  "SUPABASE_ACCESS_TOKEN",
 ];
 
 /**

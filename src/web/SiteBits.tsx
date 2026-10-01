@@ -37,6 +37,7 @@
  */
 import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { FeedbackTrigger } from "./FeedbackButton.js";
 import { libraryHomeTitle } from "./library-home-title.js";
 import { Link } from "./Link.js";
 import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
@@ -139,9 +140,9 @@ export function Wordmark({ className }: { className?: string }) {
  * unsupported it simply stays borderless, which is the right look at the top of
  * the page and an acceptable one below it.
  *
- * **`signedIn` has no default, and that is the point of it.** Features, Pricing
- * and the public library are mounted signed in as well as signed out (App.tsx),
- * and *Sign in* is the one entry whose destination exists only for a
+ * **`signedIn` has no default, and that is the point of it.** Features, Pricing,
+ * public-readable sharing and the public library are mounted signed in as well
+ * as signed out (App.tsx), and *Sign in* is the one entry whose destination exists only for a
  * stranger — see the comment on it below. A defaulted prop would let the next
  * caller inherit a dead link without saying anything, which is exactly how this
  * one got here, so every caller answers the question.
@@ -305,6 +306,12 @@ export function SiteNav({
               Sign in
             </a>
           )}
+          {/* **Feedback, last, and only signed in** — the slot *Sign in* holds
+              for a stranger. It was the fixed corner button until 2026-10-01,
+              drawn on top of this row's last link (spya-xgn06m); App.tsx §
+              `drawsSiteNav` now leaves the corner off these pages. Its word
+              goes below `sm` — `FEEDBACK_SHAPE.nav` says why. */}
+          {signedIn && <FeedbackTrigger variant="nav" />}
         </div>
       </div>
     </nav>

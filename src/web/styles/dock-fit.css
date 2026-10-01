@@ -181,9 +181,9 @@
    (it is a `.dock-btn`) but not `.dock-home` (it is not), so both are spelled
    out at every rung and nothing depends on noticing that asymmetry.
 
-   No padding change here. The two are at the ends of the row, where 0.15rem
-   buys nothing the words did not already, and the rungs below tighten
-   everything anyway. */
+   No padding change here. The two are at the ends of the row, where tightening
+   padding buys little beside removing the words, and the rungs below change
+   the padding anyway. */
 .dock.dock-fit-1 .dock-home .dock-btn-label,
 .dock.dock-fit-1 .dock-feedback .dock-btn-label,
 .dock.dock-fit-2 .dock-home .dock-btn-label,
@@ -213,10 +213,28 @@
 .dock.dock-fit-2 .dock-modes .dock-btn,
 .dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
 
-/* Rung 3 — every button in the bar, not just the modes. Tighter than rung 2 by
-   0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
-   brought the row to 401px against 390 of bar, and closing an 11px gap exactly
-   would have reopened it the moment the Comments count reached three digits.
+/* **Rung 3 is 0.55rem rather than 0.45, since 2026-10-01, and rung 2 stayed
+   at 0.6.** Greg, twice in a day (spya-bumjmy, spya-ng89zf): *"Add a teeny bit
+   more horizontal space between the buttons in the Reading view bottom-bar
+   (especially when collapsed/without-labels)."* Inside the segment the buttons
+   touch, so their own padding *is* the space between icons — `.dock`'s `gap`
+   reaches only the loose controls.
+
+   **Rung 2 was widened to 0.7rem first, and measured, and put back.** The
+   ladder is measured, so a wider rung arrives at a wider window: plain mode at
+   1280 — one of the two commonest laptop widths — fell from rung 2 to rung 3
+   and lost the words *Commands*, *Comments*, *Metadata* and *Experimental*.
+   Both of Greg's reports were filed from a band mode, which is rung 3 at any
+   laptop width (a band takes 400px), so rung 3 is where his "collapsed" is and
+   where the room is free: there is no rung below it to fall to.
+   docs/plans/261001j-….
+
+   Rung 3 — every button in the bar, not just the modes. The modes tighten by
+   0.15rem from rung 2; loose non-mode buttons tighten by 0.05rem from their
+   base padding, and their remaining labels disappear. It was written when 0.55rem brought thirteen icons to 401px against
+   390 of bar and this rung was what made a phone fit; the modes have outgrown
+   that (853px against 390, measured 2026-10-01), so a phone scrolls either way
+   and the rung now only has to be narrower than rung 2.
 
    `.dock-home` is named beside `.dock-btn` because it is not one — see
    `.dock-home` in § the mode switch for why it stays out of that class.
@@ -227,7 +245,7 @@
 /* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
 .dock.dock-fit-3 .dock-btn-label { display: none; }
 .dock.dock-fit-3 .dock-btn,
-.dock.dock-fit-3 .dock-home { padding-inline: 0.45rem; }
+.dock.dock-fit-3 .dock-home { padding-inline: 0.55rem; }
 /* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
 
 /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.

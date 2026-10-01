@@ -14,10 +14,10 @@
    `fb-*` classes rather than Tailwind: the house convention for dialogs, and
    this one is a form with a dozen elements whose spacing has to agree.
 
-   **`.fb-button` is one of two shapes the trigger wears since 2026-09-06.** The
-   other is `.dock-feedback`, a button in the bottom bar, which needs no rule of
-   its own: it is a `.dock-btn` and § the bar's fit ladder owns its word. This
-   corner is what every page *without* a `Dock` still draws. */
+   **`.fb-button` is one of four shapes the trigger wears.** The others live in
+   the bottom bar (`.dock-feedback`), the shelf masthead (`.fb-masthead`) and the
+   marketing nav (`.fb-nav`). This sheet owns the corner and the dialog; the
+   three row variants take their appearance from the row they join. */
 
 /* The mirror of `.logo-home` in the other corner, and the same three numbers:
    `--safe-*` insets, `--bar-h` so it sits on the controls bar's line rather
@@ -269,15 +269,10 @@
 .fb-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
 .fb-close:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
 
-.fb-intro {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-/* `.fb-email` was here. It set the reader's own address in mono inside the
-   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
-   § Props. */
+/* `.fb-intro` and `.fb-email` were here: the one-line intro under the thanks
+   and the reader's address set in mono inside it. The address went on
+   2026-09-05 (FeedbackDialog.tsx § Props) and the line itself on 2026-10-01,
+   docs/plans/261001j-…. */
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }

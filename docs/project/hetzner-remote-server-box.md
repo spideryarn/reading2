@@ -57,8 +57,9 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   [Running `gjd-remote` from the box](#running-gjd-remote-from-the-box).
 - [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — what `push-env` is allowed to send.
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
-  delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
-  deliberately off it. Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+  delete the box) is deliberately off it. `SUPABASE_ACCESS_TOKEN` (can delete the production
+  Supabase project) was too, until Greg put it on, 2026-10-01: *"I know there is risk, but I think
+  it'll be fine."* Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
 - [`scripts/gjd-remote-upload.ts`](../../scripts/gjd-remote-upload.ts) — putting a file on the box:
   where `upload` sends it, the local paths whose basename would escape that folder, and
   `remoteWriteScript`, the one `sh` recipe behind **every** `writeRemote` — prompts and job scripts
@@ -243,8 +244,8 @@ twice missed a token that can delete the box
 are remembered** in `~/.config/gjd-remote/repos/` — the file records every name you decided about and
 which of them you approved — so the next push starts from your answers, a key you unticked stays
 unticked whatever a later model thinks of it, and no model is asked about a key you have already
-decided. Two guards cannot be ticked past on either path: the two names that can delete
-infrastructure, and any value that is a database URL not pointing at a loopback host — by value, so a
+decided. Two guards cannot be ticked past on either path: the name that can delete
+the box, and any value that is a database URL not pointing at a loopback host — by value, so a
 production database under a name nothing here has heard of is caught too.
 [`scripts/gjd-remote-envpolicy.ts`](../../scripts/gjd-remote-envpolicy.ts) holds the whole of it,
 `pushEnvPlan` included — the CLI is glue, so that one test can put a sentinel value in at the top and

@@ -28,7 +28,7 @@
  * That is narrower than *nothing here is generated*, which is what this line
  * said until 2026-09-08 and which had stopped being true twice over: the page
  * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
- * 2026-09-07 it can start a run of its own (§ Re-run AI processing, below, one
+ * 2026-09-07 it can start a run of its own (§ AI processing, below, one
  * button per step). Neither happens on arrival, and *on arrival* is the half a
  * reader here is trusting.
  *
@@ -172,7 +172,7 @@
  * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
  *
  * What has **not** changed is the rule: no verdict this page cannot stand
- * behind. *Re-run AI processing* offers a re-run and claims nothing about whether
+ * behind. *AI processing* offers a re-run and claims nothing about whether
  * you need one, which is exactly why it could ship while the placeholder it
  * replaced could not.
  *
@@ -1119,19 +1119,11 @@ export function Metadata({
 
         {/* ------------------------------------------- 9. technical details --
             Everything that is true, is ours rather than the reader's, and has
-            no bearing on reading the article: the two identifiers, the PDF's
-            fingerprint and which stages have run. Shut, so it costs one line
-            for anybody not looking for it. Greg, 2026-09-03. */}
-        <TechnicalDetails
-          slug={slug}
-          provenance={provenance}
-          rawSha256={meta.rawSha256}
-          error={provenanceError}
-          slow={slow}
-          aside={pipelineLine}
-          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
-          arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
-        />
+            no bearing on reading the article: the two identifiers and the PDF's
+            fingerprint. Shut, so it costs one line for anybody not looking for
+            it. Greg, 2026-09-03. Which stages have run moved to *AI
+            processing* on 2026-10-01 (`spya-qgh5ta`). */}
+        <TechnicalDetails slug={slug} provenance={provenance} rawSha256={meta.rawSha256} />
 
         {/* ------------------------------- 9¼. what it cost (administrator) --
             Greg, 2026-09-30 (SPIDERYARN-READING2-68): *"In the metadata mode
@@ -1148,7 +1140,12 @@ export function Metadata({
             docs/plans/261001c-metadata-cost-shut-with-its-total-and-export-further-down.md. */}
         <ExportSection slug={slug} offer={hasShelfRow} />
 
-        {/* ------------------------------------- 9½. re-run AI processing --
+        {/* ----------------------------------------- 9½. AI processing --
+            **What we did to it, and asking for it again, in one section**
+            since 2026-10-01 — Greg (`spya-qgh5ta`): *"in Metadata mode,
+            perhaps also amalgamate "What we did to it" and "Re-run AI
+            processing""*. The stage rows came out of *Technical details*,
+            with the error rule they carry. Before that:
             One section for both ways of asking again — a mode at a time, or
             the whole article — just above Archive, shut until opened. Greg,
             2026-09-29 (SPIDERYARN-READING2-4Z): *"We have both a "Generate it
@@ -1163,6 +1160,11 @@ export function Metadata({
           provenance={provenance}
           onFinished={refresh}
           reset={experimental.on}
+          error={provenanceError}
+          slow={slow}
+          aside={pipelineLine}
+          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
+          arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
         {/* ---------------------------------------------- 10. archiving it --
@@ -1284,8 +1286,11 @@ function SharingSection({
 }
 
 /**
- * **Re-run AI processing** — the things this page will ask for again, and,
- * behind the experimental switch, starting the whole article again.
+ * **AI processing** — the things this page will ask for again, and,
+ * behind the experimental switch, starting the whole article again; and since
+ * 2026-10-01, below them, the record of what has run (`StageRecord`). It was
+ * called *Re-run AI processing* until the record joined it (`spya-qgh5ta`,
+ * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 5).
  *
  * One section since 2026-09-29, when Greg asked for *Generate it again* and
  * *Start this article again* to be amalgamated, shut by default and moved above
@@ -1305,11 +1310,11 @@ function SharingSection({
  *
  * ## A section of its own, not a button on each stage row
  *
- * The stage rows in *Technical details* answer a different question, and only
- * one of the two is a menu: that list is a **record** — all sixteen stages, when
- * each last wrote, no controls — and this is a **menu** of the ones you can ask
- * for. Interleaving them would put an eligibility branch inside `StageRow` and
- * rows with a button beside rows that cannot have one.
+ * The stage rows below the re-run menu answer a different question, and only
+ * one of the two lists is a menu: `StageRecord` is a **record** — all sixteen
+ * stages, when each last wrote, no controls — while the first list is the modes
+ * you can ask for. Interleaving them would put an eligibility branch inside
+ * `StageRow` and rows with a button beside rows that cannot have one.
  *
  * It is also where a reader can find it. The dimmed *"Re-run a stage"*
  * placeholder sat inside `Technical details` — a shut section, behind a second
@@ -1353,6 +1358,11 @@ function RerunSection({
   provenance,
   onFinished,
   reset,
+  error,
+  slow,
+  aside,
+  hierarchyGenerator,
+  arcGenerator,
 }: {
   slug: string;
   /** Null until the metadata request lands; the rows draw either way. */
@@ -1365,9 +1375,26 @@ function RerunSection({
   onFinished: () => void;
   /** `useExperimental().on` — the whole-article reset is drawn only with it. */
   reset: boolean;
+  /** The metadata request's failure, which draws the section open — below. */
+  error: string | null;
+  slow: boolean;
+  /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
+  aside: string | null;
+  hierarchyGenerator: string;
+  arcGenerator: string | undefined;
 }) {
   return (
-    <Section label="Re-run AI processing" collapsible keepMounted>
+    /* **Collapsible only while nothing has gone wrong** — the rule the stage
+       rows brought with them from *Technical details* (`StageRecord` below):
+       a failed metadata request draws the section open, with the error first. */
+    <Section label="AI processing" collapsible={!error} keepMounted aside={error ? null : aside}>
+      {error && (
+        <p
+          className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
+        >
+          {error}
+        </p>
+      )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
           as one more article against their allowance (plan 260930k). First in
           the section, above the rows it changes the model for: switching it
@@ -1423,7 +1450,78 @@ function RerunSection({
           />
         ))}
       </div>
+
+      <StageRecord
+        provenance={provenance}
+        error={error}
+        slow={slow}
+        hierarchyGenerator={hierarchyGenerator}
+        arcGenerator={arcGenerator}
+      />
     </Section>
+  );
+}
+
+/**
+ * **What we did to it** — which pipeline stages have run, and when, as a
+ * record with no controls. Inside *AI processing* since 2026-10-01, below the
+ * menu of what can be asked for again; it was a subheading of *Technical
+ * details* before that (`TechnicalDetails`' header has its history). Its own
+ * component, not rows interleaved with `RerunRow`: `RerunSection`'s header
+ * says why the record and the menu stay two lists in one section.
+ *
+ * The error is drawn by the section, above everything, and opens it.
+ */
+function StageRecord({
+  provenance,
+  error,
+  slow,
+  hierarchyGenerator,
+  arcGenerator,
+}: {
+  provenance: ArticleMetadata | null;
+  error: string | null;
+  slow: boolean;
+  hierarchyGenerator: string;
+  arcGenerator: string | undefined;
+}) {
+  return (
+    <>
+      {/* Which stages have run, and the two that carry a model's name. A stage
+          counts as run only when *all* of its outputs are on disk —
+          src/pipeline.ts owns that rule and this page borrows it rather than
+          restating it. */}
+      <SubHeading>What we did to it</SubHeading>
+      {/* Named, not "Loading…", and only after the timer — their loading
+          rules on both counts (original-version/design-system.md#loading-states). */}
+      {!error && provenance === null && slow && (
+        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+          Checking which files the pipeline wrote…
+        </p>
+      )}
+      {provenance && (
+        /* One group over all the rows, same as the stat cards: once one row's
+           tooltip is open, running down the column is instant rather than a
+           fresh wait per row. */
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+            {provenance.stages.map((stage) => (
+              <StageRow
+                key={stage.step}
+                stage={stage}
+                generator={
+                  stage.step === "hierarchy"
+                    ? hierarchyGenerator
+                    : stage.step === "arc"
+                      ? arcGenerator
+                      : undefined
+                }
+              />
+            ))}
+          </div>
+        </TooltipGroup>
+      )}
+    </>
   );
 }
 
@@ -1693,7 +1791,7 @@ function RerunRow({
  * the request at all.
  *
  * **A failed read is not shut away**: the section stops being collapsible and
- * the alert shows, as *Technical details* does with its error — postmortem
+ * the alert shows, as *AI processing* does with its metadata error — postmortem
  * 260903d, a shut section that sealed the error in.
  */
 function CostSection({ slug }: { slug: string }) {
@@ -2169,10 +2267,11 @@ function SubHeading({ children }: { children: ReactNode }) {
  * which is the test for what belongs.
  *
  * **That row has gone**, on 2026-09-07: its one entry was *"Re-run a stage"* and
- * it shipped as *Generate it again*. Since 2026-09-29 it is the shut *Re-run AI
- * processing* section near the foot, immediately above Archive. Which is the
- * second half of the story this paragraph tells: burying it here is exactly why
- * nobody found it. See `RerunSection` above, and the note where `SOON` stood.
+ * it shipped as *Generate it again*. From 2026-09-29 until 2026-10-01 it was the
+ * shut *Re-run AI processing* section near the foot, immediately above Archive;
+ * that section is now *AI processing*. This is the second half of the story this
+ * paragraph tells: burying it here is exactly why nobody found it. See
+ * `RerunSection` above, and the note where `SOON` stood.
  *
  * ## The rule this section inherits, and must not break
  *
@@ -2187,38 +2286,28 @@ function SubHeading({ children }: { children: ReactNode }) {
  * error at the top. tests/metadata-page-order.test.tsx pins it, and pins that
  * the section is really there while it does — the first draft of that test
  * passed against a page with no such section at all.
+ *
+ * ## And then they moved again, and the rule with them
+ *
+ * On 2026-10-01 *What we did to it* left this section for *AI processing*,
+ * beside the re-run rows — Greg, `spya-qgh5ta`: *"amalgamate "What we did to
+ * it" and "Re-run AI processing""*. The error and `collapsible={!error}` went
+ * with the rows (`RerunSection`, `StageRecord`), so this section, which is
+ * now only identifiers and a fingerprint, is always collapsible.
+ * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 5.
  */
 function TechnicalDetails({
   slug,
   provenance,
   rawSha256,
-  error,
-  slow,
-  aside,
-  hierarchyGenerator,
-  arcGenerator,
 }: {
   slug: string;
   provenance: ArticleMetadata | null;
   /** The PDF's hash, if this article is one. */
   rawSha256: string | undefined;
-  error: string | null;
-  slow: boolean;
-  /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
-  aside: string | null;
-  hierarchyGenerator: string;
-  arcGenerator: string | undefined;
 }) {
   return (
-    <Section label="Technical details" collapsible={!error} aside={error ? null : aside}>
-      {error && (
-        <p
-          className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
-        >
-          {error}
-        </p>
-      )}
-
+    <Section label="Technical details" collapsible>
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {/* **The slug, called what it is to the person reading.** "Slug" is
@@ -2299,42 +2388,6 @@ function TechnicalDetails({
           )}
         </div>
       </TooltipGroup>
-
-      {/* Which stages have run, and the two that carry a model's name. A stage
-          counts as run only when *all* of its outputs are on disk —
-          src/pipeline.ts owns that rule and this page borrows it rather than
-          restating it. */}
-      <SubHeading>What we did to it</SubHeading>
-      {/* Named, not "Loading…", and only after the timer — their loading
-          rules on both counts (original-version/design-system.md#loading-states). */}
-      {!error && provenance === null && slow && (
-        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          Checking which files the pipeline wrote…
-        </p>
-      )}
-      {provenance && (
-        /* One group over all the rows, same as the stat cards: once one row's
-           tooltip is open, running down the column is instant rather than a
-           fresh wait per row. */
-        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
-            {provenance.stages.map((stage) => (
-              <StageRow
-                key={stage.step}
-                stage={stage}
-                generator={
-                  stage.step === "hierarchy"
-                    ? hierarchyGenerator
-                    : stage.step === "arc"
-                      ? arcGenerator
-                      : undefined
-                }
-              />
-            ))}
-          </div>
-        </TooltipGroup>
-      )}
-
     </Section>
   );
 }
@@ -3201,7 +3254,7 @@ function DeletePermanently({
      failed *first* load leaves `provenance` null and both halves agree; a
      failed **refresh** does not, because `readProvenance` deliberately keeps
      the previous answer so the page does not empty out over one lost
-     revalidation (see its header). Every row in *Re-run AI processing* can fire
+     revalidation (see its header). Every row in *AI processing* can fire
      one. So this control arrived at `known=true, failed=true` — a state the
      first load cannot produce — and went on offering deletion over metadata
      the client had explicitly failed to re-establish, in the window where the
@@ -3452,7 +3505,7 @@ function Section({
   aside?: ReactNode;
   collapsible?: boolean;
   /**
-   * **Shut hides the children rather than unmounting them.** For *Re-run AI
+   * **Shut hides the children rather than unmounting them.** For *AI
    * processing*, whose rows each hold a `useStepJob` subscription: unmounted,
    * a run that finished while the section was shut would never call
    * `onFinished`, and reopening would not replay it — `useJobs` starts a new

@@ -120,6 +120,30 @@ describe("the Remember composer is chat's, with three differences", () => {
     expect(host.querySelector(".chat-stance")).toBeNull();
   });
 
+  it("describes the stance picker itself on hover and focus", async () => {
+    paint(rememberThread());
+    const select = host.querySelector<HTMLSelectElement>(".chat-stance select");
+    expect(select).toBeTruthy();
+
+    await act(async () => {
+      select?.dispatchEvent(new MouseEvent("mouseenter"));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    let card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(card?.textContent).toContain("Balanced");
+    expect(card?.textContent).toContain("Signposts");
+    expect(select?.getAttribute("aria-describedby")).toBe(card?.id);
+
+    await act(async () => {
+      select?.dispatchEvent(new MouseEvent("mouseleave"));
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      select?.focus();
+    });
+    card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(card?.textContent).toContain('a direct question or "just tell me" gets a plain answer');
+    expect(select?.getAttribute("aria-describedby")).toBe(card?.id);
+  });
+
   it("labels the microphone in Remember and not in chat", () => {
     /* Greg asked for the microphone to be emphasised because talking a
        paragraph beats typing one. An unlabelled icon among three other

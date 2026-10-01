@@ -535,7 +535,7 @@ export type ChecklistInput = Guards & {
 };
 
 const FORBIDDEN_WHY =
-  "never sent: this key can destroy the box or the production project";
+  "never sent: this key can destroy the box";
 const NOT_LOCAL_WHY =
   "never sent: its value does not point at a loopback address, so it may be production";
 

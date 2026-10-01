@@ -410,6 +410,15 @@ describe("the route walk: one branded home control, never two triggers", () => {
     expect(document.querySelector(".site-nav"), `${path} lost its bar`).not.toBeNull();
     expect(document.querySelector(".logo-home"), `${path} drew the corner too`).toBeNull();
     expect(feedbackTriggers()).toHaveLength(1);
+    /* **And Feedback is in the bar, not over it**, since 2026-10-01: the corner
+       button sat on the nav's last link (spya-xgn06m, docs/plans/261001j-…).
+       Naming both classes, for the shelf's reason below — a count of one is
+       satisfied by the wrong one. */
+    expect(
+      document.querySelector(".site-nav .fb-nav"),
+      `${path} has no Feedback in its nav`,
+    ).not.toBeNull();
+    expect(document.querySelector(".fb-button"), `${path} drew the corner button too`).toBeNull();
     expect(document.querySelector(".dock")).toBeNull();
   });
 

@@ -8,8 +8,10 @@
  *    order — no list, no change of style;
  *  - "More detail" (`?topicsView=detail`) turns them into one row per topic,
  *    every topic in rank order, each with a colour swatch, a count bar
- *    proportional to the largest count shown, "n of M on the shelf", and its
- *    top three articles as links to `/read/<slug>`;
+ *    proportional to the largest count shown, with a card saying so, and its
+ *    top three articles as links to `/read/<slug>` — and **no** "n of M on
+ *    the shelf" in the row since 2026-10-01 (Greg's `spya-f28vqj`: the bar
+ *    says it, and the chip's own card keeps both denominators);
  *  - the chip in a row is the pill: it toggles the same key, with the same
  *    `aria-pressed`;
  *  - a topic's pill dot and its row swatch are the same hue-ring stop, the
@@ -139,7 +141,7 @@ describe("All N topics", () => {
 });
 
 describe("More detail", () => {
-  it("draws one row per topic, every topic in rank order, with links, bars, swatches and n of M", async () => {
+  it("draws one row per topic, every topic in rank order, with links, bars and swatches, and no n of M", async () => {
     await show("/");
     await click(button("More detail"));
     expect(params().get("topicsView")).toBe("detail");
@@ -157,7 +159,7 @@ describe("More detail", () => {
     const links = [...first.querySelectorAll("a")];
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/read/a0", "/read/a1", "/read/a2"]);
     expect(links.map((a) => a.textContent)).toEqual(["Title of a0", "Title of a1", "Title of a2"]);
-    expect(first.textContent).toContain("3 of 20 on the shelf");
+    expect(first.textContent).not.toContain("of 20");
 
     // The bar: the live count over the largest live count shown.
     const bars = rows.map((r) => r.querySelector("[data-count-bar]")?.getAttribute("data-count-bar"));
@@ -308,6 +310,20 @@ describe("copies of one article", () => {
     plasma: "Plasma",
   };
 
+  it("says what a bar is when it is pointed at", async () => {
+    await show("/?topicsView=detail");
+    const rows = [...(detailList()?.querySelectorAll(":scope > li") ?? [])];
+    /* A native `mouseenter` on the trigger, because that is what `useHover`
+       listens for (docs/project/tooltips.md § Three things about testing a card
+       in jsdom); the card is portalled to `<body>`, not into `host`. */
+    rows[7]?.querySelector("[data-count-bar]")?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const cards = [...document.querySelectorAll('[role="tooltip"]')];
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.textContent).toContain("7 articles in this view use this topic");
+    expect(cards[0]?.textContent).toContain("the topic with the most (14)");
+  });
+
   it("names distinct titles in a detail row, the first copy's slug for each, up to three", async () => {
     data = COPIES;
     titleOf = (slug) => TITLES[slug];
@@ -318,7 +334,7 @@ describe("copies of one article", () => {
     expect(links.map((a) => a.textContent)).toEqual(["A brief history of ball lightning", "Storms", "Red sprites"]);
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/read/ball-1", "/read/storms", "/read/sprites"]);
     // The counts stay physical: seven articles use it, copies and all.
-    expect(row?.textContent).toContain("7 of 7 on the shelf");
+    expect(row?.textContent).not.toContain("of 7");
   });
 
   it("names distinct titles in the tooltip too", () => {

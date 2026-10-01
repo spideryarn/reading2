@@ -1121,7 +1121,7 @@ export function DebatePanel({
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the
-          Metadata mode for that."* Metadata's *Re-run AI processing* has a row
+          Metadata mode for that."* Metadata's *AI processing* has a row
           for this mode; the button inside the stale banner stays, as a
           repair the page is prompting rather than a standing redo.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
