@@ -172,3 +172,23 @@ whatever address the local admin account has.
   - F6: the awaited send → after the response.
   - F7: no note in the claim email.
   - F8: one task per delivery.
+- 2026-10-01: GPT Sol second plan review ([answer](261001p-voucher-emails-plan-review-2-sol.md)):
+  *build with changes*. Five of the eight closed; all new findings taken, and they supersede the
+  design above where they differ:
+  - **Each provider request is frozen when it is queued**: the row carries `recipient`, `subject`,
+    `body_text` and `body_html`, and the send reads only the row. A claim notice's recipient is
+    filled once, on the first successful creator lookup. Resend refuses a key reused with a
+    different body (`409 invalid_idempotent_request`), so a retry must be the same request. The
+    address is now in a second table, so the foreign key cascades on delete.
+  - **`attempt_started_at`**, set by the reservation, is what *stale* is measured from, so two
+    retries of an old queued row cannot both win.
+  - **Event-time eligibility**: the automatic send does not re-check the voucher, so an address
+    change that committed is sent even if a claim lands a moment later. Revoking moves the
+    voucher's still-queued gift deliveries to `skipped: voucher revoked`; only Retry checks live
+    state.
+  - An address change queues a delivery only when the normalised address actually differs.
+  - The replayed create compares every stored field exactly, and queues only when it inserted.
+  - Delivery ids come back from the transaction and are scheduled outside it.
+  - The claim's contract, stated plainly: the claim and its queued notice commit together, so a
+    failed queue insert rolls the claim back, the plan is still served, and the next visit tries
+    again.

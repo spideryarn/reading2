@@ -34,6 +34,31 @@ describe("sendEmail", () => {
     });
   });
 
+  it("sends an HTML part and an Idempotency-Key only when the caller gives them", async () => {
+    const fetch = okFetch();
+    await sendEmail(
+      { ...EMAIL, html: "<p>Body</p>", idempotencyKey: "voucher-email/abc" },
+      "test",
+      { fetch, env: PROD },
+    );
+    const [, init] = fetch.mock.calls[0] ?? [];
+    const headers = init?.headers as Record<string, string> | undefined;
+    expect(headers?.["idempotency-key"]).toBe("voucher-email/abc");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      from: FROM,
+      to: ["someone@example.com"],
+      subject: "Hello",
+      text: "Body text",
+      html: "<p>Body</p>",
+    });
+
+    /* And without them, neither appears — the plain-text body above stays exact. */
+    const plain = okFetch();
+    await sendEmail(EMAIL, "test", { fetch: plain, env: PROD });
+    const plainHeaders = plain.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
+    expect(plainHeaders && "idempotency-key" in plainHeaders).toBe(false);
+  });
+
   it("sends nothing outside production, even with a key", async () => {
     for (const VERCEL_ENV of [undefined, "preview", "development"]) {
       const fetch = okFetch();
@@ -73,14 +98,29 @@ describe("sendEmail", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("returns failed, and does not throw, on a non-2xx", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(
-      async () => new Response('{"name":"validation_error"}', { status: 422 }),
-    );
-    await expect(sendEmail(EMAIL, "test", { fetch, env: PROD })).resolves.toEqual({
-      kind: "failed",
-      reason: "Resend answered 422",
-    });
+  it("returns failed, and does not throw, on a non-2xx, keeping only an allowlisted error name", async () => {
+    const answering = (body: string, status: number) =>
+      vi.fn<typeof globalThis.fetch>(async () => new Response(body, { status }));
+    await expect(
+      sendEmail(EMAIL, "test", {
+        fetch: answering('{"name":"validation_error","message":"someone@example.com is bad"}', 422),
+        env: PROD,
+      }),
+    ).resolves.toEqual({ kind: "failed", reason: "Resend answered 422 validation_error", providerError: "validation_error" });
+    /* Resend's two idempotency refusals, which the voucher outbox decides on. */
+    for (const name of ["invalid_idempotent_request", "concurrent_idempotent_requests"] as const) {
+      await expect(
+        sendEmail(EMAIL, "test", { fetch: answering(JSON.stringify({ name, message: "m" }), 409), env: PROD }),
+      ).resolves.toEqual({ kind: "failed", reason: `Resend answered 409 ${name}`, providerError: name });
+    }
+    /* A name not on the list, or no JSON at all, is the status alone: a provider
+       may echo a submitted field in any string it controls. */
+    for (const body of ['{"name":"someone@example.com"}', "not json", '{"name":42}']) {
+      await expect(sendEmail(EMAIL, "test", { fetch: answering(body, 500), env: PROD })).resolves.toEqual({
+        kind: "failed",
+        reason: "Resend answered 500",
+      });
+    }
   });
 
   it("returns failed, and does not throw, when fetch itself throws", async () => {

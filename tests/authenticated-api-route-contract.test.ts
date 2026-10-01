@@ -365,6 +365,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["PATCH"],
     witnesses: ["/api/admin/vouchers/w1"],
   },
+  /* 261001p — Retry one voucher email, beside the voucher it belongs to. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/voucher-emails/w1/retry"],
+  },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
     methods: ["GET"],
@@ -849,8 +855,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 82;
-const EXPECTED_GUARD_COUNT = 100;
+const EXPECTED_MATCHER_COUNT = 83;
+const EXPECTED_GUARD_COUNT = 101;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1983,6 +1989,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/vouchers",
         "POST literal /api/admin/vouchers",
         "PATCH regex /^\\/api\\/admin\\/vouchers\\/([\\w-]+)$/",
+        // voucher email Retry, 261001p — beside the voucher routes
+        "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",

@@ -1,0 +1,555 @@
+/**
+ * **The emails a gift voucher sends** — one to its recipient when it is made
+ * (and again when its address really changes), one to its creator when it is
+ * claimed. docs/plans/261001p-voucher-emails-to-recipient-and-creator.md, and
+ * the table `billing_voucher_emails` in src/db/schema.ts.
+ *
+ * ## The shape: an outbox, sent at most once
+ *
+ * 1. **Queue**, inside the event's own transaction (the voucher insert, the
+ *    claim's `UPDATE … RETURNING`, the address change). The provider request is
+ *    rendered and frozen there: subject, text, HTML, and for a gift the
+ *    recipient. So the event and its email commit together, and nothing about
+ *    sending happens inside that transaction.
+ * 2. **Reserve**, after the response: one `UPDATE … SET status = 'sending',
+ *    attempts = attempts + 1, attempt_started_at = now() … RETURNING attempts`,
+ *    so of any number of contenders exactly one wins. The automatic send may
+ *    reserve only a `queued` row, and does **not** look at the voucher's live
+ *    state: an event that committed keeps its email (event-time eligibility).
+ *    Revoking is what cancels, by moving queued gifts to `skipped` in the
+ *    revoke's own transaction (`skipQueuedGifts`).
+ * 3. **Send** the stored request with `Idempotency-Key: voucher-email/<id>`.
+ *    Resend answers a repeat of the same key and body with the first result for
+ *    24 hours, so retrying a send it did accept does not send it twice.
+ * 4. **Complete**: `WHERE id = $1 AND status = 'sending' AND attempts = <mine>`,
+ *    so an attempt that lost its lease cannot overwrite the one that took it.
+ *
+ * A **Retry** (the admin's button) may reserve a `queued`, `failed` or
+ * `skipped` row, or a `sending` one whose lease is more than ten minutes old —
+ * never a `sent` one — and, for a gift, only while its voucher is unclaimed,
+ * unrevoked and still at that address. That is `RETRYABLE`, one SQL fragment,
+ * and the list's `retryable` flag is the same fragment, so the page and the
+ * route cannot disagree.
+ *
+ * ## What may fail, and what that leaves
+ *
+ * Everything after the event — reserve, the creator lookup, the send, complete
+ * — is caught here and logged with a label and the delivery id, never an
+ * address, a body or the note (a database error's message can quote a query's
+ * parameters, so only its `name` is logged). It never throws to its caller. A
+ * failure leaves `queued` (never reserved) or `sending` (never completed), and
+ * both can be retried.
+ *
+ * ## Lock order
+ *
+ * **Voucher, then delivery**, everywhere: the claim and the revoke lock the
+ * voucher and then write its deliveries. Nothing here locks a delivery and then
+ * its voucher — a reservation's `UPDATE … FROM billing_vouchers` reads the
+ * voucher without locking it.
+ */
+
+import { and, eq, isNull, sql } from "drizzle-orm";
+
+import type { VoucherEmailState, VoucherEmailStatus, VoucherEmails } from "../admin-vouchers.js";
+import { FREE_LIFETIME_INGESTS } from "../billing/tiers.js";
+import { getDb } from "../db/client.js";
+import { billingVoucherEmails, billingVouchers } from "../db/schema.js";
+import { type EmailDeps, type SendResult, oneLine, sendEmail } from "../email.js";
+import { log } from "../log.js";
+import { ADMIN_VOUCHERS_URL, PUBLIC_ORIGIN } from "../urls.js";
+import { type AccountEmail, accountEmail } from "./admin-accounts.js";
+
+const logger = log("store");
+
+export type VoucherEmailKind = "gift" | "claimed";
+
+/** The longest `detail` the table allows. */
+const DETAIL_MAX = 200;
+
+/** The idempotency key Resend is given. One per delivery, never per attempt. */
+export function idempotencyKeyFor(deliveryId: string): string {
+  return `voucher-email/${deliveryId}`;
+}
+
+/** A database error's name and nothing else: its message can quote a parameter. */
+function errorName(err: unknown): string {
+  return err instanceof Error ? err.name : "unknown error";
+}
+
+/* ------------------------------------------------------------ messages -- */
+
+const LOGIN_URL = `${PUBLIC_ORIGIN}/login`;
+const SMALL_NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+
+/** `20 free articles`, `1 free article` — digits even for one, as the wording says. */
+function freeArticles(n: number): string {
+  return `${n} free article${n === 1 ? "" : "s"}`;
+}
+
+/** `the three articles every free account starts with`, from the constant. */
+function freeAllowanceClause(): string {
+  const n: number = FREE_LIFETIME_INGESTS;
+  const word = SMALL_NUMBERS[n] ?? String(n);
+  return `the ${word} article${n === 1 ? "" : "s"} every free account starts with`;
+}
+
+export interface RenderedEmail {
+  readonly subject: string;
+  readonly text: string;
+  readonly html?: string;
+}
+
+/**
+ * **The recipient's email.** The only value in it is `articles`, an integer the
+ * route validated, so there is nothing to escape. **Never the note, the creator
+ * or the voucher id** — tests/billing-voucher-emails.test.ts pins that. HTML in
+ * the shape of supabase/templates/confirmation.html.
+ */
+export function giftMessage(articles: number): RenderedEmail {
+  if (!Number.isInteger(articles) || articles < 1) throw new Error("a gift message needs a whole number of articles");
+  const gift = freeArticles(articles);
+  const subject = `A gift of ${gift} on Spideryarn`;
+  const intro = `You have been given ${gift} on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.`;
+  const how =
+    "Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.";
+  const after = `They come on top of ${freeAllowanceClause()}. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.`;
+  const footer =
+    "Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com.";
+
+  const text = [
+    `A gift of ${gift}`,
+    "",
+    intro,
+    "",
+    how,
+    "",
+    `Sign in or create an account: ${LOGIN_URL}`,
+    "",
+    after,
+    "",
+    "--",
+    footer,
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+<tr><td style="padding:0 0 32px 0;">
+<img src="${PUBLIC_ORIGIN}/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+</td></tr>
+<tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of ${gift}</td></tr>
+<tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">${intro}</td></tr>
+<tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">${how}</td></tr>
+<tr><td style="padding:0 0 28px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${LOGIN_URL}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Sign in or create an account</a></td></tr></table>
+</td></tr>
+<tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${after}</td></tr>
+<tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+`;
+  return { subject, text, html };
+}
+
+/** The facts a claim notice is rendered from, all from the claim's own `UPDATE … RETURNING`. */
+export interface ClaimFacts {
+  /** The voucher's address, which the claim just matched to the claimant's confirmed one. */
+  readonly claimantEmail: string;
+  readonly ownerId: string;
+  readonly articles: number;
+  readonly createdAt: Date;
+  readonly claimedAt: Date;
+}
+
+/** `2026-10-01 17:42 UTC`. */
+function utcMinute(at: Date): string {
+  const iso = at.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+
+/**
+ * **The creator's notice**, plain text in `arrivalMessage`'s shape. **Not the
+ * note** (Sol F7): it would be one more copy in Resend, the forwarder and an
+ * inbox, and the page already has it. The claimant's address is somebody else's
+ * text, so it goes through `oneLine` and never into the subject.
+ */
+export function claimedMessage(facts: ClaimFacts): RenderedEmail {
+  return {
+    subject: `Gift voucher claimed: ${facts.articles} article${facts.articles === 1 ? "" : "s"}`,
+    text: [
+      "A gift voucher has been claimed.",
+      "",
+      `Email: ${oneLine(facts.claimantEmail)}`,
+      `Account id: ${facts.ownerId}`,
+      `Claimed: ${utcMinute(facts.claimedAt)}`,
+      "",
+      `Articles: ${facts.articles}`,
+      `Created: ${utcMinute(facts.createdAt)}`,
+      "",
+      `All vouchers: ${ADMIN_VOUCHERS_URL}`,
+    ].join("\n"),
+  };
+}
+
+/* --------------------------------------------------------------- queue -- */
+
+/** The transaction the event is already inside. */
+type Tx = Pick<ReturnType<typeof getDb>, "insert" | "update">;
+
+/**
+ * **Queue the recipient's email, in the event's transaction.** `recipient` is
+ * the normalised address the voucher has as of this event; it is frozen here.
+ * Returns the delivery id, which the caller hands to `afterResponse` **after**
+ * its transaction has committed.
+ */
+export async function queueGiftEmail(
+  tx: Tx,
+  voucherId: string,
+  recipient: string,
+  articles: number,
+): Promise<string> {
+  const message = giftMessage(articles);
+  const [row] = await tx
+    .insert(billingVoucherEmails)
+    .values({
+      voucherId,
+      kind: "gift",
+      recipient,
+      subject: message.subject,
+      bodyText: message.text,
+      bodyHtml: message.html ?? null,
+    })
+    .returning({ id: billingVoucherEmails.id });
+  if (!row) throw new Error("queueing a gift voucher email returned no row");
+  return row.id;
+}
+
+/**
+ * **Queue the creator's notice, in the claim's transaction.** The recipient is
+ * left null: it is the creator's address, which only the Auth service knows,
+ * and that is a network call that does not belong inside a transaction. The
+ * first successful lookup freezes it (`deliverReservedVoucherEmail`).
+ *
+ * `null` if this voucher already has its notice — which nothing should make
+ * possible, since a voucher is claimed once, and which must not fail the claim.
+ */
+export async function queueClaimedEmail(tx: Tx, voucherId: string, facts: ClaimFacts): Promise<string | null> {
+  const message = claimedMessage(facts);
+  const [row] = await tx
+    .insert(billingVoucherEmails)
+    .values({ voucherId, kind: "claimed", subject: message.subject, bodyText: message.text, bodyHtml: null })
+    .onConflictDoNothing({ target: billingVoucherEmails.voucherId, where: sql`kind = 'claimed'` })
+    .returning({ id: billingVoucherEmails.id });
+  return row?.id ?? null;
+}
+
+/**
+ * **Cancel the gift emails that have not started**, in the transaction that
+ * revokes the voucher (or readdresses it — an email still waiting for the old
+ * address should not go). A `sending` row is already with Resend and is left
+ * to finish.
+ */
+export async function skipQueuedGifts(tx: Tx, voucherId: string, detail: "voucher revoked" | "address changed"): Promise<void> {
+  await tx
+    .update(billingVoucherEmails)
+    .set({ status: "skipped", detail, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(billingVoucherEmails.voucherId, voucherId),
+        eq(billingVoucherEmails.kind, "gift"),
+        eq(billingVoucherEmails.status, "queued"),
+      ),
+    );
+}
+
+/* -------------------------------------------------------------- reserve -- */
+
+/**
+ * **May the admin's Retry reserve this delivery?** One fragment, over the
+ * delivery as `e` and its voucher as `v`, used by the Retry reservation and by
+ * the list's `retryable` flag alike.
+ *
+ * Never `sent`. A `sending` row only once its lease is ten minutes old. A gift
+ * only while its voucher is unclaimed, unrevoked and still at the address this
+ * delivery was frozen with — a readdressed voucher has a newer delivery for that.
+ */
+const RETRYABLE = sql`(
+  (e.status in ('queued', 'failed', 'skipped')
+    or (e.status = 'sending' and e.attempt_started_at < now() - interval '10 minutes'))
+  and (e.kind <> 'gift'
+    or (v.claimed_by is null and v.revoked_at is null and v.email = e.recipient))
+)`;
+
+/** What a reservation hands the send: the attempt it now owns. `null` when it lost. */
+export type Reserve = (deliveryId: string, mode: "automatic" | "retry") => Promise<number | null>;
+
+const reserve: Reserve = async (deliveryId, mode) => {
+  const may = mode === "automatic" ? sql`e.status = 'queued'` : RETRYABLE;
+  const result = await getDb().execute(sql`
+    update spideryarn.billing_voucher_emails e
+       set status = 'sending', attempts = e.attempts + 1, attempt_started_at = now(),
+           detail = null, updated_at = now()
+      from spideryarn.billing_vouchers v
+     where e.id = ${deliveryId} and v.id = e.voucher_id and ${may}
+    returning e.attempts`);
+  const row = rowsOf<{ attempts: number }>(result)[0];
+  return row ? Number(row.attempts) : null;
+};
+
+export type RetryReservation =
+  | { readonly kind: "reserved"; readonly attempts: number }
+  | { readonly kind: "not-found" }
+  /** Sent, being sent, or a gift whose voucher was since claimed, revoked or readdressed. */
+  | { readonly kind: "refused" };
+
+/**
+ * **The admin's Retry, reserved inside the request** so the route can answer
+ * 404 or 409 in its own words; the send itself goes after the response
+ * (`deliverReservedVoucherEmail`). Throws only on a database error, which the
+ * route reports as it would any other.
+ */
+export async function reserveVoucherEmailRetry(deliveryId: string): Promise<RetryReservation> {
+  const attempts = await reserve(deliveryId, "retry");
+  if (attempts !== null) return { kind: "reserved", attempts };
+  const [exists] = await getDb()
+    .select({ id: billingVoucherEmails.id })
+    .from(billingVoucherEmails)
+    .where(eq(billingVoucherEmails.id, deliveryId))
+    .limit(1);
+  return exists ? { kind: "refused" } : { kind: "not-found" };
+}
+
+/* ----------------------------------------------------- send and complete -- */
+
+export interface Outcome {
+  readonly status: Extract<VoucherEmailStatus, "sent" | "skipped" | "failed">;
+  readonly detail: string | null;
+}
+
+export type Complete = (deliveryId: string, attempts: number, outcome: Outcome) => Promise<boolean>;
+
+const complete: Complete = async (deliveryId, attempts, outcome) => {
+  const done = await getDb()
+    .update(billingVoucherEmails)
+    .set({ status: outcome.status, detail: outcome.detail?.slice(0, DETAIL_MAX) ?? null, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(billingVoucherEmails.id, deliveryId),
+        eq(billingVoucherEmails.status, "sending"),
+        eq(billingVoucherEmails.attempts, attempts),
+      ),
+    )
+    .returning({ id: billingVoucherEmails.id });
+  return done.length > 0;
+};
+
+/** The seams, for tests. Every default is the real thing. */
+export interface VoucherEmailDeps {
+  readonly email?: EmailDeps;
+  /** The creator's address, for a claim notice. Defaults to the Auth Admin API. */
+  readonly lookupCreator?: (ownerId: string) => Promise<AccountEmail>;
+  readonly reserve?: Reserve;
+  readonly complete?: Complete;
+}
+
+/** A `SendResult` as a stored outcome. The reasons never carry an address. */
+function outcomeOf(result: SendResult): Outcome {
+  switch (result.kind) {
+    case "sent":
+      return { status: "sent", detail: null };
+    case "skipped":
+      return { status: "skipped", detail: result.reason };
+    case "failed":
+      return { status: "failed", detail: result.reason };
+    default: {
+      const unhandled: never = result;
+      return unhandled;
+    }
+  }
+}
+
+/**
+ * **The automatic send, after the event's response.** Reserves only a `queued`
+ * row, then delivers it. **Never throws.**
+ */
+export async function sendQueuedVoucherEmail(deliveryId: string, deps: VoucherEmailDeps = {}): Promise<void> {
+  let attempts: number | null;
+  try {
+    attempts = await (deps.reserve ?? reserve)(deliveryId, "automatic");
+  } catch (err) {
+    logger.error(
+      { deliveryId, err: errorName(err) },
+      "voucher email: could not reserve it — it is left queued, and Retry on /admin/vouchers can send it",
+    );
+    return;
+  }
+  /* Somebody else has it, or it is no longer queued (sent, or revoked first). */
+  if (attempts === null) return;
+  await deliverReservedVoucherEmail(deliveryId, attempts, deps);
+}
+
+/**
+ * **Send a delivery this caller has reserved, and record what happened.**
+ * Reads the frozen request from the row and nothing else — bar the voucher's
+ * `created_by`, which never changes, for a claim notice's first lookup.
+ * **Never throws.**
+ */
+export async function deliverReservedVoucherEmail(
+  deliveryId: string,
+  attempts: number,
+  deps: VoucherEmailDeps = {},
+): Promise<void> {
+  const finish = deps.complete ?? complete;
+  try {
+    const [row] = await getDb()
+      .select({
+        kind: billingVoucherEmails.kind,
+        recipient: billingVoucherEmails.recipient,
+        subject: billingVoucherEmails.subject,
+        bodyText: billingVoucherEmails.bodyText,
+        bodyHtml: billingVoucherEmails.bodyHtml,
+        createdBy: billingVouchers.createdBy,
+      })
+      .from(billingVoucherEmails)
+      .innerJoin(billingVouchers, eq(billingVouchers.id, billingVoucherEmails.voucherId))
+      .where(eq(billingVoucherEmails.id, deliveryId))
+      .limit(1);
+    if (!row) return;
+
+    let recipient = row.recipient;
+    if (recipient === null) {
+      /* A claim notice's first attempt: freeze the creator's address, once. */
+      const found = await (deps.lookupCreator ?? accountEmail)(row.createdBy);
+      if (found.kind !== "found") {
+        /* Never `hello@` instead: that address is not known to be theirs (Sol F4). */
+        await finish(deliveryId, attempts, { status: "failed", detail: "creator address unavailable" });
+        logger.warn({ deliveryId, lookup: found.reason }, "voucher email: the creator's address could not be looked up — not sent");
+        return;
+      }
+      await getDb()
+        .update(billingVoucherEmails)
+        .set({ recipient: found.email, updatedAt: sql`now()` })
+        .where(and(eq(billingVoucherEmails.id, deliveryId), isNull(billingVoucherEmails.recipient)));
+      const [frozen] = await getDb()
+        .select({ recipient: billingVoucherEmails.recipient })
+        .from(billingVoucherEmails)
+        .where(eq(billingVoucherEmails.id, deliveryId))
+        .limit(1);
+      recipient = frozen?.recipient ?? null;
+      if (recipient === null) throw new Error("a claim notice's recipient did not freeze");
+    }
+
+    const label = `voucher: ${row.kind}`;
+    const result = await sendEmail(
+      {
+        to: recipient,
+        subject: row.subject,
+        text: row.bodyText,
+        ...(row.bodyHtml === null ? {} : { html: row.bodyHtml }),
+        idempotencyKey: idempotencyKeyFor(deliveryId),
+      },
+      label,
+      deps.email,
+    );
+    if (result.kind === "failed" && result.providerError === "invalid_idempotent_request") {
+      /* The same key with a different body: the frozen request changed, which
+         nothing here may do. Failed, and loud. */
+      logger.error({ deliveryId }, "voucher email: Resend saw this key with a different request — an invariant is broken");
+    }
+    const recorded = await finish(deliveryId, attempts, outcomeOf(result));
+    if (!recorded) {
+      logger.warn({ deliveryId, attempts }, "voucher email: a newer attempt took this delivery over; this outcome was not recorded");
+    }
+  } catch (err) {
+    logger.error(
+      { deliveryId, err: errorName(err) },
+      "voucher email: delivering it failed — it is left sending, and Retry may take it once its lease is ten minutes old",
+    );
+  }
+}
+
+/* ----------------------------------------------------------------- list -- */
+
+interface LatestRow {
+  id: string;
+  voucher_id: string;
+  kind: VoucherEmailKind;
+  status: VoucherEmailStatus;
+  attempts: number;
+  detail: string | null;
+  updated_at: Date | string;
+  attempt_started_at: Date | string | null;
+  retryable: boolean;
+}
+
+function iso(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
+/**
+ * **The latest delivery of each kind for these vouchers**, with `retryable`
+ * computed by `RETRYABLE` itself. Vouchers with none are absent from the map.
+ */
+export async function latestVoucherEmails(voucherIds: readonly string[]): Promise<Map<string, VoucherEmails>> {
+  const out = new Map<string, VoucherEmails>();
+  if (voucherIds.length === 0) return out;
+  const result = await getDb().execute(sql`
+    select distinct on (e.voucher_id, e.kind)
+           e.id, e.voucher_id, e.kind, e.status, e.attempts, e.detail, e.updated_at,
+           e.attempt_started_at, ${RETRYABLE} as retryable
+      from spideryarn.billing_voucher_emails e
+      join spideryarn.billing_vouchers v on v.id = e.voucher_id
+     where e.voucher_id in (${sql.join(
+       voucherIds.map((id) => sql`${id}`),
+       sql`, `,
+     )})
+     order by e.voucher_id, e.kind, e.created_at desc, e.id desc`);
+  for (const row of rowsOf<LatestRow>(result)) {
+    const common = {
+      id: row.id,
+      status: row.status,
+      attempts: Number(row.attempts),
+      detail: row.detail,
+      updatedAt: iso(row.updated_at) ?? "",
+      attemptStartedAt: iso(row.attempt_started_at),
+      retryable: row.retryable === true,
+    };
+    const current = out.get(row.voucher_id) ?? { gift: null, claimed: null };
+    out.set(
+      row.voucher_id,
+      row.kind === "gift"
+        ? { ...current, gift: { ...common, kind: "gift" } satisfies VoucherEmailState<"gift"> }
+        : { ...current, claimed: { ...common, kind: "claimed" } satisfies VoucherEmailState<"claimed"> },
+    );
+  }
+  return out;
+}
+
+/** Every delivery for one voucher, oldest first. Tests and diagnostics. */
+export async function voucherEmailsFor(voucherId: string) {
+  return await getDb()
+    .select()
+    .from(billingVoucherEmails)
+    .where(eq(billingVoucherEmails.voucherId, voucherId))
+    .orderBy(billingVoucherEmails.createdAt, billingVoucherEmails.id);
+}
+
+function rowsOf<T>(result: unknown): T[] {
+  const rows = (result as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}
