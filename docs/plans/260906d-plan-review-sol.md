@@ -102,7 +102,7 @@ This matters because the plan otherwise risks claiming a new compile guarantee w
 
 > | Presentation | Visitor `BAND_SAYS` is already total; owner/controller presentation is untested | **compile tripwire exists; owner behaviour missing** |
 >
-> Update `mode.md` to distinguish the existing visitor-presentation total from the new owner/controller surface test. Do not describe presentation as newly compiler-checked; describe the deliverable as making the existing compile decision exercise the real owner controller.
+> Update `new-mode.md` to distinguish the existing visitor-presentation total from the new owner/controller surface test. Do not describe presentation as newly compiler-checked; describe the deliverable as making the existing compile decision exercise the real owner controller.
 
 ### F8 — P2 — established: the `no-raw-nul-bytes` migration target is stale
 

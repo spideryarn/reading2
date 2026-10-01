@@ -49,7 +49,7 @@
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
 import { useState, type ReactElement, type ReactNode } from "react";
-import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
+import { Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
 import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
@@ -60,6 +60,7 @@ import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -590,11 +591,6 @@ export function QuotesPanel({
   /* Empty with fewer than two quotes or two ranks; then there is no rank row
      and the head row carries the count and the badge instead. */
   const ranks = quotes && quotes.quotes.length > 1 ? rankOptions(all) : [];
-  const count = quotes && (
-    <span className="quotes-count">
-      {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
-    </span>
-  );
   /* Provenance about the owner's own run, so a visitor sees none of it:
      `profileHash` never leaves the server (src/public-types.ts). An icon since
      2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
@@ -616,6 +612,33 @@ export function QuotesPanel({
      visitor as well, which is what makes "the reader is told" true rather than
      true for whoever happens to own the article. */
   const discarded = discardedNote(quotes?.discarded);
+  /* What the band's (i) adds after the mode's own words: how many quotes,
+     what the stage refused to keep, and who chose them. Greg, 2026-10-01
+     (spya-ucu35y): *"how many X (of y) … what model was used"*; plan 261001m.
+     The count was at the rank row's end (or in the head row) and the
+     discarded sentence above the list until then; *prioritised* still says
+     "5 of 14" beside its slider, a count beside the control it describes. The
+     discarded sentence is the list's, so a visitor gets it too; the
+     provenance is the owner's artefact's — a visitor's carries none
+     (src/public-types.ts). */
+  const made = owner?.quotes ?? null;
+  const about = quotes ? (
+    <>
+      <p>
+        {all.length === 1 ? "One quote" : `${all.length} quotes`}
+        {made?.passes && made.passes > 1 ? `, found in ${made.passes} passes` : ""}.
+      </p>
+      {discarded && <p>{discarded}</p>}
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  ) : null;
 
   /**
    * @param again beside a list that is already there, so the run must be
@@ -665,6 +688,8 @@ export function QuotesPanel({
     <ModeSurface
       label="Quotes"
       feature="quotes"
+      mode="quotes"
+      about={about}
       /* **No head row while the rank row is drawn**, since 2026-10-01 — Greg,
           on a landscape iPhone: *"all the stuff at the top of their columns
           takes up the vertical real estate, and I can't see the actual result"*
@@ -677,15 +702,13 @@ export function QuotesPanel({
           Both children are gated on `quotes`; `head={quotes && …}` would pass
           the surface `null` while the list loads and no `.band-head` would be
           drawn at all. With one quote, or one rank on offer, there is no rank
-          row, so the old row stays and carries both. */
-      head={
-        ranks.length > 0 ? null : (
-          <>
-            {count}
-            {badge}
-          </>
-        )
-      }
+          row, so the old row stays and carries both.
+
+          **The count has gone to the band's (i)** since 2026-10-01 (plan
+          261001m), so this row holds only the badge now. Still a fragment
+          rather than `null`, for the reason above: the row holds its place
+          while the list loads, and the (i) sits in it. */
+      head={ranks.length > 0 ? null : <>{badge}</>}
       /* Pinned under the list rather than at the end of it. Same guard it had
           as a trailing child of the band — and **not on a stale or an outdated
           list**, whose banner offers the one honest action there, a list of its
@@ -714,14 +737,7 @@ export function QuotesPanel({
           options={ranks}
           rank={rank}
           onRank={onRank}
-          trailing={
-            badge || rank !== "prioritised" ? (
-              <>
-                {rank !== "prioritised" && count}
-                {badge}
-              </>
-            ) : null
-          }
+          trailing={badge}
         />
       )}
 
@@ -799,14 +815,9 @@ export function QuotesPanel({
               Metadata, and a run started there shows in the foot. Plan
               260929c. */}
 
-          {/* Said once, above the list, and only when there is something to say.
+          {/* The discarded sentence was here, above the list, until
+              2026-10-01; it is in the band's (i) now (`about`, plan 261001m).
               See `discardedNote` for why only two of the five counts are named. */}
-          {discarded && (
-            <p className="quotes-discarded">
-              <Sparkles size={12} />
-              {discarded}
-            </p>
-          )}
 
           {/* One list again, in every rank. It was two headed groups from
               2026-08-31 until 2026-09-03, when the bar started hiding what is

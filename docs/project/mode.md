@@ -84,7 +84,7 @@ rest.** A new word there is red until it has a row in each of these totals:
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
 | `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
 | `SPENDS` and `DRAWS` | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) — what an **owner's** press buys, and what the band actually draws. Both independently written, never derived from the tables above. `DRAWS` is total over `Mode` with no exclusions — a mode that draws no band says so as a `kind: "none"` row **carrying the positive control**, what is on screen instead. It was keyed `Exclude<Mode, NO_BAND_MODES>` until GPT Sol's F21 on 2026-09-06, and that one list both excused a mode from the table and skipped it at run time, so a mode added to it was checked by nothing |
-| `modeBand()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says so in its own case — `plain` returns `null`, and `annotations` draws only what sits outside its right-hand column. (It was `band()` until 2026-09-11; `band()` is now the wrapper that puts its answer, or a visitor's `VisitorBand`, inside the boundary below) |
+| `modeBand()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says so in its own case — `plain` returns `null`, and `marginalia` draws only what sits outside its right-hand column. (It was `band()` until 2026-09-11; `band()` is now the wrapper that puts its answer, or a visitor's `VisitorBand`, inside the boundary below) |
 | `MODE_CONTAINMENT` | [`src/web/reader/ModeBoundary.tsx`](../../src/web/reader/ModeBoundary.tsx) — **whether the band may break on its own**, without taking the article. `contained` is the answer for any mode with a band; the boundary is already at the call site. `exempt` needs a reason and a matching change to `EXEMPT` in [`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx). Give `WITNESS` an entry for each composition path the mode can draw: the owner's band, a distinct available visitor band, and `VisitorBand` when `visitorGap` can put it in the slot. Each names a `useRenderCount` label whose injected throw proves the component is really inside. If a press or a chip inside your band arms a token, add it to `bandTarget` in `activation.ts` so a band that throws before claiming it retires it ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)) |
 | `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the ring, the paragraph bar and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly — the switch is the list of which do. The **prose marks** are one step further on: `proseFound`, in the same file, adds the quotes, which are marked in every mode ([quotes.md](quotes.md)) — so a new mode gets those whether it asks or not, and must not add them to the other three |
 
@@ -113,7 +113,8 @@ Then the residue, which is why this page exists:
   § `SPENDS` for a new one — an independently written table of what each press buys.*
 - **The band itself**: render it with
   [`ModeSurface`](../../src/web/ModeSurface.tsx), which owns the `<aside class="mode-band">`, its
-  **required** `aria-label`, the optional `head` and `foot` slots, and nothing else. Do not
+  **required** `aria-label`, the optional `head` and `foot` slots, the band's (i) (`mode` and
+  `about`, below), and nothing else. Do not
   hand-write the `<aside>` — twelve panels did until 2026-09-07, and the two places that still do
   are documented exceptions rather than precedents: `FeatureBoundary`'s fallback (a deliberate
   circuit breaker — read the comment there before you touch it) and the `/design` band specimen.
@@ -146,18 +147,54 @@ Then the residue, which is why this page exists:
   to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
   the top, in a foot, or under the controls:
 
-  > make a note in the mode.md (or similar) that we don't want these mode descriptions - they
+  > make a note in the new-mode.md (or similar) that we don't want these mode descriptions - they
   > waste space. Either put them as tooltips for an (i) icon, or just try and make things
   > self-explanatory.
   >
   > — Greg, 2026-09-30 (SPIDERYARN-READING2-7B)
 
   So, in order of preference: make the control or the content say it by itself; put it in the card
-  on the control that opens it (`ControlTip`'s *what* and *how*, [tooltips.md](tooltips.md)); or,
-  when there is no control to hang it on, an (i) icon whose tooltip carries it. Empty states and
-  failures are not descriptions — they say what is happening, and stay.
+  on the control that opens it (`ControlTip`'s *what* and *how*, [tooltips.md](tooltips.md)); or
+  put it in the band's (i), next. Empty states and failures are not descriptions — they say what is
+  happening, and stay.
   [261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md)
-  took Simple's foot out for this. *Nothing.*
+  took Simple's foot out for this.
+- **Every band has an (i) in its top-right corner**, and what a band says *about itself* goes there:
+
+  > Move this into a tooltip for a (i) icon in the top-right. … Each mode should have such an (i)
+  > icon, which contains information like: how many X (of y); other useful explanatory information
+  > about what this is, why, how it works, caveats, how to understand it, etc; when it was
+  > generated/ran; what model was used.
+  >
+  > — Greg, 2026-10-01 (spya-ucu35y), about Tweets' *"Written by claude-sonnet-5 · tweets/5 · 1 Oct
+  > 2026 · 20.0s"* foot
+
+  Give `ModeSurface` your mode as `mode`, **unconditionally**: the card then opens with the mode's
+  own `description` and `how` from [`MODE_CATALOG`](../../src/mode-catalog.ts) — the words the
+  Dock's card on its button says, so write them there and not again — and the band has its (i) in
+  every state, loading, empty, running and visitor included. `about` adds what only your mode
+  knows, in this order: **counts** ("12 terms", "8 of 24"), **caveats**, and **who made it and when**
+  with [`AboutMade`](../../src/web/BandAbout.tsx) — the model, the version, the exact time and how
+  long ago ([design-css-overview.md § Dates](design-css-overview.md#dates)), how long it took. That
+  last part is the owner's alone: a visitor's artefact carries none of it.
+
+  **What stays on the band**: empty states, loading, running jobs and failures; anything the reader
+  can act on; a count beside the control it describes (a threshold's "8 of 24"); navigation
+  ("Question 3 of 8"); and a caveat the visible rows cannot be read without — Timeline's *"Everything
+  dated here is in 2026"*, because its rows leave the year out. A head row whose only content was a
+  count goes, and gives the space back. The one band without a corner (i) is Referee, whose *how
+  this works* card is too long for a tooltip and opens inside the band instead.
+
+  **Your top row has to leave the corner clear.** The (i) is out of flow (`position: absolute` in
+  the band), and the band gets `has-about`, which sets `--band-about-room`. `.band-head` and
+  `.gloss-sort` already pad their right edge by it; if your top row is anything else, add
+  `var(--band-about-room)` to its right padding in your own stylesheet
+  ([design-css-overview.md](design-css-overview.md) § The band's (i)). Plan
+  [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
+  *[`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
+  § `DRAWS`: every band row says `about: "corner"` or names why it is exempt, and the sweep checks
+  one (i), first in the band, in the empty and the populated state, and no "Written by" on the band
+  itself.*
 - **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
   *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
   which derives the list rather than repeating it.
@@ -430,6 +467,12 @@ on 2026-09-10, when its nested list became Structure's narrow face
    in `settleAddress`, [`src/web/router.ts`](../../src/web/router.ts) — [url-state.md](url-state.md)), and the mode's line in
    [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
    says where it went.
+
+**A retired word for a mode that is not a band does not go in `RETIRED_MODES`**, which maps only to
+band modes (`BandMode`). Marginalia's old word, `annotations`, has to land on the `?margin=1` switch
+instead, so it is translated there by `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts),
+which the Reader, the Dock's links and the remembered last view all ask —
+[261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md).
 
 ## Before you call it finished
 

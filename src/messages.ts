@@ -2750,6 +2750,7 @@ export const AUTH_EXCHANGE_FAILED: ReaderFacingFailure = {
 export function authConfirmationSent(email: string): string {
   return (
     `Check ${email} for a confirmation link. The account will not work until you have clicked it. ` +
+    "If the link opens in a new tab, come back to this tab afterwards to carry on where you left off. " +
     "[auth-confirm]"
   );
 }
@@ -4334,7 +4335,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is
      where they are put. */
-  annotations:
+  marginalia:
     "Notes beside the text: the question each part answers, where the argument has got to, and " +
     "the ideas the piece assumes, where those have been made.",
 };
@@ -4545,7 +4546,7 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
  * **What the order on screen is, said out loud — one sentence per order.**
  *
  * A reader looking at a list assumes its order carries a claim, so each order
- * says what it is, in the line after *"Searched on …"*. Since 2026-09-29 these
+ * says what it is, on the line over the list. Since 2026-09-29 these
  * replace `DEBATE_NO_RANKING` (*"no ranking … is applied"*), which became false
  * the day the list gained an order bar (SPIDERYARN-READING2-5P,
  * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F16).

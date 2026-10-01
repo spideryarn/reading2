@@ -25,6 +25,10 @@
   padding: 0.5rem 0.6rem 0.55rem;
   border-bottom: 1px solid var(--rule);
 }
+/* The band's top row (a visitor's is `.srch-all`, below), so it clears the (i)
+   in the corner: mode-band.css § `.mode-band > .band-about`. Sideways only, so
+   the zero-slack vertical fit is untouched. */
+.mode-band.has-about > .srch-box { padding-right: calc(0.6rem + var(--band-about-room)); }
 .srch-field { position: relative; display: flex; align-items: center; }
 .srch-input {
   flex: 1;
@@ -131,6 +135,7 @@
   flex: none;
   padding: 0.35rem 0.5rem 0.25rem;
 }
+.mode-band.has-about .srch-all { padding-right: calc(0.5rem + var(--band-about-room)); }
 .srch-all-tick, .srch-saved-tick {
   display: flex;
   align-items: center;

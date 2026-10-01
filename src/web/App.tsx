@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -17,7 +18,16 @@ import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { adminOnly, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
+import {
+  adminOnly,
+  CALLBACK_HREF,
+  LIBRARY_HREF,
+  navigate,
+  parseRoute,
+  type Route,
+  useRoute,
+} from "./router.js";
+import { takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
@@ -179,10 +189,9 @@ export function App() {
      short prompt, so there is one signed-out page rather than two. The address
      bar still holds the article, so signing in lands you on it.
 
-     `/login` is the exception, and the only one. It is a page somebody was
-     *sent* — a password-reset email has to land somewhere — so it keeps the
-     compact screen rather than being answered with the pitch. See
-     SignInPage.tsx.
+     `/login` is the exception, and the only one. It is the dedicated sign-in
+     page somebody was *sent*, so it is answered directly rather than with the
+     pitch. See SignInPage.tsx.
 
      **And `/read/<slug>` is the second exception, since 2026-08-28.** An owner
      can mark a document world-readable, and from that moment a stranger at its
@@ -337,6 +346,21 @@ export function App() {
  * that had `useJobs` driving imports only on the pages that happened to mount
  * it (see `useJobSession` above). One wrapper, one button, one rule.
  */
+/**
+ * Signed in at `/login`: go where the sign-in page remembered, or the shelf.
+ *
+ * **The pathname check is for StrictMode**, which runs this effect twice: the
+ * first run takes the destination and navigates, and the second must not then
+ * send the reader on to the shelf over the top of it.
+ */
+function LeaveLogin() {
+  useEffect(() => {
+    if (parseRoute(location.pathname).kind !== "login") return;
+    navigate(takeReturn(CALLBACK_HREF) ?? LIBRARY_HREF, { replace: true });
+  }, []);
+  return null;
+}
+
 function SignedIn({
   route,
   user,
@@ -444,10 +468,10 @@ function SignedIn({
             spider and the way home now, and the fixed corner copy sat on top
             of it (z-index 60 over the bar's 40) — two spiders, two animation
             hosts. GPT Sol, reviewing docs/plans/260929a-…, finding 1. */}
-        {/* **`signedIn` is what keeps the top bar honest here.** Without it the
-            nav drew *Sign in* → `/#sign-in`, and `/` is the shelf for this
-            reader, which has no such panel: a link that visibly does nothing.
-            GPT Sol, stage 2 code review of
+        {/* **`signedIn` is what keeps the top bar honest here.** Before the
+            dedicated sign-in page, omitting it drew *Sign in* → `/#sign-in`,
+            and `/` is the shelf for this reader, which had no such panel: a
+            link that visibly did nothing. GPT Sol, stage 2 code review of
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
@@ -561,13 +585,21 @@ function SignedIn({
   }
   /* Signed in, and asking for the sign-in page. There is nothing to show — the
      gate above already returned `SignInPage` for everyone who needs it — so
-     this is somebody following a stale link, and the shelf is where they meant
-     to end up. `replace`, because a Back button that returns you to a page that
-     immediately bounces you again is a trap. */
-  if (route.kind === "login") {
-    navigate(LIBRARY_HREF, { replace: true });
-    return null;
-  }
+     this is either somebody who has just signed in *on* it with a password, or
+     somebody following a stale link. `replace`, because a Back button that
+     returns you to a page that immediately bounces you again is a trap.
+
+     **Where to: whatever the sign-in page remembered, taken once.** Since
+     2026-10-01 the landing page and `/pricing` send a stranger here with
+     `?next=` (docs/plans/261001m), and SignInControls writes that through
+     `rememberReturn` when the reader submits. `takeReturn` reads it and forgets
+     it, with its ten-minute expiry — so the URL's `next` is never obeyed on its
+     own, and a signed-in visit to an old `/login?next=…` goes to the shelf
+     (GPT Sol, plan review F1).
+
+     In an effect, `LeaveLogin` below, since a navigation during render updates
+     every route subscriber mid-render, which React warns about. */
+  if (route.kind === "login") return <LeaveLogin />;
 
   /* No `HomeLogo` here any more, and that is not a tidy-up. `ArticlePage` can
      now end at `LandingPage` — a stranger following a link to a document that

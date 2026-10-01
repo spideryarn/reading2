@@ -56,6 +56,8 @@
  * to spare.
  */
 import type { HTMLAttributes, ReactNode, Ref } from "react";
+import type { Mode } from "../modes.js";
+import { AboutMode, BandAbout } from "./BandAbout.js";
 
 /**
  * Everything an `<aside>` takes that this component does not name itself.
@@ -101,6 +103,10 @@ type PassThrough = Omit<
   | "role"
   | "aria-hidden"
   | "aria-labelledby"
+  /* `about` is an RDFa attribute in `HTMLAttributes` (a string); here it is the
+     band's (i) card, a `ReactNode`, and the two intersect to "string" unless the
+     attribute is taken out. Nobody passes RDFa to a band. */
+  | "about"
 >;
 
 export function ModeSurface({
@@ -109,6 +115,8 @@ export function ModeSurface({
   head,
   children,
   foot,
+  mode,
+  about,
   ref,
   ...rest
 }: {
@@ -171,11 +179,52 @@ export function ModeSurface({
    * transcript and the composer as one fragment.
    */
   foot?: ReactNode;
+  /**
+   * **Which mode this band is**, for the (i) in its corner: the card opens with
+   * that mode's own sentence and its *how* from `MODE_CATALOG`
+   * (src/mode-catalog.ts) — the words the Dock's card on the same mode says, so
+   * the two cannot drift — and then `about`. Given a mode, the band always has
+   * its (i), in every state, empty and visitor included. Optional only for the
+   * bands that are not one mode's (`PublicChrome`'s visitor band);
+   * tests/every-mode-draws-its-surface.test.tsx holds every mode to it.
+   */
+  mode?: Mode | undefined;
+  /**
+   * **What the band's (i) adds after the mode's own words**, which sits in the band's top-right
+   * corner — the same place in every band. Greg, 2026-10-01 (spya-ucu35y):
+   * *"Each mode should have such an (i) icon"*. After `mode`'s words: the
+   * counts, the caveats, and who made it and when (`AboutMade`). docs/project/mode.md § No description line in the band;
+   * docs/plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md.
+   *
+   * **This is the one exception to "adds no DOM"**, and it is out of flow: the
+   * button is `position: absolute` against the band (which is `fixed`), so it
+   * takes no flex space and Search's zero-slack fit is unchanged. It comes
+   * first so it is first in tab order. No stylesheet selects the band's
+   * children by position (checked 2026-10-01). The band gets `has-about`,
+   * which sets `--band-about-room`; a mode's top row pads its right edge by
+   * that so the icon never covers a control (`.band-head` does it in
+   * mode-band.css; a mode's own top row does it in its own stylesheet).
+   *
+   * Absent, `null` or a boolean adds nothing, like `head`; with no `mode`
+   * either, there is no (i).
+   */
+  about?: ReactNode;
   /** For `OutlinePanel`, which measures the band to choose a rung. */
   ref?: Ref<HTMLElement>;
 } & PassThrough) {
+  const extra = typeof about !== "boolean" && about != null;
+  const hasAbout = mode !== undefined || extra;
+  const className = [feature ? `mode-band ${feature}` : "mode-band", hasAbout ? "has-about" : ""]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <aside {...rest} ref={ref} className={feature ? `mode-band ${feature}` : "mode-band"} aria-label={label}>
+    <aside {...rest} ref={ref} className={className} aria-label={label}>
+      {hasAbout && (
+        <BandAbout label="About this mode">
+          {mode && <AboutMode mode={mode} />}
+          {extra && about}
+        </BandAbout>
+      )}
       {/* **The three values React renders as nothing, and a boolean is two of
           them.** `head` is written by a caller as `cond && <X/>` or
           `cond ? <X/> : null` at least as often as it is omitted, and those hand

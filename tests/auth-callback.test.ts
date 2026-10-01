@@ -419,3 +419,33 @@ describe("a failure never leaves the destination behind", () => {
     expect(code).toMatch(/const fail = \([^)]*\) => \{[\s\S]{0,400}?takeReturn\(CALLBACK_HREF\);[\s\S]{0,200}?setError\(/);
   });
 });
+
+/**
+ * **Where the way out of a failure goes**, since the landing page stopped
+ * carrying a form (docs/plans/261001m, GPT Sol's plan review F3). "back to the
+ * sign-in screen" used to go to `/`, which *was* the sign-in screen; it is the
+ * marketing page now, so that button has to name `/login` itself.
+ */
+describe("the way out of a failure", () => {
+  function press(text: string): void {
+    const found = [...document.querySelectorAll("button")].find((b) => b.textContent === text);
+    if (!found) throw new Error(`no "${text}" in: ${document.body.textContent}`);
+    act(() => found.click());
+  }
+
+  it("sends a reader who is not signed in to the sign-in page", async () => {
+    await arriveWith("?error=access_denied&error_code=access_denied");
+    press("back to the sign-in screen");
+    expect(navigate).toHaveBeenCalledWith("/login", { replace: true });
+  });
+
+  it("sends a reader who is signed in to their shelf", async () => {
+    urlSessionKind.mockReturnValue(new Promise(() => {}));
+    await arriveWith("?code=abc123");
+    await act(async () => {
+      vi.advanceTimersByTime(11_000);
+    });
+    press("go to your shelf");
+    expect(navigate).toHaveBeenCalledWith("/", { replace: true });
+  });
+});

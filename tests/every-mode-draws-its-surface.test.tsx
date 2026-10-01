@@ -906,12 +906,12 @@ async function open(search = "", { strict = true }: { strict?: boolean } = {}): 
   await settle();
 }
 
-/* **Annotations is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
+/* **Marginalia is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
    press turns the column on and leaves `?mode=` alone, so from Plain it is
    read here as the view it opens. Every fixture this file presses from is Plain. */
 const modeInUrl = (): string => {
   const query = new URLSearchParams(location.search);
-  return query.get("mode") ?? (query.get("margin") === "1" ? "annotations" : "plain");
+  return query.get("mode") ?? (query.get("margin") === "1" ? "marginalia" : "plain");
 };
 
 /** `?mode=` is written behind nuqs' throttle, so a single read is a race. */
@@ -927,7 +927,7 @@ async function modeAfterPress(before: string): Promise<string> {
 /** The real bar button, found the way a screen reader would find it. */
 function modeButton(mode: Mode): HTMLButtonElement {
   const label = MODE_LABEL[mode];
-  /* The radios, and Annotations' toggle after them (261001i). */
+  /* The radios, and Marginalia's toggle after them (261001i). */
   const found = [
     ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
   ].find(
@@ -1139,7 +1139,7 @@ const SPENDS: Record<Mode, Spend> = {
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
   /* The tree's questions, the arc and the ideas already made — read, never
      generated. A press that started the Ideas job here would be the bug. */
-  annotations: { kind: "none", why: "draws what the article already has; it never starts a job" },
+  marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1267,6 +1267,23 @@ for (const trigger of TRIGGERS) {
               stillPending(),
               `${mode}${want.search}: presses left armed and unclaimed after the page settled`,
             ).toEqual([]);
+
+            /* The band's (i) is there before anything is in it — empty or
+               running, not only populated (GPT Sol, plan review 261001m). */
+            const draws = DRAWS[mode];
+            if (draws.kind === "band" && draws.about === "corner") {
+              const band = host.querySelector(draws.where);
+              expect(band, `${mode}: no ${draws.where} before its artefact exists`).not.toBeNull();
+              const corner = (band as Element).querySelectorAll(":scope > .band-about");
+              expect(
+                corner.length,
+                `${mode}: not exactly one (i) in the corner before its artefact exists`,
+              ).toBe(1);
+              expect(
+                corner[0],
+                `${mode}: the (i) is not the band's first child before its artefact exists`,
+              ).toBe((band as Element).firstElementChild);
+            }
           }
           /* **Outside the loop**, because a table can promise a press and then
              list none, and a loop over nothing passes. See `AtLeastOne`. */
@@ -1307,8 +1324,17 @@ for (const trigger of TRIGGERS) {
  *  - `control` — for a bandless mode, what must be on screen *instead*. Not
  *    optional, because "no band" is also what a page that failed to load draws.
  */
+/**
+ * **Every band's (i), in its top-right corner** — `ModeSurface`'s `about`.
+ * Greg, 2026-10-01 (spya-ucu35y): *"Each mode should have such an (i) icon"*;
+ * docs/plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md. A row
+ * says `"corner"`, or names why it is exempt — never neither, so a new band
+ * cannot leave it out by omission.
+ */
+type About = "corner" | { exempt: string };
+
 type Draws =
-  | { kind: "band"; where: string; says: string }
+  | { kind: "band"; where: string; says: string; about: About }
   | {
       kind: "none";
       why: string;
@@ -1332,7 +1358,7 @@ const DRAWS: Record<Mode, Draws> = {
      read of the ideas happened, reached the notes and was put in a cell. jsdom
      lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
      room and the notes are drawn. */
-  annotations: {
+  marginalia: {
     kind: "none",
     why: "its notes sit beside the prose, in the table's own cells",
     query: "?margin=1",
@@ -1366,48 +1392,51 @@ const DRAWS: Record<Mode, Draws> = {
      trap documented on `BAND_SAYS` in tests/public-network-trace.test.tsx. Read
      raw, a `textContent` assertion here would be satisfied by a panel whose
      visible columns rendered nothing at all. */
-  structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW },
+  structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW, about: "corner" },
   /* The root's own gist, drawn as the band rather than as a column. */
-  summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST },
+  summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST, about: "corner" },
   /* An entry's name, which is what a closed row shows — a canary the panel
      cannot draw without having drawn the list. */
-  glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM },
+  glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM, about: "corner" },
   /* The idea's **name** rather than its statement, for the same reason. */
-  ideas: { kind: "band", where: ".mode-band.ideas", says: IDEA_NAME },
+  ideas: { kind: "band", where: ".mode-band.ideas", says: IDEA_NAME, about: "corner" },
   /* **The line itself, and it had to be**: the panel draws the quoted words and
      not the model's reason for choosing them. See `QUOTE_LINE`. */
-  quotes: { kind: "band", where: ".mode-band.quotes", says: QUOTE_LINE },
+  quotes: { kind: "band", where: ".mode-band.quotes", says: QUOTE_LINE, about: "corner" },
   /* The event's label. The dating phrase beside it is drawn too, but a label is
      the row's own content where a phrase could come from a formatter. */
-  timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL },
+  timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL, about: "corner" },
   /* What the found page is said to bear on — a row's body, not the group
      heading above it, which is a constant sentence. */
-  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_TITLE },
+  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_TITLE, about: "corner" },
   /* A work's title — the row's own content, not the order buttons or the
      foot's sentences, which are constants a panel with no rows still draws. */
-  citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE },
-  faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION },
-  trajectory: { kind: "band", where: ".mode-band.trajectory", says: TRAJECTORY_ROLE },
+  citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE, about: "corner" },
+  faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
+  trajectory: { kind: "band", where: ".mode-band.trajectory", says: TRAJECTORY_ROLE, about: "corner" },
   /* A post's own words, off the thread in the payload. `.tweets` and not
      `.gloss`: the panel's feature string is `"gloss tweets"`, so `.gloss` alone
      would also match Glossary's band. */
-  tweets: { kind: "band", where: ".mode-band.tweets", says: TWEET_POST },
+  tweets: { kind: "band", where: ".mode-band.tweets", says: TWEET_POST, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
-  diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE },
+  diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE, about: "corner" },
   /* The owner's own saved question. Asserting the band's *"Search"* heading
      would pass over an empty `<aside>`. */
-  search: { kind: "band", where: ".mode-band.srch", says: SEARCH_CRITERION },
+  search: { kind: "band", where: ".mode-band.srch", says: SEARCH_CRITERION, about: "corner" },
   /* The referee's own criterion, off the saved list — and the band opens on
      Criteria, so this is the sub-mode a press actually lands on. */
-  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT },
+  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: { exempt: "its how-this-works card opens inside the band; too long for a tooltip, and already its (i)" } },
   /* **The two conversation bands share a component and a class**, so the
      negation is what keeps these two rows apart: Remember's band carries
      `remember` as well as `chat`, and without `:not()` a Remember panel drawn
      in Chat's place would satisfy this row. */
-  chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE },
-  /* Recall, which is the half Remember opens on. */
-  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_TITLE },
+  chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE, about: "corner" },
+  /* Recall, which is the half Remember opens on — and since plan 261001m it
+     opens the reader's one Remember conversation rather than a list, under a
+     header that says "Remember", so the thing to find is the answer in it
+     rather than the thread's title. */
+  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_ANSWER, about: "corner" },
 };
 
 describe("phase B — what each mode's real controller drew", () => {
@@ -1450,6 +1479,25 @@ describe("phase B — what each mode's real controller drew", () => {
         const band = host.querySelector(row.where);
         expect(band, `${mode}: no ${row.where} on the page`).not.toBeNull();
         expect(readable(band as Element), `${mode}: the band drew no body`).toContain(row.says);
+
+        /* Who wrote it belongs in the (i), not on the band — the line Greg's
+           report was about was Tweets' "Written by claude-sonnet-5 · …". */
+        expect(readable(band as Element), `${mode}: provenance on the band`).not.toMatch(/Written by /);
+
+        /* The (i): one, a direct child of the band (the corner, not some row's
+           end), and a card with words in it once pressed. */
+        const corner = (band as Element).querySelectorAll(":scope > .band-about");
+        if (row.about !== "corner") {
+          expect(row.about.exempt.trim(), `${mode}: an exemption with no reason`).not.toBe("");
+          expect(corner.length, `${mode} is exempt and still drew a corner (i)`).toBe(0);
+          return;
+        }
+        expect(corner.length, `${mode}: no (i) in the band's corner`).toBe(1);
+        expect(corner[0], `${mode}: the (i) is not the band's first child`).toBe((band as Element).firstElementChild);
+        expect((band as Element).querySelectorAll(".band-about").length, `${mode}: a second (i)`).toBe(1);
+        await act(async () => (corner[0] as HTMLButtonElement).click());
+        const card = document.querySelector(".band-about-card");
+        expect(card?.textContent?.trim() ?? "", `${mode}: the (i) opened an empty card`).not.toBe("");
       },
       PHASE_MS,
     );
@@ -1464,7 +1512,7 @@ describe("phase B — what each mode's real controller drew", () => {
    draw nothing*, and carries the positive control with it. */
 
 /* ===================================================== the notes beside a band ==
-   **Annotations' column beside a band** — `?margin=1`, since 2026-10-01
+   **Marginalia's column beside a band** — `?margin=1`, since 2026-10-01
    (docs/plans/261001i-annotations-column-beside-a-band-mode.md). The width
    arithmetic is swept in tests/layout-margin.test.ts; this is the page: the two
    drawn together where they fit, the band winning where they do not, and an
@@ -1498,9 +1546,9 @@ describe("the notes beside a band", () => {
   /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
      the other"*. Pressing a band already wins; this is pressing the notes
      (261001k). */
-  it("swaps the band out for the notes when Annotations is pressed below 900px", async () => {
+  it("swaps the band out for the notes when Marginalia is pressed below 900px", async () => {
     await atWidth(800, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
     const query = new URLSearchParams(location.search);
     expect(query.get("margin")).toBe("1");
@@ -1511,7 +1559,7 @@ describe("the notes beside a band", () => {
 
   it("undoes the combined swap with one Back step", async () => {
     await atWidth(800, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     expect(location.search).toContain("margin=1");
 
     await act(async () => history.back());
@@ -1527,7 +1575,7 @@ describe("the notes beside a band", () => {
   it("brings back notes hidden behind a band rather than turning them off", async () => {
     await atWidth(800, "?mode=glossary&margin=1");
     expect(notes()).toBe(0);
-    await press("annotations");
+    await press("marginalia");
     for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
     expect(new URLSearchParams(location.search).get("margin")).toBe("1");
     expect(host.querySelector(".mode-band")).toBeNull();
@@ -1536,7 +1584,7 @@ describe("the notes beside a band", () => {
 
   it("leaves the band open where both fit", async () => {
     await atWidth(1024, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     const query = new URLSearchParams(location.search);
     expect(query.get("mode")).toBe("glossary");
     expect(query.get("margin")).toBe("1");
@@ -1559,15 +1607,15 @@ describe("the notes beside a band", () => {
       expect(url(), `after ${mode}`).toBe(want);
       expect(history.length - before, `entries for ${mode}`).toBe(1);
     };
-    await step("annotations", "plain/1");
+    await step("marginalia", "plain/1");
     await step("glossary", "glossary/1");
-    await step("annotations", "plain/1");
-    await step("annotations", "plain/-");
+    await step("marginalia", "plain/1");
+    await step("marginalia", "plain/-");
   }, PHASE_MS);
 
   it("leaves a phone's band open, where the notes do not fit even alone", async () => {
     await atWidth(390, "?mode=glossary");
-    await press("annotations");
+    await press("marginalia");
     await settle();
     expect(host.querySelector(".mode-band"), "the band closed for nothing").not.toBeNull();
   }, PHASE_MS);
@@ -1581,6 +1629,17 @@ describe("the notes beside a band", () => {
 
   it("opens an old ?mode=annotations link as Plain with the notes on", async () => {
     await atWidth(1024, "?mode=annotations");
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBeNull();
+    expect(query.get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(notes()).toBeGreaterThan(0);
+  }, PHASE_MS);
+
+  /* The mode's own word since 261001n takes the same road as the old one
+     (`isMarginaliaModeWord`): the notes on, and no `mode=` left behind. */
+  it("opens a ?mode=marginalia link as Plain with the notes on", async () => {
+    await atWidth(1024, "?mode=marginalia");
     const query = new URLSearchParams(location.search);
     expect(query.get("mode")).toBeNull();
     expect(query.get("margin")).toBe("1");

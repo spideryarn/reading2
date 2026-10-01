@@ -60,13 +60,13 @@ import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
+import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
-import { howLong } from "./relative-time.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
 /** How long a copy button says it worked before going back to normal. */
@@ -102,13 +102,15 @@ export function TweetsPanel({
   return (
     <ModeSurface
       label="Tweets"
+      mode="tweets"
       feature="gloss tweets"
-      /* **A head only when there is a thread**: the counts and *Copy the
-         thread*, which is not the mode's name (mode.md § the band's
-         chrome). No thread, no row. */
+      /* **A head only when there is a thread**: *Copy the thread* and the
+         owner's profile badge, which are not the mode's name (mode.md § the
+         band's chrome). No thread, no row. The counts that were here are in
+         the (i), with who wrote it — spya-ucu35y. */
       head={
         ready && thread ? (
-          <ThreadCounts thread={thread} article={article}>
+          <ThreadHead thread={thread} article={article}>
             {owner?.thread && (
               <WrittenForYou
                 written={owner.thread.profileHash != null}
@@ -117,13 +119,16 @@ export function TweetsPanel({
                 compact
               />
             )}
-          </ThreadCounts>
+          </ThreadHead>
         ) : null
       }
-      foot={owner?.thread && ready ? <Provenance thread={owner.thread} owner={owner} /> : null}
+      about={
+        <TweetsAbout thread={ready ? thread : null} article={article} made={ready ? (owner?.thread ?? null) : null} />
+      }
+      foot={owner?.thread && ready ? <RunRow owner={owner} /> : null}
     >
       {owner?.error && (
-        <div className="tw:px-4 tw:pt-3">
+        <div className="tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3">
           <p className="gloss-error tw:m-0" role="alert">
             {owner.error}
           </p>
@@ -217,15 +222,11 @@ function UnlinkedNote({ thread, slug }: { thread: PublicTweets; slug: string }) 
 }
 
 /**
- * **The thread's three numbers**, said as a sentence, and *Copy the thread*.
- *
- * The document's word count is the one that earns its place: on its own
- * "1,842 characters" is a fact about nothing, and beside 8,275 words it is the
- * compression the reader is being asked to trust. Takes a `PublicTweets`
- * because the counts are arithmetic over the posts, which a visitor has too;
- * `children` is where the owner puts their own provenance label.
+ * **The head row: *Copy the thread*, and `children`**, which is where the
+ * owner puts their profile badge. The thread's numbers were here until
+ * 2026-10-01; they are in `TweetsAbout` now (spya-ucu35y).
  */
-export function ThreadCounts({
+export function ThreadHead({
   thread,
   article,
   children,
@@ -234,17 +235,8 @@ export function ThreadCounts({
   article: Article;
   children?: ReactNode;
 }) {
-  const total = thread.tweets.length;
-  /* Summed here rather than stored — the same reason nothing stores a post number. */
-  const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
-  const words = useMemo(() => articleStats(article).words, [article]);
-
   return (
     <div className="tw:flex tw:w-full tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1">
-      <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
-        {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters from{" "}
-        {words.toLocaleString()} words
-      </p>
       {children}
       <CopyButton
         text={() => threadMarkdown(thread, article)}
@@ -258,7 +250,60 @@ export function ThreadCounts({
 }
 
 /**
- * **The posts themselves**, and the over-limit line above them.
+ * **What the band's (i) says after the mode's own words** (`ModeSurface`'s
+ * `mode`): the thread's three numbers, the over-limit caveat, and who wrote it
+ * and when.
+ *
+ * The document's word count is the one that earns its place: on its own
+ * "1,842 characters" is a fact about nothing, and beside 8,275 words it is the
+ * compression the reader is being asked to trust. The numbers are arithmetic
+ * over the posts, which a visitor has too; `made` — who wrote it — is the
+ * owner's alone (a visitor's thread carries none of it). All of it was on the
+ * band until Greg, 2026-10-01 (spya-ucu35y): *"Move this into a tooltip for a
+ * (i) icon in the top-right"*.
+ */
+export function TweetsAbout({
+  thread,
+  article,
+  made,
+}: {
+  thread: PublicTweets | null;
+  article: Article;
+  made: TweetThread | null;
+}) {
+  const words = useMemo(() => articleStats(article).words, [article]);
+  if (!thread) return null;
+  const total = thread.tweets.length;
+  /* Summed here rather than stored — the same reason nothing stores a post number. */
+  const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
+  const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
+  return (
+    <>
+      <p>
+        {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters from{" "}
+        {words.toLocaleString()} words.
+      </p>
+      {over > 0 && (
+        <p>
+          {over === 1 ? "One post is" : `${over} posts are`} over the {thread.limit}-character limit. Nothing
+          has been cut — what the model wrote is what is shown.
+        </p>
+      )}
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * **The posts themselves.** The over-limit sentence that stood above them is
+ * in the (i) since 2026-10-01; each overlong post's own count still turns red.
  *
  * One component for the owner and for a visitor: two lists for one thread is
  * how the two drift into two designs for one thing. Each post leads with its
@@ -274,19 +319,9 @@ export function ThreadPosts({
   onJump(id: BlockId): void;
 }) {
   const total = thread.tweets.length;
-  const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
 
   return (
     <>
-      {/* Muted since 2026-09-29: each overlong post's own count already turns
-          red, so this line explains rather than alarms. */}
-      {over > 0 && (
-        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-          {over === 1 ? "One post is" : `${over} posts are`} over {thread.limit} characters. Nothing
-          has been cut — what the model wrote is what is below.
-        </p>
-      )}
-
       <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:p-0">
         {thread.tweets.map((tweet, i) => (
           <li
@@ -339,24 +374,24 @@ export function ThreadPosts({
 }
 
 /**
- * **The foot: who wrote the thread and when, and a run that is under way.**
+ * **The foot: a run that is under way, or one that failed** — and nothing when
+ * neither, so a settled thread has no foot at all.
  *
  * No standing *Write it again* — Greg, 2026-09-29 (SPIDERYARN-READING2-53):
- * *"let's just rely on the Metadata mode for that."* What stays is the part that
- * was never a button: a job started from Metadata or from the stale banner shows
- * its progress and its Stop here, and a failed one says why.
+ * *"let's just rely on the Metadata mode for that."* A job started from Metadata
+ * or from the stale banner shows its progress and its Stop here, and a failed
+ * one says why. Who wrote the thread and when was the first line of this foot
+ * until 2026-10-01; it is in the (i) now (`TweetsAbout`, spya-ucu35y).
  */
-function Provenance({ thread, owner }: { thread: TweetThread; owner: UseTweets }) {
+function RunRow({ owner }: { owner: UseTweets }) {
   const running = !owner.stale && (owner.job || owner.starting);
+  const failed = !running && !owner.stale && owner.failed;
+  if (!running && !failed) return null;
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-2">
-      <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-        Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
-        {howLong(thread.elapsedMs)}
-      </p>
       {running && <RunFoot job={owner.job} owner={owner} />}
-      {!running && !owner.stale && owner.failed && (
-        <span className="tw:ml-auto tw:text-xs tw:text-destructive">{owner.failed.message}</span>
+      {failed && (
+        <span className="tw:ml-auto tw:text-xs tw:text-destructive">{failed.message}</span>
       )}
     </div>
   );
@@ -496,15 +531,4 @@ export function threadMarkdown(thread: PublicTweets, article: Article): string {
   const head = [article.meta.title, article.meta.url].filter(Boolean).join("\n");
   const posts = thread.tweets.map((t, i) => `${i + 1}/${thread.tweets.length} ${t.text}`);
   return [head, ...posts].join("\n\n");
-}
-
-/** `25 Aug 2026`, or nothing readable if the artefact's timestamp is not one. */
-function whenWritten(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return "at an unknown time";
-  return new Date(t).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }

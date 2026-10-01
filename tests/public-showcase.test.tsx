@@ -43,9 +43,9 @@ import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/* The landing page renders `SignInControls`, which imports this and would build
-   a real Supabase client. Nothing here presses anything, so the stub only has
-   to exist — same shape as tests/site-nav-sign-in.test.tsx. */
+/* The landing page imports shared auth-aware furniture whose module graph
+   reaches this client. Nothing here signs in, so the stub only has to exist —
+   same shape as tests/site-nav-sign-in.test.tsx. */
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {

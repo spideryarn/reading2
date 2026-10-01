@@ -515,7 +515,7 @@ describe("Dock gives the ladder something to work with", () => {
    */
   it("the reading view with the switch on: every mode, one segment", () => {
     render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
-    /* Annotations is a toggle beside the radios since 2026-10-01 (261001i). */
+    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i). */
     expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
       visibleModes(true, undefined).length,
     );

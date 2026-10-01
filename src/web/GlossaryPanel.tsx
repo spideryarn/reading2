@@ -111,6 +111,7 @@ import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ForYouMark, ForYouNote, MarkedForYou } from "./MarkedForYou.js";
+import { AboutMade } from "./BandAbout.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 
@@ -271,16 +272,37 @@ export function GlossaryPanel({
   /* Which entries are marked, and the line for each. Empty for a visitor. */
   const notes = new Map((owner?.forYou?.marks ?? []).map((mark) => [mark.termId, mark.note]));
   const sorts = glossary && glossary.entries.length > 1 ? sortOptions(all) : [];
-  const count = glossary && (
-    <span className="gloss-count">
-      {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
-    </span>
-  );
+  /* What the band's (i) adds after the mode's own words: how many terms, how
+     many passes found them, and who wrote it. Greg, 2026-10-01 (spya-ucu35y):
+     *"how many X (of y) … what model was used"*; plan 261001m. The count was
+     at the sort row's end (or in the head row) until then; *prioritised*
+     still says "8 of 24" beside its slider, which is a count beside the
+     control it describes and stays. The passes and the provenance are the
+     owner's artefact's — a visitor's list carries neither (src/public-types.ts). */
+  const made = owner?.glossary ?? null;
+  const about = glossary ? (
+    <>
+      <p>
+        {all.length === 1 ? "One term" : `${all.length} terms`}
+        {made && made.passes > 1 ? `, found in ${made.passes} passes` : ""}.
+      </p>
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  ) : null;
 
   return (
     <ModeSurface
       label="Glossary"
       feature="gloss"
+      mode="glossary"
+      about={about}
       /* **No head row at all while the sort row is drawn**, since 2026-09-29.
           Greg, on a phone: *"The Glossary stuff at the top takes up too much
           space … maybe move the "N words" onto the `order` row somehow -
@@ -297,15 +319,13 @@ export function GlossaryPanel({
           hand the surface `null` and render no `.band-head` at all — deleting
           a row that was on screen. With one term, or fewer than two sorts on
           offer, there is no sort row to carry them, so the old row stays.
-          docs/plans/260929a-compact-glossary-header-and-kind-icons.md. */
-      head={
-        sorts.length > 0 ? null : (
-          <>
-            {count}
-            {badge}
-          </>
-        )
-      }
+          docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+
+          **The count has gone to the band's (i)** since 2026-10-01 (plan
+          261001m), so this row holds only the badge now. It is still a
+          fragment rather than `null`, for the reason above: the row holds
+          its place while the list is coming, and the (i) sits in it. */
+      head={sorts.length > 0 ? null : <>{badge}</>}
       /* Pinned under the scroller rather than at the end of it, which is what
           `foot` is for. The guard is the one it had as a trailing child: the
           run row belongs to an owner whose glossary has arrived. */
@@ -351,14 +371,7 @@ export function GlossaryPanel({
           options={sorts}
           sort={order}
           onSort={onSort}
-          trailing={
-            order !== "prioritised" || badge ? (
-              <>
-                {order !== "prioritised" && count}
-                {badge}
-              </>
-            ) : null
-          }
+          trailing={badge}
         />
       )}
 

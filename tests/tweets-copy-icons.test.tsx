@@ -18,7 +18,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicTweets } from "../src/public-types.js";
 import type { Article } from "../src/types.js";
-import { ThreadCounts, ThreadPosts } from "../src/web/Tweets.js";
+import { ThreadHead, ThreadPosts } from "../src/web/Tweets.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,7 +61,7 @@ function draw(): void {
   act(() => {
     root.render(
       createElement("div", null, [
-        createElement(ThreadCounts, { key: "c", thread: THREAD, article: ARTICLE }),
+        createElement(ThreadHead, { key: "c", thread: THREAD, article: ARTICLE }),
         createElement(ThreadPosts, { key: "p", thread: THREAD, onJump: () => {} }),
       ]),
     );

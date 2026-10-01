@@ -1,6 +1,6 @@
 {
   "id": "0e40e6c8-4f9d-4114-b231-5e70af731d07",
-  "prevId": "bbdec3dd-a8a9-43b0-9b32-b2f740cb8110",
+  "prevId": "301c6f46-524b-4121-9e2b-01254dccbb51",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1994,7 +1994,24 @@
           "default": "'chat'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "chat_threads_one_remember": {
+          "name": "chat_threads_one_remember",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'remember'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "chat_threads_article_id_articles_id_fk": {
           "name": "chat_threads_article_id_articles_id_fk",

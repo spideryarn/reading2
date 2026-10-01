@@ -34,8 +34,8 @@
  * scroller (`.tl-scroll`) is nudged to show its row — `useFollow`, Summary's
  * machinery, which sets that scroller's `scrollTop` and never touches the
  * page, so it cannot fight the prose scroll landing the passage
- * (SPIDERYARN-READING2-54). The promise about where the passages come from is
- * an info button's tooltip in the head, not a paragraph in the foot
+ * (SPIDERYARN-READING2-54). The promise about where the passages come from is in
+ * the band's (i), not a paragraph in the foot
  * (SPIDERYARN-READING2-52).
  *
  * ## The depth control is three buttons, not a slider
@@ -51,7 +51,6 @@ import {
   BookA,
   ChevronLeft,
   ChevronRight,
-  Info,
   Lightbulb,
   RotateCw,
   Route,
@@ -64,6 +63,7 @@ import type { DoorView, TrajectoryView } from "./modes/trajectory/TrajectoryMode
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
+import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PurposeLine } from "./TrajectoryPurpose.js";
 import { useRenderCount } from "./perf.js";
@@ -294,8 +294,7 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
  * **The pinned head**: the stepper, and the depth control when there is more
  * than one depth to offer.
  */
-function RouteHead({ view, total, about }: { view: TrajectoryView; total: number; about: string[] }) {
-  const [aboutOpen, setAboutOpen] = useState(false);
+function RouteHead({ view, total }: { view: TrajectoryView; total: number }) {
   const [sparkOpen, setSparkOpen] = useState(false);
   const here = view.rows[view.position - 1]?.position ?? null;
   const said =
@@ -366,10 +365,11 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
           </StepTip>
         </div>
       </TooltipGroup>
-      {/* **The depth control and the (i) are one group that does not wrap**
+      {/* **The depth control, one group that does not wrap**
           (SPIDERYARN-READING2-73), so a head too narrow for one row breaks
-          before the depths and never leaves the (i) alone on a row of its own —
-          the row Greg asked to have back. trajectory.css § .traj-head-end. */}
+          before the depths. It held this head's own (i) too, until that moved
+          to the band's corner on 2026-10-01 (spya-ucu35y, plan 261001m).
+          trajectory.css § .traj-head-end. */}
       <div className="traj-head-end">
         {view.depths.length > 1 && (
           <fieldset className="traj-depths" aria-label="How deep">
@@ -389,34 +389,6 @@ function RouteHead({ view, total, about }: { view: TrajectoryView; total: number
             ))}
           </fieldset>
         )}
-        {/* **Where the passages come from**, said once and out of the way — the
-            two foot sentences Greg asked to move into a tooltip
-            (SPIDERYARN-READING2-52). Controlled, as Quotes' *Why this one* is,
-            so a tap toggles it on a touch device with no hover; hover and focus
-            open it too. */}
-        <Tooltip
-          content={
-            <>
-              {about.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-            </>
-          }
-          placement="bottom"
-          open={aboutOpen}
-          onOpenChange={setAboutOpen}
-          className="traj-about-card"
-        >
-          <button
-            type="button"
-            className={`traj-about${aboutOpen ? " on" : ""}`}
-            aria-label="About this route"
-            aria-expanded={aboutOpen}
-            onClick={() => setAboutOpen((was) => !was)}
-          >
-            <Info size={16} />
-          </button>
-        </Tooltip>
       </div>
     </div>
   );
@@ -574,25 +546,39 @@ export function TrajectoryPanel({ access, view, away }: Props) {
     />
   );
 
+  /* **Where the passages come from**, and who planned the route — the band's
+     (i) since 2026-10-01 (spya-ucu35y, plan 261001m). The promise and the
+     coverage note were the head's own (i) before that, and the two foot
+     sentences before that (SPIDERYARN-READING2-52). Provenance is the owner's
+     only: a visitor's route carries none (src/public-types.ts). */
+  const routed = ready && total > 0 && view.depth !== null;
+  const coverage = atMost ? coverageNote(route.stops.length, route.offered) : null;
+  const made = owner?.trajectory ?? null;
+  const about = routed ? (
+    <>
+      <p>{promise}</p>
+      {coverage && <p>{coverage}</p>}
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  ) : null;
+
   return (
     <ModeSurface
       label="Trajectory"
       feature="gloss trajectory"
+      mode="trajectory"
+      about={about}
       /* **A head that stays put**: the stepper and the depth control, pinned
          above the scroller. Present only when there is a route to step — no
          empty row over the loading sentence (mode.md § the header row). */
-      head={
-        ready && total > 0 && view.depth !== null ? (
-          <RouteHead
-            view={view}
-            total={total}
-            about={[
-              promise,
-              ...(atMost ? [coverageNote(route.stops.length, route.offered)].filter((n): n is string => n !== null) : []),
-            ]}
-          />
-        ) : null
-      }
+      head={routed ? <RouteHead view={view} total={total} /> : null}
       foot={
         /* **A status-only foot.** The promise moved to the head's tooltip
            (SPIDERYARN-READING2-52), and the standing *Plan it again* went —
@@ -692,8 +678,10 @@ export function TrajectoryPanel({ access, view, away }: Props) {
                           ) : (
                             <span className="traj-place">{row.place ?? "—"}</span>
                           )}
-                          {words && <span className="traj-words">“{words.shown}”</span>}
+                          {/* The cue before the quote: it is the question to
+                              read the passage with (Greg, SPIDERYARN-READING2-8J). */}
                           {row.current && row.cue && <span className="traj-cue">{row.cue}</span>}
+                          {words && <span className="traj-words">“{words.shown}”</span>}
                         </span>
                       </button>
                     );

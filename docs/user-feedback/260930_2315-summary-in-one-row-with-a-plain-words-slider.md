@@ -24,7 +24,7 @@ it runs on a pool account and could not read Sentry.
 > Moderately-Complex might be +3 or something. (7A)
 
 > Remove "Written by AI in plain words to help you get your bearings. The article says it better, and
-> each paragraph links to where." from Summary mode. And make a note in the mode.md (or similar)
+> each paragraph links to where." from Summary mode. And make a note in the new-mode.md (or similar)
 > that we don't want these mode descriptions - they waste space. Either put them as tooltips for an
 > (i) icon, or just try and make things self-explanatory. (7B)
 

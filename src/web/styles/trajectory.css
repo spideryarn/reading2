@@ -17,17 +17,16 @@
   flex-wrap: wrap;
   align-items: center;
   /* 0.4rem across, not 0.7rem: with the depth buttons' padding below, the
-     ~24px that lets a five-stop route's stepper, depths and (i) share one row
+     ~24px that lets a five-stop route's stepper and depths share one row
      of the 377px head (SPIDERYARN-READING2-73, plan 260930h). */
   gap: 0.4rem;
   width: 100%;
 }
-/* **The depth buttons and the (i), one group that does not wrap.** A head
-   too narrow for one row — a long route's sparkline is up to 72px — breaks
-   between the stepper and this group, so the (i) is always on a row of
-   controls and never alone on its own (SPIDERYARN-READING2-73). `flex: 1` so
-   the group fills what is left of its row and the (i)'s `margin-left: auto`
-   keeps it at the right edge, where it was. */
+/* **The depth buttons, one group that does not wrap.** A head too narrow for
+   one row — a long route's sparkline is up to 72px — breaks between the
+   stepper and this group (SPIDERYARN-READING2-73). It held the head's own (i)
+   too until 2026-10-01; that is the band's now, in its corner, and
+   `.band-head` keeps clear of it (mode-band.css § `.mode-band > .band-about`). */
 .traj-head-end {
   display: flex;
   flex: 1 0 auto;
@@ -110,33 +109,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* **Where the passages come from** — an info button, last in the head and
-   pushed to its right edge, whose tooltip holds the two sentences that were
-   the foot (SPIDERYARN-READING2-52). Quiet, like Quotes' `.quotes-why`: it
-   is a footnote, not a control the reader needs to walk the route. The
-   house height, so it sits level with the stepper's row. It shares
-   `.traj-head-end` with the depth buttons, so it wraps only with them. */
-.traj-about {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--control-h);
-  height: var(--control-h);
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.traj-about:hover { color: var(--ink); background: var(--surface-raised); }
-.traj-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
-.traj-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.traj-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
-.traj-about-card p { margin: 0; }
-.traj-about-card p + p { margin-top: 0.4rem; }
 
 /* ------------------------------------------------------------------ rows -- */
 .traj-list { margin: 0.3rem 0 0; padding: 0; list-style: none; }
@@ -240,6 +212,14 @@
 .traj-read-error { margin: 0.4rem 0.7rem 0; }
 .traj-read-error .gloss-error { margin: 0 0 0.5rem; }
 
+/* Before a route has a pinned head, its status or error is the top row. */
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-quiet,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-empty,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-stale,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .traj-read-error {
+  padding-right: calc(0.7rem + var(--band-about-room));
+}
+
 /* A rule above it, so the foot reads as being about the route rather than
    the last row's — citations.css's `.cite-foot`. */
 .traj-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
@@ -261,6 +241,9 @@
   font-size: 0.8rem;
   line-height: 1.35;
   color: var(--ink-faint);
+}
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .traj-purpose {
+  padding-right: var(--band-about-room);
 }
 .traj-purpose-said {
   flex: 1;

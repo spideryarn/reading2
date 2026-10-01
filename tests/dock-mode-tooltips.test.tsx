@@ -124,7 +124,7 @@ function loose(props: Record<string, unknown> = {}): void {
 
 /** Every control that is one of the modes, in either arm. */
 function modeControls(): HTMLElement[] {
-  /* Annotations' toggle beside the radios since 2026-10-01 (261001i). */
+  /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
       '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',

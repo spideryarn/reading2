@@ -5,12 +5,13 @@
  * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
  *
  * - no head row while the sort row is drawn, and the profile badge at the end
- *   of the sort row instead; the head row back, with its count, when there is
- *   no sort row to carry the badge. **The badge is `<MarkedForYou>` since plan
- *   261001m** — the owner's "for you" marks — where it was the whole-list
- *   *written for you* badge; the fixture below gives an owner marks wherever
- *   their list used to carry a profile, so every row of the matrix keeps its
- *   meaning;
+ *   of the sort row instead; the head row back when there is no sort row to
+ *   carry the badge; the term count in the band's (i) since 2026-10-01 (plan
+ *   261001m, the band-(i) one). **The badge is `<MarkedForYou>` since plan
+ *   261001m (the shared-output one)** — the owner's "for you" marks — where it
+ *   was the whole-list *written for you* badge; the fixture below gives an
+ *   owner marks wherever their list used to carry a profile, so every row of
+ *   the matrix keeps its meaning;
  * - no "order" word, and no hint line under the Look up box — its "not added
  *   to the list" is in the button's tooltip;
  * - the kind of a term as an icon with a label, and none for `concept`.
@@ -163,6 +164,16 @@ afterEach(() => {
   host.remove();
 });
 
+/** Open the band's (i) and read its card; closes it again so the next read starts shut. */
+async function aboutCard(): Promise<string> {
+  const button = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
+  if (!button) throw new Error("the band has no (i)");
+  await act(async () => button.click());
+  const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+  await act(async () => button.click());
+  return text;
+}
+
 describe("the head row", () => {
   it("keeps exactly one total and owner badge, in the one row each state permits", async () => {
     const legacy = glossary("a-profile", [
@@ -202,7 +213,7 @@ describe("the head row", () => {
       {
         name: "owner ready, no entries",
         access: { kind: "owner", owner: owner(empty, {}), glossary: empty },
-        counts: 1,
+        counts: 0,
         badges: 1,
         head: true,
         sortRow: false,
@@ -211,7 +222,7 @@ describe("the head row", () => {
       {
         name: "owner ready, one entry",
         access: { kind: "owner", owner: owner(one, {}), glossary: one },
-        counts: 1,
+        counts: 0,
         badges: 1,
         head: true,
         sortRow: false,
@@ -220,7 +231,7 @@ describe("the head row", () => {
       {
         name: "legacy list with no useful sort choice",
         access: { kind: "owner", owner: owner(legacy, {}), glossary: legacy },
-        counts: 1,
+        counts: 0,
         badges: 1,
         head: true,
         sortRow: false,
@@ -229,7 +240,7 @@ describe("the head row", () => {
       {
         name: "prioritised URL falling back to document order",
         access: { kind: "owner", owner: owner(partial, {}), glossary: partial },
-        counts: 1,
+        counts: 0,
         badges: 1,
         head: false,
         sortRow: true,
@@ -248,7 +259,7 @@ describe("the head row", () => {
         name: "owner in another order",
         access: { kind: "owner", owner: owner(many, {}), glossary: many },
         sort: "document",
-        counts: 1,
+        counts: 0,
         badges: 1,
         head: false,
         sortRow: true,
@@ -315,12 +326,25 @@ describe("the head row", () => {
     expect(host.querySelector(".gloss-gate-value")?.textContent).toMatch(/of 4$/);
   });
 
-  it("puts the count at the sort row's end in an order with no threshold row", async () => {
+  /* The count went to the band's (i) on 2026-10-01 — Greg (spya-ucu35y):
+     *"how many X (of y)"* in the (i); plan 261001m. Prioritised's "n of m"
+     beside its slider stays (above). */
+  it("says the count in the band's (i), not on the sort row, in an order with no threshold row", async () => {
     await mount(owner(glossary("a-profile", SCORED), {}), "document");
     expect(host.querySelector(".band-head")).toBeNull();
     expect(host.querySelector(".gloss-gate")).toBeNull();
-    expect(host.querySelector(".gloss-sort-trail .gloss-count")?.textContent).toBe("4 terms");
-    expect(host.querySelector('[role="group"] .gloss-count')).toBeNull();
+    expect(host.querySelector(".gloss-count")).toBeNull();
+    expect(host.querySelector(".gloss-sort-trail button.prof-badge")).not.toBeNull();
+    expect(await aboutCard()).toContain("4 terms.");
+  });
+
+  it("says who wrote the list in the (i), and nothing about it for a visitor", async () => {
+    await mount(owner(glossary("a-profile", SCORED), {}));
+    expect(await aboutCard()).toMatch(/Written by test \(test\)/);
+    await mountAccess({ kind: "visitor", glossary: glossary(null, SCORED) });
+    const card = await aboutCard();
+    expect(card).toContain("4 terms.");
+    expect(card).not.toContain("Written by");
   });
 
   it("says 'Marked for you' and opens the profile panel, with no action", async () => {
@@ -356,12 +380,13 @@ describe("the head row", () => {
     expect(host.querySelector(".prof-badge")).toBeNull();
   });
 
-  it("comes back, with the count and the badge, when there is no sort row", async () => {
+  it("comes back, with the badge, when there is no sort row; the count is in the (i)", async () => {
     await mount(owner(glossary("a-profile", [SCORED[0]!]), {}));
     expect(host.querySelector(".gloss-sort")).toBeNull();
     const head = host.querySelector(".band-head");
-    expect(head?.querySelector(".gloss-count")?.textContent).toBe("1 term");
+    expect(head?.querySelector(".gloss-count")).toBeNull();
     expect(head?.querySelector("button.prof-badge")).not.toBeNull();
+    expect(await aboutCard()).toContain("One term.");
   });
 
   it("does not say 'order' in front of the sort buttons, but still names the group", async () => {

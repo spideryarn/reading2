@@ -1,7 +1,7 @@
-diff --git a/docs/project/mode.md b/docs/project/mode.md
+diff --git a/docs/project/new-mode.md b/docs/project/new-mode.md
 index 895c9af9..70085f46 100644
---- a/docs/project/mode.md
-+++ b/docs/project/mode.md
+--- a/docs/project/new-mode.md
++++ b/docs/project/new-mode.md
 @@ -97,6 +97,22 @@ Then the residue, which is why this page exists:
    bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
    count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
@@ -10,7 +10,7 @@ index 895c9af9..70085f46 100644
 +  to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
 +  the top, in a foot, or under the controls:
 +
-+  > make a note in the mode.md (or similar) that we don't want these mode descriptions - they
++  > make a note in the new-mode.md (or similar) that we don't want these mode descriptions - they
 +  > waste space. Either put them as tooltips for an (i) icon, or just try and make things
 +  > self-explanatory.
 +  >
@@ -79,7 +79,7 @@ index ceac6e2d..92d6351e 100644
 +  `simple/1` row reads as absent and the next press replaces it.
 +- **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
    `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
-   the Summary button itself arms nothing ([mode.md](mode.md), `useAutoRun`). A visitor on a
+   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
    public article gets the stored paragraphs off the payload, or a line saying none has been made.
 -- **One level, pitched at 15.** Greg's shorter ELI12 is **deferred** until he has read ELI15 on a real
 -  paper; the probe outputs of both are in the plan.
@@ -1330,7 +1330,7 @@ index 1fd7ff1e..0b43388e 100644
 + * here — *"Written by AI in plain words to help you get your bearings…"* —
 + * until Greg, 2026-09-30 (SPIDERYARN-READING2-7B): *"we don't want these mode
 + * descriptions - they waste space."* Each pill's card says it now, and
-+ * docs/project/mode.md has the rule.
++ * docs/project/new-mode.md has the rule.
   */
  import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
  import { Button } from "@/components/ui/button";
@@ -1821,7 +1821,7 @@ index 2c59d925..218d4c61 100644
 - * **Gists | Simple.** A row like the Depth row beneath it, because it is the
 - * same gesture: one of these is on, you press another, the band changes.
 + * What the foot under the paragraphs used to say, now said where it is asked
-+ * for (Greg, SPIDERYARN-READING2-7B; docs/project/mode.md).
++ * for (Greg, SPIDERYARN-READING2-7B; docs/project/new-mode.md).
 + */
 +const PLAIN_HOW =
 +  "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";

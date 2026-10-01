@@ -29,7 +29,7 @@
  *
  * **Neither of them is `searchedAt`.** Debate is time-sensitive research and a
  * shared link outlives it, so the artefact carries the day the search ran and
- * the panel says *"Searched on …"* — displayed provenance, not automatic
+ * the band's (i) says when it was searched — displayed provenance, not automatic
  * staleness. A visitor opening a year-old shared article must be able to see how
  * old the search is without the artefact declaring itself invalid.
  * src/types.ts § `Debate.searchedAt`.
