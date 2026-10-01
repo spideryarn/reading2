@@ -43,7 +43,7 @@ the Feedback half. Fable is retired, so Opus's job here went to the plan and GPT
 
 — spya-d9xdhs, 2026-09-30
 
-**Ending: Shipped.** On `dev` in COMMIT_SHA. Not deployed. The Sentry status writes are the next
+**Ending: Shipped.** On `dev` in 305e8db4. Not deployed. The Sentry status writes are the next
 sweep's.
 
 What we did ([261001j](../plans/261001j-bottom-bar-spacing-feedback-circle-nav-feedback-earlier-timestamps.md)):
