@@ -109,9 +109,9 @@ where it sits.
   the arc sentence for the part you are in. Without an arc (a visitor, or before it is written) it
   is the path alone, and looks complete.
 - **Notes, per block**:
-  - the **Socratic question** of each depth-1 section beside its first block, and the article's own
+  - the **Socratic question** of each depth-1 part beside its first block, and the article's own
     (the root's) beside the first block;
-  - **Ideas**, if the reader has already made them: beside each block an idea occurs in, a small
+  - **Ideas**, if the reader has already made them: beside the first block each idea occurs in, a small
     stamp — *assumes* or *introduces* — and the idea's short name; the full statement in a tooltip.
     Annotations never starts the Ideas job.
 - **Visibly ours**: small sans, faint ink, no hue — the accent belongs to the reader's own marks
@@ -158,6 +158,47 @@ note pulling others aside — a comment-thread model), Floating UI (one element 
 anchor positioning (Baseline only in 2026, and stacking needs typed `attr()` that Safari and
 Firefox lack). The collision rule is ten lines; everything else is our own glue either way.
 [third-party-library-selection.md](../reusable/third-party-library-selection.md).
+
+## GPT Sol's plan review, and what changed
+
+`logs/fb7e/plan-review-sol.md` in the worktree (not committed); verdict *build with fixes*, no P0.
+
+| | Finding | Taken? |
+|---|---|---|
+| F1 P1 | the reserve must cover the whole outward extent, and reach `minWidth` | **Yes.** `margW` is the note's whole border box, its gap included as padding, so the formula holds as written; `minWidth` carries `margReserve`; `tests/layout-margin.test.ts` sweeps 300–3290px, both rails, roots 12/16/20, for no overflow. The masthead is checked in the browser rather than in arithmetic. |
+| F2 P1 | `layoutKey` did not change when Annotations reflowed the prose (`modeW` stays 0) | **Yes.** `tableW` and `margReserve` joined the key. |
+| F3 P1 | the boundary would guard an empty slot | **Yes.** `modeBand()` returns the head and the owner's ideas read, so those are inside the mode's boundary (`AnnotationsHead` is the witness, owner and visitor); the notes in the cells carry a boundary of their own per block (`MarginNotesSlot`), tested to lose the note and keep the article. |
+| F4 P1 | the collision pass must be idempotent | Already was: the wanted top is the *row's*, which no translate moves, and the translate written is absolute. Tested on the pure function. |
+| F5 P2 | observe the notes as well as the table | **Yes**, plus once on `document.fonts.ready`. |
+| F6 P1 | owner/visitor ideas seam explicit | Already: `POLICY` is `available`; visitor ideas only from the payload; `useIdeasRead` (never `useIdeas`) mounted only on the owner's path inside the mode. |
+| F7 P2 | memoise the notes map | Already: on tree, blocks and ideas only; the `at`-driven head is outside it. |
+| F8 P2 | idea stamps as real buttons, tap-openable | **Yes**: a button with a controlled card. |
+| F9 P1 | the narrow message over the opening lines; no herald | **Message moved** to the foot, above the dock. **Herald not given**: it stands on a band's foot, there is no band, and the column appearing is itself the answer to "what did that press do". Recorded rather than built. |
+| F10 P2 | every occurrence stamped could be ~50 notes | **Yes**: one stamp per idea, at its first occurrence. |
+| F11 P2 | last-view regression test | **Yes.** |
+| F12 P3 | "depth-1 section" | Fixed: questions are on the root and each depth-1 **part**. |
+
+## The browser, then GPT Astra's design pass
+
+A Sonnet subagent drove the built mode in Playwright on the box (article `love-spya-kwm06n`, 75
+rows, 11 notes) and measured rather than looked: at 1600px the table was at x 402–1210 in Plain
+and in Annotations alike; 0 overlapping notes at every width; no horizontal scroll at 1600, 1100
+or 800; at 500px no notes and the narrow line clear of the dock; a selection across two annotated
+paragraphs carried none of the notes; no console errors of ours. What it found wrong was the head.
+
+Greg asked for GPT Astra's help with the look (7K), so the screenshots went to Astra with the
+channel-budget constraints. Its eight points, and what happened to each:
+
+| | Astra said | Taken? |
+|---|---|---|
+| 1 | the head as a card dominates the margin (seven lines of arc at 800px) | **Yes**: no box; path on one line, arc clamped at three, the whole arc in a card |
+| 2 | notes peek through the gap above the head | **Yes**: flush under the bar, page behind it, a 12px fade below |
+| 3 | questions sit beside headings and the date line | **Yes**: beside each part's first gistable paragraph (`firstParagraph` in notes.ts) |
+| 4 | the article's own question runs into the first part's | **Yes**: dropped; one question per part |
+| 5 | italic questions read like the author's italic synopsis; add an "AI annotations" label | **Upright, soft ink, yes. The label, no** — Greg asked the same night for no description lines in modes (7B), and small sans with no hue is the voice the research gives the machine |
+| 6 | idea stamps look like incidental prose | **Yes**: an 11px semibold uppercase stamp, the name dashed |
+| 7 | three different left edges | **Yes**: one edge, `--marg-gap` past the table; the question's rule hangs in the gap |
+| 8 | cards cover the passage; the narrow notice floats over prose | **Cards open below**, over the column. **The notice stays** a floating line above the dock: a dock row is a change to the dock for one experimental mode |
 
 ## Stages
 

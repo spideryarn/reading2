@@ -29,6 +29,9 @@ export type AnnotationNote =
       provenance: IdeaProvenance;
     };
 
+/** A sentence's worth: fewer words than this is a heading, a date or a byline. */
+export const PARAGRAPH_MIN_WORDS = 12;
+
 /**
  * The notes for every block that has any, in the order they are drawn.
  *
@@ -51,12 +54,43 @@ export function annotationNotes(
     else out.set(blockId, [note]);
   };
 
+  /* **Beside the part's first paragraph, not its first block.** A part's range
+     starts at its heading, or at the date line under the title, and a question
+     drawn level with those reads as a caption for them (GPT Astra's design
+     pass, 2026-10-01). The first gistable text block of at least a sentence's
+     words, then; the range's own start when it has none.
+
+     **The word floor is the rule that does the work, and it is a heuristic.**
+     `kind` alone is not enough: an essay that bolds a one-word line for a
+     heading ("Jobs", "Bounds") stores it as `text`, and so is the date line
+     and the "~23 min read" under a title — measured on `love-spya-kwm06n` in
+     the browser, where a kind-only rule put every one of six questions beside
+     one of those. */
+  const firstParagraph = (range: readonly [BlockId, BlockId]): BlockId => {
+    const lo = index.get(range[0]);
+    const hi = index.get(range[1]);
+    if (lo === undefined || hi === undefined) return range[0];
+    for (let i = lo; i <= hi; i++) {
+      const block = blocks[i];
+      if (block && block.kind === "text" && block.gistable && block.words >= PARAGRAPH_MIN_WORDS) {
+        return block.id;
+      }
+    }
+    return range[0];
+  };
+
+  /* **The parts' questions, and not the article's own** (`depth` 0). Drawn
+     beside the first lines it ran straight into the first part's question —
+     nine lines of questions before a word of the argument — so the root's is
+     left out, and the column asks one question per part. GPT Astra's design
+     pass, 2026-10-01. */
   const root = tree?.nodes[tree.rootId];
   if (tree && root) {
-    if (root.question) add(root.range[0], { kind: "question", depth: 0, text: root.question });
     for (const id of root.children) {
       const part = tree.nodes[id];
-      if (part?.question) add(part.range[0], { kind: "question", depth: 1, text: part.question });
+      if (part?.question) {
+        add(firstParagraph(part.range), { kind: "question", depth: 1, text: part.question });
+      }
     }
   }
 

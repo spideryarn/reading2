@@ -96,7 +96,8 @@ function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }
   const [open, setOpen] = useState(false);
   return (
     <Tooltip
-      placement="left"
+      placement="bottom"
+      keepSide
       open={open}
       onOpenChange={setOpen}
       content={
@@ -113,7 +114,8 @@ function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        <span className="marg-stamp">{PROVENANCE_WORD[note.provenance]}</span> {note.name}
+        <span className="marg-stamp">{PROVENANCE_WORD[note.provenance]}</span>{" "}
+        <span className="marg-idea-name">{note.name}</span>
       </button>
     </Tooltip>
   );
@@ -144,11 +146,37 @@ export function AnnotationsHead({
     );
   }
   if (path.length === 0 && arc === null) return null;
+  /* **Orientation, not a summary**: the path on one line and the arc cut at
+     three, the whole of both in a card on hover, focus or tap. A head that
+     grew to the arc's full six or seven lines dominated the margin it is meant
+     to sit quietly at the top of (GPT Astra's design pass, 2026-10-01). */
   return (
     <aside className="marg-head" aria-label="Where you are">
       {path.length > 0 && <p className="marg-path">{path.join(" › ")}</p>}
-      {arc !== null && <p className="marg-arc">{arc}</p>}
+      {arc !== null && <ArcLine arc={arc} />}
     </aside>
+  );
+}
+
+function ArcLine({ arc }: { arc: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={setOpen}
+      content={<p>{arc}</p>}
+    >
+      <button
+        type="button"
+        className="marg-arc"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {arc}
+      </button>
+    </Tooltip>
   );
 }
 

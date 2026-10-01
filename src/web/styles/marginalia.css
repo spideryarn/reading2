@@ -2,15 +2,26 @@
    beside each block and the head pinned at the top of the column.
    AnnotationsColumn.tsx has the shape;
    docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md has
-   the reasons.
+   the reasons, and GPT Astra's design pass (2026-10-01) most of the values.
 
-   **Visibly ours.** Small sans, faint ink and no hue: the accent belongs to the
+   **Visibly ours.** Small sans, soft ink and no hue: the accent belongs to the
    reader's own marks (docs/research/260828c-decorated-mode-ideas.md § The
    channel budget), so these can never be mistaken for a comment, and comments
-   can join this column one day without being mistaken for ours.
+   can join this column one day without being mistaken for ours. Upright, not
+   italic: the article's own synopsis under the title is italic, and a margin
+   in the same voice read as the author's.
+
+   **One left edge.** Every line of text in the column — the head, a question,
+   a stamp — starts `--marg-gap` past the table's right edge; a question's rule
+   sits just outside that edge, in the gap.
 
    **Never in a copy.** `user-select: none` on every note and the head, so a
    reader who copies three paragraphs gets the author's three paragraphs. */
+
+.reader {
+  /* The gutter between the prose cell and the column's text. */
+  --marg-gap: 1.25rem;
+}
 
 /* ---------------------------------------------------------- § the room --
    `.reader` keeps `--marg-reserve` clear on its right, and it is often 0:
@@ -22,7 +33,7 @@
 }
 
 /* ---------------------------------------------------------- § a note --
-   Inside its block's `td.text` (which is `position: relative` — gutter.css),
+   Inside its block's `td.text` (which is `position: relative` — prose.css),
    at the cell's top, starting just past its right edge. Out of flow, so the
    prose's rows are exactly Plain's. `useMarginLayout` writes a `translate` on
    the few that would overlap the one above. */
@@ -32,90 +43,113 @@
   left: 100%;
   width: var(--marg-w);
   box-sizing: border-box;
-  padding: 0.35rem 0.5rem 0 1.25rem;
+  /* 0.5rem: measured in the browser, the first line of a 13px note then sits
+     within a pixel of its paragraph's first line (it was 2.3px high at 0.35rem). */
+  padding: 0.5rem 0.5rem 0 var(--marg-gap);
   font-family: var(--font-ui);
   font-size: 0.8125rem;
-  line-height: 1.35;
-  color: var(--ink-faint);
+  line-height: 1.45;
+  color: var(--ink-soft);
   user-select: none;
   -webkit-user-select: none;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .marg-note p {
   margin: 0;
 }
 
-/* The question a part answers: the one note at fuller ink, because it is the
-   one that asks the reader to do something — read on to answer it. The
-   article's own question (depth 0) a step quieter than a part's, since it is
-   about the whole and sits beside its first lines. */
+/* The question a part answers — the one note that asks the reader to do
+   something: read on to answer it. Its rule hangs in the gap, so its words
+   start on the column's one edge. */
 .marg-question {
-  color: var(--ink);
-  font-style: italic;
-  border-left: 2px solid var(--rule-strong);
+  border-left: 1px solid var(--rule-strong);
+  margin-left: calc(-0.5rem - 1px);
   padding-left: 0.5rem;
 }
-.marg-question[data-depth="0"] {
-  color: var(--ink-faint);
-}
 
-/* An idea, at its first occurrence: a stamp in small caps, then the idea's
-   handle. The statement is in the card — on hover, focus or a tap. A button
-   (AnnotationsColumn.tsx § IdeaStamp) drawn as text. */
+/* An idea, at its first occurrence: a stamp in small capitals, then the idea's
+   handle, dashed — the underline style the research gives a proposition the
+   argument leans on. The statement is in the card, on hover, focus or a tap.
+   A button (AnnotationsColumn.tsx § IdeaStamp), drawn as text. */
 .marg-idea {
   all: unset;
   display: block;
   cursor: help;
-  text-decoration: underline dashed color-mix(in oklch, var(--ink-faint) 60%, transparent);
-  text-underline-offset: 3px;
+  color: var(--ink-soft);
   border-radius: 2px;
 }
-.marg-idea:focus-visible {
-  outline: 2px solid var(--ring, var(--rule-strong));
+.marg-idea-name {
+  text-decoration: underline dashed 1px currentColor;
+  text-underline-offset: 3px;
+}
+.marg-idea:focus-visible,
+.marg-arc:focus-visible {
+  outline: 2px solid var(--rule-strong);
   outline-offset: 2px;
 }
 .marg-stamp {
-  font-variant: small-caps;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 /* ---------------------------------------------------------- § the head --
-   Pinned at the top of the column, under the controls bar. It covers the top
-   of the notes as they scroll beneath it, so it has a background. */
+   Pinned flush under the controls bar, across the whole column, with the page
+   behind it and a short fade below: notes scrolling up pass under one clean
+   edge rather than showing through a gap or stopping at a box. Orientation,
+   not a summary — the path on one line, the arc cut at three, the whole of it
+   in a card. */
 .marg-head {
   position: fixed;
-  top: calc(var(--bar-bottom) + 0.5rem);
-  /* Over the column: the table's right edge (layout.ts § `Fit.margLeft`), plus
-     the note's own left padding so the head and the notes share an edge. */
-  left: calc(var(--safe-left) + var(--marg-left) + 1.25rem);
-  width: calc(var(--marg-w) - 1.75rem);
+  top: var(--bar-bottom);
+  left: calc(var(--safe-left) + var(--marg-left));
+  width: var(--marg-w);
   z-index: 30;
   box-sizing: border-box;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.5rem var(--marg-gap);
   background: var(--page);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
   font-family: var(--font-ui);
   font-size: 0.8125rem;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--ink-faint);
   user-select: none;
   -webkit-user-select: none;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.25rem;
+}
+.marg-head::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 auto 0;
+  height: 12px;
+  background: linear-gradient(var(--page), transparent);
+  pointer-events: none;
 }
 .marg-head p {
   margin: 0;
 }
 .marg-path {
-  font-variant: small-caps;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
+  font-variant: small-caps;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .marg-arc {
-  color: var(--ink);
+  all: unset;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  cursor: help;
+  color: var(--ink-soft);
+  border-radius: 2px;
 }
 
 /* No room for the column: one line at the foot of the window, just above the

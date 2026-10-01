@@ -6,10 +6,12 @@ whichever mode is on. The first two are permanent; the band is the surface the m
 [the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
 goes stale.
 
-**One mode opens no band at all**, and it is the default. `plain` is the article by itself, and it is
+**Two modes open no band at all**, and one of them is the default. `plain` is the article by itself, and it is
 what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
 which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
-[260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) So *a mode is open* and *a band is open* are separate questions
+[260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
+Annotations, which draws a column of notes to the right of the prose instead, behind the
+experimental switch. So *a mode is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 
 The feature the app is *for* is **[granularity zoom](granularity-zoom.md)**: the article at any level
@@ -159,9 +161,20 @@ readers never are.
   [260930h](../plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md) (the band as a
   share of the room, and icon-only copy buttons).
 
+- **Annotations** — the one mode drawn to the *right* of the prose rather than in the band: a
+  column of notes, each level with the block it is about and scrolling with the text — each
+  part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
+  a head pinned at the top saying which part and section you are in and, from the arc, where the
+  argument has got to. It opens no band, generates nothing, and hides its notes on a window too
+  narrow for the column. Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
+  to the text, the middle for the text, the right for what is. Behind the switch. No
+  `annotations.md` yet; the plan is the reference —
+  [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
+
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
-That is every band mode; `plain` is the only one that opens no band.
+That is every band mode; `plain` and Annotations open none — Annotations draws its column on the
+right instead.
 
 ### Marking a passage, and asking about one
 
