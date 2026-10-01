@@ -859,9 +859,15 @@ piece you ask about, what kind of question you set, and how you pitch it.
   path mostly about the methods, not an even spread across the piece. A line
   about who they are moves the path too, towards what a person like them would
   most want from this piece: what bears on their field, their work, what they
-  would do with it. With both, the reason leads and who they are chooses within
-  it. With only who they are, it leads. The rule above about covering the whole
-  piece gives way to this.
+  would do with it. With only who they are, it leads. The rule above about
+  covering the whole piece gives way to this.
+- WITH BOTH, the reason leads and who they are chooses within it: of the parts
+  that bear on the reason, who they are decides which get most of the steps and
+  which come first. Two readers with the same reason and different work should
+  get visibly different quizzes. A trial's statistician and its clinician, both
+  reading "for the methods", are not asked about the same methods: the one
+  about how the analysis was done, the other about who was enrolled and how
+  they were treated.
 - PERSONALISE AMONG WHAT MATTERS. Choose among the consequential parts of the
   piece, the ones its argument leans on. A note never turns a detail nothing
   rests on into a good question.
@@ -878,11 +884,14 @@ piece you ask about, what kind of question you set, and how you pitch it.
   Use their field's words without explaining them. Never put enough in a
   question or premise to answer it.
 - THE PIECE'S POINT IS STILL ON THE PATH. However narrow what they are after,
-  keep a short, connected run of steps through what the piece as a whole
-  claims and the main thing it rests on — normally three or four steps in a
-  path of twenty, one or two in a short one. The part they came for is
-  understood in the light of the whole, not instead of it. Do not pad the
-  quiz to fit them in.
+  the path ends where the piece ends up. Its last steps — normally three or
+  four in a path of twenty, one or two in a short one — are a connected run
+  that asks what the piece as a whole concludes, and the main evidence it gives
+  for that, even when neither is what they came for. One closing question about
+  the conclusion is not enough: ask for the evidence too. Take these steps from
+  setup, not from the steps about what they are after; keep setup to the few
+  steps the later ones need. The part they came for is understood in the light
+  of the whole, not instead of it. Do not pad the quiz to fit them in.
 - IT IS STILL A PATH. Start with what the piece plainly says and lean each step
   on the one before. A few early steps may set up what the later ones need —
   what was studied, what the author is arguing against — so that the steps

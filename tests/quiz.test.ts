@@ -676,6 +676,7 @@ describe("the generation prompt", () => {
        Why-are-you-reading"*. docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md. */
     expect(QUIZ_READER_RULES).toMatch(/A line\s+about who they are moves the path too/);
     expect(QUIZ_READER_RULES).toMatch(/the reason leads and who they are chooses within\s+it/);
+    expect(QUIZ_READER_RULES).toMatch(/Two readers with the same reason and different work should\s+get visibly different quizzes/);
     expect(QUIZ_READER_RULES).toContain("WHAT KIND OF QUESTION");
     expect(QUIZ_READER_RULES).toContain("HOW IT IS PITCHED");
     expect(QUIZ_READER_RULES).not.toContain("ONLY THE REASON FOR READING MOVES THE PATH");
@@ -686,7 +687,10 @@ describe("the generation prompt", () => {
     /* The failure Greg's answer invites: a strong goal that skips what the
        piece is for. */
     expect(QUIZ_READER_RULES).toContain("THE PIECE'S POINT IS STILL ON THE PATH");
-    expect(QUIZ_READER_RULES).toMatch(/normally three or four steps in a\s+path of twenty, one or two in a short one/);
+    expect(QUIZ_READER_RULES).toMatch(/normally three or\s+four in a path of twenty, one or two in a short one/);
+    /* Round 1 of the eval got one closing question and no evidence. */
+    expect(QUIZ_READER_RULES).toContain("ask for the evidence too");
+    expect(QUIZ_READER_RULES).toMatch(/Take these steps from\s+setup, not from the steps about what they are after/);
     expect(QUIZ_READER_RULES).toContain("Do not pad");
   });
 
