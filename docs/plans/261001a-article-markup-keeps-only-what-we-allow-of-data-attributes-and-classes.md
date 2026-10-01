@@ -37,9 +37,10 @@ has nothing to remember.
 1. **`data-*` attributes.** Set DOMPurify's own `ALLOW_DATA_ATTR: false`, and put the survivors in
    one declared list, `ARTICLE_DATA_ATTRS`, added through `ADD_ATTR`. It has two parts:
    - **The pipeline's own namespace**: every value of `RESERVED_ATTRS` (`src/reserved.ts`, the
-     `data-spya-*` family). Stage 2 writes these for stage 3. Stage 3 stamps `wasId`/`wasName`
-     *before* its sanitise and reads them straight after. The reading view reads the note and PDF
-     figure stamps. Each one is already scrubbed from a stranger's markup on import by
+     `data-spya-*` family). Stage 2 writes the note and callout stamps for stage 3; stage 3 stamps
+     `wasId`/`wasName` *before* its sanitise and reads them straight after; the PDF renderer writes
+     its figure stamp; and extraction evals temporarily write `sourceRef`. The reading view reads
+     the note and PDF figure stamps. Each one is scrubbed from a stranger's markup on import by
      `scrubReserved`, under reserved.ts's own rule. Importing the constants keeps that file the only
      place that names one.
    - **Two publisher facts the pipeline reads**: `data-url-original` and `data-href-mobile`, gwern's
@@ -110,18 +111,21 @@ The tests are written first and must be seen red.
    edit anywhere, so no test needs to go red for it. What can still go wrong is a collision: the
    app keying something off a name an article is allowed to keep. The first draft of this item
    overclaimed here, and Sol corrected it (plan review, finding 1). The tests scan `src/` (not
-   tests) for every `data-…` literal, and `src/web` for every class in five spellings: stylesheet
-   selectors, `closest`/`matches`/`querySelector` arguments, `*SELECTOR*` constants, `className`
-   literals and `classList` calls. They put each one through the real `sanitizeHtml` on a
-   `<span>`, a `<p>` and a MathML `<mi>`, and assert that whatever survives is declared. They also
-   assert that the only surviving `data-*` names the browser reads are the four `data-spya-*`
-   stamps, and that the only class we share with Temml is `tml-display`. The failure message names
-   the file.
+   tests) for `data-…` literals, `dataset` properties and `RESERVED_ATTRS` references, and scan
+   `src/web` for classes in seven spellings: stylesheet selectors,
+   `closest`/`matches`/`querySelector` arguments, `*SELECTOR*` constants, `*CLASS*` constants,
+   `className` literals and assignments, `setAttribute("class", …)` writes, and `classList` calls.
+   They put data names through the real `sanitizeHtml` on a `<span>`, and classes through it on a
+   `<p>` and a MathML `<mi>`, and assert that whatever survives is declared. They also
+   assert that the only surviving `data-*` names present in browser source are the four
+   `data-spya-*` stamps, and that the only class we share with Temml is `tml-display`. The failure
+   message names the file.
 4. **`TEMML_CLASSES` is pinned to Temml's stylesheet.** The test parses the class selectors out of
    `Temml-Local.css` and asserts the two sets are equal. After a Temml upgrade this goes red rather
    than letting maths lose a class without anyone noticing.
 5. **Maths survives.** A battery of TeX (fractions, `aligned`, `\cancel`, `\vec`, `\overline`,
-   `\boxed`, tags) goes through the real Temml renderer and the sanitiser, and every class survives.
+   `\boxed`, tags) goes through the real Temml renderer and the sanitiser, and every styled class it
+   emits survives. A separate synthetic loop checks every declared Temml class.
 6. **What must be kept, is kept**: every `RESERVED_ATTRS` value, `data-url-original`,
    `data-href-mobile`, `pdf-uncertain`, and a block id.
 7. The existing suites: `tests/sanitize*.test.ts`, the maths tests, `tests/reserved.test.ts`,
@@ -129,11 +133,11 @@ The tests are written first and must be seen red.
 
 ## Which defence this touches
 
-The DOMPurify policy in `src/sanitize-policy.ts`, a row in
-[security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live),
-touched with Greg's approval (above). Nothing else in that table is touched. The map's row and
-security.md's description of the policy are updated to say it is now an allowlist for `data-*` and
-classes.
+The DOMPurify policy in `src/sanitize-policy.ts` — the defence named by a row in
+[security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live)
+— is touched with Greg's approval (above). Nothing in that table is touched: its existing row
+already names the shared policy. security.md's description is updated to say it is now an allowlist
+for `data-*` and classes.
 
 ## What was passed over
 
@@ -166,9 +170,47 @@ classes.
 1. This plan, reviewed by GPT Sol (`--sandbox review`).
 2. Tests red → policy edit → green; `npm test`, `npm run typecheck`, lint on touched files. GPT Sol
    code review (`--sandbox workspace-write`). Commit, push to `dev`.
-3. Docs: security.md/security-map.md lines, the 5Z feedback note, awaiting-approval.md, 260930f's
+3. Docs: security.md, the 5Z feedback note, awaiting-approval.md, 260930f's
    § Left for Greg.
 
 ## As built
 
-(filled in after stage 2)
+Built as planned, 2026-10-01, with both GPT Sol reviews in this folder: the plan review
+(`261001a-article-markup-allowlist-plan-review-sol.md`, approve after tightening) and the code
+review (`…-code-review-sol.md`, approve, no P0–P2).
+
+- **Production evidence.** The forged-marking queries returned 0 rows for both attributes and
+  classes. The controls, using the same pattern shapes on names known to be present, returned
+  1,563 and 123 rows. The script was `data/survey-5z.mjs`, gitignored; its queries are summarised
+  under § Evidence.
+- **Red, then green.** The new tests went red against the old policy with ten failures: every
+  forgery survived. They went green after the change.
+- **Mutation-checked.** Each of three plants turned the intended test red, and each was then
+  removed: `data-url-original` in a `src/web` file, `className="sout"`, and `data-block-link`
+  added to `ARTICLE_DATA_ATTRS`.
+- **Sol's code-review fixes.** `src/extract.ts` now scrubs a publisher's `data-spya-src` as well as
+  `data-spya-pdf-figure`, since the whole namespace now passes the sanitiser (red→green in
+  `tests/extract-sanitize.test.ts`). The scanners also read `dataset.*`, `RESERVED_ATTRS.*`,
+  `*CLASS*` constants, `.className =` and `setAttribute("class", …)`. Every Temml class is tested
+  on MathML and rejected on HTML.
+- **Three existing tests needed their premise changed, not their purpose:**
+  - `tests/sanitize.test.ts`: two tests pinned the denylist's "keeps a publisher's `data-*` and
+    class" behaviour, and are reversed.
+  - `tests/empty-blocks-keep-their-ids.test.ts`: two `<hr>`s are now told apart by `title`/`lang`
+    rather than by `class`/`data-x`.
+  - `tests/store-roundtrip.test.ts`: the expected `blocks.json` is now the fixture cleaned by the
+    current policy, because the export cleans on the way out. Previous bumps never changed the
+    fixtures' html, so this had not come up.
+- **One finding the survey's names did not show.** Noema keeps its footnote text in a
+  `data-note` attribute (64 production blocks). Nothing in `src/` ever displayed it: no JS and no
+  CSS `attr()`. So dropping it changes nothing a reader sees, and a Noema footnote recogniser would
+  read the raw page in stage 2, before any sanitise, like `notes.ts` does.
+- **Gates.** The full `npm test` before the review fixes had 9 failures in 8 files:
+  - 4, in 3 files, were this change's and are fixed above;
+  - 5 were the fresh-worktree ones (`cold-start-lazy-imports`, `pdf-bundle-trace` and three
+    `fleet-*`), all green after `npm run build` and `npm run build:fleet` (112 tests).
+- **After the fixes.** 56 affected files and 1,479 tests green, plus `store-roundtrip` with 95.
+  `npm run typecheck` exit 0, and lint clean on every touched file.
+- **Not done.** The entry-point row in `security-map.md` is unchanged, because it is still true;
+  `security.md` carries the new rule. The public DTO for cross-references (260930f item 2) waits
+  on Greg.

@@ -182,8 +182,9 @@ is presentational, no handler trusts it, and it is accepted on purpose (the comm
 each new marking had to be added to it by hand. Six versions of the policy were exactly that, and
 the seventh omission was a forgeable preview card
 ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md),
-SPIDERYARN-READING2-5Z). `tests/sanitize-allowlist.test.ts` scans `src/` for every `data-…` name and
-class the app uses, and fails if one survives without being declared.
+SPIDERYARN-READING2-5Z). `tests/sanitize-allowlist.test.ts` scans the source spellings by which the
+app names data attributes and classes, including `dataset`, reserved-attribute constants, selectors
+and class APIs, and fails if one survives without being declared.
 
 Removed:
 

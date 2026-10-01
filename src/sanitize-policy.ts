@@ -33,10 +33,12 @@ import { RESERVED_ATTRS } from "./reserved.js";
  * Two families, and a third would need an argument:
  *
  * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
- *   writes it for stage 3, stage 3 stamps `wasId`/`wasName` *before* its own
- *   sanitise and reads them straight after, and the reading view reads the note
- *   and PDF figure stamps. Every one is scrubbed from a stranger's markup on the
- *   way in (`scrubReserved`), which is reserved.ts's rule, not this file's.
+ *   writes note and callout stamps for stage 3; stage 3 stamps `wasId`/`wasName`
+ *   *before* its own sanitise and reads them straight after; the PDF renderer
+ *   writes its figure stamp; and extraction evals temporarily write `sourceRef`.
+ *   The reading view reads the note and PDF figure stamps. Every one is scrubbed
+ *   from a stranger's markup on the way in (`scrubReserved`), which is
+ *   reserved.ts's rule, not this file's.
  * - **two addresses a publisher wrote**: gwern's `data-url-original` and
  *   `data-href-mobile`, the real link behind an archive copy, which
  *   src/citations.ts reads off the sanitised block. Nothing in the browser reads
@@ -53,8 +55,9 @@ export const ARTICLE_DATA_ATTRS: readonly string[] = [
 ];
 
 /**
- * **The only classes an article keeps on an HTML element**: the one our PDF
- * renderer writes (src/pdf-read.ts, styled in shell.css). Readability's
+ * **The only classes an article keeps on any element**: the one our PDF renderer
+ * writes (src/pdf-read.ts, styled in shell.css). MathML may additionally keep
+ * `TEMML_CLASSES`, below. Readability's
  * `keepClasses: false` has always stripped a publisher's, and a production
  * survey on 2026-10-01 found this token and no other in 101,526 stored blocks.
  *

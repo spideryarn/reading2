@@ -1163,9 +1163,9 @@ function carryOverIds(
  * different documents — `sanitizeInPlace` replaces `innerHTML`, so every node
  * is re-parsed and nothing can be remembered across it by identity.
  *
- * Hence an attribute, which is text and does survive. DOMPurify keeps `data-*`
- * by default, and keeps these in the very cases the `id` itself is deleted
- * (see stampAuthorAnchors).
+ * Hence an attribute, which is text and does survive. The shared sanitiser's
+ * `ARTICLE_DATA_ATTRS` explicitly keeps these two stamps, including in the very
+ * cases where DOMPurify deletes the `id` itself (see `stampAuthorAnchors`).
  *
  * **Two of them, because `id` and `<a name>` are not equal claims.** The HTML
  * spec resolves a fragment by looking at every `id` in the document *first* and
@@ -1552,9 +1552,9 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       gistable,
       ...(note ? { note } : {}),
       ...(context ? { context } : {}),
-      /* Read from `el`, which is still in the document: the note stamps are
-         `data-*`, so neither the sanitiser nor `scrubStamps` (which only takes
-         WAS_ID/WAS_NAME off) has touched them. */
+      /* Read from `el`, which is still in the document: the note stamps are in
+         the sanitiser's explicit `ARTICLE_DATA_ATTRS`, and `scrubStamps` takes
+         only WAS_ID/WAS_NAME off. */
       ...noteFieldsFor(el),
     };
   });

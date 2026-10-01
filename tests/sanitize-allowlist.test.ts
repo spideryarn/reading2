@@ -43,13 +43,34 @@ function sourceFiles(pattern: string): string[] {
   return globSync(pattern, { cwd: ROOT }).filter((f) => !/\.test\.tsx?$/.test(f));
 }
 
-/** Every `data-…` name spelled anywhere under `glob`, with the first file that spells it. */
+const dataName = /\bdata-[a-z][a-z0-9]*(?:-[a-z0-9]+)*/g;
+
+/** `dataset.fooBar` is the attribute `data-foo-bar`. */
+function datasetName(property: string): string {
+  return `data-${property.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+}
+
+/**
+ * Every `data-…` name spelled under `glob`, plus the two common ways source
+ * names one without spelling it: `dataset.foo` and `RESERVED_ATTRS.foo`.
+ */
 function dataNamesInSource(glob = "src/**/*.{ts,tsx,css}"): Map<string, string> {
   const found = new Map<string, string>();
+  const add = (name: string | undefined, file: string) => {
+    if (name && !found.has(name)) found.set(name, file);
+  };
   for (const file of sourceFiles(glob)) {
     const text = readFileSync(path.join(ROOT, file), "utf8");
-    for (const m of text.matchAll(/\bdata-[a-z][a-z0-9]*(?:-[a-z0-9]+)*/g)) {
-      if (!found.has(m[0])) found.set(m[0], file);
+    for (const m of text.matchAll(dataName)) add(m[0], file);
+    for (const m of text.matchAll(/\.dataset\.([a-z][a-zA-Z0-9]*)\b/g)) {
+      if (m[1]) add(datasetName(m[1]), file);
+    }
+    for (const m of text.matchAll(/\.dataset\[\s*["']([a-z][a-zA-Z0-9]*)["']\s*\]/g)) {
+      if (m[1]) add(datasetName(m[1]), file);
+    }
+    for (const m of text.matchAll(/RESERVED_ATTRS\.([a-zA-Z][a-zA-Z0-9]*)\b/g)) {
+      const key = m[1] as keyof typeof RESERVED_ATTRS | undefined;
+      if (key) add(RESERVED_ATTRS[key], file);
     }
   }
   return found;
@@ -70,16 +91,51 @@ function classSelectors(css: string): Set<string> {
   return out;
 }
 
+type AddClass = (c: string | undefined, file: string) => void;
+
+function addClassTokens(value: string, file: string, add: AddClass): void {
+  for (const tok of value.split(/\s+/)) add(tok, file);
+}
+
+function classesInWebCode(text: string, file: string, add: AddClass): void {
+  const selectorClasses = (sel: string) => {
+    for (const c of sel.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)) add(c[1], file);
+  };
+  for (const m of text.matchAll(/(?:closest|matches|querySelector(?:All)?)\(\s*(["'`])([^"'`]*)\1/g)) {
+    selectorClasses(m[2] ?? "");
+  }
+  for (const m of text.matchAll(/[A-Z_]*SELECTOR[A-Z_]*\s*(?::[^=]+)?=\s*(["'`])([^"'`]*)\1/g)) {
+    selectorClasses(m[2] ?? "");
+  }
+  for (const m of text.matchAll(/[A-Z_]*CLASS(?:ES)?[A-Z_]*\s*(?::[^=]+)?=\s*(["'`])([^"'`]*)\1/g)) {
+    addClassTokens(m[2] ?? "", file, add);
+  }
+  for (const m of text.matchAll(/className(?:=\{?|:\s*)(["'`])([^"'`]*)\1/g)) {
+    addClassTokens((m[2] ?? "").replace(/\$\{[^}]*\}/g, " "), file, add);
+  }
+  for (const m of text.matchAll(/\.className\s*=\s*(["'`])([^"'`]*)\1/g)) {
+    addClassTokens(m[2] ?? "", file, add);
+  }
+  for (const m of text.matchAll(/setAttribute\(\s*["']class["']\s*,\s*(["'`])([^"'`]*)\1/g)) {
+    addClassTokens(m[2] ?? "", file, add);
+  }
+  for (const m of text.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*(["'`])([^"'`]*)\1/g)) {
+    add(m[2], file);
+  }
+}
+
 /**
  * Every class the app keys anything off or writes, with the first file that
- * does. Five spellings, because a scanner that reads one misses the others —
+ * does. Seven spellings, because a scanner that reads one misses the others —
  * `XREF_SELECTOR` is a constant, not a `closest()` argument, and the first
  * version found it only because the stylesheet also names it:
  *
  *  - class selectors in our own stylesheets;
  *  - selectors handed to `closest`, `matches` or `querySelector(All)`;
  *  - string constants whose name ends in `SELECTOR`;
+ *  - string constants whose name contains `CLASS`;
  *  - `className` string and template literals (their static tokens);
+ *  - direct `.className = "…"` and `setAttribute("class", "…")` writes;
  *  - `classList.add/remove/toggle/contains("…")`.
  */
 function appClasses(): Map<string, string> {
@@ -87,26 +143,11 @@ function appClasses(): Map<string, string> {
   const add = (c: string | undefined, file: string) => {
     if (c && /^-?[a-zA-Z_][\w-]*$/.test(c) && !found.has(c)) found.set(c, file);
   };
-  const selectorClasses = (sel: string, file: string) => {
-    for (const c of sel.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)) add(c[1], file);
-  };
   for (const file of sourceFiles("src/web/**/*.css")) {
     for (const c of classSelectors(readFileSync(path.join(ROOT, file), "utf8"))) add(c, file);
   }
   for (const file of sourceFiles("src/web/**/*.{ts,tsx}")) {
-    const text = readFileSync(path.join(ROOT, file), "utf8");
-    for (const m of text.matchAll(/(?:closest|matches|querySelector(?:All)?)\(\s*(["'`])([^"'`]*)\1/g)) {
-      selectorClasses(m[2] ?? "", file);
-    }
-    for (const m of text.matchAll(/[A-Z_]*SELECTOR[A-Z_]*\s*(?::[^=]+)?=\s*(["'`])([^"'`]*)\1/g)) {
-      selectorClasses(m[2] ?? "", file);
-    }
-    for (const m of text.matchAll(/className(?:=\{?|:\s*)(["'`])([^"'`]*)\1/g)) {
-      for (const tok of (m[2] ?? "").replace(/\$\{[^}]*\}/g, " ").split(/\s+/)) add(tok, file);
-    }
-    for (const m of text.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*(["'`])([^"'`]*)\1/g)) {
-      add(m[2], file);
-    }
+    classesInWebCode(readFileSync(path.join(ROOT, file), "utf8"), file, add);
   }
   return found;
 }
@@ -134,11 +175,24 @@ describe("the 5Z forgeries", () => {
     );
   });
 
-  it("strips an app class from a MathML element too", () => {
-    const out = sanitizeHtml(`<math ${MATHML}><mi class="mode-band xref tml-left">x</mi></math>`);
-    expect(out).toContain(`<mi class="tml-left">`);
+  it("uses namespaces, including an HTML integration point inside MathML", () => {
+    const out = sanitizeHtml(
+      `<math ${MATHML}><mi class="mode-band xref tml-left">x</mi>` +
+        `<mtext><span class="xref tml-left">y</span></mtext></math>`,
+    );
+    expect(out).toContain(`<mi class="tml-left">x</mi>`);
+    expect(out).toContain(`<mtext><span>y</span></mtext>`);
     expect(out).not.toContain("mode-band");
     expect(out).not.toContain("xref");
+  });
+
+  it("gives SVG only the namespace-independent article classes", () => {
+    const out = sanitizeHtml(
+      `<svg><g class="pdf-uncertain xref tml-left"><text>x</text></g></svg>`,
+    );
+    expect(out).toContain(`<g class="pdf-uncertain">`);
+    expect(out).not.toContain("xref");
+    expect(out).not.toContain("tml-left");
   });
 
   it("does not let Temml's vocabulary onto an HTML element", () => {
@@ -198,7 +252,7 @@ describe("completeness: no marking the app uses survives unless it is declared",
     expect(survivors).toEqual([]);
   });
 
-  it("lets the browser read no surviving data-* name but the pipeline's own stamps", () => {
+  it("lets browser source name no surviving data-* but the pipeline's own stamps", () => {
     /* The collision this rule can still suffer (Sol, plan review, finding 1):
        the reading view starting to trust a name an article is allowed to keep.
        `data-url-original` in src/web would be exactly that — a publisher's
@@ -250,35 +304,67 @@ describe("Temml's vocabulary, pinned to the stylesheet that gives it meaning", (
     expect([...TEMML_CLASSES].sort()).toEqual([...classSelectors(css)].sort());
   });
 
-  it("keeps every class Temml draws that its stylesheet styles, through the real renderer", () => {
+  it("keeps every declared Temml class on MathML, and none on HTML", () => {
+    for (const c of TEMML_CLASSES) {
+      expect(sanitizeHtml(`<math ${MATHML}><mi class="${c}">x</mi></math>`), c).toContain(
+        `class="${c}"`,
+      );
+      expect(sanitizeHtml(`<span class="${c}">x</span>`), c).toBe("<span>x</span>");
+    }
+  });
+
+  it("keeps every styled class emitted by a representative real-renderer battery", () => {
     /* Not *every* class Temml writes: `mord`, `tml-tag`, `tml-tageqn` and a few
        more are hooks for Temml's own `postProcess` and for Firefox, which we do
        not call and whose rules are not in Temml-Local.css. Unstyled, they draw
-       nothing, so dropping them changes no pixel. */
+       nothing, so dropping them changes no pixel.
+
+       Nor does this battery claim to make Temml emit all 58 stylesheet classes:
+       it currently exercises 28. The synthetic test above covers the whole
+       declared set; the expected tokens here make each real feature a positive
+       control rather than letting six unrelated `tml-display`s satisfy a count. */
     const render = temmlRenderer(temml);
-    const battery = [
-      "\\frac{a}{b}",
-      "\\sqrt{x^2}",
-      "\\begin{aligned} a&=b\\\\ c&=d\\end{aligned}",
-      "\\cancel{z}\\bcancel{y}\\xcancel{w}\\sout{v}",
-      "\\vec{v}\\widehat{abc}\\widetilde{xyz}\\overline{ab}\\underline{cd}",
-      "\\boxed{x}\\fbox{y}\\phase{30^\\circ}\\longdiv{5}\\angl{n}",
-      "\\mathcal{A}\\mathscr{B}\\textcircled{c}",
-      "\\begin{equation}x\\tag{1}\\end{equation}",
-      "a'\\;b\\,c\\quad d",
+    const battery: Array<{ tex: string; expected: string[] }> = [
+      { tex: "\\frac{a}{b}", expected: ["tml-display"] },
+      { tex: "\\sqrt{x^2}", expected: ["tml-sml-pad"] },
+      {
+        tex: "\\begin{aligned} a&=b\\\\ c&=d\\end{aligned}",
+        expected: ["tml-jot", "tml-left", "tml-right"],
+      },
+      {
+        tex: "\\cancel{z}\\bcancel{y}\\xcancel{w}\\sout{v}",
+        expected: ["tml-cancel", "tml-xcancel", "downstrike", "upstrike", "sout"],
+      },
+      {
+        tex: "\\vec{v}\\widehat{abc}\\widetilde{xyz}\\overline{ab}\\underline{cd}",
+        expected: ["tml-vec", "tml-hat-3", "tml-tilde-3", "tml-overline", "tml-underline"],
+      },
+      {
+        tex: "\\boxed{x}\\fbox{y}\\phase{30^\\circ}\\longdiv{5}\\angl{n}",
+        expected: ["tml-fbox", "phasor-angle", "longdiv-arc", "actuarial"],
+      },
+      {
+        tex: "\\mathcal{A}\\mathscr{B}\\textcircled{c}",
+        expected: ["mathcal", "mathscr", "textcircle"],
+      },
+      { tex: "\\begin{equation}x\\tag{1}\\end{equation}", expected: ["tml-left", "tml-right"] },
+      { tex: "a'\\;b\\,c\\quad d", expected: ["tml-prime"] },
     ];
-    let seen = 0;
-    for (const tex of battery) {
+    const seen = new Set<string>();
+    for (const { tex, expected } of battery) {
       const html = render(tex, true);
+      expect(html, tex).not.toBeNull();
       if (html === null) continue;
       const styled = (s: string) =>
         [...s.matchAll(/class="([^"]*)"/g)]
           .map((m) => (m[1] ?? "").split(/\s+/).filter((c) => TEMML_CLASSES.includes(c)).join(" "))
           .filter((c) => c !== "")
           .join("|");
-      seen += styled(html) === "" ? 0 : 1;
+      const emitted = styled(html);
+      for (const c of expected) expect(emitted, `${tex} did not exercise ${c}`).toContain(c);
+      for (const c of emitted.split(/[ |]/).filter(Boolean)) seen.add(c);
       expect(styled(sanitizeHtml(html)), tex).toBe(styled(html));
     }
-    expect(seen).toBeGreaterThan(5);
+    expect(seen.size).toBe(28);
   });
 });
