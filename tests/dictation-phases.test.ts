@@ -56,6 +56,16 @@ vi.mock("../src/web/lib/api.js", async () => {
 let built: FakeRecognition[] = [];
 let gumCalls = 0;
 let gumRejects = false;
+/**
+ * The machine's microphones, for the remembered-device cases (spya-k3q9mc).
+ * `defaultInput` is what `{ audio: true }` opens; an `exact` request for an id
+ * not in `inputs` rejects the way WebKit does, with an `OverconstrainedError`
+ * that is not an `Error`.
+ */
+let inputs: Array<{ deviceId: string; label: string }> = [];
+let defaultInput: { deviceId: string; label: string } | null = null;
+let holdEnumeration = false;
+let releaseEnumeration: (() => void) | null = null;
 let tracksStopped = 0;
 /** `ended` handlers the hook installed on the track it opened. */
 let endedListeners: Array<() => void> = [];
@@ -170,10 +180,12 @@ class SafariRecognition extends FakeRecognition {
  */
 let tracksHandedOut: MediaStreamTrack[] = [];
 
-function fakeTrack() {
+function fakeTrack(device: { deviceId: string; label: string } | null = null) {
   const track = {
     readyState: "live",
     muted: false,
+    label: device?.label ?? "",
+    getSettings: () => (device ? { deviceId: device.deviceId } : {}),
     addEventListener: (name: string, fn: () => void) => {
       if (name === "ended") endedListeners.push(fn);
     },
@@ -296,10 +308,28 @@ function install(Ctor: typeof FakeRecognition) {
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
     value: {
-      getUserMedia: async () => {
+      getUserMedia: async (c: MediaStreamConstraints) => {
         gumCalls++;
         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
-        return { getAudioTracks: () => [fakeTrack()], getTracks: () => [fakeTrack()] };
+        const audio = c.audio;
+        const exact =
+          typeof audio === "object" && audio && typeof audio.deviceId === "object"
+            ? (audio.deviceId as { exact?: string }).exact
+            : undefined;
+        const device = exact ? inputs.find((d) => d.deviceId === exact) : defaultInput;
+        if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
+        return {
+          getAudioTracks: () => [fakeTrack(device ?? null)],
+          getTracks: () => [fakeTrack(device ?? null)],
+        };
+      },
+      enumerateDevices: async () => {
+        if (holdEnumeration) {
+          await new Promise<void>((release) => {
+            releaseEnumeration = release;
+          });
+        }
+        return inputs.map((d) => ({ kind: "audioinput", ...d }));
       },
     },
   });
@@ -427,6 +457,10 @@ beforeEach(() => {
   built = [];
   gumCalls = 0;
   gumRejects = false;
+  inputs = [];
+  defaultInput = null;
+  holdEnumeration = false;
+  releaseEnumeration = null;
   transcribeCalls = 0;
   transcribeFails = false;
   transcribeStatus = 502;
@@ -1334,6 +1368,106 @@ describe("what reaches the textarea", () => {
     );
     expect(h.text).toEqual(["the evidence"]);
     expect(h.get().interim).toBe("not the his");
+    h.unmount();
+  });
+});
+
+/**
+ * **A remembered microphone whose id no longer resolves.** spya-k3q9mc: on an
+ * iPhone with AirPods, every press said the chosen microphone was not
+ * available, and then worked. The id had stopped resolving; the device had
+ * not gone. docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
+ */
+describe("the remembered microphone", () => {
+  function store(entries: Record<string, string>) {
+    const map = new Map(Object.entries(entries));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+    });
+    return map;
+  }
+  const AIRPODS = { deviceId: "airpods-today", label: "AirPods Pro" };
+  const PHONE = { deviceId: "phone-mic", label: "iPhone Microphone" };
+
+  it("says nothing when the default that opened is the chosen one under a new id, and adopts the id", async () => {
+    const saved = store({
+      "spya.dictation.deviceId": "airpods-yesterday",
+      "spya.dictation.deviceLabel": "AirPods Pro",
+    });
+    inputs = [AIRPODS, PHONE];
+    defaultInput = AIRPODS;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(h.get().armed).toBe(true);
+    expect(h.get().deviceUnavailable).toBe(false);
+    expect(saved.get("spya.dictation.deviceId")).toBe("airpods-today");
+    expect(h.get().deviceId).toBe("airpods-today");
+    h.unmount();
+  });
+
+  it("names the chosen one when a different microphone opened", async () => {
+    store({
+      "spya.dictation.deviceId": "airpods-yesterday",
+      "spya.dictation.deviceLabel": "AirPods Pro",
+    });
+    inputs = [AIRPODS, PHONE];
+    defaultInput = PHONE;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
+    h.unmount();
+  });
+
+  it("warns once about a choice stored without a name, then forgets it", async () => {
+    const saved = store({ "spya.dictation.deviceId": "airpods-yesterday" });
+    inputs = [AIRPODS];
+    defaultInput = AIRPODS;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(h.get().deviceUnavailable).toEqual({ wanted: null });
+    expect(saved.has("spya.dictation.deviceId")).toBe(false);
+    h.unmount();
+  });
+
+  it("remembers the name of a chosen microphone once it has opened by id", async () => {
+    const saved = store({ "spya.dictation.deviceId": "airpods-today" });
+    inputs = [AIRPODS];
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(h.get().deviceUnavailable).toBe(false);
+    expect(saved.get("spya.dictation.deviceLabel")).toBe("AirPods Pro");
+    h.unmount();
+  });
+
+  it("keeps the fallback track inside the mic claim while it checks the device", async () => {
+    /* `enumerateDevices` is an await after the fallback track opens. A stop in
+       that gap must stop the track before releasing the page-wide claim, or a
+       second box can open another capture alongside it. */
+    useSafari();
+    store({
+      "spya.dictation.deviceId": "airpods-yesterday",
+      "spya.dictation.deviceLabel": "AirPods Pro",
+    });
+    inputs = [AIRPODS];
+    defaultInput = AIRPODS;
+    holdEnumeration = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(tracksHandedOut).toHaveLength(1);
+    expect(tracksStopped).toBe(0);
+
+    act(() => h.get().toggle());
+    expect(tracksStopped).toBe(1);
+
+    releaseEnumeration?.();
+    await settleCapture();
     h.unmount();
   });
 });

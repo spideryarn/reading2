@@ -481,7 +481,9 @@ describe("which microphone it opens", () => {
     await settle();
     gumPlan = ["overconstrained"];
     await pressAndOpen(h);
-    expect(h.get().deviceUnavailable).toBe(true);
+    /* No name was ever remembered for "gone" (it never opened), so the warning
+       cannot say which one was chosen — and says so once. 261001l. */
+    expect(h.get().deviceUnavailable).toEqual({ wanted: null });
     // ...while still naming whatever it actually opened.
     expect(h.get().deviceLabel).toBe("MacBook Pro Microphone (Built-in)");
     h.unmount();

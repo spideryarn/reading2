@@ -107,9 +107,14 @@ import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js
 import { verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
+  judgeFallback,
   labelled,
+  listInputs,
+  openedId,
   rememberDevice,
+  rememberDeviceLabel,
   rememberedDevice,
+  rememberedDeviceLabel,
 } from "./mic-devices.js";
 import { type MicRecording, type MicTape, type TapeEvents, extFor, recordTrack } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
@@ -312,8 +317,14 @@ export interface UseDictation {
    * being used. Said out loud rather than left for the reader to notice, since
    * transcribing from a device they did not pick is the failure this round is
    * about. GPT Sol's code review, item 2.
+   *
+   * `wanted` is the browser's name for the one they chose, so the sentence can
+   * say which — null for a choice stored before names were kept, which is
+   * warned about once and then forgotten. Not set when the device that opened
+   * is the chosen one under an id that stopped resolving, which is not news
+   * (spya-k3q9mc; mic-devices.ts § judgeFallback).
    */
-  deviceUnavailable: boolean;
+  deviceUnavailable: false | { wanted: string | null };
   /**
    * Choose a microphone, and restart on it if a dictation is running — a picker
    * that needs a second press to take effect looks broken, which is the whole
@@ -636,7 +647,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const retryGeneration = useRef(0);
   /** The retry request in flight, so an unmount can cancel it. */
   const retryUpload = useRef<AbortController | null>(null);
-  const [deviceUnavailable, setDeviceUnavailable] = useState(false);
+  const [deviceUnavailable, setDeviceUnavailable] = useState<UseDictation["deviceUnavailable"]>(false);
   /* Whether *this* dictation will produce live words. Not a constant: it is a
      property of the capture that actually opened, and a `start()` that refused
      turns a live browser into a silent one for one press. */
@@ -1428,6 +1439,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     holdKept(null);
 
     const preferred = rememberedDevice();
+    const preferredLabel = rememberedDeviceLabel();
     void (async () => {
       /* **Before `getUserMedia`, and that is the whole point** — the gap this
          closes is between one instance opening a device and another instance
@@ -1458,15 +1470,63 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         return;
       }
 
+      /* Own the track before the first await after capture. A stop while device
+         enumeration is pending must stop it before `finish` releases this
+         session's page-wide microphone claim. */
+      s.track = outcome.track;
       s.live = outcome.live;
       setLiveText(outcome.live);
-      setDeviceUnavailable(preferred !== null && !outcome.honoured);
-      s.track = outcome.track;
+      const opened = labelled(outcome.track);
+      /* **Was it the microphone they chose?** Asked of the name as well as the
+         id since 2026-10-01: on an iPhone with AirPods every press said the
+         chosen microphone was not available and then worked (spya-k3q9mc). A
+         remembered id can stop resolving while the device is still there, and
+         the name — unique among the inputs, and agreeing with the id that
+         opened — is how that is told apart from a headset that has gone.
+         mic-devices.ts § judgeFallback. The inputs are listed only on this
+         path, and only now, when there is permission and so there are names. */
+      setDeviceUnavailable(false);
+      if (preferred !== null && outcome.honoured) {
+        rememberDeviceLabel(opened);
+      } else if (preferred !== null) {
+        const inputs = await listInputs();
+        if (session.current !== s || s.finished) {
+          /* `finish` owned the track across the await, and stopped it before it
+             released the claim. Nothing from this stale continuation may land. */
+          return;
+        }
+        const verdict = judgeFallback(
+          preferredLabel,
+          { label: opened, id: openedId(outcome.track) },
+          inputs,
+        );
+        switch (verdict.kind) {
+          case "same-device":
+            rememberDevice(verdict.id);
+            rememberDeviceLabel(opened);
+            setDeviceId(verdict.id);
+            break;
+          case "forget":
+            /* Said once, then dropped: stored before names were kept, it can
+               never be checked, and would otherwise warn on every press. */
+            rememberDevice(null);
+            setDeviceId(null);
+            setDeviceUnavailable({ wanted: null });
+            break;
+          case "different":
+            setDeviceUnavailable({ wanted: verdict.wanted });
+            break;
+          default: {
+            const never: never = verdict;
+            void never;
+          }
+        }
+      }
       /* **The name of what we opened**, which is the piece that was missing. A
          meter reading zero and a meter pointed at a dead conferencing loopback
          are the same picture until something says which device produced it.
          docs/plans/260827k-microphone-device-and-recording.md. */
-      setDeviceLabel(labelled(outcome.track));
+      setDeviceLabel(opened);
       /* The context is created only now, and only when there is something to
          measure. It is a shared singleton, so this is a get rather than a build
          most of the time. */
