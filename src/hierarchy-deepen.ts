@@ -543,14 +543,18 @@ export function readExpansion(opts: {
  *
  * ## And what stops it going higher
  *
- * `DEFAULT_JOB_CONCURRENCY` is **3** (src/jobs.ts), and nothing stops three jobs
- * being in this step at once, so what the account sees is `3 × 8 = 24` scoped
- * calls in flight. That is a quarter of the 100 `CHUNK_CONCURRENCY` already
- * points at the same account, which is the only evidence anyone has about what
- * this account will take — so 24 is inside demonstrated headroom rather than
- * inside a guess. It is also the reason the number is not simply *"as wide as the
- * wave"*: the width that matters to a rate limiter is the one summed across jobs,
- * and this file cannot see the other two.
+ * `DEFAULT_JOB_CONCURRENCY` is **6** (src/jobs.ts, since 2026-10-01; it was 3),
+ * and nothing stops six jobs being in this step at once, so what the account
+ * sees is `6 × 8 = 48` scoped calls in flight. **That is a chosen ceiling, not
+ * demonstrated headroom.** This used to call 24 "a quarter of the 100
+ * `CHUNK_CONCURRENCY` already points at the same account", but the PDF stage
+ * runs on a different model and provider, so its 100 says nothing about what
+ * the Sonnet calls here will take (GPT Sol, 2026-10-01). The test pins the
+ * product at 48 so that raising either number is a decision.
+ * docs/plans/261001b-raise-the-job-concurrency-cap-to-six.md. It is also the
+ * reason the number is not simply *"as wide as the wave"*: the width that
+ * matters to a rate limiter is the one summed across jobs, and this file cannot
+ * see the others.
  *
  * **This is an ambition, and `WidthGate` is what happens when it is wrong** — it
  * halves on a 429 and earns a slot back per width successes, exactly as it does

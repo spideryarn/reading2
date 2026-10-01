@@ -39,7 +39,7 @@
  * separately drawn plates look like different books, which reads as broken.
  *
  * **The calls stay sequential.** The lease is 760 s (`LEASE_MS`, src/jobs.ts)
- * and bounded parallelism here would multiply against the global three-job
+ * and bounded parallelism here would multiply against the global job
  * concurrency; four plates at ~40 s fit with room.
  *
  * ## What an article's author can still make the picture do
