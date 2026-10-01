@@ -53,6 +53,7 @@ import {
 } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
+import type { AdminVoucher, ClaimantUsage } from "../admin-vouchers.js";
 
 const logger = log("store");
 
@@ -186,46 +187,6 @@ export async function giftsFor(ownerId: string): Promise<Gift[]> {
 }
 
 /* -------------------------------------------------- the administrator's -- */
-
-/**
- * The claimant's standing, for the admin table's *how used* column.
- *
- * `free` is the only state in which the gift is doing anything; `paid` says it
- * is bound and waiting for them to be back on Free; `unknown` is a stored
- * period that does not contain now, as `/profile` says it.
- */
-export type ClaimantUsage =
-  | {
-      readonly kind: "free";
-      /** Ingests counted against the allowance, as `/profile`'s `used`. */
-      readonly used: number;
-      /** The whole Free allowance, gifts included. */
-      readonly limit: number;
-      /** Further private articles the wall would admit — `privateHeadroom`. */
-      readonly remaining: number;
-      /** Back on Free after a subscription ended. */
-      readonly lapsed: boolean;
-    }
-  | { readonly kind: "paid"; readonly tierId: string }
-  | { readonly kind: "unknown" };
-
-/** One voucher as `/admin/vouchers` draws it. Admin-only: it carries the note. */
-export interface AdminVoucher {
-  readonly id: string;
-  readonly email: string;
-  readonly articles: number;
-  readonly note: string | null;
-  readonly createdAt: string;
-  readonly createdBy: string;
-  readonly updatedAt: string;
-  readonly claimedBy: string | null;
-  readonly claimedAt: string | null;
-  readonly revokedAt: string | null;
-  /** The claimant's current address, from the Auth service; null when it could not say. */
-  readonly claimantEmail: string | null;
-  /** Present only for a claimed voucher. */
-  readonly claimant?: ClaimantUsage;
-}
 
 /** A seam for tests; defaults to the Auth Admin API. */
 export interface ListDeps {

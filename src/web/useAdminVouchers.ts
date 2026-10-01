@@ -14,44 +14,12 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import type { AdminVoucher } from "../admin-vouchers.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
-/**
- * **One voucher as the admin route sends it.**
- *
- * A copy of `AdminVoucher` and `ClaimantUsage` in src/store/pg-vouchers.ts,
- * because that file is a server module and tests/client-imports.test.ts
- * refuses even a type import from one. The right home for both is a flat
- * module both sides may import (as `AdminUser` lives in src/admin.ts); that
- * move is a server edit and was left for the stage that owns the server.
- */
-export interface AdminVoucherRow {
-  readonly id: string;
-  readonly email: string;
-  readonly articles: number;
-  readonly note: string | null;
-  readonly createdAt: string;
-  readonly createdBy: string;
-  readonly updatedAt: string;
-  readonly claimedBy: string | null;
-  readonly claimedAt: string | null;
-  readonly revokedAt: string | null;
-  /** The claimant's current address, from the Auth service; null when it could not say. */
-  readonly claimantEmail: string | null;
-  /** Present only for a claimed voucher. */
-  readonly claimant?:
-    | {
-        readonly kind: "free";
-        readonly used: number;
-        readonly limit: number;
-        /** Further private articles — the server's `privateHeadroom`. */
-        readonly remaining: number;
-        readonly lapsed: boolean;
-      }
-    | { readonly kind: "paid"; readonly tierId: string }
-    | { readonly kind: "unknown" };
-}
+/** One voucher as the admin route sends it — the shared wire shape. */
+export type AdminVoucherRow = AdminVoucher;
 
 export interface NewVoucherInput {
   readonly email: string;

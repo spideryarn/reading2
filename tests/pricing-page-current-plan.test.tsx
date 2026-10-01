@@ -319,7 +319,7 @@ describe("the pricing page's current-plan line", () => {
        "Your plan has ended" is true of both a reader with two free slots left
        and one with none, and Greg asked what you are *on now*. `remaining`
        lives only in `detail`. */
-    expect(line).toContain("2 of 3");
+    expect(line).toContain("room for 2 further private articles");
     /* And the forbidden rendering is still impossible: `used` is not on this
        arm of the union, so no ratio wider than the limit can appear. */
     expect(line).not.toContain("of 3 articles used");
