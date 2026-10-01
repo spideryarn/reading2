@@ -1,6 +1,9 @@
 # Simple's fidelity guard, built: check each level against its cited passages, retry once, record it
 
 **Status as of 2026-10-01:** built; Sol's plan review taken (one P1 declined, below); one real press run.
+The writer it guards moved to Opus the same day, with the guard kept; on Opus it fires on about one
+level in 18 on the PID paper rather than 6 in 18 —
+[261001p](261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 
 Builds the guard that
 [261001h § Measuring the guard](261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md)

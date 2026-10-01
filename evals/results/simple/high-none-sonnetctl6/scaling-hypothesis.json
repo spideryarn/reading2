@@ -1,0 +1,127 @@
+{
+  "arm": "high-none-sonnetctl6",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:35:31.361Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 19095,
+  "costUsd": 0.058026,
+  "tokens": {
+    "input": 5517,
+    "output": 3087,
+    "reasoning": 1097
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 318,
+  "fullerWords": 324,
+  "briefWords": 142,
+  "paragraphs": [
+    {
+      "text": "This is an essay about GPT-3, a huge text-prediction program released by the company OpenAI in 2020. It was built to predict the next word in a piece of text, trained on huge amounts of internet writing, and it is over ten times bigger than any neural network (a kind of learning program loosely modeled on brain cells) built before it. The essay asks what GPT-3's surprising abilities tell us about where artificial intelligence is headed.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "What makes GPT-3 matter, the essay argues, is that it learned to follow instructions and pick up new tasks from just a few examples, without being specially trained for that skill. This was not expected: simply making the model much bigger produced a new ability nobody built in. The essay argues this supports the \"scaling hypothesis\": the idea that intelligence may come from simple learning methods run at enormous size, rather than needing clever new designs, and that AI researchers have no reliable way to predict or explain when such abilities will appear.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-rbx2kz"
+      ]
+    },
+    {
+      "text": "The essay calls this pattern the \"blessings of scale\": unlike most research, where small versions of a problem are easy and big ones are hard, here the biggest, hardest versions somehow work best, with networks growing more stable, more general, and more skilled at learning new things as they grow. It also lays out the \"pretraining thesis\": that getting really good at predicting ordinary text eventually forces a program to grasp real-world facts, logic, and common sense, because that is the only way left to shave off errors once the easy patterns are used up.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-rjwfkb",
+        "spya-kmyg3w"
+      ]
+    },
+    {
+      "text": "Finally, the essay criticizes AI experts who confidently predicted limits or slowdowns that never came, arguing their forecasts were driven more by caution and reputation than any real model of how AI progresses. It ends by asking whether this scaling trend will keep delivering startling new abilities through the 2020s, or eventually level off.",
+      "ids": [
+        "spya-m9r8zx",
+        "spya-zyncdd",
+        "spya-ewxv9q"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program released in 2020 that predicts text by learning from internet writing, and what it suggests about artificial intelligence. It argues for the \"scaling hypothesis\": the idea that making neural networks (brain-inspired learning systems) much bigger, with more data and computing power, is enough to make them dramatically smarter, without needing clever new designs.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 was never specifically trained to learn new tasks from a few examples, yet it could, a skill called meta-learning. That was a surprise, and it suggests that simply scaling up unsupervised learning (training on raw, unlabeled data) could supply a key ingredient missing from other areas of AI, like robotics. The author also argues most AI experts failed to predict this and still lack a real explanation for why scaling works, making their risk forecasts unreliable.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "The author calls the underlying pattern the \"blessings of scale\": past a certain size, problems that stump small models become easier, not harder, and abilities like generalizing and meta-learning emerge on their own. One proposed reason is that big models act like huge collections of smaller sub-models; simple ones that just memorize data win early on, but as data grows, only sub-models capturing real patterns, like actual arithmetic, keep winning. As training continues on vast, varied text, GPT-3's remaining errors involve fewer and fewer characters of text but require deeper reasoning to fix, suggesting true understanding is needed to close the gap with humans.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-vkkfzh",
+        "spya-kmyg3w"
+      ]
+    },
+    {
+      "text": "The piece also compares OpenAI, which built GPT-3 on a bet that scale alone would work, to other labs like DeepMind and Google Brain, which it says doubt that bet and instead favor building intelligence piece by piece. It closes with a discussion of whether such text-predicting models secretly become \"agents\" that pursue goals, since they learn by imitating goal-pursuing humans in their training text, and argues this risk is hard to fully rule out.",
+      "ids": [
+        "spya-arrq35",
+        "spya-vr9q2p",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece looks at GPT-3, a huge text-prediction program, and an idea called the scaling hypothesis. That idea says if you make neural networks (computer programs that learn from examples) much bigger, with much more data and computing power, they get much smarter on their own.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised people. It did not just learn more facts than the earlier GPT-2. It also learned, on its own, how to follow instructions and pick up brand-new tasks from just a few examples. No one built that skill in; size and data alone produced it.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author calls this the blessings of scale: usually small problems are easy and big ones are hard, but for these networks it flips. Made large enough, they stop taking shortcuts and start truly learning, generalizing, and even acting like beginner agents that plan and pursue goals.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

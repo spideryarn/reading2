@@ -1,0 +1,120 @@
+{
+  "arm": "high-none-sonnetctl3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:34:15.192Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "5e0266204878b1c1",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 12550,
+  "costUsd": 0.0412674,
+  "tokens": {
+    "input": 5520,
+    "output": 2778,
+    "reasoning": 1127
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 207,
+  "fullerWords": 256,
+  "briefWords": 135,
+  "paragraphs": [
+    {
+      "text": "This is an informal note about a classic idea called \"distributed representations\" — the notion that a network's neurons, together, stand for things rather than one neuron per thing. The author argues this idea actually hides two different strategies, which he names \"composition\" and \"superposition\", and uses simple examples of neurons representing colored shapes to tell them apart.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "Telling these two strategies apart matters because they behave very differently, and because pulling a network's representations apart into separate, independent pieces is seen as necessary for escaping the \"curse of dimensionality\" — the problem that possible combinations grow explosively as you add more features — and for truly understanding how networks work inside.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition means simple features, like \"green\" and \"square\", combine to represent many objects using few neurons, and this supports generalizing from one combination to a related one. Superposition means cramming more things than there are neurons, which needs a nonlinear step to unpack later, but loses that easy generalization. The note shows these two trade off against each other: fully flexible composition and maximal packing can't both happen at once, though a network can mix the two by making its features sparse, meaning most combinations never actually occur, which opens up \"spare space\" for superposition.",
+      "ids": [
+        "spya-phaxrs",
+        "spya-xcrca8",
+        "spya-jzkekc"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah exploring how \"superposition\" — a way neural networks pack more features than they have neurons for — relates to \"distributed representations,\" a classic idea in neuroscience and AI about how neurons encode information. The piece argues that what people call distributed representations actually blends two different strategies: composition and superposition.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "This distinction matters because breaking a network's representations into separate, independent pieces is necessary to understand how neural networks work. Since composition and superposition have very different properties, treating them as the same thing can lead to confusion about what a representation can and cannot do.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7",
+        "spya-sq6424"
+      ]
+    },
+    {
+      "text": "Using examples of neurons representing colored shapes, the piece shows composition: separate features, like \"green\" and \"square,\" combine to represent objects. This needs more neurons than packing everything into one, but fewer than giving every combination its own neuron, and it lets a network generalize to new combinations it hasn't directly seen. Superposition instead squeezes far more items into very few neurons than there are neurons, like a dense code, but then you lose the ability to easily read out single features, and you need extra nonlinear processing to unpack what's stored.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g9pmmp",
+        "spya-phaxrs"
+      ]
+    },
+    {
+      "text": "The piece argues these two strategies actually compete for the same limited space: full composition needs an exponential amount of room as more features combine, while superposition instead uses that space to cram in many unrelated items. Still, the two can mix when features are sparse, meaning most combinations rarely occur together, leaving \"gaps\" that can be filled using superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note about how neural networks (brain-like computer models) store information. It looks at a classic idea called \"distributed representations,\" where information is spread across many neurons instead of just one.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The author argues this classic idea actually hides two very different strategies, and mixing them up causes confusion. Telling them apart matters because breaking down what neurons represent into separate pieces is needed to truly understand how networks work.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "One strategy, composition, builds things by combining separate features, like color and shape combining to make \"red circle.\" The other, superposition, crams more things into neurons than there are neurons, by overlapping them. These two strategies pull against each other: more of one strategy means less room for the other. But sometimes, when combinations are rare, networks can mix both at once.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 8,
+    "unanchored": 0
+  }
+}

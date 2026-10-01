@@ -1,5 +1,5 @@
 /**
- * Check one glossary term on the web, whichever store the article lives in.
+ * Dig deeper into one glossary term — and explain a term the reader typed.
  *
  * ## Why this is not in `src/api.ts` any more
  *
@@ -34,9 +34,10 @@ import {
   type ExplainEnding,
   explainStream as explainStreamDefault,
 } from "./explain.js";
+import { type DigLibrarySearch, admitDig, searchFirst as searchFirstDefault } from "./dig-deeper.js";
 import { isStale, safeUrl } from "./glossary.js";
 import { log } from "./log.js";
-import type { GlossaryLookupStore } from "./store/contracts.js";
+import type { FetchAllowanceStore, GlossaryLookupStore } from "./store/contracts.js";
 import { formsOf, termPattern } from "./term-match.js";
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "./asked-term.js";
 import {
@@ -171,6 +172,25 @@ export interface LookUpTermDeps {
   readonly lookups: GlossaryLookupStore;
 
   /**
+   * ***Dig deeper*'s allowance** — required, with no default, because every
+   * press is a forced search and an answer on the high-power model over the
+   * whole article, and a composition root that forgot it would be unbounded
+   * (plan 261001p, Sol F5). src/dig-deeper.ts § `admitDig`.
+   */
+  readonly allowance: Pick<FetchAllowanceStore, "take" | "finish">;
+
+  /**
+   * **The reader's other articles** — `librarySearch.searchLibrary` in the
+   * composition root. Injected rather than imported, because src/store/index.ts
+   * imports this file. Required for the allowance's reason: a root that forgot
+   * it would quietly dig without the library.
+   */
+  readonly library: DigLibrarySearch;
+
+  /** The forced search. Overridable so a test spends nothing. */
+  readonly searchFirst?: typeof searchFirstDefault;
+
+  /**
    * Overridable so a test can drive the successful path without a model. The
    * stream, not the drain, since cluster E stage 2 —
    * docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
@@ -191,16 +211,29 @@ export type TermLookupEvent =
   | { type: "done"; entry: GlossaryEntry };
 
 /**
- * A lookup that has passed every refusal, and the answer not yet started —
- * {@link AskedTermQuestion}'s split, for the same reason: the route answers
- * the 404 and the two 409s as JSON, and only then opens the stream.
+ * A lookup that has passed every refusal **and its allowance**, and the answer
+ * not yet started — {@link AskedTermQuestion}'s split, for the same reason: the
+ * route answers the 404, the two 409s and the allowance's 429/503 as JSON, and
+ * only then opens the stream.
  */
 export interface TermLookupQuestion {
   stream(signal?: AbortSignal): AsyncGenerator<TermLookupEvent>;
+  /**
+   * Free the allowance's slot if the stream never runs — a client gone before
+   * it starts. Idempotent; the stream frees it itself when it ends.
+   * `InvestigationRun.release`'s shape (src/citation-investigate.ts).
+   */
+  release(): Promise<void>;
 }
 
 /**
- * Check one glossary term on the web, and keep what comes back.
+ * ***Dig deeper* into one glossary term**, and keep what comes back — the
+ * button that was *Check the web* until 2026-10-01 (plan 261001p). Every press
+ * now runs a forced web search and the reader's library search first
+ * (src/dig-deeper.ts § `searchFirst`), and the answer is written by the
+ * high-power model with those findings in front of it. A press on an entry
+ * that already has an answer replaces it, because the store upserts; one that
+ * fails leaves it.
  *
  * **This is `explain` with a different selection, and that is the point.** Our
  * review of the version this feature was borrowed from argued that a glossary
@@ -247,6 +280,7 @@ export function makeLookUpTerm(
   deps: LookUpTermDeps,
 ): (slug: string, termId: string) => Promise<TermLookupQuestion> {
   const explainStream = deps.explainStream ?? explainStreamDefault;
+  const searchFirst = deps.searchFirst ?? searchFirstDefault;
   const now = deps.now ?? (() => new Date().toISOString());
 
   return async function lookUpTerm(slug, termId) {
@@ -311,15 +345,47 @@ export function makeLookUpTerm(
     const blockId = anchor.blockId;
     const quote = anchor.quote;
 
+    /* **After every free refusal, before anything that costs** — and before
+       the route writes a header, so a refusal is ordinary JSON the panel reads
+       as a sentence (Sol F5). */
+    const free = await admitDig(deps.allowance);
+
     async function* stream(signal?: AbortSignal): AsyncGenerator<TermLookupEvent> {
+      try {
+        yield* answer(signal);
+      } finally {
+        await free();
+      }
+    }
+
+    async function* answer(signal?: AbortSignal): AsyncGenerator<TermLookupEvent> {
+      /* **The search first, inside the stream**, so a search that fails is an
+         `error` frame and the answer already on the entry stays — nothing has
+         been written. The subject is the term's own name, as the glossary
+         has it; the sentence is the paragraph the term is anchored in. */
+      const dig = await searchFirst({
+        slug,
+        subject: found.name,
+        article: {
+          title: article.meta.title,
+          author: article.meta.byline,
+          date: article.meta.publishedAt,
+        },
+        context: article.blocks.find((b) => b.id === blockId)?.text,
+        library: deps.library,
+        ...(signal ? { signal } : {}),
+      });
       for await (const event of explainStream({
         meta: article.meta,
         blocks: article.blocks,
         /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so
-           the ambient owner is this article's. */
+           the ambient owner is this article's. A dig answers on the high-power
+           model whatever this says; it is passed for the type, and so a test
+           can see the article's setting was asked. */
         power: articlePower(article.highPowerSince),
         blockId,
         quote,
+        dig,
         ...(signal ? { signal } : {}),
       })) {
         if (event.type === "delta") {
@@ -365,10 +431,9 @@ export function makeLookUpTerm(
         await deps.lookups.save(slug, termId, lookup);
 
         /* No prose in the log line, and that includes the answer and the
-           term. What is here is what tells you the feature is working or
-           quietly is not: `searches: 0` on every call means the model has
-           stopped choosing to look, which is invisible from the outside
-           because "I already knew that" is a legitimate answer. src/log.ts,
+           term. `searches` can no longer be 0 here — `searchFirst` refuses a
+           press it cannot show a search behind — so what this line tells you
+           now is how many more the answer ran on top. src/log.ts,
            docs/project/logging.md. */
         log("store").info(
           {
@@ -389,7 +454,7 @@ export function makeLookUpTerm(
       throw new Error("The explanation ended without an answer.");
     }
 
-    return { stream };
+    return { stream, release: free };
   };
 }
 

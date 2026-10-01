@@ -1,0 +1,124 @@
+{
+  "arm": "high-none-sonnetctl3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:34:15.264Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 23071,
+  "costUsd": 0.072206,
+  "tokens": {
+    "input": 5517,
+    "output": 4505,
+    "reasoning": 2697
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 273,
+  "fullerWords": 319,
+  "briefWords": 132,
+  "paragraphs": [
+    {
+      "text": "This essay looks at GPT-3, a huge language-prediction program released in 2020, and asks what its success means for artificial intelligence. GPT-3 was not just trained on more text than earlier versions; it also began following instructions and learning new tasks from a few examples, something it was never specifically built to do.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author says this matters because it backs a once-unpopular idea called the scaling hypothesis: that intelligence may come simply from running fairly basic learning methods on much bigger neural networks (programs loosely modeled on brains) with much more data, rather than needing clever new designs. If true, this means AI progress depends mainly on how much computing power and data get thrown at it, and the piece argues that most AI experts and research labs still do not take this seriously enough.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-scr8jb"
+      ]
+    },
+    {
+      "text": "A central idea is the \"blessings of scale\": hard problems, oddly, get easier to solve than easy ones once a network is made big enough, because the network stops relying on shortcuts and starts finding more general solutions. As a model's prediction errors shrink, the easy mistakes vanish first, leaving errors that need real understanding, like knowing whether a character in a story is alive or dead.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-kmyg3w"
+      ]
+    },
+    {
+      "text": "The piece also argues that experts have repeatedly and confidently predicted that scaling would fail, and been wrong, which should make us doubt today's confident dismissals of AI risk. An appendix adds a further concern: because these models learn by imitating human-written text full of people acting and planning, they may pick up real \"agency\" — the ability to form and pursue goals — even when nobody designed them to.",
+      "ids": [
+        "spya-b93jbz",
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This essay by Gwern looks at GPT-3, a huge language-generating computer program released in 2020, and asks what its success means for artificial intelligence. GPT-3 was trained simply by predicting the next word in huge amounts of internet text, yet it turned out to follow instructions and learn new tasks from just a few examples, something its smaller predecessor GPT-2 could not do. The piece argues this points to a bigger idea called the scaling hypothesis: that intelligence may come simply from running simple learning methods at a very large size, rather than from clever new designs.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The essay says this matters because GPT-3 is still cheap compared to large government or military budgets, and far from the best possible design, which suggests far more powerful systems are affordable soon. It also argues that most AI researchers have no real model of why this happened or what it means, so their public reassurances about AI risk cannot be trusted either way.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-rbx2kz"
+      ]
+    },
+    {
+      "text": "A central idea is the \"blessings of scale\": many problems that are hard for small neural networks (computer models loosely inspired by brain cells) become easy once the network and its training data get large enough, producing generalization and even meta-learning (learning how to learn new tasks) that nobody specifically designed in. The essay suggests this happens because huge models act like a vast ensemble of smaller guesses, and training pushes out shortcut answers in favor of ones general enough to work across huge, varied data.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The piece also traces a parallel idea called the pretraining thesis: predicting text well enough eventually forces a model to grasp reasoning, causality, and knowledge about the world, because only real understanding can keep lowering prediction error on the hardest cases. Finally, it argues that companies differ sharply in how seriously they take the scaling hypothesis, and that history's experts have repeatedly and wrongly dismissed this kind of progress before it happened.",
+      "ids": [
+        "spya-n4zu5k",
+        "spya-nhgv5g",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant AI language model, and the scaling hypothesis. That idea says smart AI needs no clever new tricks. Just make neural networks - brain-like learning systems - much bigger, with more data and computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 learned to follow instructions and solve new tasks from just a few examples. It did this without being specially trained for those tasks. It also kept improving as it grew, with no sign of slowing down. That suggests even bigger models could do far more.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70"
+      ]
+    },
+    {
+      "text": "One key idea is called the \"blessings of scale.\" Many problems that seem to need clever designs instead get solved just by making models bigger. Another key idea: most AI experts failed to predict this, and some still don't take scaling seriously.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

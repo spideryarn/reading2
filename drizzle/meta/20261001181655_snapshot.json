@@ -1,5 +1,5 @@
 {
-  "id": "2d302901-84f6-4cfa-94a3-7b3fc5e922ea",
+  "id": "35848ca0-aab2-4862-8afa-97283e4fcaa0",
   "prevId": "428e189e-a64b-4d0f-a4ba-06b8fb887c6c",
   "version": "7",
   "dialect": "postgresql",
@@ -1648,186 +1648,6 @@
         "billing_tiers_id_format": {
           "name": "billing_tiers_id_format",
           "value": "\"spideryarn\".\"billing_tiers\".\"id\" ~ '^[a-z][a-z0-9_-]{1,30}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.billing_voucher_emails": {
-      "name": "billing_voucher_emails",
-      "schema": "spideryarn",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "voucher_id": {
-          "name": "voucher_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "attempt_started_at": {
-          "name": "attempt_started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "detail": {
-          "name": "detail",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recipient": {
-          "name": "recipient",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "subject": {
-          "name": "subject",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body_text": {
-          "name": "body_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body_html": {
-          "name": "body_html",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "billing_voucher_emails_voucher": {
-          "name": "billing_voucher_emails_voucher",
-          "columns": [
-            {
-              "expression": "voucher_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "billing_voucher_emails_one_claimed": {
-          "name": "billing_voucher_emails_one_claimed",
-          "columns": [
-            {
-              "expression": "voucher_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"billing_voucher_emails\".\"kind\" = 'claimed'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "billing_voucher_emails_voucher_id_billing_vouchers_id_fk": {
-          "name": "billing_voucher_emails_voucher_id_billing_vouchers_id_fk",
-          "tableFrom": "billing_voucher_emails",
-          "tableTo": "billing_vouchers",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "voucher_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "billing_voucher_emails_kind": {
-          "name": "billing_voucher_emails_kind",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"kind\" in ('gift', 'claimed')"
-        },
-        "billing_voucher_emails_status": {
-          "name": "billing_voucher_emails_status",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"status\" in ('queued', 'sending', 'sent', 'skipped', 'failed')"
-        },
-        "billing_voucher_emails_attempts": {
-          "name": "billing_voucher_emails_attempts",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"attempts\" >= 0"
-        },
-        "billing_voucher_emails_detail_length": {
-          "name": "billing_voucher_emails_detail_length",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"detail\" is null or char_length(\"spideryarn\".\"billing_voucher_emails\".\"detail\") <= 200"
-        },
-        "billing_voucher_emails_gift_has_recipient": {
-          "name": "billing_voucher_emails_gift_has_recipient",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"kind\" <> 'gift' or \"spideryarn\".\"billing_voucher_emails\".\"recipient\" is not null"
-        },
-        "billing_voucher_emails_sending_has_lease": {
-          "name": "billing_voucher_emails_sending_has_lease",
-          "value": "\"spideryarn\".\"billing_voucher_emails\".\"status\" <> 'sending' or \"spideryarn\".\"billing_voucher_emails\".\"attempt_started_at\" is not null"
         }
       },
       "isRLSEnabled": false
@@ -4358,7 +4178,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper')"
         }
       },
       "isRLSEnabled": false

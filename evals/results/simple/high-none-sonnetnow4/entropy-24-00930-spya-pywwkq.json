@@ -1,0 +1,117 @@
+{
+  "arm": "high-none-sonnetnow4",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "bde8836623e3ed53b6bb1635bd68923a65d58f7772eeb56357221752f06e9064",
+  "at": "2026-10-01T17:27:07.091Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "8b813e5a1defc663f3cff11dfa4a08fe622cdbb3de3acd7b5b7e82bd44ff91b8",
+  "power": "standard",
+  "guard": false,
+  "wallMs": 15296,
+  "costUsd": 0.0487434,
+  "tokens": {
+    "input": 5520,
+    "output": 2661,
+    "reasoning": 1017
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 212,
+  "fullerWords": 282,
+  "briefWords": 139,
+  "paragraphs": [
+    {
+      "text": "This is a science review about how to study the way brain cells process information. Brains take in signals and transform them into useful patterns, but how neurons actually combine signals from many sources is poorly understood. The authors introduce a mathematical tool called partial information decomposition, or PID, and explain how it can reveal this hidden process.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because basic questions about brain computation remain open: what circuit patterns help neurons process information well, and how does this relate to behavior? Until recently, scientists lacked both large enough recordings of brain activity and good enough analysis tools to answer these questions. New recording technology plus PID now make progress possible.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the information two neurons send to a target neuron into three parts: information both sources share (redundant), information only one source provides (unique), and information that only appears when you look at both sources together (synergistic). This synergistic part is treated as a sign of real computation. Studies described here found synergy is higher in \"rich clubs\" (well-connected neuron hubs), rises with more feedback-loop connections between source neurons, and peaks when source neurons' activity is moderately, not extremely, similar. In monkeys performing tasks, synergy patterns also shifted depending on what the brain region was doing.",
+      "ids": [
+        "spya-t02v4p",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about a method called partial information decomposition, or PID, for studying how brain circuits process information. It explains the method in plain terms and then walks through recent experiments that used it on real neural recordings, from cultured mouse brain tissue to behaving monkeys.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article frames this as tackling a basic unanswered problem: brains take in signals from the world and somehow transform them into adaptive behavior, but how individual neurons actually combine and modify information is poorly understood. New recording tools can now capture hundreds or thousands of neurons at once, so there is a pressing need for ways to make sense of this flood of data.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "The core idea is that when two source neurons feed into a target neuron, the information they jointly provide can be split into three parts: redundant information (available from either source alone), unique information (available only from one specific source), and synergistic information (visible only when you look at both sources together, not from either alone). This synergistic part is treated as the signature of real neural computation, since it shows the target is not just summing inputs but reading patterns across them.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-q2b0e5",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Applying this to data, the authors found synergy concentrated in \"rich clubs\" of densely connected, highly active neurons, with rich-club triads carrying about 2.7 times more synergy than others despite being under 40% of neurons. Synergy also rose with more recurrent connections between source neurons, and it peaked when source neurons' activity was moderately, rather than highly, correlated. In behaving monkeys, these patterns shifted with task demands, for instance redundancy rising sharply during movement execution, suggesting synergy reflects real behavioral states, not just lab artifacts.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is a review about how brain cells, called neurons, process information. It explains a math tool called partial information decomposition, or PID, which splits up the information that two or more neurons give about another neuron's activity.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because simply tracking information flow between neurons does not show how neurons actually combine or transform signals. PID can reveal synergy: information that only shows up when you look at inputs together, not from any single input alone, which may reflect real computation happening in the brain.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Studying real neurons, the authors found synergy was higher in densely connected hub neurons called rich clubs, and in neurons with more connections looping back between sources. Synergy also depended on how similar the incoming signals were. In behaving monkeys, which brain regions showed more synergy changed depending on the task.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}
