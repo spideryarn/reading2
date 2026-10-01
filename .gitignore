@@ -28,6 +28,17 @@ api-dist
 # are committed under evals/pdf/baselines/ instead.
 scratch-bakeoff
 
+# evals/thinking-effort/ copies each article out of the store, renders it again
+# for the judges, and can draw plates. The article prose and the images are
+# regenerable and are not ours to commit; the runs, the outputs, the lineups
+# and the verdicts are. Plan 261001p.
+evals/results/thinking-effort-*/corpus/
+evals/results/thinking-effort-*/judging/**/article-*.md
+evals/results/thinking-effort-*/illustrated/**/*.jpg
+evals/results/thinking-effort-*/illustrated/**/*.jpeg
+evals/results/thinking-effort-*/illustrated/**/*.png
+evals/results/thinking-effort-*/illustrated/**/*.webp
+
 # scripts/run-codex.ts writes its activity log beside the answer it was asked
 # for. Each is roughly a megabyte of whatever codex read along the way — file
 # dumps, grep hits, and on 2026-08-27 every one of the five sitting here matched

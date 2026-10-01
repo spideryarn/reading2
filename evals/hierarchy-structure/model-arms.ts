@@ -102,6 +102,17 @@ export interface CallStats {
   startedOffsetMs?: number;
   /** This call's end, on the same clock and for the same reason as `startedOffsetMs`. */
   endedOffsetMs?: number;
+  /**
+   * How the answer ended (`end_turn`, …). Messages wire only; optional because
+   * a run.json written before 2026-10-01 has none. Recorded for the
+   * thinking-off arm, whose claim is "a normal answer with no thinking".
+   */
+  stopReason?: string | null;
+  /**
+   * The `thinking` type the request carried — `"adaptive"` or `"disabled"`.
+   * Messages wire only, and optional for the same reason as `stopReason`.
+   */
+  thinkingSent?: string;
 }
 
 /**
@@ -255,10 +266,18 @@ export class ArmFailure extends Error {
    * not. GPT Sol's review of the tiling change, finding 5.
    */
   readonly built: BuildReport | undefined;
-  constructor(message: string, calls: CallStats[], built?: BuildReport) {
+  /**
+   * **The answer that failed, verbatim**, when there was one — so a refused
+   * answer can be read rather than only counted. Added 2026-10-01 when the
+   * first thinking-off draw came back as 12k characters that were not JSON
+   * and nothing on disk said what they were (plan 261001p).
+   */
+  readonly raw: string | undefined;
+  constructor(message: string, calls: CallStats[], built?: BuildReport, raw?: string) {
     super(message);
     this.calls = calls;
     this.built = built;
+    this.raw = raw;
   }
 }
 
@@ -292,6 +311,38 @@ function apiKey(): string {
 }
 
 /**
+ * **The Messages request body, as a value, so a test can read it** — pulled
+ * out of `sendMessages` for `chatBody`'s reason when `thinking: "off"` arrived
+ * (plan 261001p): an arm whose switch never reaches the wire answers 200 and
+ * is reported as a finding about a request nobody sent.
+ *
+ * **`thinking: "off"` sends `{type: "disabled"}` and no `output_config`.**
+ * Sonnet 5 accepts `disabled` (Opus 5.5 and Sonnet 5.5 would refuse it with a
+ * 400, which is loud). The call shape carries no effort, so none is sent —
+ * the decision is plan 261001p's, after GPT Sol's review (F5). That the call
+ * really ran without thinking is checked on the answer, not assumed: see
+ * `sendMessages`.
+ */
+export function messagesBody(req: {
+  call: CallSpec;
+  system: string;
+  user: string;
+  maxTokens: number;
+}): Record<string, unknown> {
+  const { call, system, user, maxTokens } = req;
+  return {
+    model: call.model,
+    max_tokens: maxTokens,
+    ...(call.thinking === "off"
+      ? { thinking: { type: "disabled" } }
+      : { thinking: { type: "adaptive" }, output_config: { effort: call.effort } }),
+    system,
+    messages: [{ role: "user", content: user }],
+    provider: MESSAGES_PROVIDER,
+  };
+}
+
+/**
  * The Messages wire, through OpenRouter's Anthropic-compatible Skin — the same
  * endpoint, provider pin and `require_parameters` production uses
  * (`MESSAGES_PROVIDER`, src/messages-stream.ts), with only model and effort
@@ -317,22 +368,20 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
        tests/messages-stream.test.ts is what pins that the field arrives. */
     let streamCostUsd: number | null = null;
     let streamGenerationId: string | null = null;
-    const stream = client.messages.stream({
-      model: call.model,
-      max_tokens: maxTokens,
-      thinking: { type: "adaptive" },
-      output_config: { effort: call.effort },
-      system,
-      messages: [{ role: "user", content: user }],
-      provider: MESSAGES_PROVIDER,
-    } as unknown as Anthropic.MessageStreamParams);
+    /* Off the raw `message_delta` too, as meterStream reads it, rather than
+       trusting the merged message alone to have kept the field. */
+    let streamThinkingTokens: number | null = null;
+    const body = messagesBody({ call, system, user, maxTokens });
+    const stream = client.messages.stream(body as unknown as Anthropic.MessageStreamParams);
     stream.on("streamEvent", (event) => {
       const raw = event as unknown as {
         message?: { id?: string };
-        usage?: { cost?: unknown };
+        usage?: { cost?: unknown; output_tokens_details?: { thinking_tokens?: unknown } };
       };
       if (typeof raw.usage?.cost === "number") streamCostUsd = raw.usage.cost;
       if (raw.message?.id) streamGenerationId = raw.message.id;
+      const t = raw.usage?.output_tokens_details?.thinking_tokens;
+      if (typeof t === "number") streamThinkingTokens = t;
     });
     const message = await stream.finalMessage();
 
@@ -358,7 +407,7 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       ms: finishedAt - startedAt,
       inputTokens: u.input_tokens ?? null,
       outputTokens: u.output_tokens ?? null,
-      reasoningTokens: u.output_tokens_details?.thinking_tokens ?? null,
+      reasoningTokens: streamThinkingTokens ?? u.output_tokens_details?.thinking_tokens ?? null,
       /* The raw event's id, like meterStream's generationId — with the merged
          message's id as the fallback. verify-costs.ts asks the generation
          endpoint about it after the run. */
@@ -369,6 +418,8 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       wave,
       startedOffsetMs: startedAt - armStartedAt,
       endedOffsetMs: finishedAt - armStartedAt,
+      stopReason: message.stop_reason ?? null,
+      thinkingSent: (body.thinking as { type: string }).type,
     };
 
     /* Arm outcomes, not bench faults — the same distinction the chat wire
@@ -376,6 +427,22 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
        other ten down with it. Both of these billed, so the stats travel. */
     if (wasRefused(message)) {
       throw new ArmFailure("the model refused the structure request", [stats]);
+    }
+    /* **A thinking-off arm that thought is not the arm**, and OpenRouter
+       accepting the field is not evidence it was honoured
+       (src/messages-stream.ts § MESSAGES_PROVIDER). Two observations, either
+       of which refuses: a thinking count above zero, or a thinking block in
+       the content. An absent count stays `null` in the stats rather than
+       being written down as a zero nobody reported. */
+    const thinkingBlocks = message.content.filter(
+      (b) => b.type === "thinking" || b.type === "redacted_thinking",
+    ).length;
+    if (call.thinking === "off" && ((stats.reasoningTokens ?? 0) > 0 || thinkingBlocks > 0)) {
+      throw new ArmFailure(
+        `thinking was sent as disabled and the answer has ${stats.reasoningTokens ?? "an unreported number of"} ` +
+          `thinking tokens in ${thinkingBlocks} thinking block(s) — this is not a thinking-off result`,
+        [stats],
+      );
     }
     if (message.stop_reason === "max_tokens") {
       throw new ArmFailure(
@@ -414,6 +481,12 @@ export function chatBody(req: {
   maxTokens: number;
 }): Record<string, unknown> {
   const { call, system, user, maxTokens } = req;
+  /* Refused rather than ignored: this wire has no spelling for it here, and a
+     thinking-off arm sent with thinking on would report a finding about a
+     request nobody made. */
+  if (call.thinking === "off") {
+    throw new Error(`thinking: "off" is a Messages-wire setting; ${call.model} goes over chat`);
+  }
   return {
     model: call.model,
     reasoning: { effort: call.effort },
@@ -935,7 +1008,7 @@ export async function runModelArm(
         /* The call succeeded and the answer failed the pipeline's rules — a
            tiling gap, an invented id. The money is spent and the outcome is
            "produced nothing"; both travel with the failure. See ArmFailure. */
-        throw new ArmFailure((err as Error).message, [stats], built);
+        throw new ArmFailure((err as Error).message, [stats], built, raw);
       }
     }
     case "waves":

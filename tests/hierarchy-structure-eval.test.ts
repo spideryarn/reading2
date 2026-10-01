@@ -14,7 +14,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ARMS, armByName, CANDIDATES, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
+import { ARMS, armByName, CANDIDATES, effortOf, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
 import type { ArmResult } from "../evals/hierarchy-structure/run.js";
 import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
@@ -23,6 +23,7 @@ import {
   assertCallAccounted,
   type CallStats,
   chatBody,
+  messagesBody,
   parseStructureResponse,
   renderHeadingList,
   renderSeedProposal,
@@ -526,7 +527,7 @@ describe("the challenger field", () => {
       expect(c.supportedEfforts, `${c.name} does not support "${FIELD_EFFORT}"`).toContain(FIELD_EFFORT);
       const arm = armByName(c.name);
       if (arm.kind !== "one-call") throw new Error(`${c.name} changed kind`);
-      expect(arm.call.effort).toBe(FIELD_EFFORT);
+      expect(effortOf(arm.call)).toBe(FIELD_EFFORT);
       expect(arm.call.model).toBe(c.model);
     }
   });
@@ -542,7 +543,7 @@ describe("the challenger field", () => {
        and the field needs its Sonnet arm back. */
     const incumbent = armByName("incumbent");
     if (incumbent.kind !== "one-call") throw new Error("the incumbent changed kind");
-    expect(incumbent.call.effort).toBe(FIELD_EFFORT);
+    expect(effortOf(incumbent.call)).toBe(FIELD_EFFORT);
     expect(incumbent.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 });
@@ -600,6 +601,42 @@ describe("chatBody", () => {
          retention or the parameter requirement, which is what this guards. */
       expect(chatBody({ ...req, call: arm.call }).provider, `${arm.name} must ask for ZDR`).toMatchObject(ZDR);
     }
+  });
+});
+
+/**
+ * **The thinking switch has to reach the wire** — the `chatBody` argument
+ * again, for `smart-off` (plan 261001p). A thinking-off arm that sent adaptive
+ * thinking would answer 200 and be reported as "thinking off is as good".
+ */
+describe("messagesBody", () => {
+  const req = { system: "sys", user: "usr", maxTokens: 1000 };
+
+  it("sends production's adaptive thinking and effort for the incumbent", () => {
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("expected a one-call arm");
+    const on = messagesBody({ ...req, call: incumbent.call });
+    expect(on.thinking).toEqual({ type: "adaptive" });
+    /* Written out, not read from PRODUCTION_EFFORT — the parity pin's reason. */
+    expect(on.output_config).toEqual({ effort: "low" });
+  });
+
+  it("sends disabled thinking and NO output_config for both thinking-off draws", () => {
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("expected a one-call arm");
+    for (const name of ["smart-off", "smart-off-repeat"]) {
+      const off = armByName(name);
+      if (off.kind !== "one-call") throw new Error(`${name}: expected a one-call arm`);
+      const body = messagesBody({ ...req, call: off.call });
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect("output_config" in body).toBe(false);
+      expect(body.model).toBe(incumbent.call.model);
+      expect(effortOf(off.call)).toBeNull();
+    }
+  });
+
+  it("refuses thinking off on the chat wire rather than dropping it", () => {
+    expect(() => chatBody({ ...req, call: { model: "x/y", thinking: "off" } })).toThrow(/Messages-wire/);
   });
 });
 

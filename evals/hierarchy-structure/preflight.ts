@@ -22,7 +22,7 @@
  * file, and this one buys no inference.
  */
 
-import type { ArmSpec } from "./arms.js";
+import { type ArmSpec, type CallSpec, effortOf } from "./arms.js";
 
 /** What the catalogue says about one model's reasoning, archived verbatim. */
 export interface EffortRecord {
@@ -116,17 +116,19 @@ export function effortVerdict(
  * table needs re-reading anyway.
  */
 export async function preflightEfforts(arms: readonly ArmSpec[]): Promise<EffortRecord[]> {
+  /* A thinking-off call sends no effort, so there is nothing of it to check
+     against a ladder — its claim is checked on the answer instead
+     (model-arms.ts § `sendMessages`). */
+  const ask = (arm: string, call: CallSpec) => {
+    const effort = effortOf(call);
+    return effort === null ? [] : [{ arm, model: call.model, effort }];
+  };
   const wanted = arms.flatMap((a) =>
-    a.kind === "one-call"
-      ? [{ arm: a.name, model: a.call.model, effort: a.call.effort }]
-      : a.kind === "waves"
-        ? [{ arm: a.name, model: a.call.model, effort: a.call.effort }]
-        : a.kind === "revise"
-          ? [
-              { arm: a.name, model: a.propose.model, effort: a.propose.effort },
-              { arm: a.name, model: a.revise.model, effort: a.revise.effort },
-            ]
-          : [],
+    a.kind === "one-call" || a.kind === "waves"
+      ? ask(a.name, a.call)
+      : a.kind === "revise"
+        ? [...ask(a.name, a.propose), ...ask(a.name, a.revise)]
+        : [],
   );
   if (wanted.length === 0) return [];
   const cat = await catalogue(apiKey());
