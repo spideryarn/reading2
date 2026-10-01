@@ -108,3 +108,15 @@ list).
   — build with changes. All five findings taken: the four unguarded constructors, the migrator
   stripping, the overclaimed future-proofing (now a parser check), the extra test cases, and the
   runtime wording.
+- Code: [261001j-refuse-unverified-tls-code-review-sol.md](261001j-refuse-unverified-tls-code-review-sol.md)
+  — approve with two fixes, both applied by Sol: the constructor scan became an AST scan (the regex
+  missed import aliases and accepted `ssl: false`), and the docs now say only
+  `sslnegotiation=direct` replaces the `ssl` object.
+
+## Shipped
+
+On `dev`, 2026-10-01: `bdd6b4fa` (the change), `9a14df1d` (Sol's code-review fixes), `871cd53b`
+(a comment reworded so the test-lane registry stops reading it as a connection), merged as
+`f2c0d22f`. Not deployed; the Overseer deploys. After deploy, `/api/health` should still say
+`ssl.mode: "verified"` with no `TLS refused` warning — anything else means production's
+`DATABASE_URL` or certificate differs from what was checked here.
