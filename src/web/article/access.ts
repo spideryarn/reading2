@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from "react";
-import type { Article, Comment } from "../../types.js";
+import type { Article, Comment, Crossref } from "../../types.js";
 import { sanitizeArticle } from "../sanitize.js";
 import type { SavedSearch } from "../useSearch.js";
 import { apiFetch, readJson } from "../lib/api.js";
@@ -84,6 +84,13 @@ type ArticleAccess =
        * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
        */
       searches: SavedSearch[];
+      /**
+       * **The cross-references the prose may draw**, or null — lifted out here
+       * for `comments`' reason. The public DTO sends the key only when the
+       * links are fresh, so present is drawable (src/public-types.ts §
+       * `PublicArticle.crossrefs`). Plan 261001b, SPIDERYARN-READING2-5Z.
+       */
+      crossrefs: readonly Crossref[] | null;
       /**
        * **The glossary, the summaries, the ideas and the tweet thread**, as
        * they arrived — inside the same payload as the prose.
@@ -391,6 +398,9 @@ export async function resolveAccess(
              supplies the `status` a `PublicSearchRun` deliberately does not
              carry. src/web/public-artefacts.ts. */
           searches: visitorSearches(found.article),
+          /* Off the raw payload, once, like the two above. Absent is null:
+             none built, or stale, and either way nothing to draw. */
+          crossrefs: found.article.crossrefs?.links ?? null,
           sessionUnconfirmed: found.sessionUnconfirmed,
         };
 

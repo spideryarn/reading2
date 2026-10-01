@@ -1,0 +1,98 @@
+{
+  "arm": "high-about-split1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "4cefbf1ba90cafe46894c7c7a6131e2524be52053507a3c4a51e05b32835e2cf",
+  "at": "2026-09-30T23:45:13.373Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 20130,
+  "costUsd": 0.064056,
+  "tokens": {
+    "input": 28783,
+    "output": 649,
+    "reasoning": 0
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 237,
+  "fullerWords": 352,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's 2020 essay on GPT-3, OpenAI's then-largest language model, and what its release implies about AI progress. The piece argues GPT-3 did something unexpected: beyond learning facts, it learned to learn, picking up new tasks from just a few examples in its prompt, despite being trained only to predict the next word in text.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The essay argues this matters because it supports the scaling hypothesis: that intelligence may just be simple neural networks and learning rules, run at very large scale on diverse data, with no special new architecture needed. GPT-3 used an old, deliberately simple design, yet capability kept climbing smoothly with size, and the loss curves showed no sign of flattening out.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-fvqe70",
+        "spya-sctj6d"
+      ]
+    },
+    {
+      "text": "Gwern calls this pattern the blessings of scale: hard problems become easier, not harder, as models, data, and compute grow, while small-scale shortcuts stop working and models are forced toward genuine generalization. He ties this to an ensemble-like view of neural networks, where many overfit sub-models compete and the simplest one that truly solves the task eventually wins out as data and size increase.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The piece also argues that most AI researchers and labs failed to predict this, and still lack a real explanation for why it happened, making their risk forecasts unreliable. It closes with a separate worry: models trained on human-generated text may absorb agency itself, since so much of that text describes agents planning and acting toward goals.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's essay on GPT-3, OpenAI's 175-billion-parameter language model released in 2020, as a case for the scaling hypothesis: that simply making neural networks and their training data much bigger yields qualitatively new capabilities, without needing new architectures. GPT-3 didn't just get better at tasks GPT-2 could already do; it showed meta-learning, picking up new tasks from a handful of examples in the prompt, despite never being trained to do that.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-fvqe70"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because GPT-3 is expensive by ordinary standards but cheap next to military or corporate budgets, meaning far larger models are affordable now. It also argues unsupervised pretraining on raw data, long a weak spot in deep learning, can supply the world-knowledge and reasoning that other systems like robotics or reinforcement learning lack. And it argues that most AI labs and forecasters don't actually believe scaling works this way, so their public statements about AI risk carry no real predictive content either way.",
+      "ids": [
+        "spya-dfjr4c",
+        "spya-scr8jb",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The core mechanism proposed is the \"blessings of scale\": hard problems get easier, not harder, as networks and data grow, the reverse of the usual research experience. Gwern frames a big model as an ensemble of countless smaller sub-models; simple ones that just memorize surface patterns win early, but as data grows past what memorization can cover, sub-models that encode genuine general rules (like arithmetic, or task-learning itself) start winning instead. Relatedly, the \"pretraining thesis\" holds that squeezing out the last bits of prediction error on text forces a model toward real understanding, since only genuine reasoning can catch the rare, subtle errors cheaper shortcuts miss.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-vkkfzh",
+        "spya-nhgv5g"
+      ]
+    },
+    {
+      "text": "Gwern also argues history backs this up: decades-old predictions by early scaling advocates about when cheap-enough compute would arrive have held up, while mainstream experts who dismissed scaling as a dead end have mostly not revisited their forecasts. An appendix separately raises a safety worry: because GPT-3 is trained on huge amounts of human-generated text describing agents pursuing goals, it ends up able to imitate agency itself, and the author doubts this can be cleanly filtered out of training data even for seemingly neutral domains like physics.",
+      "ids": [
+        "spya-cxnhav",
+        "spya-m9r8zx",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -1,0 +1,3682 @@
+diff --git a/docs/project/new-mode.md b/docs/project/new-mode.md
+index 895c9af9..70085f46 100644
+--- a/docs/project/new-mode.md
++++ b/docs/project/new-mode.md
+@@ -97,6 +97,22 @@ Then the residue, which is why this page exists:
+   bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
+   count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
+   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
++- **No description line in the band.** A sentence saying what the mode is, how it was made or how
++  to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
++  the top, in a foot, or under the controls:
++
++  > make a note in the new-mode.md (or similar) that we don't want these mode descriptions - they
++  > waste space. Either put them as tooltips for an (i) icon, or just try and make things
++  > self-explanatory.
++  >
++  > — Greg, 2026-09-30 (SPIDERYARN-READING2-7B)
++
++  So, in order of preference: make the control or the content say it by itself; put it in the card
++  on the control that opens it (`ControlTip`'s *what* and *how*, [tooltips.md](tooltips.md)); or,
++  when there is no control to hang it on, an (i) icon whose tooltip carries it. Empty states and
++  failures are not descriptions — they say what is happening, and stay.
++  [261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md)
++  took Simple's foot out for this. *Nothing.*
+ - **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
+   *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
+   which derives the list rather than repeating it.
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index ceac6e2d..92d6351e 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -629,25 +629,60 @@ through the Feedback button (SPIDERYARN-READING2-6E):
+ > — Greg, 2026-09-30
+ 
+ It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept an **orientation,
+-not a digest**: two to four paragraphs, capped by code; **every paragraph is a door** — the passages
+-it rests on, drawn as the same `BlockRef` chips the gists use, and a paragraph with none is dropped
+-when it is written; and a foot saying it was written by AI and that the article says it better.
+-Plain text, never markdown.
++not a digest**: a few paragraphs, capped by code; **every paragraph is a door** — the passages it
++rests on, drawn as the same `BlockRef` chips the gists use, and a paragraph with none is dropped when
++it is written. Plain text, never markdown. What it is — written by AI, the article says it better —
++is said in the slider's card, not in a line under the paragraphs (below).
++
++### Three levels, one row, shaped by the reader (since 2026-10-01)
++
++> In the Summary mode, let's somehow group Parts & Sections together, get rid of the Gists button
++> (since clicking on Parts or Sections is enough) … the main thing I'm trying to do is avoid wasting
++> vertical space, and use the UI design to give the user a clue about how they work and are related
++> to each other. Also, the Very-Simple and Moderately-Complex summaries should take into account
++> User-Profile and Why-are-you-reading-it.
++>
++> — Greg, 2026-09-30 (SPIDERYARN-READING2-7A)
++
++> let's provide a UI-slider with 3 level (short & very-simple, just-under-current-length and
++> fairly-simple, just-over-current-length and moderately-complex)
++>
++> — Greg, 2026-09-30 (SPIDERYARN-READING2-7J)
+ 
+-- **The door rule.** Pressing the Simple chip with nothing stored runs the `simple` job; arriving on
++```
++ [ Parts | Sections ]   ○──●──○ Simple   ⓤ
++```
++
++- **One row, no labels.** Parts | Sections is the outline, a joined pair; Sections *adds* the
++  sections, so Parts is drawn included under it (`aria-pressed` stays on the depth chosen). The
++  *Article* depth and the *Gists*, *View* and *Depth* words are gone. The slider is the plain words:
++  **Brief** (short, very simple, pitched at twelve), **Simple** (fairly simple, just under the first
++  version's length, at fifteen), **Fuller** (moderately complex, just over it, at eighteen). Idle and
++  faint while the outline shows; touching it opens the level it lands on. ⓤ is the owner's *written
++  for you* badge.
++- **The reader's profile and goal shape all three**, through the shared `PROFILE_RULES` and
++  `profileSection` ([src/profile.ts](../../src/profile.ts)): what the reader says they know is not
++  explained, and the goal decides what leads. Recorded as `profileHash`, not in the stamp — a changed
++  profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
++  visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
++  for the owner's profile.
++- **One press writes all three**: one model call per level, run side by side, all or none stored. A
++  `simple/1` row reads as absent and the next press replaces it.
++- **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
+   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
+   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
+   public article gets the stored paragraphs off the payload, or a line saying none has been made.
+-- **One level, pitched at 15.** Greg's shorter ELI12 is **deferred** until he has read ELI15 on a real
+-  paper; the probe outputs of both are in the plan.
+ - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
+-  waits about ten seconds behind the job progress, like FAQ. Why, and the one decision left for
+-  Greg, are in
++  waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
+   [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
+ 
++The design, the measurements and the review are
++[261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
++
+ Code: [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx),
+-[`useSimple.ts`](../../src/web/useSimple.ts), the switch in
+-[`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx); the stage is
++[`useSimple.ts`](../../src/web/useSimple.ts), the row in
++[`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) and
++[`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx); the stage is
+ [`src/simple-summary.ts`](../../src/simple-summary.ts).
+ 
+ ## What this deliberately does not have
+@@ -658,8 +693,8 @@ stage that wrote them were deleted on 2026-08-31.
+ **The expertise axis.** Their second version crossed three lengths with three reading levels
+ (beginner / intermediate / expert) behind two sliders. There is no evidence anywhere in their repo
+ that anyone used it — no telemetry, no follow-up doc, no critique — and two sliders is a lot of
+-interface for a thing nobody measured. The gists still have one level. Simple is a single plain level
+-of its own, not a second axis across the gists, so the zoom axis keeps meaning one thing.
++interface for a thing nobody measured. The gists still have one level. Simple's three levels are one slider
++of their own, not a second axis across the gists, so the zoom axis keeps meaning one thing.
+ 
+ **Anything generated as you move around.** Nothing is written when you move the Depth control, and
+ the Gists spend nothing. The one thing here that spends is Simple, once per article on a press, and
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index 49633d56..d2d2db47 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -59,8 +59,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
+ | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
+ | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
+ | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
+-| `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
+-| `summary` | which half of Summary is open: `gists` (the default, and absent) or `simple`, the plain-words orientation — [summaries.md](summaries.md) § Simple. Arriving on it never spends; only a press on the Simple chip does. `deep` keeps its value and is unused under Simple | push | `?summary=simple` |
++| `deep` | how far down the tree summary mode goes: `1` the parts (the default), `2` the sections. `0`, the article alone, lost its pill on 2026-10-01 and now reads as the default | push | `?deep=2` |
++| `summary` | which part of Summary is open: `gists`, the outline (the default, and absent; chosen by pressing Parts or Sections), or one of the three plain-words levels on the slider — `brief`, `simple`, `fuller` — [summaries.md](summaries.md) § Simple. Arriving on it never spends; only touching the slider does. `deep` keeps its value and is unused under a level. Pressing Parts or Sections writes both keys in one entry | push | `?summary=fuller` |
+ | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
+ | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
+ | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
+diff --git a/src/messages.ts b/src/messages.ts
+index f9c702e4..a0ddbc1b 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -3825,6 +3825,7 @@ export const OWNED_ARTEFACT = {
+   /* Owner-only, and listed all the same, for `illustrated`'s reason: its
+      `profileHash` is the reader's own, and `ProfileCarrying` asks. */
+   trajectory: "your route through the quotes",
++  simple: "your plain-words summary",
+   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
+      declared type makes every value `string | undefined`, and the coverage
+      check in tests/messages.test.ts would then be unsatisfiable without a cast
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 48ee524a..4e899734 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -99,6 +99,7 @@ import {
+ import {
+   generateSimpleSummary,
+   inputFingerprint as simpleFingerprint,
++  SIMPLE_LEVELS,
+   SIMPLE_VERSION,
+ } from "./simple-summary.js";
+ import {
+@@ -3873,7 +3874,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+     /**
+      * The exact body-only article rendering the request sends, with the
+      * **real, nullable** metadata, which is what `generateSimpleSummary`
+-     * hashes too. No `profileHash`.
++     * hashes too. **The profile is not in it**: the request reads
++     * `ctx.profile` and the artefact records its `profileHash`, but a changed
++     * profile makes nothing stale — the quiz's rule; `profileChanged` on the
++     * owner's GET is how the reader hears of it. So `inputFingerprint` hashes
++     * the profile-free user message, which is all this can compute.
++     * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+      */
+     stamp: async (ctx, store) => {
+       const article = await tryReadArticle(ctx.slug, store);
+@@ -3891,8 +3897,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+         signal: ctx.signal,
+         power: ctx.power,
+         cacheArticle: ctx.cacheArticle,
++        profile: ctx.profile ?? null,
+       });
+-      const paragraphs = run.simpleSummary.paragraphs;
++      /* Paragraphs per level, in the slider's order: "2/4/5". */
++      const counts = SIMPLE_LEVELS.map((level) => run.simpleSummary.levels[level].length).join("/");
++      const words = SIMPLE_LEVELS.map((level) => run.words[level]).join("/");
+       plog.info(
+         {
+           slug: ctx.slug,
+@@ -3905,17 +3914,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           maxTokens: run.maxTokens,
+           ms: run.elapsedMs,
+           blocks: run.blocks,
+-          paragraphs: paragraphs.length,
+-          words: run.words,
++          paragraphs: counts,
++          words,
++          /* The profile's LENGTH, never the profile — it is the reader's own
++             words about themselves. */
++          profileChars: ctx.profile?.length ?? 0,
+           /* Counts only — never the prose. `unanchored` and `unknownIds` are
+              the ones to watch: a paragraph the piece does not back. */
+           ...run.dropped,
+         },
+-        `simple ${ctx.slug}: ${paragraphs.length} paragraphs, ${run.words} words`,
++        `simple ${ctx.slug}: ${counts} paragraphs, ${words} words`,
+       );
+       return {
+         parts: { simple: run.simpleSummary },
+-        detail: `${paragraphs.length} paragraphs`,
++        detail: `${counts} paragraphs`,
+       };
+     },
+   },
+diff --git a/src/public-types.ts b/src/public-types.ts
+index 6101e92e..c3d78f79 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -68,6 +68,7 @@ import type {
+   DebateLean,
+   DebateRelation,
+   FaqQuestion,
++  SimpleLevel,
+   SimpleParagraph,
+   GlossaryKind,
+   Idea,
+@@ -487,13 +488,16 @@ export interface PublicFaq {
+  *
+  * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain
+  * words about the piece and the block ids of passages the payload already
+- * carries whole. No profile is in this stage.
++ * carries whole, at every level.
+  *
+  * **What does not cross** is the pipeline, as everywhere in this file:
+- * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs`.
++ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
++ * and `profileHash`, the owner's. Since 2026-10-01 the paragraphs are pitched
++ * at the owner's profile and goal, as a profiled glossary's are, and the owner's
++ * *make public* dialog says so (plan 261001b).
+  */
+ export interface PublicSimpleSummary {
+-  paragraphs: SimpleParagraph[];
++  levels: Record<SimpleLevel, SimpleParagraph[]>;
+ }
+ 
+ /**
+diff --git a/src/public/dto.ts b/src/public/dto.ts
+index 4a8b92e6..41666030 100644
+--- a/src/public/dto.ts
++++ b/src/public/dto.ts
+@@ -89,7 +89,7 @@ import type {
+   Tweet,
+   TweetThread,
+ } from "../types.js";
+-import { anchorFields, identifiesOf, isSimpleParagraphs, readStoredLean } from "../types.js";
++import { anchorFields, identifiesOf, isSimpleLevels, readStoredLean } from "../types.js";
+ import type {
+   PublicArticle,
+   PublicBlock,
+@@ -503,15 +503,20 @@ function publicFaq(faq: Faq): PublicFaq {
+ }
+ 
+ /**
+- * **Simple, rebuilt paragraph by paragraph** — each `{ text, ids }` and
+- * nothing else; the stamp is pipeline provenance.
+- * src/public-types.ts § `PublicSimpleSummary` is the argument.
++ * **Simple, rebuilt level by level and paragraph by paragraph** — each
++ * `{ text, ids }` and nothing else; the stamp is pipeline provenance, and
++ * `profileHash` is the owner's. src/public-types.ts § `PublicSimpleSummary` is
++ * the argument.
+  */
+ function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
++  const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
++    paragraphs.map((p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }));
+   return {
+-    paragraphs: simple.paragraphs.map(
+-      (p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }),
+-    ),
++    levels: {
++      brief: level(simple.levels.brief),
++      simple: level(simple.levels.simple),
++      fuller: level(simple.levels.fuller),
++    },
+   };
+ }
+ 
+@@ -1033,7 +1038,7 @@ export function publicArticle(row: {
+     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
+     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
+-    ...(row.simpleSummary !== null && isSimpleParagraphs(row.simpleSummary.paragraphs)
++    ...(row.simpleSummary !== null && isSimpleLevels(row.simpleSummary.levels)
+       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
+       : {}),
+     ...(row.citations !== null ? { citations: publicCitationList(row.citations) } : {}),
+diff --git a/src/routes.ts b/src/routes.ts
+index 1eb11d9e..57f08c5d 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -409,6 +409,7 @@ import type {
+   FeedbackKind,
+   LibraryEntry,
+   GlossaryResponse,
++  SimpleSummaryResponse,
+   InvestigateCitationDone,
+   Job,
+   LibrarySearchResponse,
+@@ -8112,9 +8113,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     pattern: /^\/api\/simple\/([\w.%-]+)$/,
+     article: "first-capture",
+     handler: async ({ request: { res } }, captures) => {
+-      /* No `withProfileChanged`: not written for a profile. `stale` and
+-         `outdated` apart, as `/api/faq/` has them. */
+-      send(res, 200, await loadSimpleSummary(slugPart(captures, 1)));
++      /* `withProfileChanged` since 2026-10-01: the paragraphs are written for
++         the owner's profile and goal (plan 261001b). `stale` and `outdated`
++         apart, as `/api/faq/` has them. */
++      const at = slugPart(captures, 1);
++      send(
++        res,
++        200,
++        await withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
++      );
+     },
+   },
+ 
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index ed3ab98b..d363186a 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -1,7 +1,8 @@
+ /**
+  * Pipeline stage 5r — **Simple**: a few short paragraphs, in everyday words,
+  * saying what the piece is about, why it matters and what its key ideas are,
+- * each paragraph resting on the passages it came from. A sub-mode of Summary.
++ * each paragraph resting on the passages it came from. A sub-mode of Summary,
++ * written at **three levels**, one call each, side by side: `brief`, `simple` and `fuller`.
+  *
+  * > explain it to me like I'm 12 or 15 … a summary of, at most, I suppose, a
+  * > few short paragraphs using simple language, kind of minimizing jargon, or
+@@ -10,8 +11,16 @@
+  * >
+  * > — Greg, 2026-09-30 (SPIDERYARN-READING2-6E)
+  *
+- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md is the design, and GPT
+- * Sol's review of it is where most of the validation below comes from.
++ * > the Very-Simple and Moderately-Complex summaries should take into account
++ * > User-Profile and Why-are-you-reading-it. ... If it's ELI12, maybe it should
++ * > be ELI15, and then the Moderately-Complex might be +3 or something.
++ * >
++ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-7A)
++ *
++ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md is the first design,
++ * and GPT Sol's review of it is where most of the validation below comes from;
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md
++ * added the second level and the profile.
+  *
+  * **There is no command line here.** Re-running it against one article is a job:
+  *
+@@ -23,24 +32,48 @@
+  * easy summaries"*, so three things are enforced here rather than hoped for in
+  * the prompt:
+  *
+- * 1. **Short, and capped by code.** More than `MAX_PARAGRAPHS` paragraphs, or
+- *    more than `MAX_WORDS` words, is a failure — never a cut, because a
++ * 1. **Short, and capped by code.** More paragraphs, or more words, than a
++ *    level's `SIMPLE_LIMITS` allow is a failure — never a cut, because a
+  *    silently truncated orientation is a wrong one.
+  * 2. **Every paragraph is a door.** Each names one to three body-evidence block
+- *    ids; one left with none after validation is dropped, and fewer than
+- *    `MIN_PARAGRAPHS` left is a failure that stores nothing.
+- * 3. **No profile** in v1, as `faq` has none.
++ *    ids; one left with none after validation is dropped, and fewer than the
++ *    level's minimum left is a failure that stores nothing.
++ * 3. **Every level or none.** Any level failing fails the run.
++ *
++ * ## The reader
+  *
+- * ## The request
++ * The shared profile machinery, as Glossary and Ideas use it: `PROFILE_RULES`
++ * in the constant system prompt and `profileSection` after the breakpoint, in
++ * the user message. **The profile moves the floor, not the level**: a
++ * fifteen-year-old *who already knows what the reader says they know*, so a
++ * reader who says they build AI systems is not told what a language model is.
++ * The goal changes what the paragraphs lead with, never what the piece says.
++ *
++ * The profile is recorded as `profileHash` and is **not in `sourceHash`**: a
++ * changed profile does not make the paragraphs stale (the owner's GET reports
++ * `profileChanged`, and *Write it again* picks up the new one), and
++ * `inputFingerprint` hashes the article and the profile-free user message the
++ * pipeline's stamp can also compute (Sol's plan review, P1-1).
++ *
++ * ## The request — one call per level, side by side
+  *
+  * `articleWithIds(meta, blocks.filter(isBodyEvidence))` — Ideas' article block
+- * byte for byte — then `SIMPLE_SYSTEM`, and a user message that is a constant.
+- * At `high` effort, measured against `medium` (src/models.ts § `STAGE_EFFORT`
+- * has the numbers), so it shares Ideas' cached prefix when a job holds both.
+- * Its fingerprint
+- * hashes the exact rendered strings it sends, as src/crossrefs.ts's does, so a
+- * change the request cannot see (a supplement block, a re-cut tree) does not
+- * mark a paid artefact stale.
++ * byte for byte — then the level's `simpleSystem(level)`, and a user message
++ * that is a constant plus the profile section. At `high` effort
++ * (src/models.ts § `STAGE_EFFORT` has the numbers), so it shares Ideas' cached
++ * prefix when a job holds both.
++ *
++ * **A call per level, not one asked for all.** The plan's first design was one
++ * call writing two levels; measured, it made the model think five to twenty
++ * times as long (1–15k reasoning tokens against 150–800 for one level) and the
++ * wait went from 9–18 s to 24–134 s. So each level is its own call, the shape
++ * the first plan measured, and they run at once: the wait is the slowest of
++ * three short calls. **All or none** — the first to fail aborts the others,
++ * and nothing is stored. Plan 261001b § Ledger has the tables.
++ *
++ * Its fingerprint hashes the exact rendered article it sends, as
++ * src/crossrefs.ts's does, so a change the request cannot see (a supplement
++ * block, a re-cut tree) does not mark a paid artefact stale.
+  */
+ 
+ import { createHash } from "node:crypto";
+@@ -56,6 +89,7 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
+ import { effortFor, generatorFor, type ModelPower } from "./models.js";
+ import { parseJsonAnswer } from "./parse-json.js";
+ import { plainWords } from "./plain-words.js";
++import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+ import {
+   type BlockFingerprint,
+   fallbackHeadTitle,
+@@ -63,84 +97,105 @@ import {
+ } from "./source-hash.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import {
++  SIMPLE_LEVELS,
++  SIMPLE_LIMITS,
+   SIMPLE_MAX_IDS,
+-  SIMPLE_MAX_PARAGRAPHS,
+-  SIMPLE_MAX_WORDS,
+-  SIMPLE_MIN_PARAGRAPHS,
+   type BlockId,
+   type Meta,
++  type SimpleLevel,
+   type SimpleParagraph,
+   type SimpleSummary,
+   type Tree,
+ } from "./types.js";
+ 
+-export type { SimpleParagraph, SimpleSummary } from "./types.js";
++export type { SimpleLevel, SimpleParagraph, SimpleSummary } from "./types.js";
++export { SIMPLE_LEVELS } from "./types.js";
+ 
+ /**
+  * Bumped whenever the prompt changes what a paragraph *is*. The one constant:
+  * stamped into the artefact by `buildSimpleSummary` and compared against by the
+  * pipeline's stamp and the owner's read (src/pipeline.ts, src/store/pg.ts).
++ *
++ * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
++ * no `levels` and reads as absent (`isSimpleLevels`, src/types.ts).
+  */
+-export const SIMPLE_VERSION = "simple/1";
+-
+-/** More is a failure, not a cut. */
+-export const MAX_PARAGRAPHS = SIMPLE_MAX_PARAGRAPHS;
+-
+-/** Fewer surviving validation is a failure: nothing is stored. */
+-export const MIN_PARAGRAPHS = SIMPLE_MIN_PARAGRAPHS;
++export const SIMPLE_VERSION = "simple/2";
+ 
+ /** Passages per paragraph. Extra ids are dropped and counted. */
+ export const MAX_IDS = SIMPLE_MAX_IDS;
+ 
+ /**
+- * The hard ceiling on the whole text, in words. The prompt asks for well
+- * under 250; this leaves room for a model that runs a little long, and refuses
+- * one that has written a digest rather than an orientation.
+- */
+-export const MAX_WORDS = SIMPLE_MAX_WORDS;
+-
+-/**
+- * The answer budget in tokens: at most four paragraphs of ~320 words in all
+- * (~430 tokens at 0.75 words a token, doubled for safety), plus three ids and
+- * the JSON around each. Undersizing does not degrade: it throws
+- * `truncationFailure` and loses the whole pass.
+- */
+-export const ANSWER_TOKENS = 1_000 + MAX_PARAGRAPHS * MAX_IDS * 10;
+-
+-/**
+- * **Who the paragraphs are pitched at.** Production ships one level, 15 (the
+- * plan's § What v1 is: at 12, on a dense paper, a number, a direction or a
+- * hedge is where it gets dropped). 12 exists so the stage-1 probe can put the
+- * two side by side for Greg (evals/simple/probe.ts); no reader can ask for it.
++ * One call's answer budget in tokens, sized for the larger level: Fuller's
++ * word ceiling (450 words, ~600 tokens at 0.75 words a token, doubled for
++ * safety), plus three ids and the JSON around each of its paragraphs.
++ * Undersizing does not degrade: it throws `truncationFailure` and loses the
++ * whole pass.
+  */
+-export type SimplePitch = 12 | 15;
++export const ANSWER_TOKENS =
++  1_200 + Math.max(...SIMPLE_LEVELS.map((level) => SIMPLE_LIMITS[level].maxParagraphs)) * MAX_IDS * 10;
+ 
+ /*
+  * **The word asks are below what the ceiling allows, on evidence.** The first
+- * probe asked for "under 250 words" and got 261–339 at 15 (two of three `high`
+- * runs over `MAX_WORDS`), and "under 150" got 189–208 at 12: the model runs
+- * about a third over a total it is given. So the ask is the length we want to
+- * see and the sentence cap does most of the work — a sentence limit is kept
+- * where a total is not. Plan 260930i § Measuring it has both rounds.
++ * probe asked for "under 250 words" and got 261–339 at 15: the model runs about
++ * a third over a total it is given. So the ask is the length we want to see
++ * and the sentence cap does most of the work — a sentence limit is kept where a
++ * total is not. Plan 260930i § Measuring it has both rounds.
++ *
++ * Lowered again with the reader (plan 261001b): asked for about 200, a
++ * profiled Simple came back at up to 338 words, two runs in twelve over the
++ * 320 ceiling; Fuller, asked for 300, reached 448 of its 450.
++ *
++ * **Three levels around the first version's length**, which came out at
++ * 240–273 words (Greg, SPIDERYARN-READING2-7J and -7F): Brief short and very
++ * simple, at twelve; Simple fairly simple and just under that length, at
++ * fifteen; Fuller moderately complex and just over it, at eighteen — Greg's
++ * *"+3 or something"* above fifteen (7A).
+  */
+-const PITCH: Record<SimplePitch, { reader: string; shape: string; words: number; sentence: number }> = {
+-  15: {
+-    reader: "a curious fifteen-year-old who has not studied this field",
++const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number; sentence: number }> = {
++  brief: {
++    reader: "A bright twelve-year-old",
++    shape: "Two or three short paragraphs, each two or three sentences",
++    words: 100,
++    sentence: 18,
++  },
++  simple: {
++    reader: "A bright fifteen-year-old",
+     shape: "Two to four paragraphs, each two to four sentences",
+-    words: 200,
++    words: 170,
+     sentence: 25,
+   },
+-  12: {
+-    reader: "a curious twelve-year-old who has not studied this field",
+-    shape: "Two or three paragraphs, each two or three sentences",
+-    words: 130,
+-    sentence: 18,
++  fuller: {
++    reader: "A bright eighteen-year-old in their first year at university",
++    shape: "Three to five paragraphs, each two to four sentences",
++    words: 220,
++    sentence: 30,
+   },
+ };
+ 
+-/** The system prompt for a pitch. `SIMPLE_SYSTEM` is the one that ships. */
+-export function simpleSystem(pitch: SimplePitch): string {
+-  const p = PITCH[pitch];
++/**
++ * What a level may do beyond the plainest — said inside that level's own
++ * prompt, never as a comparison with another version: a reader may read only
++ * one, so none refers to another.
++ */
++const NOTCH_UP: Record<SimpleLevel, string> = {
++  brief: `
++
++Keep it very simple: the one thing the piece is about, why it matters, and at
++most two key ideas. Leave out anything a first-time reader could do without.`,
++  simple: "",
++  fuller: `
++
++You may keep more of the piece's own terms than a beginner's version would (each
++still said in plain words where it first appears), and add one more layer of how
++or why.`,
++};
++
++/**
++ * The system prompt for one level. Constant per level — the reader goes in
++ * the user message, after the breakpoint.
++ */
++export function simpleSystem(level: SimpleLevel): string {
++  const p = PITCH[level];
+   return `You are helping a reader get their bearings before they read the article above.
+ 
+ WHAT YOU WRITE
+@@ -151,12 +206,24 @@ wants to know first, so that the article itself makes sense when they read it.
+ 
+ THE READER
+ 
+-${p.reader}. Everyday words and short sentences.
++${p.reader} who has not studied this field. Everyday words and short sentences.${NOTCH_UP[level]}
+ 
+ - Use jargon sparingly. Where you do use a term, say what it means in the same
+   sentence, in everyday words. Never explain one hard word with another.
+ - Keep the author's key term where the reader will meet it in the article; it
+   is their handhold. Say what it means.
++- If the request describes the reader, what they say they already know counts
++  as everyday words for them: use it without explaining it. Everything else
++  stays at this pitch.
++
++LENGTH
++
++${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
++all, and never more than ${p.words + 50}. Shorter is fine; this is an
++orientation, not a digest, so leave detail to the article.${SYSTEM_TAIL}`;
++}
++
++const SYSTEM_TAIL = `
+ 
+ THE SHAPE
+ 
+@@ -164,11 +231,7 @@ THE SHAPE
+   of piece it is.
+ - Then: why it matters — why THE PIECE says it matters, not why you think it
+   might.
+-- Then: its key ideas or findings, in one or two paragraphs.
+-
+-${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
+-all, and never more than ${p.words + 50}. Shorter is fine; this is an orientation,
+-not a digest, so leave detail to the article.
++- Then: its key ideas or findings.
+ 
+ FAITHFUL, NOT JUST SIMPLE
+ 
+@@ -189,6 +252,8 @@ The ids go only in "ids". Never write an id, or "block …", in the text.
+ 
+ ${plainWords("explain")}
+ 
++${PROFILE_RULES}
++
+ OUTPUT
+ 
+ JSON only, no prose, no code fence:
+@@ -199,20 +264,36 @@ JSON only, no prose, no code fence:
+ 
+ Plain text in "text": no markdown, no bullet points, no headings. Never put a
+ real line break inside a string, and escape any straight double quote as \\".`;
+-}
+ 
+-export const SIMPLE_SYSTEM = simpleSystem(15);
++/** Each level's system prompt, built once. */
++export const SIMPLE_SYSTEMS = Object.fromEntries(
++  SIMPLE_LEVELS.map((level) => [level, simpleSystem(level)]),
++) as Record<SimpleLevel, string>;
+ 
+-/** The user message — a constant, so the request is the article and the rules. */
+-export function renderPrompt(): string {
+-  return "Write the plain-words orientation for this article.";
++/**
++ * The user message's constant half — and all of what `inputFingerprint` hashes
++ * of it. The same for every level: the level is in the system prompt.
++ */
++const BASE_PROMPT = "Write the plain-words orientation for this article.";
++
++/**
++ * The user message: the constant ask, and the reader after it when there is
++ * one. With no profile it is `BASE_PROMPT` byte for byte — `profileSection`
++ * returns `""` — and the separator is added only when there is a section,
++ * since that function supplies no leading newline (Sol's plan review, P2-8).
++ */
++export function renderPrompt(profile: string | null): string {
++  const section = profileSection(profile);
++  return section ? `${BASE_PROMPT}\n\n${section}` : BASE_PROMPT;
+ }
+ 
+ /**
+- * What this artefact was written from: the exact article bytes and user
+- * message the request sends — crossrefs' approach (src/crossrefs.ts §
+- * `inputFingerprint`, Sol F11 there). The tree is here only for the fallback
+- * head title `articleWithIds` prints when there is no metadata.
++ * What this artefact was written from: the exact article bytes the request
++ * sends and the **profile-free** user message — crossrefs' approach
++ * (src/crossrefs.ts § `inputFingerprint`, Sol F11 there). The profile is in
++ * `profileHash`, not here, so the pipeline's stamp, which has no profile, can
++ * compute the same value (Sol's plan review, P1-1). The tree is here only for
++ * the fallback head title `articleWithIds` prints when there is no metadata.
+  *
+  * The instructions have their own `SIMPLE_VERSION`; the model has its own
+  * stamp field.
+@@ -234,7 +315,7 @@ export function inputFingerprint(
+         ...(meta.url == null ? {} : { url: meta.url }),
+       } as Meta)
+     : ({ title: fallbackHeadTitle(tree) } as Meta);
+-  const request = [articleWithIds(renderedMeta, evidence), renderPrompt()];
++  const request = [articleWithIds(renderedMeta, evidence), renderPrompt(null)];
+   return createHash("sha256")
+     .update(`spya-simple-input/1\n${JSON.stringify(request)}`, "utf8")
+     .digest("hex")
+@@ -252,9 +333,9 @@ export function isStale(
+ }
+ 
+ /**
+- * What validation threw away. **Reported, logged, never stored**: the plan's
+- * artefact is the paragraphs and the stamp, and a reader has no use for our
+- * checking's tally.
++ * What validation threw away, across every level. **Reported, logged, never
++ * stored**: the artefact is the paragraphs and the stamp, and a reader has no
++ * use for our checking's tally.
+  */
+ export interface SimpleDropped {
+   /** A paragraph that was not an object. */
+@@ -281,6 +362,11 @@ export function wordCount(text: string): number {
+   return t === "" ? 0 : t.split(/\s+/).length;
+ }
+ 
++/** Words across a list of paragraphs. */
++export function paragraphWords(paragraphs: readonly SimpleParagraph[]): number {
++  return paragraphs.reduce((n, p) => n + wordCount(p.text), 0);
++}
++
+ /** One paragraph's ids: known body evidence, first occurrence, at most `MAX_IDS`. */
+ function keptIds(raw: unknown, evidenceIds: ReadonlySet<string>, dropped: SimpleDropped): BlockId[] {
+   const ids: BlockId[] = [];
+@@ -335,54 +421,84 @@ export function toParagraphs(
+ }
+ 
+ /**
+- * The artefact, from what the model said plus what we could verify of it.
+- * **Every failure throws and writes nothing**: no `paragraphs` array, more than
+- * `MAX_PARAGRAPHS`, more than `MAX_WORDS` in what survives, or fewer than
+- * `MIN_PARAGRAPHS` surviving.
++ * One level's answer, validated against its limits. Throws, naming the level,
++ * on any failure — which is what lets the generator abort the other calls the
++ * moment one level is lost.
+  */
+-export function buildSimpleSummary(
++export function buildLevel(
+   parsed: unknown,
+-  opts: {
+-    slug: string;
+-    /** The body evidence the request sent — the only ids a paragraph may name. */
+-    evidence: readonly { id: BlockId }[];
+-    /** The power it was written at — the stamp names the model (plan 260930f). */
+-    power: ModelPower;
+-    sourceHash: string;
+-    elapsedMs: number;
+-    dropped: SimpleDropped;
+-  },
+-): SimpleSummary {
++  level: SimpleLevel,
++  evidenceIds: ReadonlySet<string>,
++  d: SimpleDropped,
++): SimpleParagraph[] {
++  const limits = SIMPLE_LIMITS[level];
+   const list =
+     parsed && typeof parsed === "object" ? (parsed as { paragraphs?: unknown }).paragraphs : undefined;
+   if (!Array.isArray(list)) {
+     throw new Error(
+-      "The model's answer has no `paragraphs` array in it, so there is nothing to read.",
++      `The model's "${level}" answer has no \`paragraphs\` array in it, so there is nothing to read at that level.`,
+     );
+   }
+-  if (list.length > MAX_PARAGRAPHS) {
++  if (list.length > limits.maxParagraphs) {
+     throw new Error(
+-      `The model wrote ${list.length} paragraphs and the limit is ${MAX_PARAGRAPHS}. ` +
++      `The model wrote ${list.length} "${level}" paragraphs and the limit is ${limits.maxParagraphs}. ` +
+         "Nothing is kept rather than a cut-down version, because a truncated orientation is a wrong one.",
+     );
+   }
+-  const d = opts.dropped;
+-  const paragraphs = toParagraphs(list, new Set(opts.evidence.map((b) => b.id as string)), d);
+-  const words = paragraphs.reduce((n, p) => n + wordCount(p.text), 0);
+-  if (words > MAX_WORDS) {
++  const before = { ...d };
++  const paragraphs = toParagraphs(list, evidenceIds, d);
++  const words = paragraphWords(paragraphs);
++  if (words > limits.maxWords) {
+     throw new Error(
+-      `The model wrote ${words} words and the limit is ${MAX_WORDS}. ` +
++      `The model wrote ${words} "${level}" words and the limit is ${limits.maxWords}. ` +
+         "Nothing is kept rather than a cut-down version.",
+     );
+   }
+-  if (paragraphs.length < MIN_PARAGRAPHS) {
++  if (paragraphs.length < limits.minParagraphs) {
+     throw new Error(
+-      `Only ${paragraphs.length} of the model's ${list.length} paragraphs could be tied to the ` +
+-        `article, and at least ${MIN_PARAGRAPHS} are needed, so there is nothing to write. ` +
+-        `Dropped: ${d.unanchored} with no usable passage, ${d.empty} empty, ${d.malformed} ` +
+-        `malformed; ${d.unknownIds} ids not in this article's body.`,
++      `Only ${paragraphs.length} of the model's ${list.length} "${level}" paragraphs could be tied to the ` +
++        `article, and at least ${limits.minParagraphs} are needed, so there is nothing to write. ` +
++        `Dropped: ${d.unanchored - before.unanchored} with no usable passage, ${d.empty - before.empty} empty, ` +
++        `${d.malformed - before.malformed} malformed; ${d.unknownIds - before.unknownIds} ids not in this article's body.`,
+     );
+   }
++  return paragraphs;
++}
++
++interface StampOptions {
++  slug: string;
++  /** The power it was written at — the stamp names the model (plan 260930f). */
++  power: ModelPower;
++  sourceHash: string;
++  /** The rendered profile the requests carried, or null — recorded as its hash. */
++  profile: string | null;
++  elapsedMs: number;
++}
++
++/**
++ * The artefact, from what the model said at each level plus what we could
++ * verify of it. **Every failure throws and writes nothing**, at either level:
++ * no `paragraphs` array, more paragraphs or words than its limits, or fewer
++ * paragraphs surviving than its minimum. Every level or none.
++ *
++ * @param answers each level's parsed answer, `{ paragraphs: [...] }`.
++ */
++export function buildSimpleSummary(
++  answers: Partial<Record<SimpleLevel, unknown>>,
++  opts: StampOptions & {
++    /** The body evidence the requests sent — the only ids a paragraph may name. */
++    evidence: readonly { id: BlockId }[];
++    dropped: SimpleDropped;
++  },
++): SimpleSummary {
++  const evidenceIds = new Set(opts.evidence.map((b) => b.id as string));
++  const levels = {} as Record<SimpleLevel, SimpleParagraph[]>;
++  for (const level of SIMPLE_LEVELS) levels[level] = buildLevel(answers[level], level, evidenceIds, opts.dropped);
++  return stamped(levels, opts);
++}
++
++/** The stamp around two validated levels. */
++function stamped(levels: Record<SimpleLevel, SimpleParagraph[]>, opts: StampOptions): SimpleSummary {
+   return {
+     version: SIMPLE_VERSION,
+     /* The model's name for this power — every staleness check compares against it. */
+@@ -391,15 +507,16 @@ export function buildSimpleSummary(
+     sourceHash: opts.sourceHash,
+     generatedAt: new Date().toISOString(),
+     elapsedMs: opts.elapsedMs,
+-    paragraphs,
++    profileHash: opts.profile ? hashProfile(opts.profile) : null,
++    levels,
+   };
+ }
+ 
+ export interface SimpleSummaryRun {
+   simpleSummary: SimpleSummary;
+   blocks: number;
+-  /** Words across the paragraphs kept. */
+-  words: number;
++  /** Words kept, per level. */
++  words: Record<SimpleLevel, number>;
+   dropped: SimpleDropped;
+   model: string;
+   inputTokens: number;
+@@ -413,16 +530,15 @@ export interface SimpleSummaryRun {
+ export async function generateSimpleSummary(opts: {
+   /** The article, handed in — never a directory to open. src/article-input.ts. */
+   article: Article;
++  /**
++   * Who is reading, already rendered — `renderProfile` in src/profile.ts — or
++   * null. The job's frozen copy (`ctx.profile`), never resolved here.
++   */
++  profile: string | null;
+   onProgress?: (detail: string) => void;
+   signal?: AbortSignal;
+   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
+   cacheArticle?: boolean;
+-  /**
+-   * **The probe's, not a reader's** (evals/simple/probe.ts): 15 ships. A
+-   * different pitch is a different prompt, so an artefact written at 12 would
+-   * carry `SIMPLE_VERSION` wrongly — nothing in the app passes it.
+-   */
+-  pitch?: SimplePitch;
+   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+   power: ModelPower;
+ }): Promise<SimpleSummaryRun> {
+@@ -438,91 +554,118 @@ export async function generateSimpleSummary(opts: {
+   /* The body only, as `ideas` does — and ids are checked against the same set,
+      so an id from the bibliography is an invented one. */
+   const evidence = blocks.filter(isBodyEvidence);
++  const evidenceIds = new Set(evidence.map((b) => b.id as string));
+   const started = Date.now();
+   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
+-  const system = opts.pitch === undefined || opts.pitch === 15 ? SIMPLE_SYSTEM : simpleSystem(opts.pitch);
+-
+-  let message: Anthropic.Message;
+-  try {
+-    const call = streamMessage(
+-      "simple",
+-      {
+-        max_tokens: maxTokens,
+-        thinking: { type: "adaptive" },
+-        output_config: { effort: effortFor("simple") },
+-        /* Article first, then this stage's instructions: Ideas' article bytes. */
+-        system: [
+-          {
+-            type: "text" as const,
+-            text: articleWithIds(meta, evidence),
+-            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+-          },
+-          { type: "text" as const, text: system },
+-        ],
+-        messages: [{ role: "user", content: renderPrompt() }],
+-      },
+-      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
+-    );
++  const article = articleWithIds(meta, evidence);
++  const user = renderPrompt(opts.profile);
++  const dropped = emptyDropped();
+ 
+-    if (opts.onProgress) {
+-      const report = opts.onProgress;
+-      let chars = 0;
+-      let last = 0;
+-      call.onText((delta) => {
+-        chars += delta.length;
+-        const now = Date.now();
+-        if (now - last < 500) return;
+-        last = now;
+-        report(`${chars.toLocaleString("en-GB")} characters so far`);
++  /* **All or none, and the losers do not run on.** The first level to
++     fail aborts the others, so a failed press is not billed for a paragraph
++     list nobody will keep. The job's own signal still stops all of them. */
++  const sibling = new AbortController();
++  const signal = opts.signal ? AbortSignal.any([opts.signal, sibling.signal]) : sibling.signal;
++
++  let chars = 0;
++  let last = 0;
++  const onText = (delta: string) => {
++    if (!opts.onProgress) return;
++    chars += delta.length;
++    const now = Date.now();
++    if (now - last < 500) return;
++    last = now;
++    opts.onProgress(`${chars.toLocaleString("en-GB")} characters so far`);
++  };
++
++  const writeLevel = async (level: SimpleLevel) => {
++    let message: Anthropic.Message;
++    try {
++      const call = streamMessage(
++        "simple",
++        {
++          max_tokens: maxTokens,
++          thinking: { type: "adaptive" },
++          output_config: { effort: effortFor("simple") },
++          /* Article first, then this level's instructions: Ideas' article bytes. */
++          system: [
++            {
++              type: "text" as const,
++              text: article,
++              ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
++            },
++            { type: "text" as const, text: SIMPLE_SYSTEMS[level] },
++          ],
++          /* The reader goes here and nowhere earlier: after the breakpoint, so
++             a profile never splits the article's cache entry (src/profile.ts §
++             `profileSection`). */
++          messages: [{ role: "user", content: user }],
++        },
++        { power: opts.power, signal },
++      );
++      call.onText(onText);
++      /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
++         is what records what this call cost. src/messages-stream.ts. */
++      message = await call.finalMessage();
++    } catch (err) {
++      throw anthropicCallFailed(err);
++    }
++    if (wasRefused(message)) {
++      throw stageFailure(MODEL_REFUSED, {
++        authored: `the model answered the "${level}" request with stop_reason: refusal`,
+       });
+     }
++    if (message.stop_reason === "max_tokens") {
++      throw truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
++        outputTokens: message.usage.output_tokens,
++        answerChars: message.content
++          .filter((b): b is Anthropic.TextBlock => b.type === "text")
++          .reduce((n, b) => n + b.text.length, 0),
++      });
++    }
++    const raw = message.content
++      .filter((b): b is Anthropic.TextBlock => b.type === "text")
++      .map((b) => b.text)
++      .join("");
++    const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, dropped);
++    return { paragraphs, usage: message.usage };
++  };
+ 
+-    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
+-       is what records what this call cost. src/messages-stream.ts. */
+-    message = await call.finalMessage();
+-  } catch (err) {
+-    throw anthropicCallFailed(err);
+-  }
+-  if (wasRefused(message)) {
+-    throw stageFailure(MODEL_REFUSED, {
+-      authored: "the model answered with stop_reason: refusal",
+-    });
+-  }
+-  if (message.stop_reason === "max_tokens") {
+-    throw truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
+-      outputTokens: message.usage.output_tokens,
+-      answerChars: message.content
+-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+-        .reduce((n, b) => n + b.text.length, 0),
+-    });
+-  }
+-
+-  const raw = message.content
+-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+-    .map((b) => b.text)
+-    .join("");
+-
+-  const dropped = emptyDropped();
+-  const simpleSummary = buildSimpleSummary(parseJsonAnswer<unknown>(raw, "the model's answer"), {
++  const written = await Promise.all(
++    SIMPLE_LEVELS.map((level) =>
++      writeLevel(level).catch((err: unknown) => {
++        sibling.abort();
++        throw err;
++      }),
++    ),
++  );
++  const levels = Object.fromEntries(SIMPLE_LEVELS.map((level, i) => [level, written[i]!.paragraphs])) as Record<
++    SimpleLevel,
++    SimpleParagraph[]
++  >;
++  const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
++    written.reduce((n, w) => n + (pick(w.usage) ?? 0), 0);
++
++  const simpleSummary = stamped(levels, {
+     power: opts.power,
+     slug: opts.article.slug,
+-    evidence,
+     sourceHash,
++    profile: opts.profile,
+     elapsedMs: Date.now() - started,
+-    dropped,
+   });
+ 
+   /* Nothing is written here — the caller writes through the store. */
+   return {
+     simpleSummary,
+     blocks: blocks.length,
+-    words: simpleSummary.paragraphs.reduce((n, p) => n + wordCount(p.text), 0),
++    words: Object.fromEntries(SIMPLE_LEVELS.map((l) => [l, paragraphWords(levels[l])])) as Record<SimpleLevel, number>,
+     dropped,
+     model: generatorFor(opts.power),
+-    inputTokens: message.usage.input_tokens,
+-    outputTokens: message.usage.output_tokens,
+-    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+-    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
++    /* Summed over both calls. */
++    inputTokens: sum((u) => u.input_tokens),
++    outputTokens: sum((u) => u.output_tokens),
++    cacheReadTokens: sum((u) => u.cache_read_input_tokens),
++    cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
+     maxTokens,
+     elapsedMs: Date.now() - started,
+   };
+diff --git a/src/store/artifacts.ts b/src/store/artifacts.ts
+index 1bfebd8f..e18f0464 100644
+--- a/src/store/artifacts.ts
++++ b/src/store/artifacts.ts
+@@ -60,7 +60,7 @@ import type {
+   Tree,
+   TweetThread,
+ } from "../types.js";
+-import { isDebateDocument, isSimpleParagraphs } from "../types.js";
++import { isDebateDocument, isSimpleLevels } from "../types.js";
+ import { sameGenerator } from "../models.js";
+ import type { LabelsFile } from "../labels.js";
+ import type { RawManifest } from "../fetch.js";
+@@ -418,10 +418,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
+      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
+      missing list and on one validation empties, so neither reaches here. */
+   crossrefs: { field: "links", ok: isArray },
+-  /* Two to four usable paragraphs. `buildSimpleSummary` enforces this on the
++  /* Both levels, each within its limits. `buildSimpleSummary` enforces this on the
+      model's answer; this second check is the store boundary, so a direct or
+      malformed JSONB value cannot make the step report done with an empty band. */
+-  simple: { field: "paragraphs", ok: isSimpleParagraphs },
++  simple: { field: "levels", ok: isSimpleLevels },
+ };
+ 
+ /**
+diff --git a/src/store/export-bundle.ts b/src/store/export-bundle.ts
+index 5040eac0..46973caf 100644
+--- a/src/store/export-bundle.ts
++++ b/src/store/export-bundle.ts
+@@ -845,6 +845,12 @@ function countOf(value: unknown, key: string): number {
+   return 0;
+ }
+ 
++/** Simple's `levels` object, structurally, as `countOf` reads everything else. */
++function levelsOf(value: unknown): unknown {
++  if (value === null || typeof value !== "object") return null;
++  return (value as Record<string, unknown>).levels ?? null;
++}
++
+ /**
+  * **How many pictures this bundle actually names**, across both collections.
+  *
+@@ -895,7 +901,11 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n:
+     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
+     { label: "trajectory stops", n: countOf(revision.trajectory, "stops") },
+     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
+-    { label: "plain-words paragraphs", n: countOf(revision.simpleSummary, "paragraphs") },
++    /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)
++       counts nothing, which is what every other read makes of it. */
++    { label: "plain-words paragraphs (brief)", n: countOf(levelsOf(revision.simpleSummary), "brief") },
++    { label: "plain-words paragraphs (simple)", n: countOf(levelsOf(revision.simpleSummary), "simple") },
++    { label: "plain-words paragraphs (fuller)", n: countOf(levelsOf(revision.simpleSummary), "fuller") },
+     { label: "arc entries", n: countOf(revision.arc, "entries") },
+     /* **Both collections, and only what is really named.** `assets` holds the
+        article's own `<img src>`s in `entries` and the pictures recovered from a
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index bb8a2c04..b65df22a 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -190,7 +190,7 @@ import type {
+   TweetThread,
+   Visibility,
+ } from "../types.js";
+-import { isSimpleParagraphs } from "../types.js";
++import { isSimpleLevels } from "../types.js";
+ import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
+ import type { ArtifactMap } from "./artifacts.js";
+ import type { ArticleReader, RawSource } from "./contracts.js";
+@@ -2511,6 +2511,7 @@ function personalisedSteps(revision: {
+   sketch: Sketch | null;
+   illustrated: Illustrated | null;
+   trajectory: Trajectory | null;
++  simpleSummary: SimpleSummary | null;
+ }): StepName[] {
+   /* `Record`, not `Partial<Record>`: another artefact gaining a `profileHash`
+      has to fail here, at the compiler, rather than fall off the dialog. It has
+@@ -2530,6 +2531,10 @@ function personalisedSteps(revision: {
+        stamp says whose. Its stored output is public but the stamp is not, and
+        an owner about to publish is owed the fact. */
+     trajectory: revision.trajectory,
++    /* The eighth, since 2026-10-01: both plain-words levels are pitched at
++       the owner's profile and goal, and a visitor reads the owner's. Plan
++       261001b. */
++    simple: revision.simpleSummary,
+   };
+   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
+      the record is now exactly the artefacts that can be personalised and a
+@@ -2587,7 +2592,7 @@ export function shareableArtefacts(revision: {
+        malformed band. The owner's inventory must answer the same question or
+        it promises that a shared link contains something the link withholds. */
+     simpleSummary:
+-      revision.simpleSummary && isSimpleParagraphs(revision.simpleSummary.paragraphs)
++      revision.simpleSummary && isSimpleLevels(revision.simpleSummary.levels)
+         ? revision.simpleSummary
+         : null,
+     citations: revision.citations,
+@@ -3197,7 +3202,10 @@ const rawPgArticleReader: ArticleReader = {
+         /* The same stamp shape as `crossrefs`, over its own exact request. */
+         case "simple": {
+           const simple = revision.simpleSummary as SimpleSummary | null;
+-          if (!simple || !tree || blocks.length === 0) return false;
++          /* The shape guard every other read uses, so Metadata cannot call
++             done what the GET and the public page treat as absent (Sol's
++             plan review of 261001b, P1-2). */
++          if (!simple || !isSimpleLevels(simple.levels) || !tree || blocks.length === 0) return false;
+           return sameStamp(
+             {
+               inputHash: simple.sourceHash,
+@@ -3698,7 +3706,9 @@ const rawPgArticleReader: ArticleReader = {
+     const found = await currentRevision(slug, "simpleSummary");
+     if (!found) throw notFound(slug);
+     const simpleSummary = found.revision.simpleSummary as SimpleSummary | null;
+-    if (!simpleSummary || !isSimpleParagraphs(simpleSummary.paragraphs)) {
++    /* `isSimpleLevels` also turns a `simple/1` row (no `levels`) into this
++       404, so the owner's press writes every level over it. */
++    if (!simpleSummary || !isSimpleLevels(simpleSummary.levels)) {
+       throw Object.assign(
+         new Error(
+           `No plain-words summary for "${slug}" yet. Write one with ` +
+diff --git a/src/types.ts b/src/types.ts
+index 9b5d2f3c..9724556a 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -4509,24 +4509,58 @@ export interface SimpleParagraph {
+   ids: BlockId[];
+ }
+ 
+-/** The stored Simple contract, shared by generation and every read boundary. */
+-export const SIMPLE_MIN_PARAGRAPHS = 2;
+-export const SIMPLE_MAX_PARAGRAPHS = 4;
++/**
++ * **The three plain-words levels**, in the order the slider runs: `brief`,
++ * short and very simple; `simple`, fairly simple and just under the first
++ * version's length; `fuller`, moderately complex and just over it. Greg,
++ * 2026-09-30 (SPIDERYARN-READING2-7J): *"a UI-slider with 3 level (short &
++ * very-simple, just-under-current-length and fairly-simple,
++ * just-over-current-length and moderately-complex)"*.
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
++ *
++ * Also the `?summary=` values for these views (src/web/params.ts), so
++ * `simple` keeps the value readers' links already carry.
++ */
++export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
++export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
++
++/** One level's limits — the stored Simple contract, shared by generation and every read boundary. */
++export interface SimpleLevelLimits {
++  minParagraphs: number;
++  maxParagraphs: number;
++  /** The hard ceiling on the level's words; the prompt asks for well under it. */
++  maxWords: number;
++}
++
++/*
++ * The word ceilings sit above the longest the measurement saw at each level
++ * (210, 338 and 431, plan 261001b § Ledger) — a ceiling is the line between an
++ * orientation and a digest, not a length target, and with three calls a tight
++ * one loses all three for one level's ten words. The prompt's asks are what
++ * set the length.
++ */
++export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
++  brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
++  simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
++  fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
++};
++
++/** Passages per paragraph, at either level. */
+ export const SIMPLE_MAX_IDS = 3;
+-export const SIMPLE_MAX_WORDS = 320;
+ 
+ /**
+- * Is this a usable stored paragraph list?
++ * Is this a usable stored paragraph list for this level?
+  *
+  * The generator performs the evidence-dependent check that every id belongs
+  * to the exact body it sent. This is the part a reader can check without the
+  * article: the same quantity, text, id and word limits the generator enforces.
+  */
+-export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
++export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is SimpleParagraph[] {
++  const limits = SIMPLE_LIMITS[level];
+   if (
+     !Array.isArray(value) ||
+-    value.length < SIMPLE_MIN_PARAGRAPHS ||
+-    value.length > SIMPLE_MAX_PARAGRAPHS
++    value.length < limits.minParagraphs ||
++    value.length > limits.maxParagraphs
+   ) {
+     return false;
+   }
+@@ -4554,7 +4588,21 @@ export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
+       return false;
+     }
+   }
+-  return words <= SIMPLE_MAX_WORDS;
++  return words <= limits.maxWords;
++}
++
++/**
++ * **Is this a usable stored Simple — every level, each within its limits?**
++ * The one guard every read boundary uses: the owner's GET, Metadata's *is it
++ * done*, the artefact reader and the public projection (Sol's plan review,
++ * P1-2). A `simple/1` row — one `paragraphs` list, no `levels` — fails it, so
++ * it reads as absent everywhere at once and the next press writes every level
++ * over it.
++ */
++export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
++  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
++  const levels = value as Partial<Record<SimpleLevel, unknown>>;
++  return SIMPLE_LEVELS.every((level) => isSimpleParagraphs(levels[level], level));
+ }
+ 
+ /** The artefact. The `simple_summary` column on `article_revisions`. */
+@@ -4562,12 +4610,23 @@ export interface SimpleSummary {
+   version: string;
+   generator: string;
+   slug: string;
+-  /** A hash of the body-only article rendering actually sent (src/simple-summary.ts). */
++  /**
++   * A hash of the body-only article rendering and the **profile-free** user
++   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
++   * it, so a changed profile never makes the paragraphs stale.
++   */
+   sourceHash: string;
+   generatedAt: string;
+   elapsedMs: number;
+-  /** Two to four, enforced by code — fewer is a failure and nothing is stored. */
+-  paragraphs: SimpleParagraph[];
++  /**
++   * `hashProfile` of the rendered profile these were written for, or `null`
++   * for none. Having the field is what puts Simple in the owner's *make public*
++   * dialog as personalised (`ProfileCarrying`, src/store/pg.ts); it never
++   * reaches a visitor (src/public/dto.ts).
++   */
++  profileHash: string | null;
++  /** Every level, always — validation stores all of them or none. */
++  levels: Record<SimpleLevel, SimpleParagraph[]>;
+ }
+ 
+ /**
+@@ -4580,9 +4639,16 @@ export interface SimpleSummaryResponse {
+   stale: boolean;
+   /** The article is the same and we would write this differently now. */
+   outdated: boolean;
++  /**
++   * The reader has changed their profile since these were written —
++   * `profileIsStale` in src/profile.ts, added by the route
++   * (`withProfileChanged`). Never makes them stale.
++   */
++  profileChanged: boolean;
+ }
+ 
+-export type SimpleSummaryFound = SimpleSummaryResponse;
++/** What the store hands the route, before the route adds the profile answer. */
++export type SimpleSummaryFound = Omit<SimpleSummaryResponse, "profileChanged">;
+ 
+ /* -------------------------------------------------------------- crossrefs --
+    Links inside one article: a short phrase in one block that refers to what
+diff --git a/src/web/SimplePanel.tsx b/src/web/SimplePanel.tsx
+index 1fd7ff1e..0b43388e 100644
+--- a/src/web/SimplePanel.tsx
++++ b/src/web/SimplePanel.tsx
+@@ -5,20 +5,27 @@
+  * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+  * docs/project/summaries.md § Simple.
+  *
+- * Drawn inside the Summary band, below the Gists | Simple switch
+- * (SummaryPanel.tsx), so there is no `ModeSurface` here — this is the body.
++ * Drawn inside the Summary band, below the one row of controls
++ * (SummaryMode.tsx § `SummaryControls`), so there is no `ModeSurface` here —
++ * this is the body. Two levels, `simple` and `fuller`, one artefact: the panel
++ * draws whichever the row has chosen.
+  *
+- * Three things keep it an orientation rather than a replacement for reading,
+- * and the file must go on doing all three:
++ * Two things keep it an orientation rather than a replacement for reading,
++ * and the file must go on doing both:
+  *
+  * - **every paragraph is a door** — its ids are drawn with the same `BlockRef`
+  *   chips the gists use, hover shows the passage, a click goes there;
+- * - **it says what it is**, in the foot (`SIMPLE_FOOT`);
+  * - **plain text**, never markdown — model output is not HTML (security.md).
++ *
++ * **What it is lives on the pills, not under the paragraphs.** There was a foot
++ * here — *"Written by AI in plain words to help you get your bearings…"* —
++ * until Greg, 2026-09-30 (SPIDERYARN-READING2-7B): *"we don't want these mode
++ * descriptions - they waste space."* Each pill's card says it now, and
++ * docs/project/new-mode.md has the rule.
+  */
+ import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+-import type { BlockId, SimpleParagraph } from "../types.js";
++import type { BlockId, SimpleLevel, SimpleParagraph } from "../types.js";
+ import type { PublicSimpleSummary } from "../public-types.js";
+ import type { UseSimple } from "./useSimple.js";
+ import { BlockRef } from "./BlockRef.js";
+@@ -26,10 +33,6 @@ import { JobProgress } from "./JobProgress.js";
+ import { TooltipGroup } from "./Tooltip.js";
+ import { useRenderCount } from "./perf.js";
+ 
+-/** The one line under the paragraphs, for owner and visitor alike. */
+-export const SIMPLE_FOOT =
+-  "Written by AI in plain words to help you get your bearings. The article says it better, and each paragraph links to where.";
+-
+ /** A visitor on a public article whose owner never asked for one. */
+ export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this piece yet.";
+ 
+@@ -47,13 +50,28 @@ export type SimpleAccess =
+   | { kind: "owner"; owner: UseSimple }
+   | { kind: "visitor"; simple: PublicSimpleSummary | null; owner?: never };
+ 
+-export function SimplePanel({ access, onJump }: { access: SimpleAccess; onJump(id: BlockId): void }) {
++export function SimplePanel({
++  access,
++  level,
++  onJump,
++}: {
++  access: SimpleAccess;
++  /** Which of the two levels the row has chosen. */
++  level: SimpleLevel;
++  onJump(id: BlockId): void;
++}) {
+   useRenderCount("SimplePanel");
+   const owner = access.kind === "owner" ? access.owner : null;
+-  const paragraphs = access.kind === "owner" ? access.owner.simple?.paragraphs : access.simple?.paragraphs;
++  const paragraphs =
++    access.kind === "owner" ? access.owner.simple?.levels[level] : access.simple?.levels[level];
+   /* A visitor's paragraphs arrived with the page, so they are ready by construction. */
+   const ready = paragraphs !== undefined && (owner === null || owner.status === "ready");
+-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
++  /* The button beside paragraphs already there: while a job runs or after one
++     failed, and — since the paragraphs are written for the reader — once the
++     reader has changed their profile, so *Write it again* picks up the new one
++     (the quiz's rule; the badge in the row says why, in its card). */
++  const showJob =
++    owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed || owner.profileChanged);
+ 
+   /**
+    * @param again whether this is the button beside paragraphs already there.
+@@ -125,7 +143,6 @@ export function SimplePanel({ access, onJump }: { access: SimpleAccess; onJump(i
+               ))}
+             </div>
+           </TooltipGroup>
+-          <p className="simple-foot">{SIMPLE_FOOT}</p>
+           {showJob && <div className="simple-job">{run("Write it again", true)}</div>}
+         </>
+       )}
+diff --git a/src/web/SummaryPanel.tsx b/src/web/SummaryPanel.tsx
+index 69be1e08..65800d8e 100644
+--- a/src/web/SummaryPanel.tsx
++++ b/src/web/SummaryPanel.tsx
+@@ -23,7 +23,7 @@
+  * ```
+  *  ┌── spine ──┬────── SUMMARY (this panel) ──────┬──── the article ────┐
+  *  │           │  SUMMARY                         │                     │
+- *  │  ▇▇▇▇▇▇▇  │  Depth   article · parts · secs  │  Being You opens    │
++ *  │  ▇▇▇▇▇▇▇  │  [Parts|Sections] ○─●─○ Simple  │  Being You opens    │
+  *  │  ▇▇▇▇     │ ──────────────────────────────── │  with a story about │
+  *  │  ▇▇▇      │  Consciousness is what it is     │  waking from        │
+  *  │  ▇▇▇▇▇▇   │  like to be a living body.       │  anaesthesia…       │
+@@ -82,8 +82,8 @@ import { ChevronRight } from "lucide-react";
+ import type { BlockId } from "../types.js";
+ import { BlockRange, BlockRef } from "./BlockRef.js";
+ import { ModeSurface } from "./ModeSurface.js";
+-import { TooltipGroup } from "./Tooltip.js";
+-import { MAX_SUMMARY_DEPTH } from "./params.js";
++import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
++import { MAX_SUMMARY_DEPTH, MIN_SUMMARY_DEPTH } from "./params.js";
+ import { FOLLOW_ATTR, useFollow } from "./follow.js";
+ import { currentEntryId, showsChildren, type SummaryNode } from "./tree.js";
+ import { useRenderCount } from "./perf.js";
+@@ -98,22 +98,40 @@ interface Props {
+   /** Jump the article to a block, exactly as a gist cell does. */
+   onJump(id: BlockId): void;
+   /**
+-   * The Gists | Simple switch, built by the band (SummaryMode.tsx), which
+-   * owns `?summary=` and the press. Absent in a test about the outline alone.
++   * The rest of the one row of controls — the plain-words pair and the
++   * *written for you* badge — built by the band (SummaryMode.tsx), which owns
++   * `?summary=` and the press. Absent in a test about the outline alone.
+    */
+   subMode?: ReactNode;
+   /**
+-   * **Simple's view, when Simple is the sub-mode open** — drawn in place of
+-   * the Depth row and the outline. Null or absent means Gists. Built by the
+-   * band so the owner/visitor seam stays a component boundary there, and this
+-   * panel stays a pure function of what it is handed.
++   * **A plain-words level's view, when one is open** — drawn in place of the
++   * outline. Null or absent means the outline. Built by the band so the
++   * owner/visitor seam stays a component boundary there, and this panel stays
++   * a pure function of what it is handed.
+    * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+    */
+   simple?: ReactNode;
+ }
+ 
++/**
++ * **Parts | Sections — a ladder, not a switch.** Sections *adds* the sections
++ * under each part, so while it is chosen Parts is drawn *included* (a softer
++ * wash) as well: Greg asked for the design to *"give the user a clue about how
++ * they work and are related to each other"* (SPIDERYARN-READING2-7A).
++ * `aria-pressed` stays on the one depth chosen, so a screen reader hears one
++ * choice, not two (Sol's plan review of 261001b, P2-9).
++ *
++ * `article`, depth 0, is gone (78): the root's gist heads the outline at every
++ * depth. `deep` can still be 0 when a caller passes it; nothing is lit then.
++ */
++/** Each depth's word, lower case, for the sentences the badges say — `article` still names depth 0. */
+ const DEPTH_LABELS = ["article", "parts", "sections"];
+ 
++const DEPTH_PILLS: readonly { depth: number; label: string; what: string }[] = [
++  { depth: 1, label: "Parts", what: "The article's parts, one sentence each." },
++  { depth: 2, label: "Sections", what: "The parts, and the sections inside each, one sentence each." },
++];
++
+ export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple }: Props) {
+   useRenderCount("SummaryPanel");
+   /**
+@@ -204,34 +222,54 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simpl
+           `<h2>` was never carrying that.
+           docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
+ 
++      {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
++          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The outline
++          pair here, then the band's plain-words pair and badge. No labels: the
++          groups are named for a screen reader by their hidden legends, and
++          the pills' cards say what each one is. */}
+       <div className="summ-controls">
+-        {subMode}
+         {/* Their structure panel's one control, and the one thing it proved:
+-            a single depth cut-off over a whole document is usable. Gists
+-            only: Simple has no depth, and `?deep=` just waits for the reader
+-            to come back. */}
+-        {simple == null && (
+-        <fieldset className="summ-row">
+-          <legend className="summ-label">Depth</legend>
+-          {DEPTH_LABELS.map((label, d) => (
+-            <button
+-              key={label}
+-              type="button"
+-              className={`summ-pill${d === deep ? " on" : ""}`}
+-              aria-pressed={d === deep}
+-              disabled={d > MAX_SUMMARY_DEPTH}
+-              title={
+-                d === 0
+-                  ? "The whole article, and nothing under it"
+-                  : `Down to the ${label}`
+-              }
+-              onClick={() => onDeep(d)}
+-            >
+-              {label}
+-            </button>
+-          ))}
++            a single depth cut-off over a whole document is usable. Drawn
++            under a plain-words level too, unlit, because pressing one is how
++            the reader comes back to the outline; `?deep=` waits meanwhile. */}
++        <fieldset className="summ-seg">
++          <legend className="sr-only">Outline</legend>
++          <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
++            {DEPTH_PILLS.map(({ depth, label, what }) => {
++              const outline = simple == null;
++              const chosen = outline && depth === deep;
++              const included = outline && depth < deep;
++              return (
++                <Tooltip
++                  key={label}
++                  placement="bottom"
++                  keepSide
++                  className="tip-soon"
++                  content={
++                    <ControlTip
++                      head={label}
++                      what={what}
++                      how="Read from the outline built when the article was added; nothing is written for it."
++                    />
++                  }
++                >
++                  <button
++                    type="button"
++                    className={`summ-pill${chosen ? " on" : ""}${included ? " included" : ""}`}
++                    aria-pressed={chosen}
++                    disabled={depth > MAX_SUMMARY_DEPTH}
++                    /* Sections, pressed while chosen, steps back to Parts: the
++                       ladder's top rung switched off. */
++                    onClick={() => onDeep(chosen && depth > MIN_SUMMARY_DEPTH ? depth - 1 : depth)}
++                  >
++                    {label}
++                  </button>
++                </Tooltip>
++              );
++            })}
++          </TooltipGroup>
+         </fieldset>
+-        )}
++        {subMode}
+       </div>
+ 
+       {simple != null ? simple : (
+diff --git a/src/web/WrittenForYou.tsx b/src/web/WrittenForYou.tsx
+index 4cc05355..98e46a04 100644
+--- a/src/web/WrittenForYou.tsx
++++ b/src/web/WrittenForYou.tsx
+@@ -42,7 +42,7 @@
+  * pointed at, and until 2026-08-30 it answered it with a link nobody could
+  * click — see ProfilePanel.tsx for the measurement.
+  *
+- * ## `compact`: an icon without words, in Glossary only (2026-09-29)
++ * ## `compact`: an icon without words, in Glossary and Summary (2026-09-29)
+  *
+  * > Perhaps hide "written for you" as a tooltip on something or just an icon.
+  * >
+@@ -60,6 +60,13 @@
+  * still no hover `title`: ProfilePanel.tsx says why.
+  * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+  *
++ * **And Summary's plain words, since 2026-10-01**, for the same space argument
++ * made harder: Greg asked for Summary's controls in one row with no wasted
++ * vertical space (SPIDERYARN-READING2-7A), and the badge sits at that row's
++ * end. A changed profile is also said in words there — a *Write it again*
++ * button appears under the paragraphs — so the colour is not the only signal.
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
++ *
+  * docs/project/reader-profile.md.
+  */
+ import { UserRound, UserRoundPen } from "lucide-react";
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index 4d07719f..5fa0a5ef 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -259,12 +259,12 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+      already there by the time the article is on screen. */
+   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
+   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+-  /* Opens on Gists, which are free. Its Simple chip arms for itself one level
+-     down, as Remember's Quiz chip does — so pressing Summary on an address
+-     that still says `?summary=simple` spends nothing. */
++  /* Opens on the outline, which is free. Its plain-words pills arm for
++     themselves one level down, as Remember's Quiz chip does — so pressing
++     Summary on an address that still says `?summary=simple` spends nothing. */
+   summary: {
+     kind: "none",
+-    reason: "opens on Gists, from the tree the pipeline already built; the Simple chip arms itself",
++    reason: "opens on the outline, from the tree the pipeline already built; the plain-words pills arm themselves",
+   },
+ 
+   /* Nothing exists to fill until the reader has typed. */
+@@ -597,8 +597,10 @@ export function bandTarget(
+ ): AutoRunTarget | null {
+   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
+   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+-  /* The literal the Simple chip arms (SummaryMode.tsx § `SummarySubModeToggle`). */
+-  if (mode === "summary") return sub.summary === "simple" ? "simple" : null;
++  /* The literal both plain-words pills arm (SummaryMode.tsx § `SummaryControls`):
++     one job writes both levels, so Fuller arms `simple` too. Sol's plan review
++     of 261001b, P1-3. */
++  if (mode === "summary") return sub.summary === "gists" ? null : "simple";
+   const decision = MODE_TARGET[mode];
+   switch (decision.kind) {
+     case "fixed":
+diff --git a/src/web/modes/summary/SummaryMode.tsx b/src/web/modes/summary/SummaryMode.tsx
+index 2c59d925..218d4c61 100644
+--- a/src/web/modes/summary/SummaryMode.tsx
++++ b/src/web/modes/summary/SummaryMode.tsx
+@@ -9,35 +9,47 @@
+  * byte-for-byte, so `App.tsx` stops knowing what is inside them.
+  * See docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
+  *
+- * **Two sub-modes since 2026-09-30**: Gists, the tree's own sentences, and
+- * Simple, a few paragraphs in everyday words that a model writes on a press
+- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md). Gists fetch nothing,
+- * so for them owner and visitor are the same. Simple is an artefact, so it
+- * brought the owner/visitor pair the other artefact modes have: the owner's
+- * `OwnerSimple` mounts `useSimple` (a GET, a job, the press), and the
+- * visitor's band hands the panel the stored paragraphs off the public payload
+- * with no hook at all.
++ * **One row of controls since 2026-10-01**: the outline (the tree's gists, at
++ * Parts or Sections), and a slider over three plain-words levels — Brief,
++ * Simple, Fuller — that a model writes on a press
++ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
++ *
++ * ```
++ *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
++ * ```
++ *
++ * The outline fetches nothing, so for it owner and visitor are the same. The
++ * plain-words levels are one artefact, so they brought the owner/visitor pair
++ * the other artefact modes have: the owner's `OwnerSimple` mounts `useSimple`
++ * (a GET, a job, the press) and supplies the badge, and the visitor's band
++ * hands the panel the stored paragraphs off the public payload with no hook at
++ * all.
+  */
+ 
++import type { ReactNode } from "react";
+ import { useMemo } from "react";
+-import { useQueryState } from "nuqs";
+-import type { Article, BlockId } from "../../../types.js";
++import { useQueryState, useQueryStates } from "nuqs";
++import type { Article, BlockId, SimpleLevel } from "../../../types.js";
++import { SIMPLE_LEVELS } from "../../../types.js";
+ import type { PublicSimpleSummary } from "../../../public-types.js";
+ import { armActivation } from "../../activation.js";
+-import { currentAt, deepParam, SUMMARY_VIEWS, type SummaryView, summaryParam } from "../../params.js";
++import { currentAt, deepParam, isPlainLevel, type SummaryView, summaryParam } from "../../params.js";
+ import { useRenderCount } from "../../perf.js";
+ import { buildSummaryTree } from "../../tree.js";
+ import { SimplePanel } from "../../SimplePanel.js";
+ import { SummaryPanel } from "../../SummaryPanel.js";
+-import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
++import { ControlTip, Tooltip } from "../../Tooltip.js";
+ import { useSimple } from "../../useSimple.js";
++import { WrittenForYou } from "../../WrittenForYou.js";
+ 
+ /**
+  * The owner's Summary band.
+  *
+- * Gists are drawn from the tree the page already holds; Simple is `OwnerSimple`
+- * below, mounted only while it is the sub-mode open, so its GET and its
+- * `useAutoRun` owner exist exactly as long as the view does.
++ * The outline is drawn from the tree the page already holds; a plain-words
++ * level is `OwnerSimple` below, mounted only while one is open, so its GET and
++ * its `useAutoRun` owner exist exactly as long as the view does — and stay
++ * mounted across a switch between the two levels, which share one artefact.
+  *
+  * See docs/project/summaries.md.
+  */
+@@ -51,34 +63,58 @@ export function SummaryBand({
+   onJump(id: BlockId): void;
+ }) {
+   useRenderCount("SummaryBand");
+-  const [view, setView] = useQueryState("summary", summaryParam);
+-  return (
++  const { view, setView, onDeep } = useSummaryView();
++  const mode = useSummaryMode(article);
++  const panel = (plain: ReactNode, badge: ReactNode) => (
+     <SummaryPanel
+-      /* Keyed on the sub-mode so the outline's scroller is a fresh element
+-         each time Gists comes back — `useFollow` attaches its wheel listener
+-         once per mount. */
+-      key={view}
+-      {...useSummaryMode(article)}
++      {...mode}
++      onDeep={onDeep}
+       onJump={onJump}
+-      subMode={<SummarySubModeToggle slug={slug} value={view} onChange={(next) => void setView(next)} />}
+-      simple={view === "simple" ? <OwnerSimple slug={slug} onJump={onJump} /> : null}
++      subMode={<SummaryControls slug={slug} value={view} onChange={setView} badge={badge} />}
++      simple={plain}
+     />
+   );
++  return isPlainLevel(view) ? (
++    <OwnerSimple slug={slug} level={view} onJump={onJump} render={panel} />
++  ) : (
++    panel(null, null)
++  );
+ }
+ 
+-/** Simple's owner half: the read, the job and the press. */
+-function OwnerSimple({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
++/**
++ * The plain-words levels' owner half: the read, the job and the press — and
++ * the *written for you* badge, which belongs in the row above the panel and
++ * needs this hook's answer, so the band hands a `render` in rather than the
++ * row reaching down.
++ */
++function OwnerSimple({
++  slug,
++  level,
++  onJump,
++  render,
++}: {
++  slug: string;
++  level: SimpleLevel;
++  onJump(id: BlockId): void;
++  render(plain: ReactNode, badge: ReactNode): ReactNode;
++}) {
+   useRenderCount("OwnerSimple");
+   const owner = useSimple(slug);
+-  return <SimplePanel access={{ kind: "owner", owner }} onJump={onJump} />;
++  /* Provenance, not a warning — GlossaryPanel.tsx's reasoning. Owner-only:
++     `profileHash` never reaches a visitor. */
++  const badge =
++    owner.simple && owner.profiled ? (
++      <WrittenForYou written changed={owner.profileChanged} slug={slug} compact />
++    ) : null;
++  return <>{render(<SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} />, badge)}</>;
+ }
+ 
+ /**
+  * **The same band, for somebody who does not own the article.**
+  *
+- * Simple's paragraphs came in the page's own payload (`simpleSummary`), or
+- * did not, which means nobody has made them. No `useSimple`, so no read of
+- * `/api/simple/:slug`, no `useAutoRun` and no job, and the switch arms nothing
++ * The paragraphs came in the page's own payload (`simpleSummary`), or did
++ * not, which means nobody has made them. No `useSimple`, so no read of
++ * `/api/simple/:slug`, no `useAutoRun` and no job, and the pills arm nothing
+  * — nothing here can ask the model. A second band rather than a flag because a
+  * hook cannot be called conditionally (src/web/reader-capability.ts).
+  */
+@@ -92,94 +128,172 @@ export function VisitorSummaryBand({
+   onJump(id: BlockId): void;
+ }) {
+   useRenderCount("VisitorSummaryBand");
+-  const [view, setView] = useQueryState("summary", summaryParam);
++  const { view, setView, onDeep } = useSummaryView();
+   return (
+     <SummaryPanel
+-      key={view}
++      /* Keyed on outline-or-not so the outline's scroller is a fresh element
++         each time it comes back — `useFollow` attaches its wheel listener once
++         per mount. The owner's band gets the same from `OwnerSimple`'s mount. */
++      key={isPlainLevel(view) ? "plain" : "outline"}
+       {...useSummaryMode(article)}
++      onDeep={onDeep}
+       onJump={onJump}
+-      subMode={<SummarySubModeToggle slug={null} value={view} onChange={(next) => void setView(next)} />}
++      subMode={<SummaryControls slug={null} value={view} onChange={setView} badge={null} />}
+       simple={
+-        view === "simple" ? (
+-          <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} onJump={onJump} />
++        isPlainLevel(view) ? (
++          <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={view} onJump={onJump} />
+         ) : null
+       }
+     />
+   );
+ }
+ 
+-/** Each chip's card: what it is, then what a press would not have told you. */
+-const SUB_MODE: Record<SummaryView, { label: string; what: string; how: string }> = {
+-  gists: {
+-    label: "Gists",
+-    what: "One sentence for the whole article and for each of its parts and sections, as deep as you choose.",
+-    how: "Read from the outline built when the article was added; nothing is written for it.",
++/**
++ * `?summary=` and `?deep=`, and the one verb that writes both: pressing Parts
++ * or Sections under a plain-words level goes back to the outline *at* that
++ * depth, in one history entry, so one Back undoes one press.
++ */
++function useSummaryView() {
++  const [view, setView] = useQueryState("summary", summaryParam);
++  const [, setOutline] = useQueryStates({
++    summary: summaryParam,
++    deep: deepParam,
++  });
++  return {
++    view,
++    setView: (next: SummaryView) => void setView(next),
++    onDeep: (deep: number) => void setOutline({ summary: "gists", deep }),
++  };
++}
++
++/**
++ * Each level's name and what it is. Short, very simple, just under, just over
++ * — Greg's words for the three stops (SPIDERYARN-READING2-7J).
++ */
++const PLAIN: Record<SimpleLevel, { label: string; what: string }> = {
++  brief: {
++    label: "Brief",
++    what: "Short and very simple: what it is about, why it matters, and a key idea or two.",
+   },
+   simple: {
+     label: "Simple",
+-    what: "Explain it like I'm 15: what this is about, why it matters, and its key ideas, in a few short paragraphs of everyday words.",
+-    how: "One model pass over the article, written once and kept. Each paragraph links to the passages it rests on.",
++    what: "Fairly simple: what it is about, why it matters and its key ideas, in a few short paragraphs of everyday words.",
++  },
++  fuller: {
++    label: "Fuller",
++    what: "Moderately complex: a little longer, keeping more of the piece's own terms, still in plain words.",
+   },
+ };
+ 
+ /**
+- * **Gists | Simple.** A row like the Depth row beneath it, because it is the
+- * same gesture: one of these is on, you press another, the band changes.
++ * What the foot under the paragraphs used to say, now said where it is asked
++ * for (Greg, SPIDERYARN-READING2-7B; docs/project/new-mode.md).
++ */
++const PLAIN_HOW =
++  "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";
++
++/**
++ * **The plain-words slider, and the badge** — the right half of Summary's one
++ * row (SummaryPanel.tsx draws the Parts | Sections half beside it). Greg,
++ * 2026-09-30 (SPIDERYARN-READING2-7J): *"let's provide a UI-slider with 3
++ * level"*. A slider rather than three pills because the three are one scale —
++ * shorter and plainer to the left, longer and fuller to the right — and a
++ * slider is the control that says so.
++ *
++ * ```
++ *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
++ * ```
++ *
++ * **Idle while the outline shows**: drawn faint, sitting on Simple (or where
++ * the reader left it), and touching it — a click, a drag or an arrow key —
++ * opens that level. The native `<input type="range">`, so the keyboard and a
++ * screen reader get a real slider (`aria-valuetext` names the level).
+  *
+  * @param slug the article, **only so a press can be recorded** — null for a
+  *   visitor, whose press must arm nothing (there is no `useAutoRun` to claim
+  *   it, and a token nobody claims is a spend still owed).
+  */
+-export function SummarySubModeToggle({
++export function SummaryControls({
+   slug,
+   value,
+   onChange,
++  badge,
+ }: {
+   slug: string | null;
+   value: SummaryView;
+   onChange(next: SummaryView): void;
++  /** The owner's *written for you* badge, or null. */
++  badge?: ReactNode;
+ }) {
++  const on = isPlainLevel(value);
++  const level: SimpleLevel = on ? value : "simple";
++
++  /* **The gesture seam.** Choosing a level with nothing stored writes all
++     three — Greg's rule about opening a mode, one level down
++     (src/web/activation.ts). Here, on the slider's own input events, and not
++     in `onChange` of the query state: `?summary=` moves on Back, Forward, a
++     pasted link and a last-view restore too, and none of them may buy a model
++     call. Every level arms the one `simple` step, which writes them all.
++
++     **Armed before the "already there" check**, so touching the level already
++     open mints a fresh press — the only way back from a failed read, as
++     QuizPanel.tsx § `RememberSubModeToggle` has it. A drag fires both
++     `change` and `click`; the second arm replaces the first's token, which is
++     one pending press either way. */
++  const choose = (next: SimpleLevel) => {
++    if (slug !== null) armActivation(slug, "simple");
++    if (value !== next) onChange(next);
++  };
++  const at = (input: HTMLInputElement): SimpleLevel => SIMPLE_LEVELS[Number(input.value)] ?? "simple";
++
+   return (
+-    <fieldset className="summ-row summ-views">
+-      <legend className="summ-label">View</legend>
+-      {/* `keepSide` for the reason RefereeViews gives: the band sits at the
+-          right of the window and a card flung to the cross axis would land on
+-          the chips being read. */}
+-      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-        {SUMMARY_VIEWS.map((view) => (
+-          <Tooltip
+-            key={view}
+-            placement="bottom"
+-            keepSide
+-            className="tip-soon"
+-            content={<ControlTip head={SUB_MODE[view].label} what={SUB_MODE[view].what} how={SUB_MODE[view].how} />}
+-          >
+-            <button
+-              type="button"
+-              className={`summ-pill${value === view ? " on" : ""}`}
+-              aria-pressed={value === view}
+-              onClick={() => {
+-                /* **The gesture seam for Simple.** Pressing it with nothing
+-                   stored writes it — Greg's rule about opening a mode, one level
+-                   down (src/web/activation.ts). Here, in the `onClick`, and not
+-                   in `onChange`: `?summary=` is query state, so Back, Forward, a
+-                   pasted link and a last-view restore move it too, and none of
+-                   them may buy a model call.
+-
+-                   **Armed before the `value === view` check**, so pressing
+-                   Simple while already in Simple mints a fresh press — the only
+-                   way back from a failed read, as QuizPanel.tsx §
+-                   `RememberSubModeToggle` has it. */
+-                if (view === "simple" && slug !== null) armActivation(slug, "simple");
+-                if (value !== view) onChange(view);
++    <>
++      <fieldset className={`summ-seg summ-slider${on ? " on" : ""}`}>
++        <legend className="sr-only">In plain words</legend>
++        {/* `keepSide` for the reason RefereeViews gives: the band sits at the
++            right of the window and a card flung to the cross axis would land on
++            the controls being read. */}
++        <Tooltip
++          placement="bottom"
++          keepSide
++          className="tip-soon"
++          content={
++            <ControlTip
++              head="In plain words"
++              what={SIMPLE_LEVELS.map((l) => `${PLAIN[l].label} — ${PLAIN[l].what}`).join(" ")}
++              how={PLAIN_HOW}
++            />
++          }
++        >
++          <label className="summ-slider-track">
++            <input
++              type="range"
++              min={0}
++              max={SIMPLE_LEVELS.length - 1}
++              step={1}
++              value={SIMPLE_LEVELS.indexOf(level)}
++              aria-label="In plain words: how simple"
++              aria-valuetext={`${PLAIN[level].label}${on ? "" : " (not showing)"}`}
++              onChange={(e) => choose(at(e.currentTarget))}
++              /* A click on the thumb where it already sits changes nothing, so
++                 `change` never fires; this is how the idle slider opens the
++                 level it is resting on. */
++              onClick={(e) => choose(at(e.currentTarget))}
++              onKeyDown={(e) => {
++                if (e.key === "Enter" || e.key === " ") {
++                  e.preventDefault();
++                  choose(at(e.currentTarget));
++                }
+               }}
+-            >
+-              {SUB_MODE[view].label}
+-            </button>
+-          </Tooltip>
+-        ))}
+-      </TooltipGroup>
+-    </fieldset>
++            />
++            <span className="summ-slider-name" aria-hidden="true">
++              {PLAIN[level].label}
++            </span>
++          </label>
++        </Tooltip>
++      </fieldset>
++      {badge ? <span className="summ-badge">{badge}</span> : null}
++    </>
+   );
+ }
+ 
+@@ -189,10 +303,11 @@ export function SummarySubModeToggle({
+  * `?deep=` lives here for the reason it used to live in the band: it is
+  * meaningless outside summary mode, and reading it in `Reader` would put a
+  * parameter subscription on every render of the reading view for a value only
+- * this mode uses.
++ * this mode uses. Its writer is `useSummaryView`'s `onDeep`, which also leaves
++ * a plain-words level.
+  */
+ function useSummaryMode(article: Article) {
+-  const [deep, setDeep] = useQueryState("deep", deepParam);
++  const [deep] = useQueryState("deep", deepParam);
+ 
+   const root = useMemo(
+     () => buildSummaryTree(article.tree, article.blocks),
+@@ -213,5 +328,5 @@ function useSummaryMode(article: Article) {
+     return i === -1 ? null : i;
+   }, [at, article.blocks]);
+ 
+-  return { root, deep, onDeep: (next: number) => void setDeep(next), atRow };
++  return { root, deep, atRow };
+ }
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 94744a1d..5aef22b6 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -29,7 +29,7 @@
+  * `popstate` for everything else. One query string, one listener.
+  */
+ import { createParser, debounce } from "nuqs";
+-import type { DebateBears, IdentificationLevel, TrajectoryDepth } from "../types.js";
++import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type TrajectoryDepth } from "../types.js";
+ import { isSpideryarnId } from "../ids.js";
+ import { isIdentificationLevel } from "./debate-levels.js";
+ import { DIAGRAMS, type DiagramKind } from "./diagram.js";
+@@ -1130,31 +1130,53 @@ export const diagramHueParam = createParser<ScatterHue>({
+  */
+ export const MAX_SUMMARY_DEPTH = 2;
+ 
++/**
++ * The shallowest depth a reader can choose: the parts. `0`, the article's own
++ * gist alone, was a pill until 2026-10-01 — Greg: *"Remove the "Article"
++ * pill"* (SPIDERYARN-READING2-78) — so an old link's `?deep=0` now reads as
++ * the default. The root's gist still heads the outline at every depth.
++ */
++export const MIN_SUMMARY_DEPTH = 1;
++
+ export const deepParam = createParser<number>({
+   parse: (v) => {
+     const n = Number.parseInt(v, 10);
+-    return Number.isInteger(n) && n >= 0 && n <= MAX_SUMMARY_DEPTH ? n : null;
++    return Number.isInteger(n) && n >= MIN_SUMMARY_DEPTH && n <= MAX_SUMMARY_DEPTH ? n : null;
+   },
+   serialize: (v) => String(v),
+ })
+   .withDefault(1)
+   .withOptions({ history: "push" });
+ 
+-/** Summary's two sub-modes: the tree's gists, or a plain-words orientation. */
+-export const SUMMARY_VIEWS = ["gists", "simple"] as const;
++/**
++ * Summary's three views: the tree's gists (the outline, at `?deep=`), or one of
++ * the two plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
++ * are these URL values.
++ */
++export const SUMMARY_VIEWS = ["gists", ...SIMPLE_LEVELS] as const;
+ export type SummaryView = (typeof SUMMARY_VIEWS)[number];
+ 
++/** Is this view one of the plain-words levels? */
++export function isPlainLevel(view: SummaryView): view is SimpleLevel {
++  return view !== "gists";
++}
++
+ /**
+- * Which half of Summary is open — `gists` (the default, omitted) or `simple`,
+- * a few short paragraphs in everyday words
+- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md). *Which thing, within
+- * this mode*, so the shape of `?remember=` and `?referee=`: in the URL, because
+- * it changes the whole band, and pushed, because switching is a deliberate act
+- * Back should undo. `?deep=` keeps its value and is simply unused under Simple.
+- *
+- * **Writing it never spends.** Only a press on the Simple chip arms the run
+- * (SummaryMode.tsx § `SummarySubModeToggle`); Back, a pasted link and a
+- * last-view restore arrive here and buy nothing.
++ * Which part of Summary is open — `gists` (the outline; the default, omitted),
++ * `simple` or `fuller`, a few short paragraphs in everyday words at two levels
++ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
++ * *Which thing, within this mode*, so the shape of `?remember=` and
++ * `?referee=`: in the URL, because it changes the whole band, and pushed,
++ * because switching is a deliberate act Back should undo. `?deep=` keeps its
++ * value and is simply unused under a plain-words level.
++ *
++ * `gists` has no pill of its own since 2026-10-01: pressing Parts or Sections
++ * is what chooses it (Greg, SPIDERYARN-READING2-7A).
++ *
++ * **Writing it never spends.** Only a press on a plain-words pill arms the run
++ * (SummaryMode.tsx § `SummaryControls`); Back, a pasted link and a last-view
++ * restore arrive here and buy nothing.
+  */
+ export const summaryParam = createParser<SummaryView>({
+   parse: (v) => (SUMMARY_VIEWS.includes(v as SummaryView) ? (v as SummaryView) : null),
+diff --git a/src/web/styles/summary.css b/src/web/styles/summary.css
+index 714bb71c..c760fa39 100644
+--- a/src/web/styles/summary.css
++++ b/src/web/styles/summary.css
+@@ -83,6 +83,72 @@
+    bottom of the panel would buy. */
+ .summ-pill:disabled { opacity: 0.4; cursor: default; }
+ 
++/* ---- the one row: two groups, no labels (plan 261001b) ----
++   Greg, 2026-09-30: *"avoid wasting vertical space, and use the UI design to
++   give the user a clue about how they work and are related to each other"*
++   (SPIDERYARN-READING2-7A). Each group is a `<fieldset>` whose legend only a
++   screen reader hears; the gap between groups is what says "a different
++   choice". */
++/* **One row**, wrapping rather than scrolling at the band's narrowest (18rem,
++   MODE_MIN in layout.ts): the slider drops to a second line before anything
++   hides. */
++.summ-controls {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 0.3rem 0.9rem;
++}
++.summ-seg {
++  margin: 0;
++  padding: 0;
++  border: 0;
++  min-width: 0;
++  display: flex;
++  align-items: center;
++}
++/* **Parts | Sections joined into one segment**: they share a border, so they
++   read as one scale rather than two unrelated buttons. */
++.summ-seg > .summ-pill { border-radius: 0; }
++.summ-seg > .summ-pill:first-of-type { border-radius: 999px 0 0 999px; }
++.summ-seg > .summ-pill:last-of-type { border-radius: 0 999px 999px 0; }
++.summ-seg > .summ-pill + .summ-pill { margin-left: -1px; }
++/* Parts while Sections is chosen: included, not chosen — the ladder's lower
++   rung, lit more softly than the one pressed. `aria-pressed` stays false. */
++.summ-pill.included {
++  border-color: var(--highlight);
++  background: color-mix(in srgb, var(--highlight-wash) 45%, transparent);
++  color: var(--ink);
++}
++/* The chosen pill's border sits above its neighbour's where they overlap. */
++.summ-seg > .summ-pill.on { position: relative; z-index: 1; }
++
++/* **The plain-words slider** (SPIDERYARN-READING2-7J): three stops, shorter
++   and plainer to the left. Faint while the outline shows — it is resting on
++   a level, not showing one — and full strength while a level is open. */
++.summ-slider-track {
++  display: inline-flex;
++  align-items: center;
++  gap: 0.45rem;
++  cursor: pointer;
++}
++.summ-slider input[type="range"] {
++  width: 4.6rem;
++  margin: 0;
++  accent-color: var(--highlight);
++  cursor: pointer;
++}
++.summ-slider-name {
++  min-width: 3.1rem;
++  font-size: 0.85rem;
++  color: var(--ink-faint);
++}
++.summ-slider:not(.on) input[type="range"] { opacity: 0.5; }
++.summ-slider.on .summ-slider-name { color: var(--highlight-ink); }
++.summ-slider:not(.on) .summ-slider-track:hover input[type="range"] { opacity: 0.8; }
++
++/* The *written for you* badge, pushed to the row's far end. */
++.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
++
+ /* ---- the outline ---- */
+ /* The reader's own scroller, and also the one the panel moves itself to follow
+    the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
+@@ -376,14 +442,5 @@ a.summ-title:hover { color: var(--highlight-ink); }
+   margin-top: 0.3rem;
+   font-size: 0.81rem;
+ }
+-/* What it is, said once, quietly, under the last door. */
+-.simple-foot {
+-  margin: 1.1rem 0 0;
+-  padding-top: 0.6rem;
+-  border-top: 1px solid var(--rule);
+-  color: var(--ink-faint);
+-  font-size: 0.81rem;
+-  line-height: 1.45;
+-}
+ .simple-job { margin-top: 0.7rem; }
+ 
+diff --git a/src/web/useSimple.ts b/src/web/useSimple.ts
+index 4aea5897..97715181 100644
+--- a/src/web/useSimple.ts
++++ b/src/web/useSimple.ts
+@@ -31,6 +31,10 @@ export interface UseSimple {
+   stale: boolean;
+   /** The article is the same and the current prompt would write this differently. */
+   outdated: boolean;
++  /** Written for a profile — derived from the artefact's `profileHash`, as `useIdeas` does. */
++  profiled: boolean;
++  /** The reader has changed their profile since. Never stale; it offers a rewrite. */
++  profileChanged: boolean;
+   slug: string;
+   error: string | null;
+   /** The job writing this article's Simple, if one is. */
+@@ -55,6 +59,7 @@ export function useSimple(slug: string): UseSimple {
+   const [simple, setSimple] = useState<SimpleSummary | null>(null);
+   const [stale, setStale] = useState(false);
+   const [outdated, setOutdated] = useState(false);
++  const [profileChanged, setProfileChanged] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+   /* `current()` after every `await`, before any state is set: false means this
+@@ -69,6 +74,7 @@ export function useSimple(slug: string): UseSimple {
+           setSimple(null);
+           setStale(false);
+           setOutdated(false);
++          setProfileChanged(false);
+           setError(null);
+           setStatus("none");
+           return;
+@@ -78,6 +84,7 @@ export function useSimple(slug: string): UseSimple {
+         setSimple(loaded.simpleSummary);
+         setStale(loaded.stale);
+         setOutdated(loaded.outdated);
++        setProfileChanged(loaded.profileChanged);
+         setError(null);
+         setStatus("ready");
+       } catch (err) {
+@@ -124,6 +131,8 @@ export function useSimple(slug: string): UseSimple {
+     simple,
+     stale,
+     outdated,
++    profiled: simple?.profileHash != null,
++    profileChanged,
+     slug,
+     error,
+     job: queue.job,
+diff --git a/tests/a-broken-mode-leaves-the-article-readable.test.tsx b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+index c08b14d4..6ea0951c 100644
+--- a/tests/a-broken-mode-leaves-the-article-readable.test.tsx
++++ b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+@@ -1694,10 +1694,11 @@ describe("a press that met any broken band is retired", () => {
+     expect(jobPosts()).toEqual([]);
+   });
+ 
+-  /* Summary's Simple chip (plan 260930i): `bandTarget` must answer `simple`
+-     for `?summary=simple`, or the boundary retires nothing and the token waits
+-     for a later mount to spend. */
+-  it("summary: the Simple chip, when the Simple view throws under the real useSimple", async () => {
++  /* Summary's plain-words slider (plans 260930i, 261001b): `bandTarget` must
++     answer `simple` for every level — Fuller here, the one Sol's plan review
++     found missing (P1-3) — or the boundary retires nothing and the token
++     waits for a later mount to spend. */
++  it("summary: the slider moved to Fuller, when the plain-words view throws under the real useSimple", async () => {
+     who.set(OWNER_A);
+     notBuilt = "/api/simple/";
+     await open("?mode=summary");
+@@ -1705,11 +1706,13 @@ describe("a press that met any broken band is retired", () => {
+     trace.length = 0;
+ 
+     probe.throwAt = "OwnerSimple";
+-    const chip = [...host.querySelectorAll<HTMLButtonElement>(".summ-views .summ-pill")].find(
+-      (b) => (b.textContent ?? "").trim() === "Simple",
+-    );
+-    expect(chip, "no Simple chip").toBeDefined();
+-    await act(async () => chip?.click());
++    const input = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
++    expect(input, "no plain-words slider").not.toBeNull();
++    await act(async () => {
++      if (!input) return;
++      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
++      input.dispatchEvent(new Event("input", { bubbles: true }));
++    });
+     await settle();
+ 
+     containedInside("summary");
+diff --git a/tests/meta-fallback-fingerprint.test.ts b/tests/meta-fallback-fingerprint.test.ts
+index 519fc976..c6cb228f 100644
+--- a/tests/meta-fallback-fingerprint.test.ts
++++ b/tests/meta-fallback-fingerprint.test.ts
+@@ -382,16 +382,19 @@ describe("an article with no metadata", () => {
+     const block = quotable(withoutMeta.blocks);
+     const second = withoutMeta.blocks.find((b) => b.id !== block.id && isBodyEvidence(b));
+     if (!second) throw new Error("the fixture has no second body block");
++    /* One call per level, and this stub gives both the same answer: three
++       paragraphs is inside both levels' limits. */
+     answer = JSON.stringify({
+       paragraphs: [
+         { text: "This piece is about something.", ids: [block.id] },
+         { text: "It matters for a reason it gives.", ids: [second.id] },
++        { text: "And it says why, in more detail.", ids: [block.id, second.id] },
+       ],
+     });
+ 
+-    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta });
++    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta, profile: null });
+ 
+-    expect(run.simpleSummary.paragraphs).toHaveLength(2);
++    expect(run.simpleSummary.levels.simple).toHaveLength(3);
+     expect(run.simpleSummary.sourceHash).toBe(
+       inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
+     );
+diff --git a/tests/pipeline-artifact-store.test.ts b/tests/pipeline-artifact-store.test.ts
+index d27fa3de..17fbef29 100644
+--- a/tests/pipeline-artifact-store.test.ts
++++ b/tests/pipeline-artifact-store.test.ts
+@@ -648,7 +648,7 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
+     generatedAt: new Date().toISOString(),
+     elapsedMs: 1,
+   });
+-  /* Two paragraphs on the first block — the fewest the step writes. The store
++  /* The fewest paragraphs each level writes, on the first block. The store
+      checks the shape, not the ids; `buildSimpleSummary` checks those. */
+   store.plant(SLUG, "simple", "simple", {
+     generator: CAPABLE_MODEL,
+@@ -657,10 +657,22 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
+     version: SIMPLE_VERSION,
+     generatedAt: new Date().toISOString(),
+     elapsedMs: 1,
+-    paragraphs: [
+-      { text: "What it is about.", ids: [BLOCKS[0]!.id] },
+-      { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
+-    ],
++    profileHash: null,
++    levels: {
++      brief: [
++        { text: "What it is.", ids: [BLOCKS[0]!.id] },
++        { text: "Why.", ids: [BLOCKS[0]!.id] },
++      ],
++      simple: [
++        { text: "What it is about.", ids: [BLOCKS[0]!.id] },
++        { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
++      ],
++      fuller: [
++        { text: "What it is about, more fully.", ids: [BLOCKS[0]!.id] },
++        { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
++        { text: "Its key idea.", ids: [BLOCKS[0]!.id] },
++      ],
++    },
+   });
+   /* **A route over the one quote planted above**, and its `sourceHash` is the
+      route's input hash rather than any article fingerprint — the quote, the
+diff --git a/tests/pressing-a-chip-arms-it.test.tsx b/tests/pressing-a-chip-arms-it.test.tsx
+index 50d57465..602c0ca8 100644
+--- a/tests/pressing-a-chip-arms-it.test.tsx
++++ b/tests/pressing-a-chip-arms-it.test.tsx
+@@ -236,78 +236,97 @@ describe("Remember's Recall | Quiz toggle", () => {
+   });
+ });
+ 
+-/* ----------------------------------------------- Summary's Gists | Simple -- */
++/* ------------------------------------------ Summary's plain-words slider -- */
+ 
+-const { SummarySubModeToggle } = await import("../src/web/modes/summary/SummaryMode.js");
++const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
+ 
+-/** `slug: null` is the visitor's toggle, which must arm nothing. */
+-function mountSummaryToggle(value: "gists" | "simple", slug: string | null = SLUG): string[] {
++/** `slug: null` is the visitor's slider, which must arm nothing. */
++function mountSummaryControls(value: "gists" | "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
+   const changes: string[] = [];
+   act(() => {
+     root.render(
+-      createElement(SummarySubModeToggle, { slug, value, onChange: (next: string) => void changes.push(next) }),
++      createElement(SummaryControls, { slug, value, onChange: (next: string) => void changes.push(next) }),
+     );
+   });
+   return changes;
+ }
+ 
+-function summaryChip(label: string): string {
+-  const buttons = [...host.querySelectorAll<HTMLElement>(".summ-views .summ-pill")];
+-  const at = buttons.findIndex((b) => b.textContent?.trim() === label);
+-  if (at < 0) throw new Error(`no ${label} chip`);
+-  return `.summ-views .summ-pill:nth-of-type(${at + 1})`;
++function slider(): HTMLInputElement {
++  const found = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
++  if (!found) throw new Error("no plain-words slider");
++  return found;
+ }
+ 
+-describe("Summary's Gists | Simple switch", () => {
+-  it("is a labelled group of focusable pressed-state controls", () => {
+-    mountSummaryToggle("gists");
+-    const group = host.querySelector("fieldset.summ-views");
+-    const buttons = [...(group?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+-    expect(group?.querySelector("legend")?.textContent).toBe("View");
+-    expect(buttons.map((button) => [button.type, button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+-      ["button", "Gists", "true"],
+-      ["button", "Simple", "false"],
+-    ]);
+-    act(() => buttons[1]?.focus());
+-    expect(document.activeElement).toBe(buttons[1]);
++/** Move the slider to a stop, as a drag or an arrow key does: React hears `input`. */
++function slideTo(stop: number): void {
++  const input = slider();
++  act(() => {
++    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, String(stop));
++    input.dispatchEvent(new Event("input", { bubbles: true }));
+   });
++}
+ 
+-  it("arms Simple when Simple is pressed, and moves to it", () => {
+-    const changes = mountSummaryToggle("gists");
++describe("Summary's plain-words slider", () => {
++  it("is a named range with three stops that says which level it is on", () => {
++    mountSummaryControls("gists");
++    const group = host.querySelector("fieldset.summ-slider");
++    expect(group?.querySelector("legend")?.textContent).toBe("In plain words");
++    expect(group?.querySelector("legend")?.className).toBe("sr-only");
++    const input = slider();
++    expect([input.min, input.max, input.step, input.value]).toEqual(["0", "2", "1", "1"]);
++    expect(input.getAttribute("aria-valuetext")).toBe("Simple (not showing)");
++    mountSummaryControls("fuller");
++    expect(slider().value).toBe("2");
++    expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
++  });
++
++  it("arms the run when moved to a level, and moves to it", () => {
++    const changes = mountSummaryControls("gists");
+     expect(armed("simple")).toBe(false);
+-    click(summaryChip("Simple"));
++    slideTo(0);
++    expect(armed("simple")).toBe(true);
++    expect(changes).toEqual(["brief"]);
++  });
++
++  it("arms Fuller's press as the one simple step, which writes every level", () => {
++    const changes = mountSummaryControls("simple");
++    slideTo(2);
++    expect(armed("simple")).toBe(true);
++    expect(changes).toEqual(["fuller"]);
++  });
++
++  it("opens the level it rests on when the idle slider is clicked", () => {
++    const changes = mountSummaryControls("gists");
++    click(".summ-slider input[type=range]");
+     expect(armed("simple")).toBe(true);
+     expect(changes).toEqual(["simple"]);
+   });
+ 
+-  it("arms a fresh press when Simple is pressed while already showing", () => {
++  it("arms a fresh press when clicked on the level already showing", () => {
+     /* The way back from a failed read (useAutoRun.ts § A failed read is not an
+        answer): nothing re-fires without a new nonce. No `onChange`, because
+        writing the same value would push a history entry that goes nowhere. */
+-    const changes = mountSummaryToggle("simple");
+-    click(summaryChip("Simple"));
++    const changes = mountSummaryControls("simple");
++    click(".summ-slider input[type=range]");
+     const first = pendingActivation(SLUG, "simple");
+     expect(first).not.toBeNull();
+-    click(summaryChip("Simple"));
++    click(".summ-slider input[type=range]");
+     expect(pendingActivation(SLUG, "simple")).not.toBe(first);
+     expect(changes).toEqual([]);
+   });
+ 
+-  it("arms nothing for Gists, or for merely being in Simple", () => {
+-    /* A pasted `?summary=simple`, a Back step, a last-view restore: each
+-       mounts the switch with Simple already set, and none is a press. */
+-    mountSummaryToggle("simple");
+-    expect(armed("simple")).toBe(false);
+-    mountSummaryToggle("simple");
+-    click(summaryChip("Gists"));
++  it("arms nothing for merely being on a level", () => {
++    /* A pasted `?summary=fuller`, a Back step, a last-view restore: each
++       mounts the slider with a level already set, and none is a press. */
++    mountSummaryControls("fuller");
+     expect(armed("simple")).toBe(false);
+   });
+ 
+-  it("arms nothing for a visitor, who still gets to switch", () => {
+-    const changes = mountSummaryToggle("gists", null);
+-    click(summaryChip("Simple"));
++  it("arms nothing for a visitor, who still gets to move it", () => {
++    const changes = mountSummaryControls("gists", null);
++    slideTo(2);
+     expect(armed("simple")).toBe(false);
+-    expect(changes).toEqual(["simple"]);
++    expect(changes).toEqual(["fuller"]);
+   });
+ });
+ 
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index 4164ec35..dfb9a72a 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -1042,19 +1042,32 @@ describe("the artefacts a shared link carries", () => {
+    * paragraphs cross, the pipeline's provenance does not. Plan 260930i.
+    */
+   const SIMPLE: SimpleSummary = {
+-    version: "simple/1",
++    version: "simple/2",
+     generator: "some-model",
+     slug: "noema",
+     sourceHash: "abc123",
+     generatedAt: "2026-09-30T10:00:00.000Z",
+     elapsedMs: 7_000,
+-    paragraphs: [
+-      { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
+-      {
+-        text: "It matters because a copy would not do.",
+-        ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
+-      },
+-    ],
++    /* The owner's — it must not cross (plan 261001b). */
++    profileHash: "0f1e2d3c4b5a6978",
++    levels: {
++      brief: [
++        { text: "It asks what a measurement carries.", ids: ["spya-bbbbbb" as BlockId] },
++        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
++      ],
++      simple: [
++        { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
++        {
++          text: "It matters because a copy would not do.",
++          ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
++        },
++      ],
++      fuller: [
++        { text: "This essay asks what a measurement has to carry, and why.", ids: ["spya-bbbbbb" as BlockId] },
++        { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
++        { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
++      ],
++    },
+   };
+ 
+   /**
+@@ -1663,27 +1676,45 @@ describe("the artefacts a shared link carries", () => {
+     expect(JSON.stringify(built.faq)).not.toContain("dropped");
+   });
+ 
+-  /** The paragraphs and their passages' ids, and not the stamp. Plan 260930i. */
+-  it("carries Simple's paragraphs and their ids, and not the stamp", () => {
++  /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
++  it("carries Simple's paragraphs and their ids at every level, and not the stamp", () => {
+     expect(pathsUnder("simpleSummary")).toEqual(
+-      ["paragraphs", "paragraphs[].ids", "paragraphs[].text"].sort(),
++      [
++        "levels",
++        "levels.brief",
++        "levels.brief[].ids",
++        "levels.brief[].text",
++        "levels.fuller",
++        "levels.fuller[].ids",
++        "levels.fuller[].text",
++        "levels.simple",
++        "levels.simple[].ids",
++        "levels.simple[].text",
++      ].sort(),
+     );
+-    expect(built.simpleSummary).toEqual({ paragraphs: SIMPLE.paragraphs });
++    expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
+     const json = JSON.stringify(built.simpleSummary);
+-    for (const provenance of ["simple/1", "some-model", "abc123", "generatedAt", "elapsedMs"]) {
++    for (const provenance of ["simple/2", "some-model", "abc123", "generatedAt", "elapsedMs", "profileHash", "0f1e2d3c4b5a6978"]) {
+       expect(json, provenance).not.toContain(provenance);
+     }
+   });
+ 
+-  it("does not publish a stored Simple artefact outside its 2–4 paragraph contract", () => {
++  it("does not publish a stored Simple artefact outside either level's contract", () => {
+     const invalid = publicArticle({
+       ...ARTICLE_BASE,
+       ...NO_ARTEFACTS,
+-      simpleSummary: { ...SIMPLE, paragraphs: [] },
++      simpleSummary: { ...SIMPLE, levels: { ...SIMPLE.levels, fuller: [] } },
+     });
+     expect("simpleSummary" in invalid).toBe(false);
+   });
+ 
++  it("does not publish a simple/1 row, which has one paragraphs list and no levels", () => {
++    const { levels: _gone, ...rest } = SIMPLE;
++    const v1 = { ...rest, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
++    const invalid = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: v1 });
++    expect("simpleSummary" in invalid).toBe(false);
++  });
++
+   /**
+    * **Each cited work minus `key` and `found`, and every address re-judged.**
+    * Exact nested keys against a list with every field set, so a spread of the
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index 751bd739..3cd1468b 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -1125,10 +1125,10 @@ describe("a signed-out browser on a shared document", () => {
+ 
+     expect(host.textContent).toContain(PUBLIC_GIST);
+     expect(host.textContent).not.toContain("Nobody has built");
+-    /* And the Depth control, which is the one thing the panel still offers —
+-       so this cannot pass on a band that rendered its heading and nothing
+-       else. */
+-    expect(host.textContent).toContain("Depth");
++    /* And the Parts | Sections control, which is the one thing the outline
++       offers — so this cannot pass on a band that rendered its heading and
++       nothing else. (It was labelled "Depth" until plan 261001b.) */
++    expect(host.querySelector(".summ-seg .summ-pill")?.textContent).toBe("Parts");
+     expect(outsidePublic()).toEqual([]);
+   });
+ 
+@@ -1305,10 +1305,21 @@ describe("a signed-out browser on a shared document", () => {
+     served = {
+       ...ARTICLE,
+       simpleSummary: {
+-        paragraphs: [
+-          { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
+-          { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
+-        ],
++        levels: {
++          brief: [
++            { text: "The short one.", ids: ["spya-cccccc"] },
++            { text: "Why.", ids: ["spya-cccccc"] },
++          ],
++          simple: [
++            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
++            { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
++          ],
++          fuller: [
++            { text: "The fuller version says what the piece is about.", ids: ["spya-cccccc"] },
++            { text: "Then why it matters.", ids: ["spya-cccccc"] },
++            { text: "Then its key idea.", ids: ["spya-cccccc"] },
++          ],
++        },
+       },
+     };
+     await open("?mode=summary&summary=simple");
+diff --git a/tests/shared-inventory.test.ts b/tests/shared-inventory.test.ts
+index e73e1516..cc9f284a 100644
+--- a/tests/shared-inventory.test.ts
++++ b/tests/shared-inventory.test.ts
+@@ -538,16 +538,28 @@ describe("what counts as shareable", () => {
+       trajectory: null,
+       faq: null,
+       simpleSummary: {
+-        version: "simple/1",
++        version: "simple/2",
+         generator: "test",
+         slug: "x",
+         sourceHash: "0000000000000000",
+         generatedAt: "2020-01-01T00:00:00.000Z",
+         elapsedMs: 1,
+-        paragraphs: [
+-          { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
+-          { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+-        ],
++        profileHash: null,
++        levels: {
++          brief: [
++            { text: "What it is.", ids: ["spya-k3m9qt"] },
++            { text: "Why it matters.", ids: ["spya-p7w2dn"] },
++          ],
++          simple: [
++            { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
++            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
++          ],
++          fuller: [
++            { text: "What the piece is about, in more detail.", ids: ["spya-k3m9qt"] },
++            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
++            { text: "How it makes the argument.", ids: ["spya-k3m9qt"] },
++          ],
++        },
+       },
+       citations: null,
+       debate: null,
+@@ -573,8 +585,20 @@ describe("what counts as shareable", () => {
+         sourceHash: "0000000000000000",
+         generatedAt: "2020-01-01T00:00:00.000Z",
+         elapsedMs: 1,
+-        /* Fewer than two paragraphs is not a usable or public Simple. */
+-        paragraphs: [],
++        profileHash: null,
++        /* Fewer than two paragraphs at either level is not a usable or public Simple. */
++        levels: {
++          brief: [
++            { text: "One.", ids: ["spya-k3m9qt"] },
++            { text: "Two.", ids: ["spya-k3m9qt"] },
++          ],
++          simple: [],
++          fuller: [
++            { text: "One.", ids: ["spya-k3m9qt"] },
++            { text: "Two.", ids: ["spya-k3m9qt"] },
++            { text: "Three.", ids: ["spya-k3m9qt"] },
++          ],
++        },
+       },
+       citations: null,
+       debate: null,
+diff --git a/tests/simple-panel.test.tsx b/tests/simple-panel.test.tsx
+index d1515169..0999b839 100644
+--- a/tests/simple-panel.test.tsx
++++ b/tests/simple-panel.test.tsx
+@@ -1,25 +1,29 @@
+ // @vitest-environment jsdom
+ /**
+- * **Simple — Summary's plain-words sub-mode**, on the client
+- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md stage 2).
++ * **Simple — Summary's plain-words levels**, on the client
++ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md stage 2, and the
++ * slider and levels of
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+  *
+- * Two halves:
++ * Three parts:
+  *
+- *  1. **The view.** Each paragraph is plain text followed by a `BlockRef` door
+- *     per id; the foot says what it is; *stale* draws the notice and *outdated*
+- *     draws nothing; a visitor gets the stored paragraphs and no verb, or a
+- *     line saying none has been made.
+- *  2. **The press.** The real `SummarySubModeToggle` over the real `useSimple`,
+- *     under `<StrictMode>`, counting job requests the way
+- *     tests/modes-that-start-themselves.test.tsx does: pressing Simple with
++ *  1. **The view.** The chosen level's paragraphs, each plain text followed by
++ *     a `BlockRef` door per id; no description line (7B); *stale* draws the
++ *     notice and *outdated* draws nothing; a changed profile offers a rewrite;
++ *     a visitor gets the stored paragraphs and no verb, or a line saying none
++ *     has been made.
++ *  2. **The press.** The real `SummaryControls` slider over the real
++ *     `useSimple`, under `<StrictMode>`, counting job requests the way
++ *     tests/modes-that-start-themselves.test.tsx does: choosing a level with
+  *     nothing stored buys exactly one run; arriving on `?summary=simple` (a
+  *     pasted link, a Back step, a restore — all the same setter) buys nothing;
+  *     and a second press recovers from a failed read.
++ *  3. **The outline's ladder** beside it: Parts | Sections.
+  */
+ import { act, createElement, type ReactElement, StrictMode, useState } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import type { BlockId, Job, SimpleSummary } from "../src/types.js";
++import type { BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+ import type { UseSimple } from "../src/web/useSimple.js";
+ import type { SummaryView } from "../src/web/params.js";
+ 
+@@ -42,18 +46,33 @@ const LATER = "spya-r8z3nh" as BlockId;
+ const WHAT = "This essay asks whether a machine could ever be conscious, and says probably not.";
+ const WHY = "It matters because people are starting to treat chatbots as if they had feelings.";
+ 
++const BRIEF_TEXT = "A short one: could a machine feel? Probably not.";
++const FULLER_TEXT = "The fuller one keeps the essay's own term, the hard problem, and says what it means.";
++
+ function artefact(): SimpleSummary {
+   return {
+-    version: "simple/1",
++    version: "simple/2",
+     generator: "test",
+     slug: "a-piece",
+     sourceHash: "hash",
+     generatedAt: "2026-09-30T09:00:00.000Z",
+     elapsedMs: 1,
+-    paragraphs: [
+-      { text: WHAT, ids: [EARLY, MIDDLE] },
+-      { text: WHY, ids: [LATER] },
+-    ],
++    profileHash: null,
++    levels: {
++      brief: [
++        { text: BRIEF_TEXT, ids: [EARLY] },
++        { text: "It matters for chatbots.", ids: [LATER] },
++      ],
++      simple: [
++        { text: WHAT, ids: [EARLY, MIDDLE] },
++        { text: WHY, ids: [LATER] },
++      ],
++      fuller: [
++        { text: FULLER_TEXT, ids: [EARLY] },
++        { text: WHY, ids: [LATER] },
++        { text: "And it says where the argument stops.", ids: [MIDDLE] },
++      ],
++    },
+   };
+ }
+ 
+@@ -63,7 +82,7 @@ vi.mock("../src/web/lib/api.js", () => ({
+     if (artefactFails) throw new Error("network");
+     return artefactStatus === 404
+       ? new Response(null, { status: 404 })
+-      : new Response(JSON.stringify({ simpleSummary: artefact(), stale: false, outdated: false }), {
++      : new Response(JSON.stringify({ simpleSummary: artefact(), stale: false, outdated: false, profileChanged: false }), {
+           status: 200,
+         });
+   },
+@@ -98,12 +117,12 @@ vi.mock("../src/web/useJobs.js", async () => {
+   };
+ });
+ 
+-const { SIMPLE_FOOT, SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
++const { SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
+   "../src/web/SimplePanel.js"
+ );
+ const { BlockLinkProvider } = await import("../src/web/BlockLinkCard.js");
+ const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
+-const { SummarySubModeToggle } = await import("../src/web/modes/summary/SummaryMode.js");
++const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
+ const { useSimple } = await import("../src/web/useSimple.js");
+ const { resetActivations } = await import("../src/web/activation.js");
+ const { jobEngine } = await import("../src/web/jobEngine.js");
+@@ -147,6 +166,8 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
+     simple: artefact(),
+     stale: false,
+     outdated: false,
++    profiled: false,
++    profileChanged: false,
+     slug: "a-piece",
+     error: null,
+     job: null,
+@@ -163,15 +184,21 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
+ 
+ const jumps: BlockId[] = [];
+ 
+-async function draw(access: Parameters<typeof SimplePanel>[0]["access"]): Promise<void> {
++async function draw(
++  access: Parameters<typeof SimplePanel>[0]["access"],
++  level: SimpleLevel = "simple",
++): Promise<void> {
+   jumps.length = 0;
+   await act(async () =>
+-    root.render(createElement(SimplePanel, { access, onJump: (id: BlockId) => void jumps.push(id) })),
++    root.render(createElement(SimplePanel, { access, level, onJump: (id: BlockId) => void jumps.push(id) })),
+   );
+ }
+ 
+ const text = (): string => host.textContent ?? "";
+ 
++/** The foot Greg asked to go (SPIDERYARN-READING2-7B). */
++const NO_FOOT = "Written by AI";
++
+ describe("the Simple view", () => {
+   it("draws each paragraph as text, followed by a door for each of its passages", async () => {
+     await draw({ kind: "owner", owner: owner() });
+@@ -184,7 +211,7 @@ describe("the Simple view", () => {
+     expect(
+       [...(paras[1]?.querySelectorAll("a.block-ref") ?? [])].map((a) => a.getAttribute("data-block-link")),
+     ).toEqual([LATER]);
+-    expect(text()).toContain(SIMPLE_FOOT);
++    expect(text()).not.toContain(NO_FOOT);
+   });
+ 
+   it("jumps to the passage when a door is clicked", async () => {
+@@ -214,6 +241,7 @@ describe("the Simple view", () => {
+         <BlockLinkProvider index={index}>
+           <SimplePanel
+             access={{ kind: "owner", owner: owner() }}
++            level="simple"
+             onJump={(id: BlockId) => void jumps.push(id)}
+           />
+         </BlockLinkProvider>,
+@@ -232,7 +260,7 @@ describe("the Simple view", () => {
+ 
+   it("renders a paragraph's markup as the characters, never as HTML", async () => {
+     const simple = artefact();
+-    simple.paragraphs[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
++    simple.levels.simple[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
+     await draw({ kind: "owner", owner: owner({ simple }) });
+     expect(host.querySelector(".simple-text b")).toBeNull();
+     expect(host.querySelector(".simple-text")?.textContent).toBe("<b>bold</b> **stars**");
+@@ -247,6 +275,27 @@ describe("the Simple view", () => {
+     expect(text()).toContain(WHAT);
+   });
+ 
++  it("draws the level the slider has chosen, and only that one", async () => {
++    await draw({ kind: "owner", owner: owner() }, "brief");
++    expect(text()).toContain(BRIEF_TEXT);
++    expect(text()).not.toContain(WHAT);
++    await draw({ kind: "owner", owner: owner() }, "fuller");
++    expect(text()).toContain(FULLER_TEXT);
++    expect(host.querySelectorAll(".simple-para")).toHaveLength(3);
++    await draw({ kind: "visitor", simple: { levels: artefact().levels } }, "brief");
++    expect(text()).toContain(BRIEF_TEXT);
++  });
++
++  it("offers to write it again once the reader has changed their profile, without a notice line", async () => {
++    await draw({ kind: "owner", owner: owner({ profiled: true, profileChanged: true }) });
++    expect(text()).toContain("Write it again");
++    expect(host.querySelector(".gloss-stale")).toBeNull();
++    expect(text()).toContain(WHAT);
++    /* And not while the profile is the one they were written for. */
++    await draw({ kind: "owner", owner: owner({ profiled: true, profileChanged: false }) });
++    expect(text()).not.toContain("Write it again");
++  });
++
+   it("says nothing when only the prompt is older", async () => {
+     await draw({ kind: "owner", owner: owner({ outdated: true }) });
+     expect(host.querySelector(".gloss-stale")).toBeNull();
+@@ -283,10 +332,10 @@ describe("the Simple view", () => {
+   });
+ 
+   it("gives a visitor the stored paragraphs and their doors, and nothing to press", async () => {
+-    await draw({ kind: "visitor", simple: { paragraphs: artefact().paragraphs } });
++    await draw({ kind: "visitor", simple: { levels: artefact().levels } });
+     expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+     expect(host.querySelectorAll("a.block-ref")).toHaveLength(3);
+-    expect(text()).toContain(SIMPLE_FOOT);
++    expect(text()).not.toContain(NO_FOOT);
+     expect(host.querySelectorAll("button")).toHaveLength(0);
+   });
+ 
+@@ -299,7 +348,7 @@ describe("the Simple view", () => {
+ 
+ /* --------------------------------------------------------------- the press -- */
+ 
+-/** The owner's band, reduced: the real switch and, under Simple, the real hook. */
++/** The owner's band, reduced: the real slider and, under a level, the real hook. */
+ function SimpleProbe({ slug }: { slug: string }): ReactElement {
+   const view = useSimple(slug);
+   return createElement("div", { "data-band": "simple" }, view.starting ? "starting" : view.status);
+@@ -314,8 +363,10 @@ function Band({ slug, start }: { slug: string; start: SummaryView }): ReactEleme
+   return createElement(
+     "div",
+     null,
+-    createElement(SummarySubModeToggle, { slug, value: view, onChange: setView }),
+-    view === "simple" ? createElement(SimpleProbe, { slug }) : null,
++    createElement(SummaryControls, { slug, value: view, onChange: setView }),
++    /* One element for every level, so moving between levels keeps the hook
++       mounted — as `OwnerSimple` does in the real band. */
++    view !== "gists" ? createElement(SimpleProbe, { slug }) : null,
+   );
+ }
+ 
+@@ -326,37 +377,59 @@ async function open(start: SummaryView): Promise<void> {
+   await settle();
+ }
+ 
++function slider(): HTMLInputElement {
++  const found = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
++  if (!found) throw new Error("no plain-words slider");
++  return found;
++}
++
++/** A click on the slider where it rests — how the idle slider opens Simple. */
+ async function pressSimple(): Promise<void> {
+-  const chip = [...host.querySelectorAll<HTMLButtonElement>(".summ-views .summ-pill")].find(
+-    (b) => b.textContent?.trim() === "Simple",
+-  );
+-  if (!chip) throw new Error("no Simple chip");
+-  await act(async () => chip.click());
++  const input = slider();
++  await act(async () => input.click());
++  await settle();
++}
++
++/** A drag or an arrow key to a stop. */
++async function slideTo(stop: number): Promise<void> {
++  const input = slider();
++  await act(async () => {
++    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, String(stop));
++    input.dispatchEvent(new Event("input", { bubbles: true }));
++  });
+   await settle();
+ }
+ 
+ const simpleGets = (): string[] => gets.filter((u) => u.startsWith("/api/simple/"));
+ 
+-describe("pressing Simple", () => {
+-  it("writes it when nothing is stored, once", async () => {
++describe("choosing a plain-words level", () => {
++  it("writes them when nothing is stored, once", async () => {
+     await open("gists");
+-    expect(simpleGets(), "Gists reads nothing").toEqual([]);
++    expect(simpleGets(), "the outline reads nothing").toEqual([]);
+     await pressSimple();
+     expect(simpleGets().length).toBeGreaterThan(0);
+     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+   });
+ 
+-  it("does not write it a second time when pressed again", async () => {
++  it("writes them once when the reader goes straight to Fuller", async () => {
++    await open("gists");
++    await slideTo(2);
++    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
++  });
++
++  it("does not write them a second time when pressed again, or moved to another level", async () => {
+     await open("gists");
+     await pressSimple();
+     await pressSimple();
++    await slideTo(0);
+     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+   });
+ 
+-  it("writes nothing when one is already stored", async () => {
++  it("writes nothing when they are already stored", async () => {
+     artefactStatus = 200;
+     await open("gists");
+     await pressSimple();
++    await slideTo(2);
+     expect(simpleGets().length).toBeGreaterThan(0);
+     expect(posts).toEqual([]);
+   });
+@@ -373,9 +446,9 @@ describe("pressing Simple", () => {
+   });
+ });
+ 
+-describe("arriving at Simple without pressing it", () => {
++describe("arriving at a level without choosing it", () => {
+   it("spends nothing on a pasted link or a restore", async () => {
+-    await open("simple");
++    await open("fuller");
+     /* The read settled — so "no POST" is about a panel that knows it is empty. */
+     expect(simpleGets().length).toBeGreaterThan(0);
+     expect(host.querySelector('[data-band="simple"]')?.textContent).toBe("none");
+@@ -391,39 +464,67 @@ describe("arriving at Simple without pressing it", () => {
+   });
+ });
+ 
+-describe("Simple and the Gists depth", () => {
+-  it("hides Depth under Simple and restores the chosen depth on returning to Gists", async () => {
+-    const onDeep = vi.fn();
+-    await act(async () => {
+-      root.render(
+-        createElement(SummaryPanel, {
+-          root: null,
+-          deep: 2,
+-          onDeep,
+-          atRow: null,
+-          onJump: () => {},
+-          simple: createElement("div", { "data-simple": "" }, "Simple body"),
+-        }),
+-      );
+-    });
+-    expect([...host.querySelectorAll("legend")].some((legend) => legend.textContent === "Depth")).toBe(false);
++/* ------------------------------------------------------ the outline ladder -- */
+ 
++describe("Parts | Sections beside the slider", () => {
++  async function panel(deep: number, plain: boolean, onDeep: (d: number) => void): Promise<void> {
+     await act(async () => {
+       root.render(
+         createElement(SummaryPanel, {
+           root: null,
+-          deep: 2,
++          deep,
+           onDeep,
+           atRow: null,
+           onJump: () => {},
+-          simple: null,
++          simple: plain ? createElement("div", { "data-simple": "" }, "Simple body") : null,
+         }),
+       );
+     });
+-    const sections = [...host.querySelectorAll<HTMLButtonElement>(".summ-pill")].find(
+-      (button) => button.textContent === "sections",
+-    );
+-    expect(sections?.getAttribute("aria-pressed")).toBe("true");
++  }
++  const pill = (label: string): HTMLButtonElement => {
++    const found = [...host.querySelectorAll<HTMLButtonElement>(".summ-pill")].find((b) => b.textContent === label);
++    if (!found) throw new Error(`no ${label} pill`);
++    return found;
++  };
++
++  it("has no Article pill and no visible labels — one row, two named groups", async () => {
++    await panel(1, false, () => {});
++    expect([...host.querySelectorAll(".summ-pill")].map((b) => b.textContent)).toEqual(["Parts", "Sections"]);
++    expect([...host.querySelectorAll("legend")].map((l) => [l.textContent, l.className])).toEqual([
++      ["Outline", "sr-only"],
++    ]);
++    expect(host.querySelectorAll(".summ-controls")).toHaveLength(1);
++  });
++
++  it("lights Parts as included under Sections, with aria-pressed on the chosen depth only", async () => {
++    await panel(2, false, () => {});
++    expect(pill("Sections").getAttribute("aria-pressed")).toBe("true");
++    expect(pill("Sections").classList.contains("on")).toBe(true);
++    expect(pill("Parts").getAttribute("aria-pressed")).toBe("false");
++    expect(pill("Parts").classList.contains("included")).toBe(true);
++    await panel(1, false, () => {});
++    expect(pill("Parts").getAttribute("aria-pressed")).toBe("true");
++    expect(pill("Sections").classList.contains("included")).toBe(false);
++  });
++
++  it("steps Sections back to Parts when pressed while chosen", async () => {
++    const onDeep = vi.fn();
++    await panel(2, false, onDeep);
++    await act(async () => pill("Sections").click());
++    expect(onDeep).toHaveBeenLastCalledWith(1);
++    await act(async () => pill("Parts").click());
++    expect(onDeep).toHaveBeenLastCalledWith(1);
++  });
++
++  it("draws the pair unlit under a plain-words level, and a press asks for that depth", async () => {
++    const onDeep = vi.fn();
++    await panel(2, true, onDeep);
++    expect(host.querySelector("[data-simple]")).not.toBeNull();
++    expect(pill("Sections").getAttribute("aria-pressed")).toBe("false");
++    expect(pill("Parts").classList.contains("included")).toBe(false);
+     expect(onDeep).not.toHaveBeenCalled();
++    /* Not "step back": under a level, Sections is not chosen, so it asks for 2. */
++    await act(async () => pill("Sections").click());
++    expect(onDeep).toHaveBeenLastCalledWith(2);
+   });
+ });
+diff --git a/tests/simple-summary.test.ts b/tests/simple-summary.test.ts
+index ff4275de..e8b49781 100644
+--- a/tests/simple-summary.test.ts
++++ b/tests/simple-summary.test.ts
+@@ -1,11 +1,14 @@
+ /**
+  * **Simple's validation, and the one request it sends** —
+- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md § The artefact.
++ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md § The artefact, and
++ * the two levels and the reader since
++ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+  *
+- * Every bullet of the plan's validation list has a case here. Each one is a
++ * Every bullet of the plans' validation lists has a case here. Each one is a
+  * way the stage would be wrong quietly: a paragraph with no door back to the
+- * piece, or a digest where an orientation was asked for, looks exactly like one
+- * that works (docs/reusable/silent-success.md).
++ * piece, a digest where an orientation was asked for, or one good level stored
++ * beside a missing one, looks exactly like one that works
++ * (docs/reusable/silent-success.md).
+  */
+ import path from "node:path";
+ 
+@@ -13,42 +16,55 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+ import type { Article } from "../src/article-input.js";
+ import { SHAPE, whyUnusable } from "../src/store/artifacts.js";
+-import type { Block, BlockId } from "../src/types.js";
++import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../src/types.js";
+ import {
+   ANSWER_TOKENS,
+-  MAX_WORDS,
+-  SIMPLE_SYSTEM,
++  SIMPLE_SYSTEMS,
+   SIMPLE_VERSION,
+   buildSimpleSummary,
+   emptyDropped,
+   generateSimpleSummary,
+   inputFingerprint,
+-  simpleSystem,
++  renderPrompt,
+ } from "../src/simple-summary.js";
+ import { HIGH_POWER_MODEL, STAGE_EFFORT } from "../src/models.js";
++import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
+ 
+ /* ------------------------------------------------------- the stubbed model -- */
+ 
+-let answer = "";
++/** One answer for every call, or one per level — told apart by the level's system prompt. */
++let answer: string | Partial<Record<SimpleLevel, string>> = "";
+ let stop: string = "end_turn";
+-const sent: { task: string; body: unknown; options: unknown }[] = [];
++const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
++
++const levelOf = (body: unknown): SimpleLevel => {
++  const text = (body as { system?: { text?: string }[] }).system?.[1]?.text ?? "";
++  return text.includes("eighteen-year-old") ? "fuller" : text.includes("twelve-year-old") ? "brief" : "simple";
++};
++
++/** A level the case does not name gets a good answer, so each case is about the level it names. */
++const answerFor = (level: SimpleLevel): string =>
++  typeof answer === "string" ? answer : (answer[level] ?? JSON.stringify({ paragraphs: GOOD[level] }));
+ 
+ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
+   return {
+     ...real,
+     streamMessage: (task: string, body: unknown, options: unknown) => {
++      const signal = (options as { signal?: AbortSignal }).signal;
+       sent.push({
+         task,
+         body: JSON.parse(JSON.stringify(body)),
+         options: JSON.parse(JSON.stringify(options)),
++        aborted: () => signal?.aborted ?? false,
+       });
++      const text = answerFor(levelOf(body));
+       const message = {
+         id: "msg_stub",
+         type: "message",
+         role: "assistant",
+         model: "stub",
+-        content: [{ type: "text", text: answer, citations: null }],
++        content: [{ type: "text", text, citations: null }],
+         stop_reason: stop,
+         stop_sequence: null,
+         usage: { input_tokens: 1, output_tokens: 1 },
+@@ -93,84 +109,134 @@ const EVIDENCE = BLOCKS.filter((b) => b.treatment !== "supplement");
+ 
+ const para = (text: string, ...ids: string[]) => ({ text, ids });
+ 
+-function build(paragraphs: unknown, dropped = emptyDropped()) {
+-  return buildSimpleSummary(
+-    { paragraphs },
+-    { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped, power: "standard" },
+-  );
++/** A good Fuller level, for the cases that are about Simple. */
++const FULLER = [
++  para("It asks whether a model can learn to read, and how.", INTRO.id),
++  para("Reading matters because most knowledge is written.", WHY.id),
++  para("Trained on ten thousand pages, it read 38% faster in this sample.", RESULT.id, METHOD.id),
++];
++/** A good Simple level, for the cases that are about Fuller. */
++const SIMPLE = [para("It asks whether a model can read.", INTRO.id), para("It read faster.", RESULT.id)];
++/** A good Brief level. */
++const BRIEF = [para("Can a model read?", INTRO.id), para("It read faster.", RESULT.id)];
++/** A good answer at every level. */
++const GOOD: Record<SimpleLevel, ReturnType<typeof para>[]> = { brief: BRIEF, simple: SIMPLE, fuller: FULLER };
++
++const opts = (dropped = emptyDropped(), profile: string | null = null) => ({
++  slug: "s",
++  evidence: EVIDENCE,
++  sourceHash: "h",
++  elapsedMs: 1,
++  dropped,
++  power: "standard" as const,
++  profile,
++});
++
++/** Each level's answer, as its own call returns it. */
++const answerOf = (paragraphs: unknown) => ({ paragraphs });
++
++function build(simple: unknown, dropped = emptyDropped(), fuller: unknown = FULLER) {
++  return buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(simple), fuller: answerOf(fuller) }, opts(dropped));
+ }
+ 
++const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
++
+ /* ------------------------------------------------------------ validation -- */
+ 
+ describe("buildSimpleSummary", () => {
+-  it("keeps good paragraphs whole, in the model's order, stamped with SIMPLE_VERSION", () => {
++  it("keeps both levels whole, in the model's order, stamped with SIMPLE_VERSION", () => {
+     const out = build([
+       para("It asks whether a model can read.", INTRO.id),
+       para("It matters because most knowledge is written.", WHY.id),
+       para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
+     ]);
+-    expect(out.paragraphs).toEqual([
++    expect(out.levels.simple).toEqual([
+       { text: "It asks whether a model can read.", ids: [INTRO.id] },
+       { text: "It matters because most knowledge is written.", ids: [WHY.id] },
+       { text: "It read 38% faster, in this sample.", ids: [RESULT.id, METHOD.id] },
+     ]);
++    expect(out.levels.fuller).toEqual(FULLER);
+     expect(out.version).toBe(SIMPLE_VERSION);
++    expect(out.version).toBe("simple/2");
+     expect(out.sourceHash).toBe("h");
+-    expect(SHAPE.simple.ok(out.paragraphs)).toBe(true);
++    expect(out.profileHash).toBeNull();
++    expect(SHAPE.simple.ok(out.levels)).toBe(true);
+   });
+ 
+-  it("fails on an answer with no paragraphs array", () => {
+-    expect(() =>
+-      buildSimpleSummary({ summary: "x" }, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
+-    ).toThrow(/no `paragraphs` array/);
+-    expect(() =>
+-      buildSimpleSummary(null, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
+-    ).toThrow(/no `paragraphs` array/);
++  it("records the profile it was written for as its hash, never the words", () => {
++    const profile = renderProfile({ profile: "I build software.", purpose: "Methods." });
++    if (!profile) throw new Error("fixture needs a profile");
++    const out = buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts(emptyDropped(), profile));
++    expect(out.profileHash).toBe(hashProfile(profile));
++    expect(JSON.stringify(out)).not.toContain("I build software");
+   });
+ 
+-  it("fails on more than four paragraphs rather than cutting", () => {
++  it("fails on an answer missing any level, naming it — all or none", () => {
++    expect(() => buildSimpleSummary({ simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts())).toThrow(
++      /"brief" answer has no `paragraphs` array/,
++    );
++    const missing = /"simple" answer has no `paragraphs` array/;
++    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), fuller: answerOf(FULLER) }, opts())).toThrow(missing);
++    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE) }, opts())).toThrow(
++      /"fuller" answer has no `paragraphs` array/,
++    );
++    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: null, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
++    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: { summary: "x" }, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
++  });
++
++  it("fails the whole run when only Fuller is bad", () => {
++    expect(() => build(SIMPLE, emptyDropped(), [para("Only one.", INTRO.id)])).toThrow(
++      /Only 1 of the model's 1 "fuller" paragraphs/,
++    );
++  });
++
++  it("fails on more paragraphs than a level allows rather than cutting", () => {
+     const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
+-    expect(() => build(five)).toThrow(/5 paragraphs and the limit is 4/);
++    expect(() => build(five)).toThrow(/5 "simple" paragraphs and the limit is 4/);
++    /* Five is Fuller's ceiling, not a failure there; six is. */
++    expect(build(SIMPLE, emptyDropped(), five).levels.fuller).toHaveLength(5);
++    const six = [...five, para("Six.", WHY.id)];
++    expect(() => build(SIMPLE, emptyDropped(), six)).toThrow(/6 "fuller" paragraphs and the limit is 5/);
+   });
+ 
+-  it("fails over the word ceiling rather than cutting", () => {
+-    const long = Array.from({ length: MAX_WORDS }, () => "word").join(" ");
+-    expect(() => build([para(long, INTRO.id), para("And one more.", WHY.id)])).toThrow(
+-      new RegExp(`${MAX_WORDS + 3} words and the limit is ${MAX_WORDS}`),
++  it("fails over a level's word ceiling rather than cutting", () => {
++    const max = SIMPLE_LIMITS.simple.maxWords;
++    expect(() => build([para(words(max), INTRO.id), para("And one more.", WHY.id)])).toThrow(
++      new RegExp(`${max + 3} "simple" words and the limit is ${max}`),
+     );
+     /* At the ceiling exactly is fine. */
+-    const at = Array.from({ length: MAX_WORDS - 2 }, () => "word").join(" ");
+-    expect(build([para(at, INTRO.id), para("Two words.", WHY.id)]).paragraphs).toHaveLength(2);
++    expect(build([para(words(max - 2), INTRO.id), para("Two words.", WHY.id)]).levels.simple).toHaveLength(2);
++    /* Fuller has its own, higher ceiling: Simple's is not a failure there. */
++    const fullerMax = SIMPLE_LIMITS.fuller.maxWords;
++    expect(fullerMax).toBeGreaterThan(max);
++    const roomy = [para(words(max), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
++    expect(build(SIMPLE, emptyDropped(), roomy).levels.fuller).toHaveLength(3);
++    const over = [para(words(fullerMax), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
++    expect(() => build(SIMPLE, emptyDropped(), over)).toThrow(/"fuller" words and the limit is/);
+   });
+ 
+   it("drops and counts an unknown id, a supplement's id and a non-string id", () => {
+     const dropped = emptyDropped();
+     const out = build(
+-      [
+-        para("One.", "spya-zzzzzz", INTRO.id),
+-        { text: "Two.", ids: [NOTE.id, 42, WHY.id] },
+-      ],
++      [para("One.", "spya-zzzzzz", INTRO.id), { text: "Two.", ids: [NOTE.id, 42, WHY.id] }],
+       dropped,
+     );
+-    expect(out.paragraphs.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
++    expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
+     expect(dropped.unknownIds).toBe(3);
+   });
+ 
+   it("dedupes ids before capping them at three, and counts both", () => {
+     const dropped = emptyDropped();
+     const out = build(
+-      [
+-        para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id),
+-        para("Two.", WHY.id),
+-      ],
++      [para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id), para("Two.", WHY.id)],
+       dropped,
+     );
+-    expect(out.paragraphs[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
++    expect(out.levels.simple[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
+     expect(dropped.duplicateIds).toBe(2);
+     expect(dropped.overCap).toBe(1);
+   });
+ 
+-  it("drops a paragraph with no surviving id — every paragraph is a door", () => {
++  it("drops a paragraph with no surviving id — every paragraph is a door, at either level", () => {
+     const dropped = emptyDropped();
+     const out = build(
+       [
+@@ -180,49 +246,57 @@ describe("buildSimpleSummary", () => {
+         para("Key idea.", RESULT.id),
+       ],
+       dropped,
++      [...FULLER, para("A fourth, resting on nothing.", "spya-yyyyyy")],
+     );
+-    expect(out.paragraphs.map((p) => p.text)).toEqual(["About.", "Key idea."]);
+-    expect(dropped.unanchored).toBe(2);
++    expect(out.levels.simple.map((p) => p.text)).toEqual(["About.", "Key idea."]);
++    expect(out.levels.fuller).toEqual(FULLER);
++    expect(dropped.unanchored).toBe(3);
+   });
+ 
+   it("drops an empty paragraph and a non-object, and counts them", () => {
+     const dropped = emptyDropped();
+-    const out = build(
+-      [para("  ", INTRO.id), "a string", para("About.", INTRO.id), para("Why.", WHY.id)],
+-      dropped,
+-    );
+-    expect(out.paragraphs).toHaveLength(2);
++    const out = build([para("  ", INTRO.id), "a string", para("About.", INTRO.id), para("Why.", WHY.id)], dropped);
++    expect(out.levels.simple).toHaveLength(2);
+     expect(dropped.empty).toBe(1);
+     expect(dropped.malformed).toBe(1);
+   });
+ 
+-  it("fails with fewer than two surviving paragraphs, saying why", () => {
++  it("fails with fewer surviving paragraphs than a level needs, saying why", () => {
+     expect(() => build([para("About.", INTRO.id), para("Why.", "spya-zzzzzz")])).toThrow(
+-      /Only 1 of the model's 2 paragraphs.*1 with no usable passage/,
++      /Only 1 of the model's 2 "simple" paragraphs.*1 with no usable passage/,
+     );
+     expect(() => build([])).toThrow(/Only 0 of the model's 0/);
+   });
++});
++
++/* --------------------------------------------------- the store boundary -- */
++
++describe("the store boundary", () => {
++  const good = GOOD;
+ 
+-  it("refuses an invalid paragraph count again at the store boundary", () => {
++  it("refuses a level with the wrong paragraph count, and a missing level", () => {
+     const one = [para("Only one.", INTRO.id)];
+-    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) =>
+-      para(`Paragraph ${i}.`, b.id),
+-    );
+-    expect(whyUnusable("simple", { paragraphs: [] })).toBe('no usable "paragraphs"');
+-    expect(whyUnusable("simple", { paragraphs: one })).toBe('no usable "paragraphs"');
+-    expect(whyUnusable("simple", { paragraphs: five })).toBe('no usable "paragraphs"');
+-    expect(whyUnusable("simple", { paragraphs: [one[0], para("Two.", WHY.id)] })).toBeNull();
++    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
++    expect(whyUnusable("simple", { levels: good })).toBeNull();
++    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: one, fuller: FULLER } })).toBe('no usable "levels"');
++    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: five, fuller: FULLER } })).toBe('no usable "levels"');
++    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE, fuller: SIMPLE } })).toBe('no usable "levels"');
++    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE } })).toBe('no usable "levels"');
++    expect(whyUnusable("simple", { levels: null })).toBe('no usable "levels"');
++  });
++
++  it("reads a simple/1 row — one paragraphs list, no levels — as unusable", () => {
++    expect(whyUnusable("simple", { version: "simple/1", paragraphs: SIMPLE })).toBe('no usable "levels"');
+   });
+ 
+   it("refuses malformed stored paragraphs and the same word ceiling", () => {
+-    const overWords = Array.from({ length: MAX_WORDS }, () => "word").join(" ");
+-    for (const paragraphs of [
++    for (const simple of [
+       [para("", INTRO.id), para("Two.", WHY.id)],
+       [para("One.", INTRO.id, INTRO.id), para("Two.", WHY.id)],
+       [para("One.", INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
+-      [para(overWords, INTRO.id), para("One more.", WHY.id)],
++      [para(words(SIMPLE_LIMITS.simple.maxWords), INTRO.id), para("One more.", WHY.id)],
+     ]) {
+-      expect(whyUnusable("simple", { paragraphs })).toBe('no usable "paragraphs"');
++      expect(whyUnusable("simple", { levels: { brief: BRIEF, simple, fuller: FULLER } })).toBe('no usable "levels"');
+     }
+   });
+ });
+@@ -235,81 +309,161 @@ beforeAll(async () => {
+   example = await readArticleFromDir(path.resolve(import.meta.dirname, "..", "example"));
+ });
+ 
++const PROFILE = renderProfile({
++  profile: "CTO; background in cognitive science and machine learning.",
++  purpose: "How the model was trained.",
++});
++
+ describe("the request", () => {
+   const article = (): Article => ({ ...example, slug: "simple-test", blocks: BLOCKS });
++  const good = () => ({
++    simple: JSON.stringify(answerOf(SIMPLE)),
++    fuller: JSON.stringify(answerOf(FULLER)),
++  });
++  const userMessage = (i = 0) =>
++    (sent[i]?.body as { messages?: { content: string }[] } | undefined)?.messages?.[0]?.content ?? "";
++  const run = (profile: string | null = null, power: "standard" | "high" = "standard") =>
++    generateSimpleSummary({ power, article: article(), profile });
+ 
+   it("fails on malformed JSON and stores nothing", async () => {
+     answer = "{ this is not json";
+-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
++    await expect(run()).rejects.toThrow();
+   });
+ 
+   it("fails on an empty successful answer", async () => {
+     answer = "";
+-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
++    await expect(run()).rejects.toThrow();
+   });
+ 
+   it("fails on a refusal", async () => {
+     stop = "refusal";
+     answer = "";
+-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
++    await expect(run()).rejects.toThrow();
+   });
+ 
+   it("fails on a max_tokens stop rather than parsing half an answer", async () => {
+     stop = "max_tokens";
+-    answer = JSON.stringify({ paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)] });
+-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
++    answer = good();
++    await expect(run()).rejects.toThrow();
++  });
++
++  it("makes one call per level, side by side, each with its own system prompt and the same article", async () => {
++    answer = good();
++    const out = await run();
++    expect(sent).toHaveLength(3);
++    expect(sent.map((c) => c.task)).toEqual(["simple", "simple", "simple"]);
++    const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
++    expect(systems[0]?.[0]).toEqual(systems[1]?.[0]);
++    expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS)));
++    expect(out.simpleSummary.levels).toEqual(GOOD);
++  });
++
++  it("fails the whole run when one level's call fails, and aborts the other", async () => {
++    answer = { simple: JSON.stringify(answerOf(SIMPLE)), fuller: JSON.stringify(answerOf([para("One.", INTRO.id)])) };
++    await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
++    /* The sibling's signal is aborted — the call that succeeded is not left running. */
++    expect(sent.every((c) => c.aborted())).toBe(true);
+   });
+ 
+   it("reports what it dropped on the run, and does not store it", async () => {
+-    answer = JSON.stringify({
+-      paragraphs: [para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)],
+-    });
+-    const run = await generateSimpleSummary({ power: "standard", article: article() });
+-    expect(run.dropped.unknownIds).toBe(1);
+-    expect(run.dropped.duplicateIds).toBe(1);
+-    expect(run.words).toBe(2);
+-    expect("dropped" in run.simpleSummary).toBe(false);
++    answer = {
++      simple: JSON.stringify(answerOf([para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)])),
++      fuller: JSON.stringify(answerOf(FULLER)),
++    };
++    const out = await run();
++    expect(out.dropped.unknownIds).toBe(1);
++    expect(out.dropped.duplicateIds).toBe(1);
++    expect(out.words.simple).toBe(2);
++    expect(out.words.fuller).toBeGreaterThan(out.words.simple);
++    expect("dropped" in out.simpleSummary).toBe(false);
+   });
+ 
+   it("sends Ideas' article bytes and an exact request fingerprint, at high effort, under its own task", async () => {
+     const noMeta: Article = { ...example, meta: null };
+-    const [first, second] = noMeta.blocks.filter((b) => b.treatment !== "supplement");
+-    if (!first || !second) throw new Error("fixture needs two body blocks");
+-    answer = JSON.stringify({ paragraphs: [para("About.", first.id), para("Why.", second.id)] });
+-    const run = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true });
++    const [first, second, third] = noMeta.blocks.filter((b) => b.treatment !== "supplement");
++    if (!first || !second || !third) throw new Error("fixture needs three body blocks");
++    answer = {
++      brief: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
++      simple: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
++      fuller: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id), para("How.", third.id)])),
++    };
++    const out = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true, profile: null });
+ 
+     answer = JSON.stringify({ ideas: [] });
+     const { generateIdeas } = await import("../src/ideas.js");
+     await generateIdeas({ power: "standard", article: noMeta, previous: null, cacheArticle: true }).catch(() => undefined);
+ 
+-    const [call, ideasCall] = sent;
+-    if (!call || !ideasCall) throw new Error("expected both calls");
+-    expect(call.task).toBe("simple");
++    const [call, , , ideasCall] = sent;
++    if (!call || !ideasCall) throw new Error("expected three calls");
+     const body = call.body as {
+       max_tokens: number;
+       system: unknown[];
+       output_config: { effort: string };
+     };
+     expect(body.system[0]).toEqual((ideasCall.body as { system: unknown[] }).system[0]);
+-    expect(body.system[1]).toEqual({ type: "text", text: SIMPLE_SYSTEM });
+     expect(body.output_config.effort).toBe("high");
+-    expect(body.max_tokens).toBe(run.maxTokens);
++    expect(body.max_tokens).toBe(out.maxTokens);
+     expect(body.max_tokens).toBeGreaterThanOrEqual(ANSWER_TOKENS);
+     expect(STAGE_EFFORT.simple).toBe("high");
+-    expect(run.simpleSummary.sourceHash).toBe(inputFingerprint(noMeta.blocks, noMeta.tree, null));
++    expect(out.simpleSummary.sourceHash).toBe(inputFingerprint(noMeta.blocks, noMeta.tree, null));
++  });
++
++  it("with no profile, sends the constant ask byte for byte and records no profile", async () => {
++    answer = good();
++    const out = await run();
++    expect(userMessage(0)).toBe("Write the plain-words orientation for this article.");
++    expect(userMessage(1)).toBe(userMessage(0));
++    expect(userMessage(0)).toBe(renderPrompt(null));
++    expect(out.simpleSummary.profileHash).toBeNull();
++  });
++
++  it("puts the reader after the ask, in the shared profile section, and never in a system prompt", async () => {
++    if (!PROFILE) throw new Error("fixture needs a profile");
++    answer = good();
++    const out = await run(PROFILE);
++    /* Sol's plan review, P2-8: a blank line between the ask and the section. */
++    const expected =
++      `${renderPrompt(null)}\n\n=== WHO IS READING THIS ===\n\n${PROFILE}\n\n` +
++      "Let this change what you lead with and how much you explain. It changes nothing\n" +
++      "about what the article says, and nothing about its proportions. Do not address\n" +
++      "the reader and do not mention this.";
++    expect(userMessage(0)).toBe(expected);
++    expect(userMessage(1)).toBe(expected);
++    for (const call of sent) {
++      const system = (call.body as { system: { text: string }[] }).system;
++      expect(system.map((s) => s.text).join("\n")).not.toContain("cognitive science");
++    }
++    expect(out.simpleSummary.profileHash).toBe(hashProfile(PROFILE));
++  });
++
++  it("carries the shared profile rules in the constant half of both levels", () => {
++    expect(SIMPLE_SYSTEMS.simple).toContain(PROFILE_RULES);
++    expect(SIMPLE_SYSTEMS.fuller).toContain(PROFILE_RULES);
++  });
++
++  it("gives two profiles different requests and the same sourceHash — the stamp cannot see a profile", async () => {
++    const other = renderProfile({ profile: "A historian.", purpose: null });
++    if (!PROFILE || !other) throw new Error("fixture needs two profiles");
++    answer = good();
++    const a = await run(PROFILE);
++    const b = await run(other);
++    const none = await run(null);
++    expect(userMessage(0)).not.toBe(userMessage(3));
++    expect(a.simpleSummary.profileHash).not.toBe(b.simpleSummary.profileHash);
++    /* What `STEPS.simple.stamp` computes: the same function, with no profile. */
++    const stamp = inputFingerprint(BLOCKS, example.tree, example.meta);
++    expect(a.simpleSummary.sourceHash).toBe(stamp);
++    expect(b.simpleSummary.sourceHash).toBe(stamp);
++    expect(none.simpleSummary.sourceHash).toBe(stamp);
+   });
+ 
+   it("sends high power to the gateway and stamps the model that wrote the artefact", async () => {
+-    answer = JSON.stringify({
+-      paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)],
+-    });
+-    const run = await generateSimpleSummary({ power: "high", article: article() });
+-    const [call] = sent;
+-    if (!call) throw new Error("expected one call");
+-
+-    expect(call.options).toMatchObject({ power: "high" });
+-    expect(run.model).toBe(HIGH_POWER_MODEL);
+-    expect(run.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
++    answer = good();
++    const out = await run(null, "high");
++    expect(sent).toHaveLength(3);
++    for (const call of sent) expect(call.options).toMatchObject({ power: "high" });
++    expect(out.model).toBe(HIGH_POWER_MODEL);
++    expect(out.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
+   });
+ 
+   it("does not go stale when only a supplement block, which the request omits, changes", () => {
+@@ -323,10 +477,11 @@ describe("the request", () => {
+     );
+   });
+ 
+-  it("ships the fifteen-year-old pitch, and the probe's twelve is a different prompt", () => {
+-    expect(SIMPLE_SYSTEM).toBe(simpleSystem(15));
+-    expect(SIMPLE_SYSTEM).toContain("fifteen-year-old");
+-    expect(simpleSystem(12)).not.toBe(SIMPLE_SYSTEM);
+-    expect(SIMPLE_SYSTEM).toContain("PLAIN WORDS");
++  it("pitches Simple at fifteen and Fuller at eighteen, and both keep the plain-words rule", () => {
++    expect(SIMPLE_SYSTEMS.simple).toContain("fifteen-year-old");
++    expect(SIMPLE_SYSTEMS.fuller).toContain("eighteen-year-old");
++    expect(SIMPLE_SYSTEMS.simple).not.toContain("eighteen-year-old");
++    for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
+   });
+ });
++
+diff --git a/tests/store-export-bundle.test.ts b/tests/store-export-bundle.test.ts
+index fffc7298..933e9885 100644
+--- a/tests/store-export-bundle.test.ts
++++ b/tests/store-export-bundle.test.ts
+@@ -117,16 +117,28 @@ const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came fro
+ 
+ /** A generated artefact that both export formats must carry whole. */
+ const SIMPLE: SimpleSummary = {
+-  version: "simple/1",
++  version: "simple/2",
+   generator: "fixture-model",
+   slug: SLUG,
+   sourceHash: "0123456789abcdef",
+   generatedAt: "2026-09-30T12:00:00.000Z",
+   elapsedMs: 321,
+-  paragraphs: [
+-    { text: "The article explains the question.", ids: [BLOCKS[0]] },
+-    { text: "It then gives the answer and its limits.", ids: [BLOCKS[1], BLOCKS[2]] },
+-  ],
++  profileHash: null,
++  levels: {
++    brief: [
++      { text: "It asks a question.", ids: [BLOCKS[0]] },
++      { text: "And answers it.", ids: [BLOCKS[1]] },
++    ],
++    simple: [
++      { text: "The article explains the question.", ids: [BLOCKS[0]] },
++      { text: "It then gives the answer and its limits.", ids: [BLOCKS[1], BLOCKS[2]] },
++    ],
++    fuller: [
++      { text: "The article explains the question and where it came from.", ids: [BLOCKS[0]] },
++      { text: "It then gives the answer.", ids: [BLOCKS[1]] },
++      { text: "And it says where that answer stops.", ids: [BLOCKS[2]] },
++    ],
++  },
+ };
+ 
+ /* A real source document, so the rollback's `readRawDocument` actually reaches
+@@ -485,6 +497,17 @@ describe("the bundle is the faithful projection", () => {
+     expect(rollback).toEqual(SIMPLE);
+   });
+ 
++  /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
++     `simple/2` row does not have, and a zero row is dropped — so both levels
++     would have vanished from the page while the JSON beside it carried them. */
++  it("counts every plain-words level on the page", () => {
++    const page = bundled.get("index.html");
++    if (!page) throw new Error("no index.html");
++    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(brief\)<\/span>/)?.[1]).toBe("2");
++    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(simple\)<\/span>/)?.[1]).toBe("2");
++    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(fuller\)<\/span>/)?.[1]).toBe("3");
++  });
++
+   /**
+    * **The images the reader is told they have include the ones out of a PDF.**
+    *
+diff --git a/tests/visitor-gaps.test.ts b/tests/visitor-gaps.test.ts
+index 1247a9ab..76e31f48 100644
+--- a/tests/visitor-gaps.test.ts
++++ b/tests/visitor-gaps.test.ts
+@@ -529,7 +529,7 @@ describe("what the payload says it has", () => {
+       }),
+     ).toMatchObject({ glossary: true, quotes: false });
+     expect(
+-      artefactsIn({ ...BARE, simpleSummary: { paragraphs: [{ text: "About.", ids: [] }] } }),
++      artefactsIn({ ...BARE, simpleSummary: { levels: { brief: [], simple: [{ text: "About.", ids: [] }], fuller: [] } } }),
+     ).toMatchObject({ simpleSummary: true, faq: false });
+   });
+ 

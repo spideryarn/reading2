@@ -3828,6 +3828,7 @@ export const OWNED_ARTEFACT = {
   /* Owner-only, and listed all the same, for `illustrated`'s reason: its
      `profileHash` is the reader's own, and `ProfileCarrying` asks. */
   trajectory: "your route through the quotes",
+  simple: "your plain-words summary",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast
@@ -4029,7 +4030,7 @@ export const ALWAYS_SHARED = [
     label: "The article's text",
     detail:
       "Every paragraph, heading, list and footnote we extracted, in full, with its formatting and " +
-      "its links — not a summary of it.",
+      "its links — not a summary of it — and the links we drew between its own passages, where there are any.",
   },
   {
     key: "pictures",
@@ -4518,6 +4519,25 @@ export function debateWorkFieldsNote(parts: readonly string[]): string {
     `${subject} as the AI read ${parts.length === 1 ? "it" : "them"} off the page; ` +
     `${parts.length === 1 ? "it was" : "each was"} found in the page's extract.`
   );
+}
+
+/**
+ * **Which Debate fields came from a registry** (plan 261001a stage 6): the
+ * identifier is the page address's own, and the record was kept only because
+ * its title agreed with the page's. `parts` names only fields actually used,
+ * so a missing registry year cannot claim an extracted year as Crossref's.
+ */
+export function debateRegistryNote(
+  source: "crossref" | "datacite",
+  parts: readonly ("full title" | "authors" | "year")[],
+): string {
+  const name = source === "crossref" ? "Crossref" : "DataCite";
+  const [first = "", ...rest] = parts;
+  const last = rest.pop();
+  const head = [first, ...rest].join(", ");
+  const list = last === undefined ? head : `${head} and ${last}`;
+  const subject = list.charAt(0).toUpperCase() + list.slice(1);
+  return `${subject} from ${name}, under the identifier this page's address carries — its title there agrees with the page's.`;
 }
 
 /**

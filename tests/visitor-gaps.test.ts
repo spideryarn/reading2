@@ -529,7 +529,7 @@ describe("what the payload says it has", () => {
       }),
     ).toMatchObject({ glossary: true, quotes: false });
     expect(
-      artefactsIn({ ...BARE, simpleSummary: { paragraphs: [{ text: "About.", ids: [] }] } }),
+      artefactsIn({ ...BARE, simpleSummary: { levels: { brief: [], simple: [{ text: "About.", ids: [] }], fuller: [] } } }),
     ).toMatchObject({ simpleSummary: true, faq: false });
   });
 

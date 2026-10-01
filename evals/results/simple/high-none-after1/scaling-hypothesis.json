@@ -1,0 +1,104 @@
+{
+  "arm": "high-none-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.619Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 30652,
+  "costUsd": 0.08408,
+  "tokens": {
+    "input": 28925,
+    "output": 2623,
+    "reasoning": 1177
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 224,
+  "fullerWords": 331,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program released in 2020 that predicts and generates text. It looks at what GPT-3 can do, and what that means for artificial intelligence (AI) in general. The author argues for the scaling hypothesis: making a simple type of learning program much bigger can make it much smarter, without needing clever new tricks.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-ewxv9q",
+        "spya-suzdvz"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised almost everyone, including the author. It did not just know more facts than smaller versions before it. It also learned to follow instructions and solve brand-new tasks from just a few examples, something nobody specially trained it to do. The author calls this \"meta-learning,\" meaning the program learned how to learn.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author calls this pattern the \"blessings of scale\": problems that stump a small learning program often become easy once the program, its data, and its training are made much larger. This happens even though nobody built the program to work that way on purpose. The author thinks this could be a path toward much smarter AI, sooner than most experts expect.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8",
+        "spya-emqjaa"
+      ]
+    },
+    {
+      "text": "The piece also argues that predicting text well enough eventually requires real understanding of facts, reasoning, and the world, not just guessing common words. It criticizes AI experts who confidently said such huge programs would not work, and who rarely admit later that they were wrong.",
+      "ids": [
+        "spya-rjwfkb",
+        "spya-g3b5y7",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is an essay about GPT-3, the largest neural network (a brain-inspired learning program) ever trained when it was released by OpenAI in 2020. It is trained simply to predict the next word in huge amounts of internet text. The author argues that its surprising abilities, especially learning new tasks from a few examples without special training, point to a bigger idea about how AI progress happens.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "This matters because the author sees GPT-3 as evidence for the scaling hypothesis: the old, once-unpopular idea that intelligence is mainly simple learning methods applied to huge amounts of data and computing power. Decades-old forecasts by pioneers like Hans Moravec, once dismissed, now look accurate. The author also argues that AI experts have no real model of why this works, and their reassurances about AI risk cannot be trusted either way.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-emqjaa"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": unlike most research, where small problems are easy and big ones are hard, deep learning seems to get more stable, more general, and better at new tasks simply by growing larger. The author suggests this happens because a big model contains vast numbers of smaller sub-models; simple ones that just memorize data eventually lose out to sub-models that learn real, flexible rules, once the data and model are large enough.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "Another key idea, called the pretraining thesis, is that predicting text accurately forces a model to learn ever-deeper things: first spelling and word frequency, then grammar, then facts and associations, and eventually reasoning and causality. The very last, smallest errors left to fix are argued to require something close to true understanding, since only genuine reasoning can catch the rarest, subtlest mistakes.",
+      "ids": [
+        "spya-n4zu5k",
+        "spya-rjwfkb",
+        "spya-g3b5y7"
+      ]
+    },
+    {
+      "text": "Finally, the piece criticizes respected AI researchers for confidently predicting, year after year, that such scaling would not work, and for rarely admitting they were wrong once it did. It contrasts this with OpenAI, which the author says made a deliberate bet on the scaling hypothesis that most rival labs still doubt.",
+      "ids": [
+        "spya-m9r8zx",
+        "spya-arrq35",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

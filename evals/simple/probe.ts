@@ -11,6 +11,12 @@
  * npx tsx evals/simple/probe.ts report > evals/simple/results-260930.md    # free
  * ```
  *
+ * **Since `simple/2`** (plan 261001b) an arm is `<effort>-<reader>[-<tag>]`,
+ * the reader being `none`, `about`, `goalA` or `goalB` from readers.json, and
+ * both levels are recorded; the ELI12 knob went with the two real levels. The
+ * `…-15-…` arms under evals/results/simple/ are the older prompt, kept as the
+ * `before` side. What follows describes the first probe.
+ *
  * An arm is `<effort>-<pitch>[-<tag>]`; the tag names a prompt revision, since
  * the arms are separated in time, not in code. The effort goes through
  * `SPIDERYARN_PIPELINE_EFFORT`, the whole-run override `effortFor` already
@@ -51,7 +57,15 @@ interface ArmFile {
   ok: boolean;
   error?: string;
   words?: number;
+  /** The `simple` level — the only level before `simple/2`. */
   paragraphs?: { text: string; ids: string[] }[];
+  /** `simple/2` arms: who it was written for, and the `fuller` level. */
+  reader?: string;
+  fullerWords?: number;
+  fuller?: { text: string; ids: string[] }[];
+  /** Since the slider (7J): the `brief` level. */
+  briefWords?: number;
+  brief?: { text: string; ids: string[] }[];
   dropped?: Record<string, number>;
 }
 
@@ -74,11 +88,31 @@ async function list(): Promise<void> {
   await closeDb();
 }
 
+/**
+ * The reader a `simple/2` arm writes for (plan 261001b § Ledger, P1-5):
+ * `none`, `about` alone, or `about` with goal `A` or `B` from readers.json —
+ * rendered by production's own `renderProfile`, as a job's `ctx.profile` is.
+ */
+type Reader = "none" | "about" | "goalA" | "goalB";
+
+async function readerProfile(reader: Reader, slug: string): Promise<string | null> {
+  if (reader === "none") return null;
+  const { renderProfile } = await import("../../src/profile.js");
+  const readers = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "readers.json"), "utf8")) as {
+    about: string;
+    goals: Record<string, Record<"A" | "B", { goal: string }>>;
+  };
+  const goal = reader === "about" ? null : readers.goals[slug]?.[reader === "goalA" ? "A" : "B"]?.goal;
+  if (reader !== "about" && !goal) throw new Error(`readers.json declares no ${reader} for ${slug}`);
+  return renderProfile({ profile: readers.about, purpose: goal ?? null });
+}
+
 async function run(arm: string, slugs: string[]): Promise<void> {
-  const m = /^(low|medium|high|max)-(12|15)(-[\w]+)?$/.exec(arm);
-  if (!m) throw new Error("--arm must be <low|medium|high|max>-<12|15>[-<tag>]");
+  const m = /^(low|medium|high|max)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
+  if (!m) throw new Error("--arm must be <low|medium|high|max>-<none|about|goalA|goalB>[-<tag>]");
   const effort = m[1]!;
-  const pitch = Number(m[2]) as 12 | 15;
+  const reader = m[2] as Reader;
+  const pitch = 15;
   loadEnvLocal();
   process.env.SPIDERYARN_PIPELINE_EFFORT = effort;
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
@@ -112,19 +146,29 @@ async function run(arm: string, slugs: string[]): Promise<void> {
         let file: ArmFile;
         let spent: { costUsd: number | null; tokens: ArmFile["tokens"] } = { costUsd: null, tokens: null };
         const onDone = (report: { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number }; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }[] }) => {
-          const c = report.calls[0];
-          if (!c) return;
-          const nanos = c.cost.source === "provider" ? c.cost.costNanos : c.cost.source === "computed" ? c.cost.computedCostNanos : undefined;
-          spent = {
-            costUsd: nanos === undefined ? null : nanos / 1e9,
-            tokens: { input: c.inputTokens ?? 0, output: c.outputTokens ?? 0, reasoning: c.reasoningTokens },
-          };
+          /* Summed over every call: since `simple/2` a run is two, one per level. */
+          if (report.calls.length === 0) return;
+          let nanosTotal: number | null = 0;
+          const tokens = { input: 0, output: 0, reasoning: 0 as number | null };
+          for (const c of report.calls) {
+            const nanos = c.cost.source === "provider" ? c.cost.costNanos : c.cost.source === "computed" ? c.cost.computedCostNanos : undefined;
+            nanosTotal = nanos === undefined || nanosTotal === null ? null : nanosTotal + nanos;
+            tokens.input += c.inputTokens ?? 0;
+            tokens.output += c.outputTokens ?? 0;
+            tokens.reasoning = c.reasoningTokens === null || tokens.reasoning === null ? null : tokens.reasoning + c.reasoningTokens;
+          }
+          spent = { costUsd: nanosTotal === null ? null : nanosTotal / 1e9, tokens };
         };
         try {
           /* `onDone`, not the returned report: it fires on a failed run too, so a
              run that fails validation is still priced. */
           const { result } = await collectSpend(
-            () => simple.generateSimpleSummary({ article: { ...article, slug }, pitch, power: "standard" }),
+            async () =>
+              simple.generateSimpleSummary({
+                article: { ...article, slug },
+                profile: await readerProfile(reader, slug),
+                power: "standard",
+              }),
             {
               attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
               sink: (row) => costStore.record(row),
@@ -136,8 +180,13 @@ async function run(arm: string, slugs: string[]): Promise<void> {
             wallMs: Date.now() - started,
             ...spent,
             ok: true,
-            words: result.words,
-            paragraphs: result.simpleSummary.paragraphs,
+            reader,
+            words: result.words.simple,
+            fullerWords: result.words.fuller,
+            briefWords: result.words.brief,
+            paragraphs: result.simpleSummary.levels.simple,
+            fuller: result.simpleSummary.levels.fuller,
+            brief: result.simpleSummary.levels.brief,
             dropped: { ...result.dropped },
           };
         } catch (err) {
@@ -192,14 +241,14 @@ function readArms(): ArmFile[] {
 function report(): void {
   const files = readArms();
   const lines: string[] = [];
-  lines.push("| arm | article | body words | ok | wall s | $ | out tokens | words | paras | ids dropped | paras dropped |");
-  lines.push("|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|");
+  lines.push("| arm | article | body words | ok | wall s | $ | out tokens | words | paras | fuller words | fuller paras | ids dropped | paras dropped |");
+  lines.push("|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
   for (const f of files) {
     const d = f.dropped ?? {};
     const idsDropped = (d.unknownIds ?? 0) + (d.duplicateIds ?? 0) + (d.overCap ?? 0);
     const parasDropped = (d.unanchored ?? 0) + (d.empty ?? 0) + (d.malformed ?? 0);
     lines.push(
-      `| ${f.arm} | ${f.slug} | ${f.bodyWords} | ${f.ok ? "yes" : "**no**"} | ${(f.wallMs / 1000).toFixed(1)} | ${f.costUsd?.toFixed(4) ?? "?"} | ${f.tokens?.output ?? "?"} | ${f.words ?? "-"} | ${f.paragraphs?.length ?? "-"} | ${f.ok ? idsDropped : "-"} | ${f.ok ? parasDropped : "-"} |`,
+      `| ${f.arm} | ${f.slug} | ${f.bodyWords} | ${f.ok ? "yes" : "**no**"} | ${(f.wallMs / 1000).toFixed(1)} | ${f.costUsd?.toFixed(4) ?? "?"} | ${f.tokens?.output ?? "?"} | ${f.words ?? "-"} | ${f.paragraphs?.length ?? "-"} | ${f.fullerWords ?? "-"} | ${f.fuller?.length ?? "-"} | ${f.ok ? idsDropped : "-"} | ${f.ok ? parasDropped : "-"} |`,
     );
   }
   lines.push("");
@@ -212,7 +261,12 @@ function report(): void {
         lines.push(`Failed: ${f.error}`, "");
         continue;
       }
+      if (f.brief) lines.push("**brief**", "");
+      for (const p of f.brief ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
+      if (f.fuller) lines.push("**simple**", "");
       for (const p of f.paragraphs ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
+      if (f.fuller) lines.push("**fuller**", "");
+      for (const p of f.fuller ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
     }
   }
   console.log(lines.join("\n"));
@@ -224,12 +278,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else if (cmd === "run") {
     const at = rest.indexOf("--arm");
     const arm = at >= 0 ? rest[at + 1] : undefined;
-    if (!arm) throw new Error("run needs --arm <effort>-<pitch>");
+    if (!arm) throw new Error("run needs --arm <effort>-<reader>");
     await run(
       arm,
       rest.filter((_, i) => i !== at && i !== at + 1),
     );
   } else if (cmd === "report") report();
   else if (cmd === "show") await show(rest[0] ?? "", rest.slice(1));
-  else throw new Error("usage: list | run --arm <effort>-<pitch> <slug>... | report");
+  else throw new Error("usage: list | run --arm <effort>-<reader> <slug>... | report");
 }

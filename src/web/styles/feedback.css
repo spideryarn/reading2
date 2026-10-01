@@ -229,6 +229,12 @@
   color: var(--highlight);
   font-weight: 600;
 }
+/* Its opposite, in All only: said, but quietly, so the shipped ones still stand
+   out. `--ink-soft`, not the meta line's `--ink-faint`, which is just under
+   4.5:1 on the panel and this word carries meaning. */
+.fb-earlier-unshipped {
+  color: var(--ink-soft);
+}
 .fb-earlier:focus-visible {
   outline: 1px solid var(--highlight);
   outline-offset: -1px;

@@ -382,16 +382,19 @@ describe("an article with no metadata", () => {
     const block = quotable(withoutMeta.blocks);
     const second = withoutMeta.blocks.find((b) => b.id !== block.id && isBodyEvidence(b));
     if (!second) throw new Error("the fixture has no second body block");
+    /* One call per level, and this stub gives both the same answer: three
+       paragraphs is inside both levels' limits. */
     answer = JSON.stringify({
       paragraphs: [
         { text: "This piece is about something.", ids: [block.id] },
         { text: "It matters for a reason it gives.", ids: [second.id] },
+        { text: "And it says why, in more detail.", ids: [block.id, second.id] },
       ],
     });
 
-    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta });
+    const run = await generateSimpleSummary({ power: "standard", article: withoutMeta, profile: null });
 
-    expect(run.simpleSummary.paragraphs).toHaveLength(2);
+    expect(run.simpleSummary.levels.simple).toHaveLength(3);
     expect(run.simpleSummary.sourceHash).toBe(
       inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
     );

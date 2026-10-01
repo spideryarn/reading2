@@ -1694,10 +1694,11 @@ describe("a press that met any broken band is retired", () => {
     expect(jobPosts()).toEqual([]);
   });
 
-  /* Summary's Simple chip (plan 260930i): `bandTarget` must answer `simple`
-     for `?summary=simple`, or the boundary retires nothing and the token waits
-     for a later mount to spend. */
-  it("summary: the Simple chip, when the Simple view throws under the real useSimple", async () => {
+  /* Summary's plain-words slider (plans 260930i, 261001b): `bandTarget` must
+     answer `simple` for every level — Fuller here, the one Sol's plan review
+     found missing (P1-3) — or the boundary retires nothing and the token
+     waits for a later mount to spend. */
+  it("summary: the slider moved to Fuller, when the plain-words view throws under the real useSimple", async () => {
     who.set(OWNER_A);
     notBuilt = "/api/simple/";
     await open("?mode=summary");
@@ -1705,11 +1706,13 @@ describe("a press that met any broken band is retired", () => {
     trace.length = 0;
 
     probe.throwAt = "OwnerSimple";
-    const chip = [...host.querySelectorAll<HTMLButtonElement>(".summ-views .summ-pill")].find(
-      (b) => (b.textContent ?? "").trim() === "Simple",
-    );
-    expect(chip, "no Simple chip").toBeDefined();
-    await act(async () => chip?.click());
+    const input = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
+    expect(input, "no plain-words slider").not.toBeNull();
+    await act(async () => {
+      if (!input) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await settle();
 
     containedInside("summary");

@@ -522,6 +522,20 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         contextHash: "0123456789abcdef",
         promptVersion: "citation-investigate/1",
         at: new Date(),
+        /* Plan 261001a stage 3: a read paper, so every paper column is filled
+           and the column-level check below sees each one leave in the zip. */
+        paperState: "read",
+        paperRequestedUrl: "https://arxiv.org/pdf/2001.08361",
+        paperFinalUrl: "https://arxiv.org/pdf/2001.08361",
+        paperHost: "arxiv.org",
+        paperWords: 900,
+        paperSentWords: 800,
+        paperChunks: ["c1", "c2"],
+        paperMatchedBy: "arxiv",
+        paperEvidenceSha: "a".repeat(64),
+        paperSelectionVersion: "paper-selection/1",
+        paperReadAt: new Date(),
+        paperPassages: [{ chunk: "c2", page: 2, text: "A passage the code found.", bears: "supports" }],
       });
     },
     /* On the block `beforeAll` gave an identity row: the composite foreign key

@@ -410,6 +410,7 @@ import type {
   FeedbackKind,
   LibraryEntry,
   GlossaryResponse,
+  SimpleSummaryResponse,
   InvestigateCitationDone,
   Job,
   LibrarySearchResponse,
@@ -8106,8 +8107,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      GET only, and no DELETE: the step replaces, so asking again is
      POST /api/jobs { slug, steps: ["crossrefs"] }. This route never spends.
      **Owner-authenticated like every artefact route here, with no anonymous
-     twin** (Sol F1): a visitor's read goes through the public DTO, and adding
-     it there is a defence edit left for Greg (the plan's § Left for Greg). */
+     twin** (Sol F1): a visitor's links arrive inside the public article
+     payload, fresh ones only (plan 261001b). */
   {
     kind: "pattern",
     method: "GET",
@@ -8130,9 +8131,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/simple\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      /* No `withProfileChanged`: not written for a profile. `stale` and
-         `outdated` apart, as `/api/faq/` has them. */
-      send(res, 200, await loadSimpleSummary(slugPart(captures, 1)));
+      /* `withProfileChanged` since 2026-10-01: the paragraphs are written for
+         the owner's profile and goal (plan 261001b). `stale` and `outdated`
+         apart, as `/api/faq/` has them. */
+      const at = slugPart(captures, 1);
+      send(
+        res,
+        200,
+        await withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
+      );
     },
   },
 

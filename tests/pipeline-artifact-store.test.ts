@@ -648,7 +648,7 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
-  /* Two paragraphs on the first block — the fewest the step writes. The store
+  /* The fewest paragraphs each level writes, on the first block. The store
      checks the shape, not the ids; `buildSimpleSummary` checks those. */
   store.plant(SLUG, "simple", "simple", {
     generator: CAPABLE_MODEL,
@@ -657,10 +657,22 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: SIMPLE_VERSION,
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
-    paragraphs: [
-      { text: "What it is about.", ids: [BLOCKS[0]!.id] },
-      { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
-    ],
+    profileHash: null,
+    levels: {
+      brief: [
+        { text: "What it is.", ids: [BLOCKS[0]!.id] },
+        { text: "Why.", ids: [BLOCKS[0]!.id] },
+      ],
+      simple: [
+        { text: "What it is about.", ids: [BLOCKS[0]!.id] },
+        { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
+      ],
+      fuller: [
+        { text: "What it is about, more fully.", ids: [BLOCKS[0]!.id] },
+        { text: "Why it matters.", ids: [BLOCKS[0]!.id] },
+        { text: "Its key idea.", ids: [BLOCKS[0]!.id] },
+      ],
+    },
   });
   /* **A route over the one quote planted above**, and its `sourceHash` is the
      route's input hash rather than any article fingerprint — the quote, the

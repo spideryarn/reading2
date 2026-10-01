@@ -21,7 +21,7 @@
  *  - **claim** (*by claim*) — rows about this piece as the first group, then one
  *    group per claim in **article order**, headed by the claim's own words.
  *    Needs nothing the artefact does not already have.
- *  - **date** — oldest first by `publishedYear`, undated last, with a marker at
+ *  - **date** — oldest first by `rowYear` (the registry's year, else `publishedYear`), undated last, with a marker at
  *    the article's own year. Needs a row that carries a year.
  *  - **stance** — critical first, then *could not tell*, *neither*,
  *    *supportive*. Needs nothing new.
@@ -55,13 +55,16 @@
  * DTO is a listed defence and does not pass them — the plan's § Deliberately
  * not in this), and a stored row is never revalidated. So every read here
  * copes with the field being absent or nonsense, and a visitor is offered *by
- * claim* and *stance* by construction.
+ * claim* and *stance* by construction. The one exception is `registry` (plan
+ * 261001a stage 6), which the DTO does pass: a visitor is offered *date* where
+ * a row's record carries a year.
  *
  * **Search order is the tie-break everywhere**, and it is never re-sorted by
  * identification level — the chip on a direct row already says that.
  */
-import type { BlockId, DebateBears, DebateLean } from "../types.js";
+import type { BlockId, DebateBears, DebateLean, RegistryWork } from "../types.js";
 import { readStoredBears, readStoredLean } from "../types.js";
+import { readRegistryWork } from "../registry-work.js";
 import { applyThreshold, type ThresholdResult } from "./threshold.js";
 
 /**
@@ -129,6 +132,24 @@ export function readPublishedYear(row: object): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 1000 && value <= 9999
     ? value
     : null;
+}
+
+/**
+ * **A row's registry record, or null** (plan 261001a stage 6) — rebuilt by
+ * `readRegistryWork`, so a stored row in any shape reads as a record or as
+ * nothing.
+ */
+export function readRowRegistry(row: object): RegistryWork | null {
+  return readRegistryWork((row as { registry?: unknown }).registry);
+}
+
+/**
+ * **The year a row is dated by**: the registry's, where the row's address
+ * carried an identifier whose record agreed with the page's title, else
+ * `publishedYear`. The *date* order sorts on this and nothing else.
+ */
+export function rowYear(row: object): number | null {
+  return readRowRegistry(row)?.year ?? readPublishedYear(row);
 }
 
 /** A row's `workTitle`, or null when absent or blank. */
@@ -233,7 +254,7 @@ function hasDataFor(order: DebateOrder, direct: readonly object[], claims: reado
     case "prioritised":
       return claims.some((r) => readBears(r) !== null);
     case "date":
-      return [...direct, ...claims].some((r) => readPublishedYear(r) !== null);
+      return [...direct, ...claims].some((r) => rowYear(r) !== null);
     case "claim":
     case "stance":
       return true;
@@ -312,17 +333,17 @@ function byDate<D extends OrderableRow, C extends ClaimLikeRow>(
 ): DebateGroup<D, C>[] {
   const all: (D | C)[] = [...direct, ...claims];
   const dated = stableBy(
-    all.filter((r) => readPublishedYear(r) !== null),
-    (r) => readPublishedYear(r) ?? 0,
+    all.filter((r) => rowYear(r) !== null),
+    (r) => rowYear(r) ?? 0,
   );
-  const undated = all.filter((r) => readPublishedYear(r) === null);
+  const undated = all.filter((r) => rowYear(r) === null);
   if (articleYear === null) {
     return nonEmpty<D, C>([
       { kind: "flat", rows: dated },
       { kind: "undated", rows: undated },
     ]);
   }
-  const cut = dated.findIndex((r) => (readPublishedYear(r) ?? 0) >= articleYear);
+  const cut = dated.findIndex((r) => (rowYear(r) ?? 0) >= articleYear);
   const at = cut === -1 ? dated.length : cut;
   return nonEmpty<D, C>([
     { kind: "flat", rows: dated.slice(0, at) },

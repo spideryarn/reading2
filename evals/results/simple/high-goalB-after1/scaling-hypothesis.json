@@ -1,0 +1,96 @@
+{
+  "arm": "high-goalB-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.845Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 106591,
+  "costUsd": 0.191844,
+  "tokens": {
+    "input": 29062,
+    "output": 13372,
+    "reasoning": 11972
+  },
+  "ok": true,
+  "reader": "goalB",
+  "words": 237,
+  "fullerWords": 294,
+  "paragraphs": [
+    {
+      "text": "This essay by Gwern is about GPT-3, a huge language model made by OpenAI, and an idea called the \"scaling hypothesis.\" That idea says smart behavior can come just from making neural networks bigger, with more data and computing power, no special tricks needed. GPT-3 surprised people by learning new tasks from just a few examples, without being built for that.",
+      "ids": [
+        "spya-ag750z",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The essay says this matters because most AI experts have no real theory of why this happens or where it leads. It argues their public reassurances about AI risk would sound the same either way. So those reassurances tell us little. OpenAI built its whole strategy on betting that scaling works; most other labs, like DeepMind, did not.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-arrq35",
+        "spya-vr9q2p"
+      ]
+    },
+    {
+      "text": "The essay's core idea, \"blessings of scale,\" is that problems hard for small models become easy for large ones. Stability, generalization, and meta-learning — learning how to learn new tasks — all emerge together as models and data grow. No special engineering is needed to get these abilities; they show up on their own.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "In an appendix, Gwern argues these models learn to imitate agents, because they're trained on huge amounts of text written by people pursuing goals. He says this agent-like behavior may be nearly impossible to filter out. That's because treating a system as if it wants something is often the simplest way to predict what it will do next. This holds even for non-human data.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-ehe426",
+        "spya-msngfz"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's essay on GPT-3, OpenAI's large language model, and the \"scaling hypothesis.\" That hypothesis claims intelligence is simple neural networks and learning algorithms, applied at a scale beyond what's currently reachable, without needing special architecture. GPT-3 was larger than most researchers expected, and continued to improve with scale rather than hitting diminishing returns. Unlike GPT-2, it learned to follow instructions and do new tasks from a handful of examples, purely from being trained to predict the next word in internet text.",
+      "ids": [
+        "spya-ag750z",
+        "spya-asr663",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The essay argues this matters because mainstream AI forecasting is unmoored from evidence. It contends researchers' comments on AI risk are \"meaningless,\" since they would say the same things whether scaling worked or not. None of them, it notes, predicted GPT-3's meta-learning in advance. OpenAI made a startup-like bet that scaling alone is the path, restructuring itself financially to raise money for it. DeepMind instead holds a \"weak scaling hypothesis\": it believes many separate brain-like modules must be engineered and combined. Most other labs, the essay says, are uninterested or unable to compete.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-arrq35",
+        "spya-vr9q2p"
+      ]
+    },
+    {
+      "text": "Its central mechanism, the \"blessings of scale,\" holds that large models act like ensembles of countless sub-models, biased toward simple solutions. As data and scale grow, memorized shortcuts stop working, and more general, human-like abstractions — including meta-learning — win out instead, without being deliberately built in.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-vkkfzh",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "A closing appendix pushes the risk question further. Because these models imitate agent-generated text, they learn to imitate agency — and can be prompted to plan and act toward goals, as shown by robots following language instructions. Gwern argues this \"ambient agency\" may be nearly impossible to engineer away. Modeling a system as goal-seeking is often simply the most efficient way for a network to predict it, even for non-human data.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-cw7jg4",
+        "spya-msngfz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

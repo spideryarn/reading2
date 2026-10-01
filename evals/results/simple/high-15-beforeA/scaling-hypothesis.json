@@ -1,0 +1,60 @@
+{
+  "arm": "high-15-beforeA",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:04.076Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 17845,
+  "costUsd": 0.071484,
+  "tokens": {
+    "input": 28232,
+    "output": 1502,
+    "reasoning": 814
+  },
+  "ok": true,
+  "words": 270,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge text-predicting computer program released in 2020, and what it means for a big idea called the scaling hypothesis. That idea says intelligence might come from simply making neural networks (learning programs loosely modeled on brains) much bigger, fed much more data and computing power, rather than from clever new designs.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-suzdvz"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 did more than just get better at old tasks. It learned to follow instructions and pick up brand-new tasks from just a few examples, a skill called meta-learning, or learning how to learn. This surprised most researchers, including the author, since bigger models were expected to hit limits, but performance kept improving smoothly as the model grew.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The author calls this pattern the \"blessings of scale\": problems that are hard for small neural networks get easier, not harder, as networks grow huge. One explanation offered is that a giant model contains countless smaller sub-models, and training pushes it toward the simplest ones that still work, which turn out to be more general and human-like. Separately, the \"pretraining thesis\" argues that training a model to predict text forces it to learn grammar, facts, and eventually reasoning and common sense, because these are needed to predict well.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-n4zu5k"
+      ]
+    },
+    {
+      "text": "The author argues most AI experts did not predict this and still cannot explain why it happened, and criticizes them for dismissing scaling without solid arguments. An appendix raises a further worry: models trained on huge amounts of human-written text may end up imitating agents, meaning they could develop goal-pursuing behavior, simply because so much of that text describes people acting to achieve things.",
+      "ids": [
+        "spya-m9r8zx",
+        "spya-b93jbz",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

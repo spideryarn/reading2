@@ -65,7 +65,7 @@
 
 import { log } from "../log.js";
 import { makeFindCitation } from "../citation-find.js";
-import { makeInvestigateCitation } from "../citation-investigate.js";
+import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
 import type {
@@ -564,12 +564,17 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
  * page a current *Look it up* read) and its own store —
  * src/citation-investigate.ts. Below `fetchAllowanceStore` for the same reason.
  */
-export const investigateCitation = makeInvestigateCitation({
+export const investigateCitationDeps: InvestigateCitationDeps = {
   reader,
   finds: citationFindStore,
   investigations: citationInvestigationStore,
   allowance: fetchAllowanceStore,
-});
+  /* The cited paper itself, read through stage 2 with stage 1's registry
+     (plan 261001a stage 3). tests/citation-investigate-wiring.test.ts holds
+     this to the real function. */
+  readPaper: readCitedPaper,
+};
+export const investigateCitation = makeInvestigateCitation(investigateCitationDeps);
 
 /** An uploaded paper's guessed web address — one row per article, a claim then an answer. */
 export const sourceGuessStore: SourceGuessStore = guarded("source-guesses", pgSourceGuessStore);

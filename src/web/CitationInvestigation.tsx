@@ -19,10 +19,25 @@
  * stored record does not say whether a profile went into the call — only that
  * the context hash covered it — so the sentence says *used this article* and
  * no more, rather than guess.
+ *
+ * **The paper itself** (plan 261001a stage 3): `paperReadSentence` says, per
+ * stored `paper.state`, what we did about it and on what day; a read paper's
+ * passages are the chunk's own characters, under a label saying code found
+ * them and that each one's bearing is the AI's reading. An answer with no
+ * `paper` is from before that stage and is drawn exactly as it was then.
  */
 import { ChevronDown, ChevronUp, ExternalLink, Microscope } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { CitationInvestigation, CitationLookup, InvestigateStage } from "../types.js";
+import { paperUnreadableSentence } from "../messages.js";
+import type {
+  CitationInvestigation,
+  CitationLookup,
+  InvestigatedPaper,
+  InvestigateStage,
+  PaperMatchedBy,
+  PaperPassage,
+  PaperPassageBears,
+} from "../types.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { useTapReveal } from "./useTapReveal.js";
@@ -32,12 +47,22 @@ import { useTapReveal } from "./useTapReveal.js";
 /** Over a kept answer, collapsed or not: whose words these are, and from what. */
 export const INVESTIGATION_LABEL = "the AI's reading of web search extracts";
 
+/** The same label when the AI was also shown parts of the paper itself (plan 261001a stage 3). */
+export const INVESTIGATION_LABEL_WITH_PAPER = "the AI's reading of parts of the paper and web search extracts";
+
+/** Over the paper's passages: whose words, found how, and whose reading `bears` is. */
+export const PAPER_PASSAGES_LABEL =
+  "The paper's own words, found by code in the text we read; each one's bearing is the AI's reading";
+
 /** While the press's first step looks for the work's own page (plan 260930d). */
 export const INVESTIGATE_FINDING = "Finding the work…";
 
+/** While the press reads the paper itself and picks its passages (plan 261001a stage 3). */
+export const INVESTIGATE_READING_PAPER = "Reading the paper itself, if we can get it…";
+
 /** Under the button until the first words land. The words are the progress after that. */
 export const INVESTIGATE_WAIT =
-  "It searches the web and then writes, which can take up to a minute. If it finishes, the answer is kept on this row even if you leave.";
+  "It searches the web, tries to read the paper, and then writes, which can take a minute or two. If it finishes, the answer is kept on this row even if you leave.";
 
 /** Sol Q-4: a failed *Investigate again* replaced nothing, and says so. */
 export const INVESTIGATE_PREVIOUS_KEPT = "The new investigation was not kept; the previous one is still shown.";
@@ -49,8 +74,77 @@ export const INVESTIGATE_LOOKUP_KEPT = "The longer investigation failed; the qui
 
 export type InvestigationProvenanceInput = Pick<
   CitationInvestigation,
-  "sources" | "extractsRead" | "longestExtractWords" | "matchedHost"
+  "sources" | "extractsRead" | "longestExtractWords" | "matchedHost" | "paper"
 >;
+
+/** The label over a kept answer: the paper is named only when the AI was shown it. */
+export function investigationLabel(inv: Pick<CitationInvestigation, "paper">): string {
+  return inv.paper?.state === "read" ? INVESTIGATION_LABEL_WITH_PAPER : INVESTIGATION_LABEL;
+}
+
+/** A dated snapshot (Sol P-10): the day it was read, never "current". */
+function onDay(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+const count = (n: number) => n.toLocaleString("en-GB");
+
+const MATCHED_BY: Record<PaperMatchedBy, string> = {
+  doi: "its title and DOI",
+  arxiv: "its title and arXiv id",
+  "title-author": "its title and first author",
+};
+
+/**
+ * **What we did about the paper itself, in words** (plan 261001a stage 3 §
+ * What was read, said by code) — from the stored fields only, one sentence per
+ * state, and dated: `read on …` for a paper read, `tried on …` otherwise.
+ */
+export function paperReadSentence(paper: InvestigatedPaper): string {
+  switch (paper.state) {
+    case "read": {
+      const words = paper.words === 1 ? "1 word" : `${count(paper.words)} words`;
+      return (
+        `We read the paper itself: a PDF from ${paper.host}, ${words}. ` +
+        `The AI was shown ${count(paper.sentWords)} of them — the opening and the passages closest to what the article cites it for. ` +
+        `Matched by ${MATCHED_BY[paper.matchedBy]}. Read on ${onDay(paper.readAt)}.`
+      );
+    }
+    case "unreadable":
+      return `${paperUnreadableSentence(paper.unreadableWhy)} We tried ${paper.host} on ${onDay(paper.readAt)}.`;
+    case "not-the-full-text":
+      return `We reached a page for this work on ${paper.host}, but not its full text, so the AI was not shown it. Tried on ${onDay(paper.readAt)}.`;
+    case "not-confirmed":
+      return `We found a document on ${paper.host} but could not confirm it is this work, so the AI was not shown it. Tried on ${onDay(paper.readAt)}.`;
+    case "identity-conflict":
+      return `The identifier the article gives points to a different title, so we did not use it. Tried on ${onDay(paper.readAt)}.`;
+    case "no-address":
+      return `We had no address for the paper itself, so the AI was not shown it. Tried on ${onDay(paper.readAt)}.`;
+    default: {
+      const never: never = paper;
+      return never;
+    }
+  }
+}
+
+/** How a passage bears, as the AI read it, in words for its caption. */
+const BEARS_WORDS: Record<PaperPassageBears, string> = {
+  supports: "supports the claim",
+  partly: "partly supports it",
+  context: "context for it",
+};
+
+/** A passage's caption: its page, and its bearing labelled as the AI's reading. */
+export function passageCaption(p: Pick<PaperPassage, "page" | "bears">): string {
+  return `page ${p.page} · the AI's reading: ${BEARS_WORDS[p.bears]}`;
+}
+
+/** What the row says when a read paper yields no passage to show — never *the paper does not support*. */
+export function noPassagesSentence(passages: PaperPassage[] | null): string {
+  return passages === null
+    ? "Picking passages from the paper failed this time, so none is shown."
+    : "The AI found no passage it could point to in what it was shown.";
+}
 
 /** The distinct hosts of the sources that are web addresses, in the order they came. */
 function sourceHosts(sources: readonly { url: string }[]): string[] {
@@ -105,11 +199,27 @@ export function investigationProvenance(
       : firstCheckHost !== null
         ? `An earlier quick check matched a page on ${firstCheckHost}; this search did not return an extract from it.`
         : "We could not confirm that any result is this work itself.";
+  /* **No `paper`: an answer from before plan 261001a stage 3**, said exactly
+     as it was then. With one, "we did not fetch any page" would be false — we
+     may have fetched the paper — so the sentence is about the results only,
+     and the paper has its own sentence (`paperReadSentence`). */
+  if (!inv.paper) {
+    return [
+      returned,
+      "We did not fetch any page ourselves; an extract may be an abstract or part of a paper's text.",
+      `The AI was asked to base what it says about the work on ${them}, and used this article to relate ${it}.`,
+      `It was instructed not to quote ${it}.`,
+      identity,
+    ].join(" ");
+  }
+  const read = inv.paper.state === "read";
   return [
     returned,
-    "We did not fetch any page ourselves; an extract may be an abstract or part of a paper's text.",
-    `The AI was asked to base what it says about the work on ${them}, and used this article to relate ${it}.`,
-    `It was instructed not to quote ${it}.`,
+    `We did not fetch ${one ? "that result" : "those results"} ourselves; an extract may be an abstract or part of a paper's text.`,
+    read
+      ? `The AI was asked to base what it says about the work on ${them} and the parts of the paper it was shown, and used this article to relate ${it}.`
+      : `The AI was asked to base what it says about the work on ${them}, and used this article to relate ${it}.`,
+    read ? `It was instructed not to quote ${it} or the paper.` : `It was instructed not to quote ${it}.`,
     identity,
   ].join(" ");
 }
@@ -190,6 +300,8 @@ export type InvestigationView =
   | { kind: "none" }
   /** Pressed, and the first step is looking for the work's own page (plan 260930d). */
   | { kind: "finding" }
+  /** Pressed, and the press is reading the paper itself (plan 261001a stage 3). */
+  | { kind: "reading-paper" }
   /** Pressed, and no words yet. */
   | { kind: "waiting" }
   /** Words arriving: the stream so far, never drawn as kept. */
@@ -215,7 +327,9 @@ export function investigationViewOf(
 ): InvestigationView {
   if (here.running) {
     if (here.draft) return { kind: "arriving", text: here.draft };
-    return here.stage === "finding" ? { kind: "finding" } : { kind: "waiting" };
+    if (here.stage === "finding") return { kind: "finding" };
+    if (here.stage === "reading-paper") return { kind: "reading-paper" };
+    return { kind: "waiting" };
   }
   if (here.failed !== null) {
     /* The error does not prove nothing was kept (a save can succeed and the
@@ -274,11 +388,12 @@ export function InvestigateButton({
              first step is *Look it up* (src/citation-find.ts), skipped only
              for a current assessed lookup — "a current checked reading";
              "passages code found" is `verifyQuote`; no search count is
-             promised (the provider's); what is read is extracts — neither
-             step fetches a page; the profile part is the prompt's *For you*,
+             promised (the provider's); what is read is extracts, and — plan
+             261001a stage 3 — the paper's PDF only when src/paper-evidence.ts
+             confirms it, its passages only via `verifyPassage`; the profile part is the prompt's *For you*,
              only with a profile; both are stored per row. */
-          what="First it searches the web for this work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
-          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper; it never fetches the paper itself. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
+          what="First it searches the web for this work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Next it tries to read the paper itself. Then it writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
+          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper. It also tries to fetch the paper's PDF: the AI is shown it only when code has checked it is this work, and then only its opening and the parts closest to what the article cites it for. Passages of it are shown here only where code found them in that text. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
           tap={reveal.tap}
         />
       }
@@ -352,6 +467,12 @@ export function InvestigationBlock({
       return (
         <p className="cite-inv-wait" role="status">
           {INVESTIGATE_FINDING}
+        </p>
+      );
+    case "reading-paper":
+      return (
+        <p className="cite-inv-wait" role="status">
+          {INVESTIGATE_READING_PAPER}
         </p>
       );
     case "waiting":
@@ -432,9 +553,10 @@ function Kept({
   const parts = investigationParts(investigation.answer);
   const shown = open ? parts : parts.slice(0, 1);
   const sources = investigation.sources.filter((s) => isWebUrl(s.url));
+  const paper = investigation.paper;
   return (
     <>
-      <p className="cite-lookup-label">{INVESTIGATION_LABEL}:</p>
+      <p className="cite-lookup-label">{investigationLabel(investigation)}:</p>
       {shown.map((part, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed answer, never reordered
         <div key={i} className={`cite-inv-part${open ? "" : " folded"}`}>
@@ -448,6 +570,9 @@ function Kept({
       </button>
       {open && (
         <>
+          {paper?.state === "read" && <PaperPassages passages={paper.passages} />}
+          {/* Absent on an answer from before plan 261001a stage 3: drawn as it was then. */}
+          {paper && <p className="cite-inv-prov">{paperReadSentence(paper)}</p>}
           <p className="cite-inv-prov">{investigationProvenance(investigation, lookup)}</p>
           {sources.length > 0 && (
             <ul className="cite-inv-sources">
@@ -468,6 +593,29 @@ function Kept({
           </p>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * **The paper's passages** — each the chunk's own characters as code found
+ * them (src/citation-paper-passages.ts), with the page it starts on and its
+ * bearing, captioned as the AI's reading. None to show is said plainly, and a
+ * failed pick is not drawn as *found none*.
+ */
+function PaperPassages({ passages }: { passages: PaperPassage[] | null }) {
+  if (passages === null || passages.length === 0) {
+    return <p className="cite-inv-prov">{noPassagesSentence(passages)}</p>;
+  }
+  return (
+    <>
+      <p className="cite-inv-prov">{PAPER_PASSAGES_LABEL}:</p>
+      {passages.map((p) => (
+        <figure key={`${p.chunk}:${p.text}`} className="cite-quote">
+          <blockquote>“{p.text}”</blockquote>
+          <figcaption>{passageCaption(p)}</figcaption>
+        </figure>
+      ))}
     </>
   );
 }

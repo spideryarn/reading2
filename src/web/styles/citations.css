@@ -56,6 +56,9 @@
   text-underline-offset: 2px;
   width: fit-content;
 }
+/* "from Crossref" beside a by-line the registry filled in: quieter than the
+   by-line, because it says where the words came from rather than what they are. */
+.cite-by-from { color: var(--ink-faint); }
 /* The entry in the tooltip, and in the prose card: the article's own words. */
 .cite-entry {
   font-size: 0.8rem;

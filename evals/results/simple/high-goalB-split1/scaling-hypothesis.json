@@ -1,0 +1,20 @@
+{
+  "arm": "high-goalB-split1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "4cefbf1ba90cafe46894c7c7a6131e2524be52053507a3c4a51e05b32835e2cf",
+  "at": "2026-09-30T23:45:15.387Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 24206,
+  "costUsd": 0.074552,
+  "tokens": {
+    "input": 28866,
+    "output": 1682,
+    "reasoning": 701
+  },
+  "ok": false,
+  "error": "The model wrote 338 \"simple\" words and the limit is 320. Nothing is kept rather than a cut-down version."
+}

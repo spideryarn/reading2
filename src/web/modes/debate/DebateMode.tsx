@@ -129,11 +129,11 @@ export function VisitorDebateBand({
   const articleYear = yearOf(publishedAt);
   const [level, setLevel] = useQueryState("name", nameParam);
   const [order, setOrder] = useQueryState("debateby", debateOrderParam);
-  /* Read for symmetry: a visitor's rows carry no `bears` (the public DTO does
-     not pass it), so *prioritised* is never drawn and this bar never shows. */
+  /* A visitor's rows carry `bears` since 2026-10-01 (plan 261001b, 5P), so
+     *prioritised* and its bar work for them as for the owner. */
   const [relevance, setRelevance] = useQueryState("bears", bearsParam);
-  /* Read for symmetry too: a visitor's debate carries no synthesis (the public
-     DTO does not pass it), so there are no threads for this to name. */
+  /* And the synthesis since the same day (6M) — absent when the boundary
+     withheld a row, and then there are no threads for this to name. */
   const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
   return (
     <DebatePanel

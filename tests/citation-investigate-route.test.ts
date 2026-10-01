@@ -104,7 +104,19 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
   let calls = 0;
   let lookups = 0;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-  globalThis.fetch = ((_url: string, init?: { body?: string }) => {
+  const outside: string[] = [];
+  globalThis.fetch = ((_url: string | URL, init?: { body?: string }) => {
+    /* **Plan 261001a stage 3: the real paper read runs here too**, through
+       the real composition root — the paper's own address and the registry.
+       Neither reaches the network: the registry gets a 500 (an error, which
+       stores nothing and cools nothing in the shared cache) and the paper a
+       404, so the press stores an `unreadable` paper and goes on. */
+    const url = String(_url);
+    if (!url.startsWith("https://openrouter.ai/")) {
+      outside.push(new URL(url).host);
+      const registry = /^https:\/\/api\.(crossref|datacite)\.org\//.test(url);
+      return Promise.resolve(new Response("", { status: registry ? 500 : 404 }));
+    }
     /* The lookup is the one call that does not stream. */
     if (!(init?.body ?? "").includes('"stream":true')) {
       lookups += 1;
@@ -131,6 +143,8 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
   return {
     calls: () => calls,
     lookups: () => lookups,
+    /** The hosts asked that are not the model gateway — the paper and the registry. */
+    outside: () => outside,
     finish(rest: string) {
       controller?.enqueue(
         chunk({
@@ -328,6 +342,12 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
     expect(stub.calls()).toBe(1);
     expect(await storedAnswer()).toBe(done.investigation.answer);
     expect((await listed())?.investigation).toEqual(done.investigation);
+    /* Plan 261001a stage 3, through the real composition root: the row's
+       arXiv link was asked for as a PDF (the registry may answer from the
+       shared cache, so whether it was asked is not pinned here), and the
+       paper's state was stored through the CHECKs and read back. */
+    expect(stub.outside()).toContain("arxiv.org");
+    expect(done.investigation.paper).toMatchObject({ state: "unreadable", host: "arxiv.org", unreadableWhy: "not-found" });
   });
 
   it("hides the answer when the list is made again with a different why, and shows it when put back", async () => {
@@ -394,7 +414,7 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
     await handled;
 
     const names = frames(call.body()).map((f) => (f.name === "stage" ? `stage:${(f.data as { stage: string }).stage}` : f.name));
-    expect(names.filter((n) => n !== "delta")).toEqual(["stage:finding", "lookup", "stage:reading", "done"]);
+    expect(names.filter((n) => n !== "delta")).toEqual(["stage:finding", "lookup", "stage:reading-paper", "stage:reading", "done"]);
     const lookup = frames(call.body()).find((f) => f.name === "lookup")?.data as FindCitationResponse;
     expect(lookup.outcome).toBe("found");
     expect(lookup.outcome === "found" ? lookup.lookup.state : null).toBe("assessed");

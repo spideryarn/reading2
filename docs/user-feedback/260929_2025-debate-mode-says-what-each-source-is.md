@@ -68,3 +68,7 @@ Short of the plan's own target: a phone screen shows about two and a half rows, 
 
 Measured: ten paid eval runs, about $2.35, plus one real re-run (~$0.25). Two GPT Sol reviews, of
 the plan and of the code; the code reviewer fixed eight findings.
+
+## Follow-up, 2026-10-01: visitors
+
+**Visitors now get the relevance judgement**, so *prioritised* and its bar work for them as they do for you. The authors-and-year decision (a lookup service) is still yours and stays in awaiting-approval.md. Greg approved widening the public DTO (a listed defence), relayed by the Overseer. Shipped in `6c1b2cd2`, with GPT Sol's code-review fixes in `7431f0fd`. Plan: [261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md).

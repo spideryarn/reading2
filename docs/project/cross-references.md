@@ -86,18 +86,17 @@ cross-reference: it cannot know the nonce.
 
 ## Who sees it
 
-**Only the article's owner, in v1.** The route is `GET /api/crossrefs/:slug`, owner-authenticated,
-and a visitor's view makes no request for it. Two things wait on Greg, because each is an edit to a
-[listed defence](security-map.md#where-the-defences-physically-live), and an unattended run does
-not make those:
+**The owner, and since 2026-10-01 a visitor to a public article.** The owner's route is
+`GET /api/crossrefs/:slug`, owner-authenticated. A visitor makes no request: the links arrive inside
+the public article payload as `crossrefs: { links: [{from, phrase, to}] }`, and **only when they are
+fresh**. The public reader asks `isStale` (`src/crossrefs-fingerprint.ts`) of the same inputs the
+owner's read uses, so a visitor never sees a link the owner's view would hide. Greg approved both
+defence edits:
 
-1. **Reserving the mark at ingress** — `data-xref` in `FORBID_ATTR`, the `xref` class reserved, and
-   `SANITIZER_VERSION` bumped. This is the sanitiser's own rule for a new `MarkKind`. The nonce
-   already stops a forged mark from working; the reservation would stop one from even *looking*
-   like a link. The same edit should forbid `data-block-link`, `data-block-preview` and
-   `data-block-missing`, which an article can forge today regardless of this feature.
-2. **Visitors** — a `crossrefs` key through `PUBLIC_PROJECTIONS` and the public DTO, omitted when
-   stale.
+1. **The mark is reserved at ingress.** The sanitiser keeps only the `data-*` names and classes an
+   article may carry, so an article cannot forge `xref` or `data-block-*` markup
+   ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md)).
+2. **Visitors see the links** ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
 
 ## Deferred
 

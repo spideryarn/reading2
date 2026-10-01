@@ -1278,6 +1278,36 @@ describe("the Earlier tab", () => {
     expect(items[1]?.querySelector(".fb-earlier-shipped")).toBeNull();
   });
 
+  /* SPIDERYARN-READING2-7D: "In Feedback / Earlier / All, add the indicator
+     for whether each suggestion has shipped or not." An absence is not an
+     indicator, so in All a not-shipped row says so. */
+  it("in All, says Not shipped on every row that has not shipped", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    const items = [...panelOf("Earlier").querySelectorAll("li")];
+    expect(items[0]?.querySelector(".fb-earlier-unshipped")).toBeNull();
+    const unshipped = items[1]?.querySelector(".fb-earlier-unshipped");
+    expect(unshipped?.textContent).toBe("Not shipped");
+    expect(unshipped?.getAttribute("title")).toContain("isn't marked as shipped");
+    expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).toContain(" · Not shipped");
+  });
+
+  it("does not repeat Not shipped on every row of the Not shipped filter", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    listAnswer = page({ reports: [REPORTS.reports[1]], more: false });
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    const items = [...panelOf("Earlier").querySelectorAll("li")];
+    expect(items).toHaveLength(1);
+    expect(items[0]?.textContent).toContain("The shelf is slow.");
+    expect(items[0]?.querySelector(".fb-earlier-unshipped")).toBeNull();
+  });
+
   it("refuses a report without a shipped flag as the wrong shape", async () => {
     const { shipped: _dropped, ...withoutFlag } = REPORTS.reports[0] ?? { shipped: true };
     listAnswer = page({ reports: [withoutFlag], more: false });

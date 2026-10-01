@@ -60,6 +60,7 @@ import {
 import { escapeHtml, normaliseText } from "../html.js";
 import { log } from "../log.js";
 import { articleUrl, isWebUrl } from "../urls.js";
+import { isUsableSimpleSummary } from "../types.js";
 
 const logger = log("store");
 
@@ -590,7 +591,7 @@ one thing that will make the rest of these files make sense.
       citation-finds.json  Pages found on the web for cited works you asked about.
       citation-investigations.json
                            What Investigate wrote about cited works you asked it to look into,
-                           and which search results it read.
+                           which search results it read, and what it read of each paper.
       reading-time.json    How many seconds you have spent on each block.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
@@ -775,7 +776,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
   "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/citation-investigations.json":
-    "What Investigate wrote about cited works you asked it to look into, and which search results it read.",
+    "What Investigate wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
@@ -845,6 +846,11 @@ function countOf(value: unknown, key: string): number {
   return 0;
 }
 
+/** Simple's `levels` object, structurally, as `countOf` reads everything else. */
+function levelsOf(value: unknown): unknown {
+  return isUsableSimpleSummary(value) ? value.levels : null;
+}
+
 /**
  * **How many pictures this bundle actually names**, across both collections.
  *
@@ -895,7 +901,11 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
     { label: "trajectory stops", n: countOf(revision.trajectory, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
-    { label: "plain-words paragraphs", n: countOf(revision.simpleSummary, "paragraphs") },
+    /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)
+       counts nothing, which is what every other read makes of it. */
+    { label: "plain-words paragraphs (brief)", n: countOf(levelsOf(revision.simpleSummary), "brief") },
+    { label: "plain-words paragraphs (simple)", n: countOf(levelsOf(revision.simpleSummary), "simple") },
+    { label: "plain-words paragraphs (fuller)", n: countOf(levelsOf(revision.simpleSummary), "fuller") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the
        article's own `<img src>`s in `entries` and the pictures recovered from a

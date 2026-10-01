@@ -55,7 +55,8 @@ import { STORAGE_FAILED } from "../messages.js";
 import type { PublicArticle, PublicBlock } from "../public-types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
-import { hashBlocks } from "../source-hash.js";
+import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
+import { isStale as crossrefsIsStale } from "../crossrefs-fingerprint.js";
 import { isSlug } from "../ingest.js";
 import { blobStore } from "./blobs.js";
 import { canonicalKey } from "../source.js";
@@ -357,6 +358,12 @@ const PUBLIC_PROJECTIONS = {
        `publicSourceUrl`, as the masthead's is. `publicDebate` in
        ../public/dto.ts. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     debate: articleRevisions.debate,
+    /* **Cross-references, 2026-10-01** — Greg approved the defence edit
+       (plan 261001b, SPIDERYARN-READING2-5Z). Not a mode but an annotation:
+       links drawn in the prose. `loadArticle` below asks `isStale` of it with
+       the owner's own inputs, and `publicCrossrefs` in ../public/dto.ts keeps
+       `{from, phrase, to}` per link and nothing else. */
+    crossrefs: articleRevisions.crossrefs,
     /* **The seventh, and the one that cost real money to make.** A visitor sees
        the Sketch the owner already paid for; nothing on their side can start
        another. docs/project/security-map.md § the hazard this section is really
@@ -764,6 +771,31 @@ export const pgPublicReader: PublicArticleReader = {
           )
         : undefined;
 
+      /**
+       * **Whether the cross-references still describe this revision** — the
+       * owner's `loadCrossrefs` question (src/store/pg.ts), asked by the same
+       * function of the same inputs: the raw `rows` (not the sanitised
+       * `blocks`, for `current`'s reason above), the tree, and
+       * `citedMetaFingerprintOf` over the raw revision columns. Not
+       * `PublicMeta`, whose title falls back to a heading and whose address is
+       * the published one: either would hash a head the model never saw, and
+       * every link would read stale or, worse, fresh. Plan 261001b, Sol P3.
+       */
+      const crossrefs = found.revision.crossrefs;
+      const crossrefsFresh =
+        crossrefs !== null &&
+        !crossrefsIsStale(
+          crossrefs,
+          rows.map((row) => ({
+            id: row.blockId,
+            text: row.text,
+            role: row.role,
+            treatment: row.treatment,
+          })),
+          tree,
+          citedMetaFingerprintOf(found.revision),
+        );
+
       return publicArticle({
         slug: found.slug,
         title: found.revision.title,
@@ -787,6 +819,8 @@ export const pgPublicReader: PublicArticleReader = {
         simpleSummary: found.revision.simpleSummary,
         citations: found.revision.citations,
         debate: found.revision.debate,
+        crossrefs,
+        crossrefsFresh,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
         /* `null` columns become absent keys, exactly as the artefacts do — the

@@ -1,0 +1,100 @@
+{
+  "arm": "high-about-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.624Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 25220,
+  "costUsd": 0.064338,
+  "tokens": {
+    "input": 20654,
+    "output": 2303,
+    "reasoning": 1135
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 174,
+  "fullerWords": 244,
+  "paragraphs": [
+    {
+      "text": "This article is about how to measure \"computation\" inside brains: how groups of neurons combine signals into something new. It introduces a tool called partial information decomposition (PID), which breaks down the information that several neurons carry about another neuron's future activity into separate pieces.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "This matters because just tracking whether information flows from one neuron to another does not explain how neurons combine and transform signals. PID lets researchers ask whether a neuron just adds up its inputs, or instead reacts to specific patterns across them.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "PID splits information into redundant information, carried by several neurons at once, unique information, carried by only one, and synergistic information, only visible when looking at neurons together. The authors found synergy is higher in densely connected \"rich club\" neurons, in circuits with more feedback loops between inputs, and when input neurons are moderately, but not too, correlated.",
+      "ids": [
+        "spya-e94ury",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The review also describes applying this to monkeys performing tasks, tools for running these analyses, and limits, such as how the decomposition becomes unmanageable as more neurons are added.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This article reviews how information theory, and especially a method called partial information decomposition (PID), can be used to study how neural circuits process information. It walks through the concepts and math behind PID and then surveys recent findings that used it on real neural recordings.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The piece frames this as addressing basic open questions: what circuit wiring favors information processing, and what physiological features correspond to it. Simply tracking information flow between neurons, it argues, does not reveal how neurons actually combine or transform multiple input streams into something new.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID decomposes the information two or more source neurons give about a target neuron into redundant information, given by more than one source, unique information, given by only one source, and synergistic information, only visible from the sources' joint pattern. Synergy is treated as the signature of genuine computation.",
+      "ids": [
+        "spya-q2b0e5",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Applying PID to recordings from cultured cortical circuits, the authors found synergy correlates with how much information flows into a triad of neurons, is far higher inside densely connected \"rich club\" neurons, and rises with more recurrent connections between source neurons. Synergy also peaks when input neurons are moderately correlated, then falls if they become too similar.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "A study on behaving monkeys replicated several of these patterns and showed synergy shifts with task demands, rising or falling in different brain regions across stages of a behavior. The review closes with practical tools, caveats about data size, and future directions like multi-target and time-resolved decomposition.",
+      "ids": [
+        "spya-wr7f6y",
+        "spya-t8fayf",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

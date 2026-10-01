@@ -464,6 +464,8 @@ describe("all five roles", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      crossrefs: null,
+      crossrefsFresh: false,
       comments: [],
       searches: [],
       sketch: null,

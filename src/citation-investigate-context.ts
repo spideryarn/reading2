@@ -23,6 +23,10 @@
 import { createHash } from "node:crypto";
 
 import { generationKey } from "./models.js";
+/* A value import from a module that imports this one's types only — erased,
+   so no cycle at run time. pdf.js is loaded lazily there (src/pdf.ts), so the
+   store's read path does not pay for it. */
+import { PAPER_SELECTION_VERSION } from "./paper-evidence.js";
 import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } from "./types.js";
 
 /**
@@ -30,7 +34,7 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * the second part's layout, or anything here changes what an answer would say**
  * — it is inside the fingerprint, so a bump detaches every stored answer.
  */
-export const CITATION_INVESTIGATE_VERSION = "citation-investigate/4";
+export const CITATION_INVESTIGATE_VERSION = "citation-investigate/5";
 
 /** Each citing passage sent, in characters — *Look it up*'s `PASSAGE_CAP`. */
 export const INVESTIGATE_PASSAGE_CAP = 1_200;
@@ -145,6 +149,11 @@ export function investigateContextHash(
 ): string {
   return hash16([
     CITATION_INVESTIGATE_VERSION,
+    /* Which rule chose the paper's chunks (plan 261001a stage 3, Sol P-10).
+       The paper's own content is not here: nothing re-fetches it on read, so
+       a kept answer is a dated snapshot of what was read, not a claim that
+       the remote paper is unchanged. */
+    PAPER_SELECTION_VERSION,
     generationKey(model),
     articleKey,
     context.title,
