@@ -9,7 +9,11 @@ Built 2026-08-26 from [prompt-caching.md](../plans/260826g-prompt-caching.md), w
 the alternatives. The research behind it:
 [anthropic](../research/260826b-prompt-caching-anthropic.md) (mechanics, pricing, invalidation),
 [openrouter](../research/260826d-prompt-caching-openrouter.md) (the request-path calls),
-[callsites](../research/260826c-prompt-caching-callsites.md) (the audit).
+[callsites](../research/260826c-prompt-caching-callsites.md) (the audit). Revisited 2026-10-01:
+[current practice](../research/261001a-prompt-caching-best-practice-2026.md), a
+[production audit](../research/261001a-prompt-caching-production-audit/README.md) of every call
+against thirty days of real spend, and [the plan](../plans/261001l-prompt-caching-across-every-call.md)
+those led to — mostly a decision *not* to add machinery, § What production actually does.
 
 This doc is the operating manual: where the caches are, what breaks them, and how to tell.
 
@@ -42,7 +46,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | **three groups**, one shared entry each: `arc`+`tweets`, `glossary`+`quotes`, and `ideas`+`timeline`+`quiz`+`faq`+`sketch` (all sending the body only). Membership is effort **and** rendering together, read off [`STAGE_EFFORT`](../../src/models.ts) rather than kept in a second list here — **see below for why glossary is not with arc** | `articleText`, and `articleWithIds` for the third group |
+| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was four: the big `ids` group (tweets, ideas, sketch, timeline, quiz, faq, simple), glossary with quotes, and arc and crossrefs each alone. **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
@@ -85,7 +89,9 @@ accepted: the worst case is a few cents and a batch of latency, and the alternat
 
 ### Glossary is a third cache, and the reason is not the article
 
-`arc`, `tweets` and `glossary` do emit byte-identical article text — that part of the design worked.
+`arc`, `tweets` and `glossary` did emit byte-identical article text — that part of the design worked.
+(Tweets has since moved to `articleWithIds`, on 2026-09-29, so it left arc's group for the `ids` one;
+the argument below about effort is unchanged.)
 They still cannot share a cache, because **`output_config.effort` is part of the cache key**, and
 the three stages are not all set to the same effort (`src/models.ts` § `STAGE_EFFORT`, which is
 the one place that says which runs at what).
@@ -145,7 +151,7 @@ write in a doc and a different thing to decide about.
 **So the breakpoint is conditional.** A stage marks the article only when **another step of the same
 job** is in its cache group — `cacheArticleForStep` in [`src/pipeline.ts`](../../src/pipeline.ts),
 set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
-An ordinary ingest therefore marks nothing, a job that asks for arc and tweets together marks **both**,
+An ordinary ingest therefore marks nothing, a job that asks for glossary and quotes together marks **both**,
 and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no second
 call.
 
@@ -221,6 +227,48 @@ than defaults:
 
 Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_HIERARCHY`, which is off
 ([260904d](../plans/260904d-deepen-fat-sections.md) § stage 8).
+
+## What production actually does
+
+**Measured 2026-10-01, and it is the fact to start from: the pipeline's article stages have never
+cached anything in production.** Zero reads and zero writes on every arc, tweets, glossary, quotes,
+ideas, sketch, timeline, quiz and faq call in thirty days of `ai_calls` — the audit, with its SQL,
+is [261001a-prompt-caching-production-audit](../research/261001a-prompt-caching-production-audit/README.md).
+
+Not a bug. A stage marks the article only when another step of **its own job** is in its group
+(above), and the reading view posts one job per mode, so the predicate is false on essentially every
+real call. The rule that stops us paying 1.25× for nothing has, in practice, switched article caching
+off — and on the numbers that is about right:
+
+- **The money is small.** $72 of spend in those thirty days, and the best any marking rule could have
+  saved was a few dollars of it.
+- **The one recurring shape is the import burst** — the add page's tick box queues every main mode at
+  once ([`queueAutoModes`](../../src/web/auto-modes.ts)), and mode jobs on one article run in
+  parallel since 2026-09-29. Of the jobs it posts only **two pairs** can share an article —
+  tweets with ideas, glossary with quotes — worth about **2.6¢ an import** on a 10,000-token article.
+- **Capturing it needs cross-job coordination**, and that has no honest signal: the moment an entry
+  becomes readable is the writer's `message_start`, which only the writer's process sees; a step
+  persisted as `running` says nothing about it. Marking the pairs *without* waiting makes it worse
+  (both write, neither reads). Posting each pair as one job would work with the code as it is, and
+  holds Quotes behind Glossary and Ideas behind Tweets on every import.
+
+So it is **deliberately not done**, by Greg's rule for caching — sparingly, and for good reason
+(2026-10-01, via the Overseer). [261001l](../plans/261001l-prompt-caching-across-every-call.md) has
+the design that was reviewed and dropped, and why. **Revisit** when the audit's SQL, re-run on
+post-2026-09-30 data, shows the import pairs worth materially more than a dollar a month.
+
+**Where caching does pay, it is inside one call site that fans out over one article** — and there
+the coordination is in-process and exact. Simple's three levels are the worked example
+([261001j](../plans/261001j-simple-press-cost-and-latency.md)): the slowest level goes first with the
+article marked, the other two start once its stream has begun (`MeteredCall.onStart` in
+[`src/messages-stream.ts`](../../src/messages-stream.ts)), and a press fell from $0.142 to $0.090.
+**A new call site that fans out over one article should reuse that, not build a second one** — and
+should measure it cold, the way `evals/simple/fanout-spike.ts --cold` does, or a cache left warm by
+an earlier run fakes the saving.
+
+**An open question, not chased:** Debate shows cache reads in production with no breakpoint of its
+own (its three passes open differently, so they cannot be sharing one with each other). Something
+upstream of us is caching part of its web-search loop; nobody has looked at what.
 
 ## The marker that used to ruin it
 
@@ -347,7 +395,7 @@ Three defences, and none substitutes for another:
 - **`tests/article-prompt.test.ts`** proves the prefix is *stable* — byte-identical across two
   questions, two selections, two reading positions, a growing conversation. Deterministic, no
   network, runs on every change. It cannot prove anything was cached.
-- **`npm run eval:caching -- data/<slug>`** proves it is *cached*, by calling twice and reading the
+- **`npm run eval:caching -- <slug> [--wire=chat|messages|both]`** proves it is *cached*, by calling twice and reading the
   number back. Costs money, run by hand, results committed under `evals/results/`. The pass
   condition is a `cacheReadTokens` on the second call of roughly the article's own size — not merely
   non-zero, since a hit on the system prompt alone would clear that bar while the article missed
@@ -359,10 +407,19 @@ Three defences, and none substitutes for another:
   breakpoint, so it is covered by construction — which is a weaker thing than being called, and is
   written here as such.
 
-  **All three of those are on the chat wire, so the eval covers one wire and not the other.** No
-  eval calls a pipeline stage. That is the same "covered by construction" weakness one level up, and
-  it is worth naming rather than assuming the migration inherited the coverage: what actually stands
-  behind the seven stages is the live probe recorded above and the third defence below.
+  **It covers the Messages wire too, since 2026-10-01** — the gap this paragraph used to name. The
+  `messages` arm calls the real `generateGlossary` then `generateQuotes` with the article marked,
+  then quotes again with only its effort changed as a negative control. Call 1 has to *write* (a
+  read there means a cache left warm by somebody else, and the run says "inconclusive" rather than
+  passing); call 2 has to read about what call 1 wrote; the control has to read nothing. First run,
+  on a ~13k-token article: 16,192 written, 16,192 read back, control 0 —
+  [the result](../../evals/results/prompt-caching-noema-mythology-of-conscious-ai.md).
+  **It checks the wire and the stages' byte layout, not the job wiring** that decides whether a real
+  job marks the article at all: that is
+  [`tests/article-cache-call-site.test.ts`](../../tests/article-cache-call-site.test.ts), which walks
+  real jobs through Postgres and reads `ctx.cacheArticle`. Forcing the flag in an eval and calling
+  that coverage of production is the shape [silent-success.md](../reusable/silent-success.md) warns
+  about.
 - **`aiCost` on the step's own log line**, which is new since 2026-08-27 and is the only one of the
   three that watches a *real* run rather than a run somebody set up. A cached read is roughly a
   tenth the price of a fresh one, so the same step costing ten times more than it did last week is
@@ -407,8 +464,10 @@ does nothing: no error, and zeros in both usage fields — which is indistinguis
 has broken. `underCacheFloor` exists to tell those two apart, and callers log it rather than throwing,
 because a short article is a perfectly good article that simply cannot be cached.
 
-The floor is a property of the model, not of us: Opus 5 needs 512, Haiku 4.5 needs 4,096, and the
-progression is not monotonic. **Anything that edits [`src/models.ts`](../../src/models.ts) should
+The floor is a property of the model, not of us: Opus 5 and Opus 5.5 need 512 (5.5 measured live on
+2026-09-30, `HIGH_POWER_CACHE_FLOOR_TOKENS` in [`src/article-prompt.ts`](../../src/article-prompt.ts)),
+Anthropic's page also gives 512 for Sonnet 5.5, Haiku 4.5 needs 4,096, and the progression is not
+monotonic ([261001a](../research/261001a-prompt-caching-best-practice-2026.md)). **Anything that edits [`src/models.ts`](../../src/models.ts) should
 look at `CACHE_FLOOR_TOKENS`.** A model change also flushes every cache — caches are model-scoped —
 so a comparison run via a `SPIDERYARN_*_MODEL` override will show all writes and no reads, which is
 correct and not a fault.
@@ -429,7 +488,8 @@ In rough order of how easily it happens here:
    its queue at concurrency 1 and widens after the first batch returns — but **only when its prefix
    clears the floor**, because the first version serialised unconditionally and so paid a whole
    batch of latency, every run, for a discount that did not exist at these lengths. See
-   [`src/labels.ts`](../../src/labels.ts).
+   [`src/labels.ts`](../../src/labels.ts). The exact signal, where one process owns the fan-out, is
+   `MeteredCall.onStart` — [§ What production actually does](#what-production-actually-does).
 5. **Editing one stage's article rendering.** There is one renderer for a reason; changing it changes
    what several stages send.
 6. **Provider routing.** A cache lives on the upstream that wrote it. Every call sends a `provider`
@@ -455,6 +515,13 @@ have to move when the route did. Break-even is the **second** use of a prefix, w
 single-use prefixes are left unmarked.
 The 1-hour TTL is deliberately not used — it doubles the write and needs three uses, and a reading
 session's calls land within minutes of each other. A cache hit refreshes the TTL for free.
+
+**Three uses against *not marking*, which is the comparison that matters.** One write and *n* reads
+cost 2.0 + 0.1n of the prefix's uncached price at 1h, against 1 + n unmarked, so 1h needs two
+later reads inside the hour; the 5-minute write needs one. A source that says 1h "pays for a single
+reuse" is comparing it with a 5-minute marker, not with leaving the article unmarked. Re-checked
+2026-10-01 against the 30-day audit: no group has enough two-read hours to be worth it
+([261001l](../plans/261001l-prompt-caching-across-every-call.md) § Not doing).
 
 ## See also
 

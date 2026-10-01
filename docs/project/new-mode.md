@@ -392,6 +392,17 @@ Two things to check:
 Then generate the mode once on a local article and open the metadata page: the mode's line should
 be there.
 
+**Its cache group.** A mode that sends the whole article takes a row in `STAGE_EFFORT` and
+`ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts)) — the compiler asks — and those two values
+*are* the choice of which stages it can share a cached article with: same effort and same renderer,
+one group. Choose them for what the mode writes, never to join a group, and say in the comment on its
+row which group that puts it in, or that it is alone. Expect the group to save almost nothing: modes
+are separate jobs, so a cached article is shared only inside one job. **If the mode makes several
+calls over one article itself**, stagger them on `MeteredCall.onStart` as Simple does rather than
+firing them together — [prompt-caching.md § What production actually does](prompt-caching.md#what-production-actually-does).
+*[`tests/article-cache-group.test.ts`](../../tests/article-cache-group.test.ts), for the grouping;
+nothing for the comment.*
+
 ## Retiring a mode
 
 The checklist above read backwards, plus two things adding never needs. Outline was the first to go,

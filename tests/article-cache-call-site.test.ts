@@ -116,6 +116,8 @@ const PART: Partial<Record<StepName, unknown>> = {
   tweets: { tweets: [] },
   ideas: { ideas: [] },
   glossary: { entries: [] },
+  /* Non-empty: `SHAPE.quotes` refuses an empty list. */
+  quotes: { quotes: [{ id: "spya-q00001", text: "recorded" }] },
 };
 
 /** A step that records the context it was handed and writes the least it may. */
@@ -263,6 +265,22 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
     await walk(["arc", "glossary"]);
     expect(seen.map((s) => s.step)).toEqual(["arc", "glossary"]);
     expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
+  }, 30_000);
+
+  it("marks both of glossary and quotes, and a lone glossary not at all", async () => {
+    /* **The pair evals/prompt-caching.ts runs on the Messages wire**, with
+       `cacheArticle: true` forced. That eval proves the wire and the two
+       stages' byte layout, and says in its header that it does not prove the
+       job sets the flag. This is that half, for the same two stages — so a
+       PASS there and a green here together cover the import that asks for
+       both. docs/plans/261001l-prompt-caching-across-every-call.md § 2b. */
+    await walk(["glossary", "quotes"]);
+    expect(seen.map((s) => s.step)).toEqual(["glossary", "quotes"]);
+    expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);
+
+    await walk(["glossary"]);
+    expect(seen.map((s) => s.step)).toEqual(["glossary"]);
+    expect(seen.map((s) => s.cacheArticle)).toEqual([false]);
   }, 30_000);
 
   it("marks nothing at all when the job holds one article stage", async () => {

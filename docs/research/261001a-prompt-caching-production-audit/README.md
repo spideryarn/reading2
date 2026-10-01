@@ -4,6 +4,13 @@
 - the code was read in this tree;
 - production was read through `.env.prod`, with every query inside `BEGIN READ ONLY … ROLLBACK`. The runner is `runq.mjs` in this folder (psql is not installed on the box, so it uses node `pg` by absolute path). Every query is reproduced below as `q*.sql`.
 
+> **Corrected after GPT Sol's review (2026-10-01).** Three things below are wrong or overstated and
+> are kept as written so the queries still match: (1) the import burst is **two** cache-sharing pairs
+> (tweets→ideas, glossary→quotes), not six calls — about 2.6¢ an import, ~$1/month, not $0.09–0.10;
+> (2) the high/ids estimate includes Simple's own fan-out, since fixed by 261001j; (3) Debate's three
+> passes share no prefix, so its row is not an opportunity. Also "41%" is 43 of 103 *calls*; of
+> followers it is 57%. [261001l § What the review changed](../../plans/261001l-prompt-caching-across-every-call.md).
+
 ## The headline, in plain words
 
 - **The volume is small.** Production spent **$72.39 over the last 30 days**: 1,569 calls on 45 articles, and **one owner** (Greg). Every figure below is dollars per month at *that* volume. It scales with readers.

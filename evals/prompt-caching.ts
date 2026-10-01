@@ -1,10 +1,14 @@
 /**
  * Eval — is the article actually being cached, and what does that save?
  *
- *   npm run eval:caching -- data/noema-mythology-of-conscious-ai
+ *   npm run eval:caching -- <slug> [<slug>...] [--wire=chat|messages|both]
+ *
+ * The article is read from the store (Postgres), by slug, as the owner in
+ * `SPIDERYARN_OWNER_ID` — the `data/<slug>` folders this used to read no longer
+ * exist for real articles. `--wire` defaults to `both`.
  *
  * **This one spends money.** Unlike evals/hierarchy-labels.ts, which measures
- * artefacts already on disk, this makes real model calls — that is the whole
+ * artefacts already stored, this makes real model calls — that is the whole
  * point of it. Every deterministic thing about prompt caching is already pinned
  * in tests/article-prompt.test.ts: that the cached prefix is byte-identical
  * across calls, that the reader's position stays out of it, that the four
@@ -18,14 +22,41 @@
  * There is also a public report of cache reads sitting at zero through
  * OpenRouter with Claude, so "no error" is specifically not evidence here.
  *
- * **The pass condition is a non-zero read on the second call**, of roughly the
- * article's own size. Anything else is a failure worth reading the output over.
+ * ## The two wires, and what each arm checks
+ *
+ * **Chat wire** (`--wire=chat`): search twice, then two chat turns — the
+ * request-path calls. Pass: the second call of each pair reads roughly the
+ * article's own size.
+ *
+ * **Messages wire** (`--wire=messages`): the pipeline's wire. It calls the REAL
+ * stage functions the pipeline's `STEPS` entries call — `generateGlossary`
+ * then `generateQuotes`, one cache group (same renderer, same effort) — one
+ * after the other on one article, with `cacheArticle: true` forced. Then a
+ * negative control: `generateQuotes` again with ONLY its effort changed
+ * (`SPIDERYARN_PIPELINE_EFFORT`, set for that call and restored), which must
+ * read nothing, because effort is part of the cache key. Usage and cost come off
+ * the `ai_calls` ledger rows each call writes (`collectSpend`), not off the
+ * stage's own return value.
+ *
+ * Cold-start honesty without touching the request bytes: glossary must WRITE
+ * (at least the 1,024-token floor) and read zero. If it reads, a previous run
+ * warmed the entry, and the arm is reported WARM, INCONCLUSIVE — never PASS.
+ * PASS needs quotes to read within 10% of what glossary wrote, and the control
+ * to read zero.
+ *
+ * **What the Messages arm checks**: the wire, and the two stages' byte layout
+ * (that glossary and quotes really do send the same prefix up to the
+ * breakpoint). **What it does NOT check: the job wiring** — whether a real job
+ * sets `cacheArticle` to `true` for both members of a same-group pair. This
+ * forces the flag. That is tests/article-cache-call-site.test.ts, which walks
+ * real jobs through `advanceJobWith` and reads the `StepContext` each step is
+ * handed. docs/plans/261001l-prompt-caching-across-every-call.md § Stage 1.
  *
  * Results are committed under `evals/results/` so the next change is compared
  * against a number rather than against somebody's memory. See evals/README.md.
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { articleWithIds, estimateTokens } from "../src/article-prompt.js";
@@ -79,14 +110,6 @@ function costs(r: CallResult): { actual: number; uncached: number } {
     actual: usd(fresh, PRICE.input) + usd(write, PRICE.cacheWrite5m) + usd(read, PRICE.cacheRead),
     uncached: usd(total, PRICE.input),
   };
-}
-
-async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }> {
-  const { blocks } = JSON.parse(await readFile(path.join(dir, "blocks.json"), "utf-8")) as {
-    blocks: Block[];
-  };
-  const meta = JSON.parse(await readFile(path.join(dir, "meta.json"), "utf-8")) as Meta;
-  return { meta, blocks };
 }
 
 /**
@@ -197,11 +220,12 @@ async function chatTwice(slug: string, meta: Meta, blocks: Block[]): Promise<Cal
   return out;
 }
 
-function report(dir: string, calls: CallResult[], articleTokens: number): string {
+function report(calls: CallResult[], articleTokens: number): string {
   const lines: string[] = [];
-  lines.push(`# Prompt caching — ${path.basename(dir)}`);
+  lines.push("## Chat wire — search and chat");
   lines.push("");
-  lines.push(`Article: about ${articleTokens.toLocaleString()} tokens.`);
+  lines.push(`Article as \`articleWithIds\` renders it: about ${articleTokens.toLocaleString()} tokens.`);
+  lines.push("Costs in this table are computed from the list prices above, not read off the ledger.");
   lines.push("");
   lines.push("| call | prompt | cache read | cache write | ms | cost | uncached |");
   lines.push("|---|---:|---:|---:|---:|---:|---:|");
@@ -290,50 +314,269 @@ function verdict(cold: CallResult, warm: CallResult, articleTokens: number): str
   return lines;
 }
 
+/**
+ * One Messages-wire call, as the ledger recorded it.
+ *
+ * Read off the `ai_calls` row (`SpendRecord`) rather than off the stage's own
+ * return value, so this eval reads the same numbers the cost report does. A
+ * stage that made more than one call (a retry) shows its first and says how
+ * many there were.
+ */
+interface WireCall {
+  label: string;
+  effort: string;
+  calls: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+  costUsd: number | null;
+  upstream: string | null;
+  ms: number;
+}
+
+/** Sonnet 5's minimum cacheable prefix. docs/project/prompt-caching.md. */
+const CACHE_FLOOR = 1_024;
+
+async function messagesArm(slug: string): Promise<{ calls: WireCall[]; articleTokens: number }> {
+  const { loadArticle } = await import("../src/store/index.js");
+  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
+  const { collectSpend, totalSpend } = await import("../src/ai-spend.js");
+  const { costStore } = await import("../src/store/ai-calls.js");
+  const { generateGlossary } = await import("../src/glossary.js");
+  const { generateQuotes } = await import("../src/quotes.js");
+  const { articleText } = await import("../src/article-prompt.js");
+  const { isBodyEvidence } = await import("../src/block-policy.js");
+  const { effortFor } = await import("../src/models.js");
+
+  const owner = environmentOwnerId();
+  return runAsOwner(owner, async () => {
+    const stored = await loadArticle(slug);
+    /* The shape the pipeline's `readArticle` hands a stage: blocks, tree, meta.
+       Both stages get this one object, so any difference in what they send is
+       their own — which is the byte layout this arm is checking. */
+    const article = { slug, blocks: stored.blocks, tree: stored.tree, meta: stored.meta ?? null };
+    const articleTokens = estimateTokens(articleText(article.meta, article.blocks.filter(isBodyEvidence)));
+
+    const measure = async (
+      label: string,
+      job: "glossary" | "quotes",
+      run: () => Promise<unknown>,
+    ): Promise<WireCall> => {
+      const effort = effortFor(job);
+      const started = Date.now();
+      const { report } = await collectSpend(run, {
+        attribution: { scopeKind: "eval", ownerId: owner, articleSlug: slug },
+        sink: (row) => costStore.record(row),
+      });
+      const mine = report.calls.filter((c) => c.job === job);
+      const first = mine[0];
+      if (!first) throw new Error(`${label}: the ledger recorded no ${job} call`);
+      const { nanos, unpriced } = totalSpend([first]);
+      return {
+        label,
+        effort,
+        calls: mine.length,
+        inputTokens: first.inputTokens ?? 0,
+        cacheReadTokens: first.cacheReadTokens ?? 0,
+        cacheWriteTokens: first.cacheWriteTokens ?? 0,
+        outputTokens: first.outputTokens ?? 0,
+        costUsd: unpriced > 0 ? null : nanos / 1e9,
+        upstream: first.upstream,
+        ms: Date.now() - started,
+      };
+    };
+
+    /* `previous: null` and no profile: a first pass, the shape an article with
+       neither artefact gets. Nothing here writes either artefact back. */
+    const glossary = () =>
+      generateGlossary({ article, previous: null, profile: null, power: "standard", cacheArticle: true });
+    const quotes = () =>
+      generateQuotes({ article, previous: null, profile: null, power: "standard", cacheArticle: true });
+
+    const calls: WireCall[] = [];
+    calls.push(await measure("glossary (cold — expect a write, no read)", "glossary", glossary));
+    calls.push(await measure("quotes (same group — expect a read)", "quotes", quotes));
+
+    /* The negative control: the same stage, the same bytes, only the effort
+       changed. `effortFor` reads the variable at call time (src/models.ts), so
+       setting it around one call moves that call and nothing else. */
+    const before = process.env.SPIDERYARN_PIPELINE_EFFORT;
+    const controlEffort = effortFor("quotes") === "high" ? "low" : "high";
+    process.env.SPIDERYARN_PIPELINE_EFFORT = controlEffort;
+    try {
+      calls.push(await measure(`quotes at effort ${controlEffort} (control — expect no read)`, "quotes", quotes));
+    } finally {
+      if (before === undefined) delete process.env.SPIDERYARN_PIPELINE_EFFORT;
+      else process.env.SPIDERYARN_PIPELINE_EFFORT = before;
+    }
+    return { calls, articleTokens };
+  });
+}
+
+type Verdict = "PASS" | "FAIL" | "WARM, INCONCLUSIVE";
+
+/**
+ * The Messages arm's verdict, stated. Three calls, three conditions, and a
+ * cold start that has to be shown rather than assumed.
+ */
+function messagesVerdict([cold, warm, control]: WireCall[]): { verdict: Verdict; why: string[] } {
+  if (!cold || !warm || !control) return { verdict: "FAIL", why: ["fewer than three calls were measured"] };
+  if (cold.cacheReadTokens > 0) {
+    return {
+      verdict: "WARM, INCONCLUSIVE",
+      why: [
+        `glossary read ${cold.cacheReadTokens.toLocaleString()} tokens on what was meant to be a cold call, ` +
+          "so something warmed this prefix inside the TTL (an earlier run, or a real job). A read on " +
+          "quotes cannot then be credited to glossary's write. Wait out the TTL, or use another article.",
+      ],
+    };
+  }
+  const why: string[] = [];
+  let ok = true;
+  if (cold.cacheWriteTokens < CACHE_FLOOR) {
+    ok = false;
+    why.push(
+      `glossary wrote ${cold.cacheWriteTokens.toLocaleString()} tokens, below the ${CACHE_FLOOR.toLocaleString()}-token ` +
+        "floor: the breakpoint was not sent, or the prefix is too short to cache.",
+    );
+  } else {
+    why.push(`glossary wrote ${cold.cacheWriteTokens.toLocaleString()} tokens and read none — a true cold start.`);
+  }
+  const ratio = cold.cacheWriteTokens > 0 ? warm.cacheReadTokens / cold.cacheWriteTokens : 0;
+  if (cold.cacheWriteTokens > 0 && Math.abs(ratio - 1) <= 0.1) {
+    why.push(
+      `quotes read ${warm.cacheReadTokens.toLocaleString()} (${(ratio * 100).toFixed(1)}% of glossary's write) — ` +
+        "the two stages send the same prefix and the wire reused it.",
+    );
+  } else {
+    ok = false;
+    why.push(
+      `quotes read ${warm.cacheReadTokens.toLocaleString()}, ${(ratio * 100).toFixed(1)}% of glossary's write ` +
+        "(want 90–110%). Zero means the bytes differ before the breakpoint or the provider did not reuse " +
+        "the entry; a partial read means something ahead of the article matched and the article did not.",
+    );
+  }
+  if (control.cacheReadTokens === 0) {
+    why.push(`the control (effort ${control.effort}) read nothing, as effort being part of the cache key predicts.`);
+  } else {
+    ok = false;
+    why.push(
+      `the control (effort ${control.effort}) read ${control.cacheReadTokens.toLocaleString()} tokens. Either ` +
+        "effort is no longer part of the cache key — which would change the grouping in src/models.ts § " +
+        "STAGE_EFFORT — or the read is not coming from where this eval thinks.",
+    );
+  }
+  return { verdict: ok ? "PASS" : "FAIL", why };
+}
+
+function messagesReport(calls: WireCall[], articleTokens: number): { text: string; verdict: Verdict } {
+  const lines: string[] = [];
+  lines.push("## Messages wire — glossary then quotes, one cache group");
+  lines.push("");
+  lines.push(
+    "The real stage functions (`generateGlossary`, `generateQuotes`) with `cacheArticle: true` forced. " +
+      `Article as \`articleText\` renders it: about ${articleTokens.toLocaleString()} tokens. ` +
+      "Tokens and cost are read off the `ai_calls` ledger rows.",
+  );
+  lines.push("");
+  lines.push("**Checks** the Messages wire and the two stages' byte layout. **Does not check** the job wiring");
+  lines.push("that decides `cacheArticle` — that is tests/article-cache-call-site.test.ts.");
+  lines.push("");
+  lines.push("| call | effort | input (uncached) | cache read | cache write | output | cost | provider | ms |");
+  lines.push("|---|---|---:|---:|---:|---:|---:|---|---:|");
+  let total = 0;
+  let priced = true;
+  for (const c of calls) {
+    if (c.costUsd === null) priced = false;
+    else total += c.costUsd;
+    lines.push(
+      `| ${c.label}${c.calls > 1 ? ` (${c.calls} calls; first shown)` : ""} | ${c.effort} | ${c.inputTokens} | ` +
+        `${c.cacheReadTokens} | ${c.cacheWriteTokens} | ${c.outputTokens} | ` +
+        `${c.costUsd === null ? "unpriced" : `$${c.costUsd.toFixed(4)}`} | ${c.upstream ?? "—"} | ${c.ms} |`,
+    );
+  }
+  lines.push("");
+  lines.push(
+    `**Spent on this arm: ${priced ? `$${total.toFixed(4)}` : `at least $${total.toFixed(4)} (some calls unpriced)`}.**`,
+  );
+  lines.push("");
+  const { verdict, why } = messagesVerdict(calls);
+  lines.push(`### Verdict: **${verdict}**`);
+  lines.push("");
+  for (const w of why) lines.push(`- ${w}`);
+  return { text: lines.join("\n"), verdict };
+}
+
+type Wire = "chat" | "messages" | "both";
+
 async function main(): Promise<void> {
   loadEnvLocal();
-  const dirs = process.argv.slice(2);
-  if (dirs.length === 0) {
-    console.error("Usage: npm run eval:caching -- <dir with blocks.json + meta.json> [...]");
+  const args = process.argv.slice(2);
+  const wireArg = args.find((a) => a.startsWith("--wire="))?.slice("--wire=".length) ?? "both";
+  if (wireArg !== "chat" && wireArg !== "messages" && wireArg !== "both") {
+    console.error(`--wire must be chat, messages or both, not ${wireArg}`);
+    process.exit(1);
+  }
+  const wire: Wire = wireArg;
+  /* A path is reduced to its last segment, so the old `data/<slug>` spelling
+     still names the article — which is read from the store either way. */
+  const slugs = args.filter((a) => !a.startsWith("--")).map((a) => path.basename(a));
+  if (slugs.length === 0) {
+    console.error("Usage: npm run eval:caching -- <slug> [...] [--wire=chat|messages|both]");
     console.error("This calls a model and costs money. See evals/README.md.");
     process.exit(1);
   }
 
-  for (const dir of dirs) {
-    const { meta, blocks } = await loadArticle(dir);
-    const articleTokens = estimateTokens(articleWithIds(meta, blocks));
-    console.log(`\n${path.basename(dir)} — about ${articleTokens.toLocaleString()} tokens\n`);
+  const { loadArticle } = await import("../src/store/index.js");
+  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
+  /* No `closeDb` here: `withLedger` writes the chat arm's ledger rows after
+     `main` returns, and a closed pool would simply be reopened by that write.
+     An idle pool lets the process exit on its own. */
+  let failed = false;
+  for (const slug of slugs) {
+    const sections: string[] = [`# Prompt caching — ${slug}`, "", `Run ${new Date().toISOString()}.`, ""];
 
-    /* Two criteria that are genuinely different, so nothing but the cache could
-       make the second call cheaper. */
-    const calls = await searchTwice(meta, blocks, [
-      "passages where the author states their main claim",
-      "passages that give a concrete example",
-    ]);
+    if (wire !== "messages") {
+      const { meta, blocks } = await runAsOwner(environmentOwnerId(), () => loadArticle(slug));
+      const articleTokens = estimateTokens(articleWithIds(meta, blocks));
+      console.log(`\n${slug} — chat wire, about ${articleTokens.toLocaleString()} tokens\n`);
 
-    const chat = await chatTwice(path.basename(dir), meta, blocks);
+      /* Two criteria that are genuinely different, so nothing but the cache
+         could make the second call cheaper. */
+      const calls = await searchTwice(meta, blocks, [
+        "passages where the author states their main claim",
+        "passages that give a concrete example",
+      ]);
+      const chat = await chatTwice(slug, meta, blocks);
+      const text = report([...calls, ...chat], articleTokens);
+      console.log(text);
+      sections.push(text, "");
+    }
 
-    const text = report(dir, [...calls, ...chat], articleTokens);
-    console.log(text);
+    if (wire !== "chat") {
+      console.log(`\n${slug} — Messages wire: glossary, quotes, quotes at another effort\n`);
+      const { calls, articleTokens } = await messagesArm(slug);
+      const { text, verdict } = messagesReport(calls, articleTokens);
+      console.log(text);
+      sections.push(text, "");
+      if (verdict !== "PASS") failed = true;
+    }
 
     await mkdir("evals/results", { recursive: true });
-    const out = path.join("evals/results", `prompt-caching-${path.basename(dir)}.md`);
-    await writeFile(out, `${text}\n`);
+    const out = path.join("evals/results", `prompt-caching-${slug}.md`);
+    await writeFile(out, `${sections.join("\n")}\n`);
     console.log(`\nWritten to ${out}`);
   }
 
-  /* The bare-text rendering is what arc, tweets and glossary share. Printed
-     rather than called, because proving *that* cache needs two pipeline stages
-     run back to back — expensive, and worth doing deliberately rather than as a
-     side effect of this script. */
-  console.log(
-    "\nNote: this checks search and chat. Explain shares their article rendering\n" +
-      "and their explicit breakpoint, so it is covered by construction rather\n" +
-      "than by a call here — but say so, rather than listing it as checked.\n" +
-      "The pipeline's shared block is `articleText`; to check it, run two of\n" +
-      "arc, tweets or glossary back to back on one article and compare their\n" +
-      "cacheReadTokens in the pipeline log.",
-  );
+  if (wire !== "messages") {
+    console.log(
+      "\nNote: the chat arm checks search and chat. Explain shares their article\n" +
+        "rendering and their explicit breakpoint, so it is covered by construction\n" +
+        "rather than by a call here — but say so, rather than listing it as checked.",
+    );
+  }
+  if (failed) process.exitCode = 1;
 }
 
 const invokedDirectly = isMain(import.meta.url);

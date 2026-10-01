@@ -151,8 +151,15 @@ on the day it was written.
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```
-npm run eval:caching -- data/noema-mythology-of-conscious-ai
+npm run eval:caching -- noema-mythology-of-conscious-ai [--wire=chat|messages|both]
 ```
+
+The article is read from the store by slug. Two arms: the **chat wire** (search twice, chat twice)
+and the **Messages wire** (the real `generateGlossary` then `generateQuotes` with `cacheArticle: true`
+forced, then quotes again at another effort as a negative control). The Messages arm checks the wire
+and the stages' byte layout, **not** the job wiring that sets the flag —
+[`tests/article-cache-call-site.test.ts`](../tests/article-cache-call-site.test.ts) is that half.
+Its verdict is PASS, FAIL, or WARM, INCONCLUSIVE when the first call read a cache it should not have.
 
 **This one calls a model**, unlike `hierarchy-labels.ts`, and that is the whole point of it. Everything
 deterministic about prompt caching is already pinned in

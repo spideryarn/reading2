@@ -1,6 +1,7 @@
 # Prompt caching across every call: what is worth doing, and the one lever that is
 
-**Status as of 2026-10-01:** researched and audited; plan written, awaiting review. Nothing built.
+**Status as of 2026-10-01:** researched, audited, reviewed by GPT Sol (round 1: *reframe*) and cut to
+Stage 1. Stage 2 is **dropped** — § What the review changed.
 
 Part of [prompt-caching.md](../project/prompt-caching.md). From Greg, via the Overseer:
 
@@ -32,8 +33,8 @@ stage marks the article only when another step of the **same job** shares its gr
 (`cacheArticleForStep`), and the client posts one job per mode. So the rule that keeps us from
 paying the 1.25× write for nothing has also, in practice, switched article caching off.
 
-**The calls do cluster.** In the high/`ids` group, 41% of calls that follow a sibling on the same
-article land within 5 minutes and 18% more within the hour; glossary+quotes, 55% and 20%. That was
+**The calls do cluster.** In the old high/`ids` cut, 43 of 103 calls (57% of those that follow a sibling on the same
+article) land within 5 minutes and 18% of followers more within the hour; glossary+quotes, 55% and 20%. That was
 measured mostly *before* two changes that make clustering much tighter:
 
 - 2026-09-29: mode jobs on one article **run in parallel** (`mayOverlap`, src/sharing-steps.ts).
@@ -80,37 +81,77 @@ breaks even at **n ≈ 1.1**, so 1h needs **two or more** later reads inside the
 one (1.25 + 0.1n vs 1 + n, n ≈ 0.28). The 1h case is only worth having where the audit's 5–60-minute
 tail is two-plus reads deep — glossary+quotes, at most. **Not in this plan** (see § Not doing).
 
+## What the review changed
+
+GPT Sol, plan review round 1 (2026-10-01, read-only, on f9736a1c): **reframe**, no P0/P1. Every
+finding checked against the code; all six stand.
+
+- **F1, the burst is two pairs, not six calls** (checked: `tests/auto-modes.test.tsx` pins the jobs as
+  `tweets`, `glossary`, `quotes`, `ideas`, `quotes→ideas→trajectory`, `crossrefs`). Only
+  tweets→ideas and glossary→quotes can share. At 10k tokens that is
+  2 × (0.9 − 0.25) × 10k × $2/M ≈ **$0.026 an import**, about **$1 a month** at today's volume — not
+  the $0.09–0.10 below, which counted the experimental modes the box never queues. And the audit's
+  high/ids figure includes Simple's own historical fan-out, which 261001j has since fixed.
+- **F2/F3, the cross-job design has no readiness signal.** A step persisted as `running` says nothing
+  about whether the provider has begun the request; the cache-ready event (`message_start`) exists
+  only in the leader's process. An election over active jobs also admits two leaders (an older job
+  queued behind the cap) and misses a warm cache whose writer has already finished. And the manual
+  provider `order` turns off OpenRouter's sticky routing, so even a correct wait is not a guaranteed
+  hit. Doing it properly needs a durable "cache ready" record written at the model-call seam — real
+  machinery for ~$1/month.
+- **F4, Debate's three passes share no prefix** (direct, claims and synthesis passes each open
+  differently; the audit grouped them by purpose only). Removed from the ranking.
+- **F5, the eval must say what it checks.** Forcing `cacheArticle: true` tests the wire, not the job
+  wiring that decides it; that needs its own deterministic test. And a cold-start marker must not be
+  an eval-only edit to the request bytes.
+- **F6, prose**: one percentage mixed denominators (43 of 103 calls is 42% of all; 57% of followers).
+
+**Decision: Stage 2 is dropped**, including the simpler "post the pairs as two jobs" variant Sol
+offered — it would hold Quotes behind Glossary and Ideas behind Tweets on every import (each pair's
+second mode ready a minute or so later) to save about a dollar a month, which is the trade Greg's
+"sparingly, and for good reason" rules out. **Revisit** when post-2026-09-30 production data, Simple
+excluded, shows the import pairs are worth more than that — the audit's SQL re-runs as it stands.
+
 ## Plan
 
-Two stages. Stage 1 is cheap and certain. Stage 2 is the one real lever, and it is complexity, so it
+Stage 1 only, below. Stage 2 is kept as written for the record, under its heading, and is **not
+being built**.
+
+Two stages, as first written. Stage 1 is cheap and certain. Stage 2 is the one real lever, and it is complexity, so it
 is spiked, measured, and put to the Overseer as a recommendation with numbers before it is built.
 
 ### Stage 1 — correct the record, measure the Messages wire, make the checklist ask
 
 1. **prompt-caching.md**: fix the groups table (arc alone; tweets in the ids group); say plainly that
    article caching is effectively off in production and why; the floors (Sonnet 5 1,024; Opus 5.x
-   512; Haiku 4.5 4,096); the 1h arithmetic above; the import burst as the shape that matters now;
+   512; Haiku 4.5 4,096); the 1h arithmetic above; the import burst, what it is worth (two pairs,
+   ~$1/month) and why it is not coordinated;
    link the research doc and this plan; replace "no eval calls a pipeline stage" once item 2 lands.
-2. **The eval covers the Messages wire.** `npm run eval:caching` today reads `data/<slug>` — a
-   filesystem article dir from before the store moved to Postgres — and calls only chat-wire
-   functions. Extend it (or add a sibling) to run **two stages of one cache group on one article
-   through the real `runStep`-equivalent path with `cacheArticle: true`**, staggered on `onStart`,
-   with a unique per-run marker at the front so a warm cache from an earlier run cannot fake a read
-   (the `evals/simple/fanout-spike.ts --cold` lesson). Pass: the second call's
-   `cache_read_input_tokens` ≈ the first's write. Also a negative control: same pair, effort
-   differing → the read is zero. Results under `evals/results/`.
+2. **A Messages-wire eval, named as one** (Sol F5). `npm run eval:caching` reads `data/<slug>` from
+   the filesystem, which no longer exists for real articles, and calls only chat-wire functions. Move
+   its loading to the store (as `evals/simple/fanout-spike.ts` does) and add a Messages-wire arm: two
+   **real stage functions of one cache group** (glossary then quotes, run one after the other, so no
+   stagger is needed) on one article with `cacheArticle: true`, then a **negative control** — the
+   same second stage with only its effort changed. Cold-start honesty without touching the request
+   bytes: call 1 must *write* and read zero (if it reads, the run is reported "warm, inconclusive",
+   never as a pass). Pass: call 2 reads ≈ call 1's write; the control reads 0. It checks the wire
+   and the stages' byte layout; it says in its header that it does **not** check the job wiring.
+   Results under `evals/results/`.
+2b. **The job wiring gets its own deterministic test** (Sol F5): that the `StepContext` a real job
+   builds (src/jobs.ts, where `cacheArticle` is set) carries `true` for both members of a same-group
+   pair and `false` for a lone stage — through the code that builds it, not a hand-built context. If
+   such a test already exists, cite it instead.
 3. **new-mode.md**: a short "Its cache group" item — a new article-reading stage takes a row in
    `STAGE_EFFORT` and `ARTICLE_RENDERER` (the compiler already asks), and the choice of renderer and
    effort *is* the choice of which stages it shares an article with; say which group it joins, or
    that it is alone, in the comment on its row. Point at prompt-caching.md.
-4. **Debate's claims pass** (item 3 above) only if a read of `debate.ts` shows the article prefix is
-   byte-identical between its passes and the change is a few lines (move the article into its own
-   `cache_control` part ahead of `CLAIMS_SYSTEM`). Otherwise listed, not done.
+4. ~~Debate's claims pass~~ — dropped (Sol F4): its passes share no prefix. Its unexplained
+   existing reads are noted in prompt-caching.md as an open question, not chased here.
 
 Done when: docs corrected; the Messages-wire eval run once with a committed result (positive and
 negative control both as predicted); `npm test`, `npm run typecheck` green.
 
-### Stage 2 — the import burst: spike, then recommend, then (if yes) build
+### Stage 2 — the import burst (DROPPED after review; kept for the reasoning)
 
 **Spike** (budget ≤ $6): on two real articles, run the high/ids group's stages (6 calls) twice each,
 cold: (a) all together, unmarked — today; (b) the first alone, marked, the rest started once its
@@ -160,6 +201,27 @@ The simpler options it passed over:
   Stage 2 must not double-handle Simple: Simple's own three calls already lead/follow internally;
   in a burst, Simple counts as one group member like any other stage.
 
+## What Stage 1 landed
+
+- **prompt-caching.md**: groups table corrected (arc and crossrefs alone, tweets in the `ids` group);
+  new § What production actually does — article caching is effectively off in production, why that
+  is about right, the import burst and why it is not coordinated, the revisit trigger, Simple's
+  `onStart` stagger as the pattern for a call site that fans out, Debate's unexplained reads as an
+  open question; floors brought up to date; the 1h arithmetic against *not marking*; the eval
+  paragraph rewritten for the new arm.
+- **new-mode.md** § Its cost: an "Its cache group" item.
+- **`npm run eval:caching -- <slug> [--wire=chat|messages|both]`**: loads from the store; the new
+  Messages arm runs real `generateGlossary` → `generateQuotes` with the article marked, plus an
+  effort-changed control. First run on noema-mythology-of-conscious-ai (~13k tokens): **PASS** —
+  glossary wrote 16,192, quotes read 16,192, the control read 0; all served by Anthropic.
+  Quotes cost $0.0697 reading against $0.1206 for the control writing.
+- **The job wiring**: `tests/article-cache-call-site.test.ts` already walked real jobs through
+  Postgres and read `ctx.cacheArticle`; it gained the glossary+quotes pair and a lone glossary, and
+  was seen red both ways (wiring forced `false`: 2 fail; forced `true`: 3 fail) before restoring.
+- Found on the way, left alone: the chat arm's hard-coded 2026-08-26 prices read ~26% under the
+  ledger; it labels them estimates and the Messages arm uses the ledger.
+
 ## Spend
 
-Research and audit: $0 (read-only). Budget for this plan: ≤ $15 total, tracked here per stage.
+Research and audit: $0 (read-only). Stage 1's eval run: **$0.44** (Messages arm $0.283, chat arm
+$0.160 by the ledger). Total: **$0.44** of the ≤ $15 budget. Stage 2's spike was never run.
