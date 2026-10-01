@@ -1,6 +1,6 @@
 # The quiz adapts heavily to who is reading and why
 
-Status: planned 2026-10-01, revised after GPT Sol's plan review. Follow-up to
+Status: on `dev` 2026-10-01 as a partial step (see *The decision*), not deployed. Follow-up to
 SPIDERYARN-READING2-6Q ([260930j](260930j-quiz-questions-shaped-by-the-readers-reading-goal.md), note
 [260930_2200](../user-feedback/260930_2200-quiz-shaped-by-your-reading-goal.md)).
 
@@ -79,8 +79,8 @@ a six-question path is one and a half.
 The harness 6Q built, [`evals/quiz-reading-goal.ts`](../../evals/quiz-reading-goal.ts), now records
 **which prompt wrote each run** (git commit, whether `src/quiz.ts` differed from it, a hash of its
 bytes, the model — Sol F7), stores the reference answer for the judge, and gains `blind` (a sheet
-ordered by a sha256 of seed and question, key in its own file, a balance print across the sheet's
-halves) and `score`. The judge's instructions are committed before any run:
+ordered by a sha256 of seed and each question's source coordinates, key in its own file, a balance
+print across the sheet's halves) and `score`. The judge's instructions are committed before any run:
 [`evals/quiz-reading-goal-judge.md`](../../evals/quiz-reading-goal-judge.md).
 
 **Article**: `entropy-24-00930-spya-pywwkq` (nine parts; part 7 is *Practical Considerations in
@@ -143,7 +143,7 @@ If a bar fails, one round of wording, under new arm names, and the note says so 
 
 ## What the measurement found
 
-Thirty-eight paid runs: ten on the old prompt, ten on round 1 of the new wording, eight on round 2
+Twenty-eight paid runs: ten on the old prompt, ten on round 1 of the new wording, eight on round 2
 (the profiled arms only, because the no-profile request did not change). They are in
 `evals/results/quiz-reading-goal/{old,new,r2}-*/`, each with the hash of the `src/quiz.ts` that
 wrote it. Four blind Sonnet judges labelled them: judges 1 and 2 the twenty round-1 runs (361
@@ -151,7 +151,8 @@ questions, `blind-261001c/`), and judges 3 and 4 all twenty-eight runs together 
 `blind-261001c-r2/`), so the old arms were labelled again beside round 2. **The judges agreed with
 each other on 89–100% of labels**, per label and per pair. Each bar was checked per judge by
 [`evals/quiz-reading-goal-261001c-bars.ts`](../../evals/quiz-reading-goal-261001c-bars.ts); the
-outputs are the `bars-*.txt` files beside the labels.
+outputs are the `bars-*.txt` files beside the labels. The blind seeds were `261001c` and
+`261001c-r2`; rebuilding with those seeds and the arms named by each key reproduces both sheets.
 
 **Round 1** (judges 1 and 2): bar 4 passed under both, and bar 1 under judge 1 (judge 2 put one
 no-profile run one question outside the old spread). Every other bar failed under both. Two
@@ -167,7 +168,7 @@ about the conclusion is not enough: ask for the evidence too. Take these steps f
 the steps about what they are after"), and split *with both* into its own rule with an example from
 another field (a trial's statistician and its clinician, both reading "for the methods").
 
-**Round 2, the wording that ships** (judges 3 and 4; the numbers agree, judge 3's shown):
+**Round 2, the candidate wording** (judges 3 and 4; the numbers agree, judge 3's shown):
 
 | Bar | Result |
 |---|---|
@@ -179,30 +180,66 @@ another field (a trial's statistician and its clinician, both reading "for the m
 | 6 About chooses within the goal (`FORMAL` share among on-goal questions, tool author vs electrophysiologist) | **fail**: no gap under either judge (r2: 57–62% against 60–64%). |
 | 7 The balance (≥ 3 central questions, at least one of each kind) | **fail**: 1–2 per run. **But every run now has at least one, and three of six have both the conclusion and its evidence**, where the old prompt's goal and both runs had none at all in three of six. |
 
-**Read, not counted** (bar 8): no question in any of the 38 runs addresses the reader or says a
+**Read, not counted** (bar 8): no question in any of the 28 runs addresses the reader or says a
 note was given (one "you" in a no-profile reference answer is generic). Reading the two round-2
-*both* runs side by side, the difference the labels did not catch is visible. The electrophysiologist's
-path closes its practical part on **experimental caveats**: how the triad networks were built, and
-whether organotypic cultures generalise to the intact brain. The tool author's spends those steps
+*both* arms side by side, some expected differences are visible. One electrophysiologist run closes
+its practical part on **experimental caveats**: how the triad networks were built, and whether
+organotypic cultures generalise to the intact brain. One tool-author run instead spends those steps
 on **the lattice, the property a redundancy function needs for local PID, and the multi-target
-extension**. Both then end on the conclusion and its evidence. `TOPIC` files both under `FORMAL`
-and `DATA`, so the taxonomy, chosen beforehand, is too coarse for this article. Part 7 is twelve
-blocks, and both readers draw on the same small set. Two flaws are of classes the prompt already
-forbids and that the old prompt shows too: a question that says "that redundancy measure" without
-naming it, and one "and"-joined double question.
+extension**. `TOPIC` files both under `FORMAL` and `DATA`, so the taxonomy may be too coarse for
+this article. That is a post-hoc explanation, however, not a rescue of bar 6: the two runs within
+each arm differ too, and two samples cannot attribute the side-by-side difference to the profile.
+Part 7 is twelve blocks, and both readers draw on the same small set. Two flaws are of classes the
+prompt already forbids and that the old prompt shows too: a question that says "that redundancy
+measure" without naming it, and one "and"-joined double question.
 
-**Post hoc, and labelled as such:** About-alone does move the quiz, by less than "heavily". Against
-the old prompt's About runs (judge 3), `APPLY` goes from 5 to 7 per run and on-goal from 6 to 8;
-the part-7 proxy went from 1–2 per run to 4–5 in round 1, and back to 2 in round 2, whose About runs spent more steps on findings. The old prompt was already moving further than its
-"vocabulary only" rule said: against no profile, its About runs had half the foundation questions
-(5 against 10).
+**Post hoc, and labelled as such:** the About-alone outputs differ from the old prompt's About runs.
+Under judge 3, `APPLY` goes from 5 to 7 per run and on-goal from 6 to 8; the part-7 proxy went from
+1–2 per run to 4–5 in round 1, and back to 2 in round 2, whose About runs spent more steps on
+findings. The old prompt's About and no-profile samples also differed despite its "vocabulary only"
+rule (5 foundation questions per About run against 10 per no-profile run). With two runs and all
+three predeclared About bars failing, these are observations of the samples, not evidence that the
+new wording caused an About effect.
 
-**The claim, at its right size:** with this wording the quiz still heads for the reader's goal as
-strongly as before (on-goal 61–79%, `APPLY` about half). It no longer drops the piece's conclusion
-under a strong goal, though it gives the conclusion one or two steps rather than three or four. A
-profile moves the quiz further than the old prompt did, but modestly. Two readers with the same goal
-get recognisably different quizzes when read side by side, but not by a margin these labels
-measure. One article, two runs per arm.
+**The claim the evidence supports:** the no-profile request stayed unchanged. A stated application
+goal still changes the kind of question (`APPLY` 53–55% against 7–20% with no profile), but the old
+prompt already did that. The round-2 goal arms remained in the old prompt's broad on-goal range
+(61–79% against 56–81%), while missing the 65% product floor in two of six runs. The balance moved
+in the intended direction: none of the six round-2 runs dropped both the conclusion and its support,
+where three of six old runs did; only three round-2 runs contained both, one still dropped the
+conclusion, and every run had one or two central questions rather than the required three.
+
+The measurement does **not** establish that *About you* moves the quiz more than the old prompt, or
+that two readers with the same goal reliably get different quizzes. That is the central claim of
+this work and all three bars for it failed under both round-2 judges. Round 2 therefore should not
+ship as completion of Greg's "adapt heavily" request. Its goal-balance wording could be considered
+separately as a modest improvement, but not verbatim: "one or two in a short one" conflicts with
+"one closing question … is not enough" in the same rule. This experiment does not support the
+feature claim. One article, two runs per arm.
+
+## The decision: shipped to `dev` as a partial step, not as the finished request
+
+GPT Sol's verdict was *do not ship as-is*, on the claim rather than the code: it found the code and
+the cache layout sound. Opus, asked to arbitrate between shipping a partial step and holding,
+recommended shipping, and that is what happened:
+
+- **Readers come out no worse, and on one measure better.** No-profile requests are byte-identical to
+  pre-6Q. Profiled runs land in the old prompt's range on every measure, and better on the failure
+  Greg named: no round-2 run dropped both the conclusion and its evidence, against three of six on
+  the old prompt.
+- **Holding would keep the rule Greg overruled** (*ONLY THE REASON FOR READING MOVES THE PATH*), on
+  the grounds that its replacement could not be shown to work. That is the wrong default.
+- **Another round on this set-up could not see an About effect**: one article, two runs per arm, and
+  a pitch label the judges almost never gave.
+
+**One change came after the measurement and is not measured itself**: Sol's contradiction, fixed by
+one clause (*"In a long path, one closing question about the conclusion is not enough"*). It runs in
+the direction already measured, and every run here was a long path.
+
+**What the note offers Greg as the next step**, his to choose: (1) a test that *could* see an About
+effect — two or three articles, readers who differ sharply (a newcomer against an expert, so the
+pitch can move), three or four runs per arm, and a pitch label judges actually give; about 40 Sonnet
+runs, $10–15; or (2) accept *About you* as best effort for now and let readers' feedback decide.
 
 ## Tests
 

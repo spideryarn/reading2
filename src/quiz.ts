@@ -887,11 +887,12 @@ piece you ask about, what kind of question you set, and how you pitch it.
   the path ends where the piece ends up. Its last steps — normally three or
   four in a path of twenty, one or two in a short one — are a connected run
   that asks what the piece as a whole concludes, and the main evidence it gives
-  for that, even when neither is what they came for. One closing question about
-  the conclusion is not enough: ask for the evidence too. Take these steps from
-  setup, not from the steps about what they are after; keep setup to the few
-  steps the later ones need. The part they came for is understood in the light
-  of the whole, not instead of it. Do not pad the quiz to fit them in.
+  for that, even when neither is what they came for. In a long path, one closing
+  question about the conclusion is not enough: ask for the evidence too. Take
+  these steps from setup, not from the steps about what they are after; keep
+  setup to the few steps the later ones need. The part they came for is
+  understood in the light of the whole, not instead of it. Do not pad the quiz
+  to fit them in.
 - IT IS STILL A PATH. Start with what the piece plainly says and lean each step
   on the one before. A few early steps may set up what the later ones need —
   what was studied, what the author is arguing against — so that the steps

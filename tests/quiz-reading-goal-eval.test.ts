@@ -4,8 +4,11 @@
  * a float coin once put the new arm on one side 94 times in 95. Plan:
  * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { blindOrder } from "../evals/quiz-reading-goal.js";
+import { blindOrder, score } from "../evals/quiz-reading-goal.js";
 
 const items = (arms: string[], n: number) => arms.flatMap((arm) => Array.from({ length: n }, (_, index) => ({ arm, index })));
 
@@ -37,5 +40,20 @@ describe("the blind order", () => {
     }
     expect(total / 200).toBeGreaterThan(9);
     expect(total / 200).toBeLessThan(11);
+  });
+});
+
+describe("the blind labels", () => {
+  it("does not let one duplicated id stand in for an omitted question", () => {
+    /* Equal row counts are not enough: before this check, repeating id 1 twice
+       and omitting id 2 silently charged both labels to the first arm. */
+    const dir = mkdtempSync(path.join(tmpdir(), "spya-quiz-score-"));
+    try {
+      writeFileSync(path.join(dir, "key.tsv"), "id\tarm\tindex\n1\ta\t1\n2\tb\t1\n");
+      writeFileSync(path.join(dir, "labels.tsv"), "id\tGOAL\n1\tON\n1\tOFF\n");
+      expect(() => score(dir)).toThrow("duplicate id");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

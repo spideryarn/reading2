@@ -374,8 +374,9 @@ asked on the add page and in Trajectory. The quiz job already carried it — `PO
 the rendered profile onto every job — and the stage now hands it to the prompt. With a reason, the
 path heads for the takeaways that matter for it and spends most of its steps on the parts that bear
 on it; it is still a path, still anchored, and never says a reason was given. With none, the prompt
-has the same user message byte-for-byte (`tests/profile-prompts.test.ts`); the constant system
-instructions now include the conditional goal rules on every call. The plan and its measurement are
+has the same user message byte-for-byte (`tests/profile-prompts.test.ts`). The later 261001c change
+also restored the pre-6Q system bytes: reader rules are now a separate system block, sent only when
+a profile exists and after the article's cache breakpoint. The original plan and measurement are
 [260930j](../plans/260930j-quiz-questions-shaped-by-the-readers-reading-goal.md).
 
 6Q kept *About you* to the vocabulary a question assumes. Greg reversed that the next day:
@@ -384,12 +385,29 @@ instructions now include the conditional goal rules on every call. The plan and 
 >
 > — Greg, 2026-10-01
 
-So both halves now shape **which parts** the quiz asks about, **what kind** of question it sets
-(someone applying the piece gets more *how is it done, where does it break*), and **how it is
-pitched** (a question the reader could answer from their own field without the piece is left out).
-The reason leads where both are given; *About you* chooses within it. **The counterweight:** however
-narrow the goal, three or four steps of twenty stay on what the piece as a whole is for, so a reader
-who came for one part still leaves knowing what the whole claims. Plan and measurement:
+The prompt (`QUIZ_READER_RULES`, a system block sent only with a profile) tells both halves to shape
+**which parts** the quiz asks about, **what kind** of question it sets (someone applying the piece
+gets more *how is it done, where does it break*), and **how it is pitched** (a question the reader
+could answer from their own field without the piece is left out). The reason leads where both are
+given; *About you* chooses within it. **The counterweight:** the last steps — normally three or four
+in a twenty-question path, one or two in a short one — ask for the piece's conclusion and its main
+evidence, taken from setup rather than from the reader's goal; in a long path, one closing question
+is not enough.
+
+**It is on `dev` as a partial step, not as the finished request.** It was shipped because readers
+come out no worse on any measure, and better on the failure Greg named. Holding it would have kept
+the rule he overruled. What the measurement did and did not show:
+
+The measurement did not establish the main About claim. Across one article and two runs per arm,
+both judges failed all three About bars: no measured pitch change, no predicted movement towards
+findings and data, and no formal-topic gap between the electrophysiologist and tool-author profiles.
+The goal still changed question kind (`APPLY` 53–55% against 7–20% with no profile), as the old
+prompt already did. Four of six round-2 goal/profile runs met the 65% on-goal floor; the range was
+61–79%. The balance improved without meeting its bar: every run had one or two questions on the
+conclusion or its support, against three of six old runs with neither, but only three of six had
+both and none had the required three central questions. The evidence therefore supports a modest
+balance improvement, not the claim that the quiz yet adapts heavily to *About you*. Plan, exact
+numbers and review conclusion:
 [261001c](../plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md).
 
 - **Not the shared profile machinery.** `profileSection` promises the profile changes *"nothing

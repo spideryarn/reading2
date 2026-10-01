@@ -75,32 +75,41 @@ async function partsOfArticle(article: import("../src/article-input.js").Article
   return partsOf(article.tree).map((p) => ({ title: p.title, range: p.range as [string, string] }));
 }
 
-function provenanceOf(model: string): NonNullable<ArmFile["provenance"]> {
+type SourceProvenance = Omit<NonNullable<ArmFile["provenance"]>, "model">;
+
+function sourceProvenance(): SourceProvenance {
   const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
   return {
     gitHead: git("rev-parse", "HEAD"),
     quizDirty: git("status", "--porcelain", "--", QUIZ_SOURCE) !== "",
     quizSourceSha256: createHash("sha256").update(fs.readFileSync(QUIZ_SOURCE)).digest("hex"),
-    model,
   };
 }
 
 async function generate(arm: string, purpose: string | null, about: string | null, slug: string): Promise<void> {
   const out = path.join(OUT, arm, `${slug}.json`);
   if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
+  /* Snapshot before importing and calling the generator: a snapshot taken
+     after a long model call can name edits that the already-loaded module did
+     not send. Refuse the result if the source bytes moved during the call. */
+  const source = sourceProvenance();
   const { generateQuiz } = await import("../src/quiz.js");
   const { renderProfile } = await import("../src/profile.js");
   await withArticle(slug, async (article) => {
     const profile = renderProfile({ profile: about, purpose });
     console.log(`${arm}: ${slug} — ${profile ?? "no profile"}`);
     const run = await generateQuiz({ power: "standard", article, profile });
+    const after = sourceProvenance();
+    if (after.quizSourceSha256 !== source.quizSourceSha256) {
+      throw new Error("src/quiz.ts changed during the model call; refusing to record false provenance");
+    }
     const file: ArmFile = {
       arm,
       slug,
       purpose,
       about,
       at: new Date().toISOString(),
-      provenance: provenanceOf(run.model),
+      provenance: { ...source, model: run.model },
       order: article.blocks.map((b) => b.id),
       parts: await partsOfArticle(article),
       dropped: { ...run.dropped },
@@ -200,17 +209,31 @@ function blind(slug: string, seed: string, arms: string[], dir: string): void {
  * second table of TOPIC, because "the reason leads and who they are chooses
  * within it" is a claim about the topics *inside* the goal.
  */
-function score(dir: string): void {
+function validateScoreRows(keyHead: string[], keyRows: string[][], labelHead: string[], labelRows: string[][]): void {
+  if (keyHead[0] !== "id" || labelHead[0] !== "id") throw new Error("key.tsv and labels.tsv must begin with an id column");
+  const keyIds = keyRows.map((r) => r[0] ?? "");
+  if (new Set(keyIds).size !== keyIds.length) throw new Error("key.tsv contains a duplicate id");
+  const columns = labelHead.slice(1);
+  if (columns.length === 0 || new Set(columns).size !== columns.length) throw new Error("labels.tsv needs distinct label columns");
+  if (labelRows.length !== keyRows.length) {
+    throw new Error(`${labelRows.length} labels for ${keyRows.length} questions — the judge skipped or added some`);
+  }
+  const labelIds = labelRows.map((r) => r[0] ?? "");
+  if (new Set(labelIds).size !== labelIds.length) throw new Error("labels.tsv contains a duplicate id");
+  const labelIdSet = new Set(labelIds);
+  const missing = keyIds.find((id) => !labelIdSet.has(id));
+  if (missing) throw new Error(`labels.tsv is missing id ${missing}`);
+}
+
+export function score(dir: string): void {
   const rows = (f: string) =>
     fs.readFileSync(path.join(dir, f), "utf8").trim().split("\n").map((l) => l.split("\t"));
   const [keyHead, ...keyRows] = rows("key.tsv");
   const [labelHead, ...labelRows] = rows("labels.tsv");
   if (!keyHead || !labelHead) throw new Error("empty key or labels");
+  validateScoreRows(keyHead, keyRows, labelHead, labelRows);
   const armOf = new Map(keyRows.map((r) => [r[0], r[1] ?? "?"]));
   const columns = labelHead.slice(1);
-  if (labelRows.length !== keyRows.length) {
-    throw new Error(`${labelRows.length} labels for ${keyRows.length} questions — the judge skipped or added some`);
-  }
   const tally = new Map<string, Map<string, number>>();
   const bump = (arm: string, k: string) => {
     const t = tally.get(arm) ?? new Map<string, number>();
@@ -220,6 +243,9 @@ function score(dir: string): void {
   for (const r of labelRows) {
     const arm = armOf.get(r[0]);
     if (!arm) throw new Error(`label for unknown id ${r[0]}`);
+    if (r.length !== labelHead.length || r.slice(1).some((value) => value.trim() === "")) {
+      throw new Error(`incomplete labels for id ${r[0]}`);
+    }
     bump(arm, "n");
     const goalAt = columns.indexOf("GOAL");
     const topicAt = columns.indexOf("TOPIC");

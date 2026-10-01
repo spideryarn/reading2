@@ -690,7 +690,7 @@ describe("the generation prompt", () => {
     expect(QUIZ_READER_RULES).toMatch(/normally three or\s+four in a path of twenty, one or two in a short one/);
     /* Round 1 of the eval got one closing question and no evidence. */
     expect(QUIZ_READER_RULES).toContain("ask for the evidence too");
-    expect(QUIZ_READER_RULES).toMatch(/Take these steps from\s+setup, not from the steps about what they are after/);
+    expect(QUIZ_READER_RULES).toMatch(/Take\s+these steps from setup, not from the steps about what they are after/);
     expect(QUIZ_READER_RULES).toContain("Do not pad");
   });
 
