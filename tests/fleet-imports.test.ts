@@ -82,6 +82,7 @@ const ALLOWED: Record<string, string> = {
   "src/web/dictation-errors.ts": "every recogniser error code to a sentence",
   "src/web/useAudioLevel.ts": "the meter, reading the track being recorded",
   "src/web/audio-level.ts": "the RMS itself",
+  "src/web/quiet-chime.ts": "the soft chime when the microphone has heard nothing (plan 261001k)",
   /* The two ends of one arithmetic problem. The browser checks the cap before a
      megabyte goes over the wire and the server checks it again; two copies of
      the number is how they come to disagree, which is what this file exists to

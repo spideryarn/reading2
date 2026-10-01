@@ -312,6 +312,23 @@ live phrases extend it, the transcript replaces it. On Safari and Firefox the sp
 sits at the caret, so "replace" is an insertion — two situations that look entirely different to
 the reader are one line of code with no branch to get wrong.
 
+## When it hears nothing, and after
+
+**While the microphone is on and hears nothing**, the strip says *"No sound detected yet"* — ten seconds
+under −55 dBFS (`audio-level.ts` says why it is an observation and never a diagnosis). Since
+2026-10-01 it says it as a warning: warm rather than faint, with a glyph, and a soft two-note chime
+**once per dictation** through the hook's own `AudioContext` — once, because the chime can be
+heard by the microphone, which would end the quiet and start the next one
+([`quiet-chime.ts`](../../src/web/quiet-chime.ts)). Greg asked for both after a `[mic-silent]`
+he had no warning of. It only catches a microphone hearing *nothing*; one hearing a fan and no
+words is the deferred half, in
+[261001k](../plans/261001k-dictation-silent-mic-warning-and-a-message-that-goes.md).
+
+**And afterwards, the message goes when its draft does.** A box mounted for the life of the page —
+Feedback is the one — calls `dismiss(artifact)` when the draft is finished, with the
+`artifact()` it read when Send was pressed, so a late answer cannot wipe a newer dictation's
+message. The **×** on the audio row takes the error with it too.
+
 ## Adding it to a box
 
 ```tsx
@@ -531,7 +548,8 @@ passed over, and GPT Sol's review.
   offered under `[mic-cut-off]`, which says the last seconds may be missing. Measured in Chrome
   151 on 2026-09-29: WebM and fragmented MP4 truncated at any chunk decoded, losing under a second.
   **Safari is unmeasured.**
-- **How long it stays** — until delivered or discarded, or Sign out, or the first visit after a week
+- **How long it stays** — until delivered or discarded, or (in Feedback) the report it sat beside is
+  filed, or Sign out, or the first visit after a week
   (`sweepDictations`, at startup). Not on a lapsed session. [privacy.md § On the reader's own
   device](privacy.md#on-the-readers-own-device-until-the-words-arrive).
 

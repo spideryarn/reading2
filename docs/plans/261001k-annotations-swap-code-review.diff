@@ -1,0 +1,421 @@
+diff --git a/src/web/annotations/AnnotationsColumn.tsx b/src/web/annotations/AnnotationsColumn.tsx
+index 065e1f00..d1c8cb0a 100644
+--- a/src/web/annotations/AnnotationsColumn.tsx
++++ b/src/web/annotations/AnnotationsColumn.tsx
+@@ -148,20 +148,36 @@ export function AnnotationsHead({
+       <aside className="marg-narrow" aria-label="Annotations">
+         <p>
+           {beside
+-            ? "The notes need a wider window, or the panel closed — they sit to the right of the text."
++            ? "The notes need a wider window — press Annotations again to swap them in for the panel."
+             : "The notes need a wider window — they sit to the right of the text."}
+         </p>
+       </aside>
+     );
+   }
+   if (path.length === 0 && arc === null) return null;
+-  /* **Orientation, not a summary**: the path on one line and the arc cut at
+-     three, the whole of both in a card on hover, focus or tap. A head that
+-     grew to the arc's full six or seven lines dominated the margin it is meant
+-     to sit quietly at the top of (GPT Astra's design pass, 2026-10-01). */
++  /* **Orientation, not a summary**: the arc cut at three, the whole of it in a
++     card on hover, focus or tap. A head that grew to the arc's full six or
++     seven lines dominated the margin it is meant to sit quietly at the top of
++     (GPT Astra's design pass, 2026-10-01).
++
++     **The path is not cut**: each title on a line of its own, wrapping. It was
++     one line with an ellipsis, and in a 200–288px column the part's title left
++     the section a word or two — Greg, 7M: *"the text is truncated too much"*.
++     261001k. */
+   return (
+     <aside className="marg-head" aria-label="Where you are">
+-      {path.length > 0 && <p className="marg-path">{path.join(" › ")}</p>}
++      {path.length > 0 && (
++        <p className="marg-path">
++          {path.map((title, depth) => (
++            // biome-ignore lint/suspicious/noArrayIndexKey: the path is a fixed ancestry, part then section; position is its identity.
++            <span key={depth} className="marg-path-step" data-depth={depth} title={title}>
++              {/* Read aloud as one path, as the ` › ` join was; seen as lines. */}
++              {depth > 0 && <span className="sr-only"> › </span>}
++              {title}
++            </span>
++          ))}
++        </p>
++      )}
+       {arc !== null && <ArcLine arc={arc} />}
+     </aside>
+   );
+diff --git a/src/web/annotations/press.ts b/src/web/annotations/press.ts
+new file mode 100644
+index 00000000..d634f7bd
+--- /dev/null
++++ b/src/web/annotations/press.ts
+@@ -0,0 +1,57 @@
++/**
++ * **What a press of the Annotations button does.** Greg's rule for a window too
++ * narrow for the band and the notes together: *"whichever has been activated
++ * most recently trumps/swaps out the other"* (SPIDERYARN-READING2-7P).
++ *
++ * Pressing a band already wins over the notes (layout.ts § `fitBoth`: below the
++ * width for both, the band takes the room and `?margin=1` stays). This is the
++ * other half: pressing Annotations where the two do not fit together, but the
++ * notes would fit alone, closes the band and keeps the notes on — whether they
++ * were off, or on and hidden behind a band that won. Everywhere else it is a
++ * plain toggle, a phone included: there the notes do not fit even alone, and
++ * closing the reader's band to show a line saying so would be worse than
++ * nothing.
++ * docs/plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md.
++ */
++import { type FitInput, fitView } from "../layout.js";
++
++/**
++ * **Where the notes would fit, were they on** — beside the band that is open,
++ * and with no band. Hypothetical by necessity: while the notes are off the
++ * live `Fit` has `margW` 0 whatever the width. Thresholds (GPT Sol on the
++ * plan): alone from 612px with the rail, 600 without; beside a band from 900,
++ * 888 without.
++ */
++export function notesFit(
++  input: Omit<FitInput, "margin" | "modeBand">,
++  bandOpen: boolean,
++): { both: boolean; alone: boolean } {
++  return {
++    both: fitView({ ...input, margin: true, modeBand: bandOpen }).margW > 0,
++    alone: fitView({ ...input, margin: true, modeBand: false }).margW > 0,
++  };
++}
++
++export type AnnotationsPressInput = {
++  /** `?margin=1` is on now. */
++  margin: boolean;
++  /** A band is open on the left (`mode !== "plain"`). */
++  bandOpen: boolean;
++  /** `fitView` with the open band and `margin: true` gives the notes a width.
++   *  Ignored with no band open. */
++  bothFit: boolean;
++  /** `fitView` with no band and `margin: true` gives the notes a width. */
++  aloneFit: boolean;
++};
++
++export type AnnotationsPress = { margin: boolean; closeBand: boolean };
++
++export function annotationsPress({
++  margin,
++  bandOpen,
++  bothFit,
++  aloneFit,
++}: AnnotationsPressInput): AnnotationsPress {
++  if (bandOpen && !bothFit && aloneFit) return { margin: true, closeBand: true };
++  return { margin: !margin, closeBand: false };
++}
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 561c63fd..e4b36e46 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -122,6 +122,7 @@ import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } fro
+ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
+ import { jumpToComment, stepToComment } from "../comment-jump.js";
+ import { buildSections, sectionDepth } from "../position.js";
++import { annotationsPress, notesFit } from "../annotations/press.js";
+ import { bandCoversProse, fitView } from "../layout.js";
+ import { navPlan, useArrowNav } from "../keynav.js";
+ import { ReturnChip } from "../ReturnChip.js";
+@@ -325,15 +326,17 @@ export function Reader({
+   /* **An old `?mode=annotations` link** (Annotations was a mode for its first
+      day) reads as Plain through `modeParam`; this turns the notes on for it
+      and drops the old word, in one replaced entry so Back does not return to
+-     it. Read from `location` because `modeParam` has already discarded it. */
+-  const [, setOldAnnotations] = useQueryStates({
++     it. Read from `location` because `modeParam` has already discarded it.
++     The Annotations press that swaps the band out writes both through this
++     too, so one Back undoes it (261001k). */
++  const [, setModeAndMargin] = useQueryStates({
+     mode: modeParam,
+     margin: marginParam,
+   });
+   useEffect(() => {
+     if (new URLSearchParams(location.search).get("mode") === "annotations")
+-      void setOldAnnotations({ mode: null, margin: true }, { history: "replace" });
+-  }, [setOldAnnotations]);
++      void setModeAndMargin({ mode: null, margin: true }, { history: "replace" });
++  }, [setModeAndMargin]);
+   /* The pasted Trajectory stop belongs to this article arrival, not to each
+      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
+      while leaving mode-specific query state in the URL; the first band mount
+@@ -450,6 +453,22 @@ export function Reader({
+       }),
+     [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
+   );
++  /* **Where the notes would fit**, for the Annotations press: beside the band
++     that is open, and with no band. A press reads both to decide whether it
++     swaps the band out (`annotationsPress`, 261001k). */
++  const wouldFit = useMemo(
++    () =>
++      notesFit(
++        {
++          windowWidth,
++          bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
++          rootFontPx,
++          showSpine,
++        },
++        bandOpen,
++      ),
++    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
++  );
+ 
+   /**
+    * The arc — one sentence per part on where the argument stands there — keyed
+@@ -2968,9 +2987,22 @@ export function Reader({
+              and Forward never call this callback and therefore never arm. */
+           /* **Annotations is a switch, not a band** (`BandMode`): its press
+              turns the column on or off and leaves the band, the herald and a
+-             stepped-aside band exactly as they were. */
++             stepped-aside band exactly as they were — unless the two do not
++             fit together, when the notes, pressed last, swap the band out
++             (`annotationsPress`, Greg's 7P). */
+           if (next === "annotations") {
+-            void setMargin(marginOpen ? null : true);
++            const press = annotationsPress({
++              margin: marginOpen,
++              bandOpen,
++              bothFit: wouldFit.both,
++              aloneFit: wouldFit.alone,
++            });
++            if (press.closeBand) {
++              void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
++              setBandAway(false);
++            } else {
++              void setMargin(press.margin ? true : null);
++            }
+             return;
+           }
+           armTrajectoryOpening(trajectoryArrival.current, mode, next);
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 3af29452..7e620888 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -132,13 +132,30 @@
+ .marg-head p {
+   margin: 0;
+ }
++/* The part above, small caps and faint; the section under it, in the head's
++   own voice. Each wraps rather than ending in an ellipsis — Greg, 7M: "the
++   text is truncated too much" (261001k). Two lines each, so the path is at most
++   four and the head (with the arc's three) at most seven — the backstop for a
++   long title, not the ordinary case (GPT Sol on the plan). */
+ .marg-path {
++  display: grid;
++  gap: 0.125rem;
++}
++.marg-path-step {
++  display: -webkit-box;
++  -webkit-box-orient: vertical;
++  -webkit-line-clamp: 2;
++  line-clamp: 2;
++  overflow: hidden;
++  overflow-wrap: anywhere;
++}
++.marg-path-step[data-depth="0"] {
+   font-size: 0.75rem;
+   letter-spacing: 0.04em;
+   font-variant: small-caps;
+-  white-space: nowrap;
+-  overflow: hidden;
+-  text-overflow: ellipsis;
++}
++.marg-path-step[data-depth="1"] {
++  color: var(--ink-soft);
+ }
+ .marg-arc {
+   all: unset;
+diff --git a/tests/annotations-head-path.test.tsx b/tests/annotations-head-path.test.tsx
+new file mode 100644
+index 00000000..976a6bdd
+--- /dev/null
++++ b/tests/annotations-head-path.test.tsx
+@@ -0,0 +1,43 @@
++// @vitest-environment jsdom
++/* The Annotations head's path: the part and the section each on a line of
++   their own, never cut to one line — Greg, 7M: "the text is truncated too
++   much". jsdom lays nothing out, so this checks the shape that lets each title
++   wrap; the browser check in the plan is what saw it wrap.
++   docs/plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md */
++import { act } from "react";
++import { createRoot } from "react-dom/client";
++import { afterEach, describe, expect, it } from "vitest";
++import { AnnotationsHead } from "../src/web/annotations/AnnotationsColumn.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++let host: HTMLDivElement | null = null;
++afterEach(() => {
++  host?.remove();
++  host = null;
++});
++
++function draw(path: string[]): HTMLElement {
++  host = document.createElement("div");
++  document.body.append(host);
++  const root = createRoot(host);
++  act(() => root.render(<AnnotationsHead room path={path} arc={null} />));
++  return host;
++}
++
++describe("the head's path", () => {
++  it("draws each title as a step of its own, part first", () => {
++    const part = "Smallest Brains and Largest Brains in the Animal Kingdom";
++    const section = "What Happens When Brains Get Bigger, and What Changes";
++    const steps = [...draw([part, section]).querySelectorAll(".marg-path-step")];
++    expect(steps.map((s) => s.getAttribute("data-depth"))).toEqual(["0", "1"]);
++    expect(steps[0]?.textContent).toBe(part);
++    expect(steps[1]?.textContent).toBe(` › ${section}`);
++  });
++
++  it("keeps the join for a screen reader only", () => {
++    const path = draw(["Part", "Section"]).querySelector(".marg-path");
++    expect(path?.textContent).toBe("Part › Section");
++    expect(path?.querySelector(".sr-only")?.textContent).toBe(" › ");
++  });
++});
+diff --git a/tests/annotations-press.test.ts b/tests/annotations-press.test.ts
+new file mode 100644
+index 00000000..9f5b73c3
+--- /dev/null
++++ b/tests/annotations-press.test.ts
+@@ -0,0 +1,61 @@
++/* What pressing Annotations does — the most recent press wins on a window too
++   narrow for the band and the notes together (SPIDERYARN-READING2-7P).
++   docs/plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md */
++import { describe, expect, it } from "vitest";
++import { annotationsPress, notesFit } from "../src/web/annotations/press.js";
++
++/* The hypothetical fits the press reads, at their thresholds (GPT Sol on the
++   plan): alone from 612 with the rail and 600 without; beside a band from 900
++   and 888. Between 612 and 699 the band covers the prose and the notes still
++   fit alone, so a landscape phone swaps too. */
++describe("notesFit", () => {
++  const at = (windowWidth: number, showSpine: boolean | null, bandOpen: boolean) =>
++    notesFit({ windowWidth, showSpine }, bandOpen);
++
++  it("fits the notes alone from 612px with the rail, 600 without", () => {
++    expect(at(611, true, false).alone).toBe(false);
++    expect(at(612, true, false).alone).toBe(true);
++    expect(at(599, false, false).alone).toBe(false);
++    expect(at(600, false, false).alone).toBe(true);
++  });
++
++  it("fits them beside a band from 900px with the rail", () => {
++    expect(at(899, true, true).both).toBe(false);
++    expect(at(900, true, true).both).toBe(true);
++  });
++
++  it("reads 'alone' even with a band open, so a covering band can be swapped", () => {
++    expect(at(650, null, true)).toEqual({ both: false, alone: true });
++  });
++});
++
++const press = (margin: boolean, bandOpen: boolean, bothFit: boolean, aloneFit: boolean) =>
++  annotationsPress({ margin, bandOpen, bothFit, aloneFit });
++
++describe("annotationsPress", () => {
++  it("turns the notes on with no band", () => {
++    expect(press(false, false, false, true)).toEqual({ margin: true, closeBand: false });
++  });
++
++  it("turns the notes on beside a band where both fit, and leaves the band", () => {
++    expect(press(false, true, true, true)).toEqual({ margin: true, closeBand: false });
++  });
++
++  it("swaps the band out for the notes where only one fits", () => {
++    expect(press(false, true, false, true)).toEqual({ margin: true, closeBand: true });
++  });
++
++  it("brings back notes hidden behind a band that won, rather than turning them off", () => {
++    expect(press(true, true, false, true)).toEqual({ margin: true, closeBand: true });
++  });
++
++  it("turns showing notes off", () => {
++    expect(press(true, false, false, true)).toEqual({ margin: false, closeBand: false });
++    expect(press(true, true, true, true)).toEqual({ margin: false, closeBand: false });
++  });
++
++  it("never closes the band on a phone, where the notes do not fit even alone", () => {
++    expect(press(false, true, false, false)).toEqual({ margin: true, closeBand: false });
++    expect(press(true, true, false, false)).toEqual({ margin: false, closeBand: false });
++  });
++});
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index eb1aceb4..748a11d4 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -1492,7 +1492,69 @@ describe("the notes beside a band", () => {
+     await atWidth(800, "?mode=glossary&margin=1");
+     expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+     expect(notes()).toBe(0);
+-    expect(line()).toContain("panel closed");
++    expect(line()).toContain("swap them in for the panel");
++  }, PHASE_MS);
++
++  /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
++     the other"*. Pressing a band already wins; this is pressing the notes
++     (261001k). */
++  it("swaps the band out for the notes when Annotations is pressed below 900px", async () => {
++    await atWidth(800, "?mode=glossary");
++    await press("annotations");
++    for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
++    const query = new URLSearchParams(location.search);
++    expect(query.get("margin")).toBe("1");
++    expect(query.get("mode")).toBeNull();
++    expect(host.querySelector(".mode-band"), "the band should have closed").toBeNull();
++    expect(notes(), "no notes after the swap").toBeGreaterThan(0);
++  }, PHASE_MS);
++
++  it("brings back notes hidden behind a band rather than turning them off", async () => {
++    await atWidth(800, "?mode=glossary&margin=1");
++    expect(notes()).toBe(0);
++    await press("annotations");
++    for (let i = 0; i < 40 && host.querySelector(".mode-band") !== null; i++) await settle();
++    expect(new URLSearchParams(location.search).get("margin")).toBe("1");
++    expect(host.querySelector(".mode-band")).toBeNull();
++    expect(notes()).toBeGreaterThan(0);
++  }, PHASE_MS);
++
++  it("leaves the band open where both fit", async () => {
++    await atWidth(1024, "?mode=glossary");
++    await press("annotations");
++    const query = new URLSearchParams(location.search);
++    expect(query.get("mode")).toBe("glossary");
++    expect(query.get("margin")).toBe("1");
++    expect(host.querySelector(".mode-band")).not.toBeNull();
++    expect(notes()).toBeGreaterThan(0);
++  }, PHASE_MS);
++
++  /* The whole back-and-forth, one history entry a press (GPT Sol on the plan,
++     finding 5): the swap writes `mode` and `margin` together. */
++  it("swaps each way on each press, one history entry each", async () => {
++    await atWidth(800, "?mode=glossary");
++    const url = () => {
++      const q = new URLSearchParams(location.search);
++      return `${q.get("mode") ?? "plain"}/${q.get("margin") ?? "-"}`;
++    };
++    const step = async (mode: Mode, want: string) => {
++      const before = history.length;
++      await act(async () => modeButton(mode).click());
++      for (let i = 0; i < 40 && url() !== want; i++) await settle(1);
++      expect(url(), `after ${mode}`).toBe(want);
++      expect(history.length - before, `entries for ${mode}`).toBe(1);
++    };
++    await step("annotations", "plain/1");
++    await step("glossary", "glossary/1");
++    await step("annotations", "plain/1");
++    await step("annotations", "plain/-");
++  }, PHASE_MS);
++
++  it("leaves a phone's band open, where the notes do not fit even alone", async () => {
++    await atWidth(390, "?mode=glossary");
++    await press("annotations");
++    await settle();
++    expect(host.querySelector(".mode-band"), "the band closed for nothing").not.toBeNull();
+   }, PHASE_MS);
+ 
+   it("draws no line over a band that covers the window", async () => {

@@ -122,6 +122,7 @@ import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } fro
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
+import { annotationsPress, notesFit } from "../annotations/press.js";
 import { bandCoversProse, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -325,15 +326,17 @@ export function Reader({
   /* **An old `?mode=annotations` link** (Annotations was a mode for its first
      day) reads as Plain through `modeParam`; this turns the notes on for it
      and drops the old word, in one replaced entry so Back does not return to
-     it. Read from `location` because `modeParam` has already discarded it. */
-  const [, setOldAnnotations] = useQueryStates({
+     it. Read from `location` because `modeParam` has already discarded it.
+     The Annotations press that swaps the band out writes both through this
+     too, so one Back undoes it (261001k). */
+  const [, setModeAndMargin] = useQueryStates({
     mode: modeParam,
     margin: marginParam,
   });
   useEffect(() => {
     if (new URLSearchParams(location.search).get("mode") === "annotations")
-      void setOldAnnotations({ mode: null, margin: true }, { history: "replace" });
-  }, [setOldAnnotations]);
+      void setModeAndMargin({ mode: null, margin: true }, { history: "replace" });
+  }, [setModeAndMargin]);
   /* The pasted Trajectory stop belongs to this article arrival, not to each
      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
      while leaving mode-specific query state in the URL; the first band mount
@@ -449,6 +452,22 @@ export function Reader({
         showSpine,
       }),
     [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
+  );
+  /* **Where the notes would fit**, for the Annotations press: beside the band
+     that is open, and with no band. A press reads both to decide whether it
+     swaps the band out (`annotationsPress`, 261001k). */
+  const wouldFit = useMemo(
+    () =>
+      notesFit(
+        {
+          windowWidth,
+          bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
+          rootFontPx,
+          showSpine,
+        },
+        bandOpen,
+      ),
+    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
   );
 
   /**
@@ -2968,9 +2987,22 @@ export function Reader({
              and Forward never call this callback and therefore never arm. */
           /* **Annotations is a switch, not a band** (`BandMode`): its press
              turns the column on or off and leaves the band, the herald and a
-             stepped-aside band exactly as they were. */
+             stepped-aside band exactly as they were — unless the two do not
+             fit together, when the notes, pressed last, swap the band out
+             (`annotationsPress`, Greg's 7P). */
           if (next === "annotations") {
-            void setMargin(marginOpen ? null : true);
+            const press = annotationsPress({
+              margin: marginOpen,
+              bandOpen,
+              bothFit: wouldFit.both,
+              aloneFit: wouldFit.alone,
+            });
+            if (press.closeBand) {
+              void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
+              setBandAway(false);
+            } else {
+              void setMargin(press.margin ? true : null);
+            }
             return;
           }
           armTrajectoryOpening(trajectoryArrival.current, mode, next);
