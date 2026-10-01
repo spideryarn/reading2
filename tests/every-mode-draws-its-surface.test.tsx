@@ -1509,6 +1509,21 @@ describe("the notes beside a band", () => {
     expect(notes(), "no notes after the swap").toBeGreaterThan(0);
   }, PHASE_MS);
 
+  it("undoes the combined swap with one Back step", async () => {
+    await atWidth(800, "?mode=glossary");
+    await press("annotations");
+    expect(location.search).toContain("margin=1");
+
+    await act(async () => history.back());
+    for (let i = 0; i < 40 && new URLSearchParams(location.search).get("mode") !== "glossary"; i++)
+      await settle(1);
+
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBe("glossary");
+    expect(query.get("margin"), "Back restored an intermediate half of the swap").toBeNull();
+    expect(host.querySelector(".mode-band"), "Back did not restore the band").not.toBeNull();
+  }, PHASE_MS);
+
   it("brings back notes hidden behind a band rather than turning them off", async () => {
     await atWidth(800, "?mode=glossary&margin=1");
     expect(notes()).toBe(0);

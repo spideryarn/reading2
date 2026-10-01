@@ -156,10 +156,34 @@ tallest path it met was two lines a title, inside the clamp.
 No horizontal overflow, no page errors. At 390 the button shows pressed with nothing visible
 changed — the switch is on and waits for room; the cost of not closing a band for nothing.
 
+## GPT Sol's code review
+
+Write-capable, on `ceba340f`:
+[261001k-annotations-swap-code-review-sol.md](261001k-annotations-swap-code-review-sol.md), on
+[its prompt](261001k-annotations-swap-code-review-prompt.md) and
+[the diff](261001k-annotations-swap-code-review.diff). Verdict **land after fixes**, no P0 or P1;
+it found nothing to change in the press handler or `annotationsPress`, and fixed three itself:
+
+- **P2** — a cut title's full text was in a native `title`, which a finger cannot reach. Each path
+  step is now a button with the app's card (hover, focus, tap), as the arc already was; the
+  screen-reader ` › ` sits outside the clipped box.
+- **P2** — the path test now pins the grid, the two-line clamp and the card.
+- **P3** — a history-length count would pass a push followed by a replace; a test now presses Back
+  once after the swap and finds Glossary with no `margin`.
+
+**Re-checked in the browser** (a line-clamp on a `<button>` is not a given): at 900px, the
+narrowest column (200px), real titles show in full on one or two lines; a forced 222-character
+title stops at two lines with an ellipsis; the head never grew past 147px; hover and keyboard focus
+both open the card. Shots `e-900-*` in [261001k-shots/](261001k-shots/).
+
 ## Stages
 
 1. Plan, GPT Sol plan review. **Done.**
 2. Build both, tests red first; gates. **Done.**
 3. Browser check. **Done.**
 4. GPT Sol code review (write-capable); docs (`narrow-windows.md`, `reading-view-overview.md`); the
-   feedback note.
+   feedback note. **Done.**
+
+## Status
+
+**Landed on `dev`, 2026-10-01.** Behind the experimental switch, as Annotations is. Not deployed.
