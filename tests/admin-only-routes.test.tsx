@@ -85,7 +85,9 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       ? '{"users":[]}'
       : url.startsWith("/api/admin/feedback")
         ? '{"reports":[],"hasMore":false}'
-        : "{}";
+        : url.startsWith("/api/admin/vouchers")
+          ? '{"vouchers":[]}'
+          : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
 
@@ -180,6 +182,12 @@ describe("/admin still refuses exactly as it did", () => {
     await show("/admin/users");
     expect(heading()).toBe("Spideryarn");
   });
+
+  it("refuses the vouchers page to a reader", async () => {
+    session.user = READER;
+    await show("/admin/vouchers");
+    expect(heading()).toBe("Spideryarn");
+  });
 });
 
 /**
@@ -201,6 +209,7 @@ describe("the four pages that load on demand", () => {
     ["/admin", "Admin"],
     ["/admin/users", "Users"],
     ["/admin/feedback", "Feedback"],
+    ["/admin/vouchers", "Gift vouchers"],
     ["/design", "Design reference"],
   ];
   for (const [path, name] of variants) {
@@ -217,6 +226,9 @@ describe("the list itself", () => {
   it("names admin and design, and nothing a reader has a right to", () => {
     expect(adminOnly(parseRoute("/admin"))).toBe(true);
     expect(adminOnly(parseRoute("/admin/users"))).toBe(true);
+    /* The one admin page that writes (gift vouchers, plan 261001m). */
+    expect(parseRoute("/admin/vouchers")).toEqual({ kind: "admin", page: "vouchers" });
+    expect(adminOnly(parseRoute("/admin/vouchers"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
     for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);

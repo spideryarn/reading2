@@ -59,7 +59,14 @@ const PROMISES: Record<string, string> = {
   "CandidatesPanel.tsx › cnd-box": "send",
   "ChatPanel.tsx › chat-edit-box": "send",
   "ChatPanel.tsx › chat-input": "send",
+  /* Enter creates the voucher — the form's one button (plan 261001m). */
+  "AdminVouchersPage.tsx › voucher-new-email": "go",
+  "AdminVouchersPage.tsx › voucher-new-articles": "go",
+  "AdminVouchersPage.tsx › voucher-new-note": "go",
   /* Enter commits an edit in place. */
+  "AdminVouchersPage.tsx › Email address": "done",
+  "AdminVouchersPage.tsx › Articles": "done",
+  "AdminVouchersPage.tsx › Private note": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
   /* Enter posts a question into chat. */

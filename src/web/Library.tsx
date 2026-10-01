@@ -58,6 +58,7 @@ import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "
    trigger the corner and the dock draw, in a third shape. FeedbackButton.tsx §
    `FEEDBACK_SHAPE.masthead`. */
 import { FeedbackTrigger } from "./FeedbackButton.js";
+import { FreeAllowance } from "./FreeAllowance.js";
 import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
 import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
@@ -591,6 +592,12 @@ export function Library({
       </header>
 
       <AddArticle queue={queue} />
+
+      {/* **The free allowance**, for Free and lapsed readers only — what is
+          used, what is left, and a collapsed *How free articles work*. Below
+          the add box because that is the act it counts. FreeAllowance.tsx;
+          plan 261001m. */}
+      <FreeAllowance />
 
       {error && (
         <p className="tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">

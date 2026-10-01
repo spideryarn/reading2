@@ -2,7 +2,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { LazyPage } from "./LazyPage.js";
+import { LazyPage, type PageLoader } from "./LazyPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
@@ -17,7 +17,7 @@ import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { adminOnly, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
+import { type AdminPage, adminOnly, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
@@ -25,7 +25,7 @@ import { ArticlePage } from "./article/ArticlePage.js";
 /**
  * **The three routes whose code is not in the reader's initial download.**
  * `LazyPage.tsx`
- * has the reasoning; these are the five loaders it takes.
+ * has the reasoning; these are the six loaders it takes.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
  * because `React.lazy` reads `module.default` and neither page has one — the
@@ -37,6 +37,17 @@ const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.A
 const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadAdminVouchers = () =>
+  import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
+/* One loader per admin page, keyed by the union, so a page added to
+   `AdminPage` without a loader is a compile error rather than a fall-through
+   to the index — the same reason page-title.ts keys its titles this way. */
+const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
+  home: loadAdminHome,
+  users: loadAdminUsers,
+  feedback: loadAdminFeedback,
+  vouchers: loadAdminVouchers,
+};
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
    210 KB and would otherwise land in every reader's first download for a page
@@ -549,13 +560,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        {route.page === "users" ? (
-          <LazyPage load={loadAdminUsers} routeKey="admin:users" />
-        ) : route.page === "feedback" ? (
-          <LazyPage load={loadAdminFeedback} routeKey="admin:feedback" />
-        ) : (
-          <LazyPage load={loadAdminHome} routeKey="admin:home" />
-        )}
+        <LazyPage load={ADMIN_LOADERS[route.page]} routeKey={`admin:${route.page}`} />
       </>
     );
   }

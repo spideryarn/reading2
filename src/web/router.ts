@@ -95,7 +95,7 @@ import {
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users" | "feedback";
+export type AdminPage = "home" | "users" | "feedback" | "vouchers";
 
 export type Route =
   | { kind: "library" }
@@ -489,7 +489,7 @@ export function parseRoute(pathname: string): Route {
      matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users|feedback))?\/?$/.exec(pathname);
+  const adminPath = /^\/admin(?:\/(users|feedback|vouchers))?\/?$/.exec(pathname);
   if (adminPath) {
     /* The captured segment *is* the page name for every page but the index,
        which has no segment. Written as a lookup rather than a chain of
@@ -499,7 +499,7 @@ export function parseRoute(pathname: string): Route {
     const page = adminPath[1];
     return {
       kind: "admin",
-      page: page === "users" || page === "feedback" ? page : "home",
+      page: page === "users" || page === "feedback" || page === "vouchers" ? page : "home",
     };
   }
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
@@ -632,6 +632,8 @@ export const ADMIN_HREF = "/admin";
 /* src/urls.ts's, so the admin's sign-up mail links the same path. */
 export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
+/* Gift vouchers — docs/project/admin.md § `/admin/vouchers`. */
+export const ADMIN_VOUCHERS_HREF = "/admin/vouchers";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**

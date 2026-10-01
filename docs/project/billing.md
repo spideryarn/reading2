@@ -573,6 +573,14 @@ The Portal then opens on no payment method and no invoices, which is the honest 
 that started to subscribe and stopped. Seen in the browser on 2026-09-03 and written down because it
 looks wrong for as long as it takes to remember why the mapping comes first.
 
+**The shelf says it too, to a Free reader, since 2026-10-01.** A compact box under the add box
+([library.md § The free-allowance box](library.md#the-free-allowance-box)) for the `free` and `lapsed`
+arms only: `describePlan`'s headline, the server's `remaining` (further *private* articles — never
+`limit − used`), and a collapsed *How free articles work* that links `/pricing` and `/profile`. It
+is the shelf's one `useBilling()`, and the read it makes is also what claims a waiting gift voucher
+(§ Gift vouchers below), so the box is where a new gift first shows — a gift icon by the count, the
+gift listed in the collapsed half, and a dismissible *has been added* line for seven days.
+
 ## We never touch a card
 
 Hosted Stripe Checkout and the hosted Customer Portal, both of which are redirects. Billing

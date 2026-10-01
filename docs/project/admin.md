@@ -774,7 +774,20 @@ Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
 [`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): articles a whole number 1–1000, a note of at
 most 500 characters, an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
 than a default. There is no delete: a revoked voucher stays as a record, and `revoked: false`
-restores it. The page itself is stage 2 of the plan.
+restores it.
+
+**The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
+[`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
+from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
+loader is a compile error). A create form — address, articles (20 by default), private note — over
+a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
+row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
+day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
+Edit offers the address only while the voucher waits, and a save sends only the fields that changed.
+Every write is followed by a fresh read, and a refusal is shown in the server's own words beside the
+row. The wire type is a client copy (`AdminVoucherRow`) because `pg-vouchers.ts` is a server module
+the client may not import, even for a type; moving `AdminVoucher` into a flat shared module would
+remove the copy. `tests/admin-vouchers-page.test.tsx` mounts it.
 
 ## What it cannot do, and what is not built
 

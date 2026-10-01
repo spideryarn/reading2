@@ -192,3 +192,25 @@ house pattern in database.md (app role only; no anon/authenticated access).
     once per claimant) — a network call per claimant on every load of an admin-only page.
   - `noticeKey` is the voucher id, as F5 allows; the plan's earlier line that the id never leaves the
     admin routes is superseded by F5.
+- 2026-10-01: **stage 2 (client) built.** `/admin/vouchers` is `AdminVouchersPage.tsx` over
+  `useAdminVouchers.ts` (create form, a plain table, inline edit, Revoke/Restore, every write
+  followed by a fresh read, refusals in the server's words), on the `/admin` index and lazy-loaded
+  through a new `ADMIN_LOADERS` map keyed by `AdminPage`. The shelf's box is `FreeAllowance.tsx`
+  under the add box: `describePlan`'s headline, the server's `remaining`, a gift icon and a gift
+  list only when `gifts` exists, the seven-day notice dismissed per `noticeKey`. Tests:
+  `tests/free-allowance-box.test.tsx` (13), `tests/admin-vouchers-page.test.tsx` (5), and
+  `/admin/vouchers` added to `tests/admin-only-routes.test.tsx`; each new file was red against a
+  missing module, the route test red before the loader existed, and the box and page tests were
+  each watched red under mutations (drawn for every plan, dismissal ignored, gift wording without
+  gifts; Revoke sending the wrong body, the address editable once claimed). Docs: library.md § The
+  free-allowance box, admin.md § `/admin/vouchers` (the page), billing.md § What a reader sees.
+  What changed from the plan:
+  - **The client carries its own copy of the admin wire type** (`AdminVoucherRow`), because
+    `pg-vouchers.ts` is a server module that tests/client-imports.test.ts refuses even a type import
+    from. Moving `AdminVoucher`/`ClaimantUsage` into a flat shared module is a small server-side
+    follow-up.
+  - The `/admin` index's *"Nothing on them can change anything"* now names Gift vouchers as the
+    exception.
+  - **The box mounts `useBilling` on the shelf**, which also reads `?checkout=` on mount. Stripe
+    returns to `/profile`, so nothing sends that parameter to `/`, but if one ever arrived there it
+    would be handled and cleared there.
