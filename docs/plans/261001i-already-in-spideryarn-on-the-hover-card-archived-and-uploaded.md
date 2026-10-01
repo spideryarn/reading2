@@ -144,6 +144,28 @@ ship"*:
 5. **P2** the client test plan was vague — taken: five card tests.
 6. **P3** `kind` does not guarantee a parseable URL — taken: the fail-closed test.
 
+GPT Sol, code, workspace-write ([261001i-code-review-sol.md](261001i-code-review-sol.md), prompt
+and [scoped diff](261001i-code-review.diff) beside it): **no P0–P2**. Two P3s, both fixed by Sol in
+the tree: a stale owner-only comment left in `Reader.tsx`, and the SQL privacy gates pinned in a new
+connection-free unit test (`tests/cited-in-spideryarn-sql.test.ts`) so a missing database cannot
+turn a privacy mutation into an untested one — Sol reports mutations of the ownership and archive
+guards, the identifier tier, the ranking and the card gate each went red. Its sandbox could not
+reach Postgres (its third P3); the five scoped suites were re-run outside it, 119 tests, exit 0.
+
 ## Status
 
-Building.
+**Shipped to `dev`, not deployed** (2026-10-01).
+
+- **Browser check** (Playwright, a dev server of this worktree on local Postgres, four seeded
+  `bc261001i-` articles, removed afterwards): a DOI work whose copy is the reader's own archived
+  article drew **In your library · archived** to that article, *matched by the same DOI*, in the
+  band and in the prose hover card, at 1280px and 390px; clicking the card's line opened it in the
+  same tab. A second DOI work matched the reader's own upload by its canonical guess: **In your
+  library**, *the DOI or arXiv id we found for your uploaded PDF*. A stranger's public upload with
+  a canonical guess for the first DOI never appeared, in the page or in `GET /api/citations`. No
+  horizontal overflow. [Band](261001i-shots/desktop-band.png),
+  [card](261001i-shots/desktop-hovercard-0.png), [phone card](261001i-shots/phone-hovercard-0.png).
+- After the screenshots, the card's line got the by-line's spacing (it ran into the label below);
+  a CSS margin only, not re-shot.
+- Noticed in passing, not ours: under `?mode=citations` on a one-paragraph article the band's
+  header overlays the prose, so the cite mark could not be hovered; the check used `?mode=plain`.
