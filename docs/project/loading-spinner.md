@@ -35,12 +35,14 @@ after the letters', so the two are out of step and something is changing most of
 restrained ones — *Warm Drift* above all — would look stalled alone and read as texture beside a
 partner, which is why one track was passed over.
 
-**Each draw is held for whole loops of itself.** A keyframe animation whose class is removed
-mid-loop jumps home from wherever it was, and nothing can ease it — so `LOADER_HOLD_MS` holds a loop
-for a whole number of loops after its delay, and a one-shot until it has finished. The Settle, a
-transition, gets a 300ms rest after it so its exit can ease. The loop lengths live in the
-stylesheet, so [`tests/logo-loader.test.tsx`](../../tests/logo-loader.test.tsx) reads them from
-there and fails if a hold stops agreeing.
+**Each draw is held for complete runs of itself.** A keyframe animation whose class is removed
+mid-loop jumps home from wherever it was, and nothing can ease it — so `LOADER_HOLD_MS` holds
+ordinary loops to a boundary and one-shots until they finish. Pluck is staggered, so the loader
+runs it exactly twice and waits through the last letter's delay; its hover version remains an
+infinite loop. The Settle, a transition, gets a 300ms rest after it so its exit can ease. The
+durations and delays live in the stylesheet, so
+[`tests/logo-loader.test.tsx`](../../tests/logo-loader.test.tsx) reads them from there — including
+computed staggers, pseudo-elements and conditional rules — and fails if a hold stops agreeing.
 
 **Four of the thirteen are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
 and `spya-dawn` reach both halves (the first holds the letters while the spider hauls; the second
@@ -48,6 +50,13 @@ masks the whole host) and would override the other track; `spya-seam` and `spya-
 whose transition is scoped to their class, so leaving them snaps. **A fourteenth hover animation
 fails the test until it is put in one list or the other**, and the same test reads the
 stylesheet's selectors and fails if anything in a track touches the other half.
+
+**It is the corner's wordmark, scaled up, not a big one.** The spider's moves are fixed pixels
+tuned for the 20px mark (only the letters' are in `--logo-px`), so a wordmark drawn at 36px ran
+Dragline and The Settle at about half strength; the first browser check called it "a gentle
+jiggle". So it is drawn at the corner's size and the wrapper is `scale: 2.2`, which scales every
+move exactly as it was tuned. `scale` is its own property, so it cannot fight an animation's
+`transform`.
 
 **Reduced motion gets the sentence, not the spider.** The global guard collapses every one of these
 to a still, so a cycling wordmark would be a still logo twitching between poses — neither motion nor

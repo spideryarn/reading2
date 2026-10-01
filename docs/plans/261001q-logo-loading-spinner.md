@@ -145,3 +145,26 @@ the cadence and the announcement wrong. What changed, finding by finding:
    that changes layout, and nothing at all before the 600ms threshold.
 6. **P2, doc ownership.** `loading-spinner.md` is under design-css-overview.md in AGENTS.md, in the
    parent's list, and ends with its `Up:` link.
+
+## After the code review and the browser check
+
+- **Sol's code review** ([answer](261001q-logo-loading-spinner-code-review-sol.md)) fixed what it
+  found in place: Pluck's letters are staggered by a computed delay, which my parser read as zero,
+  so the 2800ms hold cut the last letters mid-loop. In the loader Pluck now runs exactly twice
+  (`.logo-loader.spya-pluck`) and is held 3106ms, and the parser reads `calc()` staggers,
+  pseudo-elements and `@supports`-nested rules. It also made the reduced-motion subscription stable
+  with an old-Safari fallback, waited for a painted frame before the first draw, re-armed a pool of
+  one, and made the `/design` specimen decorative.
+- **The browser check** (Sonnet, Playwright, held fetch) found the loader appearing after the
+  threshold, centred, both tracks cycling with no back-to-back repeat, gone when the article lands,
+  and the sentence under reduced motion. It also found the spider's moves weak at 36px: they are
+  fixed pixels tuned for the 20px mark. **Fixed by drawing the wordmark at the corner's size and
+  scaling the wrapper** (`scale: 2.2`) rather than drawing it big, so every move scales as tuned.
+  A second browser check looked at the scaled version.
+
+Screenshots, all with the article fetch held open locally:
+[desktop](261001q-shot2-desktop-full.png), [phone](261001q-shot2-mobile-full.png),
+[Dragline at scale, ~12 frames](261001q-shot2-desktop-sheet-dragline.png), and
+[reduced motion](261001q-shot-reduced-motion.png). Radius Sweep is as faint as it is on hover,
+the set's quietest mark animation by design, and is left as it is, since the letters' track runs
+beside it.

@@ -339,7 +339,7 @@ away entirely.
 ## See also
 
 - [loading-spinner.md](loading-spinner.md) — the same set as the article page's loading spinner,
-  two at once; a fourteenth joins it by default, and its test says whether it may
+  two at once; a fourteenth fails its test until it is either given a loader timing or excluded
 - [design-css-overview.md](design-css-overview.md) — the parent: the stylesheets, the load order,
   which mechanism owns which rule
 - [original-version/design-system.md](original-version/design-system.md) — the previous app's

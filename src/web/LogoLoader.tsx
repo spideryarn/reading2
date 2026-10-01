@@ -17,12 +17,12 @@
  * beside a partner they read as texture. docs/project/loading-spinner.md has
  * the design.
  *
- * **Each draw is held for whole loops of itself** (`LOADER_HOLD_MS`), because
- * that is the only moment a class can change without a snap: a keyframe
+ * **Each draw is held for complete runs of itself** (`LOADER_HOLD_MS`), because
+ * only a resting frame can lose its class without a snap: a keyframe
  * animation removed mid-loop jumps home from wherever it was, and nothing can
  * ease it (logo-animations.css § A soft landing for The Settle).
- * tests/logo-loader.test.tsx reads every loop length out of the stylesheet and
- * fails if a hold here stops agreeing with it.
+ * tests/logo-loader.test.tsx reads every duration and delay out of the
+ * stylesheet and fails if a hold here stops agreeing with it.
  */
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { LOGO_ANIMATIONS, type LogoAnimation, pickFrom } from "./logo-animation.js";
@@ -56,7 +56,7 @@ export const LOADER_HOLD_MS: Readonly<Record<string, { run: number; rest?: numbe
   "spya-warm": { run: 3200 }, // 1 × 3.2s
   "spya-dragline": { run: 3200 }, // 2 × 1.6s
   "spya-radius": { run: 2400 }, // 1 × 2.4s
-  "spya-pluck": { run: 2800 }, // 2 × 1.4s
+  "spya-pluck": { run: 3106 }, // 306ms stagger + 2 × 1.4s
   "spya-sag": { run: 1800 }, // once, 1.6s
   "spya-register": { run: 1200 }, // once, 640ms + nine 20ms staggers
   "spya-type": { run: 2820 }, // the cursor: 700ms delay + 2 × 1.06s blink
@@ -78,13 +78,16 @@ export const LETTERS_START_MS = 100;
 /** When the spider's track starts — out of step with the letters from the first. */
 export const MARK_START_MS = 1200;
 
+/** A painted rest between two runs when a track has no different id to draw. */
+const TRACK_REARM_MS = 32;
+
 /**
  * One track: the animation id now running on it, or `null` at rest. Starts at
  * rest, so the first draw is a change from a painted resting frame — the
  * transition-based Settle has nothing to move *from* on an element born with
  * its class (DesignPage.tsx § LogoAnimations says the same).
  */
-function useTrack(pool: readonly LogoAnimation[], start: number, on: boolean): string | null {
+export function useTrack(pool: readonly LogoAnimation[], start: number, on: boolean): string | null {
   const [id, setId] = useState<string | null>(null);
   useEffect(() => {
     if (!on) {
@@ -100,9 +103,10 @@ function useTrack(pool: readonly LogoAnimation[], start: number, on: boolean): s
       setId(next.id);
       const hold = LOADER_HOLD_MS[next.id] ?? { run: 2400 };
       timer = setTimeout(() => {
-        if (hold.rest) {
+        const rest = hold.rest ?? (pool.length === 1 ? TRACK_REARM_MS : 0);
+        if (rest) {
           setId(null);
-          timer = setTimeout(draw, hold.rest);
+          timer = setTimeout(draw, rest);
         } else draw();
       }, hold.run);
     };
@@ -114,20 +118,49 @@ function useTrack(pool: readonly LogoAnimation[], start: number, on: boolean): s
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
+function reducedMotionQuery(): MediaQueryList | null {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
+  return window.matchMedia(REDUCE);
+}
+
+/** Stable for `useSyncExternalStore`: an inline function would resubscribe on every draw. */
+function subscribeReducedMotion(changed: () => void): () => void {
+  const query = reducedMotionQuery();
+  if (!query) return () => {};
+  if (typeof query.addEventListener === "function") {
+    query.addEventListener("change", changed);
+    return () => query.removeEventListener("change", changed);
+  }
+  /* Safari before 14 exposes only this deprecated pair. */
+  query.addListener(changed);
+  return () => query.removeListener(changed);
+}
+
+function reducedMotionSnapshot(): boolean {
+  return reducedMotionQuery()?.matches ?? false;
+}
+
 /**
  * Whether the reader has asked for reduced motion, **live**: a reader who
  * changes the setting during a long wait gets the still at once, timers and
  * all, not on the next page.
  */
 function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (changed) => {
-      const q = window.matchMedia?.(REDUCE);
-      q?.addEventListener?.("change", changed);
-      return () => q?.removeEventListener?.("change", changed);
-    },
-    () => window.matchMedia?.(REDUCE).matches ?? false,
-  );
+  return useSyncExternalStore(subscribeReducedMotion, reducedMotionSnapshot, () => false);
+}
+
+/** Arm animation only after the resting wordmark has survived a paint. */
+function usePainted(on: boolean): boolean {
+  const [painted, setPainted] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setPainted(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setPainted(true));
+    return () => cancelAnimationFrame(frame);
+  }, [on]);
+  return painted;
 }
 
 /**
@@ -149,23 +182,32 @@ function useReducedMotion(): boolean {
  */
 export function LogoLoader({ label }: { label: string }) {
   const still = useReducedMotion();
-  const letters = useTrack(LOADER_TRACKS.letters, LETTERS_START_MS, !still);
-  const mark = useTrack(LOADER_TRACKS.mark, MARK_START_MS, !still);
+  const painted = usePainted(!still);
+  const letters = useTrack(LOADER_TRACKS.letters, LETTERS_START_MS, !still && painted);
+  const mark = useTrack(LOADER_TRACKS.mark, MARK_START_MS, !still && painted);
 
   if (still) return <div className="loading">{label}…</div>;
 
   const running = [letters, mark].filter((x): x is string => x !== null);
   return (
-    <div className="tw:flex tw:items-center tw:justify-center tw:py-6">
+    <div className="tw:flex tw:items-center tw:justify-center tw:py-8">
       <span className="tw:sr-only">{label}…</span>
-      <div
-        className={`logo-loader tw:flex tw:items-center tw:gap-3 ${running.length ? `spya-anim ${running.join(" ")}` : ""}`}
-        aria-hidden="true"
-      >
-        <LogoMark size={36} />
-        <span className="tw:font-prose tw:text-3xl tw:text-foreground">
-          <LogoLetters />
-        </span>
+      {/* **Drawn at the corner's size and scaled up, not drawn big.** The
+          spider's moves are fixed pixels tuned for the 20px mark
+          (logo-animations.css § `--logo-px`: letters only), so a 36px spider
+          ran Dragline and Settle at half strength — the browser check called
+          it "a gentle jiggle". Scaling the whole wordmark scales every move
+          exactly as it was tuned. `scale` is its own property, so it cannot
+          collide with an animation's `transform`. */}
+      <div className="tw:scale-[2.2]" aria-hidden="true">
+        <div
+          className={`logo-loader tw:flex tw:items-center tw:gap-1.5 ${running.length ? `spya-anim ${running.join(" ")}` : ""}`}
+        >
+          <LogoMark />
+          <span className="tw:font-prose tw:text-[0.82rem] tw:text-foreground">
+            <LogoLetters />
+          </span>
+        </div>
       </div>
     </div>
   );

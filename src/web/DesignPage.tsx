@@ -1224,10 +1224,15 @@ function LogoAnimations() {
         <p className="design-note">
           <strong>As the loading spinner</strong> — the article page draws this while a fetch has
           taken longer than 600ms: one spider animation and one letters animation at once, each
-          redrawn every 2.4s, half a period apart. src/web/LogoLoader.tsx and
+          held until its own complete run ends, with their first starts 1.1s apart.
+          src/web/LogoLoader.tsx and
           docs/project/loading-spinner.md.
         </p>
-        <LogoLoader label="The loading wordmark" />
+        {/* The paragraph above names this specimen. Hide its real wait label as
+            well as its glyph so a screen reader does not meet a fictional load. */}
+        <div aria-hidden="true">
+          <LogoLoader label="The loading wordmark" />
+        </div>
       </div>
       <Button variant="outline" onClick={() => setTake((n) => n + 1)}>
         Play again
