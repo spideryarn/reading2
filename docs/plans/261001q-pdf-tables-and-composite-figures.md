@@ -114,43 +114,84 @@ after the caption:
   cells. A structured row/cell schema in the transcription is the sound fix and costs a
   `PROMPT_VERSION` bump; deferred until a table is seen to come out wrong.
 
-## Stage 2 — draw a composite figure from the model's box — **not built: deferred**
+## Stage 2 — draw a composite figure from the model's box
 
-**Status, 2026-10-01: designed, reviewed, not built.** GPT Sol's plan review
-([261001q-plan-review-sol.md](261001q-plan-review-sol.md)) found the acceptance rule
-below unsafe as written (P0), and its fixes add up to a project rather than a stage:
+**Decided by Greg, 2026-10-01**, choosing option A — a composite figure rendered from
+the model's box, bound to its caption — over framed-figures-only (B) and the whole page (C):
 
-- **A wrong region can pass** (P0). `captionPrintedOn` matches a caption's opening
-  anywhere on the page, so a prose mention can satisfy rule 1 while the page's only real
-  caption is another figure's; and a model box around a captionless *table* can absorb its
-  cells as "labels" and pass rule 3. Every page in this paper carries a table. The rule
-  needs a positive binding: the caption located at a line start, and a spatial relation
-  between that caption and the region, with no table caption between them.
-- **The safety vetoes cannot simply be kept** (P1). The drawn route refuses a page whose
-  forgiving and strict pdf.js reads disagree, and the layout reader opens the document with
-  `maxImageSize: 1`, so **every page with a picture on it disagrees**. Keeping the veto
-  refuses Fig 1 and Fig 3 outright; dropping it re-admits the paint pdf.js skips and
-  PDFium draws. A layout read that measures pictures is the prerequisite.
-- **`other` image paints have no trustworthy box** (P1). Fig 3 has two inline images, and
-  the paint interpreter files inline images, repeats, groups and masks under one `other`
-  with a placeholder box. Snapping needs them split and bounded.
-- And: low-text scans skip `readPdfRasters`' paint read (P1, 6); the located route does
-  not read layouts today (7); two located crops of one figure need refusing together (8);
-  the renderer draws a 4 pt pad the containment box must match (9); the integration test
-  must include a zero-picture page and the adversarial set (10).
+> I don't care about re-importing the broken article as much as fixing things so that
+> future articles will be correct
+>
+> — Greg, 2026-10-01, relayed by the Overseer
 
-**Sol's simpler alternative**, worth trying first when this is picked up: these three
-figures are each drawn inside **one printed rectangular frame** that the model's box
-matches. Require exactly one such frame on the page, bound to the caption by position,
-and render the frame. Narrow — only framed figures — but with a positive ownership proof
-instead of an inferred one. Or the whole-page fallback below, which is a product call.
+> Q-pdf-figures A If it comes down to it, I'd rather accidentally pull in a bit of extra
+> stuff that got included within the bounding box than have no figure imported at all
+>
+> — Greg, 2026-10-01
 
-**Which to build is Greg's call**, because the two cheap options change what a reader
-sees: a framed-figure-only rule recovers some journals and none of the unframed ones; a
-whole page in the figure's place is always available and never the wrong picture, but it
-is a page of prose at column width with the figure somewhere on it.
+**That second sentence sets the safety bar, and it is a different bar from the other
+routes'.** The bitmap and drawn routes prove that every pixel they store is the figure's
+(*a missing figure is visible; a wrong one is not*). This route proves only that the
+region **is this caption's figure**. A stray line of prose, the edge of a neighbouring
+table, paint pdf.js could not measure: those may come along. What it refuses is the
+failure Greg did not accept — **a region that is mostly something else, or tied to the
+wrong caption**.
 
-The design as first proposed, kept for the record:
+### What GPT Sol's plan review found, and what each finding becomes under that bar
+
+[261001q-plan-review-sol.md](261001q-plan-review-sol.md):
+
+| finding | what it said | under Greg's bar |
+|---|---|---|
+| P0 | `captionPrintedOn` matches a prose mention; a box around a captionless table passes | **kept, and it is the core.** The caption is found with the drawn route's `findCaption` (unique, at a line start), and the region must sit next to it with no other figure or table caption inside the region or as near to it |
+| P1-4 | the strict-read, shading and unmeasured-paint vetoes | **dropped**: they protect pixel ownership, which this route does not claim. Unmeasured paint inside the region is "extra stuff". A page whose text is all outlines has no caption to find, so it is refused anyway |
+| P1-5 | `other` paints have no trustworthy box | **not snapped to.** A group or repeat image may be cut at the region's edge; nothing is decided from its box |
+| P1-6 | low-text scans skip the paint read | a scan with an OCR'd caption is a figure we *can* show by rendering the page region — kept, no special case |
+| P1-7 | layouts are not read on the located route | **read**, for the answered page only, after the answer |
+| P1-8 | two located regions for one figure | **kept**: overlapping regions chosen for two markers refuse both |
+| P1-9 | the renderer's 4 pt pad | every check runs against the padded crop, and containment is that crop |
+| P1-10 | tests: zero-picture page, adversarial set | **kept** |
+
+### The rules (`judgeLocatedRegion`, `src/pdf-figure-region.ts`, pure)
+
+Tried only when `judgeLocatedBox` refuses an answer for a reason about *what is in the
+box* — `not-one-picture` or `assembly` — so a single clean picture is still stored whole,
+as today.
+
+1. **The answer**: the shape asked for, on a page sent, unrotated, zero-origin view box.
+2. **The caption, positively**: `findCaption` finds this marker's caption once, at the
+   start of a line, on the answered page. Otherwise `caption-not-found`.
+3. **Snap outwards**: the box (clamped to the page) takes in every picture paint (an
+   `xobject`), every ink box and every short label line that lies **mostly inside it**
+   (half its area or more), to a fixpoint. A thing barely touched is left out and may be
+   cut; that is the price of not letting a neighbour drag the region across the page.
+4. **Next to its caption**: the padded region and the caption's lines are within
+   `CAPTION_REACH_PT` (24 pt) and overlap on one axis — caption below, above or beside.
+   Otherwise `caption-not-adjacent`.
+5. **Not someone else's**: no *other* caption line — `Fig N`, `Figure N`, `Table N` —
+   intersects the padded region, or lies within `CAPTION_REACH_PT` of it on the same
+   terms as rule 4. A region between two figures' captions is the one case where it could
+   be either's, so it is refused (`another-caption`). Its own caption inside the region is
+   allowed: a caption printed inside the frame is extra, not wrong.
+6. **Not mostly prose**: the prose lines (`isProse`) inside the padded region cover less
+   than `MAX_PROSE_SHARE` (0.3) of it. A box that is a column of text is a wrong answer,
+   not a figure with a stray line (`mostly-prose`).
+7. **Sane size**: at least `MIN_REGION_SIDE_PT` a side, at most `MAX_REGION_AREA_FRACTION`
+   of the page.
+
+Then in `src/collect-pdf-figures.ts`: the located route reads the answered page's layout,
+asks rule 1–7, renders the padded region with `renderPdfRegion` (containment = the padded
+region), refuses two markers whose regions overlap, refuses a region holding most of a
+picture another route already stored, and stores through `storeOne`. **The ask gate
+widens**: every held marker is asked about, not only those with an unclaimed picture
+nearby, still capped by `MAX_LOCATE_CALLS` (8) — at ~$0.002 a call, at most ~2¢ an
+article, and only for figures the free routes refused. `PDF_FIGURE_RECOVERY_POLICY` →
+`pdf-figures/6`.
+
+### The design as first proposed, before Sol's review and Greg's answer
+
+Kept for the record; superseded by the rules above.
+
 
 When `judgeLocatedBox` refuses an answer because the box holds **no single picture**
 (`not-one-picture`) or **a picture with neighbours** (`assembly`), a second, pure judge,
