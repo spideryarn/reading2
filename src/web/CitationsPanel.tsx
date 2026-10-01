@@ -35,6 +35,7 @@
 import type { ReactNode } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
@@ -863,9 +864,7 @@ function OrderBar({
 }) {
   return (
     <div className="gloss-sort">
-      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
-      <div className="gloss-sort-group" role="group" aria-label="Order the citations by">
+      <OrderGroup label="Order the citations by" selected={order}>
         {options.map((option) => (
           <button
             key={option.key}
@@ -878,7 +877,7 @@ function OrderBar({
             {option.label}
           </button>
         ))}
-      </div>
+      </OrderGroup>
     </div>
   );
 }

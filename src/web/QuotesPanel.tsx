@@ -56,6 +56,7 @@ import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { OrderGroup } from "./OrderGroup.js";
 import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
@@ -935,11 +936,7 @@ function RankBar({
 }) {
   return (
     <div className="quotes-rank">
-      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
-          controls and wants a <legend>; these are toggle buttons that change how
-          a list is ordered, and `role="group"` with an accessible name is exactly
-          what ARIA has for that. Same call GlossaryPanel's SortBar makes. */}
-      <div className="gloss-sort-group" role="group" aria-label="Order the quotes by">
+      <OrderGroup label="Order the quotes by" selected={rank}>
         {/* No "order" word in front since 2026-10-01, as in Glossary; the
             group's `aria-label` still says it to a screen reader. */}
         {options.map((option) => (
@@ -954,7 +951,7 @@ function RankBar({
             {option.label}
           </button>
         ))}
-      </div>
+      </OrderGroup>
       {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );

@@ -56,6 +56,11 @@
   color: var(--highlight-ink);
 }
 .quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* One line on a touch screen, after the base rule so it wins — glossary.css §
+   a touch screen has the decision and the rest of the treatment. */
+@media (pointer: coarse) {
+  .quotes-rank { flex-wrap: nowrap; }
+}
 
 /* The bar. Same rules as `.gloss-gate`, and the same reason for the native
    range input: `accent-color` is one line where `::-webkit-slider-thumb` is the
