@@ -1,0 +1,70 @@
+{
+  "data": {
+    "id": "10.48550/arxiv.1706.03762",
+    "type": "dois",
+    "attributes": {
+      "doi": "10.48550/arxiv.1706.03762",
+      "titles": [
+        {
+          "title": "Attention Is All You Need"
+        }
+      ],
+      "creators": [
+        {
+          "name": "Vaswani, Ashish",
+          "nameType": "Personal",
+          "givenName": "Ashish",
+          "familyName": "Vaswani"
+        },
+        {
+          "name": "Shazeer, Noam",
+          "nameType": "Personal",
+          "givenName": "Noam",
+          "familyName": "Shazeer"
+        },
+        {
+          "name": "Parmar, Niki",
+          "nameType": "Personal",
+          "givenName": "Niki",
+          "familyName": "Parmar"
+        },
+        {
+          "name": "Uszkoreit, Jakob",
+          "nameType": "Personal",
+          "givenName": "Jakob",
+          "familyName": "Uszkoreit"
+        },
+        {
+          "name": "Jones, Llion",
+          "nameType": "Personal",
+          "givenName": "Llion",
+          "familyName": "Jones"
+        },
+        {
+          "name": "Gomez, Aidan N.",
+          "nameType": "Personal",
+          "givenName": "Aidan N.",
+          "familyName": "Gomez"
+        },
+        {
+          "name": "Kaiser, Lukasz",
+          "nameType": "Personal",
+          "givenName": "Lukasz",
+          "familyName": "Kaiser"
+        },
+        {
+          "name": "Polosukhin, Illia",
+          "nameType": "Personal",
+          "givenName": "Illia",
+          "familyName": "Polosukhin"
+        }
+      ],
+      "publicationYear": 2017,
+      "publisher": "arXiv",
+      "container": {},
+      "types": {
+        "resourceTypeGeneral": "Preprint"
+      }
+    }
+  }
+}

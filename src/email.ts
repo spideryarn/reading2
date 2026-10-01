@@ -52,10 +52,17 @@ export interface Email {
   readonly text: string;
 }
 
+/**
+ * Why a send was skipped. A closed set, because a caller decides on it:
+ * `noteArrival` retries a production process with no key and does not retry a
+ * laptop, so a new reason must be a type error there rather than a silent guess.
+ */
+export type SkipReason = "not production" | "no RESEND_API_KEY";
+
 export type SendResult =
   | { readonly kind: "sent"; readonly id: string | null }
   /** Deliberately not sent: not production, or no key. Not an error. */
-  | { readonly kind: "skipped"; readonly reason: string }
+  | { readonly kind: "skipped"; readonly reason: SkipReason }
   | { readonly kind: "failed"; readonly reason: string };
 
 /**
@@ -93,7 +100,7 @@ function realEnv(): EmailEnv {
   };
 }
 
-function whyNotSend(env: EmailEnv): string | null {
+function whyNotSend(env: EmailEnv): SkipReason | null {
   const optedIn = env.SPIDERYARN_EMAIL_SEND === "1" && env.NODE_ENV !== "test";
   if (!optedIn && env.VERCEL_ENV !== "production") return "not production";
   if (!env.RESEND_API_KEY) return "no RESEND_API_KEY";

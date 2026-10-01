@@ -108,15 +108,21 @@ The two notices, and why each fires when it does:
   primary key hands the row to exactly one request across every instance, and that request sends
   the mail, after its route has answered ([`src/arrivals.ts`](../../src/arrivals.ts)). An email
   sign-up that is never confirmed is never announced. The migration backfilled every account that
-  existed, so shipping it announced nobody.
+  existed, so shipping it announced nobody — including the first real reader, who signed up five
+  minutes before that deploy began, which is why the admin heard nothing (SPIDERYARN-READING2-79,
+  [261001b](../plans/261001b-sign-up-mail-retried-when-a-send-fails.md)).
 - **An upgrade** is decided inside `syncSubscriptionFromStripe`, under the lock it already holds, by
   `planUpgrade` in [`src/billing/tiers.ts`](../../src/billing/tiers.ts): free → paid, or a smaller
   → larger plan. Renewals, recoveries from `past_due` or `unpaid`, downgrades and cancellations send
   nothing. Because the transition is read against the row it replaces, a redelivered webhook or the
   confirm route racing it cannot send twice — [billing.md](billing.md).
 
-**Both are best-effort.** A crash between the commit and the send, or Resend being down, loses that
-notice for good; it is logged, and `/admin` is the record.
+**Both are best-effort.** A crash between the commit and the send loses that notice for good; it is
+logged, and `/admin` is the record. A sign-up whose send fails (or finds no key in production) gives
+its ledger row back, so the reader's next request tries again — at the cost of a possible duplicate,
+and with two double faults still able to lose it
+([261001b](../plans/261001b-sign-up-mail-retried-when-a-send-fails.md)). An upgrade's failed send is
+not retried.
 
 **Both carry the reader's address**, the account id, and a link to `/admin/users`, the page that
 lists every account. They did not until 2026-10-01:

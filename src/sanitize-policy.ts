@@ -22,6 +22,84 @@
  */
 
 import type { Config, DOMPurify } from "dompurify";
+import { RESERVED_ATTRS } from "./reserved.js";
+
+/**
+ * **The only `data-*` attributes an article keeps.** Every other one is dropped
+ * (`ALLOW_DATA_ATTR: false` below) — which is what makes every marking the
+ * reading view adds afterwards unforgeable, including the ones nobody has
+ * written yet.
+ *
+ * Two families, and a third would need an argument:
+ *
+ * - **the pipeline's own `data-spya-*` namespace** (src/reserved.ts). Stage 2
+ *   writes note and callout stamps for stage 3; stage 3 stamps `wasId`/`wasName`
+ *   *before* its own sanitise and reads them straight after; the PDF renderer
+ *   writes its figure stamp; and extraction evals temporarily write `sourceRef`.
+ *   The reading view reads the note and PDF figure stamps. Every one is scrubbed
+ *   from a stranger's markup on the way in (`scrubReserved`), which is
+ *   reserved.ts's rule, not this file's.
+ * - **two addresses a publisher wrote**: gwern's `data-url-original` and
+ *   `data-href-mobile`, the real link behind an archive copy, which
+ *   src/citations.ts reads off the sanitised block. Nothing in the browser reads
+ *   either.
+ *
+ * Adding a name here is the one way to let an article carry it, so
+ * tests/sanitize-allowlist.test.ts pins this list exactly and fails if any
+ * `data-…` spelled in `src/` survives without being on it.
+ */
+export const ARTICLE_DATA_ATTRS: readonly string[] = [
+  ...Object.values(RESERVED_ATTRS),
+  "data-url-original",
+  "data-href-mobile",
+];
+
+/**
+ * **The only classes an article keeps on any element**: the one our PDF renderer
+ * writes (src/pdf-read.ts, styled in shell.css). MathML may additionally keep
+ * `TEMML_CLASSES`, below. Readability's
+ * `keepClasses: false` has always stripped a publisher's, and a production
+ * survey on 2026-10-01 found this token and no other in 101,526 stored blocks.
+ *
+ * **It is the one marking of ours an article can still forge, and that is
+ * accepted rather than overlooked** (GPT Sol, plan review, finding 2). It paints a
+ * paragraph as one the PDF reader was unsure of: presentational, trusted by no
+ * handler, and stripped on the web path by Readability before we ever see it.
+ * Moving it into a scrubbed `data-spya-*` stamp would close it, at the cost of
+ * rewriting the 123 blocks that carry it. If anything ever *acts* on it, do that.
+ */
+export const ARTICLE_CLASSES: readonly string[] = ["pdf-uncertain"];
+
+/**
+ * **The classes kept on a MathML element**: the vocabulary Temml's own
+ * stylesheet (`temml/dist/Temml-Local.css`, loaded by src/web/maths.ts) gives a
+ * meaning to. The reading view draws TeX with Temml and sends the result back
+ * through this policy, so without these every formula would lose its layout.
+ *
+ * MathML only, so an article cannot put `upstrike` on a paragraph; and safe
+ * there because Temml runs with `trust: false` (src/maths-tex.ts), so a formula
+ * cannot name a class of its own. Temml writes a few more (`mord`, `tml-tag`,
+ * `tml-tageqn`) that nothing styles; they go, and no pixel changes.
+ *
+ * A copy of a vendor's list, which rots silently — except that
+ * tests/sanitize-allowlist.test.ts compares it with the stylesheet on every run,
+ * so a Temml upgrade that adds a class goes red rather than quiet.
+ */
+export const TEMML_CLASSES: readonly string[] = [
+  "actuarial", "chr-lrg", "chr-lrg-vec", "chr-med", "chr-med-vec", "chr-sml", "chr-sml-vec",
+  "circle-pad", "downstrike", "ff-narrow", "ff-nudge-left", "ff-squash", "longdiv-arc",
+  "longdiv-top", "mathcal", "mathscr", "menclose", "phasor-angle", "phasor-bottom", "sout",
+  "special-fraction", "textcircle", "tml-cancel", "tml-cancelto", "tml-display", "tml-eqn",
+  "tml-fbox", "tml-hat-1", "tml-hat-2", "tml-hat-3", "tml-hat-4", "tml-jot", "tml-left",
+  "tml-lrg-pad", "tml-med-pad", "tml-overline", "tml-prime", "tml-right", "tml-shift-left",
+  "tml-small", "tml-sml-pad", "tml-tilde-2", "tml-tilde-3", "tml-tilde-4", "tml-underline",
+  "tml-vec", "tml-xcancel", "upstrike", "wbk-acc", "wbk-lrg", "wbk-lrg-acc", "wbk-lrg-vec",
+  "wbk-med", "wbk-med-acc", "wbk-med-vec", "wbk-sml", "wbk-sml-acc", "wbk-sml-vec",
+];
+
+const MATHML_NS = "http://www.w3.org/1998/Math/MathML";
+const HTML_CLASSES: ReadonlySet<string> = new Set(ARTICLE_CLASSES);
+const MATHML_CLASSES: ReadonlySet<string> = new Set([...ARTICLE_CLASSES, ...TEMML_CLASSES]);
 
 /**
  * Which version of the policy below an artefact on disk was cleaned with.
@@ -52,7 +130,7 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 7;
+export const SANITIZER_VERSION = 8;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
@@ -106,7 +184,21 @@ export const SANITIZER_VERSION = 7;
    remembered, and one of {the reserved class, this number} is not. If a sixth
    `MarkKind` is ever added, do all three in one edit and read this paragraph
    first. GPT Sol, 2026-09-16, reviewing
-   docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md. */
+   docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
+
+   7 → 8 on 2026-10-01: **the lists are turned round.** An article now keeps
+   only the `data-*` attributes in `ARTICLE_DATA_ATTRS` and the classes in
+   `ARTICLE_CLASSES` (plus Temml's on MathML), and every other one goes. The
+   paragraph above predicted the next episode, and it came: cross-references
+   (SPIDERYARN-READING2-5Z) added `data-xref` and the `xref` class, and
+   `data-block-link` / `-preview` / `-missing` had never been listed at all, so
+   an article could open our preview card on words we never linked — GPT Sol's
+   P0, 260930f code review 2, D3. The chrome classes click handlers look for
+   (`mode-band`, `blk-permalink`, …) had never been listed either. Instead of a
+   seventh name, the rule now fails closed. A new marking needs no edit here,
+   and tests/sanitize-allowlist.test.ts scans `src/` to prove it. Stricter,
+   so bumped. Greg approved the defence edit, 2026-10-01;
+   docs/plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -206,12 +298,17 @@ const EMBED_ATTRS: ReadonlyArray<readonly [string, string]> = [
  */
 export const ARTICLE_CONFIG: Config = {
   ADD_TAGS: ["iframe"],
+  /* **Every `data-*` goes unless it is named below** — see `ARTICLE_DATA_ATTRS`.
+     DOMPurify's own switch, so the rule is the library's rather than a hook of
+     ours, and `ADD_ATTR` is its documented way back in for the named ones. */
+  ALLOW_DATA_ATTR: false,
   // Every attribute the embed hook sets must be listed here, or DOMPurify
   // strips it on the *next* pass and the hook re-appends it in a different
   // position — output that converges only after two runs. `referrerpolicy` was
   // missing and did exactly that.
   ADD_ATTR: [
     "allowfullscreen", "frameborder", "loading", "sandbox", "allow", "referrerpolicy",
+    ...ARTICLE_DATA_ATTRS,
   ],
   FORBID_TAGS: [
     "form", "input", "button", "select", "textarea", "option", "label", "style",
@@ -223,9 +320,18 @@ export const ARTICLE_CONFIG: Config = {
     // origin, which is exactly what the sandbox reasoning below assumes cannot
     // happen.
     "srcdoc",
-    /* The annotation attributes the client owns — see the note above. Every one
-       `annotateHtml` can write has to be here, or an article ships its own and
-       draws a mark nobody made.
+    /* The annotation attributes the client owns — see the note above.
+
+       **Since 2026-10-01 these are belt, not braces**: `ALLOW_DATA_ATTR: false`
+       above drops every one of them already, and every marking added later
+       with them. They stay because un-forbidding a name is how a hole reopens,
+       and because a later widening of `ARTICLE_DATA_ATTRS` would then still
+       have to get past this list. Do not extend it for a new marking; there is
+       nothing to extend.
+
+       What follows is the history of the list, kept for its reasons. Every
+       one `annotateHtml` can write had to be here, or an article shipped its
+       own and drew a mark nobody made.
 
        `data-chat` and `data-chat-end` were missing until 2026-08-26: chat marks
        are clickable, so a forged one was a link in someone else's document to a
@@ -624,8 +730,19 @@ export function installArticlePolicy(purify: DOMPurify): void {
        draws the mark — `mark.cite` in annotations.css hangs the underline off
        nothing else — which is exactly the argument the `term` entry above
        makes. */
-    for (const own of ["cmt", "chat", "term", "hit", "cite", "zoomable", "zoom-btn"]) {
-      if (el.classList?.contains(own)) el.classList.remove(own);
+    /* **Since 2026-10-01 the list above is gone, and the rule is the other way
+       round: a class stays only if it is declared** — `ARTICLE_CLASSES`, and on
+       a MathML element Temml's vocabulary too. Every name the history above
+       argues for is covered, and so is every class the app has not invented
+       yet: the `xref` mark (SPIDERYARN-READING2-5Z) and the chrome classes click
+       handlers ask `closest()` about — `mode-band`, `blk-permalink` — which no
+       version of the list ever had.
+
+       By namespace, not by tag name: `<mi>` is only MathML inside `<math>`, and
+       the namespace is what both parsers agree on. */
+    const kept = el.namespaceURI === MATHML_NS ? MATHML_CLASSES : HTML_CLASSES;
+    for (const c of Array.from(el.classList ?? [])) {
+      if (!kept.has(c)) el.classList.remove(c);
     }
     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");
 
