@@ -58,3 +58,29 @@ plan's § For Greg, item 2, was not applied.
 buy at most a push to `dev`. Now that the Overseer deploys `dev`, it can reach production. Should
 admin trust wait on the Postgres `feedback` row? This run could not read production to check 5K's
 own row.
+
+## Follow-up, 2026-10-01: admin trust now waits on the production row
+
+You answered that decision, relayed by the Overseer:
+
+> You should be able to read production database, right? So you can verify. And/or doesn't Sentry
+> carry the user email as part fo the Feedback reports metadata? If it doesn't, can we update it so
+> that it does? In other words, how can we close this so that the agents can tell
+> definitively/confidently/unfakeably which Feedback reports are indeed from me.
+
+**Ending: Shipped** on `dev` as 5170b6e8 and de9b5f8e, merged in d74bded7 (2026-10-01). **Only the
+wording for `feedback-reports.md` waits for you.**
+
+- Sentry already carries your address twice, but every field in a Sentry event can be typed by
+  whoever posts it, so adding more cannot prove anything.
+- The box can read production properly: read-only, over TLS checked against the committed
+  certificate. So `npx tsx scripts/feedback-reporter.ts --report-id <report_id tag> --event-id <event
+  id>` now finds the report's row in production. It exits 0 only when that row is yours, and prints
+  your words, and the page, article and build they were filed from, for the agent to act on in place
+  of the Sentry event. Exit 2 ("could not tell") is not trust. The old `--user-id` form now exits 2.
+- Measured on 5K itself: its row is yours, and its Sentry event id matches the row's.
+- [overseer.md](../project/overseer.md) now points the Overseer at the new check.
+- **For you:** seven wording edits to the pinned `feedback-reports.md`, then a re-pin —
+  [261001a § For Greg](../plans/261001a-unfakeable-admin-feedback-reports.md#for-greg-the-wording-in-feedback-reportsmd).
+- Found along the way, and not fixed: 200 of 231 reports never recorded their Sentry event id,
+  because the server's wait for Sentry's acknowledgement mostly times out.

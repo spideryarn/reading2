@@ -315,10 +315,18 @@ export function PrivacyPage() {
             account id and email address, so that a broken page has a person attached to it. Bug
             reports you file are copied here too.
           </Third>
+          {/* Live since 2026-09-03; until 2026-10-01 this still said "not
+              switched on yet". Checkout and the billing portal are Stripe's own
+              hosted pages. A completed-Checkout webhook can carry the billing
+              details entered there, so the promise below is that we do not keep
+              them, not that they never pass through this server. What we send is
+              in src/billing/checkout.ts; what we retain is in src/db/schema.ts §
+              billing. docs/project/privacy.md § Facts. */}
           <Third name="Stripe" href="https://stripe.com/privacy">
-            payments. <strong className="tw:text-foreground">Not switched on yet</strong> — named
-            here because it is coming. Stripe will handle the card; we will never see it, and this
-            page will say what we do keep before anybody is charged.
+            payments, if you subscribe. You enter your card and billing details on Stripe’s page;
+            we do not keep them. We send Stripe your account id and what you choose to buy. We keep
+            your plan, its allowance and how you have used it; the subscription’s status and dates;
+            and Stripe’s customer and subscription references.
           </Third>
         </ul>
         <p>

@@ -291,7 +291,9 @@ export interface PdfRecord {
  * So the model transcribes them, labels them, and `RENDERED` below drops them.
  * The check compares like with like, the gate can be tight, and v2 showing
  * footnotes is a change to one set rather than a change to the prompt, the
- * check and the thresholds together.
+ * check and the thresholds together. (It came to less than that: footnotes are
+ * shown since 2026-09-30 without touching the prompt or `RENDERED` at all —
+ * `renderHtml` lists them at the end. See `RENDERED`.)
  *
  * **`tabledata` was the same lesson taught twice.** The first version applied
  * this to footnotes and references and left rule 7 saying "do not transcribe a
@@ -335,11 +337,20 @@ export type RecordType =
   | "tabledata";
 
 /**
- * What v1 puts on the page. Everything else is transcribed, checked, and not shown.
+ * What v1 puts on the page **in place**, as the article's prose. Everything else
+ * is transcribed, checked, and not shown — with one exception since 2026-09-30:
+ * `footnote` records are shown too, gathered into the notes at the end and
+ * linked from their markers (src/pdf-read.ts § `renderNotes`,
+ * docs/plans/260930k-pdf-footnotes-shown-and-linked.md).
  *
  * This set is also **what the check gates on**, and that is not a coincidence:
  * a fault the reader can never see is worth reporting and not worth failing an
- * article for. src/pdf-score.ts § `check`.
+ * article for. src/pdf-score.ts § `check`. **Footnotes are the stated gap in
+ * that**: now visible, still scored as unshown, so an invented value or a
+ * stray tag in a note is reported rather than failing the article. Deliberately
+ * not tightened with the change that showed them — a stricter gate would buy
+ * re-reads, and so money, on every import, for text the reader sees only as
+ * a note — and the place to revisit is here, if a note is ever caught lying.
  */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "heading1",
