@@ -278,13 +278,18 @@ export function PrivacyPage() {
               until 2026-09-30, when the server started sending mail of its own
               (docs/plans/260930i). That mail goes to us, not to the reader, and
               since 2026-10-01 it carries the reader's address, at Greg's
-              request (docs/plans/261001b) — hence the second sentence. */}
+              request (docs/plans/261001b) — hence the second sentence. The
+              gift sentence is the first mail to somebody who never gave us
+              their address (docs/plans/261001p). */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
             address. The first time you use Spideryarn after signing up, and whenever you move to a
             bigger plan, we also email ourselves a note with your email address and account id (and,
             for a plan, which ones), so we know who has joined. That note goes through Resend, then
-            our domain’s mail forwarding at Namecheap, to our own inbox. Ireland (eu-west-1).
+            our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
+            a gift of free articles to an email address, and that address is sent one email saying
+            so; when the gift is claimed, we email ourselves, the same way, the address that claimed
+            it. Ireland (eu-west-1).
           </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept

@@ -1,7 +1,10 @@
 /**
  * **The whole explain request, pinned byte for byte** — the job name and the
- * body `explainStream` hands `openRouterStream`, for an ordinary call, a deep
- * one and a profiled one.
+ * body `explainStream` hands `openRouterStream`, for an ordinary call, a dug
+ * one (*Dig deeper*, plan 261001p — it was `deep` until then, and its pin was
+ * moved on purpose: the findings and the new instruction are new bytes after
+ * the breakpoint, the ceiling is `DIG_ANSWER_TOKENS`, and the job is
+ * `dig-deeper` so the ledger can tell it from explain) and a profiled one.
  *
  * Written before the stream runner was pulled out of src/explain.ts
  * (docs/plans/260930a-citations-investigate-one-work-on-demand.md § Mechanism),
@@ -24,6 +27,7 @@
  */
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DigFindings } from "../src/dig-deeper.js";
 import { explain } from "../src/explain.js";
 import type { Block, Meta } from "../src/types.js";
 
@@ -74,7 +78,15 @@ function finished(): Response {
 }
 
 /** The request as `openRouterStream` received it, serialised the way `outgoing` will serialise it. */
-async function requestFor(extra: { deep?: boolean; profile?: string }): Promise<string> {
+/** A dig's findings, fixed, so the pin moves only when the request does. */
+const DUG: DigFindings = {
+  sources: [{ url: "https://example.org/a", title: "A page", excerpt: "What the page says." }],
+  searches: 1,
+  libraryQuery: '"alpha"',
+  library: [{ slug: "another", title: "Another piece", blockId: "spya-bbbbbb", text: "alpha again" }],
+};
+
+async function requestFor(extra: { dig?: DigFindings; profile?: string }): Promise<string> {
   await explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", model: MODEL, ...extra });
   expect(seen.calls).toHaveLength(1);
   return JSON.stringify(seen.calls[0], null, 2);
@@ -96,10 +108,10 @@ describe("the explain request does not move", () => {
     expect(sha(serialised)).toMatchInlineSnapshot(`"97b63dca9cc861389b010f56647b8503bdeadfe77cbc69ed9107c3560428d88a"`);
   });
 
-  it("deep", async () => {
-    const serialised = await requestFor({ deep: true });
+  it("dug", async () => {
+    const serialised = await requestFor({ dig: DUG });
     expect(serialised).toMatchSnapshot();
-    expect(sha(serialised)).toMatchInlineSnapshot(`"4bcee3c6b9c68c1e963cee3d011e2702b4423a2d9e88cf5366579efb8258ca49"`);
+    expect(sha(serialised)).toMatchInlineSnapshot(`"e41649fa19c37f69c9f3b0d6903d8faab06c36a0c25d74b96e77456db97be18b"`);
   });
 
   it("with a profile", async () => {

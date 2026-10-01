@@ -146,7 +146,8 @@ The four options, against the numbers:
   *"double the processing cost per-article"* (Greg, 2026-09-30, [high-powered-ai.md](../project/high-powered-ai.md)),
   so this hands every article one stage of what that switch sells. Simple is one stage of ~20 and
   pressed once, so the switch keeps most of its meaning; but it is a pricing call and it is Greg's to
-  reverse. Reversing is one line (§ What ships).
+  reverse. Reversing is one line (§ What ships). **Decided 2026-10-01, keep it:** Greg, *"yes
+  let's switch to the better/safer version for everyone"* (Q-simple-high-power).
 - **Opus says a little less.** Its levels are shorter, and it leaves out findings Sonnet includes
   (this one in 14 levels of 36, against 1 of 18). Nearer the word targets Greg asked for (7J, 7F),
   but less in them.

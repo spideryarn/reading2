@@ -1018,6 +1018,11 @@ on the `free` and `lapsed` arms only, and **absent when there are none**, so no 
 voucher to somebody without one. The note, the creator and the address never leave the admin
 routes. The copy says *3 free + 20 from a gift* rather than a bare 23 (`giftMakeup`).
 
+**A voucher emails its recipient when it is made, and its creator when it is claimed**, each at most
+once, queued in the same transaction as the event. A failed send changes neither the voucher nor
+the claim. There is no expiry; revoking is the only way to invalidate one.
+[email.md § Gift voucher emails](email.md#gift-voucher-emails).
+
 ## Billing is a Postgres feature
 
 Quota is enforced on every run, since 2026-09-05 — it was `SPIDERYARN_STORE=postgres` and not

@@ -38,3 +38,20 @@ box with a gift icon and a collapsed *How free articles work* section, and for a
 a dismissible *a gift has been added* notice. Codes were not built, and "during login" became that
 notice on the page sign-in lands on; why, and the rest, are in
 [261001m-gift-vouchers-for-free-articles.md](../plans/261001m-gift-vouchers-for-free-articles.md).
+
+**Follow-up, shipped** to `dev`. The work ends at `b68513105` (not deployed: the Overseer
+deploys, and it carries one additive migration, `20261001191310_billing_voucher_emails`):
+
+> The gift voucher should definitely email the recipient. And I want an email when they claim it.
+> No need for expiry.
+>
+> — Greg, 2026-10-01
+
+Making a voucher now emails its address: *A gift of N free articles on Spideryarn*, with a link to
+sign in or create an account. It goes out again if you correct an unclaimed voucher's address. A
+claim emails the voucher's creator, whose address is looked up from the account; if that lookup
+fails, nothing is sent rather than falling back to `hello@`. Neither email carries the private
+note. Each email is sent at most once. A failed send changes nothing about the voucher or the
+claim. `/admin/vouchers` says what happened to each email, with a Retry button. There is no
+expiry. Why it is built this way, and two rounds of review, are in
+[261001p-voucher-emails-to-recipient-and-creator.md](../plans/261001p-voucher-emails-to-recipient-and-creator.md).

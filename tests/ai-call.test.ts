@@ -274,7 +274,7 @@ describe("the routing table", () => {
     /* `dictation` was in this list until 2026-09-07 and is not a chat job any
        more — it posts to /v1/audio/transcriptions. Its own policy, which is now
        *no* provider block, is asserted in the transcription block below. */
-    for (const job of ["chat", "explain", "search", "pdf"] as const) {
+    for (const job of ["chat", "explain", "dig-deeper", "search", "pdf"] as const) {
       const sent = stubTransport(() => streamed(USAGE_CHUNK, "data: [DONE]\n\n"));
       await collectSpend(async () => {
         for await (const _ of openRouterStream(
@@ -290,6 +290,13 @@ describe("the routing table", () => {
          table fails here instead of agreeing with itself. */
       expect(sent[0]?.url, job).toBe("https://openrouter.ai/api/v1/chat/completions");
     }
+  });
+
+  it("routes Dig deeper's answer exactly as explain, whose cached prefix it shares", () => {
+    /* The cache is per model and prefix, not per job name — a different
+       `order` would land a dug answer on a provider that holds no copy of the
+       article, and write one. Plan 261001p. */
+    expect(AI_JOB_ROUTE["dig-deeper"]).toEqual(AI_JOB_ROUTE.explain);
   });
 
   it("does not pin Anthropic on the jobs that are not Anthropic's", () => {
