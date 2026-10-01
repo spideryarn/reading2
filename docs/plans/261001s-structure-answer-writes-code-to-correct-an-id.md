@@ -329,3 +329,21 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
 
   Revision 4 is not sent for another plan round. Per the two-rounds rule Claude settles it, and
   stage 1's build is the next check.
+- **Stage 1 landed (built by Sol, reviewed by Claude).** New modules: `src/messages-structured-output.ts`
+  (validator and Messages adapter), `src/start-ranges.ts` (the shared kernel; `normaliseExpansion`
+  now calls it, and its tests are unchanged and green), `src/hierarchy-starts.ts` (the converter,
+  not yet wired in), and `evals/paperwork/structure-starts-replay.ts`. Claude ran typecheck and
+  nine test files (249 green), broke the clamp policy deliberately and saw two converter tests go
+  red, and restored a comment the extraction had dropped (why the first claim is range-checked).
+  Not yet verified: the validator's "documented" ceilings of 24 optional and 16 union parameters.
+  - **Offline replay: 91 of 94 identical, one extra dropped child — the gate as written fails, and
+    is overruled with the reason.** Every stage-0 answer (68 that parse) and 23 of 26 local
+    checkpoints replay identically. The three that differ are all books of over 2,000 blocks
+    (`m1-kuhn`, and two `evaldeepen` book checkpoints), whose depth-1 ranges contradict each other
+    by hundreds of blocks: in `m1-kuhn` the 22nd chapter claims blocks 49–82 after the 21st began
+    at 905. Today's end fallback keeps such a chapter by hanging it after its predecessor's end, so
+    a title and gist written about blocks 49–82 land on blocks 927–2045. Starts-only drops it and
+    lets the predecessor run on. Both trees are wrong. Dropping is the honest one, and it is the
+    choice `normaliseExpansion` already made on purpose. This is the one fault the end fallback
+    exists for, observed only on answers that are already degenerate. It goes to Sol's stage-2
+    brief to challenge.
