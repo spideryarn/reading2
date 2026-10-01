@@ -271,9 +271,9 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
     /* **The pair evals/prompt-caching.ts runs on the Messages wire**, with
        `cacheArticle: true` forced. That eval proves the wire and the two
        stages' byte layout, and says in its header that it does not prove the
-       job sets the flag. This is that half, for the same two stages — so a
-       PASS there and a green here together cover the import that asks for
-       both. docs/plans/261001l-prompt-caching-across-every-call.md § 2b. */
+       job sets the flag. This is that half for the same two stages and for the
+       combined-job shape. The import tick box queues separate jobs, so it does
+       not take this path. docs/plans/261001l-prompt-caching-across-every-call.md § 2b. */
     await walk(["glossary", "quotes"]);
     expect(seen.map((s) => s.step)).toEqual(["glossary", "quotes"]);
     expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);

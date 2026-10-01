@@ -2,7 +2,7 @@
 
 Up: [architecture.md](architecture.md)
 
-The article is the long part of nine prompts and it never changes. This is how we stop paying for it
+The article is the long part of many prompts and it never changes. This is how we stop paying for it
 every time.
 
 Built 2026-08-26 from [prompt-caching.md](../plans/260826g-prompt-caching.md), which has the reasoning and
@@ -52,10 +52,11 @@ matching before the article is even reached.
 All three are OpenRouter's caches now, and were not always — see
 [§ Every cache now goes through OpenRouter](#every-cache-now-goes-through-openrouter).
 
-Note what the pipeline row does **not** mean. Each of those stages makes *one* call per run, so none
-of them caches anything for itself; the entry only pays off when two of them run close together —
-within one ingest, or a top-up landing inside the 5-minute TTL of the pass before it. That is
-opportunistic by nature, and the eval is what will say how often it actually happens.
+Note what the pipeline row does **not** mean. Apart from Simple's three-call fan-out below, an article
+stage makes one call per run, so it caches nothing for itself. The ordinary stage marker is enabled
+only when another member of its group is in the **same job**; merely running two mode jobs inside the
+5-minute TTL does not mark either one. Simple is the exception: it owns all three calls and their
+`MeteredCall.onStart` coordination inside one call site.
 
 The labels row reads as the reliable one — its four batches run together by construction — and on the
 small articles it caches nothing at all. Its shared prefix is the system prompt plus the tree's
@@ -230,15 +231,15 @@ Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_HIER
 
 ## What production actually does
 
-**Measured 2026-10-01, and it is the fact to start from: the pipeline's article stages have never
-cached anything in production.** Zero reads and zero writes on every arc, tweets, glossary, quotes,
-ideas, sketch, timeline, quiz and faq call in thirty days of `ai_calls` — the audit, with its SQL,
-is [261001a-prompt-caching-production-audit](../research/261001a-prompt-caching-production-audit/README.md).
+**Measured 2026-10-01, and it is the fact to start from: the ordinary one-call article stages have
+never cached anything in production.** Zero reads and zero writes on every arc, tweets, glossary,
+quotes, ideas, sketch, timeline, quiz and faq call in thirty days of `ai_calls` — the audit, with its
+SQL, is [261001a-prompt-caching-production-audit](../research/261001a-prompt-caching-production-audit/README.md).
 
-Not a bug. A stage marks the article only when another step of **its own job** is in its group
+Not a bug. Those stages mark the article only when another step of **their own job** is in the group
 (above), and the reading view posts one job per mode, so the predicate is false on essentially every
-real call. The rule that stops us paying 1.25× for nothing has, in practice, switched article caching
-off — and on the numbers that is about right:
+real call. The rule that stops us paying 1.25× for nothing has, in practice, switched their article
+caching off — and on the numbers that is about right:
 
 - **The money is small.** $72 of spend in those thirty days, and the best any marking rule could have
   saved was a few dollars of it.
@@ -357,7 +358,7 @@ depending on which protocol the request went down:
 
 | | reports | `prompt_tokens` / `input_tokens` |
 |---|---|---|
-| **Messages wire** — the seven stages | Anthropic's native `cache_read_input_tokens` and `cache_creation_input_tokens`, plus the `cache_creation.ephemeral_5m/1h` split | **additive** — the cached tokens are *not* in it |
+| **Messages wire** — the pipeline stages | Anthropic's native `cache_read_input_tokens` and `cache_creation_input_tokens`, plus the `cache_creation.ephemeral_5m/1h` split | **additive** — the cached tokens are *not* in it |
 | **chat wire** — search, explain, chat | OpenRouter's normalised `prompt_tokens_details.cached_tokens` | **inclusive** — `prompt_tokens` counts the whole prompt, cached or not |
 
 So `inputTokens` on a `pipeline` line and `inputTokens` on a `model` line are not the same
@@ -395,11 +396,11 @@ Three defences, and none substitutes for another:
 - **`tests/article-prompt.test.ts`** proves the prefix is *stable* — byte-identical across two
   questions, two selections, two reading positions, a growing conversation. Deterministic, no
   network, runs on every change. It cannot prove anything was cached.
-- **`npm run eval:caching -- <slug> [--wire=chat|messages|both]`** proves it is *cached*, by calling twice and reading the
-  number back. Costs money, run by hand, results committed under `evals/results/`. The pass
-  condition is a `cacheReadTokens` on the second call of roughly the article's own size — not merely
-  non-zero, since a hit on the system prompt alone would clear that bar while the article missed
-  entirely. See [testing.md](testing.md) for why the two live in different folders.
+- **`npm run eval:caching -- <slug> [--wire=chat|messages|both]`** proves it is *cached*, by calling
+  and reading the number back. Costs money, run by hand, results committed under `evals/results/`.
+  On the chat arm, the second call must read roughly the article's own size — not merely a non-zero
+  system prefix. The Messages arm has the exact condition below. See [testing.md](testing.md) for why
+  the two live in different folders.
 
   **It checks search and chat.** It used to say "search / chat / explain" and call `findPassages`
   only, and that gap is how the chat bug above survived for a day: the doc repeated the eval's claim
@@ -408,12 +409,17 @@ Three defences, and none substitutes for another:
   written here as such.
 
   **It covers the Messages wire too, since 2026-10-01** — the gap this paragraph used to name. The
-  `messages` arm calls the real `generateGlossary` then `generateQuotes` with the article marked,
-  then quotes again with only its effort changed as a negative control. Call 1 has to *write* (a
-  read there means a cache left warm by somebody else, and the run says "inconclusive" rather than
-  passing); call 2 has to read about what call 1 wrote; the control has to read nothing. First run,
-  on a ~13k-token article: 16,192 written, 16,192 read back, control 0 —
-  [the result](../../evals/results/prompt-caching-noema-mythology-of-conscious-ai.md).
+  `messages` arm calls real stage functions with the article marked: quotes at another effort first
+  as a cold negative control, then `generateGlossary` and `generateQuotes` at their normal shared
+  effort. Both intended-cold keys have to write and read zero; a prior warm entry makes the result
+  inconclusive, not failed. The final call has to read **exactly** what glossary wrote, and every
+  measurement must contain exactly one completed ledger row. A partial read or hidden retry fails.
+  The first run used the older glossary → quotes → control order and measured 16,192 written, 16,192
+  read back, control 0 —
+  [the result](../../evals/results/prompt-caching-noema-mythology-of-conscious-ai-2026-10-01.md).
+  The eval loads the reader-facing store view; a shelf title override can therefore make its metadata
+  bytes differ from a pipeline draft's extracted metadata. It proves the two stages share the bytes
+  they are handed, not that it replayed one particular production job byte for byte.
   **It checks the wire and the stages' byte layout, not the job wiring** that decides whether a real
   job marks the article at all: that is
   [`tests/article-cache-call-site.test.ts`](../../tests/article-cache-call-site.test.ts), which walks

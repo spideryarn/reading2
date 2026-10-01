@@ -392,14 +392,17 @@ Two things to check:
 Then generate the mode once on a local article and open the metadata page: the mode's line should
 be there.
 
-**Its cache group.** A mode that sends the whole article takes a row in `STAGE_EFFORT` and
-`ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts)) — the compiler asks — and those two values
-*are* the choice of which stages it can share a cached article with: same effort and same renderer,
-one group. Choose them for what the mode writes, never to join a group, and say in the comment on its
-row which group that puts it in, or that it is alone. Expect the group to save almost nothing: modes
-are separate jobs, so a cached article is shared only inside one job. **If the mode makes several
-calls over one article itself**, stagger them on `MeteredCall.onStart` as Simple does rather than
-firing them together — [prompt-caching.md § What production actually does](prompt-caching.md#what-production-actually-does).
+**Its cache group.** If the mode's marked article block is byte-identical to the shared `articleText`
+or `articleWithIds` prefix, add it to `ArticleStage`, then give it a row in `STAGE_EFFORT` and
+`ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts)); once it is in that union, the compiler
+asks for both. Same effort and renderer mean one group. Choose them for what the mode writes, never
+to join a group, and say in the row's comment which group that puts it in, or that it is alone. If its
+bytes cannot share — Citations' whole-document rendering and Illustrated's fenced rendering are the
+examples — leave it out of `ArticleStage` and say why there instead. Expect a group to save almost
+nothing: modes are separate jobs, and an ordinary stage marks its article only when another group
+member is in that same job. **If the mode makes several calls over one article itself**, it owns a
+different shape: stagger them on `MeteredCall.onStart` as Simple does rather than firing them together
+— [prompt-caching.md § What production actually does](prompt-caching.md#what-production-actually-does).
 *[`tests/article-cache-group.test.ts`](../../tests/article-cache-group.test.ts), for the grouping;
 nothing for the comment.*
 

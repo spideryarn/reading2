@@ -29,20 +29,23 @@
  * article's own size.
  *
  * **Messages wire** (`--wire=messages`): the pipeline's wire. It calls the REAL
- * stage functions the pipeline's `STEPS` entries call — `generateGlossary`
- * then `generateQuotes`, one cache group (same renderer, same effort) — one
- * after the other on one article, with `cacheArticle: true` forced. Then a
- * negative control: `generateQuotes` again with ONLY its effort changed
- * (`SPIDERYARN_PIPELINE_EFFORT`, set for that call and restored), which must
- * read nothing, because effort is part of the cache key. Usage and cost come off
- * the `ai_calls` ledger rows each call writes (`collectSpend`), not off the
- * stage's own return value.
+ * stage functions the pipeline's `STEPS` entries call. First it calls
+ * `generateQuotes` at another effort as a negative control. Then it calls
+ * `generateGlossary` and `generateQuotes`, one cache group (same renderer,
+ * same effort), one after the other on one article, with `cacheArticle: true`
+ * forced. Running the control first establishes that its own key was cold; a
+ * read on either intended-cold call makes the run inconclusive rather than
+ * pretending an entry left by somebody else says anything about this run.
+ * `SPIDERYARN_PIPELINE_EFFORT` is set only around the control and restored.
+ * Usage and cost come off the `ai_calls` ledger rows each call writes
+ * (`collectSpend`), not off the stage's own return value.
  *
- * Cold-start honesty without touching the request bytes: glossary must WRITE
- * (at least the 1,024-token floor) and read zero. If it reads, a previous run
- * warmed the entry, and the arm is reported WARM, INCONCLUSIVE — never PASS.
- * PASS needs quotes to read within 10% of what glossary wrote, and the control
- * to read zero.
+ * Cold-start honesty without touching the request bytes: both the control and
+ * glossary must WRITE and read zero. If either reads, a previous run may have
+ * warmed that key, and the arm is reported WARM, INCONCLUSIVE — never PASS.
+ * PASS needs quotes to read exactly what glossary wrote. A positive write is
+ * the provider's evidence that the prefix cleared the serving model's floor;
+ * the floor is model-specific, so this eval does not hard-code Sonnet's 1,024.
  *
  * **What the Messages arm checks**: the wire, and the two stages' byte layout
  * (that glossary and quotes really do send the same prefix up to the
@@ -320,12 +323,20 @@ function verdict(cold: CallResult, warm: CallResult, articleTokens: number): str
  * Read off the `ai_calls` row (`SpendRecord`) rather than off the stage's own
  * return value, so this eval reads the same numbers the cost report does. A
  * stage that made more than one call (a retry) shows its first and says how
- * many there were.
+ * many there were, and the verdict fails rather than treating that selected row
+ * as the whole measurement.
  */
-interface WireCall {
+export interface WireCall {
   label: string;
   effort: string;
+  /** Rows for the expected job. The verdict requires exactly one. */
   calls: number;
+  /** In-flight calls when the collector closed. Any makes the measurement incomplete. */
+  pending: number;
+  /** Calls whose ledger sink failed. The in-memory row remains, but the claim "from the ledger" does not. */
+  writeFailures: number;
+  /** Rows attributed to another job inside this supposedly single-stage measurement. */
+  otherCalls: number;
   inputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
@@ -334,9 +345,6 @@ interface WireCall {
   upstream: string | null;
   ms: number;
 }
-
-/** Sonnet 5's minimum cacheable prefix. docs/project/prompt-caching.md. */
-const CACHE_FLOOR = 1_024;
 
 async function messagesArm(slug: string): Promise<{ calls: WireCall[]; articleTokens: number }> {
   const { loadArticle } = await import("../src/store/index.js");
@@ -352,9 +360,12 @@ async function messagesArm(slug: string): Promise<{ calls: WireCall[]; articleTo
   const owner = environmentOwnerId();
   return runAsOwner(owner, async () => {
     const stored = await loadArticle(slug);
-    /* The shape the pipeline's `readArticle` hands a stage: blocks, tree, meta.
-       Both stages get this one object, so any difference in what they send is
-       their own — which is the byte layout this arm is checking. */
+    /* The reader-facing store view, shaped into the Article the stage functions
+       accept. This is not byte-for-byte production's `readArticle`: loadArticle
+       applies a shelf title override to `meta`, while a pipeline draft reads the
+       extracted metadata. Both stages get this one object, so the cross-stage
+       byte-layout question this arm asks is still exact; it does not claim to
+       snapshot every byte a particular production job sent. */
     const article = { slug, blocks: stored.blocks, tree: stored.tree, meta: stored.meta ?? null };
     const articleTokens = estimateTokens(articleText(article.meta, article.blocks.filter(isBodyEvidence)));
 
@@ -370,13 +381,20 @@ async function messagesArm(slug: string): Promise<{ calls: WireCall[]; articleTo
         sink: (row) => costStore.record(row),
       });
       const mine = report.calls.filter((c) => c.job === job);
+      const otherCalls = report.calls.length - mine.length;
       const first = mine[0];
       if (!first) throw new Error(`${label}: the ledger recorded no ${job} call`);
-      const { nanos, unpriced } = totalSpend([first]);
+      /* Cost is every call the stage made, even though the token columns retain
+         the first row so a future retry cannot manufacture a plausible aggregate
+         cache ratio. The verdict below refuses multiple or unexpected rows. */
+      const { nanos, unpriced } = totalSpend(report.calls);
       return {
         label,
         effort,
         calls: mine.length,
+        pending: report.pending.length,
+        writeFailures: report.writeFailures,
+        otherCalls,
         inputTokens: first.inputTokens ?? 0,
         cacheReadTokens: first.cacheReadTokens ?? 0,
         cacheWriteTokens: first.cacheWriteTokens ?? 0,
@@ -395,21 +413,26 @@ async function messagesArm(slug: string): Promise<{ calls: WireCall[]; articleTo
       generateQuotes({ article, previous: null, profile: null, power: "standard", cacheArticle: true });
 
     const calls: WireCall[] = [];
-    calls.push(await measure("glossary (cold — expect a write, no read)", "glossary", glossary));
-    calls.push(await measure("quotes (same group — expect a read)", "quotes", quotes));
-
-    /* The negative control: the same stage, the same bytes, only the effort
-       changed. `effortFor` reads the variable at call time (src/models.ts), so
-       setting it around one call moves that call and nothing else. */
+    /* The negative control goes first so its own key has to establish a cold
+       write. If it read an entry left by another run, the verdict is honestly
+       inconclusive rather than calling a working effort split broken. */
     const before = process.env.SPIDERYARN_PIPELINE_EFFORT;
     const controlEffort = effortFor("quotes") === "high" ? "low" : "high";
     process.env.SPIDERYARN_PIPELINE_EFFORT = controlEffort;
     try {
-      calls.push(await measure(`quotes at effort ${controlEffort} (control — expect no read)`, "quotes", quotes));
+      calls.push(
+        await measure(
+          `quotes at effort ${controlEffort} (cold control — expect a write, no read)`,
+          "quotes",
+          quotes,
+        ),
+      );
     } finally {
       if (before === undefined) delete process.env.SPIDERYARN_PIPELINE_EFFORT;
       else process.env.SPIDERYARN_PIPELINE_EFFORT = before;
     }
+    calls.push(await measure("glossary (cold — expect a write, no read)", "glossary", glossary));
+    calls.push(await measure("quotes (same group — expect an exact read)", "quotes", quotes));
     return { calls, articleTokens };
   });
 }
@@ -420,59 +443,71 @@ type Verdict = "PASS" | "FAIL" | "WARM, INCONCLUSIVE";
  * The Messages arm's verdict, stated. Three calls, three conditions, and a
  * cold start that has to be shown rather than assumed.
  */
-function messagesVerdict([cold, warm, control]: WireCall[]): { verdict: Verdict; why: string[] } {
-  if (!cold || !warm || !control) return { verdict: "FAIL", why: ["fewer than three calls were measured"] };
-  if (cold.cacheReadTokens > 0) {
+export function messagesVerdict([control, cold, warm]: WireCall[]): { verdict: Verdict; why: string[] } {
+  if (!control || !cold || !warm) return { verdict: "FAIL", why: ["fewer than three calls were measured"] };
+
+  const accounting = [control, cold, warm].flatMap((call) => {
+    const problems: string[] = [];
+    if (call.calls !== 1) problems.push(`${call.label}: ${call.calls} matching ledger rows (want exactly 1)`);
+    if (call.otherCalls !== 0) problems.push(`${call.label}: ${call.otherCalls} unexpected other-job rows`);
+    if (call.pending !== 0) problems.push(`${call.label}: ${call.pending} call(s) still pending when collection closed`);
+    if (call.writeFailures !== 0) problems.push(`${call.label}: ${call.writeFailures} ledger write failure(s)`);
+    return problems;
+  });
+  if (accounting.length > 0) return { verdict: "FAIL", why: accounting };
+
+  const warmed = [control, cold].filter((call) => call.cacheReadTokens > 0);
+  if (warmed.length > 0) {
     return {
       verdict: "WARM, INCONCLUSIVE",
       why: [
-        `glossary read ${cold.cacheReadTokens.toLocaleString()} tokens on what was meant to be a cold call, ` +
-          "so something warmed this prefix inside the TTL (an earlier run, or a real job). A read on " +
-          "quotes cannot then be credited to glossary's write. Wait out the TTL, or use another article.",
+        `${warmed.map((call) => `${call.label} read ${call.cacheReadTokens.toLocaleString()} tokens`).join("; ")} ` +
+          "on a call that was meant to establish a cold key. An earlier run or real job may have warmed it, " +
+          "so this run cannot attribute the later read or test the effort split. Wait out the TTL, or use another article.",
       ],
     };
   }
   const why: string[] = [];
   let ok = true;
-  if (cold.cacheWriteTokens < CACHE_FLOOR) {
-    ok = false;
-    why.push(
-      `glossary wrote ${cold.cacheWriteTokens.toLocaleString()} tokens, below the ${CACHE_FLOOR.toLocaleString()}-token ` +
-        "floor: the breakpoint was not sent, or the prefix is too short to cache.",
-    );
-  } else {
-    why.push(`glossary wrote ${cold.cacheWriteTokens.toLocaleString()} tokens and read none — a true cold start.`);
+  for (const writer of [control, cold]) {
+    if (writer.cacheWriteTokens <= 0) {
+      ok = false;
+      why.push(
+        `${writer.label} wrote no cache tokens: the breakpoint was not sent, the prefix is below the serving ` +
+          "model's floor, or the provider did not create an entry.",
+      );
+    } else {
+      why.push(
+        `${writer.label} wrote ${writer.cacheWriteTokens.toLocaleString()} tokens and read none — a true cold start.`,
+      );
+    }
   }
-  const ratio = cold.cacheWriteTokens > 0 ? warm.cacheReadTokens / cold.cacheWriteTokens : 0;
-  if (cold.cacheWriteTokens > 0 && Math.abs(ratio - 1) <= 0.1) {
+  if (
+    cold.cacheWriteTokens > 0 &&
+    warm.cacheReadTokens === cold.cacheWriteTokens &&
+    warm.cacheWriteTokens === 0
+  ) {
     why.push(
-      `quotes read ${warm.cacheReadTokens.toLocaleString()} (${(ratio * 100).toFixed(1)}% of glossary's write) — ` +
+      `quotes read exactly the ${warm.cacheReadTokens.toLocaleString()} tokens glossary wrote — ` +
         "the two stages send the same prefix and the wire reused it.",
     );
   } else {
     ok = false;
     why.push(
-      `quotes read ${warm.cacheReadTokens.toLocaleString()}, ${(ratio * 100).toFixed(1)}% of glossary's write ` +
-        "(want 90–110%). Zero means the bytes differ before the breakpoint or the provider did not reuse " +
-        "the entry; a partial read means something ahead of the article matched and the article did not.",
+      `quotes read ${warm.cacheReadTokens.toLocaleString()} and wrote ${warm.cacheWriteTokens.toLocaleString()}, ` +
+        `against glossary's ${cold.cacheWriteTokens.toLocaleString()}-token write (want an exact read and no write). ` +
+        "Zero means the bytes differ before the breakpoint or the provider did not reuse the entry; a partial " +
+        "read means only an earlier prefix matched.",
     );
   }
-  if (control.cacheReadTokens === 0) {
-    why.push(`the control (effort ${control.effort}) read nothing, as effort being part of the cache key predicts.`);
-  } else {
-    ok = false;
-    why.push(
-      `the control (effort ${control.effort}) read ${control.cacheReadTokens.toLocaleString()} tokens. Either ` +
-        "effort is no longer part of the cache key — which would change the grouping in src/models.ts § " +
-        "STAGE_EFFORT — or the read is not coming from where this eval thinks.",
-    );
-  }
+  if (control.cacheWriteTokens > 0 && cold.cacheWriteTokens > 0)
+    why.push(`the cold writes at efforts ${control.effort} and ${cold.effort} establish two separate cache keys.`);
   return { verdict: ok ? "PASS" : "FAIL", why };
 }
 
 function messagesReport(calls: WireCall[], articleTokens: number): { text: string; verdict: Verdict } {
   const lines: string[] = [];
-  lines.push("## Messages wire — glossary then quotes, one cache group");
+  lines.push("## Messages wire — cold effort control, then glossary and quotes");
   lines.push("");
   lines.push(
     "The real stage functions (`generateGlossary`, `generateQuotes`) with `cacheArticle: true` forced. " +
@@ -491,7 +526,7 @@ function messagesReport(calls: WireCall[], articleTokens: number): { text: strin
     if (c.costUsd === null) priced = false;
     else total += c.costUsd;
     lines.push(
-      `| ${c.label}${c.calls > 1 ? ` (${c.calls} calls; first shown)` : ""} | ${c.effort} | ${c.inputTokens} | ` +
+      `| ${c.label}${c.calls !== 1 ? ` (${c.calls} matching calls; first shown)` : ""} | ${c.effort} | ${c.inputTokens} | ` +
         `${c.cacheReadTokens} | ${c.cacheWriteTokens} | ${c.outputTokens} | ` +
         `${c.costUsd === null ? "unpriced" : `$${c.costUsd.toFixed(4)}`} | ${c.upstream ?? "—"} | ${c.ms} |`,
     );
@@ -535,7 +570,8 @@ async function main(): Promise<void> {
      An idle pool lets the process exit on its own. */
   let failed = false;
   for (const slug of slugs) {
-    const sections: string[] = [`# Prompt caching — ${slug}`, "", `Run ${new Date().toISOString()}.`, ""];
+    const runAt = new Date();
+    const sections: string[] = [`# Prompt caching — ${slug}`, "", `Run ${runAt.toISOString()}.`, ""];
 
     if (wire !== "messages") {
       const { meta, blocks } = await runAsOwner(environmentOwnerId(), () => loadArticle(slug));
@@ -555,7 +591,7 @@ async function main(): Promise<void> {
     }
 
     if (wire !== "chat") {
-      console.log(`\n${slug} — Messages wire: glossary, quotes, quotes at another effort\n`);
+      console.log(`\n${slug} — Messages wire: cold effort control, glossary, quotes\n`);
       const { calls, articleTokens } = await messagesArm(slug);
       const { text, verdict } = messagesReport(calls, articleTokens);
       console.log(text);
@@ -564,8 +600,9 @@ async function main(): Promise<void> {
     }
 
     await mkdir("evals/results", { recursive: true });
-    const out = path.join("evals/results", `prompt-caching-${slug}.md`);
-    await writeFile(out, `${sections.join("\n")}\n`);
+    const stamp = runAt.toISOString().replaceAll(":", "-").replaceAll(".", "-");
+    const out = path.join("evals/results", `prompt-caching-${slug}-${stamp}.md`);
+    await writeFile(out, `${sections.join("\n")}\n`, { flag: "wx" });
     console.log(`\nWritten to ${out}`);
   }
 

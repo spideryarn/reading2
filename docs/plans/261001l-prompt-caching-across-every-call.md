@@ -1,7 +1,7 @@
 # Prompt caching across every call: what is worth doing, and the one lever that is
 
 **Status as of 2026-10-01:** researched, audited, reviewed by GPT Sol (round 1: *reframe*) and cut to
-Stage 1. Stage 2 is **dropped** — § What the review changed.
+Stage 1, which is **built and reviewed**. Stage 2 is **dropped** — § What the review changed.
 
 Part of [prompt-caching.md](../project/prompt-caching.md). From Greg, via the Overseer:
 
@@ -221,7 +221,29 @@ The simpler options it passed over:
 - Found on the way, left alone: the chat arm's hard-coded 2026-08-26 prices read ~26% under the
   ledger; it labels them estimates and the Messages arm uses the ledger.
 
+**Code-review correction.** The first run above remains evidence and is kept as
+`prompt-caching-noema-mythology-of-conscious-ai-2026-10-01.md`; it had replaced the August result at
+the old stable path. Future runs are timestamped. The Messages arm now runs the alternate-effort
+control first, so both cache keys establish a cold write before a PASS; a pre-warmed key is
+inconclusive. It also refuses retries, incomplete ledger accounting and partial reads instead of
+selecting the first row and accepting a 90–110% band. Its store input is the reader-facing article,
+whose title override can differ from a pipeline draft's extracted metadata; the arm proves the two
+stage functions' shared layout, not an exact replay of one production job.
+
 ## Spend
 
 Research and audit: $0 (read-only). Stage 1's eval run: **$0.44** (Messages arm $0.283, chat arm
-$0.160 by the ledger). Total: **$0.44** of the ≤ $15 budget. Stage 2's spike was never run.
+$0.160 by the ledger). The re-run after the code review: **$0.33** (Messages arm only, PASS under
+the stricter verdict — two cold writes, then quotes read exactly glossary's 16,192;
+`evals/results/prompt-caching-noema-mythology-of-conscious-ai-2026-10-01T13-11-22-229Z.md`).
+Total: **$0.77** of the ≤ $15 budget. Stage 2's spike was never run.
+
+## Code review
+
+GPT Sol, round 1 on 63fb95c9, write-capable: **ship after my fixes**, no P0/P1, eight fixes (C1–C8)
+all read and kept — exact read instead of a 10% band, every ledger row counted rather than the first,
+the control moved first so both keys are shown cold, no hard-coded floor, results timestamped rather
+than overwritten, and four doc corrections (Simple's own fan-out is the exception to "one call per
+stage"; not every whole-article mode belongs in `ArticleStage`). Its eval changes were unreviewed
+code by someone else, so they were checked by running them: the re-run above. The Postgres wiring
+test, which its sandbox could not run, was run here: green. One round was enough; nothing open.
