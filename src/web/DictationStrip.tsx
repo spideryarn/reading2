@@ -39,10 +39,9 @@
  * the timer's `role="timer"` exists exactly so that it *is* exposed while not
  * being announced.
  *
- * **The device's name appears at the moment it is diagnostic and not before.**
- * Nothing on this page used to say which microphone had produced a zero, so a
- * meter reading nothing and a meter pointed at a dead conferencing loopback
- * were the same picture.
+ * **The device's name appears for as long as it is open.** Nothing on this page
+ * used to say which microphone had produced a zero, and moving bars still do
+ * not say whether the browser opened the device the reader meant.
  */
 import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";

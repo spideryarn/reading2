@@ -52,6 +52,13 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  /* Dictation and Live share one preference, but this component stays mounted
+     while it renders nothing in the idle phase. Re-read at the start of each
+     connection so its picker describes the choice that capture just read, not
+     the choice that existed when Chat first mounted. */
+  useEffect(() => {
+    if (live.phase === "connecting") setChosen(rememberedDevice());
+  }, [live.phase]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a newly acquired device reveals labels that were hidden before permission
   useEffect(() => {
     if (!visible) return;

@@ -103,6 +103,20 @@ describe("the strip, while the microphone hears nothing", () => {
     expect(host.querySelector(".prof-mic-line")?.textContent).toContain("(your choice)");
   });
 
+  it("does not call the fallback device the reader's choice when their pick was unavailable", () => {
+    act(() =>
+      root.render(createElement(DictationStrip, {
+        dictation: {
+          ...listening(false),
+          deviceId: "airpods-id",
+          deviceUnavailable: { wanted: "AirPods Pro" },
+        },
+      })),
+    );
+    expect(host.querySelector(".prof-mic-line")?.textContent).not.toContain("(your choice)");
+    expect(host.querySelector(".prof-mic-warn")?.textContent).toContain("AirPods Pro");
+  });
+
   it("offers the system default first in the picker", () => {
     act(() => root.render(createElement(DictationStrip, { dictation: listening(false) })));
     act(() => (host.querySelector(".prof-mic-change") as HTMLButtonElement | null)?.click());

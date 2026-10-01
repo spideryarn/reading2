@@ -1758,6 +1758,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              Only when a real microphone is wanted. The synthetic silent track
              opens no device, so claiming for it would make an automated check
              evict a reader's live dictation for a device it never touches. */
+          let microphoneFallbackNotice: string | null = null;
           if (microphone) {
             held = {
               /* Asked to stop by the next claimant.
@@ -1812,8 +1813,27 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             } catch (error) {
               if (stale()) return abandon();
               if (!(preferred || defaultListed) || !deviceMissing(error)) throw error;
-              if (preferred) setNotice("Your chosen microphone is unavailable. Using the system default microphone.");
-              stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              /* A missing chosen device takes the same system-default route as
+                 the picker. Its successful common path did not enumerate, so
+                 detect Chromium's named default only now. */
+              const fallbackDefaultListed = preferred !== null && (await defaultInputListed());
+              if (stale()) return abandon();
+              let namedDefaultVanished = false;
+              try {
+                stream = await navigator.mediaDevices.getUserMedia(
+                  audioConstraint(null, fallbackDefaultListed),
+                );
+              } catch (fallbackError) {
+                if (stale()) return abandon();
+                if (!fallbackDefaultListed || !deviceMissing(fallbackError)) throw fallbackError;
+                namedDefaultVanished = true;
+                stream = await navigator.mediaDevices.getUserMedia(audioConstraint(null));
+              }
+              if (preferred) {
+                microphoneFallbackNotice = namedDefaultVanished
+                  ? "Your chosen microphone is unavailable. Using another microphone."
+                  : "Your chosen microphone is unavailable. Using the system default microphone.";
+              }
             }
             track = stream.getAudioTracks()[0] ?? null;
           } else {
@@ -1822,6 +1842,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           }
           if (stale()) return abandon();
           if (!track) throw new Error("no microphone track [live-no-track]");
+          if (microphoneFallbackNotice) setNotice(microphoneFallbackNotice);
           /* **Created disabled, and that is the seeding barrier.** "Sent before
              the first response" does not prove "accepted before VAD created
              one": the reader can start talking the instant the connection is

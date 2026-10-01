@@ -81,6 +81,20 @@ below says which one it was the next time he presses.
 5. Docs: [dictation.md](../project/dictation.md) failure 9, and the header of `mic-devices.ts`,
    which used to list "no preferring `'default'`" as something it deliberately did not do.
 
+### After GPT Sol's code review
+
+[Review](261001q-mic-default-code-review-sol.md); Sol fixed these itself and I read the diff:
+
+- **A missing pick now falls to the system default too**, not to `{ audio: true }`, in both
+  dictation and Live: chosen → `exact: "default"` → unconstrained only if that has gone as well.
+  Live says "Using another microphone" in that last case rather than claiming the system default.
+- **Ownership is re-checked after each new await** (the recogniser probe and both enumerations), so
+  a stop in that gap cannot open a microphone after the page-wide claim was released. There are
+  red-then-green lock tests for both paths.
+- `(your choice)` and both pickers re-read the shared preference on each press or connection, so
+  a pick made in Live shows correctly in dictation and the other way round.
+- `honoured` starts false and is set only when the first request actually returns a track.
+
 ## What this passes over, and why
 
 - **`ideal: "default"`.** The obvious one-liner, and measured not to work: Chrome's own choice
