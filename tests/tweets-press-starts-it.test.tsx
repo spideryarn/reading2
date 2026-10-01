@@ -272,8 +272,9 @@ describe("the Tweets band, pressed in the reading view's bar", () => {
     await pressTweets();
 
     expect(threadGets.length).toBeGreaterThan(0);
-    /* The counts line, drawn only once the thread is on screen. */
-    expect(host.textContent).toContain("1 post ·");
+    /* *Copy the thread*, drawn only once the thread is on screen. (The counts
+       line this read until 2026-10-01 is in the band's (i) now, plan 261001m.) */
+    expect(host.querySelector('[aria-label="Copy the thread"]')).not.toBeNull();
     expect(posts).toHaveLength(0);
   });
 
@@ -304,8 +305,9 @@ describe("the Tweets band, arrived in without a press", () => {
     await openAt(`/read/${SLUG}?mode=tweets`);
 
     expect(threadGets.length).toBeGreaterThan(0);
-    /* The counts line, drawn only once the thread is on screen. */
-    expect(host.textContent).toContain("1 post ·");
+    /* *Copy the thread*, drawn only once the thread is on screen. (The counts
+       line this read until 2026-10-01 is in the band's (i) now, plan 261001m.) */
+    expect(host.querySelector('[aria-label="Copy the thread"]')).not.toBeNull();
     expect(posts).toHaveLength(0);
   });
 
