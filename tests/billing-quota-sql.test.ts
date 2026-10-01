@@ -47,12 +47,12 @@ describe("the usage query", () => {
     const { sql, params } = dialect.sqlToQuery(usageSql(HOSTILE_OWNER, PAID));
     expect(sql).not.toContain("2026-09-01");
     expect(sql).not.toContain("drop table");
-    /* Five values: the owner, and the two bounds **twice** — the charged
-       predicate is built once per counted column, one for the rows at full price
-       and one for the rows whose article is public and costs half. Duplicated
-       binds rather than a duplicated *statement*, which is the property this
-       file is actually about. */
-    expect(params).toHaveLength(5);
+    /* Nine values: the owner, and the two bounds **four times** — the charged
+       predicate is built once per counted column: ingests at full price and at
+       half, and since 260930k High-powered AI upgrades at full price and at half.
+       Duplicated binds rather than a duplicated *statement*, which is the
+       property this file is actually about. */
+    expect(params).toHaveLength(9);
     expect(params).toContain("2026-09-01T00:00:00.000Z");
     expect(params).toContain("2026-10-01T00:00:00.000Z");
   });
@@ -63,7 +63,7 @@ describe("the usage query", () => {
     const free = dialect.sqlToQuery(usageSql("owner", FREE));
     const paid = dialect.sqlToQuery(usageSql("owner", PAID));
     expect(free.params).toHaveLength(1);
-    expect(paid.params).toHaveLength(5);
+    expect(paid.params).toHaveLength(9);
     expect(free.sql).not.toContain("timestamptz");
     expect(paid.sql).toContain("timestamptz");
   });

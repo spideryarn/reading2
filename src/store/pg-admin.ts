@@ -144,6 +144,16 @@ export interface IngestTally {
   lifetimeShared: number;
   /** How many of `inPeriod` are. Never includes `inFlight` — see `planFacts`. */
   inPeriodShared: number;
+  /**
+   * **High-powered AI upgrades**, over the same two windows, and how many of
+   * each are public now. Counted apart from the ingests above because they are
+   * not articles added — one more article's worth each, on the ledger as
+   * `kind = 'high_power'`. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+   */
+  highPowerLifetime: number;
+  highPowerInPeriod: number;
+  highPowerLifetimeShared: number;
+  highPowerInPeriodShared: number;
 }
 
 /** Everything the merge needs, named so the call site reads as a sentence. */
@@ -194,7 +204,7 @@ function tally(rows: CountRow[]): Map<string, number> {
  */
 type PlanFacts = Pick<
   AdminUser,
-  "plan" | "ingests" | "ingestsShared" | "ingestLimit" | "ingestWindow"
+  "plan" | "ingests" | "ingestsShared" | "highPower" | "highPowerShared" | "ingestLimit" | "ingestWindow"
 > &
   Partial<Pick<AdminUser, "planStatus">>;
 
@@ -255,6 +265,15 @@ function planFacts(
      shared. src/billing/half-units.ts. */
   const lifetimeShared = counts?.lifetimeShared ?? 0;
   const inPeriodShared = counts?.inPeriodShared ?? 0;
+  /* Upgrades are born settled, so there is no in-flight term to add. */
+  const lifetimeUpgrades = {
+    highPower: counts?.highPowerLifetime ?? 0,
+    highPowerShared: counts?.highPowerLifetimeShared ?? 0,
+  };
+  const inPeriodUpgrades = {
+    highPower: counts?.highPowerInPeriod ?? 0,
+    highPowerShared: counts?.highPowerInPeriodShared ?? 0,
+  };
 
   const entitlement = entitlementFromRow(account, tiers, now);
 
@@ -268,6 +287,7 @@ function planFacts(
       ...(status === undefined ? {} : { planStatus: status }),
       ingests: lifetime,
       ingestsShared: lifetimeShared,
+      ...lifetimeUpgrades,
       ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
       /* **Its own window, not `lifetime`.** The count and the limit are measured
          over different spans here and only the cell can say so — see
@@ -282,6 +302,7 @@ function planFacts(
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: inPeriod,
         ingestsShared: inPeriodShared,
+        ...inPeriodUpgrades,
         ingestLimit: entitlement.limit,
         ingestWindow: "period",
       }
@@ -290,6 +311,7 @@ function planFacts(
         ...(status === undefined ? {} : { planStatus: status }),
         ingests: lifetime,
         ingestsShared: lifetimeShared,
+        ...lifetimeUpgrades,
         ingestLimit: entitlement.limit,
         ingestWindow: "lifetime",
       };
@@ -499,12 +521,12 @@ export function adminQueries(db: Db) {
     ingests: db
       .select({
         owner: ingestEvents.ownerId,
-        lifetime:
-          sql<number>`count(*) filter (where ${ingestEvents.succeededAt} is not null)`.mapWith(
-            Number,
-          ),
+        lifetime: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null)`.mapWith(
+          Number,
+        ),
         inPeriod: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
               and ${billingAccounts.currentPeriodStart} is not null
               and ${billingAccounts.currentPeriodEnd} is not null
               and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
@@ -535,12 +557,36 @@ export function adminQueries(db: Db) {
            here for the same reason it is not discounted there: nobody knows yet.
            tests/admin-queries.test.ts § the ingest ledger's half-price split. */
         lifetimeShared: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
               and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
           Number,
         ),
         inPeriodShared: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is not null
+            where ${ingestEvents.kind} = 'ingest' and ${ingestEvents.succeededAt} is not null
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd}
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
+        /* The same four windows for High-powered AI's upgrades, which are
+           settled at birth and so have no in-flight term. */
+        highPowerLifetime: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power')`.mapWith(Number),
+        highPowerInPeriod: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(Number),
+        highPowerLifetimeShared: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
+              and ${isPublicPrice(articles.visibility, ingestEvents.articleVisibilityAtDelete)})`.mapWith(
+          Number,
+        ),
+        highPowerInPeriodShared: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'high_power'
               and ${billingAccounts.currentPeriodStart} is not null
               and ${billingAccounts.currentPeriodEnd} is not null
               and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}

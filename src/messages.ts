@@ -600,6 +600,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      reason as the three above: another press gives the same answer, so a Retry
      button beside it would be a button that cannot work. */
   "pay-none": "blocked",
+  /* Switching an article to High-powered AI with too little allowance left.
+     `blocked` like the three quota refusals: another press is the same sum. */
+  "pay-high-power": "blocked",
   /* Stripe had a bad minute. The one `pay-` code where another go is exactly
      the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
      different situation from `pay-off`, which is a deployment with no Stripe. */
@@ -4945,6 +4948,38 @@ export function ingestQuotaReached(quota: {
          business — unsharing can leave forty against an allowance of twenty. */
       `This billing period covers ${quota.limit} articles, and the allowance is spent. Trying ` +
       `again will not help until your allowance starts again on ${when}.${share} ${kept} [pay-limit]`,
+  };
+}
+
+/**
+ * **Switching High-powered AI on needs more allowance than is left** — the
+ * refusal `PUT /api/article/:slug/high-power` answers with a 402.
+ *
+ * Its own sentence rather than `ingestQuotaReached`, for two reasons. The rule is
+ * a different one: an upgrade must fit whole (`used + cost <= budget`), where an
+ * ingest may overdraw by one half-unit, so "the allowance is spent" can be false
+ * while this still refuses. And it carries **no sharing offer**: that list answers
+ * the ingest wall's question, and following it could publish an article and
+ * still leave the switch refused. GPT Sol, plan review finding 2, 2026-09-30.
+ *
+ * It states the price in articles, never in money — docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md, part 3.
+ */
+export function highPowerNoRoom(quota: {
+  /** When a paid allowance starts again. Absent for the free tier, whose allowance is lifetime. */
+  resetAt?: Date;
+}): ReaderFacingFailure {
+  /* One sentence for a private and a public article alike — it names both
+     prices — so the code stands for one wording (tests/messages.test.ts). */
+  const more = quota.resetAt
+    ? `until your allowance starts again on ${readableDay(quota.resetAt)}`
+    : "until you subscribe, and the pricing page sets that up";
+  return {
+    kind: "blocked",
+    message:
+      "Switching on High-powered AI counts as one more article against your allowance — half " +
+      "of one if the article is shared publicly — and there is not that much left. Trying " +
+      `again will not help ${more}. Nothing has changed, and reading is never limited. ` +
+      "[pay-high-power]",
   };
 }
 

@@ -83,7 +83,7 @@ import type { PublicSketch } from "../public-types.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import { useSketch } from "./useSketch.js";
 
 /** One drawing primitive as an element. Nothing here knows a colour. */
@@ -227,8 +227,8 @@ function OwnerSketch({
             is owed the sentence. */}
         <p className="sk-empty-why">
           A model reads the whole article, works out what shape the argument is, and draws that. It
-          is the slowest thing here — {SKETCH_WAIT} — and it costs one model call, {SKETCH_PRICE}, so
-          it is never drawn until you ask.
+          is the slowest thing here — one model call, taking {SKETCH_WAIT} — so it is never drawn
+          until you ask.
         </p>
         <div className="sk-run">
           {/* **`ensure`, not `regenerate`.** There is no picture — that is what

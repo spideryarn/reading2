@@ -965,8 +965,8 @@ export interface StepClock {
  *
  * A sweep over the endpoints rather than a pairwise "did any two overlap",
  * because question 5 is about `DEFAULT_JOB_CONCURRENCY` jobs at once and *one*
- * overlapping pair out of three is what a serialised phase D looks like:
- * `SPIDERYARN_JOB_CONCURRENCY=1` still leaves all three whole-job promises
+ * overlapping pair is what a serialised phase D can look like:
+ * `SPIDERYARN_JOB_CONCURRENCY=1` still leaves all the whole-job promises
  * alive while two of them collect `busy`. ⟨GPT Sol, DPN-04.⟩
  *
  * Windows with a missing end are ignored rather than treated as open for ever:
@@ -1001,15 +1001,15 @@ export function peakConcurrency(
  * `min(finishedAt) - max(startedAt)` and `0` where they never all were.
  *
  * **This is what `peakConcurrency` stopped being able to tell you.** The start
- * rendezvous releases the three measured steps within one turn of the event
+ * rendezvous releases the measured steps within one turn of the event
  * loop, and a measured job that requeues is refused rather than re-driven — so
- * given three valid completions, all three clocks open before `arrive()` returns
- * and the gate says go only once all three have arrived. `peakConcurrency === 3`
- * is therefore **constructed**: true of any run that got that far, false only if
+ * given valid completions, all clocks open before `arrive()` returns and the
+ * gate says go only once all have arrived. Reaching the planned peak is therefore
+ * **constructed**: true of any run that got that far, false only if
  * a clock is corrupt. It confirms the wiring and discovers nothing.
  * ⟨GPT Sol, confirming the argument, 2026-09-05.⟩
  *
- * This one is bounded by the **shortest** of the three, which is the fact that
+ * This one is bounded by the **shortest** job, which is the fact that
  * matters: the load articles' `hierarchy` is far shorter than a book's
  * 658-778 s, so it says how much of the book's step was really contended rather
  * than letting an instant of overlap stand in for the whole of it.
@@ -1085,8 +1085,8 @@ export interface Q5Budget {
  *   and the second has to mean *the wave did not fail*, because a wave that
  *   exhausts its redraws still leaves stats and still lets the step finish, on
  *   the fallback tree. ⟨DPN-03, DPN-03-R.⟩
- * - **Whole-job windows overlap even when the steps do not.** The three phase-D
- *   promises are all alive while two of them are being told `busy`, so a
+ * - **Whole-job windows overlap even when the steps do not.** The phase-D
+ *   promises are all alive while jobs without a slot are being told `busy`, so a
  *   serialised run passed a pairwise overlap check. The concurrency is taken
  *   over the *steps'* own windows and has to reach `expected`. ⟨DPN-04.⟩
  */
@@ -1094,7 +1094,7 @@ export function budgetReport(opts: {
   clocks: readonly StepClock[];
   budgetMs: number;
   deadlineMs: number;
-  /** How many steps this phase planned to run — three, for phase D. */
+  /** How many steps this phase planned to run — the job cap, for phase D. */
   expected: number;
   /**
    * **The floor for `fullConcurrencyMs`, declared before the run spends.**
@@ -1136,17 +1136,17 @@ export function budgetReport(opts: {
       message:
         `Question 5 is "does it fit the budget UNDER LOAD", and the ${opts.expected} steps reached ` +
         `a peak of ${peak} in flight at once. They ran ${peak <= 1 ? "serially" : "partly serially"}, ` +
-        "so the wall clocks below are single-job clocks. The start rendezvous releases all three " +
+        "so the wall clocks below are single-job clocks. The start rendezvous releases every job " +
         "together, so a peak below that means a CLOCK IS WRONG — a step that never ran, or one " +
         "whose timestamps were replaced by a re-drive — rather than the phase having been " +
-        "serialised. (It cannot have been: the gate opens only when all three hold claims, which " +
-        "is all three of the queue's slots, so no other job can get between them afterwards. This " +
+        "serialised. (It cannot have been: the gate opens only when every job holds a claim, which " +
+        "is all of the queue's slots, so no other job can get between them afterwards. This " +
         "line said otherwise until 2026-09-05 — DPN-29.)",
     });
   } else if (full === null || full < opts.fullConcurrencyFloorMs) {
-    /* **The measurement `peakConcurrency` stopped being.** An instant of triple
+    /* **The measurement `peakConcurrency` stopped being.** An instant of full
        overlap is now arranged by construction, so the question worth asking is
-       how LONG all three were up — and the floor is declared before the run and
+       how LONG all jobs were up — and the floor is declared before the run and
        printed in preflight, so it cannot be chosen after seeing the number. */
     findings.push({
       kind: "not-answerable",
@@ -1156,10 +1156,10 @@ export function budgetReport(opts: {
         `in flight together for ${full === null ? "an unknown time" : `${(full / 1000).toFixed(1)}s`} ` +
         `against the ${(opts.fullConcurrencyFloorMs / 1000).toFixed(0)}s floor this run declared ` +
         "before it spent. The steps did start together — the rendezvous arranges that, which is " +
-        "why `peakConcurrency` reaching 3 confirms the wiring and measures nothing — but the load " +
+        "why `peakConcurrency` reaching the planned width confirms the wiring and measures nothing — but the load " +
         "ended when the shortest of them did, and the budget reading below is for a step that was " +
         "contended only at its beginning. Quote it as latency after a synchronised start, not as " +
-        "sustained three-job load.",
+        "sustained full load.",
     });
   }
 
@@ -1482,7 +1482,7 @@ export function formatQ5(q: Q5Budget): string {
       `${q.fullConcurrencyMs === null ? "an unknown time" : `${(q.fullConcurrencyMs / 1000).toFixed(1)}s`}` +
       ` against a ${(q.fullConcurrencyFloorMs / 1000).toFixed(0)}s floor declared before the run. ` +
       "This is the load figure; below the floor, the times above measure latency after a " +
-      "synchronised start, not sustained three-job load.",
+      "synchronised start, not sustained full load.",
   );
   lines.push(`  ${q.reading}`);
   if (q.selfAborted.length > 0) {
@@ -1538,7 +1538,7 @@ export function formatFindings(findings: readonly DeepenFinding[]): string {
  *   watched failing is not evidence. docs/reusable/silent-success.md.
  * - **Repeats that overlapped.** Phase B is serial deliberately: a contended
  *   repeat confounds question 1.
- * - **A load phase that did not overlap.** Three jobs that ran one after another
+ * - **A load phase that did not overlap.** Jobs that ran one after another
  *   measure nothing about the budget under load, and this box is shared, so a
  *   dev server holding a claim slot can serialise them without anything saying
  *   so.
@@ -1590,7 +1590,7 @@ export function checkDriving(
      * The step phase D is measured on — `"hierarchy"` on the paid path,
      * `"blocks"` under `--dry-run`. Its windows are what the concurrency is
      * taken over, because the *whole-job* windows overlap even when the steps
-     * run one after another: all three promises are alive while two of them
+     * run one after another: all promises are alive while the jobs without slots
      * collect `busy`. ⟨GPT Sol, DPN-04.⟩
      */
     measuredStep: string;
@@ -1605,7 +1605,7 @@ export function checkDriving(
   /* **The runtime cap, not the constant the plan quotes.** `jobConcurrency()`
      reads `SPIDERYARN_JOB_CONCURRENCY` at call time, so a shell that set it to
      1 serialises phase D silently and the run's own metadata — which recorded
-     `DEFAULT_JOB_CONCURRENCY` — would still say 3. */
+     `DEFAULT_JOB_CONCURRENCY` — would still report the planned value. */
   if (opts.jobConcurrency !== opts.plannedConcurrency) {
     findings.push({
       kind: "note",
@@ -1658,7 +1658,7 @@ export function checkDriving(
   /* **Phase D, over the measured step's windows and not the jobs'.** The
      question is whether `d.length` of them were in flight *at once*, which is
      what `DEFAULT_JOB_CONCURRENCY` jobs at once means — one overlapping pair
-     out of three is exactly what a serialised phase D looks like. */
+     is still what a partly serialised phase D can look like. */
   const d = jobs.filter((j) => j.phase === "D");
   const steps = d.map((j) => (j.stepOutcomes ?? []).find((s) => s.name === opts.measuredStep));
   const withWindows = steps.filter((s) => s?.startedAt && s?.finishedAt);
@@ -1672,8 +1672,8 @@ export function checkDriving(
         `flight at once (${withWindows.length} of ${d.length} left a window at all), so the wall ` +
         "clocks are not clocks under load. This box is shared and the queue's cap is global — " +
         "another agent's dev server holding a claim slot will serialise them, and so will a job " +
-        "that failed before it began. The whole-JOB windows overlap either way: all three " +
-        "promises stay alive while two of them are being told `busy`.",
+        "that failed before it began. The whole-JOB windows overlap either way: all the " +
+        "promises stay alive while jobs without a slot are being told `busy`.",
     });
   }
 

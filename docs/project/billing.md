@@ -593,7 +593,7 @@ step on an article you already have is free. A failed ingest is free. Archiving 
 give the slot back — and archiving is the only removal the interface offers
 ([library.md](library.md#archive-and-undo-is-the-confirmation)).
 
-**And a public article costs half of one** — see below.
+**And a public article costs half of one**, and **switching an article to High-powered AI costs one more article** (half while it is public) — both below.
 
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in
@@ -759,6 +759,59 @@ has written, or a statement run by hand — and nothing about a wrongly-priced r
 refunds nothing: the ledger row survives with the price it had. `isPublicPrice` in
 [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) is the one spelling of that predicate, and
 the admin page's half-price split imports it rather than repeating it.
+
+### High-powered AI counts double
+
+> it should double the processing cost per-article - that's how I'd think about it.
+>
+> — Greg, 2026-09-30
+
+Switching an article to [High-powered AI](high-powered-ai.md) writes **one more charged row** to
+`ingest_events`, with `kind = 'high_power'`. That row is priced exactly like an ingest of the same
+article: 2 half-units while private, 1 while public, live, and frozen on delete by the same trigger.
+So the article costs double:
+
+| | ingest | + High-powered AI | in articles |
+|---|---|---|---|
+| private | 2 | 2 | **2** |
+| public | 1 | 1 | **1** |
+
+The rules, each for a reason:
+
+- **One charge per article, for ever.** Switching off refunds nothing, because the Opus calls were
+  already spent. Switching on again charges nothing. "Switch on, run everything on Opus, switch off"
+  therefore gets nothing back. The handler looks for the row under the billing lock, and the unique
+  partial index `ingest_events_high_power_once` is the backstop.
+- **Charged in the period it is switched on**, by the row's own `succeeded_at`, whatever the age of
+  the article. Multiplying the ingest's row instead would have charged a three-month-old article's
+  upgrade to three months ago.
+- **It must fit whole: `used + cost <= budget`.** This is not the ingest wall's `used < budget`. The
+  half-unit overdraft above exists so a free account can make six public articles; an upgrade is a
+  second charge for something already had. If it doesn't fit, the answer is `[pay-high-power]`,
+  which carries **no sharing offer**. That offer answers the ingest wall's question, and following
+  it could publish an article and still leave the switch refused.
+- **Admission, charge and switch are one transaction**, in the house lock order:
+  `lockBillingAccount`, then the article `for update` (`switchOnHighPower` in
+  [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)). A stale entitlement resyncs once
+  after the transaction commits, then gives a 503, exactly as for an ingest.
+- **The administrator is exempt**, and no row is written, as with ingests.
+- **The database enforces the row's shape** (`ingest_events_high_power_shape`). An upgrade is born
+  settled, with `reserved_at = succeeded_at` from one SQL `now()`, and it has an article or a frozen
+  price. So it can never be counted as an ingest in flight.
+
+**The wall adds both kinds; every sentence that says "added" counts only ingests.** `Usage` has two
+counts per kind. `halfUnitsUsed` adds all of them; `ingestsUsed`, `ReaderPlan.used` and
+`sharedHalfPrice` count only ingests. `ReaderPlan.highPower` carries the upgrades, and `/profile`
+says them as a separate fact without a ratio. Before the split, one public high-powered article read
+as "2 of them are public". `/admin/users` does the same split. GPT Sol found this in the plan review:
+[260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md).
+
+**What "double" does not reach, stated rather than hidden:**
+
+- An article with no charged ingest still pays one article's worth. That covers articles added
+  before billing, charged before `article_id` existed, or added by the admin.
+- A re-added URL has N ingest rows and gets one upgrade, not N.
+- Re-runs stay free, so on a high-powered article each re-run costs us about twice what it would.
 
 ### The allowance prorates, and the column holds a delta
 

@@ -56,6 +56,19 @@ const PAGE = (() => {
   return raw.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
 })();
 
+/**
+ * **Models the page may name generally rather than by id**, each with the words
+ * that must then appear. Greg, 2026-09-30, on the High-powered AI clause:
+ * *"approved changes to Privacy (though keep it a bit general, e.g. "Opus or
+ * similar frontier model")"*. The model is still covered, by that sentence, and
+ * editing the sentence away turns this red exactly as dropping an id would.
+ * An entry is Greg's decision, not a convenience: add one only with his say-so.
+ * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+ */
+const GENERAL_WORDING: Readonly<Record<string, string>> = {
+  "claude-opus-5-5": "Opus or a similar frontier model",
+};
+
 describe("the privacy page", () => {
   it("is reading the prose rather than the comments", () => {
     /* The positive control for the stripping above. Without it a regex that
@@ -70,11 +83,22 @@ describe("the privacy page", () => {
   it("names every model this app can send text to", () => {
     /* `DISPLAY_NAME` maps several wire ids onto one readable name — both
        spellings of Claude land on `claude-sonnet-5` — and the readable name is
-       what the page should carry. src/models.ts § DISPLAY_NAME. */
-    const missing = [...new Set(Object.values(DISPLAY_NAME))].filter(
-      (name) => !PAGE.includes(name),
-    );
+       what the page should carry. src/models.ts § DISPLAY_NAME. A model with an
+       approved general wording is covered by that wording instead. */
+    const collapsed = PAGE.replace(/\s+/g, " ");
+    const missing = [...new Set(Object.values(DISPLAY_NAME))].filter((name) => {
+      const general = GENERAL_WORDING[name];
+      return !PAGE.includes(name) && !(general !== undefined && collapsed.includes(general));
+    });
     expect(missing, "models missing from src/web/PrivacyPage.tsx").toEqual([]);
+    expect(PAGE).toContain("High-powered AI; <code>gpt-5.6-luna</code>");
+  });
+
+  it("has an approved general wording only for models that exist", () => {
+    /* A stale entry would be an exemption for nothing, and a way for the table
+       to quietly outgrow the one model Greg approved it for. */
+    const known = new Set(Object.values(DISPLAY_NAME));
+    expect(Object.keys(GENERAL_WORDING).filter((name) => !known.has(name))).toEqual([]);
   });
 
   it("names the live-conversation models", () => {

@@ -412,8 +412,8 @@ export function PrivacyPage() {
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
-          aids, chat and search, and <code>claude-opus-5-5</code> in its place on an article switched
-          to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
+          aids, chat and search, and Opus or a similar frontier model in its place on an article
+          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
           <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
           articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
           one;{" "}
@@ -421,7 +421,8 @@ export function PrivacyPage() {
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
-          pages; and{" "}
+          pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it
+          is shown a written description of the scene and any figures the article came with; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
         </p>

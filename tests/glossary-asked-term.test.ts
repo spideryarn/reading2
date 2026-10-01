@@ -191,10 +191,10 @@ describe("High-powered AI (plan 260930f) — an asked term's explain follows the
     expect(h.powers).toEqual(["high"]);
   });
 
-  it("asks at standard power when the owner is not an administrator", async () => {
+  it("asks at high power for a reader's article too — the column is the charge paid (plan 260930k)", async () => {
     const h = harness({ blocks, highPowerSince: since });
     await runAsOwner(DEV_OWNER_ID, () => h.ask("harness", "attention head"));
-    expect(h.powers).toEqual(["standard"]);
+    expect(h.powers).toEqual(["high"]);
   });
 });
 

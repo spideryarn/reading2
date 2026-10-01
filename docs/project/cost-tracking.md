@@ -51,6 +51,38 @@ breakdown. [new-mode.md § Its cost](new-mode.md#its-cost) says what to check.
 | What does a fresh ingest or a mode cost, cold? | `npm run eval:cost` — [evals/cost/run.ts](../../evals/cost/run.ts) |
 | Does the recording itself still work, end to end? | `npm run test:paid` — [below](#the-paid-check-npm-run-testpaid) |
 
+### Only the administrator ever sees a figure
+
+> the most important thing is that that cost information should only be available to me (i.e. admin
+> users). i don't want any regular users to know how much AI processing of their articles costs
+>
+> — Greg, 2026-09-30
+
+A reader may be told what something costs **them**: in articles against their allowance, or in their
+subscription's price. They are never told what an AI call costs **us**. That covers the ledger, and
+it covers hand-written estimates too. Five of those were in reader copy until 2026-09-30:
+"about $0.20" beside the Sketch, "$0.40–$0.65" beside Illustrated, a debate re-run note, the reset
+dialog, and a `/changelog` entry.
+
+Every surface in the table above is behind the `/api/admin` namespace gate, a CLI, or an eval. So
+the rule is easy to keep, as long as a new feature does not add a figure somewhere else.
+**`tests/no-ai-cost-for-readers.test.ts` is the guard**, in two halves:
+
+- **A scan of reader copy.** It reads the string and JSX text of `src/web/**` and `src/messages.ts`,
+  plus the raw text assets the client imports (the changelog's `.ndjson`). It flags any sum of money:
+  - a currency symbol;
+  - a currency code;
+  - cents or pence;
+  - a currency word next to a number.
+
+  The only allowed file is `PlanCards.tsx`, which shows subscription prices.
+- **A targeted payload audit.** Non-admin payload shapes are checked for a cost-like key or a
+  money-bearing value: metadata, the article DTO, the public DTO, jobs, and the billing summary. Each
+  half has its own positive control. The admin cost route is the control that must be flagged.
+
+The audit behind it is in
+[260930k § 3](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md#3-ai-cost-reaches-the-admin-only).
+
 ### The article's figure, and what it can't see
 
 `GET /api/admin/articles/:slug/cost` (behind the `/api/admin` gate like every admin route, and

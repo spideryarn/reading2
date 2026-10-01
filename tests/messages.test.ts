@@ -21,6 +21,7 @@ import {
   type FailureKind,
   providerHttpFailure,
   authProviderRefused,
+  highPowerNoRoom,
   ingestQuotaReached,
   type ReaderFacingFailure,
   articleHadNoText,
@@ -116,6 +117,8 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
     ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
     ingestQuotaReached({ limit: 3, lapsed: true }),
   ],
+  /* One code, one wording: the paid form differs only in its date. */
+  highPowerNoRoom: [highPowerNoRoom({ resetAt: new Date("2026-10-01T00:00:00Z") })],
   /* All four kinds, because `stepGaveUp` is a total map over `FailureKind` and
      a branch missing from here is a sentence that has been through none of the
      invariants below — which is the shape that let `NO_RESPONSE` and

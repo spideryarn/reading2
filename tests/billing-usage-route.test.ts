@@ -251,6 +251,8 @@ describe("GET /api/billing/usage", () => {
       limit: FREE_LIFETIME_INGESTS,
       used: 0,
       sharedHalfPrice: 0,
+      /* No High-powered AI upgrades counted (260930k). */
+      highPower: 0,
       atLimit: false,
     });
     /* Nothing to manage: the Stripe customer that would hold a billing history
@@ -278,6 +280,7 @@ describe("GET /api/billing/usage", () => {
       used: 3,
       /* Nothing shared, so nothing is cheap — and three of three is the wall. */
       sharedHalfPrice: 0,
+      highPower: 0,
       atLimit: true,
     });
   });
@@ -332,6 +335,7 @@ describe("GET /api/billing/usage", () => {
       limit: tier.limit,
       used: 2,
       sharedHalfPrice: 0,
+      highPower: 0,
       atLimit: false,
       periodEnd: period.end.toISOString(),
       endsAt: null,
@@ -752,6 +756,11 @@ describe("the admin page's ingest aggregate", () => {
          nobody yet knows whether the article will be shared. */
       lifetimeShared: 0,
       inPeriodShared: 0,
+      /* High-powered AI upgrades, counted apart from ingests (260930k) — none. */
+      highPowerLifetime: 0,
+      highPowerInPeriod: 0,
+      highPowerLifetimeShared: 0,
+      highPowerInPeriodShared: 0,
     });
   });
 
@@ -767,6 +776,11 @@ describe("the admin page's ingest aggregate", () => {
       inFlight: 0,
       lifetimeShared: 0,
       inPeriodShared: 0,
+      /* High-powered AI upgrades, counted apart from ingests (260930k) — none. */
+      highPowerLifetime: 0,
+      highPowerInPeriod: 0,
+      highPowerLifetimeShared: 0,
+      highPowerInPeriodShared: 0,
     });
   });
 });

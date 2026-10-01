@@ -31,7 +31,7 @@
  * — so the hazard is per-request rather than a global two `enqueue`s could race
  * on. 2026-09-05.⟩ Nothing in `src/` changes for this to work, except that
  * `saveDeepenRecords` publishes its file atomically because this eval reads that
- * directory from three jobs at once.
+ * directory from several jobs at once.
  *
  * ## The four phases
  *
@@ -50,9 +50,9 @@
  *   must be identical and `deepen.targets` must be 0. "Nobody asked" and "asked
  *   and found nothing" are different facts, and the artefacts distinguish them:
  *   the flag-off pass writes no records file at all.
- * - **D — the budget under load.** Three jobs at once at
- *   `DEFAULT_JOB_CONCURRENCY`: one more forced hierarchy on the book (so it is a
- *   further repeat rather than pure overhead) and two ordinary articles.
+ * - **D — the budget under load.** `DEFAULT_JOB_CONCURRENCY` jobs at once: one
+ *   more forced hierarchy on the book (so it is a further repeat rather than
+ *   pure overhead) and enough ordinary articles to fill the remaining slots.
  *
  * ## What it refuses to do
  *
@@ -189,6 +189,10 @@ import {
 /** Nothing here should take longer than this. A hung claim is a bug, not patience. */
 const JOB_TIMEOUT_MS = 40 * 60_000;
 
+/** Phase D measures the production default, not a second hard-coded width. */
+const PHASE_D_JOB_COUNT = DEFAULT_JOB_CONCURRENCY;
+const PHASE_D_LOAD_COUNT = PHASE_D_JOB_COUNT - 1;
+
 /**
  * **How long phase D's rendezvous may hold anybody at the entry** before it
  * gives up, lets go, and drives the book anyway.
@@ -201,8 +205,8 @@ const JOB_TIMEOUT_MS = 40 * 60_000;
  * second added to the `hierarchy` window question 5 reads.
  *
  * Three minutes is chosen against the thing being waited for rather than against
- * patience: both load jobs start from `fetch` on the same bytes at the same
- * instant, so they reach `hierarchy` within seconds of each other unless
+ * patience: the load jobs start from the same fixture-backed `fetch` at the same
+ * instant, so they reach `hierarchy` close together unless
  * something is already wrong — a shared box serialising them on a claim slot,
  * most likely (`STANDING_NOTES`). Waiting longer than this would not rescue that
  * case; it would only spend the survivor's lease on it. `startRendezvous`.
@@ -219,7 +223,7 @@ const LOAD_RENDEZVOUS_TIMEOUT_MS = 3 * 60_000;
 const NOTABLE_HOLD_MS = 5_000;
 
 /**
- * **How long all three measured steps must be in flight *together* before
+ * **How long every measured step must be in flight *together* before
  * question 5 may be quoted as an answer about load.**
  *
  * Declared here, printed in preflight, and passed into `budgetReport` — so the
@@ -227,10 +231,10 @@ const NOTABLE_HOLD_MS = 5_000;
  * rather than after the figure was seen. ⟨Greg, 2026-09-05.⟩
  *
  * **Why a floor at all.** `peakConcurrency` used to be the load check and is now
- * arranged by construction: the rendezvous releases all three within one turn of
- * the event loop, so an instant of triple overlap is guaranteed to any run that
+ * arranged by construction: the rendezvous releases all of them within one turn
+ * of the event loop, so an instant of full overlap is guaranteed to any run that
  * gets that far. What is *not* guaranteed is duration, and duration is bounded by
- * the **shortest** of the three — the load articles' `hierarchy`, which is far
+ * the **shortest** of them — the load articles' `hierarchy`, which is far
  * shorter than a book's 658-778 s.
  *
  * **Why sixty seconds.** Against a 700 s budget it is under a tenth of the
@@ -385,7 +389,7 @@ const STANDING_NOTES = [
   "A repeat is only a repeat if it bought its wave again. SPIDERYARN_DEEPEN_REASK names the book's " +
     "slug and nothing else; the structure checkpoint is deliberately still resumed, which is what " +
     "holds the seed constant.",
-  "Phase D runs three jobs at once, and this box is shared: another agent's dev server holding a " +
+  `Phase D runs ${PHASE_D_JOB_COUNT} jobs at once, and this box is shared: another agent's dev server holding a ` +
     "claim slot would serialise them. Read the per-step clocks against each other, not only " +
     "against the budget.",
 ];
@@ -441,7 +445,7 @@ async function driveToDone(
       throw new Error(`${job.slug}: still not done after ${JOB_TIMEOUT_MS / 60_000} minutes`);
     }
     /* **Asked before every claim, which is half the invariant** (DPN-26). The
-       three measured jobs share one fate, and once any of them has lost it none
+       the measured jobs share one fate, and once any of them has lost it none
        of the others begins another step or a re-drive. The other half is inside
        a claim that is already running, where this check cannot reach: the fate's
        abort signal, combined into the measured step's own `ctx.signal` by
@@ -538,7 +542,7 @@ interface JobSpec {
    */
   announce?: { step: StepName; arrive: (slug: string) => Promise<GateVerdict> };
   /**
-   * **The fate this job shares with its siblings** — phase D's three, and nobody
+   * **The fate this job shares with its siblings** — phase D's jobs, and nobody
    * else. Once any of them has lost the ability to answer question 5, none of
    * them claims again. `startPhaseFate`, DPN-26.
    */
@@ -560,13 +564,13 @@ interface QueuedJob {
  *
  * They are `process.env`, read at call time by `deepeningEnabled()` and
  * `reaskExpansions(slug)` — so setting and restoring them *per job* was wrong the
- * moment phase D ran three jobs at once: the first to finish restored the
- * variable out from under the two still running. A phase is the unit that has one
+ * moment phase D ran concurrent jobs: the first to finish restored the
+ * variable out from under the others still running. A phase is the unit that has one
  * answer to both questions, so a phase is what holds them.
  *
  * `reask` names slugs rather than being a boolean precisely so that one setting
- * can be right for three concurrent jobs: the book is re-bought and the two
- * articles beside it are not.
+ * can be right for concurrent jobs: the book is re-bought and the articles
+ * beside it are not.
  */
 async function withLevers<T>(
   levers: { deepen: boolean; reask: readonly string[] },
@@ -746,7 +750,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
 
   const reasking = (process.env[REASK_ENV] ?? "").split(",").includes(job.slug);
   /* **"Measured" is `announce`, not a second flag to keep in step with it.** Only
-     phase D's three jobs carry the rendezvous hook, and they are exactly the
+     phase D's jobs carry the rendezvous hook, and they are exactly the
      jobs whose step question 5 times — so the one fact has one source and the
      two cannot drift apart. */
   const measured = spec.announce !== undefined;
@@ -829,7 +833,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
       fatal: true,
       message:
         `${spec.label}: this job stopped without claiming again because its phase had already lost ` +
-        `the ability to answer — ${driven.abandoned}. The three measured jobs share one fate, so ` +
+        `the ability to answer — ${driven.abandoned}. The measured jobs share one fate, so ` +
         "none of them starts more paid work once any of them has lost it. Whatever call was " +
         "already in flight finished and was paid for; nothing further was started.",
     });
@@ -866,8 +870,8 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
      collectors saw has a row (DPN-02). Both are the cost eval's, imported.
 
      **Under a deadline, and for the same reason the end-of-run re-read is**
-     (`withDeadline`, DPN-17). This read is on phase D's path: three jobs finish
-     into three of these, and one that never answers is one `allSettled` never
+     (`withDeadline`, DPN-17). This read is on phase D's path: its jobs finish
+     into these, and one that never answers is one `allSettled` never
      settles, so the phase — and every finding and every number after it —
      waits for ever on a database that has gone away. A read that gives up says
      the spend is UNKNOWN, which is a fact the run can print.
@@ -939,9 +943,9 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
         "the bill, and this pass expanded nothing. It is excluded from questions 1-3.",
     });
     /* The third way to lose the phase, and the one that needs the records file
-       to be readable before it can be known. `budgetReport` wants three
-       completions with a wave's stats and **no failure**, so a fallback wave
-       puts three out of reach exactly as an error does. ⟨DPN-26.⟩ */
+       to be readable before it can be known. `budgetReport` wants every planned
+       completion with a wave's stats and **no failure**, so a fallback wave
+       puts the full set out of reach exactly as an error does. ⟨DPN-26.⟩ */
     loseTheFate(true);
   }
 
@@ -1033,13 +1037,13 @@ function structureTokenFloor(blocks: number): number {
  * - **Q1** was computed over four book passes and calls them a controlled
  *   population of three. The declared population is A+B — serial *because* a
  *   contended repeat confounds question 1 — and phase D's book pass ran with
- *   two other jobs against it. It is reported with Q5, where the contention is
- *   the point. ⟨GPT Sol, DPN-12.⟩
+ *   the other phase-D jobs against it. It is reported with Q5, where the
+ *   contention is the point. ⟨GPT Sol, DPN-12.⟩
  * - **Q1, Q2 and Q3** aggregated the records of a pass whose wave *threw*.
  *   ⟨DPN-05.⟩ And `0 of 0` prints as a flip rate of none. ⟨DPN-11.⟩
  * - **Q4** dropped any job whose ledger read never completed, so a missing bill
  *   read as a smaller one. ⟨DPN-02.⟩
- * - **Q5** counted three failed steps as three measurements. ⟨DPN-03/04.⟩
+ * - **Q5** counted failed steps as measurements. ⟨DPN-03/04.⟩
  */
 function answerTheQuestions(opts: {
   /** Phase A and B's passes only — the declared controlled population for Q1. */
@@ -1190,8 +1194,9 @@ function answerTheQuestions(opts: {
       `  ${p.label} (the book's wave under load): ${p.stats.expanded}/${p.stats.targets} section(s), ` +
         `${p.stats.calls} call(s), yes ${p.stats.verdicts.rawYes}/` +
         `${p.stats.verdicts.rawYes + p.stats.verdicts.rawNo}` +
-        `${p.failed ? "   FAILED — partial" : ""}. Deliberately NOT in question 1: it ran with two ` +
-        "other jobs against it, and contention is the confound question 1's serial repeats exist " +
+        `${p.failed ? "   FAILED — partial" : ""}. Deliberately NOT in question 1: it ran with ` +
+        `${Math.max(0, opts.expectedLoadSteps - 1)} other jobs against it, and contention is the ` +
+        "confound question 1's serial repeats exist " +
         "to keep out.",
     );
   }
@@ -1241,8 +1246,11 @@ export function assertArgs(args: Args): void {
     );
   }
   if (args.articles.length === 0) throw new Error("--article is required (an ordinary article's HTML)");
-  if (args.articles.length > 3) {
-    throw new Error("--article takes at most 3: one for phase C and two for phase D.");
+  if (args.articles.length > PHASE_D_JOB_COUNT) {
+    throw new Error(
+      `--article takes at most ${PHASE_D_JOB_COUNT}: one for phase C and up to ` +
+        `${PHASE_D_LOAD_COUNT} for phase D.`,
+    );
   }
 }
 
@@ -1337,7 +1345,7 @@ function currentMeta(databaseTarget: string): RunMeta {
 
 /**
  * **A queue cap that is not what phase D was planned at cannot measure phase D**
- * — and the run would spend $40.90 first and print an unmeasurable Q5 second.
+ * — and the run would spend first and print an unmeasurable Q5 second.
  * Asked before anything is enqueued, on every path, so the refusal can be
  * watched on the free ones. ⟨GPT Sol, DPN-04.⟩
  */
@@ -1347,7 +1355,7 @@ export function assertJobConcurrency(runtime: number, planned: number): void {
     `The queue's runtime cap is ${runtime} and phase D is planned at ${planned}: ` +
       "SPIDERYARN_JOB_CONCURRENCY is set in this process. Question 5 asks whether the hierarchy " +
       "step fits its budget with DEFAULT_JOB_CONCURRENCY jobs at once, and at any other cap the " +
-      "three phase-D jobs serialise while all three promises stay alive — which reads as a pass. " +
+      "the phase-D jobs serialise while every promise stays alive — which reads as a pass. " +
       "Unset the variable and run again.",
   );
 }
@@ -1412,8 +1420,8 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
  * `assertStepPlansRunnable` is what stops this being rediscovered by a person.
  *
  * **There is deliberately no split-ingest list here, and a dry run is why.**
- * Phase D's three measured windows have to intersect, and the obvious way to
- * arrange it was to take the two load articles as far as the measured step in
+ * Phase D's measured windows have to intersect, and the obvious way to
+ * arrange it was to take the load articles as far as the measured step in
  * one job and run the measured step in a second — Sol's first suggestion for
  * DPN-15. It cannot work: a job that stops short of a publishable article
  * **fails**, and a failed job's draft revision is rolled back, so the second job
@@ -1485,12 +1493,18 @@ async function main(): Promise<void> {
      the slug the queue handed back, and the book's is re-checked once it is
      known. */
   const bookSlug = `evaldeepen-${runTag}-book`;
-  const articleSlugs = [`evaldeepen-${runTag}-inert`, `evaldeepen-${runTag}-load1`, `evaldeepen-${runTag}-load2`];
+  const articleSlugs = [
+    `evaldeepen-${runTag}-inert`,
+    ...Array.from(
+      { length: PHASE_D_LOAD_COUNT },
+      (_, i) => `evaldeepen-${runTag}-load${i + 1}`,
+    ),
+  ];
 
   const counts = {
     bookIngestDeepened: 1,
     bookHierarchyRepeat: args.repeats - 1 + 1 /* the phase-D repeat */,
-    articleIngestDeepened: 3,
+    articleIngestDeepened: articleSlugs.length,
     articleHierarchyResumed: 1,
   };
   const bill = estimate(counts);
@@ -1517,7 +1531,7 @@ async function main(): Promise<void> {
     jobs: [],
   };
   /* Serialised and uniquely named — `checkpointWriter` says why, and phase D is
-     what made it necessary: three concurrent jobs all checkpointing. */
+     what made it necessary: the default cap's concurrent jobs all checkpointing. */
   const checkpoint = checkpointWriter(path.join(runDir, "run.json"), () => runFile);
   await checkpoint();
 
@@ -1535,15 +1549,15 @@ async function main(): Promise<void> {
   console.log(`  C  ${articleSlugs[0]}   ingest ${ingest.join(",")}   deepen OFF`);
   console.log(`  C  ${articleSlugs[0]}   ${rerun.join(",")} forced   deepen ON    (must be inert)`);
   console.log(
-    `  D  three at once: ${articleSlugs[1]} and ${articleSlugs[2]} ingest, HELD at the entry to ` +
-      `\`${rerun[0] ?? "hierarchy"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
-      `(repeat ${args.repeats + 1}) is there too, then all three released together`,
+    `  D  ${PHASE_D_JOB_COUNT} at once: ${articleSlugs.slice(1).join(", ")} ingest, HELD at the ` +
+      `entry to \`${rerun[0] ?? "hierarchy"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
+      `(repeat ${args.repeats + 1}) is there too, then all ${PHASE_D_JOB_COUNT} released together`,
   );
 
   console.log("\nWhat it will check");
   console.log("─".repeat(70));
   for (const line of [
-    "the re-ask lever names the book's slug and neither article's — else repeats are free and circular",
+    "the re-ask lever names the book's slug and none of the article slugs — else repeats are free and circular",
     "the deepening path touches `hierarchy-deepen` and never `hierarchy-structure` — the seed is held",
     "an ordinary repeat resumes and buys nothing; a re-asking one buys every call again and reads none",
     "every repeat's wave-1 frontier is identical — if it moved, the seed moved and Q1 is void",
@@ -1552,13 +1566,13 @@ async function main(): Promise<void> {
     "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
     "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
     "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
-    "phase D: the two load steps are HELD at their entry, and only once both are there is the book driven at all — it reaches the same entry, and all three are released together. A shared START is what the run can arrange; whether the three windows then stay open together is `peakConcurrency`'s to measure, below",
-    "phase D: if the load steps do not both reach the entry, the book's pass under load is NOT DRIVEN and NOT BOUGHT — it answers question 5 and nothing else, and question 5 is then unanswerable at any price",
-    "phase D: if the gate gives up with all three driven, every measured step it releases is ABANDONED and throws before it runs, so a phase that cannot answer question 5 buys nothing trying to. Those jobs end `error` by this eval's doing and each says so in a finding of its own",
-    "phase D: the three measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and the other two stop before their next claim AND cancel the calls their running step has not made yet. One claim runs the whole hierarchy step (structure call, wave, AND a full label pass, which starts even after the wave failed), so stopping at the claim alone left up to ~$10.80 still to be bought; the fate's abort signal is combined into the measured step's own. What is left is the single request already in flight, which may still be billed",
+    `phase D: the ${PHASE_D_LOAD_COUNT} load steps are HELD at their entry, and only once all are there is the book driven at all — it reaches the same entry, and all ${PHASE_D_JOB_COUNT} are released together. A shared START is what the run can arrange; whether every window then stays open together is \`peakConcurrency\`'s to measure, below`,
+    "phase D: if every load step does not reach the entry, the book's pass under load is NOT DRIVEN and NOT BOUGHT — it answers question 5 and nothing else, and question 5 is then unanswerable at any price",
+    "phase D: if the gate gives up after every job was driven, every measured step it releases is ABANDONED and throws before it runs, so a phase that cannot answer question 5 buys nothing trying to. Those jobs end `error` by this eval's doing and each says so in a finding of its own",
+    "phase D: the measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and the others stop before their next claim AND cancel the calls their running step has not made yet. One claim runs the whole hierarchy step (structure call, wave, AND a full label pass, which starts even after the wave failed), so the fate's abort signal is combined into the measured step's own. What is left is the single request already in flight, which may still be billed",
     "phase D: a measured job STOPS on its first requeue rather than being re-driven — a re-drive takes the rendezvous's latched verdict, runs outside the gate, and lets the queue overwrite the first attempt's clock",
-    "phase D: the hierarchy STEPS' own windows reach concurrency 3, and three of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement",
-    `phase D: all three measured steps are in flight TOGETHER for at least ${(FULL_CONCURRENCY_FLOOR_MS / 1000).toFixed(0)}s — declared here, before anything is bought, so it cannot be chosen after the figure is seen. Peak concurrency 3 is ARRANGED by the rendezvous and is only a wiring check; this is the load measurement, and below the floor question 5 reports latency after a synchronised start rather than sustained three-job load`,
+    `phase D: the hierarchy STEPS' own windows reach concurrency ${PHASE_D_JOB_COUNT}, and all of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement`,
+    `phase D: all ${PHASE_D_JOB_COUNT} measured steps are in flight TOGETHER for at least ${(FULL_CONCURRENCY_FLOOR_MS / 1000).toFixed(0)}s — declared here, before anything is bought, so it cannot be chosen after the figure is seen. Peak concurrency ${PHASE_D_JOB_COUNT} is ARRANGED by the rendezvous and is only a wiring check; this is the load measurement, and below the floor question 5 reports latency after a synchronised start rather than sustained full load`,
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
     "question 1 over phases A and B only, over passes whose wave did not throw, and refused outright if it matched nothing",
@@ -1647,9 +1661,9 @@ async function main(): Promise<void> {
       bookSlug,
       runDir,
       measuredStep: rerun[0] ?? "hierarchy",
-      /* A (1) + B (`repeats - 1`) + C (2) + D (3). The plan printed above is
+      /* A (1) + B (`repeats - 1`) + C (2) + D (`PHASE_D_JOB_COUNT`). The plan printed above is
          the same arithmetic said in words. */
-      expectedJobs: args.repeats + 5,
+      expectedJobs: args.repeats + 2 + PHASE_D_JOB_COUNT,
       died: primary,
     });
   } catch (err) {
@@ -1987,7 +2001,7 @@ async function runPhases(opts: {
   await ctx.checkpoint();
   if (stopIfCompromised(ctx, [on], "the load phase (D)")) return;
 
-  /* D — three at once, and started together so that "at once" is true of the
+  /* D — the default cap at once, and started together so that "at once" is true of the
      STEP. Its own function because it is the only phase with machinery of its
      own: the start rendezvous, and the drain that has to finish before the
      levers can be restored. */
@@ -1995,8 +2009,8 @@ async function runPhases(opts: {
 }
 
 /**
- * **Phase D — three jobs at once, and the rendezvous that makes the three
- * measured steps START together rather than merely the three promises.**
+ * **Phase D — `DEFAULT_JOB_CONCURRENCY` jobs at once, and the rendezvous that
+ * makes their measured steps START together rather than merely their promises.**
  *
  * Separated from the other three because it is the only one with machinery of
  * its own, and because both of its hazards live here: the windows that have to
@@ -2005,14 +2019,14 @@ async function runPhases(opts: {
  *
  * ## The shape, in three beats
  *
- * 1. **Drive the two load jobs**, whose measured step is held at its entry.
- * 2. **The readiness wait** — both of them there, gate still shut. Nothing of
+ * 1. **Drive the load jobs**, whose measured step is held at its entry.
+ * 2. **The readiness wait** — all of them there, gate still shut. Nothing of
  *    the book has been driven, so nothing of it has been bought, and if this
  *    wait does not end `"all"` the run **stops here**: the book's pass exists to
  *    answer question 5 and nothing else, and with the load steps gone question 5
  *    is not answerable at any price (`loadReadiness`, DPN-23).
  * 3. **Drive the book**, which reaches the same entry through the same hook and
- *    is the third arrival. The gate opens and all three go together — or it
+ *    is the final arrival. The gate opens and every job goes together — or it
  *    gives up, and then **none of them runs**: every step it releases is
  *    released `"abandoned"` and throws before `step.run` (`abandonStep`).
  *
@@ -2024,10 +2038,10 @@ async function runPhases(opts: {
  *
  * Then four statements, meant to be quoted as they stand.
  *
- * 1. **The three measured steps are released together, and after DPN-25 nothing
+ * 1. **The measured steps are released together, and after DPN-25 nothing
  *    re-runs one of them outside that release.** When the gate ends `"all"` all
- *    three are released within one turn of the event loop of each other, so all
- *    three windows open at the same instant and neither load step can have
+ *    of them are released within one turn of the event loop of each other, so all
+ *    windows open at the same instant and no load step can have
  *    finished before the book began. The qualification matters and used to be
  *    missing: a job that requeued was **re-driven**, its second arrival took the
  *    gate's latched verdict and ran outside it, and the queue replaced the first
@@ -2035,14 +2049,14 @@ async function runPhases(opts: {
  *    plausible-looking pass behind. A measured job now stops on its first
  *    requeue instead (`requeueVerdict`).
  * 2. **On a paid run, if they did not start together, none of them ran and none
- *    of them was bought.** The load steps never both reach the entry, so the
+ *    of them was bought.** The load steps never all reach the entry, so the
  *    book is never driven (`loadReadiness`); or the gate gives up with the book
  *    already driven, and every step it releases throws at the entry having
  *    bought nothing (`abandonStep`). Those jobs end `error` **by this eval's
  *    doing** and say so in a finding on their own records. *On a paid run*
  *    because `abandonStep` deliberately stands down under `--dry-run`, whose
  *    jobs are expected to fail at their last free step anyway.
- * 3. **Once any of the three has lost the phase, the other two stop before their
+ * 3. **Once any job has lost the phase, the others stop before their
  *    next claim AND cancel the calls their running step has not yet made.** A
  *    measured step that failed, a wave that fell back, a claim handed back: any
  *    of them, and `startPhaseFate` both refuses the next claim and aborts a
@@ -2055,9 +2069,8 @@ async function runPhases(opts: {
  *    a whole pass of labels — `generateHierarchy` catches a failed wave and falls
  *    straight through to `generateLabels` regardless. So "a call already in
  *    flight finishes" did not cover the calls a *running* step had not started
- *    yet, and up to about **$10.80** of phase D's $14.20 could still be bought
- *    after question 5 was known unanswerable: the book's $7.40 pass, plus
- *    whatever of the other load article's ~$3.40 remained.
+ *    yet. Most of phase D's spend could therefore still be bought after question
+ *    5 was known unanswerable.
  *
  *    What the abort really buys, read out of `src/` rather than assumed: label
  *    batches are queued *with* the signal (`src/labels.ts` §
@@ -2068,20 +2081,20 @@ async function runPhases(opts: {
  *    request already in flight**, which may still be billed, rather than a whole
  *    label pass. The claim itself cannot be aborted — its `AbortController` is
  *    private to `advanceJobWith` — and does not need to be.
- * 4. **Whether the three windows stayed open together long enough to measure is
+ * 4. **Whether all the windows stayed open together long enough to measure is
  *    NOT guaranteed, and is measured.** Two things can end the overlap, and the
  *    one I kept repeating is not one of them: **another agent's job cannot
- *    serialise these three after a successful gate**, because the gate only opens
- *    when all three hold claims, which is all three of
+ *    serialise these jobs after a successful gate**, because the gate only opens
+ *    when every phase-D job holds a claim, which is all of
  *    `DEFAULT_JOB_CONCURRENCY`'s slots. ⟨DPN-29 — I asserted the contrary three
  *    times.⟩ What really remains is runtime failure, which statement 3 now stops,
  *    and **duration**: the load articles' `hierarchy` is far shorter than the
- *    book's 658-778 s, so the two of them close long before it does.
+ *    book's 658-778 s, so they close long before it does.
  *
  * That last point is worth reading twice before quoting question 5, because it
  * is the limit of what this phase can measure rather than a fault in it: the
  * book's step is genuinely contended only for as long as the shortest sibling
- * runs. `peakConcurrency` asks whether all three were ever open at one instant,
+ * runs. `peakConcurrency` asks whether all were ever open at one instant,
  * and after the rendezvous that instant is arranged by construction — so it now
  * confirms the phase ran rather than discovering that it overlapped.
  *
@@ -2102,53 +2115,59 @@ async function runPhaseD(opts: {
 }): Promise<void> {
   const { ctx, args, runTag, articleFiles, articleSlugs, liveBookSlug, deepen } = opts;
   const { ingest, rerun, force } = opts.steps;
-  console.log(`\n[D] three jobs at once, at DEFAULT_JOB_CONCURRENCY=${DEFAULT_JOB_CONCURRENCY}`);
+  console.log(
+    `\n[D] ${PHASE_D_JOB_COUNT} jobs at once, at DEFAULT_JOB_CONCURRENCY=${DEFAULT_JOB_CONCURRENCY}`,
+  );
   console.log("─".repeat(70));
-  /* **Two more articles, from two more files if they were given and from the
-     first one twice if they were not.** Two ingests of identical bytes under
-     two different slugs are still two independent jobs — different articles,
-     different checkpoint rows, nothing shared — so the load is real either
-     way. What is lost is variety, and the run says so rather than letting a
-     reader assume three different documents. */
-  const loadIngress = [articleFiles[1] ?? articleFiles[0]!, articleFiles[2] ?? articleFiles[0]!];
-  if (articleFiles.length < 3) {
+  /* **Enough articles to fill every slot, from distinct files where they were
+     given and from the first one again where they were not.** Ingests of
+     identical bytes under different slugs are still independent jobs —
+     different articles, different checkpoint rows, nothing shared — so the
+     load is real either way. What is lost is variety, and the run says so rather
+     than letting a reader assume every job used a different document. */
+  const loadIngress = Array.from(
+    { length: PHASE_D_LOAD_COUNT },
+    (_, i) => articleFiles[i + 1] ?? articleFiles[0]!,
+  );
+  if (articleFiles.length < PHASE_D_JOB_COUNT) {
     console.log(
       `  (only ${articleFiles.length} article file(s) given, so phase D ingests the same bytes ` +
-        "under fresh slugs — two independent jobs sharing nothing, but not two different documents)",
+        `under fresh slugs — ${PHASE_D_LOAD_COUNT} independent jobs sharing no article state, ` +
+        "but not all different documents)",
     );
   }
 
   /**
    * **The rendezvous, and which way round it goes.**
    *
-   * The two load jobs start at `fetch` and reach the measured step only after
+   * The load jobs start at `fetch` and reach the measured step only after
    * stages 1-3; the book's job is a forced `hierarchy` and is there at once. So
-   * the book is **driven last** — but *all three* are held at the entry, and the
-   * three-ness is the point.
+   * the book is **driven last** — but *every job* is held at the entry, and the
+   * full width is the point.
    *
    * Holding only the loads and releasing them before driving the book left the
    * hole one party over: the loads waited for each other, nothing waited for the
-   * book, and with the third queue slot taken both released load steps could
+   * book, and with the last queue slot taken the released load steps could
    * finish before the book ever reached `hierarchy` — while the outcome said
    * `"all"`. ⟨GPT Sol, DPN-20-R.⟩
    *
    * **The book does hold, inside its claim, and it costs nothing.** Its step
    * needs 658-778 s against a 740 s deadline and can give up none of it; by the
-   * time it is driven both loads are already waiting *for it*, so its own wait
+   * time it is driven all loads are already waiting *for it*, so its own wait
    * is one microtask. The loads are the ones that really hold, bounded by
    * `LOAD_RENDEZVOUS_TIMEOUT_MS`, and what that cost them is reported.
    *
    * `startRendezvous` says what it saw; a phase that did not line up is a note
    * here and a refusal in `budgetReport`. ⟨GPT Sol, DPN-15, DPN-20, DPN-20-R.⟩
    */
-  const loadSlugs = [articleSlugs[1]!, articleSlugs[2]!];
+  const loadSlugs = articleSlugs.slice(1);
   const rendezvous = startRendezvous({
-    /* Three parties, not two: the book is one of them. */
+    /* The book is one of the parties and fills the last slot. */
     expected: loadSlugs.length + 1,
     timeoutMs: LOAD_RENDEZVOUS_TIMEOUT_MS,
   });
   const measuredStep = rerun[0] ?? "hierarchy";
-  /* **One fate for the three of them** — the invariant behind DPN-26, and behind
+  /* **One fate for all of them** — the invariant behind DPN-26, and behind
      the four separate guards that preceded it. `startPhaseFate`. */
   const fate = startPhaseFate();
 
@@ -2198,7 +2217,7 @@ async function runPhaseD(opts: {
      ⟨GPT Sol, DPN-06.⟩
 
      **One set of levers for the whole phase**, which is what the re-ask list
-     naming slugs makes possible: the book is re-bought and the two articles
+     naming slugs makes possible: the book is re-bought and the load articles
      beside it are not, from one environment. */
   const settled = await withLevers({ deepen, reask: [liveBookSlug] }, async () => {
     const loadDriving = loadQueued.map((q) => driveJob(ctx, q));
@@ -2217,7 +2236,7 @@ async function runPhaseD(opts: {
       loadDriving.map((p) => p.then(() => undefined, () => undefined)),
     );
     try {
-      /* **The readiness wait: both load steps at the entry, gate still shut.**
+      /* **The readiness wait: every load step at the entry, gate still shut.**
          Nothing of the book has been driven, so nothing of it has been bought.
          ⟨GPT Sol, DPN-20-R.⟩ */
       const ready = await rendezvous.waitFor(loadQueued.length, someLoadStopped);
@@ -2233,7 +2252,7 @@ async function runPhaseD(opts: {
         bookQueued.record.findings = [...(bookQueued.record.findings ?? []), ...verdict.findings];
         ctx.stopped =
           "Phase D's load steps never lined up, so the book's pass under load was NOT DRIVEN and " +
-          "NOT BOUGHT. It exists only to answer question 5, and question 5 needs all three " +
+          `NOT BOUGHT. It exists only to answer question 5, and question 5 needs all ${PHASE_D_JOB_COUNT} ` +
           "measured windows open at one instant. Question 5 is absent, not zero.";
         console.log(`\n${"!".repeat(70)}`);
         console.log("NOT DRIVING THE BOOK under load.");
@@ -2243,11 +2262,11 @@ async function runPhaseD(opts: {
         return loadsDrained;
       }
 
-      console.log("  Driving the book now; it is the third party and opens the gate.");
+      console.log("  Driving the book now; it is the final party and opens the gate.");
       const bookDriving = driveJob(ctx, bookQueued);
       void bookDriving.catch(() => undefined);
       /* **The book alone is the abandon signal here**, for the same reason: the
-         two loads are held and cannot settle until the gate opens. If the book
+         loads are held and cannot settle until the gate opens. If the book
          dies before it reaches the entry, this is what lets them go. */
       const lined = await rendezvous.wait(Promise.allSettled([bookDriving]));
       console.log(
@@ -2277,7 +2296,7 @@ async function runPhaseD(opts: {
         ctx.runFile.notes.push(
           `Phase D's start rendezvous ended "${lined.why}" after ${(lined.ms / 1000).toFixed(1)}s ` +
             `with ${lined.arrived.length} of ${lined.needed} measured step(s) at ` +
-            `\`${measuredStep}\`, so the three were not started together and none of them ran.`,
+            `\`${measuredStep}\`, so the jobs were not started together and none of them ran.`,
         );
         console.log(
           "  WARNING: the phase did not line up, so every measured step it released was ABANDONED " +
@@ -2291,8 +2310,8 @@ async function runPhaseD(opts: {
          between the load jobs starting and it returning has no ending at all —
          and steps held at the entry would then sit there holding their claims
          until the leases ran out. The verdict is **latched** at the first
-         opening, so this call cannot turn a gate that opened on all three into
-         an abandonment under three running steps. */
+         opening, so this call cannot turn a gate that opened on every job into
+         an abandonment under running steps. */
       rendezvous.release();
     }
   });
@@ -2320,7 +2339,7 @@ async function runPhaseD(opts: {
           fatal: true,
           message:
             `${q.spec.label}: ${ABANDONED_MARKER}. Its \`${measuredStep}\` was held at the entry, ` +
-            "the rendezvous then gave up rather than opening on all three, and this eval threw " +
+            "the rendezvous then gave up rather than opening on every job, and this eval threw " +
             "before the step ran. The job is `error` BY THIS EVAL'S DOING, not the pipeline's, " +
             "and it bought nothing — question 5 was already unanswerable, so running it would " +
             "have spent money on an answer the report would refuse to quote.",
@@ -2338,7 +2357,7 @@ async function runPhaseD(opts: {
     );
   }
   /* **Phase D is last, so there is nothing to stop before.** Its fatal findings
-     reach the reader through the findings block like everyone else's — all three
+     reach the reader through the findings block like everyone else's — all
      jobs were drained first, which is the part that mattered. */
 }
 
@@ -2547,10 +2566,11 @@ function reportAbsences(ctx: RunContext, died: unknown, expectedJobs: number): D
   }
   /* **Zero is the loud shape; short is the likelier one.** The run knows how many
      jobs it set out to create — one ingest, `repeats - 1` repeats, two control
-     passes, three under load — and a driving report over fewer of them is not the
-     report it says it is. The discipline `expectedBookPasses` already applies to
-     passes and `budgetReport`'s `expected` to clocks. A deliberate early stop is
-     not this, and has said so above. */
+     passes, and `PHASE_D_JOB_COUNT` under load — and a driving report over fewer
+     of them is not the report it says it is. The discipline
+     `expectedBookPasses` already applies to passes and `budgetReport`'s
+     `expected` to clocks. A deliberate early stop is not this, and has said so
+     above. */
   if (ctx.runFile.jobs.length < expectedJobs && ctx.stopped === null && died === null) {
     findings.push({
       kind: "not-answerable",
@@ -2695,8 +2715,8 @@ async function reportRun(opts: {
      nobody else, which makes the filter exact.
 
      **Phase A and phase B, and nothing else**: the declared controlled
-     population is the serial passes; phase D's book pass ran with two other
-     jobs against it and is reported with question 5. */
+     population is the serial passes; phase D's book pass ran with the other
+     phase-D jobs against it and is reported with question 5. */
   const allRecords: RecordsPass[] = ctx.runFile.jobs.flatMap(passesOf);
   const bookPasses = allRecords.filter((p) => p.phase === "A" || p.phase === "B");
 
@@ -2729,7 +2749,7 @@ async function reportRun(opts: {
       "\n--dry-run: no model call was made, so questions 1-5 were not asked. Their answers " +
         "are deliberately absent rather than printed as zeroes.\n" +
         `  Expect the phase-D concurrency note here: the measured step is \`${measuredStep}\`, ` +
-        "which takes milliseconds, so three of them rarely overlap however concurrently the jobs " +
+        `which takes milliseconds, so ${PHASE_D_JOB_COUNT} of them rarely overlap however concurrently the jobs ` +
         "were driven. On the paid path the step is `hierarchy` and runs for minutes, and the same " +
         "note there is the real thing — it makes question 5 unanswerable.",
     );
