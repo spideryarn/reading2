@@ -268,8 +268,17 @@ describe("chat's list has no Remember tag any more", () => {
  */
 describe("the Remember composer on a short viewport", () => {
   const real = window.matchMedia;
+  const realInnerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  const realScrollHeight = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "scrollHeight");
   afterEach(() => {
     window.matchMedia = real;
+    if (realInnerHeight) Object.defineProperty(window, "innerHeight", realInnerHeight);
+    else Reflect.deleteProperty(window, "innerHeight");
+    if (realScrollHeight) {
+      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", realScrollHeight);
+    } else {
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, "scrollHeight");
+    }
   });
 
   function viewport(short: boolean) {
@@ -289,6 +298,17 @@ describe("the Remember composer on a short viewport", () => {
     viewport(true);
     paint(rememberThread());
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(2);
+  });
+
+  it("caps a growing short-viewport box at 30% of the viewport height", () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 390 });
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 1_000,
+    });
+    viewport(true);
+    paint(rememberThread());
+    expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.style.height).toBe("117px");
   });
 
   it("is still six rows on a tall one", () => {

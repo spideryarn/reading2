@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ChatMessage, ChatThread } from "../src/types.js";
-import { asOpId, initialState, withServerIds } from "../src/web/chat/model.js";
+import { asOpId, initialState, isSettled, withServerIds } from "../src/web/chat/model.js";
 import { project } from "../src/web/chat/project.js";
 import { twice } from "./helpers/chat-reduce.js";
 
@@ -81,6 +81,80 @@ describe("withServerIds folds a provisional thread into one the tab already hold
     }, true);
     expect(out.map((t) => t.id)).toEqual([EXISTING.id, "spya-new001"]);
     expect(out[1]?.title).toBe("Server title");
+  });
+});
+
+describe("Start over's settled gate after server naming", () => {
+  const LOAD = asOpId("spya-load09");
+  const TURN = asOpId("spya-turn09");
+
+  function loaded(...threads: ChatThread[]) {
+    const started = twice(initialState("a-piece"), {
+      type: "load.started",
+      op: { id: LOAD, kind: "load" },
+    }).state;
+    return twice(started, { type: "load.succeeded", opId: LOAD, threads }).state;
+  }
+
+  it("keeps a coalesced turn unsettled under the server id until the turn finishes", () => {
+    const opening = { ...PROVISIONAL, messages: [] };
+    const question = PROVISIONAL.messages[0] as ChatMessage;
+    const reply = PROVISIONAL.messages[1] as ChatMessage;
+    const sent = twice(loaded(EXISTING), {
+      type: "turn.started",
+      op: {
+        id: TURN,
+        kind: "turn",
+        shape: "send",
+        threadId: PROVISIONAL.id,
+        replyId: reply.id,
+        reply,
+        question,
+        editing: null,
+        opening,
+        title: null,
+        at: LATER,
+        began: false,
+        attempt: null,
+      },
+      payload: { question: question.text },
+    }).state;
+    const named = twice(sent, { type: "turn.began", opId: TURN, begun: BEGUN }).state;
+
+    expect(named.base.map((t) => t.id)).toEqual([EXISTING.id]);
+    expect(isSettled(named, EXISTING.id)).toBe(false);
+
+    const done = twice(named, {
+      type: "turn.done",
+      opId: TURN,
+      done: { text: "The stored answer." },
+    }).state;
+    expect(isSettled(done, EXISTING.id)).toBe(true);
+  });
+
+  it("treats a server-loaded pending row as named, then closes while this tab recovers it", () => {
+    const pending = { ...EXISTING, messages: [EXISTING.messages[0]!, msg("spya-a00001", "assistant", "pending")] };
+    const loadingAgain = twice(loaded(pending), {
+      type: "load.started",
+      op: { id: asOpId("spya-load10"), kind: "load" },
+    }).state;
+
+    /* A row's `pending` status says nothing about whether this tab owns its
+       writer. Loads alone do not block a DELETE of the server-known id. */
+    expect(isSettled(loadingAgain, EXISTING.id)).toBe(true);
+
+    const recovering = twice(loadingAgain, {
+      type: "recovery.started",
+      op: {
+        id: asOpId("spya-rec009"),
+        kind: "recovery",
+        threadId: EXISTING.id,
+        messageId: "spya-a00001",
+        until: Date.now() + 1_000,
+        attempt: null,
+      },
+    }).state;
+    expect(isSettled(recovering, EXISTING.id)).toBe(false);
   });
 });
 

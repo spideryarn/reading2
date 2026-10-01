@@ -332,6 +332,27 @@ describe("Start over is offered only on a settled conversation", () => {
     expect(last()?.threadId).toBe(REMEMBER.id);
     expect(last()?.canStartOver).toBe(true);
   });
+
+  it("rechecks the controller's current state before deleting, even before React renders it", async () => {
+    stored = [REMEMBER];
+    await mount("remember", "?mode=remember");
+    const send = prop<(q: string) => void>("onSend");
+    const startOver = prop<(id: string) => void>("onDelete");
+
+    /* Both callbacks came from the settled render. `send` registers its turn
+       synchronously, but the controller is allowed to coalesce React's next
+       notification. The destructive callback must therefore ask the controller
+       as it is now, not the state captured by that render. */
+    await act(async () => {
+      send("A turn began before the second press");
+      startOver(REMEMBER.id);
+    });
+    await settle();
+
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(deletes(), "a stale settled callback authorised the DELETE").toHaveLength(0);
+    await act(async () => answer?.close());
+  });
 });
 
 describe("Start over waits for the server", () => {

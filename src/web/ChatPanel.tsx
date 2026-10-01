@@ -2008,7 +2008,7 @@ export function Composer({
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
    * is answering had 58px. So below 500px of viewport height (a landscape
    * phone; no laptop window is that short) Remember's box rests at two rows and
-   * grows to about half the band, still following what is typed or dictated.
+   * grows to 30% of the viewport, still following what is typed or dictated.
    * Plan 261001m § 5. Chat's one-row box is unchanged.
    */
   const short = useMedia(SHORT_VIEWPORT);

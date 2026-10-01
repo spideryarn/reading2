@@ -245,3 +245,20 @@ settled id and is never held, and the unnamed-delete paths in `src/web/chat/redu
 (`forgetLocalThread`, `releaseUnstoredDelete` and the superseded-turn branch). The cost: a
 reader cannot Start over in the second or two while an answer is arriving. That is the same as
 pressing it a moment later. C2 and C3 stay.
+
+**The narrow check of that gate** ([261001m-remember-own-thread-code-review-3-sol.md](261001m-remember-own-thread-code-review-3-sol.md)),
+since it came after round 2: **N-1 (P1)**: `settled` read the rendered snapshot, so a turn
+registered in the same task as the press could still be followed by a DELETE. It now reads the
+controller's live state, and was red first. **N-2 (P3)**: the 30% cap gained an exact test. Sol
+confirmed the gate closes C1 and R2-1, including for a thread that arrives through F3 coalescing,
+a `pending` row from another tab, and Live's stop-then-delete. Discovery is closed.
+
+## Browser check (Playwright, 2026-10-01)
+
+At 1280×800 and 390×844, all pass: Chat lists no Remember thread; Remember opens straight into its
+one conversation and no frame of a cold load shows a list; a Remember turn survives a reload;
+`?thread=<a chat>` in Remember is overruled; Start over is absent on an empty conversation and
+while an answer streams, appears once it finishes, and then clears it and survives a reload.
+
+At 844×390 the composer is 85px at rest (it was 280px), and 117px at six and at twenty lines (the
+30% cap). About 75px of transcript stays visible above it. No console errors from this change.

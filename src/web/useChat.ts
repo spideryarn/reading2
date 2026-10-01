@@ -931,7 +931,11 @@ export function useChat(slug: string): ChatApi {
     [state.operations],
   );
 
-  const settled = useCallback((threadId: string) => isSettled(state, threadId), [state]);
+  /* This is also the destructive handler's last gate, so it must answer from
+     the controller as it is on the line of the press. React may still be
+     showing the previous snapshot while the controller coalesces notifications
+     from a turn or spoken append registered in the same task. */
+  const settled = useCallback((threadId: string) => isSettled(controller.state, threadId), [controller]);
 
   return {
     /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
