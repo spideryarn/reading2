@@ -742,6 +742,13 @@ export type Task =
    * nothing saying why. docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    */
   | "citation-investigate"
+  /**
+   * **The cited paper's own passages, picked** — one non-streamed JSON call
+   * inside an *Investigate* press, sent the chunks of the paper code read and
+   * confirmed (src/citation-paper-passages.ts, plan 261001a stage 3). Its own
+   * job so the ledger shows what reading the paper adds to a press; no tools.
+   */
+  | "citation-paper-passages"
   | "link-summary";
 
 /**
@@ -976,6 +983,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* Explain's tier, because it is explain's kind of work: prose about the
      article, with web search, that a reader reads as it arrives. */
   "citation-investigate": "capable",
+  /* The quick check's tier (`citations-find`), as plan 261001a says: weighing
+     a few passages of a paper against one claim. Code checks every quote. */
+  "citation-paper-passages": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -1189,6 +1199,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   /* Chat, for `citations-find`'s reason — the web-search server tool — and
      because a reader watches it stream. */
   "citation-investigate": "chat",
+  /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
+  "citation-paper-passages": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
      one `QUICK_MODEL_OPENROUTER` is served on, which is what the throw at the
      bottom of this file is about. A reader is watching it stream, so it would
@@ -1290,6 +1302,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
   "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
   "citation-investigate": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
+  /* Plan 261001a says this runs on the quick check's model, not merely its
+     tier. Share the override too: otherwise setting the quick check's model
+     would quietly make the two calls diverge while the UI and plan still said
+     they were the same model. The spend row remains its own job. */
+  "citation-paper-passages": "SPIDERYARN_CITATIONS_FIND_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

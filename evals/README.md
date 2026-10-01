@@ -763,9 +763,9 @@ prints the bill, and buys nothing. `--spend` is the only way to spend.
 
 Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
 `{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
-the flag off and then on, which must come out byte-identical; and three jobs at once at
-`DEFAULT_JOB_CONCURRENCY` for the wall clocks, with a start rendezvous so that "at once" is true of
-the measured *step* and not merely of the three promises.
+the flag off and then on, which must come out byte-identical; and `DEFAULT_JOB_CONCURRENCY` jobs at
+once for the wall clocks, with a start rendezvous so that "at once" is true of the measured *step*
+and not merely of the job promises.
 
 **A pre-spend review refused the first version of it**, and the thirteen findings are worth
 reading before touching any of this — GPT Sol, 2026-09-05. Two of them decide whether the run is
@@ -784,8 +784,8 @@ worth making at all:
   bought the wave again; `REQUEUE_BUDGET = 2` permits three windows. The run **stops** a re-asking
   pass on its first requeue, reports it fatally (`requeueVerdict`), goes no further, and **retains**
   that article and job rather than cleaning them up — deleting the article cascades to the
-  checkpoint rows, which is the paid work the refusal exists to keep. The estimate prints $40.90 as
-  the **nominal estimate** and $85.30 as the **three-window requeue exposure**, and says plainly
+  checkpoint rows, which is the paid work the refusal exists to keep. The estimate prints a
+  **nominal estimate** and a **three-window requeue exposure**, and says plainly
   that neither is a bound: nothing here enforces a spend cap, an ordinary pass can re-buy work whose
   best-effort checkpoint write failed, and a redraw buys a second answer.
 
@@ -800,28 +800,28 @@ Four things in it are worth copying:
   are content-addressed, so a second wave over one article reads its own rows back, makes no call,
   and reports verdicts identical to the first **by construction** — a perfect stability figure worth
   nothing. `SPIDERYARN_DEEPEN_REASK` names the slugs to re-buy, the run refuses to start unless it
-  names the book and neither article, and afterwards `checkRepeatBoughtItsWave` asks the ledger
+  names the book and none of the articles, and afterwards `checkRepeatBoughtItsWave` asks the ledger
   whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
 - **The load phase is started together before it is measured, and concurrency is measured over the
-  STEPS' windows, never the jobs'.** The arithmetic demanding three overlapping `hierarchy` windows
-  was right and the phase did not arrange them: the book's job is a forced `hierarchy` and starts its
-  measured step at once, while the two load articles start at `fetch` and get there only after
-  stages 1-3. The two load jobs are driven first and are **held at the entry** to their measured
-  step; a **readiness wait** ends when both are there, with the gate still shut and nothing of the
+  STEPS' windows, never the jobs'.** The original three-wide arithmetic was right and the phase did
+  not arrange it: the book's job is a forced `hierarchy` and starts its measured step at once, while
+  the load articles start at `fetch` and get there only after stages 1-3. The load jobs are driven
+  first and are **held at the entry** to their measured step; a **readiness wait** ends when all are
+  there, with the gate still shut and nothing of the
   book driven or bought; then the book is driven, reaches the same entry through the same hook, and
-  **all three are released together** (`startRendezvous`). Two earlier versions of this were wrong in
+  **all jobs are released together** (`startRendezvous`). Two earlier versions of this were wrong in
   instructive ways. Merely *announcing* an arrival held nobody, so load1 could announce, run its
   whole step and finish before load2 announced. Holding only the loads and releasing them before
   driving the book moved the same hole one party over: with the third queue slot taken, both released
   loads could finish before the book reached `hierarchy` — and the outcome still said "all". The book
   therefore *does* wait inside its own claim, and it costs nothing, because by then everybody else is
-  waiting for it; the two load steps are the ones that really hold, bounded, and what it cost them is
+  waiting for it; the load steps are the ones that really hold, bounded, and what it cost them is
   reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
-  `"all"` stops the run rather than driving the book at all; and if the *gate* gives up with all three
+  `"all"` stops the run rather than driving the book at all; and if the *gate* gives up after all jobs
   already driven, every step it releases is released "abandoned" and throws before it runs. Those jobs
-  end `error` by this eval's doing and each carries a finding saying so. **And the three share one
+  end `error` by this eval's doing and each carries a finding saying so. **And the jobs share one
   fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
-  back, the other two stop before their next claim **and cancel the calls their running step has not
+  back, the others stop before their next claim **and cancel the calls their running step has not
   yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
   whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
   `generateHierarchy` starts even after the wave failed. So the fate carries an `AbortSignal` that
@@ -833,17 +833,17 @@ Four things in it are worth copying:
   outside it, and lets the queue overwrite the first attempt's clock. In one line: **it no longer
   starts paid measured work when the rendezvous already knows question 5 is impossible.**
   **What a successful gate guarantees is a shared start, not a shared window.** Another job **cannot**
-  serialise the three afterwards — by then all three hold claims, which is all three of the cap's
-  slots — so `peakConcurrency` reaching 3 is *arranged* and confirms the wiring rather than measuring
-  anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with all three
+  serialise the phase afterwards — by then every phase-D job holds a claim, which is all of the cap's
+  slots — so `peakConcurrency` reaching the default cap is *arranged* and confirms the wiring rather
+  than measuring anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with every job
   genuinely in flight, held to a floor **declared in preflight before anything is bought**. It is
-  bounded by the shortest of the three, and the load articles' `hierarchy` is far shorter than a
+  bounded by the shortest job, and the load articles' `hierarchy` is far shorter than a
   book's 658-778 s — so below the floor, question 5 reports latency after a synchronised start rather
-  than sustained three-job load, and says so. All three phase-D promises
-  stay alive while two of them are being told `busy`, so a whole-job overlap check passes over a
+  than sustained full load, and says so. All phase-D promises
+  stay alive while jobs without slots are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
-  agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach three over the
-  hierarchy steps' own windows, three of them have to have finished `done` with a wave's stats
+  agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach the default cap over the
+  hierarchy steps' own windows, all of them have to have finished `done` with a wave's stats
   behind them, and the runtime `jobConcurrency()` is asserted before anything is enqueued.
 - **Repeats are paired on parent-plus-range, never on `where`.** `where` is an ordinal path derived
   from the answer's own fan-out, so two repeats that split a parent in different places both emit

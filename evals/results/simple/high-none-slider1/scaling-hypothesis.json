@@ -1,0 +1,119 @@
+{
+  "arm": "high-none-slider1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-09-30T23:52:57.842Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 19171,
+  "costUsd": 0.212354,
+  "tokens": {
+    "input": 86127,
+    "output": 4010,
+    "reasoning": 2241
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 279,
+  "fullerWords": 295,
+  "briefWords": 118,
+  "paragraphs": [
+    {
+      "text": "This essay by Gwern looks at GPT-3, a giant text-predicting AI model released in 2020, and asks what its success means for the future of artificial intelligence. It argues for the \"scaling hypothesis\": the idea that intelligence comes from running simple neural networks - programs loosely modeled on brain cells - at much greater size, using more data and computing power, rather than from clever new designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 did more than just know more facts than earlier models. It showed \"meta-learning\": picking up brand-new tasks just from a few examples typed into it, without being retrained. This suggests that huge models trained on plain, unlabeled text could become key building blocks for future AI systems, and that the 2020s could bring far more capable systems, depending on who is willing to invest in scaling up further.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "A central idea is the \"blessings of scale\": problems that trip up small neural networks tend to get easier, not harder, as networks, data, and training grow, with new abilities appearing unplanned. The essay explains this by picturing a big model as holding countless smaller sub-models at once; shortcut answers win early on, but as data grows, only sub-models that truly solve the problem keep winning. It also notes that GPT-3's performance kept improving smoothly as it scaled up, following the same predictable pattern seen in much smaller models, with no sign yet of hitting a limit.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The piece also argues that major AI labs and experts have mostly dismissed this scaling approach and have a poor track record of predicting AI progress, even as earlier forecasts about cheap-enough computing power by the 2020s proved roughly right.",
+      "ids": [
+        "spya-scr8jb",
+        "spya-b93jbz",
+        "spya-cxnhav"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge AI language model released in 2020, and what its success means for the future of artificial intelligence. It argues for \"the scaling hypothesis\": the idea that simply making neural networks (computer programs loosely modeled on brain cells) much bigger, fed more data and computing power, produces more intelligent behavior, without needing clever new designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece says GPT-3 surprised almost everyone, including the author, by not hitting diminishing returns as it grew larger. It also showed \"meta-learning\": learning to do new tasks from just a few examples in a prompt, rather than needing special training for each one. This matters because it suggests even bigger models could unlock far more ability, and because training on raw, unlabeled data has long been a weak spot holding back other parts of AI, like robotics.",
+      "ids": [
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "GPT-3 was trained only to predict the next word in huge amounts of internet text, yet this alone let it do arithmetic, translate languages, unscramble words, and answer analogy questions just from examples shown to it. The essay suggests this works because a large network acts like an ensemble of many smaller sub-models. Early on, simple sub-models that just memorize surface patterns do best, but with enough data and size, sub-models that truly generalize eventually score lower error, so the network drifts toward real abstract ability.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "The piece treats GPT-3 as evidence, not proof, for a bigger claim: intelligence itself might just be simple learning rules run at enormous scale, an idea a few researchers held for decades while most of the field dismissed it. It notes that despite this evidence, most AI labs have not changed course, and it criticizes AI forecasters for never updating their views or offering predictions that could be proven wrong.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program that was trained to predict text, like guessing the next word in a sentence. It was built by OpenAI in 2020 and was far bigger than anything before it.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 surprised everyone. It could follow instructions and learn new tasks just from a few examples, without being specially trained for them. This is called meta-learning: learning how to learn, not just memorizing facts.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The big idea is the scaling hypothesis: maybe you don't need clever new tricks to make AI smarter. Just make the same kind of network bigger, feed it more data, and give it more computing power, and new abilities appear on their own.",
+      "ids": [
+        "spya-ag750z",
+        "spya-m3gtj6",
+        "spya-jwq3zr"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

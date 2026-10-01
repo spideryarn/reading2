@@ -1,0 +1,122 @@
+{
+  "arm": "high-goalA-slider1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-09-30T23:52:58.724Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 14332,
+  "costUsd": 0.15296,
+  "tokens": {
+    "input": 61395,
+    "output": 3017,
+    "reasoning": 1087
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 208,
+  "fullerWords": 300,
+  "briefWords": 163,
+  "paragraphs": [
+    {
+      "text": "This review covers partial information decomposition (PID), a framework for splitting the information that multiple neurons jointly carry about a target neuron into redundant, unique, and synergistic parts. The synergistic part is information only visible in the joint pattern of inputs, not in any single source alone, and the authors treat it as a proxy for actual computation rather than mere signal transfer.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using transfer entropy networks from multielectrode recordings of cortical cultures, they found synergy tracks feedforward transfer entropy closely, sitting at roughly a quarter of it across 25 recordings. Synergy was 2.7x higher in triads inside \"rich club\" hubs, and those hubs accounted for about 88% of network-wide synergy despite containing under 40% of neurons.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3"
+      ]
+    },
+    {
+      "text": "Recurrent connections between source neurons raised synergy (up to 50% more with two recurrent links), while feedback connections slightly lowered it. Synergy also rose with source correlation up to a point (about 7% of max mutual information) before redundancy took over at longer timescales. In behaving macaques, synergy dominance shifted toward redundancy during motor execution, suggesting task demands reshape the balance.",
+      "ids": [
+        "spya-sd9fzd",
+        "spya-ybmve2",
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "text": "The piece also flags practical limits: no single agreed-upon way to define redundancy, explosive growth in decomposition complexity beyond a few inputs, and finite-data estimation biases that inflate apparent information.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-qa7gt2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review of how neuroscientists use a method called partial information decomposition (PID) to ask what a neuron is actually doing with its inputs, beyond just detecting that information flows from one cell to another. PID splits the information that two or more source neurons carry about a target neuron into parts: redundant (carried by either source alone), unique (carried by only one), and synergistic (only visible when you look at the sources jointly).",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The synergistic part is the interesting one: it's information a neuron could only get by reading its inputs' joint pattern, not by summing or thresholding them separately. The piece treats this as the signature of real computation or integration, distinguishing neurons that just add up inputs from ones sensitive to the specific combination arriving.",
+      "ids": [
+        "spya-e94ury",
+        "spya-rc5z33"
+      ]
+    },
+    {
+      "text": "Applying PID to recordings from mouse cortical cultures, the authors found synergy tracks feedforward transfer entropy (their measure of directed information flow) closely, running at roughly a quarter of it across 25 recordings. Synergy was 2.7 times higher in \"rich club\" triads (dense hubs of well-connected neurons) than elsewhere, and rich-club triads accounted for ~88% of network-wide synergy despite being under 40% of neurons. More recurrent connections between source neurons raised synergy (up to 50% more with two recurrent links), feedback connections slightly lowered it, and synergy between two sources peaked when their activity was only moderately correlated, dropping off at high correlation where redundancy took over instead.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "In behaving macaques, overall activity was synergy-dominated, but redundancy spiked sharply during motor execution, interpreted as the brain duplicating a \"move\" signal for reliability, with different regions peaking in synergy during different task phases. The review closes on practical limits (the number of information \"atoms\" explodes combinatorially, estimation needs lots of data) and newer directions like time-resolved local PID and multi-target extensions.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review looks at partial information decomposition (PID), a method that splits the information two or more neurons jointly carry about a target neuron's future firing into separate pieces: redundant (repeated across sources), unique (from just one source), and synergistic (only visible when sources are combined). The goal is to use this framework to characterize actual neural computation, not just information flow.",
+      "ids": [
+        "spya-gzwbsr",
+        "spya-wer4cd",
+        "spya-q2b0e5"
+      ]
+    },
+    {
+      "text": "The authors argue synergy is the key signature of processing: it captures when a neuron's output depends on the joint pattern of its inputs, not just their sum, something plain transfer-entropy or correlation measures can't show.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury",
+        "spya-rc5z33"
+      ]
+    },
+    {
+      "text": "Applying PID to cortical cultures and to behaving macaques, they find synergy concentrates in network 'rich clubs' (dense hub regions), rises with recurrent connections between source neurons, and grows with input correlation up to a point before redundancy takes over. In primates, synergy versus redundancy shifted by brain region and task phase, spiking toward redundancy during motor execution, suggesting reliable signal duplication when precision matters.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  }
+}

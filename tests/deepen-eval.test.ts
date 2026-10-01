@@ -619,7 +619,7 @@ describe("the budget report", () => {
     ...over,
   });
 
-  /** Three steps that really did run at once, which is what phase D is for. */
+  /** A compact three-step fixture that really did run at once. */
   const threeAtOnce = [
     clock({ label: "D book" }),
     clock({ label: "D article 1", startedAt: "2026-09-05T00:00:01.000Z", finishedAt: "2026-09-05T00:01:30.000Z" }),
@@ -765,10 +765,10 @@ describe("the budget report", () => {
 
   /**
    * **DPN-04 - the whole-job windows overlap even when the steps do not.** At
-   * `SPIDERYARN_JOB_CONCURRENCY=1` all three `driveJob` promises stay alive
+   * `SPIDERYARN_JOB_CONCURRENCY=1` all the `driveJob` promises stay alive
    * while two of them are told `busy`, so a pairwise "did any two overlap"
    * passes over a phase that ran serially. The concurrency is over the STEPS'
-   * own windows and has to reach three.
+   * own windows and has to reach the fixture's planned width of three.
    */
   it("refuses three steps that ran one after another, however long they were alive", () => {
     const serial = [
@@ -1119,7 +1119,7 @@ describe("what to do when the claimant hands the job back", () => {
 /**
  * **DPN-26 — the fifth instance of "it buys after it already knows".**
  *
- * Phase D's three jobs were driven concurrently and *drained* together, and that
+ * Phase D's jobs were driven concurrently and *drained* together, and that
  * is all: no failure signal crossed between them. So load 1's `hierarchy` could
  * fail on its structure call while the book and load 2 went on admitting
  * expansion and label calls — for a question 5 that already could not reach
@@ -1265,9 +1265,9 @@ describe("what loses the phase, and what is merely the rehearsal ending", () => 
 /* ================================================= the checkpoint file == */
 
 /**
- * **DPN-09 — three concurrent jobs, one temporary pathname.**
+ * **DPN-09 — concurrent jobs, one temporary pathname.**
  *
- * Phase D drives three jobs at once and every one of them checkpoints. With a
+ * Phase D drives the default cap's jobs at once and every one checkpoints. With a
  * single `run.json.<pid>.tmp` two calls interleave, both rename it, and the
  * loser gets `ENOENT` — a rejection that travelled out of `driveJob` and took
  * the whole phase down through `Promise.all`.
@@ -1647,14 +1647,14 @@ describe("the estimate", () => {
  * **The four ways the driving has been wrong, or could be.**
  *
  * The first of them is not hypothetical: the harness's first `--dry-run` sent
- * one of phase D's three jobs to the real network, because overlapping
+ * one of phase D's jobs to the real network, because overlapping
  * `enqueue` calls raced on the single global variable that silences the
  * in-process pump. That job ran production's stage 1 with no eval overlay. The
  * check below is what would have said so; these cases are what stop it going
  * quiet again.
  */
 describe("the driving", () => {
-  /** The paid path's shape: three phase-D jobs, `hierarchy` measured, cap 3. */
+  /** A compact fixture shape: `hierarchy` measured under a planned cap of 3. */
   const drive = (jobs: DrivenJob[]) =>
     checkDriving(jobs, { measuredStep: "hierarchy", jobConcurrency: 3, plannedConcurrency: 3 });
 
@@ -1741,7 +1741,7 @@ describe("the driving", () => {
   /**
    * **The runtime cap, not the constant the plan quotes.** `jobConcurrency()`
    * reads its environment variable at call time, so a shell that set it to 1
-   * serialises phase D while the run's metadata goes on saying 3.
+   * serialises phase D while the run's metadata goes on reporting its planned cap.
    */
   it("goes fatal when the queue's runtime cap is not what phase D was planned at", () => {
     const found = checkDriving(

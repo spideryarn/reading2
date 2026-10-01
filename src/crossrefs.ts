@@ -47,10 +47,7 @@
  *    linking. A missing list, or a non-empty one that validation empties, throws.
  */
 
-import { createHash } from "node:crypto";
-
 import type Anthropic from "@anthropic-ai/sdk";
-import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -64,11 +61,18 @@ import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { renderedBlockMathsText } from "./quote-in-block.js";
 import { quoteFinder, quoteFinderWithMultiplicity } from "./quote-match.js";
+import { fallbackHeadTitle } from "./source-hash.js";
+/* The fingerprint and its inputs live in a pure leaf since 2026-10-01, so the
+   public reader can ask the same staleness question (plan 261001b). Re-exported
+   so every caller of this stage is unchanged. */
 import {
-  type BlockFingerprint,
-  fallbackHeadTitle,
-  type MetaFingerprintWithUrl,
-} from "./source-hash.js";
+  inputFingerprint,
+  isStale,
+  linkCap,
+  MAX_LINKS,
+  renderPrompt,
+} from "./crossrefs-fingerprint.js";
+export { inputFingerprint, isStale, linkCap, MAX_LINKS, renderPrompt };
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type {
   Block,
@@ -77,7 +81,6 @@ import type {
   Crossrefs,
   CrossrefsDropped,
   Meta,
-  Tree,
 } from "./types.js";
 
 export type { Crossref, Crossrefs, CrossrefsDropped } from "./types.js";
@@ -95,24 +98,11 @@ export type { Crossref, Crossrefs, CrossrefsDropped } from "./types.js";
  */
 export const PROMPT_VERSION = "crossrefs/2";
 
-/** The hard ceiling on links, however long the article. */
-export const MAX_LINKS = 60;
-
 /** A phrase is at least this many words… */
 export const MIN_PHRASE_WORDS = 2;
 
 /** …and at most this many. Longer is a sentence, and a sentence underlined is a wash. */
 export const MAX_PHRASE_WORDS = 12;
-
-/**
- * The most links one article may carry: **`min(60, max(3, round(blocks / 4)))`**,
- * over the body blocks the model was shown. One link per four paragraphs is
- * already a lot of underlining; the cap is the first dial if it proves noisy
- * (the plan's § Assumptions).
- */
-export function linkCap(blocks: number): number {
-  return Math.min(MAX_LINKS, Math.max(3, Math.round(blocks / 4)));
-}
 
 /**
  * The answer budget in tokens for `cap` links: a base for the JSON around the
@@ -122,52 +112,6 @@ export function linkCap(blocks: number): number {
  */
 export function answerTokens(cap: number): number {
   return 300 + cap * Math.ceil(160 / 3);
-}
-
-/**
- * What this artefact was written from: the exact article and skeleton bytes the
- * model sees. `articleWithIdsFingerprint` is close, but deliberately hashes
- * every block and every tree node; this request omits supplements and renders
- * only `partsOf(tree)`. Hashing those hidden inputs would report a fresh paid
- * artefact stale (Sol F11).
- *
- * The stage instructions have their own `PROMPT_VERSION`; the model has its own
- * stamp field. This hash owns the two content-bearing request strings.
- */
-export function inputFingerprint(
-  blocks: readonly BlockFingerprint[],
-  tree: Tree,
-  meta: MetaFingerprintWithUrl | null,
-): string {
-  /* `BlockFingerprint.treatment` is a database string rather than Block's
-     narrower union; the CHECK behind it permits only the same values. */
-  const evidence = blocks.filter((block) => block.treatment !== "supplement");
-  const renderedMeta: Meta = meta
-    ? ({
-        title: meta.title ?? fallbackHeadTitle(tree),
-        ...(meta.byline == null ? {} : { byline: meta.byline }),
-        ...(meta.siteName == null ? {} : { siteName: meta.siteName }),
-        ...(meta.url == null ? {} : { url: meta.url }),
-      } as Meta)
-    : ({ title: fallbackHeadTitle(tree) } as Meta);
-  const request = [
-    articleWithIds(renderedMeta, evidence),
-    renderPrompt({ tree, cap: linkCap(evidence.length) }),
-  ];
-  return createHash("sha256")
-    .update(`spya-crossrefs-input/1\n${JSON.stringify(request)}`, "utf8")
-    .digest("hex")
-    .slice(0, 16);
-}
-
-/** Does this artefact still describe the article, tree and metadata? */
-export function isStale(
-  crossrefs: Crossrefs,
-  blocks: readonly BlockFingerprint[],
-  tree: Tree,
-  meta: MetaFingerprintWithUrl | null,
-): boolean {
-  return crossrefs.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 export function emptyDropped(): CrossrefsDropped {
@@ -474,18 +418,6 @@ JSON only, no prose, no code fence:
 
 Nothing else in each row. Escape a double quote inside a string as \\". Never
 put a real line break inside a string.`;
-
-/** The user message: the cap, then the skeleton — which is why the tree is in the fingerprint. */
-export function renderPrompt(opts: { tree: Tree; cap: number }): string {
-  const skeleton = partsOf(opts.tree)
-    .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
-    .join("\n\n");
-  return `Link this article to itself: at most ${opts.cap} links. Fewer is fine, and none is fine.
-
-=== ITS SHAPE ===
-
-${skeleton}`;
-}
 
 function parseJson(raw: string): { links?: unknown } {
   return parseJsonAnswer<{ links?: unknown }>(raw, "the model's answer");

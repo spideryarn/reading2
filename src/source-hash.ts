@@ -458,3 +458,79 @@ function withMetaHash(
     .digest("hex")
     .slice(0, 16)}`;
 }
+
+/**
+ * The three metadata fields a staleness check is entitled to look at, rebuilt
+ * from the revision's own columns.
+ *
+ * **One helper rather than the literal written out at six call sites**, because
+ * the fields are the fingerprint's definition (src/source-hash.ts §
+ * `MetaFingerprint`) and a call site that spelled one of them differently would
+ * mark that artefact stale for ever, in Postgres only, with the filesystem
+ * store calling the same article current. That is exactly the two-stores-
+ * disagree failure the parity tests exist to catch.
+ *
+ * `?? ""` on the title matches what `articleFingerprint` does with an absent
+ * one. The `byline` and `siteName` spreads are conditional because the columns
+ * are nullable and `Meta`'s fields are optional — an explicit `undefined` and an
+ * absent key hash the same, but the type does not accept the first.
+ *
+ * **Deliberately not `metaFrom`.** That builds a whole `Meta` for a reader,
+ * including `url`, `lang` and `fetchedAt`, and falls back to the article's own
+ * first heading for a missing title. None of that belongs in a fingerprint: the
+ * head of a prompt carries three fields and a fingerprint over more of them
+ * would invalidate artefacts for changes the model never saw.
+ */
+export function metaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+}): MetaFingerprint | null {
+  /* **`null` when there is no title, matching `readMeta` in
+     src/store/artifacts-pg.ts** — *"a null title has nothing that would make a
+     usable `meta`"*. That is what the pipeline's stamp is handed, on both
+     stores, and the fingerprint deliberately tells `null` from an object whose
+     fields are empty: they are different states. Returning `{ title: "" }` here
+     made an article with no metadata current to the pipeline and stale to every
+     reader path, permanently and in Postgres only. GPT Sol, 2026-08-31;
+     tests/store-revision-columns.test.ts asserts the two agree rather than
+     asserting this returns null, so the assertion survives the fingerprint
+     changing its mind about how it encodes "absent".
+
+     `=== null`, not truthiness, for the reason `readMeta` gives: an
+     empty-string title is a different fact — extraction ran and produced
+     nothing usable — and should hash as the empty title it is. */
+  if (revision.title === null) return null;
+  return {
+    title: revision.title,
+    ...(revision.byline == null ? {} : { byline: revision.byline }),
+    ...(revision.siteName == null ? {} : { siteName: revision.siteName }),
+  };
+}
+
+/**
+ * The same, **plus the final URL**, for the two stages whose prompt head prints
+ * one — `ideas` and `sketch`, which send `articleWithIds`.
+ *
+ * **A separate function taking a wider row, and that is the point rather than a
+ * cost.** A projection that forgot `final_url` cannot reach this: it is a type
+ * error at the call site instead of a fingerprint quietly built without the
+ * field, which is the failure mode this whole family keeps producing. The four
+ * `articleText` stages go on calling `metaFingerprintOf`, so they cannot be
+ * judged on a line their prompt never carries.
+ *
+ * The column exists and is already how Postgres reconstructs `Meta.url`
+ * (`readMeta`, src/store/artifacts-pg.ts) — an earlier version of this work
+ * claimed no Postgres call site carried a URL and left it out of the
+ * fingerprint on that basis. That was simply wrong. GPT Sol, 2026-08-31.
+ */
+export function citedMetaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+  finalUrl: string | null;
+}): MetaFingerprintWithUrl | null {
+  const base = metaFingerprintOf(revision);
+  if (base === null) return null;
+  return { ...base, ...(revision.finalUrl == null ? {} : { url: revision.finalUrl }) };
+}

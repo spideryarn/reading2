@@ -93,6 +93,7 @@ import type {
   JobReset,
   JobStep,
   NavLabelStatus,
+  PaperPassage,
   Quiz,
   Quotes,
   SearchHit,
@@ -3814,9 +3815,80 @@ export const citationInvestigations = spideryarn.table(
     /** `CITATION_INVESTIGATE_VERSION` when it was written. Inside the hash too. */
     promptVersion: text("prompt_version").notNull(),
     at: timestamp("at", { withTimezone: true }).notNull(),
+    /*
+     * **The paper itself, as this press found it** — plan 261001a stage 3,
+     * `InvestigatedPaper` in src/types.ts, src/paper-evidence.ts. **All null
+     * is an answer from before that stage**, drawn as it was then. The CHECKs
+     * below tie each field to the states that have it, so no writer can store
+     * a `read` without what was sent or a refusal with a word count.
+     */
+    /** `read`, `no-address`, `unreadable`, `not-the-full-text`, `not-confirmed`, `identity-conflict`. */
+    paperState: text("paper_state"),
+    /** The address we asked for: the row's DOI or arXiv link, or the quick check's page. */
+    paperRequestedUrl: text("paper_requested_url"),
+    /** After redirects — the PDF's own address. */
+    paperFinalUrl: text("paper_final_url"),
+    paperHost: text("paper_host"),
+    /** Words in the paper's text as read, up to its references. `read` only. */
+    paperWords: integer("paper_words"),
+    /** Words of it the AI was shown. `read` only. */
+    paperSentWords: integer("paper_sent_words"),
+    /** The chunk ids the AI was shown, in document order. `read` only. */
+    paperChunks: text("paper_chunks").array(),
+    /** `PaperMatchedBy`. `read` only. */
+    paperMatchedBy: text("paper_matched_by"),
+    /** `PaperUnreadableReason`. `unreadable` only. */
+    paperUnreadableWhy: text("paper_unreadable_why"),
+    /** sha256 hex of exactly the text the AI was shown. `read` only. */
+    paperEvidenceSha: text("paper_evidence_sha"),
+    /** `PAPER_SELECTION_VERSION` the chunks were chosen under. `read` only. */
+    paperSelectionVersion: text("paper_selection_version"),
+    /** When the paper was fetched — a dated snapshot, never re-fetched on read (Sol P-10). */
+    paperReadAt: timestamp("paper_read_at", { withTimezone: true }),
+    /**
+     * At most three `{ chunk, page, text, bears }`, each the chunk's own
+     * characters as `verifyPassage` found them. One display value, read and
+     * written whole (sql.md's allowance for an opaque value). `read` only;
+     * null on a `read` means the call for passages failed, `[]` that none
+     * survived the check.
+     */
+    paperPassages: jsonb("paper_passages").$type<PaperPassage[]>(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "citation_investigations_paper_state",
+      sql`${t.paperState} is null or ${t.paperState} in ('read', 'no-address', 'unreadable', 'not-the-full-text', 'not-confirmed', 'identity-conflict')`,
+    ),
+    /* No state, no paper fields: an answer from before stage 3. A state always has its date. */
+    check(
+      "citation_investigations_paper_dated",
+      sql`(${t.paperState} is null) = (${t.paperReadAt} is null)`,
+    ),
+    /* Every state but `no-address` names where it looked. */
+    check(
+      "citation_investigations_paper_address",
+      sql`(${t.paperState} is not null and ${t.paperState} <> 'no-address') = (${t.paperRequestedUrl} is not null) and (${t.paperRequestedUrl} is not null) = (${t.paperHost} is not null)`,
+    ),
+    /* A final address exactly when a document came back. */
+    check(
+      "citation_investigations_paper_final_url",
+      sql`coalesce(${t.paperState} in ('read', 'not-the-full-text', 'not-confirmed'), false) = (${t.paperFinalUrl} is not null)`,
+    ),
+    /* What was read and sent, exactly on a `read`. */
+    check(
+      "citation_investigations_paper_read",
+      sql`coalesce(${t.paperState} = 'read', false) = (${t.paperWords} is not null) and coalesce(${t.paperState} = 'read', false) = (${t.paperSentWords} is not null) and coalesce(${t.paperState} = 'read', false) = (${t.paperChunks} is not null) and coalesce(${t.paperState} = 'read', false) = (${t.paperMatchedBy} is not null) and coalesce(${t.paperState} = 'read', false) = (${t.paperEvidenceSha} is not null) and coalesce(${t.paperState} = 'read', false) = (${t.paperSelectionVersion} is not null) and (${t.paperPassages} is null or coalesce(${t.paperState} = 'read', false))`,
+    ),
+    check(
+      "citation_investigations_paper_read_values",
+      sql`(${t.paperMatchedBy} is null or ${t.paperMatchedBy} in ('doi', 'arxiv', 'title-author')) and (${t.paperWords} is null or (${t.paperWords} >= 0 and ${t.paperSentWords} >= 0 and ${t.paperSentWords} <= ${t.paperWords})) and (${t.paperEvidenceSha} is null or ${t.paperEvidenceSha} ~ '^[0-9a-f]{64}$') and (${t.paperPassages} is null or (case when jsonb_typeof(${t.paperPassages}) = 'array' then jsonb_array_length(${t.paperPassages}) <= 3 else false end))`,
+    ),
+    /* The reason exactly when unreadable, and only a reason the reader has a sentence for. */
+    check(
+      "citation_investigations_paper_unreadable",
+      sql`coalesce(${t.paperState} = 'unreadable', false) = (${t.paperUnreadableWhy} is not null) and (${t.paperUnreadableWhy} is null or ${t.paperUnreadableWhy} in ('invalid-url', 'blocked', 'refused', 'not-found', 'site-error', 'network', 'timeout', 'too-large', 'not-a-document', 'paywall-or-empty', 'scan', 'damaged'))`,
+    ),
     check(
       "citation_investigations_entry_id_format",
       sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,

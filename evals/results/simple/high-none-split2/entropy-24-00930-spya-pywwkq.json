@@ -1,0 +1,93 @@
+{
+  "arm": "high-none-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:20.889Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 11609,
+  "costUsd": 0.098056,
+  "tokens": {
+    "input": 40643,
+    "output": 1677,
+    "reasoning": 398
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 208,
+  "fullerWords": 295,
+  "paragraphs": [
+    {
+      "text": "This article is a review explaining how scientists can measure how brain circuits \"process information\" - take in signals and combine them into something new. It introduces a method called partial information decomposition, or PID, which splits the information that two or more input neurons give about a target neuron into separate pieces: information repeated across inputs, information only one input has, and information that only shows up when you look at the inputs together.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because basic questions about how neurons combine signals, and how brain wiring shapes that, remain unanswered. That last piece, called synergy, matters most: it shows a neuron reacting to the pattern of its inputs, not just their sum, which is the authors' stand-in for real computation.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Reviewing studies of neuron recordings from cultured mouse brain tissue and from monkeys doing tasks, the authors report that synergy (pattern-sensitive combining) is higher in densely connected \"rich club\" neurons, rises with more loop-like recurrent connections between input neurons, and peaks when input neurons' activity is moderately, not too strongly, similar. In monkeys performing a task, synergy also shifted between brain regions depending on the phase of the task, with repeated (redundant) information rising sharply during movement, plausibly to keep signals reliable.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists try to measure \"information processing\" in the brain: how groups of neurons take in signals and turn them into something new. It introduces a mathematical tool called partial information decomposition, or PID, which breaks down how much neurons' combined activity tells us about another neuron's behavior.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says this matters because basic questions about the brain remain unanswered: what wiring patterns help neurons process information well, and how physical structure relates to computation. Until recently, both the data needed and the analytic tools to study this were lacking; PID helps fill that second gap.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the information that two source neurons give about a target neuron into three parts: redundant information (available from either source alone), unique information (available from only one), and synergistic information (only visible when you look at both sources together, as a pattern). Synergy is treated as a sign of real \"computation,\" since it means the neuron respons to combinations, not just to summed input.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from hundreds of neurons in mouse brain slices, and later from monkeys performing tasks, the authors found synergy was not spread evenly. It clustered in \"rich clubs\" of well-connected neurons, grew with more feedback loops between source neurons, and depended on how similar the two input signals were, peaking at a middling level of similarity rather than the highest. In monkeys, the balance of synergy versus redundancy also shifted depending on the task phase, such as rising redundancy during movement.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    },
+    {
+      "text": "The piece closes by noting PID's limits, such as how the number of pieces to track explodes as more neurons are added, and points to newer versions of the method, including ones that track time and multiple targets at once, as promising next steps.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

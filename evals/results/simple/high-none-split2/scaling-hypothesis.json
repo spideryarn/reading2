@@ -1,0 +1,94 @@
+{
+  "arm": "high-none-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:20.635Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 71623,
+  "costUsd": 0.209086,
+  "tokens": {
+    "input": 57403,
+    "output": 9428,
+    "reasoning": 8061
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 244,
+  "fullerWords": 304,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program trained to predict text, and a bigger idea behind it called the scaling hypothesis. That idea says you might reach real intelligence just by making simple neural networks (brain-like learning systems) much bigger, feeding them much more data and computing power, without needing clever new designs.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 was not just trained to copy text, it was never specifically taught to learn new tasks, yet it picked up the ability to learn new tasks from just a few examples, called meta-learning. The author argues this shows that unexpected abilities can simply emerge once a model and its training data get large enough, which has big implications for how far future AI could go.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece explains the \"blessings of scale\": oddly, bigger, harder problems seem to get easier for these systems, not harder, as models stop memorizing shortcuts and start finding genuinely general solutions. It also describes the \"pretraining thesis\": to keep improving at predicting text, a model must eventually pick up real understanding, since shallow tricks stop helping once the easy patterns are used up.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-jg69cy",
+        "spya-n4zu5k"
+      ]
+    },
+    {
+      "text": "Finally, the author argues most AI experts failed to predict this progress and still don't have a good explanation for it, while a few people who believed scale alone would work turned out to be right. The piece ends asking whether major research labs will now invest heavily in scaling up further, or keep dismissing the idea.",
+      "ids": [
+        "spya-cty5hx",
+        "spya-m9r8zx",
+        "spya-rbx2kz"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge AI language model released in 2020. It explores the \"scaling hypothesis\": the idea that simply making neural networks much bigger can produce real intelligence. GPT-3 is over ten times larger than any network built before it, trained only to predict the next word in huge amounts of internet text. Surprisingly, this leap in size did not just add facts - it produced meta-learning: the ability to learn a new task from just a few examples, without retraining.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 uses an old, deliberately simple design, yet its abilities kept improving smoothly as it grew, with no sign of leveling off. It is also expensive by ordinary research standards but cheap next to national science or military budgets, meaning far larger models are affordable. The author argues this suggests raw scale, not clever new algorithms, may be the key ingredient for building much more capable AI.",
+      "ids": [
+        "spya-asr663",
+        "spya-dfjr4c"
+      ]
+    },
+    {
+      "text": "The piece calls this pattern the \"blessings of scale.\" In most research, small problems are easy and big ones are nearly impossible. In deep learning, though, the hardest problems get easier as the network, its training data, and its computing power all grow together. Similar surprises appear across other AI systems, in images, games, and robots, where abilities like generalizing to new situations emerge only past a certain size.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "The author also explains this through a \"pretraining thesis\": accurately predicting text eventually forces a model to grasp cause and effect and common sense, not just spelling. Yet most AI experts and major labs have long doubted or dismissed the scaling idea, even as it kept being confirmed. The piece argues their confident predictions that AI progress would stall were repeatedly wrong. It says their comments on AI's risks reveal little, since they would say the same reassuring things either way.",
+      "ids": [
+        "spya-n4zu5k",
+        "spya-scr8jb",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

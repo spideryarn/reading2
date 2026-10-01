@@ -1,0 +1,240 @@
+{
+  "T1-1": {
+    "task": "T1",
+    "slug": "scaling-hypothesis",
+    "x": "high-15-beforeB",
+    "y": "high-about-slider2"
+  },
+  "T1-2": {
+    "task": "T1",
+    "slug": "olah-a4-spya-ujr7p0",
+    "x": "high-15-beforeA",
+    "y": "high-about-slider1"
+  },
+  "T1-3": {
+    "task": "T1",
+    "slug": "olah-a4-spya-ujr7p0",
+    "x": "high-about-slider2",
+    "y": "high-15-beforeB"
+  },
+  "T1-4": {
+    "task": "T1",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "x": "high-about-slider1",
+    "y": "high-15-beforeA"
+  },
+  "T1-5": {
+    "task": "T1",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "x": "high-about-slider2",
+    "y": "high-15-beforeB"
+  },
+  "T2-6": {
+    "task": "T2",
+    "slug": "scaling-hypothesis",
+    "level": "brief",
+    "rep": "2",
+    "answer": "X"
+  },
+  "T2-7": {
+    "task": "T2",
+    "slug": "scaling-hypothesis",
+    "level": "simple",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-8": {
+    "task": "T2",
+    "slug": "scaling-hypothesis",
+    "level": "fuller",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-9": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "brief",
+    "rep": "1",
+    "answer": "X"
+  },
+  "T2-10": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "simple",
+    "rep": "1",
+    "answer": "Y"
+  },
+  "T2-11": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "fuller",
+    "rep": "1",
+    "answer": "Y"
+  },
+  "T2-12": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "brief",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-13": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "simple",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-14": {
+    "task": "T2",
+    "slug": "olah-a4-spya-ujr7p0",
+    "level": "fuller",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-15": {
+    "task": "T2",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "level": "brief",
+    "rep": "2",
+    "answer": "X"
+  },
+  "T2-16": {
+    "task": "T2",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "level": "simple",
+    "rep": "2",
+    "answer": "Y"
+  },
+  "T2-17": {
+    "task": "T2",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "level": "fuller",
+    "rep": "2",
+    "answer": "X"
+  },
+  "T3-18": {
+    "task": "T3",
+    "slug": "scaling-hypothesis",
+    "x": "high-none-slider1",
+    "y": "high-15-beforeA"
+  },
+  "T3-19": {
+    "task": "T3",
+    "slug": "scaling-hypothesis",
+    "x": "high-15-beforeB",
+    "y": "high-none-slider2"
+  },
+  "T3-20": {
+    "task": "T3",
+    "slug": "olah-a4-spya-ujr7p0",
+    "x": "high-15-beforeA",
+    "y": "high-none-slider1"
+  },
+  "T3-21": {
+    "task": "T3",
+    "slug": "olah-a4-spya-ujr7p0",
+    "x": "high-none-slider2",
+    "y": "high-15-beforeB"
+  },
+  "T3-22": {
+    "task": "T3",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "x": "high-15-beforeA",
+    "y": "high-none-slider1"
+  },
+  "T3-23": {
+    "task": "T3",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "x": "high-15-beforeB",
+    "y": "high-none-slider2"
+  },
+  "T4-24": {
+    "task": "T4",
+    "slug": "scaling-hypothesis",
+    "arm": "high-none-slider1",
+    "P": "brief",
+    "Q": "simple",
+    "R": "fuller"
+  },
+  "T4-25": {
+    "task": "T4",
+    "slug": "scaling-hypothesis",
+    "arm": "high-none-slider2",
+    "P": "fuller",
+    "Q": "simple",
+    "R": "brief"
+  },
+  "T4-26": {
+    "task": "T4",
+    "slug": "scaling-hypothesis",
+    "arm": "high-about-slider2",
+    "P": "simple",
+    "Q": "brief",
+    "R": "fuller"
+  },
+  "T4-27": {
+    "task": "T4",
+    "slug": "olah-a4-spya-ujr7p0",
+    "arm": "high-none-slider1",
+    "P": "simple",
+    "Q": "brief",
+    "R": "fuller"
+  },
+  "T4-28": {
+    "task": "T4",
+    "slug": "olah-a4-spya-ujr7p0",
+    "arm": "high-none-slider2",
+    "P": "fuller",
+    "Q": "simple",
+    "R": "brief"
+  },
+  "T4-29": {
+    "task": "T4",
+    "slug": "olah-a4-spya-ujr7p0",
+    "arm": "high-about-slider1",
+    "P": "fuller",
+    "Q": "brief",
+    "R": "simple"
+  },
+  "T4-30": {
+    "task": "T4",
+    "slug": "olah-a4-spya-ujr7p0",
+    "arm": "high-about-slider2",
+    "P": "simple",
+    "Q": "brief",
+    "R": "fuller"
+  },
+  "T4-31": {
+    "task": "T4",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "arm": "high-none-slider1",
+    "P": "simple",
+    "Q": "brief",
+    "R": "fuller"
+  },
+  "T4-32": {
+    "task": "T4",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "arm": "high-none-slider2",
+    "P": "simple",
+    "Q": "brief",
+    "R": "fuller"
+  },
+  "T4-33": {
+    "task": "T4",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "arm": "high-about-slider1",
+    "P": "simple",
+    "Q": "fuller",
+    "R": "brief"
+  },
+  "T4-34": {
+    "task": "T4",
+    "slug": "entropy-24-00930-spya-pywwkq",
+    "arm": "high-about-slider2",
+    "P": "fuller",
+    "Q": "simple",
+    "R": "brief"
+  }
+}

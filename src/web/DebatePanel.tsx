@@ -133,6 +133,7 @@ import {
   debateClaimsUnverified,
   debateResponsesUnverified,
   debateWithheldOnSharedLink,
+  debateRegistryNote,
   debateWorkFieldsNote,
 } from "../messages.js";
 import {
@@ -143,6 +144,7 @@ import {
   type DebateKeySource,
   type DebateLean,
   type IdentificationLevel,
+  type RegistrySource,
   distinctSources,
   identificationLevel,
   identifiesOf,
@@ -166,9 +168,11 @@ import {
   readAuthors,
   readBears,
   readPublishedYear,
+  readRowRegistry,
   readWorkTitle,
   visibleClaims,
 } from "./debate-order.js";
+import { registryAuthorName } from "../registry-work.js";
 import {
   inThread,
   KEY_ROLE_LABEL,
@@ -918,8 +922,9 @@ interface Props {
   articleYear: number | null;
   /**
    * Which thread narrows the list — `?debatethread=`, a theme id or `key`, or
-   * `null` for none (debate-threads.ts). Owner-only in effect: a visitor's
-   * debate carries no synthesis, so there is nothing for it to name.
+   * `null` for none (debate-threads.ts). A visitor's debate carries the
+   * synthesis since 2026-10-01 unless the public boundary withheld a row
+   * (src/public/dto.ts § `publicSynthesis`), and then there is nothing to name.
    */
   thread: string | null;
   onThread(thread: string | null): void;
@@ -998,14 +1003,16 @@ export function DebatePanel({
   /**
    * **The threads, and the one the address names** — plan 260930j. The owner's
    * stored synthesis read through `readStoredSynthesis`, never directly: JSONB
-   * comes back unchecked. A visitor's debate has none (the public DTO does not
-   * carry it), so for them this is empty and the filter is a no-op.
+   * comes back unchecked. A visitor's is read the same way, against the rows
+   * they were sent — the public DTO has already re-settled it against exactly
+   * those (plan 261001b), so this second reading agrees with it, and one reader
+   * serves both arms.
    *
    * **The third narrowing, after both bars.** Each button's count is its rows
    * the bars left (`shownInThread`), and the list below is those rows only.
    */
   const synthesis = useMemo(
-    () => (debate !== null && !isShared(debate) ? readStoredSynthesis(debate) : null),
+    () => (debate !== null ? readStoredSynthesis(debate) : null),
     [debate],
   );
   const threads = useMemo(() => threadsOf(synthesis), [synthesis]);
@@ -1799,8 +1806,12 @@ function isCutShort(title: string): boolean {
  * extract — stands in only where the engine gave none or cut it short, and then
  * `titleIsAI` says so. With neither, the headline is the address.
  *
- * Authors and year are always the AI's reading (the plan's F2): the words are
- * on the page, which does not prove they are *this* page's byline.
+ * Authors and year are the AI's reading (the plan's F2) — the words are on the
+ * page, which does not prove they are *this* page's byline — **unless the row
+ * carries a registry record** (plan 261001a stage 6): the address carried a
+ * DOI or arXiv id, and the registry's title for it agrees with the engine's.
+ * Then the record's authors and year win, and `registry` names where they came
+ * from; a cut-short engine title gives way to the record's whole one too.
  */
 export function rowWork(row: DebateRow): {
   headline: string;
@@ -1808,17 +1819,45 @@ export function rowWork(row: DebateRow): {
   headlineIsAddress: boolean;
   authors: string[];
   year: number | null;
+  /** Set when the authors and year (and maybe the headline) are the registry's. */
+  registry: RegistrySource | null;
+  /** Exactly which displayed fields came from `registry`. */
+  registryFields: ("full title" | "authors" | "year")[];
 } {
   const engine = row.title?.trim() ? row.title : null;
+  const record = readRowRegistry(row);
   const work = readWorkTitle(row);
-  const useWork = work !== null && (engine === null || isCutShort(engine));
-  const headline = useWork ? work : (engine ?? addressOf(row.url));
+  const cut = engine !== null && isCutShort(engine);
+  const useRecord = record !== null && cut;
+  const useWork = !useRecord && work !== null && (engine === null || cut);
+  const headline = useRecord ? record.title : useWork ? work : (engine ?? addressOf(row.url));
+  if (record !== null) {
+    const registryFields: ("full title" | "authors" | "year")[] = [];
+    if (useRecord) registryFields.push("full title");
+    const extractedAuthors = readAuthors(row);
+    const authors = record.authors.length > 0 ? record.authors.map(registryAuthorName) : extractedAuthors;
+    if (record.authors.length > 0) registryFields.push("authors");
+    const extractedYear = readPublishedYear(row);
+    const year = record.year ?? extractedYear;
+    if (record.year !== undefined) registryFields.push("year");
+    return {
+      headline,
+      titleIsAI: false,
+      headlineIsAddress: false,
+      authors,
+      year,
+      registry: registryFields.length > 0 ? record.source : null,
+      registryFields,
+    };
+  }
   return {
     headline,
     titleIsAI: useWork,
     headlineIsAddress: !useWork && engine === null,
     authors: readAuthors(row),
     year: readPublishedYear(row),
+    registry: null,
+    registryFields: [],
   };
 }
 
@@ -1869,6 +1908,19 @@ function Row({
     work.authors.length > 0 ? bylineAuthors(work.authors) : null,
     work.year === null ? null : String(work.year),
   ].filter((part): part is string => part !== null);
+  const registryBylineFields = work.registryFields.filter(
+    (field): field is "authors" | "year" => field === "authors" || field === "year",
+  );
+  const aiBylineFields = [
+    work.authors.length > 0 && !work.registryFields.includes("authors") ? "authors" : null,
+    work.year !== null && !work.registryFields.includes("year") ? "year" : null,
+  ].filter((field): field is "authors" | "year" => field !== null);
+  const aiBylineNote =
+    aiBylineFields.length === 0
+      ? null
+      : registryBylineFields.length === 0
+        ? "As the AI read it off the page — found in the page's extract, not checked as its byline"
+        : debateWorkFieldsNote(aiBylineFields);
   return (
     <li className={`dbt-item${open ? " open" : ""}${keySource ? " key" : ""}`}>
       {/* **A key source says so first, and why** — above the title, because it
@@ -1904,8 +1956,19 @@ function Row({
       {(byline.length > 0 || !work.headlineIsAddress || direct) && (
         <p className="dbt-meta">
           {byline.length > 0 && (
-            <span className="dbt-byline" title="As the AI read it off the page — found in the page's extract, not checked as its byline">
+            <span
+              className="dbt-byline"
+              title={[
+                work.registry !== null && registryBylineFields.length > 0
+                  ? debateRegistryNote(work.registry, registryBylineFields)
+                  : null,
+                aiBylineNote,
+              ].filter((note): note is string => note !== null).join(" ")}
+            >
               {byline.join(" · ")}
+              {work.registry !== null && registryBylineFields.length > 0 && (
+                <span className="tw:sr-only"> — {debateRegistryNote(work.registry, registryBylineFields)}</span>
+              )}
             </span>
           )}
           {byline.length > 0 && !work.headlineIsAddress && (
@@ -2012,13 +2075,16 @@ function RowDetail({
      wire's, and calling it the AI's reading would be false (F2). */
   const aiParts = [
     work.titleIsAI ? "title" : null,
-    work.authors.length > 0 ? "authors" : null,
-    work.year === null ? null : "year",
+    work.authors.length > 0 && !work.registryFields.includes("authors") ? "authors" : null,
+    work.year !== null && !work.registryFields.includes("year") ? "year" : null,
   ].filter((part): part is string => part !== null);
   return (
     <div id={id} className="dbt-detail" hidden={hidden}>
       {work.authors.length > 0 && <p className="dbt-authors">By {work.authors.join(", ")}</p>}
       {aiParts.length > 0 && <p className="dbt-note dbt-work-note">{debateWorkFieldsNote(aiParts)}</p>}
+      {work.registry !== null && (
+        <p className="dbt-note dbt-work-note">{debateRegistryNote(work.registry, work.registryFields)}</p>
+      )}
       {/* **The fence.** Everything outside it is either the wire's or the
           article's; everything inside it is a model's reading of a stranger's
           page, and nothing in the returned evidence verifies any of it. */}

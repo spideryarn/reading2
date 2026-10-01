@@ -65,3 +65,7 @@ Not done, and named in the plan:
 
 Plan, with GPT Sol's two reviews:
 [260930i](../plans/260930i-citations-mark-the-exact-citation-and-read-the-pdf-reference-list.md).
+
+## Follow-up, 2026-10-01: visitors
+
+**A visitor now sees the entry on hover, but only for an article whose bibliography is part of the page**, where every word of the entry is already visible to them. **An entry read from a PDF's reference list still does not reach a visitor.** A PDF can carry a publisher's "Downloaded by …" stamp printed on one page, and the filter that removes repeated page furniture can miss it. Then it would show visitors who downloaded the paper, usually you. Publishing those safely needs its own design. Greg approved widening the public DTO (a listed defence), relayed by the Overseer. Shipped in `6c1b2cd2`, with GPT Sol's code-review fixes in `7431f0fd`. Plan: [261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md).

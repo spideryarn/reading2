@@ -1,0 +1,103 @@
+{
+  "arm": "high-goalA-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.482Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 40278,
+  "costUsd": 0.095116,
+  "tokens": {
+    "input": 29068,
+    "output": 3698,
+    "reasoning": 2255
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 221,
+  "fullerWords": 330,
+  "paragraphs": [
+    {
+      "text": "GPT-3 is a huge language model, trained only to guess the next word in text. It surprised people by learning to follow instructions and solve new kinds of problems from just a few examples, even though nobody trained it to do that directly.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece argues this supports the scaling hypothesis: the idea that simply training the same basic method on much bigger data and much more computing power is enough to produce smarter, more general behavior. No new algorithm was needed to get GPT-3's new skills.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa"
+      ]
+    },
+    {
+      "text": "This fits a wider pattern the author calls blessings of scale: as models, data, and computing power grow, problems that used to need clever special fixes start solving themselves. A big model seems to hold many smaller hidden models inside it, and the simplest one that still fits huge, varied data tends to be one that truly generalizes rather than just memorizes.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-uknzzk"
+      ]
+    },
+    {
+      "text": "As GPT-3 got bigger, its error rate on held-out text kept dropping along the same smooth curve seen in much smaller models, with no sign yet of leveling off. The piece treats this steady predictability, plus years of wrong predictions by skeptics, as a sign that scale alone may carry further than most expected, though it admits no one can say in advance exactly what new ability will appear at what size.",
+      "ids": [
+        "spya-sctj6d",
+        "spya-vn0xpd",
+        "spya-djq0xk"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "GPT-3, a 175-billion-parameter model over 100 times larger than its predecessor, was trained only to predict the next word in internet text. Yet it showed meta-learning: given a handful of examples inside its prompt, it could do tasks it was never explicitly trained for, from arithmetic to translation to unscrambling anagrams.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "Gwern treats this as evidence for the scaling hypothesis: that these capabilities emerge from scaling up a fairly generic, uniform architecture rather than requiring new algorithms tailored to each task. Scaling further, even to trillions of parameters, is framed as within reach of existing compute and corporate budgets, so the real constraint is whether organizations choose to invest in it.",
+      "ids": [
+        "spya-ag750z",
+        "spya-asr663",
+        "spya-dfjr4c"
+      ]
+    },
+    {
+      "text": "This is presented as part of a broader pattern, the blessings of scale: as models, data, and compute grow, training gets more stable and generalization improves, unlike ordinary research where hard problems stay hard. The proposed mechanism is that a large model implicitly contains many competing sub-models; simple ones that memorize or use shortcuts win early on small data, but on large enough and varied enough data, the sub-model that truly generalizes (real arithmetic rather than a lookup table) eventually wins because it is simpler relative to everything it must cover.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "As support, GPT-3's measured loss on held-out text kept following the same smooth power-law curve found in much smaller models by Kaplan et al 2020, with no sign yet of the returns running out. The piece projects that another thousandfold increase in compute could cut the loss substantially further, implying real new capability without any change in algorithm, though it stresses nobody can say in advance which ability appears at which loss level.",
+      "ids": [
+        "spya-sctj6d",
+        "spya-vn0xpd",
+        "spya-edr6mj"
+      ]
+    },
+    {
+      "text": "The piece also notes this remains contested: standard NLP benchmarks barely register GPT-3's leap, and organizations like DeepMind instead bet on assembling separate, purpose-built modules modeled on brain regions rather than on scale alone. Gwern argues that researchers have repeatedly forecast that scaling curves would bend or plateau, and those forecasts have kept being wrong.",
+      "ids": [
+        "spya-s8rx6n",
+        "spya-vr9q2p",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -46,6 +46,11 @@ const SHARED = new Set([
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`
      and nothing else. See src/debate-synthesis.ts and plan 260930j. */
   "debate-synthesis.js",
+  /* How a Crossref or DataCite record is read back off a stored row — the
+     server writes it into Citations and Debate, and the band, the hover card
+     and the date order read it again, so both sides keep one reading. Imports
+     `types.js` and nothing else. Plan 261001a, stages 5 and 6. */
+  "registry-work.js",
   "ids.js", // minting and validating block ids
   "urls.js", // the http(s) allowlist, used by the server and the panel
   "reading-time.js",

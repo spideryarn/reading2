@@ -1,0 +1,115 @@
+{
+  "arm": "high-none-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:37.789Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 16376,
+  "costUsd": 0.201494,
+  "tokens": {
+    "input": 86127,
+    "output": 2924,
+    "reasoning": 1260
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 217,
+  "fullerWords": 282,
+  "briefWords": 129,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a giant text-prediction program released in 2020, and what it means for the future of artificial intelligence (AI). It argues for the \"scaling hypothesis\": the idea that you do not need clever new tricks to make AI smarter, just much bigger neural networks (computer models loosely based on brain cells) fed much more data and computing power.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 was not just bigger than earlier models, it did something new: it could learn a fresh task just from a few examples typed into it, without being retrained, something called meta-learning. The piece says almost no AI researchers predicted this would happen, and most still have no clear theory of why it did or what comes next, which the author says makes their reassurances about AI safety hollow.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70",
+        "spya-rbx2kz"
+      ]
+    },
+    {
+      "text": "The author explains this through \"blessings of scale\": as models and training data grow, shortcuts and memorized tricks stop working, forcing the network toward deeper, more general solutions, including basic reasoning. A related idea, the \"pretraining thesis,\" says that predicting text well enough eventually requires real understanding, since only genuine reasoning can shave off the last, hardest errors. The piece also contrasts OpenAI, who bet heavily on scaling, with labs like DeepMind and Google, who doubted that just scaling up would be enough.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-rjwfkb",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge language-prediction AI model released by OpenAI in 2020, and what it reveals about a bigger idea called the scaling hypothesis: the claim that making neural networks (programs loosely modeled on brain cells) much larger, fed more data and computing power, makes them smarter on its own, without needing cleverer designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 did more than know more facts than its predecessor, GPT-2: it showed meta-learning, meaning it could pick up a brand-new task just from a few examples typed into its prompt, without retraining. The author argues this suggests that training huge models on raw, unlabeled text could become a key ingredient for broader AI, and that simply scaling up may keep producing surprises few researchers expected.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ye0m0c",
+        "spya-rbx2kz"
+      ]
+    },
+    {
+      "text": "The piece explains this through what it calls the blessings of scale: problems that stump small networks often become easy for very large ones. A giant model behaves like a huge collection of smaller internal sub-models competing to predict the data; quick-and-easy sub-models that just memorize surface patterns win early on, but once the model and data are big enough, these get crowded out by sub-models that capture deeper, more general rules, such as real arithmetic or grammar.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "The author also argues that the last small reductions in a model's prediction error are the hardest to get and require the most genuine understanding, unlike the easy early gains from learning spelling or word frequency. Finally, the piece contrasts organizations: OpenAI is betting heavily on scaling while DeepMind and Google pursue different strategies, and the author argues that most AI experts' public reassurances about risk are not based on any real, testable model of how progress happens.",
+      "ids": [
+        "spya-kmyg3w",
+        "spya-rjwfkb",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant computer program that predicts text, and why it got so much better than the AI before it. It explores a big question: why does just making an AI bigger make it smarter?",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-dfggb3"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised almost everyone. Without any special training, it learned to follow instructions and pick up brand-new tasks just from a few examples, something nobody expected from a program built only to predict text.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author's big idea is the scaling hypothesis: make a neural network (a brain-like learning program) much bigger, feed it much more data and computing power, and new abilities appear on their own, without needing clever new designs. Many expert researchers doubted this would work, but the author argues GPT-3 proves them wrong.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa",
+        "spya-cty5hx"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

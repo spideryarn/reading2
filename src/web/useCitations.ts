@@ -48,8 +48,10 @@ import type {
   CitationsResponse,
   CitedWork,
   FindCitationResponse,
+  InvestigatedPaper,
   InvestigateStage,
   Job,
+  PaperPassage,
 } from "../types.js";
 import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -468,7 +470,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
 
       const receiveStage = (data: unknown) => {
         const stage = (data as { stage?: unknown } | null)?.stage;
-        if (stage !== "finding" && stage !== "reading") return;
+        if (stage !== "finding" && stage !== "reading-paper" && stage !== "reading") return;
         setInvestigateStage(stage);
         /* This step may replace the row's lookup. Hide its verdict and
            anything derived from it until a server re-read proves what still
@@ -609,6 +611,71 @@ function isInvestigation(data: unknown): data is CitationInvestigation {
     typeof i.extractsRead === "number" &&
     typeof i.longestExtractWords === "number" &&
     (i.matchedHost === null || typeof i.matchedHost === "string") &&
-    typeof i.at === "string"
+    typeof i.at === "string" &&
+    /* Absent on an answer from before plan 261001a stage 3; when present, whole. */
+    (i.paper === undefined || isInvestigatedPaper(i.paper))
   );
+}
+
+const PAPER_BEARS = new Set<unknown>(["supports", "partly", "context"]);
+const PAPER_MATCHED_BY = new Set<unknown>(["doi", "arxiv", "title-author"]);
+const PAPER_UNREADABLE_WHY = new Set<unknown>([
+  "invalid-url",
+  "blocked",
+  "refused",
+  "not-found",
+  "site-error",
+  "network",
+  "timeout",
+  "too-large",
+  "not-a-document",
+  "paywall-or-empty",
+  "scan",
+  "damaged",
+]);
+
+const isText = (v: unknown): v is string => typeof v === "string" && v !== "";
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+function isPaperPassage(data: unknown): data is PaperPassage {
+  const p = data as Partial<PaperPassage> | null | undefined;
+  return !!p && isText(p.chunk) && isCount(p.page) && isText(p.text) && PAPER_BEARS.has(p.bears);
+}
+
+/**
+ * **The paper, checked by state** (plan 261001a stage 3) — each state with
+ * exactly the fields it is drawn from, so a row never says *we read the paper*
+ * over a missing word count, or *found no passage* over a malformed list.
+ */
+export function isInvestigatedPaper(data: unknown): data is InvestigatedPaper {
+  const p = data as Record<string, unknown> | null | undefined;
+  if (!p || typeof p !== "object" || !isText(p.readAt)) return false;
+  switch (p.state) {
+    case "read":
+      return (
+        isText(p.requestedUrl) &&
+        isText(p.finalUrl) &&
+        isText(p.host) &&
+        isCount(p.words) &&
+        isCount(p.sentWords) &&
+        Array.isArray(p.chunks) &&
+        p.chunks.every(isText) &&
+        PAPER_MATCHED_BY.has(p.matchedBy) &&
+        isText(p.evidenceSha) &&
+        isText(p.selectionVersion) &&
+        (p.passages === null ||
+          (Array.isArray(p.passages) && p.passages.length <= 3 && p.passages.every(isPaperPassage)))
+      );
+    case "no-address":
+      return true;
+    case "unreadable":
+      return isText(p.requestedUrl) && isText(p.host) && PAPER_UNREADABLE_WHY.has(p.unreadableWhy);
+    case "not-the-full-text":
+    case "not-confirmed":
+      return isText(p.requestedUrl) && isText(p.finalUrl) && isText(p.host);
+    case "identity-conflict":
+      return isText(p.requestedUrl) && isText(p.host);
+    default:
+      return false;
+  }
 }

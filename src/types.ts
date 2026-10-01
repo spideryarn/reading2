@@ -24,7 +24,7 @@
  * nothing at all, so it costs the browser bundle nothing and keeps this file
  * from becoming the sixth copy of the uuid regex.
  */
-import type { FailureKind } from "./messages.js";
+import type { FailureKind, PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
 
@@ -3840,8 +3840,9 @@ export interface CitedWork {
    * article's own characters, sliced by code: the text of the `reference`
    * block, or, for a PDF, the entry found in the reference list read from its
    * text layer (src/citation-reference-list.ts), which is not a block because
-   * stage 2 does not render it. Plan 260930i. Owner-only: `publicCitedWork`
-   * does not name it.
+   * stage 2 does not render it. Plan 260930i. A visitor gets it only when it
+   * is its `reference` block's own text — never a PDF list's, which can hold a
+   * download stamp (`publicEntry` in src/public/dto.ts, plan 261001b).
    */
   entry?: string;
   /** Where the text cites it, ≤ 3. */
@@ -3889,7 +3890,40 @@ export interface CitedWork {
    * never on a visitor's list. docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
    */
   inSpideryarn?: CitedInSpideryarn;
+  /**
+   * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
+   * written by the `citations` step after the model's list is built
+   * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
+   * the read-time fields above. `found` only when the registry's title agrees
+   * with the article's; `conflict` when it does not — the article's identifier
+   * points at a different work. Absent: not looked up, nothing found, or a
+   * revision from before the stage.
+   */
+  registry?: CitationRegistry;
 }
+
+/** The two registries a record can come from (src/bibliographic.ts § `Registry`). */
+export type RegistrySource = "crossref" | "datacite";
+
+/**
+ * **A registry's record, as a row keeps it** — Citations' and Debate's
+ * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
+ * Never read straight off a stored row on the client: nothing revalidates
+ * stored JSON, so read it through a guard.
+ */
+export interface RegistryWork {
+  source: RegistrySource;
+  title: string;
+  /** In the registry's order, at most `REGISTRY_AUTHORS_KEPT` (src/citation-registry.ts). An organisation is a `family` alone. */
+  authors: { family: string; given?: string }[];
+  /** How many more authors the registry lists past those kept; absent when none. */
+  moreAuthors?: number;
+  year?: number;
+  venue?: string;
+}
+
+/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
+export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
 
 /**
  * How a cited work was matched to an article here, strongest first. `title` is
@@ -3939,7 +3973,72 @@ export interface CitationInvestigation {
   /** Over everything the call was sent. Attached only while it matches. */
   contextHash: string;
   promptVersion: string;
+  /**
+   * **What we did about the paper itself** (plan 261001a stage 3) — code's
+   * account, never the model's. **Absent on an answer written before that
+   * stage**, which the row draws exactly as it did then.
+   */
+  paper?: InvestigatedPaper;
 }
+
+/** How code confirmed a fetched PDF is the cited work — src/paper-evidence.ts § confirmIdentity. */
+export type PaperMatchedBy = "doi" | "arxiv" | "title-author";
+
+/** The AI's reading of how one of the paper's passages bears on what the article cites it for. */
+export type PaperPassageBears = "supports" | "partly" | "context";
+
+/**
+ * **One passage of the paper, found by code** — the chunk's own characters
+ * (`verifyPassage`, src/paper-evidence.ts), never the model's spelling. `bears`
+ * is the AI's reading.
+ */
+export interface PaperPassage {
+  /** The chunk it was found in, `c1`… */
+  chunk: string;
+  /** The page that chunk starts on, 1-based. */
+  page: number;
+  text: string;
+  bears: PaperPassageBears;
+}
+
+/**
+ * **The paper, as one *Investigate* press found it** — src/paper-evidence.ts's
+ * six outcomes, kept as a dated snapshot (`readAt`): nothing re-fetches on
+ * read, so the row never implies the remote paper is unchanged (Sol P-10).
+ * URLs and hosts are the owner's, like the rest of an investigation.
+ */
+export type InvestigatedPaper =
+  | {
+      state: "read";
+      requestedUrl: string;
+      finalUrl: string;
+      host: string;
+      /** Words in the paper's text as we read it, up to its references. */
+      words: number;
+      /** Words of it the AI was shown. */
+      sentWords: number;
+      /** The chunk ids the AI was shown, in document order. */
+      chunks: string[];
+      matchedBy: PaperMatchedBy;
+      /** sha256 of exactly what the AI was shown — the record of what was read. */
+      evidenceSha: string;
+      selectionVersion: string;
+      readAt: string;
+      /**
+       * At most three, each checked by code in the chunk it names. `[]`: the
+       * AI was shown the paper and no passage it offered was found there.
+       * `null`: the call for passages failed, so none was asked for
+       * successfully — never drawn as *found none*.
+       */
+      passages: PaperPassage[] | null;
+    }
+  | { state: "no-address"; readAt: string }
+  | { state: "unreadable"; requestedUrl: string; host: string; unreadableWhy: PaperUnreadableReason; readAt: string }
+  | { state: "not-the-full-text"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
+  | { state: "not-confirmed"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
+  | { state: "identity-conflict"; requestedUrl: string; host: string; readAt: string };
+
+export type InvestigatedPaperState = InvestigatedPaper["state"];
 
 /**
  * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
@@ -3959,11 +4058,13 @@ export interface InvestigateCitationDone {
 /**
  * Which step of the one *Investigate* press is running (plan 260930d): `finding`
  * — the lookup that looks for the work's own page, only when the row has no
- * current `assessed` one — then `reading`, the streamed answer. Sent as a
- * `stage` frame (`{ stage }`); a `lookup` frame between them carries the
- * lookup's answer, the same `FindCitationResponse` `POST …/find` answers.
+ * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
+ * paper itself fetched and checked, and when read, its passages asked for),
+ * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
+ * a `lookup` frame after `finding` carries the lookup's answer, the same
+ * `FindCitationResponse` `POST …/find` answers.
  */
-export type InvestigateStage = "finding" | "reading";
+export type InvestigateStage = "finding" | "reading-paper" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {
@@ -4509,24 +4610,61 @@ export interface SimpleParagraph {
   ids: BlockId[];
 }
 
-/** The stored Simple contract, shared by generation and every read boundary. */
-export const SIMPLE_MIN_PARAGRAPHS = 2;
-export const SIMPLE_MAX_PARAGRAPHS = 4;
+/**
+ * **The three plain-words levels**, in the order the slider runs: `brief`,
+ * short and very simple; `simple`, fairly simple and just under the first
+ * version's length; `fuller`, moderately complex and just over it. Greg,
+ * 2026-09-30 (SPIDERYARN-READING2-7J): *"a UI-slider with 3 level (short &
+ * very-simple, just-under-current-length and fairly-simple,
+ * just-over-current-length and moderately-complex)"*.
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+ *
+ * Also the `?summary=` values for these views (src/web/params.ts), so
+ * `simple` keeps the value readers' links already carry.
+ */
+export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
+export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
+
+/** The stored shape's version, beside the guard that decides whether it is usable. */
+export const SIMPLE_ARTIFACT_VERSION = "simple/2";
+
+/** One level's limits — the stored Simple contract, shared by generation and every read boundary. */
+export interface SimpleLevelLimits {
+  minParagraphs: number;
+  maxParagraphs: number;
+  /** The hard ceiling on the level's words; the prompt asks for well under it. */
+  maxWords: number;
+}
+
+/*
+ * The word ceilings sit above the longest the measurement saw at each level
+ * (210, 338 and 431, plan 261001b § Ledger) — a ceiling is the line between an
+ * orientation and a digest, not a length target, and with three calls a tight
+ * one loses all three for one level's ten words. The prompt's asks are what
+ * set the length.
+ */
+export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
+  brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
+  simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
+  fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
+};
+
+/** Passages per paragraph, at every level. */
 export const SIMPLE_MAX_IDS = 3;
-export const SIMPLE_MAX_WORDS = 320;
 
 /**
- * Is this a usable stored paragraph list?
+ * Is this a usable stored paragraph list for this level?
  *
  * The generator performs the evidence-dependent check that every id belongs
  * to the exact body it sent. This is the part a reader can check without the
  * article: the same quantity, text, id and word limits the generator enforces.
  */
-export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
+export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is SimpleParagraph[] {
+  const limits = SIMPLE_LIMITS[level];
   if (
     !Array.isArray(value) ||
-    value.length < SIMPLE_MIN_PARAGRAPHS ||
-    value.length > SIMPLE_MAX_PARAGRAPHS
+    value.length < limits.minParagraphs ||
+    value.length > limits.maxParagraphs
   ) {
     return false;
   }
@@ -4554,20 +4692,69 @@ export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
       return false;
     }
   }
-  return words <= SIMPLE_MAX_WORDS;
+  return words <= limits.maxWords;
+}
+
+/**
+ * **Are all three stored levels present and within their limits?** The content
+ * half of `isUsableSimpleSummary` below, which is the whole-artefact guard every
+ * read boundary uses (Sol's plan review, P1-2).
+ */
+export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const levels = value as Partial<Record<SimpleLevel, unknown>>;
+  return SIMPLE_LEVELS.every((level) => isSimpleParagraphs(levels[level], level));
 }
 
 /** The artefact. The `simple_summary` column on `article_revisions`. */
 export interface SimpleSummary {
-  version: string;
+  version: typeof SIMPLE_ARTIFACT_VERSION;
   generator: string;
   slug: string;
-  /** A hash of the body-only article rendering actually sent (src/simple-summary.ts). */
+  /**
+   * A hash of the body-only article rendering and the **profile-free** user
+   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * it, so a changed profile never makes the paragraphs stale.
+   */
   sourceHash: string;
   generatedAt: string;
   elapsedMs: number;
-  /** Two to four, enforced by code — fewer is a failure and nothing is stored. */
-  paragraphs: SimpleParagraph[];
+  /**
+   * `hashProfile` of the rendered profile these were written for, or `null`
+   * for none. Having the field is what puts Simple in the owner's *make public*
+   * dialog as personalised (`ProfileCarrying`, src/store/pg.ts); it never
+   * reaches a visitor (src/public/dto.ts).
+   */
+  profileHash: string | null;
+  /** Every level, always — validation stores all of them or none. */
+  levels: Record<SimpleLevel, SimpleParagraph[]>;
+}
+
+/**
+ * **Is this a complete, current-shape Simple artefact?** One answer for every
+ * read boundary. Checking `levels` alone is not enough: an imported or edited
+ * `simple/1` row can happen to carry a field with that name and must still read
+ * as absent, while `profileHash` is required provenance in `simple/2`.
+ */
+export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const simple = value as Partial<Record<keyof SimpleSummary, unknown>>;
+  return (
+    simple.version === SIMPLE_ARTIFACT_VERSION &&
+    typeof simple.generator === "string" &&
+    simple.generator.length > 0 &&
+    typeof simple.slug === "string" &&
+    simple.slug.length > 0 &&
+    typeof simple.sourceHash === "string" &&
+    simple.sourceHash.length > 0 &&
+    typeof simple.generatedAt === "string" &&
+    simple.generatedAt.length > 0 &&
+    typeof simple.elapsedMs === "number" &&
+    Number.isFinite(simple.elapsedMs) &&
+    simple.elapsedMs >= 0 &&
+    (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    isSimpleLevels(simple.levels)
+  );
 }
 
 /**
@@ -4580,9 +4767,16 @@ export interface SimpleSummaryResponse {
   stale: boolean;
   /** The article is the same and we would write this differently now. */
   outdated: boolean;
+  /**
+   * The reader has changed their profile since these were written —
+   * `profileIsStale` in src/profile.ts, added by the route
+   * (`withProfileChanged`). Never makes them stale.
+   */
+  profileChanged: boolean;
 }
 
-export type SimpleSummaryFound = SimpleSummaryResponse;
+/** What the store hands the route, before the route adds the profile answer. */
+export type SimpleSummaryFound = Omit<SimpleSummaryResponse, "profileChanged">;
 
 /* -------------------------------------------------------------- crossrefs --
    Links inside one article: a short phrase in one block that refers to what
@@ -4850,9 +5044,10 @@ interface DebateRowBase {
   /*
    * **What the work is — title, authors, year. Nothing writes these today.**
    *
-   * They are the landing place for a bibliographic lookup (DOI, arXiv,
-   * OpenAlex) that Greg has not approved — a new outside service
-   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred).
+   * They were the landing place for a bibliographic lookup
+   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred);
+   * that lookup landed as `registry` below (plan 261001a stage 6), its own
+   * field so where the words came from stays readable.
    * Stage 2 first asked the search model to copy them off the page and kept
    * each only if the page's extract held it; measured, that verified on 1 row
    * of 11, because the extract is a passage from the middle of the page and the
@@ -4884,6 +5079,15 @@ interface DebateRowBase {
    * Read it through `readStoredBears`.
    */
   bears?: DebateBears;
+  /**
+   * **What Crossref or DataCite holds for the identifier this row's address
+   * carries** — written by the `debate` step after its searches
+   * (src/debate-registry.ts, plan 261001a stage 6), and only when the
+   * registry's title agrees with the engine's `title` for the page. The
+   * by-line and the *date* order prefer it to `authors` / `publishedYear`, and
+   * say where it came from. Read it through `readRegistryWork`.
+   */
+  registry?: RegistryWork;
 }
 
 /**
@@ -5325,9 +5529,9 @@ export interface Debate {
    * be confused. Read it through `readStoredSynthesis` (src/debate-synthesis.ts), never directly — JSONB
    * comes back unchecked.
    *
-   * **Owner-only.** The public DTO builds a visitor's debate field by field
-   * (src/public/dto.ts § `publicDebate`) and does not carry this one; widening
-   * that boundary is Greg's call, not an unattended run's.
+   * **A visitor gets it since 2026-10-01** (plan 261001b), re-settled against
+   * the rows they are sent, and not at all when the boundary withheld a row —
+   * src/public/dto.ts § `publicSynthesis`.
    */
   synthesis?: DebateSynthesis;
 }

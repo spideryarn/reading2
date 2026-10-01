@@ -614,6 +614,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A cited paper's passages, picked** (src/citation-paper-passages.ts) —
+     the press's own route, for consistency with the two calls around it. No
+     tools and no cache marker, so nothing here depends on `require_parameters`
+     beyond `max_tokens`; kept so an upstream that would drop a parameter is
+     refused rather than answering differently. */
+  "citation-paper-passages": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 
@@ -864,6 +874,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
     providerDefault:
       "Not measured. Explain's shape over the whole article with a few web searches; " +
       "its ceiling is src/citation-investigate.ts § ANSWER_TOKENS.",
+  },
+  "citation-paper-passages": {
+    providerDefault:
+      "Not measured. About 5,000 words of one paper and one claim, three short quotes out; " +
+      "its ceiling is src/citation-paper-passages.ts § PASSAGES_ANSWER_TOKENS.",
   },
   pdf: {
     providerDefault:

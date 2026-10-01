@@ -11,8 +11,17 @@
  * sent, so the sentence does not claim either way.
  */
 import { describe, expect, it } from "vitest";
-import type { Citation } from "../src/types.js";
-import { investigationParts, investigationProvenance } from "../src/web/CitationInvestigation.js";
+import type { Citation, InvestigatedPaper } from "../src/types.js";
+import {
+  INVESTIGATION_LABEL,
+  INVESTIGATION_LABEL_WITH_PAPER,
+  investigationLabel,
+  investigationParts,
+  investigationProvenance,
+  noPassagesSentence,
+  paperReadSentence,
+  passageCaption,
+} from "../src/web/CitationInvestigation.js";
 
 const src = (url: string, title?: string): Citation => (title ? { url, title } : { url });
 
@@ -201,5 +210,86 @@ describe("investigationParts", () => {
   it("an empty answer has no parts", () => {
     expect(investigationParts("")).toEqual([]);
     expect(investigationParts(" \n\n ")).toEqual([]);
+  });
+});
+
+/* ------------------------------------- plan 261001a stage 3: the paper itself -- */
+
+describe("what was read of the paper itself, in words (plan 261001a stage 3)", () => {
+  /* Midday UTC, so the day is the same in every time zone a test runs in. */
+  const AT = "2026-10-01T12:00:00.000Z";
+  const READ: InvestigatedPaper = {
+    state: "read",
+    requestedUrl: "https://arxiv.org/pdf/2001.08361",
+    finalUrl: "https://arxiv.org/pdf/2001.08361",
+    host: "arxiv.org",
+    words: 11200,
+    sentWords: 4900,
+    chunks: ["c1", "c2"],
+    matchedBy: "arxiv",
+    evidenceSha: "a".repeat(64),
+    selectionVersion: "paper-selection/1",
+    readAt: AT,
+    passages: [],
+  };
+
+  it.each([
+    [
+      READ,
+      "We read the paper itself: a PDF from arxiv.org, 11,200 words. The AI was shown 4,900 of them — the opening and the passages closest to what the article cites it for. Matched by its title and arXiv id. Read on 1 October 2026.",
+    ],
+    [
+      { ...READ, matchedBy: "doi" },
+      "We read the paper itself: a PDF from arxiv.org, 11,200 words. The AI was shown 4,900 of them — the opening and the passages closest to what the article cites it for. Matched by its title and DOI. Read on 1 October 2026.",
+    ],
+    [
+      { state: "unreadable", requestedUrl: "https://doi.org/10.1/x", host: "nature.com", unreadableWhy: "refused", readAt: AT },
+      "We could not get the paper because the site would not let us read it — publishers often turn away automated readers. We tried nature.com on 1 October 2026.",
+    ],
+    [
+      { state: "not-the-full-text", requestedUrl: "https://doi.org/10.1/x", finalUrl: "https://pub.example/x", host: "pub.example", readAt: AT },
+      "We reached a page for this work on pub.example, but not its full text, so the AI was not shown it. Tried on 1 October 2026.",
+    ],
+    [
+      { state: "not-confirmed", requestedUrl: "https://arxiv.org/pdf/1", finalUrl: "https://arxiv.org/pdf/1", host: "arxiv.org", readAt: AT },
+      "We found a document on arxiv.org but could not confirm it is this work, so the AI was not shown it. Tried on 1 October 2026.",
+    ],
+    [
+      { state: "identity-conflict", requestedUrl: "https://doi.org/10.1/z", host: "doi.org", readAt: AT },
+      "The identifier the article gives points to a different title, so we did not use it. Tried on 1 October 2026.",
+    ],
+    [{ state: "no-address", readAt: AT }, "We had no address for the paper itself, so the AI was not shown it. Tried on 1 October 2026."],
+  ] as [InvestigatedPaper, string][])("says case %#", (paper, sentence) => {
+    expect(paperReadSentence(paper)).toBe(sentence);
+  });
+
+  it("names the paper in the label only when the AI was shown it", () => {
+    expect(investigationLabel({ paper: READ })).toBe(INVESTIGATION_LABEL_WITH_PAPER);
+    expect(investigationLabel({ paper: { state: "no-address", readAt: AT } })).toBe(INVESTIGATION_LABEL);
+    expect(investigationLabel({})).toBe(INVESTIGATION_LABEL);
+  });
+
+  it("an answer from before the paper was read is said exactly as before; with a paper, never 'we did not fetch any page'", () => {
+    const base = {
+      sources: [src("https://example.org/a")],
+      extractsRead: 1,
+      longestExtractWords: 9,
+      matchedHost: null,
+    };
+    expect(investigationProvenance(base)).toContain(MIDDLE);
+    const withRead = investigationProvenance({ ...base, paper: READ });
+    expect(withRead).not.toContain("We did not fetch any page");
+    expect(withRead).toContain("the parts of the paper it was shown");
+    expect(withRead).toContain("not to quote it or the paper");
+    const without = investigationProvenance({ ...base, paper: { state: "no-address", readAt: AT } });
+    expect(without).not.toContain("We did not fetch any page");
+    expect(without).not.toContain("the paper it was shown");
+  });
+
+  it("captions a passage with its page and the AI's reading, and never calls none found a failure or the reverse", () => {
+    expect(passageCaption({ page: 3, bears: "partly" })).toBe("page 3 · the AI's reading: partly supports it");
+    expect(noPassagesSentence([])).toBe("The AI found no passage it could point to in what it was shown.");
+    expect(noPassagesSentence(null)).toMatch(/failed/);
+    expect(noPassagesSentence(null)).not.toMatch(/does not support/);
   });
 });

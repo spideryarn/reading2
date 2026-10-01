@@ -1427,16 +1427,16 @@ export function Reader({
    * **The cross-references the prose draws, and how the card finds where one
    * goes** — docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
    *
-   * Owner-only, and the seam is the enforcement: a visitor's capability has no
-   * `crossrefs`, so `xrefs` is null for them and nothing is drawn — no
-   * `?? artefacts…` fallback, for `works`' reason above. Already null when the
-   * artefact is stale (useCrossrefs.ts).
+   * Each arm brings its own: the owner's from `useCrossrefs`, a visitor's off
+   * the public payload (since 2026-10-01, plan 261001b). Both are already null
+   * when the artefact is stale — the hook decides it for the owner, the public
+   * reader for a visitor, by the same `isStale`.
    *
    * The resolver is `xrefTarget` bound to the same array TableView marks with,
    * so the card and the click can never disagree about a mark's target. Its
    * identity changes only when the links do.
    */
-  const xrefs = owner?.crossrefs ?? null;
+  const xrefs = capability.crossrefs;
   const resolveXref = useCallback<XrefResolver>((el) => xrefTarget(el, xrefs), [xrefs]);
 
   /**

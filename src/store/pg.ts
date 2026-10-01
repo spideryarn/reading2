@@ -141,10 +141,15 @@ import {
   articleFingerprint,
   type BlockFingerprint,
   hashBlocks,
-  type MetaFingerprint,
   type MetaFingerprintDated,
   type MetaFingerprintWithUrl,
+  citedMetaFingerprintOf,
+  metaFingerprintOf,
 } from "../source-hash.js";
+/* Moved to src/source-hash.ts on 2026-10-01 so the public reader can build the
+   same head (plan 261001b); re-exported for every caller that imports them
+   from here. */
+export { citedMetaFingerprintOf, metaFingerprintOf };
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
   Arc,
@@ -190,7 +195,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
-import { isSimpleParagraphs } from "../types.js";
+import { isUsableSimpleSummary } from "../types.js";
 import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
@@ -1853,82 +1858,6 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
 export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articles.createdAt})`;
 
 /**
- * The three metadata fields a staleness check is entitled to look at, rebuilt
- * from the revision's own columns.
- *
- * **One helper rather than the literal written out at six call sites**, because
- * the fields are the fingerprint's definition (src/source-hash.ts §
- * `MetaFingerprint`) and a call site that spelled one of them differently would
- * mark that artefact stale for ever, in Postgres only, with the filesystem
- * store calling the same article current. That is exactly the two-stores-
- * disagree failure the parity tests exist to catch.
- *
- * `?? ""` on the title matches what `articleFingerprint` does with an absent
- * one. The `byline` and `siteName` spreads are conditional because the columns
- * are nullable and `Meta`'s fields are optional — an explicit `undefined` and an
- * absent key hash the same, but the type does not accept the first.
- *
- * **Deliberately not `metaFrom`.** That builds a whole `Meta` for a reader,
- * including `url`, `lang` and `fetchedAt`, and falls back to the article's own
- * first heading for a missing title. None of that belongs in a fingerprint: the
- * head of a prompt carries three fields and a fingerprint over more of them
- * would invalidate artefacts for changes the model never saw.
- */
-export function metaFingerprintOf(revision: {
-  title: string | null;
-  byline: string | null;
-  siteName: string | null;
-}): MetaFingerprint | null {
-  /* **`null` when there is no title, matching `readMeta` in
-     src/store/artifacts-pg.ts** — *"a null title has nothing that would make a
-     usable `meta`"*. That is what the pipeline's stamp is handed, on both
-     stores, and the fingerprint deliberately tells `null` from an object whose
-     fields are empty: they are different states. Returning `{ title: "" }` here
-     made an article with no metadata current to the pipeline and stale to every
-     reader path, permanently and in Postgres only. GPT Sol, 2026-08-31;
-     tests/store-revision-columns.test.ts asserts the two agree rather than
-     asserting this returns null, so the assertion survives the fingerprint
-     changing its mind about how it encodes "absent".
-
-     `=== null`, not truthiness, for the reason `readMeta` gives: an
-     empty-string title is a different fact — extraction ran and produced
-     nothing usable — and should hash as the empty title it is. */
-  if (revision.title === null) return null;
-  return {
-    title: revision.title,
-    ...(revision.byline == null ? {} : { byline: revision.byline }),
-    ...(revision.siteName == null ? {} : { siteName: revision.siteName }),
-  };
-}
-
-/**
- * The same, **plus the final URL**, for the two stages whose prompt head prints
- * one — `ideas` and `sketch`, which send `articleWithIds`.
- *
- * **A separate function taking a wider row, and that is the point rather than a
- * cost.** A projection that forgot `final_url` cannot reach this: it is a type
- * error at the call site instead of a fingerprint quietly built without the
- * field, which is the failure mode this whole family keeps producing. The four
- * `articleText` stages go on calling `metaFingerprintOf`, so they cannot be
- * judged on a line their prompt never carries.
- *
- * The column exists and is already how Postgres reconstructs `Meta.url`
- * (`readMeta`, src/store/artifacts-pg.ts) — an earlier version of this work
- * claimed no Postgres call site carried a URL and left it out of the
- * fingerprint on that basis. That was simply wrong. GPT Sol, 2026-08-31.
- */
-export function citedMetaFingerprintOf(revision: {
-  title: string | null;
-  byline: string | null;
-  siteName: string | null;
-  finalUrl: string | null;
-}): MetaFingerprintWithUrl | null {
-  const base = metaFingerprintOf(revision);
-  if (base === null) return null;
-  return { ...base, ...(revision.finalUrl == null ? {} : { url: revision.finalUrl }) };
-}
-
-/**
  * The cited head **plus the publication date** — the fingerprint head for
  * `timeline`, and for nothing else.
  *
@@ -2511,6 +2440,7 @@ function personalisedSteps(revision: {
   sketch: Sketch | null;
   illustrated: Illustrated | null;
   trajectory: Trajectory | null;
+  simpleSummary: SimpleSummary | null;
 }): StepName[] {
   /* `Record`, not `Partial<Record>`: another artefact gaining a `profileHash`
      has to fail here, at the compiler, rather than fall off the dialog. It has
@@ -2530,6 +2460,13 @@ function personalisedSteps(revision: {
        stamp says whose. Its stored output is public but the stamp is not, and
        an owner about to publish is owed the fact. */
     trajectory: revision.trajectory,
+    /* The eighth, since 2026-10-01: all plain-words levels are pitched at
+       the owner's profile and goal, and a visitor reads the owner's. Plan
+       261001b. */
+    simple:
+      revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
+        ? revision.simpleSummary
+        : null,
   };
   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
      the record is now exactly the artefacts that can be personalised and a
@@ -2587,7 +2524,7 @@ export function shareableArtefacts(revision: {
        malformed band. The owner's inventory must answer the same question or
        it promises that a shared link contains something the link withholds. */
     simpleSummary:
-      revision.simpleSummary && isSimpleParagraphs(revision.simpleSummary.paragraphs)
+      revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
         ? revision.simpleSummary
         : null,
     citations: revision.citations,
@@ -3197,7 +3134,10 @@ const rawPgArticleReader: ArticleReader = {
         /* The same stamp shape as `crossrefs`, over its own exact request. */
         case "simple": {
           const simple = revision.simpleSummary as SimpleSummary | null;
-          if (!simple || !tree || blocks.length === 0) return false;
+          /* The shape guard every other read uses, so Metadata cannot call
+             done what the GET and the public page treat as absent (Sol's
+             plan review of 261001b, P1-2). */
+          if (!isUsableSimpleSummary(simple) || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
               inputHash: simple.sourceHash,
@@ -3654,9 +3594,10 @@ const rawPgArticleReader: ArticleReader = {
    *
    * The cited head and the tree used by its exact-request fingerprint.
    * **A 404 is the ordinary case** (the step is off `DEFAULT_INGEST_STEPS`); an
-   * EMPTY list is a 200. **Owner-only**: there is no public twin in v1 —
-   * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md
-   * § Left for Greg. The prose draws nothing when `stale` (Sol F8).
+   * EMPTY list is a 200. The owner's read: a visitor's links come inside the
+   * public article payload, judged stale by the same `isStale` over the same
+   * inputs (src/store/public-reader.ts, plan 261001b). The prose draws nothing
+   * when `stale` (Sol F8).
    */
   async loadCrossrefs(slug: string): Promise<CrossrefsFound> {
     requireSlug(slug);
@@ -3698,7 +3639,9 @@ const rawPgArticleReader: ArticleReader = {
     const found = await currentRevision(slug, "simpleSummary");
     if (!found) throw notFound(slug);
     const simpleSummary = found.revision.simpleSummary as SimpleSummary | null;
-    if (!simpleSummary || !isSimpleParagraphs(simpleSummary.paragraphs)) {
+    /* The whole-artefact guard turns every `simple/1` row into this 404, even
+       if an imported row happens to carry a valid-looking `levels` field. */
+    if (!isUsableSimpleSummary(simpleSummary)) {
       throw Object.assign(
         new Error(
           `No plain-words summary for "${slug}" yet. Write one with ` +

@@ -436,15 +436,30 @@ export const REQUEUE_BUDGET = 2;
  * (docs/project/ingest-queue.md). It is gone; this is what replaced it, counted
  * inside the `queue_state` lock — src/store/pg-jobs.ts § `claim`.
  *
- * **Three, asked and answered**, 2026-08-30: enough to ingest one article,
- * ingest a second, and answer a reader asking for a glossary, all at once. It
- * supersedes the "default to 2" recorded earlier the same day in
- * docs/plans/260830am-faster-ingest-and-concurrency.md, which was answering a narrower
- * question.
+ * **Six since 2026-10-01**, and **production runs this default** — nothing
+ * sets the variable on Vercel. It was three from 2026-08-30 (enough to ingest
+ * one article, ingest a second, and answer a glossary at once), until mode jobs
+ * on one article started overlapping and one reader opening four modes filled
+ * every slot. Asked whether to raise it to 6–8, Greg, 2026-10-01: *"yes"*.
  *
- * **What the number is actually rationing is spend and provider rate limits**,
- * not CPU or connections — there is no spend cap anywhere in this repo, and the
- * label and summary fan-outs each multiply by N. It is not rationing
+ * **Six, the low end, because what binds is unmeasured above three.** Which
+ * limit bites first depends on where Vercel puts the jobs: spread across
+ * instances, it is the model provider's throughput, since the width gates are
+ * per process and a PDF extract alone can put 100 calls in flight; packed onto
+ * one instance, it is memory under several PDF parses. The database and
+ * Vercel's own concurrency and duration limits are nowhere near. **Eight is the
+ * next step**, as an environment variable, once production has run at six
+ * without provider 429s, memory errors or pool timeouts.
+ * docs/plans/261001b-raise-the-job-concurrency-cap-to-six.md.
+ *
+ * **There is no per-reader share, deliberately**: one reader can still take
+ * every slot. With one active owner in production a share would only have
+ * idled slots; the plan above holds its reviewed shape for when it bites.
+ *
+ * **What the number is primarily rationing is spend and provider rate limits**,
+ * with memory as the unmeasured packed-instance limit above — there is no spend
+ * cap anywhere in this repo, and the label and summary fan-outs each multiply by
+ * N. It is not rationing
  * correctness: which jobs may run on one article at once is the article's own
  * line — the predecessor rule in `claim`, which since 2026-09-29 lets
  * compatible mode jobs overlap and nothing else (src/store/jobs.ts,
@@ -459,7 +474,7 @@ export const REQUEUE_BUDGET = 2;
  * **ignored rather than obeyed**: `SPIDERYARN_JOB_CONCURRENCY=0` would stop
  * every ingest in the account and read exactly like the queue being wedged.
  */
-export const DEFAULT_JOB_CONCURRENCY = 3;
+export const DEFAULT_JOB_CONCURRENCY = 6;
 
 export function jobConcurrency(): number {
   const asked = Number(process.env.SPIDERYARN_JOB_CONCURRENCY);
@@ -733,7 +748,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      the worst run so far is **417s**, and a fourth plate — `MAX_PLATES` is 4,
      src/illustrated-plate.ts — puts the worst case at about **450s**.
      Sequential by design: bounded parallelism here would multiply against the
-     three-job concurrency above.
+     global job concurrency above.
 
      **600s, and it is a ceiling rather than a rounding.** Every other row here
      rounds up hard, usually to twice the worst — this one cannot. Twice 450s is
@@ -2211,7 +2226,7 @@ export async function advanceJobWith(
    * lock (`SPIDERYARN_JOB_CONCURRENCY`, `jobConcurrency()` above) — and this is
    * the **only** door that reaches
    * the job of an owner who is not coming back. Scope it, and a reader whose
-   * claimant died leaves a `running` row holding one of the three global slots
+   * claimant died leaves a `running` row holding one of the global slots
    * for ever, because the only thing that would settle it is a request that
    * owner will never make again. `listJobs` may scope its call for an unrelated
    * reason: a read-only page load should not end somebody else's job.

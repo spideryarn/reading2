@@ -1,0 +1,20 @@
+{
+  "arm": "high-goalB-slider1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-09-30T23:52:59.891Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 14095,
+  "costUsd": 0.068782,
+  "tokens": {
+    "input": 28861,
+    "output": 1106,
+    "reasoning": 575
+  },
+  "ok": false,
+  "error": "The model wrote 210 \"brief\" words and the limit is 200. Nothing is kept rather than a cut-down version."
+}

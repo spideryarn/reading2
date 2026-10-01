@@ -51,10 +51,13 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
+import { blockHashQuery } from "../src/store/pg.js";
+import { inputFingerprint as crossrefsFingerprint } from "../src/crossrefs-fingerprint.js";
+import { citedMetaFingerprintOf } from "../src/source-hash.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Citations, Debate, Faq, Glossary, Ideas, Trajectory, TweetThread } from "../src/types.js";
+import type { Citations, Debate, Faq, Glossary, Ideas, Trajectory, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -1258,6 +1261,99 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(r.text, "the fingerprint").not.toContain("0123456789abcdef");
     /* And the neighbour's, for the reason the comments case gives. */
     expect(r.text, "the neighbour's question").not.toContain(NEIGHBOUR_CRITERION);
+  });
+
+  /**
+   * **Cross-references cross exactly when the owner's own read calls them
+   * fresh** — plan 261001b, SPIDERYARN-READING2-5Z.
+   *
+   * Two independent observations of one question. The owner's
+   * `GET /api/crossrefs` answers `stale` from `pg.ts`'s inputs; the public read
+   * answers by putting the key in the payload or not, from its own. Each
+   * variant is asserted both ways — a fresh hash must cross (the positive
+   * control: a public reader hardwired to "stale" would otherwise pass) and a
+   * wrong one must not. The variants are the edges GPT Sol named (plan review
+   * P3): this fixture's `final_url` carries a signed query, which the public
+   * masthead drops but the fingerprint must not; and a null title with a byline
+   * and site name set, where the head collapses to `null` on both sides.
+   */
+  it("serves the cross-references exactly when the owner's own read calls them fresh", async () => {
+    const db = getDb();
+    const [original] = await db
+      .select({ title: articleRevisions.title, byline: articleRevisions.byline, siteName: articleRevisions.siteName })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, REVISION_ID));
+    const link = { from: HEADING_ID, phrase: "A piece somebody shared", to: BLOCK_ID };
+    const variants = [
+      { name: "as fetched, a signed final URL", title: EXTRACTED_TITLE, byline: null, siteName: null },
+      { name: "no title, but a byline and a site", title: null, byline: "A. Writer", siteName: "Example Site" },
+    ];
+    try {
+      for (const v of variants) {
+        await db
+          .update(articleRevisions)
+          .set({ title: v.title, byline: v.byline, siteName: v.siteName })
+          .where(eq(articleRevisions.id, REVISION_ID));
+        const [rev] = await db
+          .select({
+            title: articleRevisions.title,
+            byline: articleRevisions.byline,
+            siteName: articleRevisions.siteName,
+            finalUrl: articleRevisions.finalUrl,
+            tree: articleRevisions.tree,
+          })
+          .from(articleRevisions)
+          .where(eq(articleRevisions.id, REVISION_ID));
+        const fresh = crossrefsFingerprint(
+          await blockHashQuery(db, REVISION_ID),
+          rev!.tree as Tree,
+          citedMetaFingerprintOf(rev!),
+        );
+        for (const [sourceHash, expectFresh] of [
+          [fresh, true],
+          ["0000000000000000", false],
+        ] as const) {
+          await db
+            .update(articleRevisions)
+            .set({
+              crossrefs: {
+                version: "crossrefs/2",
+                generator: "test",
+                slug: SLUG,
+                sourceHash,
+                links: [link],
+                dropped: {
+                  unknownIds: 0,
+                  nearby: 0,
+                  length: 0,
+                  unquoted: 0,
+                  ambiguous: 0,
+                  overlap: 0,
+                  truncated: 0,
+                  malformed: 0,
+                },
+                generatedAt: "2026-10-01T00:00:00.000Z",
+                elapsedMs: 1,
+              },
+            })
+            .where(eq(articleRevisions.id, REVISION_ID));
+          const owner = await call("GET", `/api/crossrefs/${SLUG}`, { as: OWNER });
+          expect(owner.status, v.name).toBe(200);
+          expect((owner.body as { stale: boolean }).stale, `${v.name}: the owner's verdict`).toBe(!expectFresh);
+          const visitor = await call("GET", `/api/public/article/${SLUG}`);
+          const got = (visitor.body as { crossrefs?: { links: unknown[] } }).crossrefs;
+          if (expectFresh) expect(got, `${v.name}: a visitor gets the fresh links`).toEqual({ links: [link] });
+          else expect(got, `${v.name}: a visitor gets no stale links`).toBeUndefined();
+          /* The hash itself never leaves. */
+          expect(visitor.text).not.toContain(sourceHash);
+        }
+      }
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ ...original!, crossrefs: null })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    }
   });
 
   /**

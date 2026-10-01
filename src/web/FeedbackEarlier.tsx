@@ -24,6 +24,14 @@
  * using" — and a filter by it: All · Shipped · Not shipped.
  * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
  *
+ * > In Feedback / Earlier / All, add the indicator for whether each suggestion
+ * > has shipped or not.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-7D)
+ *
+ * So in All a row that has not shipped says Not shipped, quietly.
+ * docs/plans/261001c-earlier-tab-marks-not-shipped-too.md.
+ *
  * ## Once per opening, per filter
  *
  * Each filter is read the first time it is chosen and kept while the reader
@@ -164,6 +172,10 @@ const EMPTY: Record<EarlierFeedbackShow, string> = {
 
 const SHIPPED_TITLE = "We shipped a change for this, and it is in the version of Spideryarn you're using.";
 
+/** Careful, because "not shipped" is only "no note marks it shipped": it may be
+ *  declined, waiting, on its way, or — with a missing note — already here. */
+const UNSHIPPED_TITLE = "This isn't marked as shipped in the version of Spideryarn you're using.";
+
 function when(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     day: "numeric",
@@ -251,6 +263,16 @@ export function EarlierList({
                       {" · "}
                       <span className="fb-earlier-shipped" title={SHIPPED_TITLE}>
                         Shipped
+                      </span>
+                    </>
+                  ) : show === "all" ? (
+                    /* Only in All (SPIDERYARN-READING2-7D): there an absence
+                       would not read as an answer, while in Not shipped every
+                       row would say it. */
+                    <>
+                      {" · "}
+                      <span className="fb-earlier-unshipped" title={UNSHIPPED_TITLE}>
+                        Not shipped
                       </span>
                     </>
                   ) : null}

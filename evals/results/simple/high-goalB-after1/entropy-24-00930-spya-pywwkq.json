@@ -1,0 +1,101 @@
+{
+  "arm": "high-goalB-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.927Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 91615,
+  "costUsd": 0.147452,
+  "tokens": {
+    "input": 20681,
+    "output": 10609,
+    "reasoning": 9291
+  },
+  "ok": true,
+  "reader": "goalB",
+  "words": 215,
+  "fullerWords": 300,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how researchers use information theory to study how brain cells process information. It focuses on a method called partial information decomposition, or PID, which breaks down how input signals combine to affect a neuron's behavior.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "This matters because scientists want to know if neurons just add up their inputs, or if they do something more like real computation. PID can show whether a neuron's response depends on the exact combination of inputs, not just each one added separately.",
+      "ids": [
+        "spya-e94ury",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons carry about a target neuron into three parts. There's information they share (redundant), information only one of them carries (unique), and information only visible when you combine them (synergistic). Studies of real neurons found this \"synergy\" is higher in densely connected hub neurons, and higher still when their inputs are moderately similar to each other.",
+      "ids": [
+        "spya-pjdgu6",
+        "spya-fud8q3",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "But using these methods on real recordings is hard. As you add more neurons to an analysis, the number of possible patterns explodes. You then need huge amounts of data to estimate probabilities accurately. Different mathematical definitions of \"shared information\" give different answers, and no one definition is agreed on by everyone. Software tools exist, but each covers only some cases, and wrong choices can produce misleading results.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-qa7gt2",
+        "spya-rc76qn"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about applying information theory to study how neural circuits process information. Its central tool is partial information decomposition, or PID, a framework that mathematically separates how multiple input neurons jointly shape the activity of a target neuron.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "The authors argue this matters because standard measures of information flow, like mutual information and transfer entropy, only capture correlation or one-way influence between neurons. They cannot show how a neuron combines several inputs into something new, which the authors treat as genuine computation.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "PID decomposes the information two or more source neurons provide about a target into three parts. These are information carried by either source (redundant), information carried by only one source (unique), and information visible only in their joint pattern (synergistic). This synergistic part is treated as a signature of actual information processing, rather than simple signal passing.",
+      "ids": [
+        "spya-pjdgu6",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Studies of cultured cortical neurons found synergy tracks the strength of feedforward connections between neurons, and is much higher in densely interconnected \"rich club\" neurons. Synergy also rises with more recurrent connections between source neurons, and peaks when source neurons are moderately, rather than highly, correlated with each other. Similar patterns appeared in recordings from behaving monkeys, where synergy also shifted with the stage of a task.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "The article is candid about practical limits for applying this to real recordings. The number of distinct information components grows explosively with the number of neurons considered together, so that even six inputs already yield millions of parts. Finite recordings introduce estimation bias, since standard entropy estimators systematically underestimate true randomness and can show fake dependence between unrelated signals. There is also no single agreed definition of \"redundant information.\" Available software packages each support only a subset of cases, such as discrete versus continuous data or two versus many sources.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-qa7gt2",
+        "spya-rc76qn"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -96,9 +96,8 @@ export type ReaderCapability =
        * the hook has already decided what is drawable, so nothing downstream
        * has a staleness flag to forget.
        *
-       * **No visitor arm, for the citations' reason:** the public DTO carries
-       * no cross-references until the defence edit left for Greg lands, so a
-       * visitor gets no marks and no card by construction.
+       * The visitor arm has its own, off the public payload, since
+       * 2026-10-01 (plan 261001b): Greg approved the defence edit.
        */
       crossrefs: readonly Crossref[] | null;
       /**
@@ -157,6 +156,15 @@ export type ReaderCapability =
        * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
        */
       searches: SavedSearch[];
+      /**
+       * **The cross-references the prose may draw**, or null — since
+       * 2026-10-01 (plan 261001b, SPIDERYARN-READING2-5Z). Data, like
+       * `comments`: the public DTO sends them only when fresh, by the owner's
+       * own `isStale`, so this is already the drawable answer the owner's
+       * `useCrossrefs` gives, and nothing downstream has a staleness flag to
+       * forget.
+       */
+      crossrefs: readonly Crossref[] | null;
       /**
        * **The artefacts this piece has, as data rather than as a loader.**
        *

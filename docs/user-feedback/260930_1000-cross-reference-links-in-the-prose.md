@@ -68,3 +68,7 @@ Plan: [261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data
 
 Plan: [260930f](../plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md).
 Doc: [cross-references.md](../project/cross-references.md).
+
+## Follow-up, 2026-10-01: visitors
+
+**Visitors now see the links**, from the public page itself, with no extra request. They see them only when the links are up to date: the server asks the same staleness question for a visitor as for you, so a visitor never sees a link your own view would hide. Each link is also re-checked on the way out (its phrase must be in its block). This closes the visitor half that was waiting in awaiting-approval.md. Greg approved widening the public DTO (a listed defence), relayed by the Overseer. Shipped in `6c1b2cd2`, with GPT Sol's code-review fixes in `7431f0fd`. Plan: [261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md).

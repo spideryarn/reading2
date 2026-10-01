@@ -7,6 +7,7 @@
  * answer stops attaching. That includes the article head and the current
  * Look-it-up match: both alter the request even when the article's blocks do not.
  */
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -18,6 +19,8 @@ import {
   investigateContextHash,
   type MatchedPage,
 } from "../src/citation-investigate-context.js";
+import { generationKey } from "../src/models.js";
+import { PAPER_SELECTION_VERSION } from "../src/paper-evidence.js";
 import type { BlockId, CitationInvestigation, Citations, CitedWork, Meta } from "../src/types.js";
 
 const A = "spya-aaaaaa" as BlockId;
@@ -119,6 +122,34 @@ describe("the investigate context", () => {
     expect(context.passages[0]).toHaveLength(INVESTIGATE_PASSAGE_CAP);
     expect(context.passages[1]).toBe("Second paragraph cites Kaplan again.");
     expect(context.reference).toBe("Kaplan 2020");
+  });
+
+  it("includes the paper selection version in the fingerprint", () => {
+    const context = investigateContext(work(), textOf(BLOCKS));
+    const articleKey = investigateArticleKey(META, BLOCKS);
+    const expected = createHash("sha256")
+      .update(
+        JSON.stringify([
+          CITATION_INVESTIGATE_VERSION,
+          PAPER_SELECTION_VERSION,
+          generationKey("m"),
+          articleKey,
+          context.title,
+          context.authors,
+          context.year,
+          context.reference,
+          context.url,
+          context.linkFrom,
+          context.why,
+          context.passages,
+          null,
+          [MATCHED.url, MATCHED.title, MATCHED.quotes],
+        ]),
+        "utf8",
+      )
+      .digest("hex")
+      .slice(0, 16);
+    expect(investigateContextHash(context, articleKey, null, MATCHED, "m")).toBe(expected);
   });
 });
 

@@ -1,0 +1,60 @@
+{
+  "arm": "high-15-beforeA",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:03.972Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 9597,
+  "costUsd": 0.048384,
+  "tokens": {
+    "input": 19852,
+    "output": 868,
+    "reasoning": 222
+  },
+  "ok": true,
+  "words": 266,
+  "paragraphs": [
+    {
+      "text": "This article is a review about how scientists study the way brains handle information. It explains a method called partial information decomposition, or PID, which breaks down how neurons combine signals from other neurons. The authors focus especially on one part of this method called synergy, which is information that only shows up when you look at multiple input signals together, not from any one alone.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says figuring out how brains process information is one of neuroscience's biggest unanswered problems. For a long time this was hard to study because scientists lacked enough data and lacked good tools to make sense of it. New recording technology now lets researchers track hundreds or thousands of neurons at once, and PID offers a way to actually interpret what all that activity means.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "The core idea is that when two neurons feed into a third one, their combined information can be split into three types: redundant (repeated by both), unique (only from one), and synergistic (only appears when both are considered jointly). Synergy is treated as a sign of real computation, since it means the neuron isn't just adding up its inputs but reacting to patterns among them.",
+      "ids": [
+        "spya-h5dz45",
+        "spya-e94ury",
+        "spya-pjdgu6"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain tissue and from monkeys doing tasks, the authors found synergy was higher in densely connected neuron hubs called rich clubs, in neurons with more loop-like (recurrent) connections, and where input signals were moderately similar to each other. In monkeys, how much synergy appeared also shifted depending on what task stage the animal was in, suggesting synergy reflects real behavioral demands, not just fixed wiring.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

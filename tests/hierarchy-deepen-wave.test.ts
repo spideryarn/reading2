@@ -470,8 +470,16 @@ describe("how wide a wave may be", () => {
 
     /* The other side: what the account sees is every concurrent job's wave at
        once, and this is the number the gate then governs rather than the number
-       the gate is for. */
-    expect(DEFAULT_JOB_CONCURRENCY * EXPANSION_CONCURRENCY).toBeLessThanOrEqual(24);
+       the gate is for.
+
+       **48 is a chosen ceiling, not a measurement.** It was 24 while the job
+       cap was 3, justified as a quarter of `CHUNK_CONCURRENCY` — but that is
+       the PDF stage's figure on a different model, so it was never evidence
+       about the Sonnet calls made here (GPT Sol, 2026-10-01). The cap went to 6
+       on 2026-10-01 (docs/plans/261001b-raise-the-job-concurrency-cap-to-six.md),
+       which is 6 × 8. Raising either number again should go red here, so that
+       it is decided rather than inherited. */
+    expect(DEFAULT_JOB_CONCURRENCY * EXPANSION_CONCURRENCY).toBeLessThanOrEqual(48);
   });
 });
 
