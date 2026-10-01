@@ -625,8 +625,13 @@ export async function runCitationLookup(
   entryId: string,
   listed: CitedWork,
   article: Article,
-  /** The article's High-powered AI setting — which model searches (plan 260930f). */
-  power: ModelPower,
+  /**
+   * **Which model searches and reads**, resolved by the caller: `/find`
+   * takes the article's High-powered AI setting (plan 260930f); *Dig deeper*
+   * on a cited work sends `DIG_DEEPER_MODEL` whatever it says, because the
+   * verdict is shown to the reader (plan 261001p stage 2, Sol F3).
+   */
+  model: string,
 ): Promise<FindCitationResponse> {
   const send = deps.call ?? ((body, options) => openRouterJson("citations-find", body, options));
   const now = deps.now ?? (() => new Date().toISOString());
@@ -646,7 +651,6 @@ export async function runCitationLookup(
   const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
   const context = lookupContext(work, (id) => text.get(id));
 
-  const model = modelFor("citations-find", power);
   const line = log("model").child({ slug, entryId });
 
   const started = Date.now();
@@ -757,7 +761,7 @@ export function makeFindCitation(
         article,
         /* The reader seam is owner-scoped, so the ambient owner is this
            article's (plan 260930f). */
-        articlePower(article.highPowerSince),
+        modelFor("citations-find", articlePower(article.highPowerSince)),
       );
     } catch (err) {
       /* `callOnce` brands undici's two otherwise-indistinguishable TypeErrors

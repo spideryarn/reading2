@@ -4080,7 +4080,9 @@ export interface InvestigateCitationDone {
 }
 
 /**
- * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+ * Which step of the one *Dig deeper* press (was *Investigate*) is running:
+ * `searching` — the forced web search, first, on every press (plan 261001p
+ * stage 2); then (plan 260930d) `finding`
  * — the lookup that looks for the work's own page, only when the row has no
  * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
  * paper itself fetched and checked, and when read, its passages asked for),
@@ -4088,7 +4090,7 @@ export interface InvestigateCitationDone {
  * a `lookup` frame after `finding` carries the lookup's answer, the same
  * `FindCitationResponse` `POST …/find` answers.
  */
-export type InvestigateStage = "finding" | "reading-paper" | "reading";
+export type InvestigateStage = "searching" | "finding" | "reading-paper" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {

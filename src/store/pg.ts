@@ -102,6 +102,7 @@ import {
   investigateContextHash,
   matchedPageOf,
 } from "../citation-investigate-context.js";
+import { DIG_DEEPER_MODEL } from "../dig-deeper.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
 import { renderProfile } from "../profile.js";
 import {
@@ -3857,8 +3858,10 @@ const rawPgArticleReader: ArticleReader = {
         shelfFrom(found.article),
       );
       const articleKey = investigateArticleKey(promptMeta, blocks);
-      /* `standard` for `model`'s reason above. */
-      const investigateModel = modelFor("citation-investigate", "standard");
+      /* **Dig deeper's model, the very constant the press writes with** (plan
+         261001p stage 2, Sol F2) — not `modelFor`, whose environment override
+         would make this side hash another model and hide every kept answer. */
+      const investigateModel = DIG_DEEPER_MODEL;
       withInvestigations = attachInvestigations(
         withFinds,
         new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),
