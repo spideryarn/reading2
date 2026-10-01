@@ -1883,6 +1883,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
       "ledger, as for `tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/dig-deeper-comment.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Dig deeper, stage 1 (2026-10-01, plan 261001p). It " +
+      "seeds one article with `scratchArticleInPg`, gives one comment an answer in SQL, and " +
+      "drives `POST /api/comments/:slug/:id/answer` with `deep: true` through `handleApi`, with " +
+      "the allowance, the search and `explainStream` stubbed — no model is called and no ledger " +
+      "row is written. Its reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/comment-answer-stream-lifetime.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/source-guess-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2645,6 +2657,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      Storage the way its neighbour above does, through `scratchArticleInPg`. */
   "tests/comment-answer-stream-lifetime.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
+  /* Plan 261001p. Seeds one article and one answered comment, and reads the
+     row back after a refused Dig deeper to show it was left alone — a read
+     a neighbour answering the same slug could falsify. No model is called. */
+  "tests/dig-deeper-comment.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,

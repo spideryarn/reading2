@@ -236,16 +236,25 @@ describe("the reported search count", () => {
   });
 });
 
-describe("a deeper search, when the reader says the answer was not good enough", () => {
+/** What a *Dig deeper* press found — src/dig-deeper.ts. tests/dig-deeper.test.ts has the rest. */
+const DUG = {
+  sources: [{ url: "https://example.org/pp", title: "A page", excerpt: "What it says." }],
+  searches: 1,
+  libraryQuery: "alpha",
+  library: [],
+};
+
+describe("Dig deeper, when the reader says the answer was not good enough", () => {
   it("does NOT touch the tool definition, which would invalidate every cache tier", async () => {
-    /* The first draft of this feature raised `max_uses` from 4 to 8 for a deep
-       call. Tools render at position 0, ahead of system and messages, and
+    /* The first draft of the deep search raised `max_uses` from 4 to 8 for a
+       deep call. Tools render at position 0, ahead of system and messages, and
        editing a tool definition invalidates all three tiers — so the variant
        that took pains to keep its instruction out of `SYSTEM` was throwing the
-       whole cache away one field earlier. The cap is now the same for everyone.
-       docs/research/260826b-prompt-caching-anthropic.md, invalidation table. */
+       whole cache away one field earlier. The cap is now the same for everyone,
+       and a dig keeps it. docs/research/260826b-prompt-caching-anthropic.md,
+       invalidation table. */
     fetchMock.mockResolvedValue(reply({}));
-    await explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", deep: true });
+    await explain({ power: "standard", meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", dig: DUG });
     const deepTools = bodyOf(fetchMock).tools;
 
     fetchMock.mockClear();
@@ -257,13 +266,13 @@ describe("a deeper search, when the reader says the answer was not good enough",
   it("leaves the cached prefix byte-identical, so it does not pay for the article twice", () => {
     /* **The expensive mistake this test exists to stop.** The cache breakpoint
        sits on the article content-part, so the cached prefix is system+article.
-       Putting the deep instruction in `SYSTEM` — the obvious place — changes
+       Putting the dig's instruction in `SYSTEM` — the obvious place — changes
        that prefix, which is a cache miss AND a second cache write of the whole
        article, on the one call in the app a reader is sitting and waiting for.
        Nothing about it is visible from outside: the answer is fine, it just
        costs more. docs/project/prompt-caching.md. */
     const plain = buildExplainMessages(meta, blocks, "spya-k3m9qt", "alpha");
-    const deep = buildExplainMessages(meta, blocks, "spya-k3m9qt", "alpha", true);
+    const deep = buildExplainMessages(meta, blocks, "spya-k3m9qt", "alpha", DUG);
 
     expect(deep[0]).toEqual(plain[0]); // the system message
     const parts = (m: (typeof plain)[number]) => m.content as { text: string }[];
@@ -273,8 +282,8 @@ describe("a deeper search, when the reader says the answer was not good enough",
 
     // And the instruction really is there, after it.
     const last = parts(deep[1] as (typeof plain)[number])[1]?.text ?? "";
-    expect(last).toMatch(/look properly/);
-    expect(JSON.stringify(plain)).not.toMatch(/look properly/);
+    expect(last).toMatch(/dig deeper/);
+    expect(JSON.stringify(plain)).not.toMatch(/dig deeper/);
   });
 });
 
