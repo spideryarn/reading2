@@ -343,15 +343,16 @@ recurring form.
   for the Mindstone login to be removed from the box altogether (*"we shouldn't be using that account
   here"*), so it is out of `~/.claude-accounts/registry.json` and logged out, and every session runs
   on the default login.
-- **[changelog.md](changelog.md)**, after every deploy, since 2026-09-30 (every six hours from
-  2026-09-12 until then) — Greg: *"run a changelog.md at some point in the next few hours if you
-  haven't recently - make sure that's part of your regularly scheduled things you do"*, and on
-  2026-09-30, *"yes make the changelog loop happen in sync with deploys"*. It is step 6 of
-  [Deploying](#deploying): one `run-claude --mcp` job under the default login, which is where the
-  Vercel MCP is signed in. A run with no new production deploy writes nothing and says so; the lines
-  it does write ship with the next deploy, with no human gate ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)).
-  There is no separate loop any more: a failed run is caught by the next one, because each run starts
-  from the file's watermark and covers every deploy since.
+- **[changelog.md](changelog.md)**, before every deploy, since 2026-10-01 (after every deploy from
+  2026-09-30, every six hours from 2026-09-12 until then) — Greg: *"run a changelog.md at some point
+  in the next few hours if you haven't recently - make sure that's part of your regularly scheduled
+  things you do"*, and on 2026-09-30, *"yes make the changelog loop happen in sync with deploys"*. It
+  is step 3 of [Deploying](#deploying): `npm run changelog:prepare`, one `run-claude` job under the
+  default login, no Vercel MCP needed. A run with nothing a reader would see writes no notes and says
+  so; the notes it does write ship in the deploy that follows, with no human gate
+  ([§ 2](#2-answer-facts-route-judgement-default-the-product-call)). There is no separate loop: a
+  failed run is caught by the next one, which plans from the history's last line, and by the deploy
+  gate, which refuses a deploy without notes.
 - **[improve-the-codebase.md](../reusable/improve-the-codebase.md)**, every week or so, ending in an
   umbrella plan; then fan the clusters out to separate agents, **staggered, with non-overlapping file
   sets**.
@@ -515,22 +516,26 @@ Every few hours, as a tmux loop like the feedback sweep's:
 2. Read every new migration and `.sql` file since `origin/main`. Additive ones you apply and name in
    the report. Anything that would destroy reader data goes to Greg first — a dropped table or
    column, a delete, a truncate, a destructive backfill.
-3. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
+3. **Write the release notes first**: `npm run changelog:prepare` under `scripts/tmux-job.ts`, then
+   pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
+   itself"*. It commits and pushes the notes for what is about to ship
+   ([changelog.md § Running it](changelog.md#running-it)), and the deploy's `changelog` gate refuses
+   a commit without them.
+4. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
-   release's; say which tests in the report. If it fails only because `dev` moved during the run
-   (*"level with origin/dev"*), pull and run it once more.
-4. It is not deployed until three things agree: the exit code, the `Target:` line naming the
+   release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
+   for the notes; say so in the report. If it fails only because `dev` moved during the run
+   (*"level with origin/dev"*, or `changelog` naming new commits), pull, re-run step 3 if `changelog`
+   asked for it, and deploy once more.
+5. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
    HEAD and `origin/main`. The success line alone is not evidence —
    [deployment.md](deployment.md).
-5. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
+6. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
    to Greg.
-6. **Then start a changelog run**, straight away — Greg, 2026-09-30: *"make sure we're updating the
-   Changelog as part of the deploy process going forwards"*. It describes the deploy that just
-   happened, and its lines ship with the next one, so the page runs one deploy behind by design
-   ([changelog.md § Running it](changelog.md#running-it)). It is its own job under
-   `scripts/tmux-job.ts`, not a step inside `npm run deploy`: a changelog failure must not fail a
-   deploy.
+7. **Then `npm run changelog:promote`** — seconds — to record the deploy in the changelog's
+   history. Greg, 2026-09-30: *"make sure we're updating the Changelog as part of the deploy process
+   going forwards"*. A skipped one costs readers nothing; the next `prepare` promotes first.
 
 ### Dependabot alerts
 

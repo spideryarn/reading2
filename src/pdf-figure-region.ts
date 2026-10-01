@@ -848,3 +848,173 @@ function touches(a: PageBox, b: PageBox, gap: number = TOUCH_GAP_PT): boolean {
 function intersects(a: PageBox, b: PageBox): boolean {
   return b.x0 < a.x1 - EPS_PT && a.x0 < b.x1 - EPS_PT && b.y0 < a.y1 - EPS_PT && a.y0 < b.y1 - EPS_PT;
 }
+
+/* ------------------------------------------------------------------ *
+ * A region the model pointed at — the composite route
+ * ------------------------------------------------------------------ */
+
+/*
+ * **A figure made of several things, rendered from the model's box once the
+ * page shows the box is this caption's.** docs/plans/261001q-pdf-tables-and-composite-figures.md
+ * § Stage 2, report spya-pawfwx.
+ *
+ * Six photos in a grid, three charts in one frame, eight blot strips: the
+ * bitmap route sees several pictures, the drawn route refuses any page with a
+ * picture, and `judgeLocatedBox` (src/pdf-figure-locate.ts) stores one embedded
+ * picture whole, so all three refuse a composite — even when the model's box
+ * is exactly right, as it was three times out of three on the paper that
+ * reported it. This renders the box instead.
+ *
+ * **The bar is Greg's, and it is lower than the other routes' on purpose:**
+ *
+ * > If it comes down to it, I'd rather accidentally pull in a bit of extra
+ * > stuff that got included within the bounding box than have no figure
+ * > imported at all
+ * >
+ * > — Greg, 2026-10-01
+ *
+ * So nothing here proves that every pixel is the figure's — no strict-read
+ * veto, no ink ownership, and paint pdf.js cannot measure may come along. What
+ * it proves is that **the region is this caption's figure and not mostly
+ * something else**: the caption found once at a line start (`findCaption`),
+ * the region beside it, no other figure's or table's caption in it or as near
+ * to it, and not mostly prose. Those are the failures Greg did not accept.
+ */
+
+/** How far, in points, a caption may sit from its figure's region — about two lines. */
+export const CAPTION_REACH_PT = 24;
+/** A region whose prose lines cover this share of it is a column of text, not a figure with a stray line. */
+export const MAX_PROSE_SHARE = 0.3;
+/** A picture, drawing or label is taken into the region when at least this share of it is already inside. */
+export const SNAP_SHARE = 0.5;
+
+export type LocatedRegionRefusal =
+  | "rotated"
+  | "offset-view-box"
+  | "empty-caption"
+  | "caption-not-found"
+  | "caption-ambiguous"
+  | "caption-mid-line"
+  /** The caption is on the page, and not next to the region. */
+  | "caption-not-adjacent"
+  /** Another figure's or table's caption is in the region, or as near to it as its own. */
+  | "another-caption"
+  | "mostly-prose"
+  | "too-small"
+  | "too-large";
+
+export type LocatedRegionVerdict =
+  | { ok: true; region: PageBox; containment: ContainmentBox[] }
+  | { ok: false; detail: LocatedRegionRefusal };
+
+export interface LocatedRegionInput {
+  /** The answered page's layout — the forgiving read; its `strictAgrees` is not consulted. */
+  layout: PageLayout;
+  /** That page's image paints (`readPdfRasters().paints`). Only `xobject` boxes are trusted. */
+  pictures: readonly { op: "xobject" | "other"; box: PageBox; clip: PageBox | null }[];
+  /** The model's box, in page points. */
+  box: PageBox;
+  /** The marker's `<figcaption>` text. */
+  caption: string;
+}
+
+/** The region to render for this caption, or why the box cannot be shown to be its figure. Pure. */
+export function judgeLocatedRegion(input: LocatedRegionInput): LocatedRegionVerdict {
+  const refuse = (detail: LocatedRegionRefusal): LocatedRegionVerdict => ({ ok: false, detail });
+  const { layout } = input;
+  if (((layout.rotate % 360) + 360) % 360 !== 0) return refuse("rotated");
+  const [vx0, vy0, vx1, vy1] = layout.view;
+  if (Math.abs(vx0) > 0.01 || Math.abs(vy0) > 0.01) return refuse("offset-view-box");
+  const view: PageBox = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
+  const page: Page = { width: vx1 - vx0, height: vy1 - vy0, top: vy1, bottom: vy0 };
+
+  /* Rule 2: the caption, positively — once, at a line start. */
+  const lines = textLines(layout.text);
+  const found = findCaption(input.caption, layout.text, lines);
+  if (!found.ok) {
+    const detail = found.detail;
+    return refuse(
+      detail === "empty-caption" || detail === "caption-ambiguous" || detail === "caption-mid-line"
+        ? detail
+        : "caption-not-found",
+    );
+  }
+  const own = found.lines;
+  const captionBox = own.map((l) => l.box).reduce(union);
+
+  const isProse = (l: Line): boolean =>
+    l.upright && l.words >= PROSE_MIN_WORDS && width(l.box) >= PROSE_MIN_WIDTH_FRACTION * page.width;
+  const isCaption = (l: Line): boolean =>
+    l.upright && (ANY_CAPTION_START.test(l.text) || PRINTED_CAPTION_START.test(l.text.normalize("NFKD").trim()));
+
+  /* Rule 3: snap outwards to whole things that are mostly inside. */
+  const things: PageBox[] = [
+    ...input.pictures.filter((p) => p.op === "xobject").map((p) => (p.clip ? meetBox(p.box, p.clip) : p.box)),
+    ...withoutFurniture(layout.ink, page).filter((b) => !b.white),
+    ...lines
+      .filter((l) => !own.includes(l) && !isProse(l) && !isCaption(l) && !inFurnitureMargin(l.box, page))
+      .map((l) => l.box),
+  ].filter((b) => b.x1 > b.x0 - EPS_PT && b.y1 > b.y0 - EPS_PT);
+  let region = meetBox(input.box, view);
+  const taken = new Set<number>();
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [i, thing] of things.entries()) {
+      if (taken.has(i) || !mostlyInside(thing, region)) continue;
+      taken.add(i);
+      region = meetBox(union(region, thing), view);
+      changed = true;
+    }
+  }
+  const crop = meetBox(padded(region), view);
+
+  /* Rule 4: next to its own caption. */
+  if (!beside(captionBox, crop)) return refuse("caption-not-adjacent");
+
+  /* Rule 5: no other caption in it, or as near. */
+  if (lines.some((l) => !own.includes(l) && isCaption(l) && (intersects(crop, l.box) || beside(l.box, crop)))) {
+    return refuse("another-caption");
+  }
+
+  /* Rule 6: not a column of text. */
+  const prose = lines
+    .filter((l) => !own.includes(l) && isProse(l))
+    .reduce((sum, l) => sum + area(meetBox(l.box, crop)), 0);
+  if (prose >= MAX_PROSE_SHARE * area(crop)) return refuse("mostly-prose");
+
+  /* Rule 7: sane size. */
+  if (width(region) < MIN_REGION_SIDE_PT || height(region) < MIN_REGION_SIDE_PT) return refuse("too-small");
+  if (area(region) > MAX_REGION_AREA_FRACTION * page.width * page.height) return refuse("too-large");
+
+  /* The renderer draws `region` grown by its pad: every check above was made
+     on that crop, and the containment is that crop, so whatever PDFium draws
+     there is admitted — rule 2 to 6 are what stand behind it. */
+  return { ok: true, region, containment: [{ box: crop, allowance: 0 }] };
+}
+
+/** Within `CAPTION_REACH_PT` of `region`, and overlapping it across the gap: below, above or beside it. */
+function beside(caption: PageBox, region: PageBox): boolean {
+  const xOverlap = Math.min(caption.x1, region.x1) - Math.max(caption.x0, region.x0) > 0;
+  const yOverlap = Math.min(caption.y1, region.y1) - Math.max(caption.y0, region.y0) > 0;
+  const dx = Math.max(0, caption.x0 - region.x1, region.x0 - caption.x1);
+  const dy = Math.max(0, caption.y0 - region.y1, region.y0 - caption.y1);
+  return (xOverlap && dy <= CAPTION_REACH_PT) || (yOverlap && dx <= CAPTION_REACH_PT);
+}
+
+/** At least `SNAP_SHARE` of `thing` lies in `region` — a hairline counted as half a point thick. */
+function mostlyInside(thing: PageBox, region: PageBox): boolean {
+  const grown = {
+    x0: thing.x0 - 0.25,
+    y0: thing.y0 - 0.25,
+    x1: Math.max(thing.x1, thing.x0) + 0.25,
+    y1: Math.max(thing.y1, thing.y0) + 0.25,
+  };
+  return area(meetBox(grown, region)) >= SNAP_SHARE * area(grown);
+}
+
+function meetBox(a: PageBox, b: PageBox): PageBox {
+  return { x0: Math.max(a.x0, b.x0), y0: Math.max(a.y0, b.y0), x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1) };
+}
+function area(b: PageBox): number {
+  return Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0);
+}

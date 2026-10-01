@@ -5,11 +5,11 @@
  *
  * **One function decides what is drawn AND which row is current.** That is the
  * whole design constraint here, and it comes from a bug this repo has already
- * paid for: the summary panel's renderer and its `currentEntryId` walk once
+ * paid for: Summary's outline renderer and its `currentEntryId` walk once
  * wrote the same rule out separately, and when two copies of a rule disagree
  * nothing errors — the panel scrolls to an element that is not in the DOM, or
- * marks a row nobody can see. See docs/project/summaries.md § Which row is
- * "the relevant one", and docs/plans/260828aw-outline-mode.md § The code.
+ * marks a row nobody can see. (Both went with that outline on 2026-10-01, plan
+ * 261001p.) See docs/plans/260828aw-outline-mode.md § The code.
  *
  * Pure, and takes no DOM. The fit — which rung actually fits the band — is
  * decided by OutlinePanel measuring the candidates this builds.
@@ -189,8 +189,9 @@ const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.
  * Build the drawn list for one rung.
  *
  * The walk is deliberately explicit rather than a recursion over `deep`,
- * because `showsChildren` in tree.ts cannot express this shape: it has a
- * whole-level cut-off, a closed set and an opened set, and none of them means
+ * because Summary's outline rule, `showsChildren` (removed with that outline on
+ * 2026-10-01), could not express this shape: it had a whole-level cut-off, a
+ * closed set and an opened set, and none of them meant
  * *open only the branch containing the reader*. `deep: 1` draws no sections;
  * `deep: 2` draws every part's sections. Found by GPT Sol reviewing the plan.
  */

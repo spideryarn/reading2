@@ -100,9 +100,9 @@ readers never are.
   Hierarchy folded into it, and where the code is.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
-- **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
-  moves them all at once, and the panel that follows the reader down the page; and **Simple**, its
-  second sub-mode, a few plain-words paragraphs to get your bearings, each linked to its passages.
+- **[summaries.md](summaries.md)** — the piece in plain words, at three lengths on one slider (Brief,
+  Simple, Fuller), each paragraph linked to its passages and checked against them. Its Parts and
+  Sections outline went on 2026-10-01; Structure draws that tree.
 - **[ideas.md](ideas.md)** — the propositions the piece needs you to hold, sibling to the glossary:
   a term is a word you look up, an idea is a claim you hold. The first stage that lets the model
   name block ids.

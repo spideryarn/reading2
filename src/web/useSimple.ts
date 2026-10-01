@@ -8,11 +8,11 @@
  * — `stale` (the article moved: the panel says so) and `outdated` (an older
  * prompt: silent). The read half is `GET /api/simple/:slug`; the write half is
  * a job (`steps: ["simple"]`). Ordering is src/web/useOrderedRead.ts's, the job
- * src/web/useStepJob.ts's, and a press on the Simple chip with nothing stored
- * starts it through src/web/useAutoRun.ts — so this file is only the parse,
- * the 404 branch and the verbs.
+ * src/web/useStepJob.ts's, and a press on a plain-words control with nothing
+ * stored starts it through src/web/useAutoRun.ts — so this file is only the
+ * parse, the 404 branch and the verbs.
  *
- * **Mounted only while a plain-words level is on screen, and only for an owner**
+ * **Mounted only while Summary is on screen, and only for an owner**
  * (modes/summary/SummaryMode.tsx § `OwnerSimple`): `useAutoRun`'s owner must
  * die with the view so a press cannot be spent after the reader has left it,
  * and a visitor reads the paragraphs off the public payload with no hook at all.
@@ -123,7 +123,7 @@ export function useSimple(slug: string): UseSimple {
     await queue.start({ force: true });
   }, [queue]);
 
-  /* A press on the Simple chip, never arrival, spends. */
+  /* A press on the Summary slider or either end button, never arrival, spends. */
   useAutoRun(slug, "simple", status, ensure, reload);
 
   return {
