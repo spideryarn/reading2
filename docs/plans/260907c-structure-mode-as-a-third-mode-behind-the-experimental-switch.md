@@ -62,7 +62,7 @@ navigation is a call Greg has not been asked to make.
 **Status: plan, 2026-09-07. Written before any code.** It builds
 [260903b](260903b-one-structure-mode-hierarchy-and-outline-merged.md)'s *design* while deliberately
 not taking its *conclusion* — see [The decision](#the-decision-and-what-it-supersedes) — and it
-follows [new-mode.md](../project/new-mode.md) item by item, which
+follows [mode.md](../project/mode.md) item by item, which
 [The checklist, walked](#the-checklist-walked) records.
 
 ## The decision, and what it supersedes
@@ -360,7 +360,7 @@ a choice on the record rather than something a later reader has to reverse-engin
 
 ## The checklist, walked
 
-[new-mode.md](../project/new-mode.md), item by item. Structure **generates nothing** — it draws the
+[mode.md](../project/mode.md), item by item. Structure **generates nothing** — it draws the
 tree that is already in the page's payload — so the whole second half of that checklist (the
 artefact, the step, the SQL CHECK, the export put-chain, the public projections, `PROMPT_VERSION`,
 the prompt-language rule) does not apply. That is the same line Outline, Hierarchy, Plain and Search
@@ -411,13 +411,13 @@ rule as a fact; Sol checked it and it was false.
 positive control, and `tests/every-mode-says-which-passages-it-marks.test.ts` named "the nine modes"
 in a test title. Neither could catch anything its own loop over `MODES` did not already catch — what
 they caught was somebody adding a mode, and made them edit arithmetic to say so, which is the
-bookkeeping [new-mode.md](../project/new-mode.md) measured at eight places for one line of
+bookkeeping [mode.md](../project/mode.md) measured at eight places for one line of
 behaviour. The count in the first is replaced by the thing it was incidentally doing — a floor that
 says the loop is not passing over an empty list — and the second is reworded. Identities go against
 `BEHIND_THE_SWITCH`; everything else derives from `MODES`.
 
 **Three tables the checklist did not name**, found by running it rather than reading it, and now
-added to [new-mode.md § Before you call it finished](../project/new-mode.md#before-you-call-it-finished):
+added to [mode.md § Before you call it finished](../project/mode.md#before-you-call-it-finished):
 `GENERATES` in [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) (Sol), and both
 `SPENDS` **and** `DRAWS` in `every-mode-draws-its-surface.test.tsx` counting as two errors rather
 than one. Four more went red without the typecheck: `ALWAYS_FREE` and the gap walk in
@@ -466,7 +466,7 @@ until its description is true of it.** So the vocabulary and the projection land
 
 **Stage 1 — the word, the tables, and a truthful two-column band.** `structure` in `MODES`; every
 compiler-forced total including `GENERATES` in `tests/command-bar.test.tsx`, which
-[new-mode.md](../project/new-mode.md)'s measured list did not name (finding 4) and which is now
+[mode.md](../project/mode.md)'s measured list did not name (finding 4) and which is now
 added to it; `BEHIND_THE_SWITCH`; the `band()` arm and a `src/web/modes/structure/` controller
 owning its own tree and focus sampler. `src/web/structure.ts` — `structureProjection()` →
 `{ columnA, columnB }` from **one selection model**, pure and with no DOM, tested against hand-built
@@ -613,7 +613,7 @@ sit.
   — Furnas's degree-of-interest rule, Miller columns, and why the combination looks unbuilt.
 - [260828aw-outline-mode.md](260828aw-outline-mode.md) — the rung ladder, the churn measurement, and
   the corpus table this plan's ladders are shaped from.
-- [new-mode.md](../project/new-mode.md) · [experimental-features.md](../project/experimental-features.md)
+- [mode.md](../project/mode.md) · [experimental-features.md](../project/experimental-features.md)
   · [granularity-zoom.md](../project/granularity-zoom.md) · [hierarchy.md](../project/hierarchy.md)
   · [column-context.md](../project/column-context.md)
 - [`src/web/outline.ts`](../../src/web/outline.ts) · [`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)

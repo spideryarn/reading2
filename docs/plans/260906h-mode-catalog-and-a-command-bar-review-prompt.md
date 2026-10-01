@@ -21,7 +21,7 @@ itself, which is untracked:
    this brief describes; judging whether the deferrals are the right ones is part of your job.
 3. `docs/plans/260905e-main-app-architecture-review.md` § A3 — the parent review, which mandates
    exhaustive per-layer adapters and must not be weakened.
-4. `docs/project/new-mode.md` — the checklist a new mode must satisfy today, including the
+4. `docs/project/mode.md` — the checklist a new mode must satisfy today, including the
    compiler-checked total tables and "the residue nothing checks".
 5. `src/modes.ts`, `src/title-text.ts` (`MODE_LABEL`), `src/web/visitor.ts` (`POLICY`),
    `src/web/activation.ts` (`MODE_TARGET`, `armActivationForMode`, `PressContext`),
@@ -61,7 +61,7 @@ actually be built as described. Specifically:
    a new `aliases` into a pure `src/mode-catalog.ts`, and deliberately leaves `label` in
    `MODE_LABEL`, `icon` and `keepLabel` in `MODES_UI`, and `POLICY` and `MODE_TARGET` exactly where
    they are. Is any of those five "stays put" decisions wrong? Is any "moves" decision wrong?
-2. **Does it weaken any total table the compiler currently checks?** `new-mode.md` lists them. A
+2. **Does it weaken any total table the compiler currently checks?** `mode.md` lists them. A
    mode added after this lands must still go red in every place it goes red today. Check
    specifically that shrinking a `ModeUi` row to `{ mode, icon, keepLabel? }` does not lose the
    property that a new mode must *decide* its experimental status rather than inherit a default.

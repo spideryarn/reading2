@@ -16,7 +16,7 @@ Writing a second, hand-kept list of modes is the wrong answer.
 ## 1. Docs it must read
 - MUST `docs/plans/260930c-auto-generate-the-main-modes-after-import.md` (§ Which modes are "main", § The design, § What it costs, § What it does not do) - may be read; it is the record.
 - MUST `docs/project/ingest-queue.md` § "Since 2026-09-30 it can also start the main modes" (the signpost to `src/web/auto-modes.ts`).
-- MUST `docs/project/experimental-features.md` § "What is behind it today" (FAQ's row and why it is still behind) and `docs/project/new-mode.md` § "Moving a mode in or out of the switch" (three edits, `BEHIND_THE_SWITCH`).
+- MUST `docs/project/experimental-features.md` § "What is behind it today" (FAQ's row and why it is still behind) and `docs/project/mode.md` § "Moving a mode in or out of the switch" (three edits, `BEHIND_THE_SWITCH`).
 - MUST `docs/project/faq.md` - what the step makes, its order and cost.
 - USEFUL `docs/project/cross-references.md` § "When it runs" (the hand-added extra step, and its wording).
 - USEFUL `docs/project/ai-gateway.md` § "What stops a reader spending our money, and what does not"; `docs/project/cost-tracking.md` (a pipeline step is tracked for free).

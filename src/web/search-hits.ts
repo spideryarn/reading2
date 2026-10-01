@@ -768,7 +768,7 @@ export function quoteMarkKey(id: string, blockId: BlockId): string {
 
 /**
  * **The Trajectory's current stop, as a passage** — the resolver
- * docs/project/new-mode.md asks a passage-marking mode for, and the plan's F9.
+ * docs/project/mode.md asks a passage-marking mode for, and the plan's F9.
  *
  * A stop *is* a quote (src/types.ts § `TrajectoryStop`), so this is not a fourth
  * way of turning words into spans: it is **the quote's own `Found`**, taken out

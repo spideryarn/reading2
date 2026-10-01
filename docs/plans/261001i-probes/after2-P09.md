@@ -34,7 +34,7 @@
 - No doc defines "the article's worked examples" or says whether any quiz question should or shouldn't touch them; I inferred the design from the prompt's own rules (premise "context is not a premise", "keep to what matters").
 - Two eval harnesses exist (`quiz-build-up`, `quiz-reading-goal`) with overlapping machinery; unclear which one to extend. `quiz.md` lists only `evals/quiz.ts` under Eval, not the other two — a signpost gap.
 - I did not need an article with worked examples; choose a few local articles that clearly have them (paper with a toy example), but which ones exist is only knowable from the database; unchecked.
-- Did not read `cost-tracking.md` or `new-mode.md`; assumed no new AI call is added.
+- Did not read `cost-tracking.md` or `mode.md`; assumed no new AI call is added.
 
 ## 6. Confidence
 7/10 on files, rules and method; 5/10 on whether the rule's wording will cleanly avoid examples without hurting takeaway coverage (needs the measurement).

@@ -35,6 +35,7 @@
 import type { ReactNode } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
+import type { ReactNode } from "react";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
@@ -54,6 +55,7 @@ import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
+import { BandAbout } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { citePassageKey } from "./rows.js";
@@ -645,6 +647,24 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = citations !== null && (owner === null || owner.status === "ready");
   const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* Empty with fewer than two works or two orders, and then there is no order
+     row and the head row carries the count and the (i) instead. */
+  const orders = citations && all.length > 1 ? orderOptions(all) : [];
+  const count = citations && (
+    <span className="gloss-count">
+      {all.length} {all.length === 1 ? "work" : "works"}
+    </span>
+  );
+  /* The two sentences about the whole list, behind an (i) — only once the list
+     is ready and has something in it, which is when the foot used to draw
+     them. */
+  const about =
+    ready && all.length > 0 ? (
+      <BandAbout label="About this list">
+        {citations.capped && <p>{CAPPED_NOTE}</p>}
+        <p>{INFLUENCE_NOTE}</p>
+      </BandAbout>
+    ) : null;
 
   const run = (label: string, again = false) =>
     owner === null ? null : (
@@ -666,18 +686,30 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
     <ModeSurface
       label="Citations"
       feature="gloss citations"
-      /* A fragment, so the row stays put while the list loads — the choice
-         Timeline and Glossary make, for the count that is its only child. */
+      /* **No head row while the order row is drawn**, since 2026-10-01 — the
+          move Glossary made (plan 260929a), for Greg's *"it says at the top how
+          many works there are. I feel like that's maybe there's a more
+          space-efficient way to say that"* (`spya-nca765`). The count goes to
+          the order row's end, and only outside *prioritised*, whose threshold
+          row already says "8 of 24". With one work, or one order on offer,
+          there is no order row, so the head row stays and carries both.
+
+          Otherwise a fragment, not a conditional, so the row stays put while
+          the list loads — the choice Timeline and Glossary make. Plan 261001l. */
       head={
-        <>
-          {citations && (
-            <span className="gloss-count">
-              {all.length} {all.length === 1 ? "work" : "works"}
-            </span>
-          )}
-        </>
+        orders.length > 0 ? null : (
+          <>
+            {count}
+            {about}
+          </>
+        )
       }
-      /* Pinned under the scroller: the two sentences about the whole list.
+      /* Pinned under the scroller, and **only a job's status now**. The two
+         sentences about the whole list that were here went behind the (i) on
+         2026-10-01 — Greg: *"at the bottom, there's an explanation of what
+         citations mode is, and that could be inside an information icon
+         tooltip"* (`spya-nca765`, plan 261001l).
+
          **No re-run here.** The first draft had *Find them again* in this foot,
          and the browser check found it the largest control in the band and the
          one press that costs money, under a list that was fine. Greg took the
@@ -686,19 +718,22 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
          A stale list still offers it, in the banner above, which is the case
          where asking again buys something; an outdated one is not announced
          (plan 260929c). A job started from Metadata still needs its progress,
-         Stop and failure here, so that transient status shares this one footer
-         with the permanent list notes. */
-      foot={
-        ready && (all.length > 0 || showJob) ? (
-          <div className="cite-foot">
-            {all.length > 0 && citations.capped && <p className="cite-note">{CAPPED_NOTE}</p>}
-            {all.length > 0 && <p className="cite-note">{INFLUENCE_NOTE}</p>}
-            {showJob && run("Find them again", true)}
-          </div>
-        ) : null
-      }
+         Stop and failure here. */
+      foot={showJob ? <div className="cite-foot">{run("Find them again", true)}</div> : null}
     >
-      {citations && all.length > 1 && <OrderBar works={all} order={order} onOrder={onOrder} />}
+      {orders.length > 0 && (
+        <OrderBar
+          options={orders}
+          order={order}
+          onOrder={onOrder}
+          trailing={
+            <>
+              {order !== "prioritised" && count}
+              {about}
+            </>
+          }
+        />
+      )}
 
       {/* Only in the order it belongs to: a number that means nothing in the
           other three would be furniture. */}
@@ -777,18 +812,14 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
 
 /* --------------------------------------------------------------- controls -- */
 
-function OrderBar({
-  works,
-  order,
-  onOrder,
-}: {
-  works: readonly ShownWork[];
-  order: CiteOrder;
-  onOrder(order: CiteOrder): void;
-}) {
-  /* Each option only once the list can honour it — a control that would
-     visibly do nothing is worse than one that is not there. GlossaryPanel.tsx
-     § SortBar. */
+/**
+ * The orders a list can honour — each option only once the list can honour
+ * it, because a control that would visibly do nothing is worse than one that is
+ * not there (GlossaryPanel.tsx § SortBar). Empty when fewer than two are on
+ * offer, which is how the panel knows there is no order row to fold the head
+ * row into.
+ */
+function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: string; title: string }[] {
   const options: { key: CiteOrder; label: string; title: string }[] = [
     ...(canPrioritise(works)
       ? [
@@ -820,24 +851,45 @@ function OrderBar({
         ]
       : []),
   ];
-  if (options.length < 2) return null;
+  return options.length < 2 ? [] : options;
+}
 
+/**
+ * The order buttons, and at the right-hand end whatever the panel hands
+ * `trailing`: the count and the (i), which came here from the head row and the
+ * foot on 2026-10-01 (plan 261001l). **Beside the group, not in it**, for the
+ * reason GlossaryPanel.tsx § SortBar gives.
+ */
+function OrderBar({
+  options,
+  order,
+  onOrder,
+  trailing,
+}: {
+  options: readonly { key: CiteOrder; label: string; title: string }[];
+  order: CiteOrder;
+  onOrder(order: CiteOrder): void;
+  trailing: ReactNode;
+}) {
   return (
-    /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
-       list, not form controls — GlossaryPanel.tsx § SortBar says why. */
-    <div className="gloss-sort" role="group" aria-label="Order the citations by">
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
-          aria-pressed={order === option.key}
-          title={option.title}
-          onClick={() => onOrder(option.key)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="gloss-sort">
+      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
+      <div className="gloss-sort-group" role="group" aria-label="Order the citations by">
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`gloss-sort-btn${order === option.key ? " on" : ""}`}
+            aria-pressed={order === option.key}
+            title={option.title}
+            onClick={() => onOrder(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <span className="gloss-sort-trail">{trailing}</span>
     </div>
   );
 }

@@ -84,7 +84,7 @@ Judgement calls:
 3. **The visitor and security side of a change.** P02 got visitor-readable-by-default backwards.
    P11 never opened `security-map.md` or the 260929a postmortem. P10 and P11 missed "visitors never
    trigger a paid call". **Cause: a missing signpost** from the feature docs (`ideas.md`, the
-   `cost-tracking.md` route) to `new-mode.md` § the artefact's visitor bullet and `security-map.md`.
+   `cost-tracking.md` route) to `mode.md` § the artefact's visitor bullet and `security-map.md`.
    P11 also asked for a missing doc: one "which modes a visitor sees" table.
 4. **Facts buried in over-long docs.**
    - `library.md` (1,204 lines): "Dates are relative" sits mid-section on sorting (P01).
@@ -103,7 +103,7 @@ Judgement calls:
    missing signpost.** `icons.md`/`tooltips.md` should point to the copy button,
    `browser-testing.md` to the Chrome test, and `evals/README.md` to the quiz evals.
 6. **Recipes for shapes that aren't modes.** P02 (a one-off paid pipeline step) and P08 (a
-   per-reader setting) both had to infer their recipe from `new-mode.md` and
+   per-reader setting) both had to infer their recipe from `mode.md` and
    `experimental-features.md`. **Cause: a missing signpost.** Each could be a short section in its
    host doc, or a line saying "the same recipe applies, minus these rows".
 7. **Product ambiguity that the docs could have surfaced.** P02 (it overlaps Simple), P06 (the name
@@ -111,9 +111,9 @@ Judgement calls:
    Greg cleanly. **Cause: buried facts.** The overlap lives in `summaries.md` and `mode-catalog.ts`
    comments, not in an obvious place.
 8. **Stale text that cost probes time.**
-   - `new-mode.md` still says `band()` (now `modeBand()`) and counts modes despite its own rule (P06).
+   - `mode.md` still says `band()` (now `modeBand()`) and counts modes despite its own rule (P06).
    - The `ReaderStore` and `pg-reader.ts` comments name the deleted filesystem store (P08).
    - The `auto-run-targets.ts` header says "Eleven" (P07).
-   - `new-mode.md`/`faq.md` never mention the add page's auto-start box (P07).
+   - `mode.md`/`faq.md` never mention the add page's auto-start box (P07).
 
    **Cause: stale docs** (and, for the last one, a missing signpost).

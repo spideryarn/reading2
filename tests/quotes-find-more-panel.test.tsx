@@ -227,8 +227,11 @@ describe("the banners", () => {
         profileChanged: true,
       }),
     );
+    /* An icon since plan 261001l, as Glossary's is, so the state is in its
+       accessible name and its `.changed` class rather than in words. */
     const badge = host.querySelector(".prof-badge");
-    expect(badge?.textContent).toContain("older profile");
-    expect(badge?.textContent).not.toContain("written for you");
+    expect(badge?.classList.contains("changed")).toBe(true);
+    expect(badge?.getAttribute("aria-label")).toContain("a profile you have changed");
+    expect(badge?.getAttribute("aria-label")).not.toBe("Written for your profile — see what it says");
   });
 });

@@ -123,7 +123,7 @@ keeps `mode=outline` until the reader changes mode, which is harmless (it means 
 everywhere), and a sixth `settleAddress` rewrite would be a second copy of the same decision.
 `liftStrandedText` writes `mode=structure` instead of `mode=outline`.
 
-The compiler lists the rest, which is new-mode.md read backwards: `MODE_LABEL`, `OWNER_MODE_NOTE`,
+The compiler lists the rest, which is mode.md read backwards: `MODE_LABEL`, `OWNER_MODE_NOTE`,
 `MODE_CATALOG`, `MODES_UI`, `POLICY`, `MODE_TARGET`, `band()`, `selectPassages`, and in tests
 `BAND_SAYS`, `SPENDS`, `DRAWS`, `GENERATES`, `SILENT`, plus the string-keyed tables the typecheck
 cannot see (`visitor-gaps`, `page-title`, `BEHIND_THE_SWITCH`, `last-view`'s mode list, the

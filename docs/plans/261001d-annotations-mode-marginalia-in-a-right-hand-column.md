@@ -4,7 +4,7 @@
 SPIDERYARN-READING2-7E (report `spya-u3dgk7`) and SPIDERYARN-READING2-7K (report `spya-w2kgha`),
 both from `/read/dongetal25-spya-vfmvmm`. Experimental, behind the switch
 ([experimental-features.md](../project/experimental-features.md)), built to
-[new-mode.md](../project/new-mode.md).
+[mode.md](../project/mode.md).
 
 ## The ask
 
@@ -38,7 +38,7 @@ both from `/read/dongetal25-spya-vfmvmm`. Experimental, behind the switch
 > — Greg, 2026-10-01 (SPIDERYARN-READING2-7K)
 
 And from the same night, on Summary mode (7B): no description line in a mode — *"they waste
-space"* ([new-mode.md § No description line](../project/new-mode.md)).
+space"* ([mode.md § No description line](../project/mode.md)).
 
 ## Prior work
 
@@ -239,7 +239,7 @@ the catalog card's claims against the code.
 
 ### Stage 1 — the mode, the column, the free content
 
-1. `annotations` in `MODES`, and the rows the compiler then asks for (new-mode.md § The client):
+1. `annotations` in `MODES`, and the rows the compiler then asks for (mode.md § The client):
    `MODE_LABEL`, `OWNER_MODE_NOTE`, `MODE_CATALOG` (`experimental: true`, aliases *marginalia,
    margin notes, notes in the margin*), `MODES_UI` (group with Structure/Summary), `POLICY`
    (free), `MODE_TARGET` (`none` — it generates nothing), `modeBand()` → `null`,

@@ -11,6 +11,14 @@ One line each: the date the report arrived, its Sentry short id, one sentence of
 proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
 in this directory records which, and the line comes off.
 
+## Waiting on Greg now
+
+- 2026-09-30 · `spya-chhzxv` (no Sentry issue found) · bulk import of many papers at about 0.05p each
+  needs four answers first: no slot for a minimal paper (and its own ceiling), a card rather than an
+  article, keeping unread PDFs, and minimal-only batches first ·
+  [261001m § Questions for Greg](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md) ·
+  [note](260930_0721-bulk-import-of-many-papers-cheaply.md)
+
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,
@@ -40,8 +48,6 @@ Each is a few minutes of attention, and each has a note that already sets out th
 cost. **One of them was written as a deploy blocker and the deploy went out anyway** — that one is
 answered and off the table now, but the note immediately below says what happened, and its last
 paragraph is the part still worth acting on.
-
-- 2026-09-30 · SPIDERYARN-READING2-69 (shipped) · PDF transcription glitches. One call left open: the author check can still drop an author printed after the last name the model gave, which is tied to stacked NeurIPS-style bylines · [260930e](../plans/260930e-pdf-transcription-glitches.md#deferred-and-named). *Its other two were answered 2026-09-30: footnotes are shown and linked ([260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md)); the re-render of existing PDF articles is written up there and left to "Start this article again".*
 
 > **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
 > 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data

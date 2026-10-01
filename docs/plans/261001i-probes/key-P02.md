@@ -6,7 +6,7 @@ shown in its own /metadata component. Template: Simple (260930i); FAQ's stage-1 
 ## Docs it must read
 - MUST `docs/project/cost-tracking.md` § "The short version: you should not have to do anything"
   and § "The route table says where the article is".
-- MUST `docs/project/new-mode.md` § "The artefact, if the mode shows one" (every total the compiler
+- MUST `docs/project/mode.md` § "The artefact, if the mode shows one" (every total the compiler
   asks for, and the residue nothing checks), § "The words the mode puts in front of the reader", § "Its cost".
 - MUST `docs/project/prompting-guide.md` (`plainWords`; § "Measuring a prompt change").
 - MUST `docs/project/vision.md` § Anti-goals — without passage links it is the summary that replaces reading.
@@ -37,7 +37,7 @@ mounted from `src/web/Metadata.tsx`.
   (`tests/db-step-constraint.test.ts`); read the `Target:` line (`docs/project/database.md`).
 - A batch step nobody watches need not stream; a press-generated wait must be named for Greg
   (CLAUDE.md "Stream any model call…"; 260930i § "A departure from CLAUDE.md").
-- Plain text (`docs/project/security.md`); visitor-readable by default (`new-mode.md`; postmortem 260929a).
+- Plain text (`docs/project/security.md`); visitor-readable by default (`mode.md`; postmortem 260929a).
 - Adding it to `src/pipeline.ts` § `DEFAULT_INGEST_STEPS` makes every import pay: name it for Greg
   (CLAUDE.md "Simplest version first"). Then generate once and see its line in the cost section.
 
@@ -45,5 +45,5 @@ mounted from `src/web/Metadata.tsx`.
 - Overlap: Simple's second paragraph is already "why it matters"; the tree root has a gist (260930i).
 - `medium` effort swapped the author's term for its opposite; word targets overshoot ~⅓ (260930i, 261001h).
 - A route cannot write a revision column — `requireLiveJobOwnsDraft` (260930i § The artefact).
-- One exported version constant, stamped and compared; `stale` is shown, `outdated` is not (`new-mode.md`).
+- One exported version constant, stamped and compared; `stale` is shown, `outdated` is not (`mode.md`).
 - The cost query keys on `article_id`, and the admin sees only their own articles (260930f, review P1).

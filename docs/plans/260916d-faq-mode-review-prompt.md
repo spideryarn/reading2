@@ -14,7 +14,7 @@ Spideryarn is an AI-assisted reading app whose stance is *augment reading, don't
 new experimental features mode." The plan defines what an FAQ should be here and how it is built.
 
 Reference material the plan leans on:
-- `docs/project/new-mode.md` — the checklist for adding a mode (client totals, artefact totals, the
+- `docs/project/mode.md` — the checklist for adding a mode (client totals, artefact totals, the
   residue nothing checks).
 - `src/ideas.ts` — the closest existing stage: model names block ids + verbatim quotes, verified by
   `findQuote`, drop-and-count, id inheritance, reading order, replace-on-rerun.

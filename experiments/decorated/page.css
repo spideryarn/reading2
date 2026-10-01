@@ -821,7 +821,8 @@ html:not(.L-arc) #arc-rail { display: none; }
   color: var(--ink-2);
   border-radius: 4px;
   padding: 0.9rem 1rem;
-  max-width: 26rem;
+  /* 26rem is wider than a phone; the card's left edge went off-screen. */
+  max-width: min(26rem, calc(100vw - 16px));
   font-family: var(--sans);
   font-size: 0.82rem;
   line-height: 1.5;
@@ -991,7 +992,12 @@ html:not(.L-gutter) .legend-sample .conn, .legend-sample .conn { display: inline
 }
 
 @media (max-width: 1180px) {
-  :root { --gutter: 0rem; --margin: 0rem; }
+  /* The columns' contents are hidden below, but the tracks stay, as the prose's
+     side margins. At 0 the text ran to the edge of a phone. */
+  :root { --gutter: 1.5rem; --margin: 1.5rem; }
+  /* No margin to lean into: on a phone the lean pushed paragraphs off the right
+     edge, and the page widened under the fixed layers button. */
+  .L-gravity .blk .body { translate: none !important; }
   #stream { column-gap: 0; }
   .gutter, .margin { display: none !important; }
   /* With no gutter to hang in, the role label would sit on the first line of prose. */

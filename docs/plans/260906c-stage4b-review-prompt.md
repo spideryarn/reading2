@@ -136,7 +136,7 @@ is for.
 
 ### 6. Docs
 
-`docs/project/new-mode.md`: the band branch left the "residue" list and joined the table of
+`docs/project/mode.md`: the band branch left the "residue" list and joined the table of
 compiler-checked totals, alongside `selectPassages`; a new table under *Before you call it finished*
 of what a fifteenth mode makes red. `docs/project/url-state.md`: a paragraph recording that the mode
 → passage-slot mapping is total. The plan doc records what landed, the two corrections and the

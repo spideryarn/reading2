@@ -7,7 +7,7 @@ reproduces the reader's case (prod build, the article really public, ideas reall
 before touching code. Writing a second visitor path for Ideas would be the mistake.
 
 ## 1. Docs it must read
-- MUST `docs/project/new-mode.md` § "The artefact, if the mode shows one" (the `PUBLIC_PROJECTIONS` and public-DTO bullet: a stored mode is shown to a visitor by default; `owners-only` only for the reader's own writing; which tests pin it).
+- MUST `docs/project/mode.md` § "The artefact, if the mode shows one" (the `PUBLIC_PROJECTIONS` and public-DTO bullet: a stored mode is shown to a visitor by default; `owners-only` only for the reader's own writing; which tests pin it).
 - MUST `docs/project/security-map.md` § "Where the defences physically live" and § "The allowlist has two failure directions, and only one of them is loud" — the DTO is an allowlist and a listed defence.
 - MUST `docs/postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md` — making vs showing.
 - USEFUL `docs/project/ideas.md` (names `VisitorIdeasBand`); `docs/project/public-readable-sharing.md` (what the author is told; Ideas is one of the profiled artefacts already on a shared link); `docs/plans/260904c-more-modes-on-a-shared-link.md` § "What every stage owes" (the recipe, if a hop were missing).
@@ -27,13 +27,13 @@ before touching code. Writing a second visitor path for Ideas would be the mista
 - Reproduce before fixing; failing test first — `CLAUDE.md`; `docs/project/testing.md`.
 - Any widening of the public DTO is a security decision for Greg — 261001b § The decision; `docs/project/security-map.md`.
 - Provenance (`profileHash`, `generatedAt`, `version`…) never crosses; a visitor's copy must not say "shaped by your profile" — 260929c § What crosses; `src/web/visitor.ts` comments.
-- Visitors never trigger a paid call — 260929c § The rule; `docs/project/new-mode.md` (`useAutoRun`).
+- Visitors never trigger a paid call — 260929c § The rule; `docs/project/mode.md` (`useAutoRun`).
 - Browser check signed out (incognito) in a Sonnet subagent — `CLAUDE.md` § Delegating; `docs/project/browser-control.md`.
 - Production is readable only inside `BEGIN READ ONLY`; never write — `CLAUDE.md` § Real data.
 
 ## 5. Traps
 - Pinning tests already exist: `tests/visitor-gaps.test.ts` (ideas built/not built), `tests/public-dto.test.ts`, `tests/public-dto-owner-only-fields.test.ts`, `tests/public-visibility-pg.test.ts`, `tests/public-network-trace.test.tsx`, `tests/store-revision-columns.test.ts`. Run them before believing a hop is missing.
 - Forgetting a column in `PUBLIC_PROJECTIONS` is the silent failure (260929c § References); a new column must be added to both reads.
-- A Postgres visibility test needs a second, private fixture article, or the predicate is untestable (new-mode.md).
+- A Postgres visibility test needs a second, private fixture article, or the predicate is untestable (mode.md).
 - A stale artefact must not be drawn to a visitor where the owner would see nothing (261001b, Sol F8 on crossrefs) — check Ideas behaves the same for owner and visitor.
 - Experimental is not a gate for visitor rules (260929c § Decided).

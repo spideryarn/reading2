@@ -547,7 +547,7 @@ describe("the one title rule, applied by both sides", () => {
        came out rather than being incremented.** The loop below is already total
        over `MODES`, so the count could never catch a mode the loop had missed —
        it only ever caught somebody adding one, and made them edit arithmetic to
-       say so. That is the bookkeeping docs/project/new-mode.md § Moving a mode
+       say so. That is the bookkeeping docs/project/mode.md § Moving a mode
        in or out of the switch measured at eight places for one line of
        behaviour, one of which had already drifted wrong and gone on passing.
 

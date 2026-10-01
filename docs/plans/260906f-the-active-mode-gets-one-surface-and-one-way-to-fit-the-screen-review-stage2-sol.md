@@ -10,7 +10,7 @@ Add one oracle shape or Quiz assertion with `subMode` omitted, expecting an empt
 
 ### F26 — P2 — established: the new-mode checklist turns a migration exception into a universal rule
 
-[`new-mode.md`](/home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/docs/project/new-mode.md:69) says every conditional header child requires an always-present fragment. That contradicts the immediately following rule that headers are optional and should exist only when there is something for them.
+[`mode.md`](/home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/docs/project/mode.md:69) says every conditional header child requires an always-present fragment. That contradicts the immediately following rule that headers are optional and should exist only when there is something for them.
 
 A future mode whose header genuinely exists only in one state would be instructed to manufacture a blank row in every other state. The rule should instead say: use a fragment only when the row is intentionally persistent while its contents are absent; otherwise pass the conditional node directly.
 

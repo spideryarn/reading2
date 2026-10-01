@@ -4,8 +4,8 @@ Task: a one-sentence "why this matters" line, generated once per article (a new 
 ## 1. Docs opened, in order
 1. `CLAUDE.md` (AGENTS.md) — signpost; pointed at cost-tracking, new-mode, architecture. Helped.
 2. `docs/project/cost-tracking.md` — the three rules for a new AI call (gateway, scope, article attribution), and the admin-only-figures rule. Very helpful.
-3. `docs/project/new-mode.md` — the "artefact" and "its cost" sections are effectively the checklist for any new pipeline step. Very helpful, though framed as "a mode".
-4. `docs/project/architecture.md` — § Adding an artefact-backed mode is only a redirect to new-mode.md. Minor.
+3. `docs/project/mode.md` — the "artefact" and "its cost" sections are effectively the checklist for any new pipeline step. Very helpful, though framed as "a mode".
+4. `docs/project/architecture.md` — § Adding an artefact-backed mode is only a redirect to mode.md. Minor.
 5. `docs/project/web-client.md` — found `Metadata.tsx` row. Helped.
 6. `docs/project/sql.md` — column taste (columns over JSON). Partly helped.
 7. `docs/project/database.md` (grep only) — migration commands. Helped.
@@ -35,20 +35,20 @@ Not opened but would: `prompting-guide.md`, `testing.md`, `typechecking.md`, `co
 - No new generic helper found that makes "add a small per-article scalar artefact" cheap; I would copy `faq`'s shape.
 
 ## 4. Rules/policies you would follow
-- Call via the gateway, inside `runStep`; step name becomes its line in the cost breakdown (`cost-tracking.md`, `new-mode.md` § Its cost).
+- Call via the gateway, inside `runStep`; step name becomes its line in the cost breakdown (`cost-tracking.md`, `mode.md` § Its cost).
 - `JOB_DISPOSITION` row for any new `AiJob` (`cost-tracking.md`).
 - Never show cost to non-admins; `tests/no-ai-cost-for-readers.test.ts` guards (`cost-tracking.md`).
-- Total records are compiler-checked; run `npm run typecheck` (`new-mode.md`, `CLAUDE.md`).
-- Bump `PROMPT_VERSION` on prompt change (`new-mode.md`).
+- Total records are compiler-checked; run `npm run typecheck` (`mode.md`, `CLAUDE.md`).
+- Bump `PROMPT_VERSION` on prompt change (`mode.md`).
 - Migration: `npm run db:generate` then `db:migrate`, read the `Target:` line (`CLAUDE.md`, `database.md`); additive migration needs no approval.
 - Column, not JSON blob (`sql.md`) — though `faq` is jsonb; a text column fits a sentence.
 - Prompt: `plainWords`, `prompting-guide.md`; stream only if a person waits (batch step: not required).
 - Failing test first; `npm test`; plan doc in `docs/plans/` plus GPT Sol review before and after; work in a worktree; commit by name; push to `dev` (`CLAUDE.md`).
-- No description line in the UI band (`new-mode.md`) — not a band here, but relevant to the wording.
+- No description line in the UI band (`mode.md`) — not a band here, but relevant to the wording.
 - Real data: don't run it against production.
 
 ## 5. Where you got lost
-- Nothing says plainly "a one-off non-mode step" — new-mode.md is titled for modes, so I had to infer which rows (`MODE_CATALOG`, `Dock`, `POLICY`) to skip.
+- Nothing says plainly "a one-off non-mode step" — mode.md is titled for modes, so I had to infer which rows (`MODE_CATALOG`, `Dock`, `POLICY`) to skip.
 - Unclear whether the line should be in `DEFAULT_INGEST_STEPS` (paid on every ingest, so affects cost per ingest) or force-only; I'd have to read `src/pipeline.ts` comments and decide; no doc states the default for a cheap new step.
 - Whether the free-text one-sentence needs the stamp/staleness/`outdated` machinery was not documented.
 - `schema.ts` hand-kept CHECK list: documented, but easy to miss before the test goes red.

@@ -168,9 +168,13 @@ Four, under the glossary's order buttons ([glossary.md](glossary.md)):
 - **first cited** — the artefact's own order.
 - **relevance**, **influence** — descending, a work missing that score last.
 
-Only the two raw scores are drawn on a row, never the combination — the glossary's rule. The foot
-says `influence` is the model's memory, not a citation count, and, **only when the model reported
-it**, that the list was capped at 80.
+Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
+at the right-hand end of the order row (`BandAbout`, shared with FAQ) says `influence` is the
+model's memory, not a citation count, and, **only when the model reported it**, that the list was
+capped at 80. Both were a foot pinned under the list until Greg, 2026-09-30 (`spya-nca765`), and the
+"N works" head row went onto the same row's end, shown only outside *prioritised*, whose threshold
+row already says "n of m"
+([261001l](../plans/261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md)).
 
 **The URL keys are `?citeby=` and `?citebar=`, not the glossary's `sort` and `gate`.** Every
 parameter survives a mode switch, and `Reader` reads `?gate=` in every mode to reveal a glossary

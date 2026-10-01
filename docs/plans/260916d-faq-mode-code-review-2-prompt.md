@@ -12,7 +12,7 @@ Nobody else is editing it while you run.
   That list does not limit scope.
 - Stage 1 (the server half, `src/faq.ts`, `GET /api/faq/:slug`) is `b31d8b87` + your own stage-1
   review fixes `301101e6`; it is context, not the candidate.
-- The plan: `docs/plans/260916d-faq-mode.md`. The mode checklist: `docs/project/new-mode.md`
+- The plan: `docs/plans/260916d-faq-mode.md`. The mode checklist: `docs/project/mode.md`
   (§ The client, § The card on the button, § Before you call it finished). The precedent: Citations
   stage 2, commit `abde65f7`, and Debate's hook `src/web/useDebate.ts`.
 
@@ -35,7 +35,7 @@ cover and check they notice; strengthen them if not.
    (public-readable, signed out) reaching a request or content they should not (`POLICY`, the
    owner-only `case "faq"`); the band not inside its `ModeBoundary`; the experimental gating wrong
    in either direction; a `BlockRef` jump that does not land; the card's two sentences false on any
-   of the four surfaces new-mode.md names, or restating each other; accessibility (heading levels
+   of the four surfaces mode.md names, or restating each other; accessibility (heading levels
    inside the band, blockquote semantics, labels); the foot's promise overclaiming; CSS leaking
    outside `.faq`.
 2. **Write findings to `docs/plans/260916d-faq-mode-code-review-2-findings.md` FIRST**: an ID (D1,
@@ -59,5 +59,5 @@ cover and check they notice; strengthen them if not.
 - The dropped-count line sums seven counters of mixed units ("questions or passages"); is that
   honest enough, or noise a reader cannot act on?
 - The `how` sentence and the band's foot say nearly the same thing — does the card restate
-  something already on screen (new-mode.md § The card on the button, fourth bullet)?
+  something already on screen (mode.md § The card on the button, fourth bullet)?
 - Stale and outdated both true shows only the stale banner.

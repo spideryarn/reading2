@@ -1160,7 +1160,7 @@ describe("what the prompts insist on", () => {
     }
   });
 
-  /** docs/project/new-mode.md § The words the mode puts in front of the reader. */
+  /** docs/project/mode.md § The words the mode puts in front of the reader. */
   it("carries the shared plain-words rule, once, in both passes", () => {
     for (const prompt of [DIRECT_SYSTEM, CLAIMS_SYSTEM]) {
       expect(prompt).toContain(plainWords("explain"));

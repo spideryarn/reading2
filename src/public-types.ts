@@ -508,7 +508,7 @@ export interface PublicFaq {
  * **Simple, as a visitor gets it** — Summary's plain-words sub-mode, from the
  * day it was built (docs/plans/260930i-simple-summaries-eli15-sub-mode.md).
  * Generated output, so readable by a visitor by default
- * (docs/project/new-mode.md § The artefact): showing the stored paragraphs
+ * (docs/project/mode.md § The artefact): showing the stored paragraphs
  * costs nothing, and only making them spends.
  *
  * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain

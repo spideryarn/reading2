@@ -59,28 +59,4 @@
    about the list rather than the last row's — citations.css's `.cite-foot`. */
 .faq-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
 
-/* **The promise's (i)**, at the right-hand end of the order row
-   (`.gloss-sort-trail`), holding the two sentences that were the foot
-   (SPIDERYARN-READING2-62). Quiet, like Trajectory's `.traj-about` and Quotes'
-   `.quotes-why`: a footnote, not a control the reader needs. Sized to the
-   order buttons beside it rather than the house control height, so the row
-   does not grow for it. */
-.faq-about {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0.4rem;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.faq-about:hover { color: var(--ink); background: var(--surface-raised); }
-.faq-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
-.faq-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.faq-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
-.faq-about-card p { margin: 0; }
-.faq-about-card p + p { margin-top: 0.4rem; }
+/* The promise's (i) is `.band-about`, in mode-band.css (`BandAbout.tsx`). */

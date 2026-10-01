@@ -556,7 +556,8 @@ with the same asymmetry in `AdminStore` and `VisibilityStore`.
 ## Reading the reports
 
 **[`/admin/feedback`](admin.md)**, since 2026-09-02 — every reader's reports, newest first, with
-the mirror state written as words. `psql` against the `feedback` table
+the mirror state written as words. **Readers only** (since 2026-10-01) leaves out the
+administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`). `psql` against the `feedback` table
 ([database.md](database.md)) still works, and Sentry
 ([sentry-error-monitoring.md](sentry-error-monitoring.md)) still has its copy.
 

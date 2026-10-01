@@ -96,6 +96,164 @@ export function markersAfter(bylineText: string, end: number): Set<string> {
 /** A byline word that may sit between two names without being a person: a marker, or glue. */
 const BETWEEN_NAMES = /^(?:\p{N}+|\p{L}|and|by|with|et|und|y|e)$/u;
 
+/**
+ * **An email address, read on the byline's own characters** — whitespace or the
+ * start before it, whitespace, `,`, `;` or the end after it, and a top-level
+ * label in lower case. That last rule is what stops a fused tail being eaten:
+ * `alice@acme.eduDeepMind` is not an address, so `DeepMind` stays a word the
+ * check has to account for (GPT Sol, plan review of 261001l, P1-2). And the
+ * top-level label is two letters or one of a short list, so a lower-case fused
+ * tail — `alice@acme.edubob` — is not an address either (code review, P1-3);
+ * a rarer top-level domain refuses the list, which is the safe way to be wrong. A braced
+ * group, `{qlu,pchen}@princeton.edu`, is one address per name in the braces;
+ * the text layer often spaces it, `{ karen,az } @robots.ox.ac.uk`, and
+ * `} @ deepmind.com`.
+ */
+const EMAIL =
+  /(?<=^|\s)(?:\{\s*([^{}@\s,]+(?:\s*,\s*[^{}@\s,]+)*)\s*\}\s*@\s*|[A-Za-z0-9._%+-]+@)(?:[A-Za-z0-9-]+\.)+(?:[a-z]{2}|com|edu|org|net|gov|mil|int|info|io|ai|dev|app|tech)(?=$|[\s,;])/gu;
+
+/** Where each email in `text` is, and how many people's addresses it holds. */
+function emailsIn(text: string): { start: number; end: number; count: number }[] {
+  return [...text.matchAll(EMAIL)].map((m) => ({
+    start: m.index,
+    end: m.index + m[0].length,
+    count: m[1] === undefined ? 1 : m[1].split(",").length,
+  }));
+}
+
+/** One author's verified affiliations as folded words, and the markers the page printed on their name. */
+interface Accounting {
+  affiliations: string[][];
+  markers: ReadonlySet<string>;
+}
+
+/**
+ * Whether `want` is printed at `byline[at]`. Only the first word may differ,
+ * by a glued marker in front that `glued` allows; `glued("")` says whether the
+ * first word may also match bare.
+ */
+function printedAt(byline: readonly Word[], at: number, want: readonly string[], glued: (marker: string) => boolean): boolean {
+  return want.every((w, i) => {
+    const h = byline[at + i]?.folded;
+    if (h === undefined) return false;
+    if (h === w) return i > 0 || glued("");
+    return i === 0 && h.endsWith(w) && glued(h.slice(0, h.length - w.length));
+  });
+}
+
+/** What a gap turned out to hold: markers and glue only, or words accounted for. */
+type Gap = "glue" | "accounted" | null;
+
+/**
+ * **The words in a gap are nobody, or the list is refused.** A gap is what lies
+ * between two names the model gave, or after the last. It may hold markers and
+ * glue, as it always could, or one of two shapes whose delimiter the model did
+ * not choose (plan 261001l § The change):
+ *
+ * - **a block's affiliations and addresses**: the *block* is the authors since
+ *   the last gap that held anything — one, in NeurIPS's name / institution /
+ *   email; several, when the names are printed together and their institutions
+ *   and addresses after. The gap may hold those authors' own verified
+ *   affiliations, each at most once, and email addresses numbering **exactly**
+ *   the block's authors. The count is the delimiter: a dropped author still has
+ *   an address on the page, so the gap holds one too many. An affiliation alone
+ *   cannot be the proof, because the model chose it — `Bob Brown Beta
+ *   Institute` is printed, verifies, and would account for Bob (GPT Sol, plan
+ *   review of 261001l, P1-1).
+ * - **marked affiliations**, after the last name only: any author's verified
+ *   affiliations, each at most once, each led by a marker the page printed on
+ *   that author's name — `aDepartment …` after `Rukhsara`, `1 Head and Neck …`
+ *   after `Ou1`. A person is not printed with an affiliation marker before them.
+ *
+ * Before 261001l the words after the last name were not checked at all for an
+ * ordinary list, so `[Mei-jun Ou]` against a five-name byline stored one author
+ * (260930e, C4).
+ */
+function gapIsNobody(
+  byline: readonly Word[],
+  from: number,
+  to: number,
+  mailAt: (word: number) => { index: number; count: number } | null,
+  block: readonly Accounting[],
+  everyone: readonly Accounting[] | null,
+): Gap {
+  const glue = (at: number) => BETWEEN_NAMES.test(byline[at]!.folded) && !mailAt(at);
+  let start = from;
+  while (start < to && glue(start)) start++;
+  if (start === to) return "glue";
+
+  /* The block's affiliations, and exactly one address per author. */
+  if (block.length > 0) {
+    const used = new Set<string>();
+    let addresses = 0;
+    let at = start;
+    while (at < to) {
+      const mail = mailAt(at);
+      if (mail) {
+        addresses += mail.count;
+        while (at < to && mailAt(at)?.index === mail.index) at++;
+        continue;
+      }
+      /* Institutions before addresses, in both layouts. After the first address
+         an "affiliation" is refused: the eval's row-major Attention byline
+         ended `… lukaszkaiser@google.com ∗ ‡ Illia Polosukhin`, and with Illia
+         dropped and his name passed off as Kaiser's affiliation, the count
+         still came out right. */
+      const next =
+        addresses > 0 ? -1 : affiliationAt(byline, at, to, block, used, (_author, m) => m === "" || MARKER.test(m));
+      if (next >= 0) at = next;
+      else if (glue(at)) at++;
+      else break;
+    }
+    if (at === to && addresses === block.length) return "accounted";
+  }
+
+  /* Marked affiliations, after the last name. */
+  if (everyone) {
+    const used = new Set<string>();
+    let at = from;
+    while (at < to) {
+      /* Spaced, `1 Head and Neck …`: the marker is a word, the affiliation bare after it. */
+      const marker = byline[at]!.folded;
+      const spaced = affiliationAt(byline, at + 1, to, everyone, used, (author, m) => m === "" && author.markers.has(marker));
+      /* Glued, `aDepartment …`. */
+      const glued = spaced < 0 ? affiliationAt(byline, at, to, everyone, used, (author, m) => m !== "" && author.markers.has(m)) : -1;
+      if (spaced >= 0) at = spaced;
+      else if (glued >= 0) at = glued;
+      else if (glue(at)) at++;
+      else return null;
+    }
+    return "accounted";
+  }
+  return null;
+}
+
+/**
+ * The first not-yet-`used` affiliation of `authors` printed at `byline[at]`,
+ * which it then marks used; where it ends, or -1. `glued(author, marker)` says
+ * which glued marker the first word may carry, `""` being none.
+ */
+function affiliationAt(
+  byline: readonly Word[],
+  at: number,
+  to: number,
+  authors: readonly Accounting[],
+  used: Set<string>,
+  glued: (author: Accounting, marker: string) => boolean,
+): number {
+  for (const [a, author] of authors.entries()) {
+    for (const [k, want] of author.affiliations.entries()) {
+      const key = `${a}/${k}`;
+      if (used.has(key) || want.length === 0 || at + want.length > to) continue;
+      if (printedAt(byline, at, want, (m) => glued(author, m))) {
+        used.add(key);
+        return at + want.length;
+      }
+    }
+  }
+  return -1;
+}
+
 /** A leading run of marks with no digit in it — `*`, `**`, `☆`, `†` — never part of an institution. */
 const LEADING_SYMBOLS = /^[\s,;*∗⁎†‡§¶☆★#]+/u;
 
@@ -171,13 +329,22 @@ interface FoundSpan {
   nextWord: number;
 }
 
-/** A name: every word exact but the last, which may carry a glued marker after it. */
-const findName = (have: Word[], want: string[], fromWord: number): FoundSpan | null => {
+/**
+ * A name: every word exact but the last, which may carry a glued marker after
+ * it. `unavailable` keeps address words from being mistaken for printed names.
+ */
+const findName = (
+  have: Word[],
+  want: string[],
+  fromWord: number,
+  unavailable: (word: number) => boolean,
+): FoundSpan | null => {
   /* A proposal with no words in it — `--- ***` — names nobody, and without this
      the empty run "matches" at the first position and the span is read off a
      last word that does not exist. */
   if (want.length === 0) return null;
   for (let s = fromWord; s + want.length <= have.length; s++) {
+    if (want.some((_w, i) => unavailable(s + i))) continue;
     const last = want.length - 1;
     const ok = want.every((w, i) => {
       const h = have[s + i]!.folded;
@@ -250,29 +417,47 @@ export function verifyAuthors(
   if (answer.length > maxAuthors) return refuse(`had ${answer.length} names, over ${maxAuthors}`);
 
   const byline = wordsOf(bylineText);
+  const emails = emailsIn(bylineText);
+  const mailAt = (w: number) => {
+    const word = byline[w]!;
+    const index = emails.findIndex((e) => word.start >= e.start && word.end <= e.end);
+    return index < 0 ? null : { index, count: emails[index]!.count };
+  };
   const pageWords = pages.map((text) => ({ text, words: wordsOf(text) }));
   const out: Author[] = [];
+  /* Each author's verified affiliations and markers, which are what may account
+     for the words in a later gap (`gapIsNobody`). */
+  const accounts: Accounting[] = [];
+  /* The first author of the current block: the one after the last gap that held anything. */
+  let blockStart = 0;
+  /* Names-only is safe only when the names were separated by markers and glue.
+     If a model-proposed affiliation helped account for a gap, a failed
+     affiliation elsewhere must not turn that uncertain segmentation into a
+     clean byline with a printed person missing. */
+  let usedGapAccounting = false;
   let nextNameWord = 0;
   /* The first affiliation that failed, if one has. The names are still checked
      to the end — a bad name refuses everything, as it always did — and only then
-     does this decide between the list and the names alone. */
+     does this decide between the list and the names alone. Every author's
+     affiliations are still verified after it, so later gaps can be accounted. */
   let affiliationFailed: string | null = null;
   for (const [n, proposed] of answer.entries()) {
     /* Start after the preceding author's span. Without this, every proposal is
        an independent existential check: the model can reverse two real names
        or repeat the first one and both still pass. */
     const want = words(proposed.name);
-    const at = findName(byline, want, nextNameWord);
+    const at = findName(byline, want, nextNameWord, (word) => mailAt(word) !== null);
     if (!at) return refuse(`named somebody not printed in the byline (author ${n + 1})`);
     /* **Nobody skipped.** What lies between the previous name and this one —
-       or before the first — must be markers and glue, or the list has left
-       out someone the page names, and the byline built from it would drop
-       their credit (GPT Sol, code review of 260929d). Someone printed after
-       the last name cannot be told from an affiliation fused onto the byline
-       record, so that case is a named limit of this check. */
-    const skipped = byline.slice(nextNameWord, at.nextWord - want.length);
-    if (skipped.some((w) => !BETWEEN_NAMES.test(w.folded))) {
-      return refuse(`left out somebody printed before author ${n + 1}`);
+       or before the first — must be nobody, or the list has left out someone
+       the page names, and the byline built from it would drop their credit
+       (GPT Sol, code review of 260929d). Nobody is markers and glue, or a
+       stacked block: `gapIsNobody`. */
+    const gap = gapIsNobody(byline, nextNameWord, at.nextWord - want.length, mailAt, accounts.slice(blockStart), null);
+    if (gap === null) return refuse(`left out somebody printed before author ${n + 1}`);
+    if (gap === "accounted") {
+      blockStart = n;
+      usedGapAccounting = true;
     }
     nextNameWord = at.nextWord;
     const rawName = oneLine(bylineText.slice(at.start, at.end));
@@ -286,20 +471,21 @@ export function verifyAuthors(
       return refuse(`had a name that is not shaped like one (author ${n + 1})`);
     }
     const affiliations: string[] = [];
-    if (affiliationFailed === null) {
-      affiliationFailed = affiliationsFor(proposed.affiliations, n, pageWords, markers, affiliations);
-    }
+    const failed = affiliationsFor(proposed.affiliations, n, pageWords, markers, affiliations);
+    affiliationFailed ??= failed;
     out.push({ name, affiliations });
+    accounts.push({ affiliations: affiliations.map(words), markers });
   }
+  /* And after the last name, for every list: until 261001l the ordinary list
+     did not check here, and dropped a trailing author (260930e, C4). */
+  const trailing = gapIsNobody(byline, nextNameWord, byline.length, mailAt, accounts.slice(blockStart), accounts);
+  if (trailing === null) {
+    return refuse(`left unaccounted words after author ${answer.length}`);
+  }
+  if (trailing === "accounted") usedGapAccounting = true;
   if (affiliationFailed !== null) {
-    /* The ordinary list historically cannot distinguish a trailing omitted
-       person from an affiliation fused onto the byline record. Names-only is
-       a new fallback, though, and must not turn that known ambiguity into a
-       regression that drops printed credit: use it only when markers and glue
-       are all that remain after the last verified name. */
-    const trailing = byline.slice(nextNameWord);
-    if (trailing.some((w) => !BETWEEN_NAMES.test(w.folded))) {
-      return refuse(`left unaccounted words after author ${answer.length}`);
+    if (usedGapAccounting) {
+      return refuse("could not safely separate every printed author after an affiliation failed");
     }
     return {
       authors: null,

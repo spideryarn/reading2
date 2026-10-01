@@ -161,7 +161,7 @@ in one place."* True of the code. False of the docs.
 
 `ideas.md`, `quotes.md` and `timeline.md` each carry a **near-verbatim fourteen-line copy** of the
 same section, "It starts itself when you press the mode", differing only in the mode name and the
-button label. `glossary.md`, `diagram.md`, `new-mode.md` and `security-map.md` carry shorter
+button label. `glossary.md`, `diagram.md`, `mode.md` and `security-map.md` carry shorter
 variants. Seven docs, one rule.
 
 The risk is not length, it is drift: the next change to `useAutoRun` updates one or two of them, and
