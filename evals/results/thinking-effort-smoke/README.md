@@ -1,5 +1,10 @@
 # Thinking effort vs quality — thinking-effort-smoke
 
+> Review note, 2026-10-01: this smoke predates the concurrency/resume fix. Its single
+> `runs.jsonl`/`order.json` are retained as the historical record, and `orderIndex` is local to each
+> invocation (the later Illustrated `low-b` therefore repeats slot 1). Full runs use per-mode JSONL,
+> seed, README and configuration files, stable full-arm slots, article snapshots and pre-call claims.
+
 Written by `evals/thinking-effort/run.ts` (plan 261001p). One row per run; the raw rows are
 `runs.jsonl`, the outputs are under `<mode>/<slug>.<arm>.*`, and the exact article bytes
 each run read are under `corpus/<slug>/`.

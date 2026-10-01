@@ -3,7 +3,9 @@
  * harness for plan 261001p (docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
  *
  *   npx tsx evals/thinking-effort/run.ts --mode sketch --arm base-a --arm low-a --slug cargocult-spya-rz663q
- *   npx tsx evals/thinking-effort/run.ts --mode sketch --mode ideas --mode illustrated --out evals/results/thinking-effort-<stamp>
+ *   # These may run concurrently into one directory (Illustrated after Sketch base-a exists):
+ *   npx tsx evals/thinking-effort/run.ts --mode sketch --out evals/results/thinking-effort-<stamp>
+ *   npx tsx evals/thinking-effort/run.ts --mode ideas --out evals/results/thinking-effort-<stamp>
  *   npx tsx evals/thinking-effort/run.ts --export-only --out <dir>      # free: write the corpus, spend nothing
  *
  * With no `--slug`, the eight articles in arms.ts; with no `--arm`, `base-a`,
@@ -32,7 +34,7 @@
  *   every run. A run started with it already set is refused. Illustrated
  *   through its `effort` option.
  * - **Generation order is counterbalanced**: per (mode, article) the arms run
- *   in a seeded shuffle, the seed recorded in `order.json` and reused on a
+ *   in a seeded shuffle, the seed recorded in `order.<mode>.json` and reused on a
  *   resume, so effort is not confounded with time or provider load (F12).
  * - **What was actually sent is read off the wire, not assumed.** `fetch` is
  *   wrapped for the run, so each row records the `effort`, `thinking` and
@@ -61,12 +63,14 @@
  * from src/pricing.ts. Latency is the generator's wall clock.
  *
  * Re-running into an existing `--out` skips every (mode, arm, slug) that
- * already has a row in `runs.jsonl`, failed rows included — a failure is a
- * result here, and a crash half-way through must not pay twice.
+ * already has a row in `runs.<mode>.jsonl`, failed rows included — a failure is
+ * a result here. A create-only claim lands before the paid call; if the process
+ * dies before the row lands, resume refuses the ambiguous cell rather than
+ * paying twice. Per-mode config files refuse a mixed-configuration resume.
  */
 import { createHash, randomInt } from "node:crypto";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Article } from "../../src/article-input.js";
@@ -107,6 +111,116 @@ export interface ArmEffort {
 export function armEffort(level: Level, production: Effort | null): ArmEffort {
   if (level === "base") return { override: null, expectedOnWire: production };
   return { override: level, expectedOnWire: level };
+}
+
+/** Files one mode owns exclusively, so three mode processes may share `--out`. */
+export const modeRowsFile = (outDir: string, mode: Mode): string => path.join(outDir, `runs.${mode}.jsonl`);
+export const modeOrderFile = (outDir: string, mode: Mode): string => path.join(outDir, `order.${mode}.json`);
+
+/** Stable slots even when a resume asks for only the unfinished arms. */
+export function selectedArmOrder(
+  mode: Mode,
+  slug: string,
+  seed: number,
+  selected: readonly ArmName[],
+): { arm: ArmName; orderIndex: number }[] {
+  return seededShuffle(ARM_NAMES, seed, `${mode}/${slug}`)
+    .map((arm, i) => ({ arm, orderIndex: i + 1 }))
+    .filter(({ arm }) => selected.includes(arm));
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function ensureExactJson(file: string, value: object, label: string): Promise<void> {
+  const body = `${JSON.stringify(value, null, 2)}\n`;
+  try {
+    await writeFile(file, body, { encoding: "utf-8", flag: "wx" });
+    return;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+  }
+  const existing = JSON.parse(await readFile(file, "utf-8")) as unknown;
+  if (canonical(existing) !== canonical(value)) {
+    throw new Error(`${file} records a different ${label}; refusing to mix configurations in one output directory`);
+  }
+}
+
+/** Create-only run contract. An identical resume is accepted; drift is refused. */
+export async function ensureModeConfig(outDir: string, config: { mode: Mode; [key: string]: unknown }): Promise<void> {
+  await mkdir(outDir, { recursive: true });
+  await ensureExactJson(path.join(outDir, `config.${config.mode}.json`), config, `${config.mode} configuration`);
+}
+
+/**
+ * Written immediately before a provider may be called. If the process dies
+ * before its JSONL row lands, a resume stops here instead of paying again.
+ */
+export async function claimRun(outDir: string, mode: Mode, key: string): Promise<void> {
+  const dir = path.join(outDir, "claims", mode);
+  await mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${key}.json`);
+  try {
+    await writeFile(file, `${JSON.stringify({ key, state: "started", claimedAt: new Date().toISOString() }, null, 2)}\n`, {
+      encoding: "utf-8",
+      flag: "wx",
+    });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    throw new Error(
+      `${key}: ${file} already exists without a recorded result. This cell may already have spent money; ` +
+        "inspect the provider/ledger before removing the claim and retrying.",
+    );
+  }
+}
+
+/** A semantic empty result is not made valid merely because its JSON parsed. */
+export function outputValidityFailure(mode: Mode, detail: Record<string, unknown>): string | null {
+  if (mode === "illustrated" && Number(detail.platesInBrief ?? 0) === 0) {
+    return "no plate survived — there is nothing to draw";
+  }
+  return null;
+}
+
+interface AccountingEvidence {
+  wireCalls: number;
+  ledgerCalls: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  thinkingTokens: number | null;
+  thinkingTokensWire: number | null;
+  providerUsd: number | null;
+  listUsd: number | null;
+  pendingCalls: number;
+  ledgerWriteFailures: number;
+}
+
+/** A rejected answer can still be a paid call, so validity never gates accounting. */
+export function accountingFaults(a: AccountingEvidence): string[] {
+  const faults: string[] = [];
+  const attempted = a.wireCalls > 0 || a.ledgerCalls > 0 || a.pendingCalls > 0 || a.ledgerWriteFailures > 0;
+  if (attempted) {
+    if (a.wireCalls !== 1) faults.push(`provider attempt has ${a.wireCalls} captured Messages requests, not one`);
+    if (a.ledgerCalls !== 1) faults.push(`provider attempt has ${a.ledgerCalls} model ledger rows, not one`);
+    if (a.inputTokens === null || a.outputTokens === null || a.thinkingTokens === null || a.thinkingTokensWire === null) {
+      faults.push("provider attempt is missing input, output, or thinking token accounting");
+    }
+    if (a.thinkingTokens !== null && a.thinkingTokensWire !== null && a.thinkingTokens !== a.thinkingTokensWire) {
+      faults.push(`wire thinking tokens ${a.thinkingTokensWire} disagree with ledger ${a.thinkingTokens}`);
+    }
+    if (a.providerUsd === null || a.listUsd === null) faults.push("provider attempt is missing provider or list-price cost");
+  }
+  if (a.pendingCalls > 0) faults.push(`${a.pendingCalls} provider call(s) were still pending when accounting closed`);
+  if (a.ledgerWriteFailures > 0) faults.push(`${a.ledgerWriteFailures} ledger row(s) failed to write`);
+  return faults;
 }
 
 interface Options {
@@ -175,6 +289,8 @@ export interface WireCapture {
   maxTokens: number | null;
   stopReason: string | null;
   thinkingTokens: number | null;
+  /** Visible answer text reconstructed from streamed deltas, verbatim. */
+  text: string;
 }
 
 /**
@@ -192,11 +308,12 @@ export function readCapture(url: string, body: string | null, sse: string | null
   const output = req.output_config as { effort?: string } | undefined;
   let stopReason: string | null = null;
   let thinkingTokens: number | null = null;
+  let text = "";
   for (const line of (sse ?? "").split("\n")) {
     if (!line.startsWith("data:")) continue;
     let event: {
       type?: string;
-      delta?: { stop_reason?: string | null };
+      delta?: { stop_reason?: string | null; type?: string; text?: string };
       usage?: { output_tokens_details?: { thinking_tokens?: number } };
     };
     try {
@@ -204,10 +321,14 @@ export function readCapture(url: string, body: string | null, sse: string | null
     } catch {
       continue;
     }
-    if (event.type !== "message_delta") continue;
-    if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
-    const t = event.usage?.output_tokens_details?.thinking_tokens;
-    if (typeof t === "number") thinkingTokens = t;
+    if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string") {
+      text += event.delta.text;
+    }
+    if (event.type === "message_delta") {
+      if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+      const t = event.usage?.output_tokens_details?.thinking_tokens;
+      if (typeof t === "number") thinkingTokens = t;
+    }
   }
   return {
     url,
@@ -217,6 +338,7 @@ export function readCapture(url: string, body: string | null, sse: string | null
     maxTokens: typeof req.max_tokens === "number" ? req.max_tokens : null,
     stopReason,
     thinkingTokens,
+    text,
   };
 }
 
@@ -263,6 +385,9 @@ export interface RunRow {
   arm: ArmName;
   level: Level;
   slug: string;
+  /** Database revision and exact prompt inputs, shared across every mode/arm. */
+  revisionId: string;
+  articleFingerprint: string;
   /** 1-based position of this arm in its (mode, article)'s shuffled order. */
   orderIndex: number;
   startedAt: string;
@@ -283,6 +408,8 @@ export interface RunRow {
   /** Illustrated only: the paper's figures the brief was offered, and which. */
   figuresOffered?: number;
   figuresFingerprint?: string;
+  /** Illustrated only: the exact base-a Sketch every arm was handed. */
+  sketchFingerprint?: string;
   valid: boolean;
   error?: string;
   stopReason: string | null;
@@ -323,6 +450,8 @@ function sumOrNull(xs: (number | null)[]): number | null {
 
 interface Loaded {
   article: Article;
+  revisionId: string;
+  articleFingerprint: string;
   figures: import("../../src/illustrated-figures.js").ArticleFigure[];
   figureSurvey: Pick<import("../../src/illustrated-figures.js").FigureSurvey, "stored" | "skipped">;
   blocks: number;
@@ -402,6 +531,15 @@ async function openOwnedArticle(
   );
   return {
     article,
+    revisionId: row.revision.id,
+    articleFingerprint: createHash("sha256")
+      .update(JSON.stringify({
+        blocks: article.blocks,
+        tree: article.tree,
+        meta: article.meta,
+        figures: survey.figures.map((f) => [f.label, f.block, f.sha256, f.ext]),
+      }))
+      .digest("hex"),
     figures: survey.figures,
     figureSurvey: { stored: survey.stored, skipped: survey.skipped },
     blocks: article.blocks.length,
@@ -419,9 +557,52 @@ async function exportCorpus(outDir: string, loaded: Loaded): Promise<void> {
   const dir = path.join(outDir, "corpus", loaded.article.slug);
   await mkdir(dir, { recursive: true });
   const json = (v: unknown) => `${JSON.stringify(v, null, 2)}\n`;
-  await writeFile(path.join(dir, "blocks.json"), json({ blocks: loaded.article.blocks }), "utf-8");
-  await writeFile(path.join(dir, "tree.json"), json(loaded.article.tree), "utf-8");
-  if (loaded.article.meta) await writeFile(path.join(dir, "meta.json"), json(loaded.article.meta), "utf-8");
+  const snapshot = { revisionId: loaded.revisionId, articleFingerprint: loaded.articleFingerprint };
+  const snapshotFile = path.join(dir, "snapshot.json");
+  const ownerDir = path.join(dir, ".snapshot-owner");
+  const assertSnapshot = async (): Promise<void> => {
+    const existing = JSON.parse(await readFile(snapshotFile, "utf-8")) as unknown;
+    if (canonical(existing) !== canonical(snapshot)) {
+      throw new Error(`${snapshotFile} records a different article revision; refusing to mix inputs in one output directory`);
+    }
+  };
+  /* The committed/resumed case: the empty owner directory is intentionally not
+     an artefact, so the ready snapshot itself must win before a new claim. */
+  if (existsSync(snapshotFile)) {
+    await assertSnapshot();
+    return;
+  }
+  let owner = false;
+  try {
+    await mkdir(ownerDir);
+    owner = true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+  }
+
+  const atomic = async (file: string, body: string): Promise<void> => {
+    const temporary = `${file}.${process.pid}.${randomInt(2 ** 31)}.tmp`;
+    await writeFile(temporary, body, "utf-8");
+    await rename(temporary, file);
+  };
+  if (owner) {
+    await atomic(path.join(dir, "blocks.json"), json({ blocks: loaded.article.blocks }));
+    await atomic(path.join(dir, "tree.json"), json(loaded.article.tree));
+    await atomic(path.join(dir, "meta.json"), json(loaded.article.meta ?? {}));
+    /* Last and atomically renamed: its presence means every corpus file above is complete. */
+    await atomic(snapshotFile, json(snapshot));
+    return;
+  }
+
+  /* Another mode owns this snapshot. Wait only for its small local writes, and
+     refuse a stale owner marker rather than generating from unrecorded bytes. */
+  for (let i = 0; i < 300 && !existsSync(snapshotFile); i++) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  if (!existsSync(snapshotFile)) {
+    throw new Error(`${ownerDir} exists but no snapshot appeared within 30 seconds; refusing an ambiguous corpus`);
+  }
+  await assertSnapshot();
 }
 
 /* ------------------------------------------------------- rasterising -- */
@@ -482,9 +663,22 @@ export async function readRows(file: string): Promise<RunRow[]> {
     .map((l) => JSON.parse(l) as RunRow);
 }
 
+/** Per-mode files are current; the single legacy file keeps old smoke runs readable. */
+export async function readModeRows(outDir: string, mode: Mode): Promise<RunRow[]> {
+  const current = modeRowsFile(outDir, mode);
+  const legacy = (await readRows(path.join(outDir, "runs.jsonl"))).filter((r) => r.mode === mode);
+  const rows = [...legacy, ...(existsSync(current) ? await readRows(current) : [])];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.key)) throw new Error(`${row.key}: duplicate result across legacy and per-mode JSONL files`);
+    seen.add(row.key);
+  }
+  return rows;
+}
+
 /** The one seed this output directory's generation order comes from. */
-async function orderSeed(outDir: string, asked: number | null): Promise<number> {
-  const file = path.join(outDir, "order.json");
+async function orderSeed(outDir: string, mode: Mode, asked: number | null): Promise<number> {
+  const file = modeOrderFile(outDir, mode);
   if (existsSync(file)) {
     const { seed } = JSON.parse(await readFile(file, "utf-8")) as { seed: number };
     if (asked !== null && asked !== seed) {
@@ -495,6 +689,33 @@ async function orderSeed(outDir: string, asked: number | null): Promise<number> 
   const seed = asked ?? randomInt(2 ** 31);
   await writeFile(file, `${JSON.stringify({ seed }, null, 2)}\n`, "utf-8");
   return seed;
+}
+
+async function configFor(
+  mode: Mode,
+  productionEffort: Effort | null,
+  plates: boolean,
+): Promise<{ mode: Mode; [key: string]: unknown }> {
+  const { CAPABLE_MODEL_OPENROUTER } = await import("../../src/models.js");
+  const promptVersion =
+    mode === "sketch"
+      ? (await import("../../src/sketch.js")).PROMPT_VERSION
+      : mode === "ideas"
+        ? (await import("../../src/ideas.js")).PROMPT_VERSION
+        : (await import("../../src/illustrated.js")).PROMPT_VERSION;
+  return {
+    version: 1,
+    mode,
+    promptVersion,
+    model: CAPABLE_MODEL_OPENROUTER,
+    power: "standard",
+    productionEffort,
+    arms: Object.fromEntries(ARM_NAMES.map((arm) => [arm, armEffort(levelOf(arm), productionEffort)])),
+    cacheArticle: false,
+    profile: null,
+    ...(mode === "ideas" ? { previous: null } : {}),
+    ...(mode === "illustrated" ? { sketch: "base-a", figures: "production-loader", plates } : {}),
+  };
 }
 
 /**
@@ -521,9 +742,15 @@ async function main(opts: Options): Promise<void> {
   };
 
   await mkdir(opts.outDir, { recursive: true });
-  const rowsFile = path.join(opts.outDir, "runs.jsonl");
-  const done = new Set((await readRows(rowsFile)).map((r) => r.key));
-  const seed = await orderSeed(opts.outDir, opts.seed);
+  const states = new Map<Mode, { rowsFile: string; done: Set<string>; seed: number }>();
+  for (const mode of opts.modes) {
+    await ensureModeConfig(opts.outDir, await configFor(mode, production[mode], opts.plates));
+    states.set(mode, {
+      rowsFile: modeRowsFile(opts.outDir, mode),
+      done: new Set((await readModeRows(opts.outDir, mode)).map((r) => r.key)),
+      seed: await orderSeed(opts.outDir, mode, opts.seed),
+    });
+  }
 
   const { closeDb } = await import("../../src/db/client.js");
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
@@ -543,21 +770,20 @@ async function main(opts: Options): Promise<void> {
       if (opts.exportOnly || !capture) return;
 
       for (const mode of opts.modes) {
+        const state = states.get(mode) as { rowsFile: string; done: Set<string>; seed: number };
         await mkdir(path.join(opts.outDir, mode), { recursive: true });
         for (const slug of opts.slugs) {
-          /* Shuffled over the full arm list, then filtered, so an arm's slot
-             does not depend on which subset this invocation happened to name. */
-          const order = seededShuffle(ARM_NAMES, seed, `${mode}/${slug}`).filter((a) => opts.arms.includes(a));
-          for (const [i, arm] of order.entries()) {
+          const order = selectedArmOrder(mode, slug, state.seed, opts.arms);
+          for (const { arm, orderIndex } of order) {
             const key = `${mode}.${arm}.${slug}`;
-            if (done.has(key)) {
-              console.log(`${key}: already in runs.jsonl, skipped`);
+            if (state.done.has(key)) {
+              console.log(`${key}: already in ${path.basename(state.rowsFile)}, skipped`);
               continue;
             }
             const loaded = corpus.get(slug) as Loaded;
             const effort = armEffort(levelOf(arm), production[mode]);
             const row = await runOne({
-              mode, arm, slug, effort, loaded, orderIndex: i + 1,
+              mode, arm, slug, effort, loaded, orderIndex,
               outDir: opts.outDir, capture, owner, raster: rasteriser.raster, plates: opts.plates,
             });
             /* The override must be gone whatever happened inside — the next
@@ -565,18 +791,18 @@ async function main(opts: Options): Promise<void> {
             if (process.env.SPIDERYARN_PIPELINE_EFFORT !== undefined) {
               throw new Error(`${key}: SPIDERYARN_PIPELINE_EFFORT was left set — refusing to run another arm`);
             }
-            await appendFile(rowsFile, `${JSON.stringify(row)}\n`, "utf-8");
-            done.add(key);
+            await appendFile(state.rowsFile, `${JSON.stringify(row)}\n`, "utf-8");
+            state.done.add(key);
             console.log(
               `${key}: ${row.valid ? "valid" : `INVALID (${row.error})`} — effort sent ${row.effortSent ?? "(none)"}, ` +
                 `thinking ${row.thinkingTokens ?? "?"} / output ${row.outputTokens ?? "?"} tokens, ` +
                 `$${row.costUsd?.toFixed(4) ?? "?"}, ${(row.latencyMs / 1000).toFixed(0)}s, stop ${row.stopReason}`,
             );
             /* After the row is written, so the money spent is on record. */
-            if (row.effortSent !== row.effortExpected) {
+            const harnessFaults = row.detail.harnessFaults as string[] | undefined;
+            if (harnessFaults && harnessFaults.length > 0) {
               throw new Error(
-                `${key}: the request had to carry effort ${row.effortExpected ?? "(none)"} and carried ` +
-                  `${row.effortSent ?? "(none)"}. Stopping before another call is paid for.`,
+                `${key}: ${harnessFaults.join("; ")}. Stopping before another call is paid for.`,
               );
             }
           }
@@ -585,7 +811,10 @@ async function main(opts: Options): Promise<void> {
     });
   } finally {
     await rasteriser.close();
-    await writeReadme(opts.outDir, await readRows(rowsFile), production, seed);
+    for (const mode of opts.modes) {
+      const state = states.get(mode);
+      if (state) await writeReadme(opts.outDir, mode, await readModeRows(opts.outDir, mode), production, state.seed);
+    }
     await closeDb();
   }
 }
@@ -610,12 +839,16 @@ async function runOne(a: {
   const base = path.join(a.outDir, a.mode, `${a.slug}.${a.arm}`);
   const files: string[] = [];
   const write = async (suffix: string, data: string | Uint8Array) => {
-    await writeFile(`${base}${suffix}`, data);
-    files.push(path.relative(a.outDir, `${base}${suffix}`));
+    const file = `${base}${suffix}`;
+    const temporary = `${file}.${process.pid}.${randomInt(2 ** 31)}.tmp`;
+    await writeFile(temporary, data);
+    await rename(temporary, file);
+    files.push(path.relative(a.outDir, file));
   };
   const detail: Record<string, unknown> = {};
   let figuresOffered: number | undefined;
   let figuresFingerprint: string | undefined;
+  let sketchFingerprint: string | undefined;
   let plates: { drawn: number; attempted: number } | undefined;
 
   /* Illustrated's inputs, loaded before anything is paid for. */
@@ -629,7 +862,9 @@ async function runOne(a: {
           `\`--mode sketch --arm base-a --slug ${a.slug} --out ${a.outDir}\` first.`,
       );
     }
-    sketch = JSON.parse(await readFile(sketchFile, "utf-8")) as Sketch;
+    const sketchBytes = await readFile(sketchFile, "utf-8");
+    sketch = JSON.parse(sketchBytes) as Sketch;
+    sketchFingerprint = createHash("sha256").update(sketchBytes).digest("hex");
     figures = a.loaded.figures;
     figuresOffered = figures.length;
     /* Of what the brief is shown: label, block and the bytes' own hash. */
@@ -640,6 +875,16 @@ async function runOne(a: {
     detail.figureLabels = figures.map((f) => `${f.label} ${f.block}`);
     detail.figuresStored = a.loaded.figureSurvey.stored;
     detail.figuresSkipped = a.loaded.figureSurvey.skipped;
+    await ensureExactJson(
+      path.join(a.outDir, `input.illustrated.${a.slug}.json`),
+      {
+        revisionId: a.loaded.revisionId,
+        articleFingerprint: a.loaded.articleFingerprint,
+        figuresFingerprint,
+        sketchFingerprint,
+      },
+      `${a.slug} Illustrated inputs`,
+    );
   }
 
   const startedAt = new Date();
@@ -647,8 +892,11 @@ async function runOne(a: {
   let valid = true;
   let error: string | undefined;
   let calls: SpendRecord[] = [];
+  let pendingCalls = 0;
+  let ledgerWriteFailures = 0;
   const saved = process.env.SPIDERYARN_PIPELINE_EFFORT;
 
+  await claimRun(a.outDir, a.mode, `${a.mode}.${a.arm}.${a.slug}`);
   try {
     const spend = await collectSpend(
       async () => {
@@ -717,10 +965,14 @@ async function runOne(a: {
         sink: (row) => costStore.record(row),
         onDone: (report) => {
           calls = report.calls;
+          pendingCalls = report.pending.length;
+          ledgerWriteFailures = report.writeFailures;
         },
       },
     );
     calls = spend.report.calls;
+    pendingCalls = spend.report.pending.length;
+    ledgerWriteFailures = spend.report.writeFailures;
   } catch (err) {
     valid = false;
     error = (err as Error).message;
@@ -732,6 +984,9 @@ async function runOne(a: {
   const latencyMs = Math.round(performance.now() - t0);
 
   const wire = await a.capture.take();
+  for (const [i, captured] of wire.entries()) {
+    if (captured.text) await write(wire.length === 1 ? ".wire.raw.txt" : `.wire-${i + 1}.raw.txt`, captured.text);
+  }
   /* One Messages call per run is what each of these generators makes. More
      than one is recorded joined, never averaged into one effort. */
   const join = (xs: (string | null)[]): string | null => {
@@ -764,12 +1019,61 @@ async function runOne(a: {
     }),
   );
 
+  const harnessFaults: string[] = [];
+  const outputFailure = valid ? outputValidityFailure(a.mode, detail) : null;
+  if (outputFailure) {
+    valid = false;
+    error = outputFailure;
+  }
+  const { CAPABLE_MODEL_OPENROUTER } = await import("../../src/models.js");
+  if (wire.length > 0) {
+    if (wire.length !== 1) harnessFaults.push(`expected one Messages request and captured ${wire.length}`);
+    for (const w of wire) {
+      if (w.effort !== a.effort.expectedOnWire) {
+        harnessFaults.push(
+          `request had to carry effort ${a.effort.expectedOnWire ?? "(none)"} and carried ${w.effort ?? "(none)"}`,
+        );
+      }
+      if (w.thinking !== "adaptive") harnessFaults.push(`request carried thinking ${w.thinking ?? "(none)"}, not adaptive`);
+      if (w.model !== CAPABLE_MODEL_OPENROUTER) {
+        harnessFaults.push(`request carried model ${w.model ?? "(none)"}, not ${CAPABLE_MODEL_OPENROUTER}`);
+      }
+    }
+  }
+  const stats = model[0];
+  harnessFaults.push(...accountingFaults({
+    wireCalls: wire.length,
+    ledgerCalls: model.length,
+    inputTokens: stats?.inputTokens ?? null,
+    outputTokens: stats?.outputTokens ?? null,
+    thinkingTokens: stats?.reasoningTokens ?? null,
+    thinkingTokensWire: wire[0]?.thinkingTokens ?? null,
+    providerUsd: usd(model),
+    listUsd: list,
+    pendingCalls,
+    ledgerWriteFailures,
+  }));
+  if (valid) {
+    if (wire[0]?.stopReason !== "end_turn") {
+      harnessFaults.push(`valid output ended ${wire[0]?.stopReason ?? "without a stop reason"}, not end_turn`);
+    }
+  }
+  if (harnessFaults.length > 0) {
+    valid = false;
+    error = [error, ...harnessFaults].filter(Boolean).join("; ");
+    detail.harnessFaults = harnessFaults;
+  }
+  detail.pendingCalls = pendingCalls;
+  detail.ledgerWriteFailures = ledgerWriteFailures;
+
   return {
     key: `${a.mode}.${a.arm}.${a.slug}`,
     mode: a.mode,
     arm: a.arm,
     level: levelOf(a.arm),
     slug: a.slug,
+    revisionId: a.loaded.revisionId,
+    articleFingerprint: a.loaded.articleFingerprint,
     orderIndex: a.orderIndex,
     startedAt: startedAt.toISOString(),
     effortOverride: a.effort.override,
@@ -783,6 +1087,7 @@ async function runOne(a: {
     chars: a.loaded.chars,
     ...(figuresOffered !== undefined ? { figuresOffered } : {}),
     ...(figuresFingerprint !== undefined ? { figuresFingerprint } : {}),
+    ...(sketchFingerprint !== undefined ? { sketchFingerprint } : {}),
     valid,
     ...(error !== undefined ? { error } : {}),
     stopReason: join(wire.map((w) => w.stopReason)),
@@ -811,6 +1116,7 @@ async function runOne(a: {
 
 async function writeReadme(
   outDir: string,
+  mode: Mode,
   rows: RunRow[],
   production: Record<Mode, Effort | null>,
   seed: number,
@@ -821,15 +1127,15 @@ async function writeReadme(
   const corpusDir = path.join(outDir, "corpus");
   const slugs = existsSync(corpusDir) ? (await readdir(corpusDir)).sort() : [];
   const lines = [
-    `# Thinking effort vs quality — ${path.basename(outDir)}`,
+    `# Thinking effort vs quality — ${path.basename(outDir)} — ${mode}`,
     "",
-    "Written by `evals/thinking-effort/run.ts` (plan 261001p). One row per run; the raw rows are",
-    "`runs.jsonl`, the outputs are under `<mode>/<slug>.<arm>.*`, and the exact article bytes",
+    "Written by `evals/thinking-effort/run.ts` (plan 261001p). One row per run; this mode's raw rows are",
+    `\`runs.${mode}.jsonl\`, the outputs are under \`<mode>/<slug>.<arm>.*\`, and the exact article bytes`,
     "each run read are under `corpus/<slug>/`.",
     "",
     `Production effort, read from the code at run time: sketch \`${production.sketch}\`, ideas \`${production.ideas}\`, ` +
       "illustrated *none named* (no `output_config`; the API default, `high` on Sonnet 5).",
-    `Arms run in a seeded shuffle per (mode, article); seed \`${seed}\` (order.json), position in \`runs.jsonl\` § orderIndex.`,
+    `Arms run in a seeded shuffle per article; seed \`${seed}\` (order.${mode}.json), stable full-arm slot in the JSONL § orderIndex.`,
     "`effort sent` is what the Messages request carried, read off the wire. Thinking tokens are",
     "inside output tokens. `$` is the ledger's (OpenRouter's settled cost) for the model call;",
     "`list $` re-prices the same tokens with src/pricing.ts. Illustrated plates are off unless `--plates`.",
@@ -887,8 +1193,9 @@ async function writeReadme(
     "block counts in the table above are the record of what it read.",
     "",
   ];
-  await writeFile(path.join(outDir, "README.md"), lines.join("\n"), "utf-8");
-  console.log(`Wrote ${path.join(outDir, "README.md")}`);
+  const file = path.join(outDir, `README.${mode}.md`);
+  await writeFile(file, lines.join("\n"), "utf-8");
+  console.log(`Wrote ${file}`);
 }
 
 if (isMain(import.meta.url)) {

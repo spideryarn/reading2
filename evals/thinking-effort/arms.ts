@@ -65,9 +65,7 @@ export const DEFAULT_SLUGS = [
  * having been drawn first.
  */
 export function seededShuffle<T>(items: readonly T[], seed: number, salt: string): T[] {
-  let h = seed >>> 0;
-  for (let i = 0; i < salt.length; i++) h = Math.imul(h ^ salt.charCodeAt(i), 0x01000193) >>> 0;
-  const random = mulberry32(h);
+  const random = seededRandom(seed, salt);
   const out = [...items];
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
@@ -76,4 +74,11 @@ export function seededShuffle<T>(items: readonly T[], seed: number, salt: string
     out[j] = a;
   }
   return out;
+}
+
+/** The same salted PRNG when a deterministic sampler, rather than a shuffle, is needed. */
+export function seededRandom(seed: number, salt: string): () => number {
+  let h = seed >>> 0;
+  for (let i = 0; i < salt.length; i++) h = Math.imul(h ^ salt.charCodeAt(i), 0x01000193) >>> 0;
+  return mulberry32(h);
 }

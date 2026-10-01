@@ -28,6 +28,7 @@ import {
   renderHeadingList,
   renderSeedProposal,
   runModelArm,
+  thinkingOffFailure,
 } from "../evals/hierarchy-structure/model-arms.js";
 import { compareTrees, scoreTree } from "../evals/hierarchy-structure/score.js";
 import { zdrVerdict } from "../evals/hierarchy-structure/verify-zdr.js";
@@ -637,6 +638,16 @@ describe("messagesBody", () => {
 
   it("refuses thinking off on the chat wire rather than dropping it", () => {
     expect(() => chatBody({ ...req, call: { model: "x/y", thinking: "off" } })).toThrow(/Messages-wire/);
+  });
+});
+
+describe("thinking-off response proof", () => {
+  it("requires a reported zero, no thinking blocks, and end_turn", () => {
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 0, stopReason: "end_turn" })).toBeNull();
+    expect(thinkingOffFailure({ reasoningTokens: null, thinkingBlocks: 0, stopReason: "end_turn" })).toMatch(/did not report/);
+    expect(thinkingOffFailure({ reasoningTokens: 1, thinkingBlocks: 0, stopReason: "end_turn" })).toMatch(/1 thinking token/);
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 1, stopReason: "end_turn" })).toMatch(/thinking block/);
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 0, stopReason: "tool_use" })).toMatch(/end_turn/);
   });
 });
 

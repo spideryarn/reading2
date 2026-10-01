@@ -29,8 +29,10 @@ question the essay says cannot be settled), and a picture that is true but unrea
    no space spent on trivia? 1 = whole sections absent · 3 = one notable gap · 5 = complete at the right grain.
 4. **Legibility** — can the picture be read: no overlaps, text that fits, a clear reading order?
    1 = hard to read at all · 3 = readable with effort · 5 = reads at a glance.
-5. **Text accuracy** — are labels true to the article, in its own terms?
-   1 = a wrong or invented claim · 3 = paraphrase that drifts in one place · 5 = accurate throughout.
+5. **Text and navigation accuracy** — are labels true to the article in its own terms, do their
+   block links land on the passage they depict, and do regions that open a detail scene lead to the
+   right part of the argument? 1 = a wrong claim or materially wrong door · 3 = one drifting label
+   or weak link · 5 = accurate throughout and every door goes where a reader expects.
 
 ## Illustrated — the Sketch, painted (judged on the brief)
 
@@ -92,8 +94,9 @@ depends on. **Held to a higher bar**: a structural regression is disqualifying o
    3 = one or two misplaced · 5 = every boundary is where a careful reader would put it.
 2. **Nesting** — does the depth reflect real sub-structure, neither flat nor needlessly deep?
    1 = flat or arbitrary · 3 = partly right · 5 = the nesting is the argument's.
-3. **Titles** — short, specific, informative about that section. 1 = generic · 3 = mixed · 5 = all sharp.
-4. **Gists** — does each gist say what the section claims, accurately?
+3. **Titles** — 2–6 words, specific, and informative about that section. 1 = generic or long enough
+   to stop being a landmark · 3 = mixed · 5 = every title is a sharp, scannable landmark.
+4. **Gists** — does each one-sentence gist say what the section claims, accurately?
    1 = vague or wrong · 3 = mostly right · 5 = accurate and specific.
 5. **Completeness** — nothing dropped, nothing duplicated, the whole article covered.
    1 = sections lost · 3 = an awkward catch-all · 5 = complete and clean.

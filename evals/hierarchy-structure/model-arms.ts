@@ -342,6 +342,27 @@ export function messagesBody(req: {
   };
 }
 
+/** The response-side proof that a disabled-thinking request was honoured. */
+export function thinkingOffFailure(a: {
+  reasoningTokens: number | null;
+  thinkingBlocks: number;
+  stopReason: string | null;
+}): string | null {
+  if (a.reasoningTokens === null) {
+    return "the response did not report a thinking-token count, so thinking off is unproved";
+  }
+  if (a.reasoningTokens !== 0) {
+    return `the response reported ${a.reasoningTokens} thinking token(s) despite disabled thinking`;
+  }
+  if (a.thinkingBlocks > 0) {
+    return `the response contained ${a.thinkingBlocks} thinking block(s) despite disabled thinking`;
+  }
+  if (a.stopReason !== "end_turn") {
+    return `the thinking-off response ended ${a.stopReason ?? "without a stop reason"}, not end_turn`;
+  }
+  return null;
+}
+
 /**
  * The Messages wire, through OpenRouter's Anthropic-compatible Skin — the same
  * endpoint, provider pin and `require_parameters` production uses
@@ -437,12 +458,13 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
     const thinkingBlocks = message.content.filter(
       (b) => b.type === "thinking" || b.type === "redacted_thinking",
     ).length;
-    if (call.thinking === "off" && ((stats.reasoningTokens ?? 0) > 0 || thinkingBlocks > 0)) {
-      throw new ArmFailure(
-        `thinking was sent as disabled and the answer has ${stats.reasoningTokens ?? "an unreported number of"} ` +
-          `thinking tokens in ${thinkingBlocks} thinking block(s) — this is not a thinking-off result`,
-        [stats],
-      );
+    if (call.thinking === "off") {
+      const failure = thinkingOffFailure({
+        reasoningTokens: stats.reasoningTokens,
+        thinkingBlocks,
+        stopReason: stats.stopReason ?? null,
+      });
+      if (failure) throw new ArmFailure(`${failure} — this is not a thinking-off result`, [stats]);
     }
     if (message.stop_reason === "max_tokens") {
       throw new ArmFailure(
@@ -1019,4 +1041,3 @@ export async function runModelArm(
       throw new Error(`runModelArm was handed the free arm "${arm.name}" — run.ts owns those.`);
   }
 }
-

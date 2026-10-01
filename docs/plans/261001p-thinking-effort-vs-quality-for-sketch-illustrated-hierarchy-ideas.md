@@ -84,11 +84,11 @@ Normal articles in 261001b are 30–60k characters; six of the eight are in or n
 
 Each mode runs through its **shipping generator** (`generateSketch`, `generateIdeas`,
 `generateIllustrated`, and the Hierarchy harness's request), never a copy of the prompt. Per article
-and mode, four draws:
+and surviving mode, four draws:
 
 - **base-a, base-b** — today's request, twice. For Illustrated that means no `output_config` at all,
   byte-for-byte what production sends (Sol F4).
-- **low-a, low-b** — the cheaper candidate, twice (Hierarchy: thinking off, twice).
+- **low-a, low-b** — the cheaper candidate, twice. Hierarchy's separate smoke used thinking off twice.
 
 `medium` is bought only if `low` shows a clear loss (Sol's simpler design): a second round,
 base-a/b against medium-a/b, same rules.
@@ -107,12 +107,14 @@ changes. Plates vary visibly between draws of one identical brief (evals/illustr
 so one draw per brief would let image luck decide. Plates are drawn only for a sample shown in the
 write-up (Sol F9).
 
-**Hierarchy off is preflighted** on the real Messages wire before the panel: zero thinking tokens,
-`end_turn`, valid JSON, a tree that builds (Sol F5).
+**Hierarchy off was preflighted** on the real Messages wire before the panel: zero thinking tokens,
+`end_turn`, valid JSON, a tree that builds (Sol F5). It failed at valid JSON twice, so the full
+Hierarchy panel and its other fourteen `off` draws are cancelled (status above).
 
-Calls: 3 modes × 8 articles × 4 = 96 text calls, plus Hierarchy 8 × 4 = 32, plus a few plates for
-the write-up and the smoke runs. At $0.15–0.40 a call, **about $25–45**, the long article the
-largest single item. Hard ceiling: **$80**; past that I stop and report.
+Remaining calls: 3 modes × 8 articles × 4 = 96 text calls, plus a few plates for the write-up.
+Hierarchy's three smoke calls (one incumbent, two `off`) and the other smoke calls are already
+spent. At $0.15–0.40 a text call, **about $20–45 more**, the long article the largest single item.
+Hard ceiling for the whole eval: **$80**; past that I stop and report.
 
 ### What is recorded per run
 
@@ -120,6 +122,12 @@ Thinking tokens, output tokens, input tokens, cost (src/pricing.ts, as the ledge
 wall-clock latency, stop reason, the effort actually sent, the serving upstream where the response
 says it, and whether the output validated (the generator's own checks; a throw is a failure, with
 its message). Everything goes in one stamped directory under `evals/results/`, raw outputs included.
+Each mode owns its JSONL, order seed, README and configuration manifest, so Sketch and Ideas can run
+as separate processes into that directory; Illustrated follows once Sketch's base-a files exist.
+The environment override is process-local. A create-only claim is written immediately before every
+paid cell, so a crash after payment but before its result is recorded makes resume stop for inspection
+rather than buying the cell again. The corpus snapshot records one revision and refuses a different
+one from another mode process.
 
 ### Seams in `src/`
 
@@ -128,15 +136,15 @@ its message). Everything goes in one stamped directory under `evals/results/`, r
   production starts sending it.
 - **Sketch and Ideas** already honour `SPIDERYARN_PIPELINE_EFFORT` via `effortFor`.
 - **Hierarchy**: the harness's `CallSpec` becomes a union — adaptive with an effort, or off — and
-  gains `smart-off` arms. Nothing in `src/` changes for the eval. If `off` is adopted,
-  `EXPAND_EFFORT` is decoupled and stays `low`: expansion is off for readers today and was not
-  measured here (Sol F5).
+  gains `smart-off` arms. Nothing in `src/` changes for the eval. Had `off` survived and been
+  adopted, `EXPAND_EFFORT` would have been decoupled and kept at `low`: expansion is off for readers
+  today and was not measured here (Sol F5).
 
 ### Judging, blind
 
-For each mode and article, **one anonymous lineup of the four draws** (Sol F8), labels W/X/Y/Z
-shuffled per article with a recorded seed, the key kept in a file the judges never see. Neither
-judge is told how many arms there are or that two of the four share a recipe.
+For each surviving mode and article, **one anonymous lineup of the four draws** (Sol F8), labels W/X/Y/Z
+shuffled per article with a recorded seed, the key kept in a file the judges never see. The judges
+can of course count four candidates; they are not told what differs or that two pairs share recipes.
 
 - **Judge 1, GPT Sol**: ranks the four against the mode's rubric, ties allowed, with one sentence
   on what separated each adjacent pair. One run per mode, all eight lineups.
@@ -162,6 +170,10 @@ wins; a tie counts ½. U runs 0–4; if effort made no difference, U averages 2.
 mean U over the eight articles. Under no difference its standard error is about 0.46 (Mann–Whitney
 variance for two against two, 20/12, over eight articles).
 
+A judge response that omits a candidate, criterion or ranking is not a score: rerun that judge on
+the same frozen lineup and record the failed attempt. If it still cannot return a complete result,
+that judge and mode are undecided and no effort change is made from the panel.
+
 - **Clear loss**: mean U ≤ 1.1 for either judge (about two standard errors below 2).
 - **Possible loss**: 1.1 < mean U ≤ 1.5 for either judge.
 - **No visible loss**: mean U > 1.5 for both judges.
@@ -169,10 +181,12 @@ variance for two against two, 20/12, over eight articles).
 Either judge's verdict counts: judge disagreement resolves to the worse of the two.
 
 **Hard gates, every mode**: every low draw validated (a failure that would cost a reader a retry
-counts against it); and the saving is real — the **median per-article reduction in thinking tokens
-across the seven articles under 100k characters** is at least a third (Sol F10).
+counts against it); and the saving is real. For each article, reduction is
+`1 - mean(low-a, low-b) / mean(base-a, base-b)` in thinking tokens; the **median reduction across
+the seven articles under 100k characters** must be at least a third (Sol F10). A missing token count
+fails this gate rather than disappearing from the median.
 
-**Hierarchy's structural gates** (Sol F7), by failure class, never pooled across articles:
+**Hierarchy's structural gates, had its smoke passed** (Sol F7), by failure class, never pooled across articles:
 - Zero tolerance across all sixteen `off` draws: a hard failure, an invented or missing id, a missing
   gist, a dropped section.
 - Repairs: compared as repair classes and moved-block intervals against the two base draws on the
@@ -186,8 +200,8 @@ across the seven articles under 100k characters** is at least a third (Sol F10).
 - **Standardising Sketch and Illustrated**: they end on one level — the higher of the two levels
   each passes on its own. (If Sketch passes `low` and Illustrated only `medium`, both go to
   `medium`.)
-- **Hierarchy**: `off` only on *no visible loss* from both judges **and** every structural gate.
-  Anything less keeps `low`.
+- **Hierarchy**: already stopped at its JSON hard gate, so `low` stays. Had the smoke passed, `off`
+  would have required *no visible loss* from both judges **and** every structural gate.
 
 ### Cache groups — what a change would move
 
@@ -203,7 +217,7 @@ today, but it constrains the 261001o caching options, and the write-up says so.
 1. **Harness** (this worktree): `evals/thinking-effort/`, the `smart-off` arms, the Illustrated
    seam, the lineup builder. Smoke on `cargocult`. Sol reviews the harness before the full run,
    because a harness bug spends the whole budget on the wrong question. Commit.
-2. **Full runs**, in tmux. Results committed under `evals/results/`.
+2. **Full runs** for Sketch, Illustrated and Ideas, in tmux. Results committed under `evals/results/`.
 3. **Blind judging**: Sol and Opus; my sample; unblind; tabulate.
 4. **Decide, change, write up**: the research doc
    (`docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`),
