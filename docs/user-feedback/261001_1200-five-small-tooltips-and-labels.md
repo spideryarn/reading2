@@ -88,5 +88,10 @@ Not built, and sent to the Overseer as follow-ups:
   citing nothing. My recommendation is to always search; it costs a search per press, so it is
   your call. Making the answer's own wording clearer means changing a prompt that comments share,
   so it needs an eval.
+  **Since built (Greg answered, 2026-10-01):** the button is now **Dig deeper**. It always runs a
+  web search (forced in code, not left to the model), answers on the bigger model (Opus), and lists
+  the sources it found; a comment's *Search the web* and Citations' *Investigate* became the same
+  action. [261001p](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md),
+  shipped to dev in `af0bf0a30` (not yet deployed; the Overseer deploys).
 
 The plan, with the review: [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md).
