@@ -1,7 +1,10 @@
 # Simple's "feedback loops" terminology collision: a prompt rule tried, not shipped, and the guard proposed
 
 **Status as of 2026-10-01:** the two prompt wordings were measured and backed out; the screen and
-probe provenance are built; the guard is a proposal, not built.
+probe provenance are built; the guard is a proposal, not built. It was measured the same day
+(§ Measuring the guard): Luna catches 24 of the 30 known faults for about $0.0027 per complete
+three-level press. The recommendation is to build an instrumented first version, store the retry
+after a second flag, and fail open if the checker itself fails. Greg decides.
 
 A fidelity bug in Simple (Summary's Brief · Simple · Fuller), dispatched by the Overseer, recorded in
 [261001b § Fidelity](261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md):
@@ -170,6 +173,164 @@ plan-review point stands for whichever change does ship: a prompt change must bu
 for Simple that version is also the shape guard (`isUsableSimpleSummary`). So the bump should split
 "which prompt wrote it" from "can we read its shape", or every stored summary reads as absent.
 
+## Measuring the guard (2026-10-01)
+
+**Recommendation: build an instrumented first version.** Use Luna (the quick tier) as the checker,
+store the retried level after a second flag, and fail open if the checker itself fails. As originally
+proposed, a level flagged twice stores nothing; on this paper that would lose roughly 30–35% of
+presses. Nothing was built into the app; the decision is Greg's.
+
+### What was measured
+
+A throwaway probe,
+[`scripts/probes/261001h-fidelity-guard-probe.ts`](../../scripts/probes/261001h-fidelity-guard-probe.ts),
+sends the checker the guard section describes. There is one call per level. Each paragraph goes with
+the text of the blocks it cites, and one verdict per paragraph comes back. A run's levels go in
+parallel, as in a press.
+
+The checker prompt names the class of fault (a reversed direction, or a finding told under another
+thing's name). It never names this paper or the word "feedback". It was not tuned on the results.
+No `ai_calls` rows were written.
+
+**The labelled set** ([labels](261001h-fidelity-guard-labels.json)) covers every saved successful
+Simple run:
+
+- **The PID paper:** 51 runs, 128 levels and 493 paragraphs. The 30 faulty paragraphs were labelled
+  by hand, and they reproduce this plan's counts: 26 clear swaps, 3 glosses using the other kind's
+  name, and 1 direction error.
+- **Controls:** 60 runs on Olah and Gwern, 150 levels and 568 paragraphs, with no preselected
+  faults. Adjudicating the alarms found two real faults.
+
+The checker measurement is conditional on the writer having produced a usable level. Nine failed
+source runs (five PID, four controls) are recorded in the corpus and excluded; none is in the shipped
+`pidpre` arm.
+
+Every alarm on an unlabelled paragraph was read by hand against its passages. The presumption that
+an unflagged paragraph is faithful was checked by a
+[blind read of 30 of them](261001h-fidelity-guard-blind-read.md), which found no fault in any. That
+puts the missed-fault rate below about 10%, not at zero.
+
+### The numbers
+
+| | Luna (quick tier) | Sonnet 5 (capable tier, Messages wire, low effort) |
+|---|---:|---:|
+| levels checked | all 278 | 105 (the pidpre, pidpost and v2 arms and their controls; stopped at budget before `pidv2_6`) |
+| PID faults caught, all 30 / subset 17 | **24 / 30 (80%)** · 12 / 17 | — · 11 / 17 |
+| clear swaps · glosses · direction | 23/26 · 1/3 · 0/1 | 9/13 · 2/3 · 0/1 |
+| caught among faults citing the finding (`spya-sd9fzd`) | 24 / 27 (89%) | 11 / 15 |
+| alarms / rate-eligible unlabelled paragraphs, PID · controls | 11/461 · 3/567 | 12/237 · 1/134 |
+| … of which, read by hand: real faults found · borderline · true but outside its cited passages · plainly wrong | 3 · 1 · 11 · 0 | 0 · 0 · 12 · 1 |
+| unreadable answers | 0 / 278 | 1 / 105 |
+| cost per complete three-level press | **$0.0027** | $0.027 |
+| latency of one call: median · p90 | 3.5 s · 5.0 s | 1.9 s · 5.5 s |
+| latency of a complete press (three calls in parallel): median · p90 · max | 4.4 s · 5.8 s · 12.2 s | 4.0 s · 7.0 s · 14.4 s |
+
+The two borderline PID paragraphs and the one borderline control alarm are outside the rates; their
+levels are outside the output-level rates too. The cost and press latency likewise use only saved
+runs with all three levels: 44 of Luna's older saved runs contain only one or two levels, which is
+why dividing its total cost by all 111 saved runs gave the earlier, wrong $0.0024 figure.
+
+**Why Luna.** setup-dev.md's rule is that a new job *"may be born on the quick tier by judgment"*.
+The measurement agrees with that choice:
+
+- On the same 17 labelled faults and 371 other rate-eligible paragraphs, Luna caught 12 against
+  Sonnet's 11 and raised 9 alarms against 13. Those small differences do not establish that Luna is
+  more accurate; they give no accuracy reason in this sample to pay for Sonnet.
+- It cost a tenth as much.
+- Luna found all three real faults outside the original labels. Only one of those paragraphs was in
+  Sonnet's measured subset, and Sonnet missed it; the other two are not a comparison between models.
+
+Sonnet reached the guard through the request a Sonnet build would send. Luna reached it through
+`link-summary`'s route, which is the request a Luna build would send.
+
+**What the alarms were.** Three of the alarms are real faults that no label had: the reason a guard
+is worth more than a fix for one term. Two are in the 150 control levels and one is another PID
+fault.
+
+- A Gwern brief says understanding is *"knowing ice cream melts rather than freezes"*. The passage
+  gives "melt" as the model's error.
+- A PID paragraph says finite samples bias entropy *upward*. The passage says the estimator
+  underestimates it.
+- An Olah paragraph says composition *"needs exponentially many neurons"*. That is the local code.
+
+Every other alarm was a claim that is true about the article but absent from the paragraph's own
+passages, mostly *"synergy peaks at moderate correlation"* (`spya-ybmve2`). Those paragraphs cite only
+the passage that reports a steady rise (`spya-hkhpex`). The checker read its evidence correctly; the
+evidence was too narrow. Only one alarm, one of Sonnet's, was a plain misreading.
+
+The three discoveries show examples of broader reach, not a rate: they were found by reading the
+checker's alarms after the fact. The blind sample found no further fault in 30 passed paragraphs,
+but three articles and 30 paragraphs cannot establish general recall.
+
+**What it misses.** It caught none of the 3 faults whose paragraph does not cite `spya-sd9fzd`,
+which is the price the plan named, and 24 of the 27 that do. It also caught 1 of the 3 glosses and
+missed the one direction error (*"feedback connections to the target"*), which is the subtlest kind.
+
+### What it would do to a press
+
+The model below uses the shipped configuration (`pidpre`: the unchanged prompt, no profile, 18
+outputs on this paper). It assumes a retry is an independent fresh sample. That assumption was not
+measured. The original figures pool Brief, Simple and Fuller; because a retry repeats the same level,
+a same-level sensitivity calculation is also shown. There are only six samples per level, so both
+are rough projections, not measured retry outcomes.
+
+- **On this paper:**
+  - 6 of 18 levels are faulty, and the checker flags 5 of them. It also flags 1 of the 12 clean
+    levels (a true-elsewhere alarm). So a third of levels are flagged on the first attempt.
+  - **As proposed (a second flag stores nothing):** the pooled model takes faulty requested-level
+    slots from 33% to 7%, loses 11% of levels, and therefore loses 30% of presses. Among the levels it
+    actually stores, 8% are faulty. Preserving each level's observed rate gives about 7% faulty
+    slots, 13% lost levels and 35% lost presses instead; among stored levels, the fault rate is 9%.
+  - **With the change (a second flag stores the retry):** the pooled model leaves about 17% of levels
+    faulty; the same-level calculation gives 18%. No press is lost under either calculation.
+- **On the controls:** after excluding the borderline case, 3 of 149 levels are flagged. The
+  fail-closed proposal would lose about 0.1% of presses on a second flag; storing the second attempt
+  loses none. There is no measured control fault rate from which to project faults after retries.
+- **Spend:**
+  - The checker costs about $0.0027 a press against the writer's ~$0.15.
+  - On this paper about one level a press is rewritten, adding ~$0.05.
+  - On the controls a rewrite adds about $0.003 on average.
+- **Wait:** the check runs after each level, so a press waits about 4–5 s longer on top of the
+  writer's 10–20 s. A press with a retry waits another ~15 s. The pooled model predicts one on about
+  70% of presses on this paper; the observed first attempts flagged at least one level on 5 of 6.
+
+### The recommendation, and why
+
+**Build it as an instrumented first version, with the change.** On the one shipped configuration and
+paper measured, the analytical model suggests that it roughly halves the fault; the retry itself was
+not run. The checker alone adds about 2% to a ~$0.15 press, but that is not the guard's total cost:
+projected retries take the worst paper to roughly 35% extra spend, and the controls to roughly 4%.
+The two real control faults show useful reach beyond the labelled PID term collision, but do not
+establish a general catch rate. This is enough for a reversible, counted beta trial, not for a claim
+that fidelity broadly improved.
+
+Failing closed would instead turn a fidelity fault into a missing summary on exactly the papers where
+the fault is common, and a reader cannot read a Simple that was never stored.
+
+So the rule becomes: check, retry once on a flag, and store the second attempt whatever its verdict,
+recording that it was flagged. If the checker call fails or answers unreadably, keep the current
+writer output unchecked and record the checker failure; do not spend the writer retry. Luna had 0
+such failures in 278 calls, so this fail-open behavior is an availability decision, not a result the
+probe measured. That reverses this plan's earlier *"must fail closed"*. Say so if you want it back.
+
+The guard and today's validation retry share `LEVEL_ATTEMPTS = 2`. If validation already consumed
+the first attempt, a flag on the valid second attempt cannot trigger a third writer call: store that
+flagged level and record that the retry budget was exhausted.
+
+Three follow-ups, none of them needed for the first build:
+
+- **Pass the checker's one-sentence reason to the retry.** That may beat a fresh sample. It costs
+  only a few lines, but it is a prompt change, so measure it like one.
+- **Widen the evidence packet** to cut the true-but-elsewhere alarms. It could include the blocks
+  next to each cited one, or the whole article (cached). Neither was measured, and the whole article
+  may cost recall.
+- **Count the flags in production**, from the record the guard stores, before trusting any of the
+  rates above beyond these three articles.
+
+**Spend:** $1.20 in all. Luna was $0.26, including a one-press smoke test. Sonnet was $0.94,
+including a one-press pricing call. Both are summed from the spend collector's records in
+`261001h-fidelity-guard-{luna,sonnet}.jsonl`.
+
 ## Reviews
 
 - Plan: [261001h-contrasting-terms-plan-review-sol.md](261001h-contrasting-terms-plan-review-sol.md).
@@ -179,3 +340,21 @@ for Simple that version is also the shape guard (`isUsableSimpleSummary`). So th
   version split was built, then backed out with the prompt.
 - Code and conclusion: reviewed 2026-10-01; the count, conclusion, guard and harness corrections are
   incorporated above.
+- Guard measurement, plan:
+  [261001h-fidelity-guard-plan-review-sol.md](261001h-fidelity-guard-plan-review-sol.md). All six
+  P1s were taken:
+  - hand adjudication scored in categories;
+  - an unreadable answer counted once;
+  - the controls and a blind read added;
+  - shipped-configuration rates reported separately;
+  - the retry outcome modelled;
+  - Sonnet sent through the Messages request a build would use.
+- Guard measurement, probe and conclusion:
+  [261001h-fidelity-guard-code-review-sol.md](261001h-fidelity-guard-code-review-sol.md). Sol fixed
+  these itself, and they are in the section above:
+  - the spend claim, which counted the checker and not the retries it causes;
+  - cost and latency over complete presses only;
+  - the borderline exclusion in the scorer, and a missed borderline label;
+  - the unfair "Sonnet found none" comparison;
+  - the same-level sensitivity figures;
+  - how the guard shares `LEVEL_ATTEMPTS` with validation.
