@@ -133,6 +133,13 @@ let jobList: Job[];
 let resetAnswer: (() => Response) | null;
 /** How many times `GET /api/metadata/:slug` has been asked for. */
 let metadataReads: number;
+/** The id of every `POST /api/jobs/:id/retry`, in order. */
+let retries: string[];
+/** While true, a retry's answer waits for `releaseRetry`. */
+let holdRetry: boolean;
+let releaseRetry: (() => void) | undefined;
+/** What the retry route answers. */
+let retryAnswer: () => Response;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -207,6 +214,10 @@ beforeEach(() => {
   jobList = [];
   resetAnswer = null;
   metadataReads = 0;
+  retries = [];
+  holdRetry = false;
+  releaseRetry = undefined;
+  retryAnswer = () => json(resetJob("job-reset-2"));
   jobEngine.reset();
 
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -230,6 +241,15 @@ beforeEach(() => {
       resets.push(JSON.parse(String(init?.body ?? "null")));
       if (resetAnswer) return Promise.resolve(resetAnswer());
       return Promise.resolve(json({ jobId: "job-reset", regenerate: [] }, 202));
+    }
+    const retried = /^\/api\/jobs\/([^/]+)\/retry$/.exec(url);
+    if (retried && method === "POST") {
+      retries.push(retried[1] ?? "");
+      const answer = retryAnswer();
+      if (!holdRetry) return Promise.resolve(answer);
+      return new Promise<Response>((go) => {
+        releaseRetry = () => go(answer);
+      });
     }
     const advanced = /^\/api\/jobs\/([^/]+)\/advance$/.exec(url);
     if (advanced && method === "POST") {
@@ -677,4 +697,71 @@ describe("the Start this article again section", () => {
       "A reset with different regeneration options is already queued for this article.",
     );
   });
+  /**
+   * **A confirmed Retry sends one retry, and holds *Starting…* until the new
+   * job is seen.** It was `void queue.retry(id)` until 2026-10-01: the confirm
+   * closed straight away and put the failure, and its Retry, back on screen
+   * until a poll found the new job — and two presses of *Yes, try again* before
+   * React committed sent two. GPT Sol's code review of 260930e (P3); the latch
+   * is `useStepJob`'s retry, copied.
+   */
+  it("sends one retry however soon the second press comes, and shows Starting meanwhile", async () => {
+    await failedReset();
+
+    holdRetry = true;
+    await press(button("Retry"));
+    const yes = button("Yes, try again");
+    expect(yes, "the Retry did not ask first").toBeTruthy();
+    /* Both events before React can commit the first one's state. */
+    await act(async () => {
+      yes?.click();
+      yes?.click();
+    });
+    await settle();
+    expect(button("Retry"), "Retry came back while the retry was still out").toBeUndefined();
+    expect(card()?.textContent).toContain("Starting");
+    expect(retries).toEqual(["job-reset"]);
+
+    await act(async () => releaseRetry?.());
+    await settle();
+    expect(button("Retry"), "Retry came back before the new job was seen").toBeUndefined();
+    expect(retries).toEqual(["job-reset"]);
+
+    await act(async () =>
+      jobEngine.receive([
+        { ...resetJob("job-reset", "error"), error: "The AI service is busy right now." },
+        resetJob("job-reset-2", "running"),
+      ]),
+    );
+    await settle();
+    expect(button("Stop"), "the retried reset is not the one being watched").toBeTruthy();
+    expect(card()?.textContent).not.toContain("Starting");
+  });
+
+  it("puts Retry back, not a stuck Starting, when the retry is refused", async () => {
+    retryAnswer = () => json({ error: "That job cannot be tried again." }, 409);
+    await failedReset();
+
+    await press(button("Retry"));
+    await press(button("Yes, try again"));
+
+    expect(retries).toEqual(["job-reset"]);
+    expect(card()?.textContent).not.toContain("Starting");
+    expect(button("Retry"), "the refused retry left no way to try again").toBeTruthy();
+  });
 });
+
+/** A reset this page watched run, then fail in a way worth another go. */
+async function failedReset(): Promise<void> {
+  await open();
+  await act(async () => jobEngine.receive([]));
+  await act(async () => jobEngine.receive([resetJob("job-reset", "running")]));
+  await settle();
+  await act(async () =>
+    jobEngine.receive([
+      { ...resetJob("job-reset", "error"), error: "The AI service is busy right now." },
+    ]),
+  );
+  await settle();
+  expect(button("Retry"), "no Retry offered after a retryable failure").toBeTruthy();
+}

@@ -2056,6 +2056,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Its only static reach is `src/api.ts` importing `createFsArtifactStore`, an import in a " +
       "module it loads rather than a call it makes. Re-run witness 2 to confirm.",
   },
+  "tests/store-glossary-run-kind-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran (plan 261001i § 3). A pure Postgres suite — " +
+      "`articleMetadata`'s glossary verdict against a list stamped the way the job stamps one. " +
+      "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
+  },
 
   /* ---- Invisible to an import walk, found by the grep --------------------- */
 
@@ -3017,6 +3026,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-export-raw.test.ts": "private-postgres",
   "tests/store-export-referee.test.ts": "private-postgres",
   "tests/store-glossary-delete-pg.test.ts": "private-postgres",
+  "tests/store-glossary-run-kind-pg.test.ts": "private-postgres",
   "tests/store-job-draft.test.ts": "private-postgres",
   "tests/store-jobs-parity.test.ts": "private-postgres",
   "tests/store-lookups-pg.test.ts": "private-postgres",

@@ -50,7 +50,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { METADATA_RERUN_STEPS } from "../src/rerun-steps.js";
 import { STEP_ORDER } from "../src/step-order.js";
-import type { Article, Job, StageState, StepName } from "../src/types.js";
+import type { Article, ArticleMetadata, Job, StageState, StepName } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -169,6 +169,8 @@ let heldMetadata: (() => void)[];
 let holdMetadata = false;
 /** How many times `GET /api/metadata/:slug` has been asked for. */
 let metadataReads: number;
+/** The server's verdict on a glossary run, or absent as an older server sends it. */
+let glossaryRun: ArticleMetadata["glossaryRun"];
 
 let host: HTMLDivElement;
 let root: Root;
@@ -202,6 +204,7 @@ function metadataBody() {
     profile: null,
     purpose: null,
     archivedAt: null,
+    ...(glossaryRun !== undefined ? { glossaryRun } : {}),
   };
 }
 
@@ -229,6 +232,7 @@ beforeEach(() => {
   retryAnswer = () => json(madeJob("job-retried", "quotes"));
   heldMetadata = [];
   holdMetadata = false;
+  glossaryRun = undefined;
   metadataReads = 0;
   jobEngine.reset();
 
@@ -442,6 +446,67 @@ describe("the Re-run AI processing section", () => {
     );
     await press(button("glossary", "Run it again"));
     expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
+  });
+
+  /**
+   * **And once the server says which, the row says which** — plan 261001i § 3.
+   * `glossaryRun` is `existingFor`'s verdict for the press this page sends, so
+   * the label can promise the append again, and only when it will happen.
+   */
+  it("offers Find more terms when the server says the run will append", async () => {
+    glossaryRun = "append";
+    await open();
+    expect(button("glossary", "Run it again")).toBeUndefined();
+    expect(row("glossary")?.textContent).toContain("Adds terms to this list");
+    expect(row("glossary")?.textContent).not.toContain("otherwise");
+    await press(button("glossary", "Find more terms"));
+    expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
+  });
+
+  it("says the list will be written again when the server says it will rewrite", async () => {
+    glossaryRun = "rewrite";
+    await open();
+    expect(button("glossary", "Find more terms")).toBeUndefined();
+    expect(button("glossary", "Run it again")).toBeTruthy();
+    expect(row("glossary")?.textContent).toContain("Writes a new list in place of this one");
+  });
+
+  /**
+   * **The verdict is judged against the purpose, and the purpose box is on this
+   * page.** A saved purpose changes what the next glossary run is written from,
+   * so a verdict read before it may be wrong after it: the page reads the
+   * metadata again. GPT Sol's plan review of 261001i, P2.
+   */
+  it("reads the verdict again once a new purpose is saved", async () => {
+    glossaryRun = "append";
+    await open();
+    const before = metadataReads;
+    const box = host.querySelector<HTMLTextAreaElement>("#article-purpose");
+    expect(box, "no purpose box on the page").toBeTruthy();
+    glossaryRun = "rewrite";
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setValue?.call(box, "To check one claim.");
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      box?.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      box?.dispatchEvent(new FocusEvent("blur"));
+    });
+    await settle();
+    expect(metadataReads, "the purpose was saved and the verdict not read again").toBeGreaterThan(
+      before,
+    );
+    expect(button("glossary", "Find more terms")).toBeUndefined();
+    expect(row("glossary")?.textContent).toContain("Writes a new list in place of this one");
+  });
+
+  it("drops the hedge when there is no list yet", async () => {
+    glossaryRun = "first";
+    ran = new Set<StepName>(["arc"]);
+    await open();
+    expect(button("glossary", "Run it")).toBeTruthy();
+    expect(host.querySelector("#rerun-note-glossary")).toBeNull();
   });
 
   it("says Run it over a glossary that has never run", async () => {

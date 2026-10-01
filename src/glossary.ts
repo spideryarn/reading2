@@ -420,6 +420,41 @@ export function existingFor(
 }
 
 /**
+ * The hash a run stamps for the profile it was handed — `null` for none.
+ *
+ * Its own function so the run (`generateGlossary`) and the page that predicts
+ * it (`glossaryRunKind`) cannot map "no profile" two different ways.
+ */
+export function runProfileHash(profile: string | null): string | null {
+  return profile ? hashProfile(profile) : null;
+}
+
+/**
+ * **What the next run will do with the list it finds**, said before the press —
+ * docs/plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md § 3.
+ *
+ * `existingFor` read for a person rather than for the stage: `append` is a
+ * *Find more terms*, `rewrite` writes a new list in place of this one (and
+ * `idsByTerm` keeps the ids it can), `first` is there being none. `null` is
+ * *we cannot tell* — no fingerprint, because there is no tree or no blocks.
+ *
+ * Built **on** `existingFor` rather than beside it, so the page and the run
+ * cannot reach two verdicts. The inputs have to be the run's too: the source is
+ * `articleFingerprint`, and the profile is the rendered string the job will
+ * carry — for Metadata's press, `resolveProfile` in src/routes.ts, which is
+ * `renderProfile` over the reader's two boxes. tests/glossary-run-kind.test.ts.
+ */
+export function glossaryRunKind(
+  onDisk: Glossary | null,
+  sourceHash: string | null,
+  profile: string | null,
+): "first" | "append" | "rewrite" | null {
+  if (!onDisk) return "first";
+  if (sourceHash === null) return null;
+  return existingFor(onDisk, sourceHash, runProfileHash(profile)) ? "append" : "rewrite";
+}
+
+/**
  * The ids an older list already spent, keyed by every name it answers to.
  *
  * **This is the half that was missing**, and its absence is what made refusing
@@ -748,7 +783,7 @@ export function buildGlossary(
        deliberately without a profile", and the panel needs to tell those two
        apart to decide whether its checkbox starts ticked.
        src/profile.ts § profileIsStale. */
-    profileHash: opts.profile ? hashProfile(opts.profile) : null,
+    profileHash: runProfileHash(opts.profile ?? null),
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
     generatedAt: new Date().toISOString(),
@@ -1366,7 +1401,7 @@ export async function generateGlossary(opts: {
      with. Those three must agree by construction, not by three callers reading
      the same field and happening to reach the same answer. */
   const profile = opts.profile ?? null;
-  const existing = existingFor(onDisk, sourceHash, profile ? hashProfile(profile) : null);
+  const existing = existingFor(onDisk, sourceHash, runProfileHash(profile));
   /* Nothing to append to, but a list to replace: same article, older prompt.
      The prose is regenerated — that is what the banner offering "Find them
      again" promises — and the ids come across so the reader's links and their

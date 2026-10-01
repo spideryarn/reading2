@@ -2473,6 +2473,20 @@ export interface ArticleMetadata {
    */
   highPowerSince: string | null;
 
+  /**
+   * **What a glossary run pressed on this page would do with the list it
+   * finds** — `glossaryRunKind` in src/glossary.ts, which is `existingFor` read
+   * for a person: `append` (a *Find more terms*), `rewrite` (a new list in
+   * place of this one), `first` (there is none), or `null` when the server
+   * cannot tell. Judged against the reader's current profile, because that is
+   * what Metadata's press sends.
+   * docs/plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md § 3.
+   *
+   * Optional for the same reason `sharing` is: a fabricated body in a test, or
+   * an older server, simply has no verdict, and the row keeps its hedge.
+   */
+  glossaryRun?: "first" | "append" | "rewrite" | null;
+
   /* ---- sharing. docs/plans/260827ai-public-read-only-access.md § Stage 1 ---- */
 
   /**
