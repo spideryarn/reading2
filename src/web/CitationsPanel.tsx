@@ -32,7 +32,7 @@
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
  */
-import { useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
@@ -261,7 +261,7 @@ export function byLineRepeatsTitle(title: string, by: string): boolean {
       .replace(/[()·]/g, " ")
       .replace(/&/g, " and ")
       .replace(/\bet al\./g, "et al")
-      .replace(/,(\s*\d{4}[a-z]?\s*)$/, "$1")
+      .replace(/,(?=\s*\d{4}[a-z]?\s*$)/, "")
       .split(/\s+/)
       .filter(Boolean)
       .join(" ");
@@ -1075,7 +1075,11 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
  * places it can open from: the by-line, and the title when the by-line only
  * repeats it (`byLineFolds`), so the two cannot drift.
  */
-function byLineCard(work: ShownWork, link?: ReactNode): { content: ReactNode; spoken: ReactNode } | null {
+function byLineCard(
+  work: ShownWork,
+  link?: ReactNode,
+  titleTrigger = false,
+): { content: ReactNode; spoken: ReactNode } | null {
   const entry = work.entry;
   const line = workByLine(work);
   const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
@@ -1084,7 +1088,13 @@ function byLineCard(work: ShownWork, link?: ReactNode): { content: ReactNode; sp
   return {
     content: (
       <>
-        <div className="tip-soon-head">{[line.authors, line.year].filter(Boolean).join(" · ")}</div>
+        {/* A folded title already says this short line. Hide that repetition
+            from assistive technology while keeping it in the visual card; a
+            shortened by-line is the exception because the head then supplies
+            the full author list the visible title omits. */}
+        <div className="tip-soon-head" aria-hidden={titleTrigger && !shortened ? true : undefined}>
+          {[line.authors, line.year].filter(Boolean).join(" · ")}
+        </div>
         {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
         {entry && <p className="cite-entry">{entry}</p>}
         {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
@@ -1135,7 +1145,6 @@ function CiteTitle({
   by: string;
 }) {
   const reveal = useTapReveal(true);
-  const spokenId = useId();
   const linkSays = source?.kind === "address" ? `${source.how}${foundAs} — opens ${source.host} in a new tab` : null;
   const card =
     by && byLineFolds(work, by)
@@ -1145,6 +1154,7 @@ function CiteTitle({
             {linkSays && <p className="tip-soon-how">{linkSays}</p>}
             {reveal.tap && <p className="tip-soon-tap">Tap again to open the link.</p>}
           </>,
+          true,
         )
       : null;
   if (source?.kind !== "address") {
@@ -1189,7 +1199,6 @@ function CiteTitle({
           href={source.url}
           target="_blank"
           rel="noreferrer noopener"
-          aria-describedby={spokenId}
           onPointerDown={reveal.onPointerDown}
           onPointerCancel={reveal.onPointerCancel}
           onClick={(e) => {
@@ -1199,7 +1208,10 @@ function CiteTitle({
           {inner}
         </a>
       </Tooltip>
-      <span id={spokenId}>{card.spoken}</span>
+      {/* In the reading flow for a screen reader browsing the row, as the
+          by-line's own was. Not the link's `aria-describedby`: focus opens the
+          card, which already describes it, and naming both read it twice. */}
+      {card.spoken}
     </p>
   );
 }

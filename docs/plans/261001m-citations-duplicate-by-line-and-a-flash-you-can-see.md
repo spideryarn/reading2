@@ -124,3 +124,18 @@ two differ.
    (`--flash-ms`, `--cite-flash-ms`) a test holds equal to the timers, so there is still one place
    to change each. This replaces the "longer, for every flash" bullet above, and means 7Y gets
    nothing for free from this plan.
+
+**Code review, GPT Sol** ([261001m-code-review-sol.md](261001m-code-review-sol.md)), fixing in
+place: the folded title's entry was spoken twice on focus (the card and a second
+`aria-describedby`); the extra reference went and the card's repeated heading is `aria-hidden`. It
+also added tests for iOS's touch-then-`mouse` click, keyboard, Ctrl- and middle-click, a folded row
+with no card, a registry-filled row, and the reduced-motion length. One change of mine on top: Sol
+had also removed the `sr-only` entry from the reading flow, which left a screen reader browsing the
+row (not focusing the link) with no way to the entry; it is back in the flow, not referenced by
+`aria-describedby`.
+
+**Browser check** (Playwright, system Chrome, 1280 and 390 touch; the label title made by rewriting
+one work of `spider-silk-spya-ge30uz` in the API response): the label card shows one line, titled
+cards keep theirs, the card opens on hover and on a first tap, the second tap opens the link, and
+the words are clearly washed at 100 ms and still at 1.5 s with `cite-flash` at 2.4 s. No app console
+errors.

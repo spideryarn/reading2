@@ -374,6 +374,22 @@ describe("flashBlock with a cited work", () => {
     expect(mark()?.classList.contains("passage-flash")).toBe(false);
   });
 
+  it("holds the stronger still wash for the cited-work length under reduced motion", async () => {
+    const { citePassageKey } = await import("../src/web/rows.js");
+    const { CITE_FLASH_MS } = await import("../src/web/flash.js");
+    reduceMotion(true);
+    layOut();
+    const td = prose("spya-aaaaaa");
+    if (td) td.innerHTML = `<p>Lab tasks <mark class="cite" data-cite="spya-waaaaa">[1]</mark>.</p>`;
+    flashBlock("spya-aaaaaa", { passage: citePassageKey("spya-waaaaa") });
+    const mark = () => document.querySelector("mark.cite");
+    expect(mark()?.classList.contains("passage-flash-still")).toBe(true);
+    vi.advanceTimersByTime(FLASH_MS);
+    expect(mark()?.classList.contains("passage-flash-still"), "not shortened to the ordinary flash").toBe(true);
+    vi.advanceTimersByTime(CITE_FLASH_MS - FLASH_MS);
+    expect(mark()?.classList.contains("passage-flash-still")).toBe(false);
+  });
+
   it("keeps each animation's length in one token the timers match", async () => {
     const { CITE_FLASH_MS } = await import("../src/web/flash.js");
     const tokens = readFileSync("src/web/styles/tokens.css", "utf8");

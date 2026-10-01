@@ -29,7 +29,9 @@ label, the label is the title, and `Bartlett (1932)` over `Bartlett · 1932` sai
 brackets, the middle dot, `&`, `et al.` — and the line is left off; never when the registry filled a
 field, whose *from Crossref* mark must stay. Its hover card, with the reference-list entry, then
 opens from the title, the link itself on a linked title, with reveal-then-commit on touch —
-[261001m](../plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md).
+[261001m](../plans/261001m-citations-duplicate-by-line-and-a-flash-you-can-see.md). On that link the
+card is also its focus description; the repeated author–year heading stays visible in the card but
+is hidden from assistive technology, so the title and entry are each spoken once.
 
 **The registry's record** (since 2026-10-01,
 [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
