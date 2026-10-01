@@ -55,6 +55,10 @@ vi.mock("../src/web/lib/api.js", async () => {
 /** Every recogniser the hook has constructed, newest last. */
 let built: FakeRecognition[] = [];
 let gumCalls = 0;
+/** What each `getUserMedia` call asked for, in order. */
+let gumRequests: MediaStreamConstraints[] = [];
+/** The `"default"` input is listed but gone by the time it is opened. */
+let defaultVanishes = false;
 let gumRejects = false;
 /**
  * The machine's microphones, for the remembered-device cases (spya-k3q9mc).
@@ -310,13 +314,16 @@ function install(Ctor: typeof FakeRecognition) {
     value: {
       getUserMedia: async (c: MediaStreamConstraints) => {
         gumCalls++;
+        gumRequests.push(c);
         if (gumRejects) throw new DOMException("denied", "NotAllowedError");
         const audio = c.audio;
         const exact =
           typeof audio === "object" && audio && typeof audio.deviceId === "object"
             ? (audio.deviceId as { exact?: string }).exact
             : undefined;
-        const device = exact ? inputs.find((d) => d.deviceId === exact) : defaultInput;
+        const device = exact
+          ? inputs.find((d) => d.deviceId === exact && !(defaultVanishes && exact === "default"))
+          : defaultInput;
         if (exact && !device) throw { name: "OverconstrainedError", constraint: "deviceId" };
         return {
           getAudioTracks: () => [fakeTrack(device ?? null)],
@@ -456,6 +463,8 @@ beforeEach(() => {
   resetMicrophoneLock();
   built = [];
   gumCalls = 0;
+  gumRequests = [];
+  defaultVanishes = false;
   gumRejects = false;
   inputs = [];
   defaultInput = null;
@@ -1378,6 +1387,51 @@ describe("what reaches the textarea", () => {
  * available, and then worked. The id had stopped resolving; the device had
  * not gone. docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
  */
+/* Greg's Mac, spya-g8byyd: macOS's input was his webcam, Chrome's own choice
+   was another microphone, and `{ audio: true }` opens Chrome's choice. The
+   fake's `defaultInput` plays Chrome's choice here; the `"default"` row is the
+   operating system's. Plan 261001q. */
+describe("the system default", () => {
+  const SYSTEM = { deviceId: "default", label: "Default - Logitech BRIO" };
+  const BUILTIN = { deviceId: "builtin", label: "MacBook Pro Microphone (Built-in)" };
+
+  it("asks for the operating system's input by name when the browser lists one", async () => {
+    inputs = [SYSTEM, BUILTIN];
+    defaultInput = BUILTIN;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests[0]).toEqual({ audio: { deviceId: { exact: "default" } } });
+    expect(h.get().deviceLabel).toBe("Default - Logitech BRIO");
+    expect(h.get().deviceUnavailable).toBe(false);
+    h.unmount();
+  });
+
+  it("falls back to the browser's choice, without a warning, if the default is gone by the time it opens", async () => {
+    inputs = [SYSTEM, BUILTIN];
+    defaultInput = BUILTIN;
+    defaultVanishes = true;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests).toEqual([{ audio: { deviceId: { exact: "default" } } }, { audio: true }]);
+    expect(h.get().armed).toBe(true);
+    expect(h.get().deviceLabel).toBe("MacBook Pro Microphone (Built-in)");
+    expect(h.get().deviceUnavailable).toBe(false);
+    h.unmount();
+  });
+
+  it("asks plainly where the browser lists no default (Safari, Firefox)", async () => {
+    inputs = [BUILTIN];
+    defaultInput = BUILTIN;
+    const h = drive();
+    act(() => h.get().toggle());
+    await settleCapture();
+    expect(gumRequests[0]).toEqual({ audio: true });
+    h.unmount();
+  });
+});
+
 describe("the remembered microphone", () => {
   function store(entries: Record<string, string>) {
     const map = new Map(Object.entries(entries));

@@ -98,7 +98,7 @@ export function LiveStatus({ live, onRestart, onType, onDictate, blocks, onJump 
             if (active) void live.stop().then(() => { if (mounted.current) onRestart(); });
           }}
         >
-          <option value="">Browser default</option>
+          <option value="">System default</option>
           {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label}</option>)}
           {chosen && !devices.some((device) => device.deviceId === chosen) &&
             <option value={chosen}>Your usual microphone (unavailable)</option>}

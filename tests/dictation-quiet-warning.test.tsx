@@ -82,6 +82,34 @@ describe("the strip, while the microphone hears nothing", () => {
     expect(line?.classList.contains("quiet")).toBe(false);
     expect(line?.querySelector(".prof-quiet-icon")).toBeNull();
   });
+
+  /* Bars moving prove *a* microphone hears sound, not that it is the one the
+     reader meant: Greg's webcam was the Mac's input and dictation heard no
+     words (spya-g8byyd, plan 261001q). So the name is there from the start. */
+  it("names the microphone, with a way to change it, while sound is getting in", () => {
+    act(() => root.render(createElement(DictationStrip, { dictation: listening(false) })));
+    const line = host.querySelector(".prof-mic-line");
+    expect(line?.querySelector(".prof-mic-device")?.textContent).toBe("MacBook Pro Microphone (Built-in)");
+    expect(line?.querySelector(".prof-mic-change")?.getAttribute("aria-label")).toBe(
+      "Change microphone, currently MacBook Pro Microphone (Built-in)",
+    );
+    expect(line?.textContent, "the system default is not anybody's pick").not.toContain("your choice");
+  });
+
+  it("says when the microphone is one the reader picked here", () => {
+    act(() =>
+      root.render(createElement(DictationStrip, { dictation: { ...listening(false), deviceId: "builtin-id" } })),
+    );
+    expect(host.querySelector(".prof-mic-line")?.textContent).toContain("(your choice)");
+  });
+
+  it("offers the system default first in the picker", () => {
+    act(() => root.render(createElement(DictationStrip, { dictation: listening(false) })));
+    act(() => (host.querySelector(".prof-mic-change") as HTMLButtonElement | null)?.click());
+    const first = host.querySelector("#dictation-mic option");
+    expect(first?.getAttribute("value")).toBe("");
+    expect(first?.textContent).toBe("System default");
+  });
 });
 
 /** An `AudioContext` that counts the notes asked of it. */

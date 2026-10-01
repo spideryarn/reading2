@@ -107,6 +107,8 @@ import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js
 import { verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
+  defaultInputListed,
+  deviceMissing,
   judgeFallback,
   labelled,
   listInputs,
@@ -2152,25 +2154,16 @@ async function beginCapture(
      report false rather than being told apart by inspecting a track we may not
      have. */
   let honoured = preferred === null;
-  /**
-   * Only a *missing device* earns a second attempt on the browser's default.
-   *
-   * Retrying on any failure at all would quietly turn a refused permission into
-   * a start on some other microphone with nothing on screen saying so — the
-   * silent substitution this whole area exists to end.
-   */
-  const deviceMissing = (err: unknown) => {
-    /* Read off the object rather than through `instanceof Error`. What
-       `getUserMedia` rejects with here is an `OverconstrainedError`, which is
-       **not** reliably an `Error` subclass — it is its own interface carrying a
-       `constraint` property, and the check that assumed otherwise silently
-       never fell back at all. */
-    const name = (err as { name?: unknown } | null)?.name;
-    return name === "OverconstrainedError" || name === "NotFoundError";
-  };
+  /* The system default by name where the browser lists one
+     (mic-devices.ts § audioConstraint). Only a *missing device* earns a second
+     attempt, unconstrained (§ deviceMissing): retrying on any failure at all
+     would quietly turn a refused permission into a start on some other
+     microphone with nothing on screen saying so — the silent substitution this
+     whole area exists to end. */
+  const defaultListed = preferred === null && (await defaultInputListed());
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred));
+    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred, defaultListed));
     track = stream.getAudioTracks()[0] ?? null;
     if (track) honoured = true;
   } catch (err) {
@@ -2179,7 +2172,7 @@ async function beginCapture(
        what we want, and this is the one place that then asks plainly instead.
        **The preference is not forgotten**: a headset unplugged for an afternoon
        should still be the choice when it comes back. */
-    if (preferred && deviceMissing(err)) {
+    if ((preferred || defaultListed) && deviceMissing(err)) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         track = stream.getAudioTracks()[0] ?? null;

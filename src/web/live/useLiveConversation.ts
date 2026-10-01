@@ -88,7 +88,7 @@ import { type MutableRefObject, useCallback, useEffect, useRef, useState } from 
 import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
-import { audioConstraint, labelled, rememberedDevice } from "../mic-devices.js";
+import { audioConstraint, defaultInputListed, deviceMissing, labelled, rememberedDevice } from "../mic-devices.js";
 import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
@@ -1803,12 +1803,16 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           if (microphone) {
             if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot open a microphone. Use a supported browser or carry on typing.");
             let stream: MediaStream;
+            /* The system default by name where the browser lists one, as
+               dictation does: mic-devices.ts § audioConstraint. */
+            const defaultListed = preferred === null && (await defaultInputListed());
+            if (stale()) return abandon();
             try {
-              stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred));
+              stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred, defaultListed));
             } catch (error) {
               if (stale()) return abandon();
-              if (!preferred || !(error instanceof DOMException) || !["OverconstrainedError", "NotFoundError"].includes(error.name)) throw error;
-              setNotice("Your chosen microphone is unavailable. Using the browser's default microphone.");
+              if (!(preferred || defaultListed) || !deviceMissing(error)) throw error;
+              if (preferred) setNotice("Your chosen microphone is unavailable. Using the system default microphone.");
               stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
             track = stream.getAudioTracks()[0] ?? null;
