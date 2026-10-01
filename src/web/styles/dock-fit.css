@@ -291,3 +291,10 @@
    about the rung that hides the mode labels, which is this one. Rung 1 hides no
    mode label, so there is nothing there for this rule to put back. */
 .dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
+
+/* **The radios inside the segment are a box of their own only to the
+   accessibility tree** — Annotations' toggle sits beside them in the same
+   segment, outside the `role="radiogroup"` (Dock.tsx § `MarginToggle`), and
+   `display: contents` keeps every rule above seeing one row of buttons.
+   docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+.dock-modes-radios { display: contents; }

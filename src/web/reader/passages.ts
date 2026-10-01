@@ -43,7 +43,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
  * § Stage 4b, and docs/plans/260905e-main-app-architecture-review.md § A3.
  */
-import type { Mode } from "../../modes.js";
+import type { BandMode } from "../../modes.js";
 import type { Found } from "../search-hits.js";
 
 /**
@@ -105,12 +105,16 @@ export const NO_FOUND: Found[] = [];
 const NOTHING: PassageSlot = { found: NO_FOUND, openKey: null };
 
 /**
- * **The mode → slot mapping, total over `Mode`.**
+ * **The mode → slot mapping, total over `BandMode`.** Annotations is not in it: since 2026-10-01 its column is a
+ * switch beside the band (`?margin=1`) and marks nothing inside the prose — the
+ * dashed underlines for ideas are deferred
+ * (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
+ * docs/plans/261001i-annotations-column-beside-a-band-mode.md).
  *
  * Every arm returns a whole `PassageSlot` rather than picking a field out of
  * one, so the marks and the ring can never come from different bands.
  */
-export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
+export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot {
   switch (mode) {
     case "ideas":
       return slots.ideas;
@@ -160,10 +164,6 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     /* Tweets neither: each post's passages are jumps (`BlockRef`), not a
        selection. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
     case "tweets":
-    /* Annotations neither: its notes sit beside their blocks in a column of
-       their own, and mark nothing inside the prose — the dashed underlines for
-       ideas are deferred (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md). */
-    case "annotations":
       return NOTHING;
     default: {
       /* The compiler being made to say that every mode has been given an

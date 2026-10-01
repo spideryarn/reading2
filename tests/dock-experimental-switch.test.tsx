@@ -194,7 +194,10 @@ describe("who sees it at all", () => {
     expect(theSwitch().closest(".dock-modes")).toBeNull();
     expect(theSwitch().getAttribute("role")).toBeNull();
     expect(theSwitch().getAttribute("aria-checked")).toBeNull();
-    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(MODES.length);
+    /* Annotations is a toggle beside the radios since 2026-10-01 (261001i). */
+    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
+      MODES.length,
+    );
   });
 });
 

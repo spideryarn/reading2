@@ -99,6 +99,7 @@ import {
 } from "../search-hits.js";
 import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
 import {
+  marginParam,
   modeParam,
   noteParam,
   panelParam,
@@ -313,6 +314,26 @@ export function Reader({
    * So this is a single value the layout reads, not a flag each feature checks.
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
+  /**
+   * **Whether Annotations' column of notes is on**, right of the prose — a
+   * switch of its own beside `mode` since 2026-10-01, so the notes can sit
+   * beside a band. `mode` never says `annotations` (`BandMode`); the Dock's
+   * Annotations button toggles this instead.
+   * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+   */
+  const [margin, setMargin] = useQueryState("margin", marginParam);
+  /* **An old `?mode=annotations` link** (Annotations was a mode for its first
+     day) reads as Plain through `modeParam`; this turns the notes on for it
+     and drops the old word, in one replaced entry so Back does not return to
+     it. Read from `location` because `modeParam` has already discarded it. */
+  const [, setOldAnnotations] = useQueryStates({
+    mode: modeParam,
+    margin: marginParam,
+  });
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("mode") === "annotations")
+      void setOldAnnotations({ mode: null, margin: true }, { history: "replace" });
+  }, [setOldAnnotations]);
   /* The pasted Trajectory stop belongs to this article arrival, not to each
      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
      while leaving mode-specific query state in the URL; the first band mount
@@ -339,15 +360,17 @@ export function Reader({
    * controls applied. Both went with that mode:
    * docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.)
    */
-  const bandOpen = mode !== "plain" && mode !== "annotations";
+  const bandOpen = mode !== "plain";
   /**
-   * **Annotations draws a column to the RIGHT of the prose instead of a band**
-   * (layout.ts § `fitMargin`). No band opens, so everything that asks
-   * `bandOpen` — the band covering the prose on a phone, the herald, the
-   * reading-time "is the prose on screen" — sees Plain's page.
-   * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
+   * **Annotations draws a column to the RIGHT of the prose**, beside whatever
+   * band is open or none (layout.ts § `fitMargin`, `fitBoth`). It opens no
+   * band, so everything that asks `bandOpen` — the band covering the prose on
+   * a phone, the herald, the reading-time "is the prose on screen" — sees the
+   * band's page or Plain's. Where there is no room for both, the band wins.
+   * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
+   * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
    */
-  const marginOpen = mode === "annotations";
+  const marginOpen = margin === true;
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
@@ -1305,8 +1328,8 @@ export function Reader({
   /**
    * **Annotations: the notes beside each block** — AnnotationsColumn.tsx.
    *
-   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` in the
-   * mode's "band", never made) or the visitor's payload. Drawn only while the
+   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` beside
+   * the column's head, never made) or the visitor's payload. Drawn only while the
    * window has room for the column (`fit.margW`); on a narrow one the head
    * says why there is nothing. Memoised on the notes alone, so scrolling does
    * not re-render `TableView`.
@@ -1892,22 +1915,6 @@ export function Reader({
          is the way out to the article; it has nothing to put in the middle. */
       case "plain":
         return null;
-      /* **No band either**: Annotations draws a column to the RIGHT of the
-         prose instead — its notes inside the table's cells (`marginNotes`),
-         and here only what is not anchored to a block: the head pinned at
-         the top of the column, and the read of the owner's ideas. Here so
-         both are inside the mode's error boundary. */
-      case "annotations":
-        return (
-          <>
-            {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
-            <AnnotationsHead
-              room={fit.margW > 0}
-              path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
-              arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
-            />
-          </>
-        );
       case "chat":
         /* **The key is inert today, and it is kept for the day it is not.**
            It was written when one `ConversationBand` was mounted by two modes
@@ -2348,6 +2355,43 @@ export function Reader({
         onPlain={() => void setMode("plain")}
       >
         {content}
+      </ModeBoundary>
+    );
+  }
+
+  /**
+   * **Annotations' column, apart from its notes** — the head pinned at the top
+   * of the column and the read of the owner's ideas: what is not anchored to a
+   * block (the notes are in the table's cells, `marginNotes`). Beside the band
+   * rather than in it since 2026-10-01, inside a boundary of its own so a
+   * broken head cannot take the band or the article with it; its way out
+   * turns the notes off.
+   *
+   * **No narrow-window line under a covering band**: the band is the whole
+   * window there, and a line about notes over a Glossary list is noise. Nor
+   * where that band has stepped aside: the pill that brings it back sits
+   * where the line would (the browser check, 2026-10-01), and it is the way
+   * on from there anyway.
+   */
+  function marginColumn(): ReactNode {
+    if (!marginOpen) return null;
+    const covered = bandOpen && fit.modeW === 0;
+    return (
+      <ModeBoundary
+        mode="annotations"
+        slug={slug}
+        owner={owner !== null}
+        onPlain={() => void setMargin(null)}
+      >
+        {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
+        {!covered && (
+          <AnnotationsHead
+            room={fit.margW > 0}
+            beside={bandOpen}
+            path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
+            arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+          />
+        )}
       </ModeBoundary>
     );
   }
@@ -2871,6 +2915,7 @@ export function Reader({
           never ran for this piece, and the ones that cost a model call —
           `POLICY` in visitor.ts says which, so no count lives here. */}
       {band()}
+      {marginColumn()}
 
       {/* **Over the top of the band, for three seconds after a press** —
           ModeHerald.tsx. After the band in source order so it paints above it
@@ -2911,11 +2956,19 @@ export function Reader({
            hook call at the top of this component. */
         experimental={experimental}
         mode={mode}
+        margin={marginOpen}
         onMode={(next, sub) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old
              entry for ~50ms, so inferring intent from the address races. Back
              and Forward never call this callback and therefore never arm. */
+          /* **Annotations is a switch, not a band** (`BandMode`): its press
+             turns the column on or off and leaves the band, the herald and a
+             stepped-aside band exactly as they were. */
+          if (next === "annotations") {
+            void setMargin(marginOpen ? null : true);
+            return;
+          }
           armTrajectoryOpening(trajectoryArrival.current, mode, next);
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */

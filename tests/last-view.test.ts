@@ -87,14 +87,30 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    /* `annotations` since 2026-10-01: it reads what the article already has
-       and starts no job, so restoring it is as inert as Structure. */
-    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline", "annotations"]) {
+    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(
       "?mode=glossary&term=spya-h4r2wd",
     );
+  });
+
+  /* Annotations' column, since 2026-10-01 a switch of its own:
+     docs/plans/261001i-annotations-column-beside-a-band-mode.md. It reads what
+     the article already has and starts no job, so restoring it is inert. */
+  it("remembers the notes beside a band, and the link always wins", () => {
+    expect(rememberableSearch("?mode=glossary&margin=1")).toBe("?mode=glossary&margin=1");
+    expect(restoredHref("/read/x", "", "?mode=glossary&margin=1")).toBe(
+      "/read/x?mode=glossary&margin=1",
+    );
+    /* A link that asks for the notes is a view of its own: no remembered band. */
+    expect(restoredHref("/read/x", "?margin=1", "?mode=glossary")).toBe(null);
+  });
+
+  it("reads a remembered mode=annotations from its first day as the notes on", () => {
+    expect(rememberableSearch("?mode=annotations")).toBe("?margin=1");
+    expect(rememberableSearch("?at=spya-a&mode=annotations&margin=1")).toBe("?at=spya-a&margin=1");
+    expect(restoredHref("/read/x", "", "?mode=annotations")).toBe("/read/x?margin=1");
   });
 
   it("reads a percent-encoded key as the parameter it is", () => {

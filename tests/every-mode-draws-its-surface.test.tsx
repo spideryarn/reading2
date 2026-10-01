@@ -906,7 +906,13 @@ async function open(search = "", { strict = true }: { strict?: boolean } = {}): 
   await settle();
 }
 
-const modeInUrl = (): string => new URLSearchParams(location.search).get("mode") ?? "plain";
+/* **Annotations is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
+   press turns the column on and leaves `?mode=` alone, so from Plain it is
+   read here as the view it opens. Every fixture this file presses from is Plain. */
+const modeInUrl = (): string => {
+  const query = new URLSearchParams(location.search);
+  return query.get("mode") ?? (query.get("margin") === "1" ? "annotations" : "plain");
+};
 
 /** `?mode=` is written behind nuqs' throttle, so a single read is a race. */
 async function modeAfterPress(before: string): Promise<string> {
@@ -921,7 +927,10 @@ async function modeAfterPress(before: string): Promise<string> {
 /** The real bar button, found the way a screen reader would find it. */
 function modeButton(mode: Mode): HTMLButtonElement {
   const label = MODE_LABEL[mode];
-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
+  /* The radios, and Annotations' toggle after them (261001i). */
+  const found = [
+    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
+  ].find(
     (b) => b.getAttribute("aria-label") === label,
   );
   expect(found, `the bar must draw ${label}`).toBeDefined();
@@ -1317,7 +1326,8 @@ const DRAWS: Record<Mode, Draws> = {
     query: "?mode=plain",
     control: { where: ".prose", says: PARAGRAPH },
   },
-  /* **No band: a column right of the prose.** The control is the owner's stored
+  /* **No band: a column right of the prose** — `?margin=1` since 2026-10-01, a
+     switch beside the band rather than a mode (261001i). The control is the owner's stored
      idea, drawn as a stamp beside the block it occurs in — which proves the
      read of the ideas happened, reached the notes and was put in a cell. jsdom
      lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
@@ -1325,7 +1335,7 @@ const DRAWS: Record<Mode, Draws> = {
   annotations: {
     kind: "none",
     why: "its notes sit beside the prose, in the table's own cells",
-    query: "?mode=annotations",
+    query: "?margin=1",
     control: { where: ".marg-note", says: IDEA_NAME },
   },
   /* The child node's title, from the tree in the payload — the one row this
@@ -1452,3 +1462,52 @@ describe("phase B — what each mode's real controller drew", () => {
    now — GPT Sol's F21. Two hand-written tests cover the two modes somebody
    thought of; a `kind: "none"` row is *required of every mode that claims to
    draw nothing*, and carries the positive control with it. */
+
+/* ===================================================== the notes beside a band ==
+   **Annotations' column beside a band** — `?margin=1`, since 2026-10-01
+   (docs/plans/261001i-annotations-column-beside-a-band-mode.md). The width
+   arithmetic is swept in tests/layout-margin.test.ts; this is the page: the two
+   drawn together where they fit, the band winning where they do not, and an
+   old `?mode=annotations` link turning into the notes. */
+describe("the notes beside a band", () => {
+  const atWidth = async (width: number, search: string) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    fixtures = "populated";
+    await open(search);
+  };
+  afterEach(() => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+  });
+  const notes = () => host.querySelectorAll("[data-marg-note]").length;
+  const line = () => host.querySelector(".marg-narrow")?.textContent ?? null;
+
+  it("draws the band and the notes together where both fit", async () => {
+    await atWidth(1024, "?mode=glossary&margin=1");
+    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+    expect(notes(), "no notes beside the band").toBeGreaterThan(0);
+    expect(line()).toBeNull();
+  }, PHASE_MS);
+
+  it("gives the band the room below 900px, and says how to get the notes back", async () => {
+    await atWidth(800, "?mode=glossary&margin=1");
+    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+    expect(notes()).toBe(0);
+    expect(line()).toContain("panel closed");
+  }, PHASE_MS);
+
+  it("draws no line over a band that covers the window", async () => {
+    await atWidth(390, "?mode=glossary&margin=1");
+    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+    expect(notes()).toBe(0);
+    expect(line()).toBeNull();
+  }, PHASE_MS);
+
+  it("opens an old ?mode=annotations link as Plain with the notes on", async () => {
+    await atWidth(1024, "?mode=annotations");
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode")).toBeNull();
+    expect(query.get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(notes()).toBeGreaterThan(0);
+  }, PHASE_MS);
+});

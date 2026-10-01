@@ -67,6 +67,7 @@ export const REMEMBERED = [
   "at", // the section you were reading
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
+  "margin", // Annotations' column of notes, right of the prose — draws only what is already there
   "deep", // how far down summary mode goes
   "summary", // gists or one of three plain levels — only a slider gesture spends
   "diagram", // which of the five pictures
@@ -247,7 +248,15 @@ export function hasArticleState(search: string): boolean {
  * what we replay unasked.
  */
 export function rememberableSearch(search: string): string {
-  const kept = pairs(search).filter((p) => {
+  /* **`mode=annotations` is `margin=1` now** (2026-10-01): Annotations was a
+     mode for its first day, and a browser that remembered it then should get
+     the notes back rather than a word `modeParam` reads as Plain. Translated
+     here, on the way in and on the way out, so a restore never puts the old
+     spelling on the address — docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+  const translated = pairs(search).map((p) =>
+    pairKey(p) === "mode" && pairValue(p) === "annotations" ? "margin=1" : p,
+  );
+  const kept = [...new Set(translated)].filter((p) => {
     const key = pairKey(p);
     if (!REMEMBERED.includes(key as (typeof REMEMBERED)[number])) return false;
     return !(key === "mode" && NEEDS_AN_EXPLICIT_PRESS.has(pairValue(p)));

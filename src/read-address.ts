@@ -14,7 +14,7 @@
  * (tests/client-imports.test.ts) both accept it.
  */
 
-import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
+import { type BandMode, DEFAULT_MODE, modeFromParam } from "./modes.js";
 
 /**
  * **Which middle-band mode a `/read/` address asked for**, or the default.
@@ -44,7 +44,7 @@ import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
  * controls, and a throw here would be a 500 on an address that only wanted a
  * tab title.
  */
-export function readMode(url: string): Mode {
+export function readMode(url: string): BandMode {
   const query = url.indexOf("?");
   if (query === -1) return DEFAULT_MODE;
   let asked: string | null = null;

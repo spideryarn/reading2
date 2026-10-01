@@ -151,7 +151,9 @@ describe("the bottom bar's mode segment", () => {
      segment says the same thing about the hairline frame. */
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();
-    expect(host.querySelector('.dock-modes[role="radiogroup"]')).not.toBeNull();
+    /* The radios' own box since 2026-10-01, inside the segment beside
+       Annotations' toggle (261001i). */
+    expect(host.querySelector('.dock-modes [role="radiogroup"]')).not.toBeNull();
     const checked = radios().filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
   });
