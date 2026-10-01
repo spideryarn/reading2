@@ -37,7 +37,7 @@ from the reading view of `jco-2005-01-libre-spya-hk9cc7`, build `e94f588d`.
 > tooltips), those internal links are probably less important than the glossary. So visually the
 > glossary links should be a bit more prominent.
 
-**Ending: Shipped**, both. On `dev` in `abe1d662c` and the review-fix commit after it, not deployed.
+**Ending: Shipped**, both. On `dev` in `abe1d662c` and `8a5eb45d6` (merged at `6bf099c4b`), not deployed.
 Resolve 8S and 8W.
 
 ## What we did
