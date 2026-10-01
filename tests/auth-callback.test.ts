@@ -31,6 +31,10 @@
  * message, which docs/project/copy.md exists to keep stable precisely so that a
  * test can pin it without pinning prose.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -365,5 +369,53 @@ describe("a password-recovery link", () => {
       vi.advanceTimersByTime(1_500);
     });
     expect(document.body.textContent).toContain("[auth-kind]");
+  });
+});
+
+/**
+ * **Every failure forgets where the reader was going.** auth-return.ts promises
+ * a failed sign-in does not survive to redirect the next one; until 2026-10-01
+ * three failures kept that promise only by omission. GPT Sol found it reviewing
+ * 261001i's plan; Greg approved the fix the same day. The last case is the
+ * structural one: a fourth failure added later cannot skip the clearing,
+ * because there is one way to fail.
+ */
+describe("a failure never leaves the destination behind", () => {
+  it("on [auth-slow]", async () => {
+    initialize.mockReturnValue(new Promise(() => {}));
+    await arriveWith("?code=abc123");
+    await act(async () => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(document.body.textContent).toContain("[auth-slow]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("on [auth-nosession]", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    const shown = await arriveWith("?code=abc123");
+    expect(shown).toContain("[auth-nosession]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("on [auth-finish]", async () => {
+    initialize.mockRejectedValue(new TypeError("fetch failed"));
+    const shown = await arriveWith("?code=abc123");
+    expect(shown).toContain("[auth-finish]");
+    expect(takeReturn).toHaveBeenCalled();
+  });
+
+  it("because every error goes through the one exit that clears it", () => {
+    const src = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "web", "AuthCallback.tsx"),
+      "utf8",
+    );
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    /* The binding and its one call are the only references: an alias such as
+       `const showError = setError` must not open a second path around `fail`.
+       Strip comments so a commented-out `takeReturn` cannot satisfy the guard. */
+    expect(code.match(/\bsetError\b/g)).toHaveLength(2);
+    expect(code.match(/\bsetError\(/g)).toHaveLength(1);
+    expect(code).toMatch(/const fail = \([^)]*\) => \{[\s\S]{0,400}?takeReturn\(CALLBACK_HREF\);[\s\S]{0,200}?setError\(/);
   });
 });
