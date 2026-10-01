@@ -51,7 +51,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MODES, type Mode } from "../src/modes.js";
+import { type BandMode, MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type { PublicArtefacts } from "../src/types.js";
 import { Dock, fitSignature, visibleModes } from "../src/web/Dock.js";
@@ -162,9 +162,10 @@ function loose(search: string, props: Record<string, unknown> = {}): void {
   });
 }
 
-/** The mode buttons of the segment, by the mode each one is for. */
+/** The mode buttons of the segment, by the mode each one is for — the radios
+    and, since 2026-10-01, Annotations' toggle after them (261001i). */
 function radioModes(): string[] {
-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].map(
+  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
 }
@@ -237,10 +238,26 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
 
   it("every one of the four, and never more than one radio checked", () => {
     for (const mode of BEHIND_THE_SWITCH) {
+      /* Annotations is a switch, not a band, since 2026-10-01: the next test. */
+      if (mode === "annotations") continue;
       reading({ mode, experimental: EXPERIMENTAL_OFF });
       expect(radioModes(), mode).toContain(MODE_LABEL[mode]);
       expect(checked(), mode).toEqual([MODE_LABEL[mode]]);
     }
+  });
+
+  /* **Annotations' toggle obeys the same rule** (261001i): with its notes on
+     it stays drawn with the switch off, pressed, so the one control that turns
+     them off cannot vanish — and it is never one of the checked radios. */
+  it("Annotations' toggle stays drawn and pressed while its notes are on", () => {
+    reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
+    const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
+    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
+    expect(checked()).toEqual([MODE_LABEL.glossary]);
+    reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
+    expect(host.querySelector('.dock-modes [aria-pressed]')).toBeNull();
   });
 
   /**
@@ -258,6 +275,25 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
   it("the metadata page with no mode in its URL draws the default bar", () => {
     loose("");
     expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
+  });
+
+  it("the metadata page translates an old Annotations mode before following either axis", () => {
+    loose("?mode=annotations");
+    const hrefFor = (mode: Mode) => {
+      const link = [...host.querySelectorAll<HTMLAnchorElement>("a.dock-mode")].find(
+        (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
+      );
+      expect(link, `${mode} link`).toBeDefined();
+      return new URL((link as HTMLAnchorElement).href).searchParams;
+    };
+
+    const glossary = hrefFor("glossary");
+    expect(glossary.get("mode")).toBe("glossary");
+    expect(glossary.get("margin"), "a band link dropped the old notes state").toBe("1");
+
+    const annotations = hrefFor("annotations");
+    expect(annotations.get("mode"), "the toggle link kept minting the retired mode").toBeNull();
+    expect(annotations.get("margin")).toBe("1");
   });
 
   it("a mode word the URL made up is ignored rather than drawn", () => {
@@ -281,12 +317,21 @@ describe("the fit signature", () => {
      tests/dock-experimental-switch.test.tsx § the fit signature, and
      tests/dock-corner-controls.test.tsx § the fit signature — because they are
      about those controls, not about the modes. */
-  const sig = (on: boolean, current: Mode) =>
+  const sig = (on: boolean, current: BandMode) =>
     fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
     expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "remember").length);
     expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
+  });
+
+  /* Annotations' toggle pressed is `.on`, which gets its label back at rung 2,
+     with the same buttons and the same mode (261001i, GPT Sol's plan review). */
+  it("changes when Annotations' notes are turned on, at the same mode", () => {
+    const off = fitSignature(visibleModes(true, "glossary"), "glossary", noop, undefined, null, null, false, false);
+    const on = fitSignature(visibleModes(true, "glossary", true), "glossary", noop, undefined, null, null, false, true);
+    expect(visibleModes(true, "glossary")).toEqual(visibleModes(true, "glossary", true));
+    expect(on).not.toBe(off);
   });
 
   it("changes when the switch does", () => {

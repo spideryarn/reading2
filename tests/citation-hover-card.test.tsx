@@ -151,7 +151,7 @@ const TERM: GlossaryEntry = {
 const jumped: BlockId[] = [];
 const openedTerms: string[] = [];
 
-function Harness({ works, entries }: { works: CitedWork[]; entries: GlossaryEntry[] }) {
+function Harness({ works, entries, owner }: { works: CitedWork[]; entries: GlossaryEntry[]; owner: boolean }) {
   /* Both scans, and then concatenated per block — which is what `TableView`
      does, and is the only way to get the merged `<mark class="term cite">` the
      overlap case is about. Computing only one of them would have made that test
@@ -196,6 +196,7 @@ function Harness({ works, entries }: { works: CitedWork[]; entries: GlossaryEntr
         notes={buildNoteIndex([])}
         lookUpLinks={false}
         canAddToShelf={false}
+        showInSpideryarn={owner}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id) => jumped.push(id)}
         onFollowNote={() => {}}
@@ -255,8 +256,8 @@ function hover(target: Element): void {
 let host: HTMLDivElement;
 let root: Root;
 
-function paint(works: CitedWork[] = WORKS, entries: GlossaryEntry[] = []): void {
-  act(() => root.render(<Harness works={works} entries={entries} />));
+function paint(works: CitedWork[] = WORKS, entries: GlossaryEntry[] = [], owner = true): void {
+  act(() => root.render(<Harness works={works} entries={entries} owner={owner} />));
 }
 
 beforeEach(() => {
@@ -525,5 +526,60 @@ describe("what the card says after Look it up", () => {
     expect(card()).not.toBeNull();
     expect(card()?.textContent).not.toMatch(/DISTINCTIVE INVESTIGATION|Investigat/);
     expect(card()?.querySelector(".cite-investigate, .cite-inv")).toBeNull();
+  });
+});
+
+/* Plan 261001i: the band's "already an article here" line, on the card too. */
+describe("the card says when the work is already an article here", () => {
+  it("draws the band's line, linking to our page in this tab", () => {
+    const owned: CitedWork = {
+      ...TULVING,
+      inSpideryarn: { slug: "old-spya-k2m3n4", whose: "yours", matchedBy: "doi", title: "My copy", archived: true },
+    };
+    paint([owned, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    const a = card()?.querySelector<HTMLAnchorElement>(".cite-here a");
+    expect(a?.textContent).toBe("In your library · archived");
+    expect(a?.getAttribute("href")).toBe("/read/old-spya-k2m3n4");
+    expect(a?.getAttribute("target")).toBeNull();
+    expect(a?.title).toContain("the same DOI");
+    /* And nothing on a work that is not here. */
+    hover(cite(1));
+    expect(card()?.querySelector(".cite-here")).toBeNull();
+  });
+
+  it("says an upload's match is by the id we found, and a public one is on the public shelf", () => {
+    const upload: CitedWork = {
+      ...TULVING,
+      inSpideryarn: { slug: "pdf-spya-p5q6r7", whose: "yours", matchedBy: "guessed-id", title: "My PDF" },
+    };
+    paint([upload, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    const a = card()?.querySelector<HTMLAnchorElement>(".cite-here a");
+    expect(a?.textContent).toBe("In your library");
+    expect(a?.title).toContain("we found for your uploaded PDF");
+
+    const shared: CitedWork = {
+      ...TULVING,
+      inSpideryarn: { slug: "theirs-spya-d5e6f7", whose: "public", matchedBy: "title", title: "As shared" },
+    };
+    paint([shared, KAPLAN, BROADBENT]);
+    hover(cite(0));
+    expect(card()?.querySelector(".cite-here a")?.textContent).toBe("On the public shelf");
+    expect(card()?.querySelector(".cite-here-how")?.textContent).toContain("As shared");
+  });
+
+  it("draws nothing for a non-owner, even from a payload that carries the field", () => {
+    /* The public DTO cannot name the field; this models a wire payload that
+       broke that type, so the card's own lock is pinned independently. */
+    const leaked: CitedWork = {
+      ...TULVING,
+      inSpideryarn: { slug: "private-spya-g8h9j2", whose: "yours", matchedBy: "doi", title: "Private copy" },
+    };
+    paint([leaked, KAPLAN, BROADBENT], [], false);
+    hover(cite(0));
+    expect(card()).not.toBeNull();
+    expect(card()?.querySelector(".cite-here")).toBeNull();
+    expect(card()?.textContent).not.toContain("Private copy");
   });
 });

@@ -33,7 +33,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { decidePublicPage } from "../src/public/page.js";
-import { DEFAULT_MODE, MODES } from "../src/modes.js";
+import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
 import { redirectsToMetadata, viewFor } from "../src/read-address.js";
 import { modeParam } from "../src/web/params.js";
 import { originalUrl, readMode, readSlug } from "../src/vercel.js";
@@ -331,7 +331,9 @@ describe("readSlug, and what a malformed capture is answered with", () => {
  */
 describe("readMode, and the mode a shared address asked for", () => {
   it("takes it off the restored URL, for every mode there is", () => {
-    for (const mode of MODES) {
+    /* Every value `?mode=` can hold: Annotations is `?margin=1` since 2026-10-01,
+       and `?mode=annotations` reads as Plain (tests/annotations-margin-param.test.ts). */
+    for (const mode of BAND_MODES) {
       expect(readMode(`/read/some-article?mode=${mode}`), mode).toBe(mode);
     }
   });

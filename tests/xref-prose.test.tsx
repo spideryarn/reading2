@@ -203,6 +203,7 @@ function Page({ xrefs, extras }: { xrefs: readonly Crossref[] | null; extras: Ex
         notes={buildNoteIndex([])}
         lookUpLinks={false}
         canAddToShelf={false}
+        showInSpideryarn={false}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id as BlockId)}
         onFollowNote={() => {}}

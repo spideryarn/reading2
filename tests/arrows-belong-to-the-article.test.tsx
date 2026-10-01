@@ -151,9 +151,35 @@ describe("the bottom bar's mode segment", () => {
      segment says the same thing about the hairline frame. */
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();
-    expect(host.querySelector('.dock-modes[role="radiogroup"]')).not.toBeNull();
+    /* The radios' own box since 2026-10-01, inside the segment beside
+       Annotations' toggle (261001i). */
+    expect(host.querySelector('.dock-modes [role="radiogroup"]')).not.toBeNull();
     const checked = radios().filter((el) => el.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);
+  });
+
+  it("keeps the radiogroup itself in the layout and accessibility trees", () => {
+    const css = readFileSync(
+      path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.dock-modes-radios\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule, "the radiogroup needs its own layout box").toContain("display: inline-flex");
+    expect(rule).not.toContain("display: contents");
+  });
+
+  it("gives the real radiogroup one coarse-pointer flex share per radio", () => {
+    paintDock();
+    const group = host.querySelector<HTMLElement>(".dock-modes-radios");
+    expect(group).not.toBeNull();
+    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(String(radios().length));
+
+    const css = readFileSync(
+      path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.dock-modes-radios\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toContain("flex: var(--dock-radio-count) 0 auto");
   });
 
   it("still selects on a click", () => {

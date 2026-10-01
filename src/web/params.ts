@@ -267,8 +267,8 @@ import { isMode } from "../modes.js";
 export { isMode };
 /* Imported as well as re-exported: `export … from` creates no local binding, and
    `modeParam` below uses all three. */
-import { DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
-export { DEFAULT_MODE, MODES, type Mode };
+import { type BandMode, DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
+export { type BandMode, DEFAULT_MODE, MODES, type Mode };
 
 /* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
    for the same reason the three above are: this file is where a component looks
@@ -291,7 +291,7 @@ import {
   isDivergingScale,
 } from "../referee-criteria.js";
 
-export const modeParam = createParser<Mode>({
+export const modeParam = createParser<BandMode>({
   /* `isMode` and not a second `MODES.includes` here. The serverless function
      that composes a shared article's `<title>` asks the same question of the
      same query string (`readMode` in src/vercel.ts), and this file used to
@@ -307,6 +307,30 @@ export const modeParam = createParser<Mode>({
 })
   .withDefault(DEFAULT_MODE)
   .withOptions({ history: "push" });
+
+/**
+ * **Whether Annotations' column of notes is on, right of the prose** — since
+ * 2026-10-01 a switch of its own beside `?mode=`, so the notes can sit beside
+ * a band. docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+ *
+ * `margin` and not `notes`: `?note=` is the explanation dialog, one letter away.
+ *
+ * **No default**: absent is off. `push`, as `mode` is: turning a column of the
+ * view on or off is a deliberate act, and Back should undo it.
+ */
+export const marginParam = parseAsBit.withOptions({ history: "push" });
+
+/**
+ * **Does this query string ask for the notes?** `?margin=1`, or an old
+ * `?mode=annotations` link from the day Annotations was a mode (2026-10-01),
+ * which `modeParam` now reads as Plain. The Reader rewrites the old spelling
+ * on arrival; this is the one statement of what it means, for that rewrite
+ * and for the Dock's links off the reading view.
+ */
+export function marginInSearch(search: string): boolean {
+  const query = new URLSearchParams(search);
+  return query.get("margin") === "1" || query.get("mode") === "annotations";
+}
 
 /**
  * Which conversation is open in chat mode, or none for the list of them.

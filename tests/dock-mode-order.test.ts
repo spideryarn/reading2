@@ -32,10 +32,14 @@ const RUNS = [
      its own (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)
      — another shape of the whole piece, beside Summary. Greg did not place it
      by hand. */
-  ["structure", "summary", "annotations", "tweets", "diagram"],
+  ["structure", "summary", "tweets", "diagram"],
   ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
   ["search", "chat", "remember"],
+  /* Annotations' toggle, since 2026-10-01 a switch beside the band rather than
+     one of the bands, at the right-hand end like its column
+     (docs/plans/261001i-annotations-column-beside-a-band-mode.md). */
+  ["annotations"],
 ] as const;
 
 describe("the mode bar's order", () => {

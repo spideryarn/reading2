@@ -110,6 +110,7 @@ function Harness() {
            is about a link out — a footnote marker resolves inside the article
            — so this is the pair that asks nothing of the network at all. */
         canAddToShelf={false}
+        showInSpideryarn={false}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id)}
         onFollowNote={(from, m) => followed.push([from, m.note.id, m.blockId])}

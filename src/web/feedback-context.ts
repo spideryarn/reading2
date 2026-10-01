@@ -32,7 +32,7 @@
  * where a slug was meant.
  */
 import type { ArticleView } from "../read-address.js";
-import type { Mode } from "../modes.js";
+import type { BandMode } from "../modes.js";
 import type { JobStatus, StepName } from "../types.js";
 
 /**
@@ -61,7 +61,7 @@ export interface FeedbackArticleContext {
    */
   revisionId: string | null;
   view: ArticleView;
-  mode: Mode;
+  mode: BandMode;
   /** How many gist columns were open — the granularity level. Always `null`
       since the gist columns went with the Hierarchy mode on 2026-09-29; kept so
       the payload's shape does not change. */

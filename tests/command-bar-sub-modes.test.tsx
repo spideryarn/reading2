@@ -7,6 +7,7 @@
  * already; the helpers are the same shape as that file's.
  */
 // @vitest-environment jsdom
+import { isBandMode } from "../src/modes.js";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { useQueryState, useQueryStates } from "nuqs";
@@ -99,8 +100,10 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     mode,
     experimental: EXPERIMENTAL_ON,
     onMode(next, sub) {
-      if (sub === undefined) void setMode(next);
-      else void setSubNav(subModeParams(sub), { history: "push" });
+      /* Annotations is a switch, not a band (`BandMode`); not under test here. */
+      if (sub === undefined) {
+        if (isBandMode(next)) void setMode(next);
+      } else void setSubNav(subModeParams(sub), { history: "push" });
     },
   });
 }
