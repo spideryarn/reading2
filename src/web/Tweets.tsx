@@ -128,7 +128,7 @@ export function TweetsPanel({
       foot={owner?.thread && ready ? <RunRow owner={owner} /> : null}
     >
       {owner?.error && (
-        <div className="tw:px-4 tw:pt-3">
+        <div className="tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3">
           <p className="gloss-error tw:m-0" role="alert">
             {owner.error}
           </p>

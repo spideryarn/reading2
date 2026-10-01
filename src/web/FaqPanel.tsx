@@ -23,7 +23,7 @@
  * What nothing checks is that the passage answers the question: that is the
  * model's reading. The promise says both halves (Sol F3), and must keep saying
  * the second. It was the band's foot; since SPIDERYARN-READING2-62 it is
- * behind an (i) at the end of the order row (`AboutPassages`).
+ * behind the band's corner (i) (`FaqAbout`).
  *
  * ## Not Quiz, not Ideas
  *
@@ -184,7 +184,7 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
       mode="faq"
       about={
         <FaqAbout
-          count={questions.length}
+          count={ready ? questions.length : null}
           dropped={dropped}
           made={ready ? (owner?.faq ?? null) : null}
         />
@@ -340,14 +340,16 @@ function FaqAbout({
   dropped,
   made,
 }: {
-  count: number;
+  count: number | null;
   dropped: string | null;
   made: { generator: string; version: string; generatedAt: string; elapsedMs: number } | null;
 }) {
   return (
     <>
-      {count > 0 && <p>{FAQ_PROMISE}</p>}
-      {count > 0 && <p>{count === 1 ? "One question." : `${count} questions.`}</p>}
+      {count !== null && count > 0 && <p>{FAQ_PROMISE}</p>}
+      {count !== null && (
+        <p>{count === 0 ? "No questions." : count === 1 ? "One question." : `${count} questions.`}</p>
+      )}
       {dropped && <p>{dropped}</p>}
       {made && (
         <AboutMade

@@ -1273,12 +1273,16 @@ for (const trigger of TRIGGERS) {
             const draws = DRAWS[mode];
             if (draws.kind === "band" && draws.about === "corner") {
               const band = host.querySelector(draws.where);
-              if (band) {
-                expect(
-                  band.firstElementChild?.classList.contains("band-about"),
-                  `${mode}: no (i) in the corner of the band before it has anything in it`,
-                ).toBe(true);
-              }
+              expect(band, `${mode}: no ${draws.where} before its artefact exists`).not.toBeNull();
+              const corner = (band as Element).querySelectorAll(":scope > .band-about");
+              expect(
+                corner.length,
+                `${mode}: not exactly one (i) in the corner before its artefact exists`,
+              ).toBe(1);
+              expect(
+                corner[0],
+                `${mode}: the (i) is not the band's first child before its artefact exists`,
+              ).toBe((band as Element).firstElementChild);
             }
           }
           /* **Outside the loop**, because a table can promise a press and then

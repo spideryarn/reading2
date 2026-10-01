@@ -212,6 +212,14 @@
 .traj-read-error { margin: 0.4rem 0.7rem 0; }
 .traj-read-error .gloss-error { margin: 0 0 0.5rem; }
 
+/* Before a route has a pinned head, its status or error is the top row. */
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-quiet,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-empty,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .gloss-stale,
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .traj-read-error {
+  padding-right: calc(0.7rem + var(--band-about-room));
+}
+
 /* A rule above it, so the foot reads as being about the route rather than
    the last row's — citations.css's `.cite-foot`. */
 .traj-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
@@ -233,6 +241,9 @@
   font-size: 0.8rem;
   line-height: 1.35;
   color: var(--ink-faint);
+}
+.mode-band.trajectory.has-about:not(:has(> .band-head)) > .traj-purpose {
+  padding-right: var(--band-about-room);
 }
 .traj-purpose-said {
   flex: 1;

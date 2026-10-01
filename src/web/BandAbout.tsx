@@ -68,16 +68,20 @@ export function AboutMade({
   verb?: string;
 }) {
   const exact = exactly(generatedAt);
-  if (!generator && !exact) return null;
-  const ago = relativeAgo(generatedAt, Date.now());
   const took =
     elapsedMs !== undefined && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? howLong(elapsedMs) : null;
+  if (!generator && !exact && !took) return null;
+  const ago = relativeAgo(generatedAt, Date.now());
   const when = exact ? `${exact}${ago ? ` (${ago})` : ""}` : null;
-  /* "Written by m, 1 Oct…" with a model; "Written 1 Oct…" without one. */
+  /* "Written by m, 1 Oct…" with a model; "Written 1 Oct…" without one;
+     and "Written in 20s" when an old artefact kept only its duration. */
   const head = generator
     ? [`${verb} by ${generator}${version ? ` (${version})` : ""}`, when].filter(Boolean).join(", ")
-    : `${verb} ${when}`;
-  return <p className="band-about-made">{`${[head, took ? `in ${took}` : null].filter(Boolean).join(", ")}.`}</p>;
+    : when
+      ? `${verb} ${when}`
+      : verb;
+  const separator = took && !when ? " " : ", ";
+  return <p className="band-about-made">{`${head}${took ? `${separator}in ${took}` : ""}.`}</p>;
 }
 
 /**

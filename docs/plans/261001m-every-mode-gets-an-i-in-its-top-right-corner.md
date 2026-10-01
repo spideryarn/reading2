@@ -180,3 +180,20 @@ review `.diff` files; those 17 lines went back to the old name (Sol P1).
   one, because its measuring copies must match what is drawn.
 - Known gaps, for the browser pass: a visitor's Diagram has no picker row, so the (i) sits over
   the picture's corner; Structure's "You are between parts." line has no clearance.
+
+## Stage 3: checks
+
+- **Browser** (Playwright, 1280×800 and 390×844, every mode): one (i) per band, none over a control,
+  no "Written by" left on any band, Referee without one. One problem: Citations' card ran to 834px
+  at 20rem wide, off the bottom of an 800px window, because its catalog `how` is ~920 characters,
+  three times any other mode's. The card is 28rem wide now. Timeline's "Read by" became "Written
+  by", like every other mode. Screenshots: `261001m-shot-*.png`.
+- **GPT Sol code review** (`261001m-mode-info-code-review-sol.md`, "approve after fixes"): phase A
+  had passed silently when no band was drawn, and now requires one; clearance added for the rows
+  that can sit under the corner in the empty, error and visitor states (Diagram's picture toolbar,
+  Structure's between-parts line, FAQ, Trajectory, Tweets' error); `AboutMade` keeps a duration on
+  its own; FAQ's card says "No questions." once a run has found none; Search's and Remember's
+  catalog `how` gained the sentence the plan's table had promised; three feature docs updated.
+- **Plan letter collision**: a sibling's Citations plan is also `261001m`. This review's first
+  prompt and answer overwrote that plan's `261001m-code-review-*.md`; both were put back from git,
+  and this plan's are `261001m-mode-info-code-review-*`.

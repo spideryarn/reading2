@@ -264,6 +264,7 @@ describe("FaqPanel", () => {
        passages there are none of. */
     await act(async () => about().click());
     expect(tip()).not.toContain(FAQ_PROMISE);
+    expect(tip()).toContain("No questions.");
     await act(async () => about().click());
   });
 

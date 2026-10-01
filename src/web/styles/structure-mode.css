@@ -410,3 +410,11 @@
   font-size: var(--structure-tier-mid);
   line-height: 1.4;
 }
+/* The empty whole band and the right column's "between parts" sentence can
+   each be the first visible words under the corner (i). The right-column rule
+   applies only when `.struct-of` is absent; when it is present, that header
+   already owns the clearance above. */
+.mode-band.struct.has-about > .struct-empty,
+.mode-band.struct.has-about .struct-inner > .struct-empty:first-child {
+  padding-right: var(--band-about-room);
+}

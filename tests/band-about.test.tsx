@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AboutMade } from "../src/web/BandAbout.js";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { ModeSurface } from "../src/web/ModeSurface.js";
+import { exactly } from "../src/web/relative-time.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -102,7 +103,7 @@ describe("AboutMade", () => {
     const text = host.textContent ?? "";
     expect(text).toContain("Written by claude-sonnet-5");
     expect(text).toContain("tweets/5");
-    expect(text).toContain("2026"); // the exact form; its wording is the locale's
+    expect(text).toContain(exactly("2026-10-01T14:03:00Z"));
     expect(text).toMatch(/3 hours ago/);
     expect(text).toContain("20.0s");
   });
@@ -124,5 +125,10 @@ describe("AboutMade", () => {
   it("says nothing about a duration it does not know", () => {
     draw(createElement(AboutMade, { generator: "m", elapsedMs: Number.NaN }));
     expect(host.textContent).not.toMatch(/unknown/);
+  });
+
+  it("keeps a known duration when an old artefact has no author or date", () => {
+    draw(createElement(AboutMade, { elapsedMs: 20_000 }));
+    expect(host.textContent).toBe("Written in 20.0s.");
   });
 });

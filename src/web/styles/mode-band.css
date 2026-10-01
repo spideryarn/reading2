@@ -1121,7 +1121,10 @@
 .band-about:hover { color: var(--ink); background: var(--surface-raised); }
 .band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
 .band-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.band-about-card { max-width: min(20rem, calc(100vw - 1.75rem)); }
+/* Wider than a control's card (20rem): the (i) carries the mode's two catalog
+   paragraphs and then its own, and Citations' card ran to 834px at 20rem — off
+   the bottom of an 800px window (browser check, plan 261001m). */
+.band-about-card { max-width: min(28rem, calc(100vw - 1.75rem)); }
 .band-about-card p { margin: 0; }
 .band-about-card p + p { margin-top: 0.4rem; }
 /* Who made it and when: last in the card, and quieter than what the mode is. */

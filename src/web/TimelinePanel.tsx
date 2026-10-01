@@ -382,7 +382,6 @@ export function TimelinePanel({
       </p>
       {made && (
         <AboutMade
-          verb="Read"
           generator={made.generator}
           version={made.version}
           generatedAt={made.generatedAt}

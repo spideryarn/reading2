@@ -238,6 +238,13 @@
 .gloss-empty p { margin: 0 0 0.5rem; }
 .gloss-hint { font-size: 0.91rem; line-height: 1.45; }
 
+/* Tweets has no head until a thread exists; its empty and loading states are
+   consequently the first row under the band's corner (i). */
+.mode-band.tweets.has-about > .gloss-quiet,
+.mode-band.tweets.has-about > .gloss-empty {
+  padding-right: calc(0.9rem + var(--band-about-room));
+}
+
 .gloss-stale {
   margin: 0.5rem 0.7rem 0;
   padding: 0.55rem 0.6rem;
@@ -460,4 +467,3 @@
   color: var(--ink-faint);
 }
 .gloss-link a:hover { color: var(--highlight-ink); }
-
