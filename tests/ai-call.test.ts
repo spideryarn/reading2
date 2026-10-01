@@ -1372,3 +1372,129 @@ describe("what the transcription wire had to be told twice", () => {
     }
   });
 });
+
+/* **Which upstream answered, when the frame's own `provider` is false.**
+   Measured live on 2026-10-01 (docs/plans/261001g-exa-upstream-label.md): a
+   request carrying an Exa `openrouter:web_search` comes back with
+   `provider: "OpenAI"` on every frame, streamed or not, whatever the pin — and
+   OpenRouter's generation record and route metadata both say Anthropic (or
+   Bedrock, under a Bedrock-only pin). The frames below are trimmed copies of
+   that probe's. */
+describe("the upstream that is written down", () => {
+  const EXA_TOOLS = [
+    { type: "openrouter:web_search", parameters: { engine: "exa", max_results: 3 } },
+  ];
+  const NATIVE_TOOLS = [{ type: "openrouter:web_search", parameters: { max_results: 3 } }];
+  /** The block `X-OpenRouter-Metadata: enabled` adds, cut to what is read. */
+  const metadata = (selected: string, attempt = 1) => ({
+    attempt,
+    summary: `available=2, selected=${selected}`,
+    endpoints: {
+      total: 10,
+      available: [
+        { provider: "Claude Platform on AWS", selected: false },
+        { provider: selected, selected: true },
+      ],
+    },
+  });
+
+  async function streamWith(tools: unknown[], ...parts: string[]) {
+    const sent = stubTransport(() => streamed(...parts));
+    const { report } = await collectSpend(async () => {
+      for await (const _ of openRouterStream(
+        "citations-find",
+        { model: "anthropic/claude-sonnet-5", messages: [], tools },
+        { signal: new AbortController().signal, onActivity: noop, end: end() },
+      )) {
+        /* drain */
+      }
+    });
+    return { sent, upstream: report.calls[0]?.upstream };
+  }
+
+  async function jsonWith(tools: unknown[], body: Record<string, unknown>) {
+    const sent = stubTransport(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          text: async () => JSON.stringify(body),
+        }) as unknown as Response,
+    );
+    const { report } = await collectSpend(() =>
+      openRouterJson("citations-find", {
+        model: "anthropic/claude-sonnet-5",
+        messages: [],
+        tools,
+      }),
+    );
+    return { sent, upstream: report.calls[0]?.upstream };
+  }
+
+  it("asks for the route metadata on both chat seams", async () => {
+    const a = await streamWith([], USAGE_CHUNK);
+    const b = await jsonWith([], { usage: { cost: 0 } });
+    expect(a.sent[0]?.headers["X-OpenRouter-Metadata"]).toBe("enabled");
+    expect(b.sent[0]?.headers["X-OpenRouter-Metadata"]).toBe("enabled");
+  });
+
+  it("believes the selected endpoint over a frame that says OpenAI, streamed", async () => {
+    const { upstream } = await streamWith(
+      EXA_TOOLS,
+      frame({ provider: "OpenAI", choices: [{ delta: { content: "x" } }] }),
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 }, openrouter_metadata: metadata("Anthropic") }),
+    );
+    expect(upstream).toBe("Anthropic");
+  });
+
+  it("keeps earlier metadata authoritative when a provider frame follows it", async () => {
+    const { upstream } = await streamWith(
+      NATIVE_TOOLS,
+      frame({ openrouter_metadata: metadata("Anthropic"), choices: [] }),
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 } }),
+    );
+    expect(upstream).toBe("Anthropic");
+  });
+
+  it("takes the last selected endpoint if several metadata blocks arrive", async () => {
+    const { upstream } = await streamWith(
+      EXA_TOOLS,
+      frame({ openrouter_metadata: metadata("Anthropic", 1), choices: [] }),
+      frame({
+        provider: "OpenAI",
+        openrouter_metadata: metadata("Amazon Bedrock", 2),
+        choices: [],
+      }),
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 } }),
+    );
+    expect(upstream).toBe("Amazon Bedrock");
+  });
+
+  it("believes the selected endpoint over a body that says OpenAI, not streamed", async () => {
+    const { upstream } = await jsonWith(EXA_TOOLS, {
+      provider: "OpenAI",
+      usage: { cost: 0.02 },
+      openrouter_metadata: metadata("Amazon Bedrock"),
+    });
+    expect(upstream).toBe("Amazon Bedrock");
+  });
+
+  it("writes nothing rather than OpenAI when an Exa call comes back without metadata", async () => {
+    const streamedCall = await streamWith(
+      EXA_TOOLS,
+      frame({ provider: "OpenAI", choices: [], usage: { cost: 0.02 } }),
+    );
+    const jsonCall = await jsonWith(EXA_TOOLS, { provider: "OpenAI", usage: { cost: 0.02 } });
+    expect(streamedCall.upstream).toBeNull();
+    expect(jsonCall.upstream).toBeNull();
+  });
+
+  it("still takes the frame's word on a call that did not ask for Exa", async () => {
+    const { upstream } = await streamWith(
+      NATIVE_TOOLS,
+      frame({ provider: "Anthropic", choices: [], usage: { cost: 0.04 } }),
+    );
+    expect(upstream).toBe("Anthropic");
+  });
+});

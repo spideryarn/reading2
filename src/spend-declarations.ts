@@ -130,6 +130,23 @@ export interface Declaration {
 
 export const DECLARATIONS: readonly Declaration[] = [
   {
+    /* **Which upstream answers an Exa-searching chat call**, 2026-10-01
+       (docs/plans/261001g-exa-upstream-label.md). One raw call per run, about
+       $0.02, run by hand. `pdf-width-spike`'s reason below in a smaller form:
+       the question is what OpenRouter's frames say *before* `Meter` reads them,
+       so the seam is the thing being measured. Unmetered for the same reason
+       as that entry — probe traffic does not belong beside readers' calls. */
+    id: "exa-upstream-probe",
+    kind: "bypass",
+    since: "2026-10-01",
+    account: "openrouter",
+    file: "scripts/probes/261001g-exa-upstream-probe.mjs",
+    job: "citations-find",
+    wire: "chat",
+    metered: false,
+    why: "The seam is what is being measured: the probe reads each frame's raw `provider` and `openrouter_metadata` and the generation record, which `openRouterStream` and `openRouterJson` consume before a caller sees them, to find out whether the upstream label or the routing is wrong.",
+  },
+  {
     /* **The concurrency probe behind `CHUNK_CONCURRENCY` 100 and `WidthGate`**,
        2026-09-04. Fires N transcription requests at once and reports the raw
        status, timing and dispatch spread of every one.
