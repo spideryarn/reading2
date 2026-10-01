@@ -665,8 +665,9 @@ function SearchBadge({ comment }: { comment: ClientComment }) {
             {/* *Found*, not *cited* — plan 261001p § What the sources list
                 means: a dug answer's list is everything its search returned,
                 and a plain-text answer cannot say which it leaned on. */}
-            {sources > 0 && ` and found ${sources === 1 ? "one source" : `${sources} sources`}`},
-            listed above.
+            {sources > 0
+              ? ` and found ${sources === 1 ? "one source" : `${sources} sources`}, listed above.`
+              : "."}
           </>
         ) : (
           <>

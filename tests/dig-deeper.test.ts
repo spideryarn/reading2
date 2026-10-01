@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JsonCall } from "../src/ai-call.js";
+import { DIG_DEEPER_LIMITED, DIG_DEEPER_RESTING } from "../src/messages.js";
 import type { Block, Meta } from "../src/types.js";
 
 const wire = vi.hoisted(() => ({
@@ -186,6 +187,30 @@ describe("the reader's library, best-effort", () => {
     });
     expect(found.library).toEqual([]);
     expect(found.searches).toBe(1);
+  });
+
+  it("does not let a slow library query outlive the search step's deadline", async () => {
+    const found = await searchFirst({
+      ...subject,
+      timeoutMs: 5,
+      library: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return {
+          hits: [
+            {
+              slug: "late",
+              title: "Too late",
+              blockId: "spya-aaaaaa",
+              text: "This arrived after the search step's whole budget.",
+              rank: 1,
+              archived: false,
+            },
+          ],
+          capped: false,
+        };
+      },
+    });
+    expect(found.library).toEqual([]);
   });
 
   it("does not search the library on an empty query", async () => {
@@ -401,5 +426,10 @@ describe("the allowance", () => {
     await free();
     await free();
     expect(finished).toEqual(["lease-1"]);
+  });
+
+  it("does not claim there is an earlier answer when the first glossary dig is refused", () => {
+    expect(DIG_DEEPER_LIMITED).not.toMatch(/answer you already have/i);
+    expect(DIG_DEEPER_RESTING.message).not.toMatch(/answer you already have/i);
   });
 });

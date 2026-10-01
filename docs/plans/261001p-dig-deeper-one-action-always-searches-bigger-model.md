@@ -171,6 +171,18 @@ a safe stopping point with its own limit.
   article **with `SPIDERYARN_EXPLAIN_MODEL` set**; the allowance refuses before any call; the
   request-snapshot `deep` case is re-pinned deliberately; the button copy.
 
+**Landed** (stage 1 commit `2c7a61a8e`, then the review fixes). Sol's code review
+([261001p-dig-deeper-stage1-review-sol.md](261001p-dig-deeper-stage1-review-sol.md)): *land after
+fixes*. Kept: **F11** (P1) the library lookup now shares the search step's deadline, so it cannot
+outlive the allowance lease; **F13** the refusal sentences no longer promise an earlier answer a
+first glossary press does not have; **F14** a search with no sources no longer says they are listed.
+**F12 (P1) overruled:** Sol had a comment press claim its row before the search, so a double press
+could not buy two searches — with a snapshot comparison in SQL, a new store method, and a new row
+state (pending but still carrying the old answer) for the sweep and the client to understand. The
+race it closes costs at most one ~$0.008 search, bounded by the allowance's two-at-once, and the
+committed order (search, then claim) never touches the stored answer on a failure. Sol's second test
+(the old answer survives a failed search) is kept, as a pin on that.
+
 ### Stage 2 — Citations' *Investigate* becomes *Dig deeper*
 
 - `makeInvestigateCitation`: `searchFirst` before the answer (its query: the work's title, authors,

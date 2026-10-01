@@ -5289,19 +5289,19 @@ export const CITATION_INVESTIGATE_UNFINISHED: ReaderFacingFailure = {
  * ***Dig deeper* refused by its allowance** (`DIG_DEEPER_RATE_POLICY`,
  * src/dig-deeper.ts) — one sentence per reason, Investigate's three below in
  * shape. Said of the action rather than of a glossary entry or a comment,
- * because the one allowance covers both buttons; and each says the answer
- * already on screen is still there, which is true on both.
+ * because the one allowance covers both buttons. They say only that this
+ * request changed nothing: the first glossary press may have no earlier answer.
  */
 export const DIG_DEEPER_BUSY =
   "Another Dig deeper is still running. Wait for it to finish, then try this one.";
 export const DIG_DEEPER_LIMITED =
-  "You have dug deeper a lot recently. Try again in a while — the answer you already have is still there.";
+  "You have dug deeper a lot recently. Try again in a while; this request did not change anything.";
 /** The 503 of the three, so it carries a code, as `CITATION_INVESTIGATE_RESTING` does. */
 export const DIG_DEEPER_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:
     "Dig deeper has done as many as it can for today, so asking again today will get the same " +
-    "answer. Try again tomorrow — the answer you already have is still there. [dig-resting]",
+    "answer. Try again tomorrow; this request did not change anything. [dig-resting]",
 };
 
 /**

@@ -1678,6 +1678,11 @@ async function answer(
   let freeDig: (() => Promise<void>) | null = null;
   if (deeper) {
     const stored = (await commentStore.load(slug)).find((c) => c.id === id);
+    /* A row already being answered would lose `beginAnswer`'s claim below
+       anyway — after spending a fill and a search. Refused here for free, so
+       only two truly simultaneous presses can race, and the loser of that race
+       costs one search and writes nothing (plan 261001p, Sol F12, overruled). */
+    if (stored?.status === "pending") throw new NotAnExplanation(id, "running");
     if (stored && stored.status !== "none" && stored.quote !== undefined) {
       freeDig = await admitDig(fetchAllowanceStore);
       try {

@@ -21,8 +21,8 @@
  * 2. **The reader's own other articles beside the web's** — the same call
  *    writes a keyword query, and `librarySearch.searchLibrary` (owner-scoped,
  *    free, literal) runs it. Best-effort: nothing found is an answer.
- * 3. **The answer on the high-power model** — `DIG_DEEPER_MODEL`, which
- *    src/explain.ts sends whatever the article's switch says.
+ * 3. **The answer on the high-power model** — src/explain.ts sends
+ *    `DIG_DEEPER_MODEL` directly, whatever the article's switch says.
  *
  * And it is bounded: `DIG_DEEPER_RATE_POLICY`, one allowance for both buttons,
  * taken by `admitDig` after every free refusal and before anything costs.
@@ -343,6 +343,15 @@ function readQuery(choice: NonNullable<SearchAnswer["choices"]>[number] | undefi
   return line;
 }
 
+/** Reject when `signal` fires, including when it fired before this was called. */
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const stop = () => reject(signal.reason ?? new DOMException("The operation was aborted", "AbortError"));
+    if (signal.aborted) stop();
+    else signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
 /**
  * **Run the forced search, then the library search** — the first half of
  * every Dig deeper press, before the answer is asked for.
@@ -354,8 +363,9 @@ function readQuery(choice: NonNullable<SearchAnswer["choices"]>[number] | undefi
  * that did not happen is the silent success this action exists to remove — an
  * answer from memory under a *from a web search* label.
  *
- * The library half never throws: a failure there is logged and the findings
- * carry no passages.
+ * The library half is best-effort and shares the search step's deadline. A
+ * failure or a slow query is logged and the findings carry no passages. The
+ * caller's own abort is different: it still stops the whole press.
  */
 export async function searchFirst(req: DigRequest): Promise<DigFindings> {
   const send = req.call ?? ((body, options) => openRouterJson("dig-deeper-search", body, options));
@@ -419,9 +429,17 @@ export async function searchFirst(req: DigRequest): Promise<DigFindings> {
   const libraryQuery = readQuery(choice);
   let library: DigPassage[] = [];
   let libraryFailed = false;
+  let libraryTimedOut = false;
   if (libraryQuery && req.library) {
     try {
-      const { hits } = await req.library(libraryQuery, DIG_LIBRARY_HITS, { excludeSlug: req.slug });
+      /* The web call and this query are one `searchFirst` step and one lease
+         budget. Racing the query against the same signal keeps that claim true
+         even though the Postgres search seam has no AbortSignal of its own. The
+         query may finish in the background; its result is deliberately ignored. */
+      const { hits } = await Promise.race([
+        req.library(libraryQuery, DIG_LIBRARY_HITS, { excludeSlug: req.slug }),
+        aborted(signal),
+      ]);
       library = hits.slice(0, DIG_LIBRARY_HITS).map((h) => ({
         slug: h.slug,
         title: h.title,
@@ -429,10 +447,17 @@ export async function searchFirst(req: DigRequest): Promise<DigFindings> {
         text: clip(h.text, DIG_LIBRARY_CHARS),
       }));
     } catch (err) {
+      if (req.signal?.aborted) throw req.signal.reason ?? err;
       /* Best-effort (Sol F1): the web results are the press's promise; the
          library is a bonus that may be empty for many reasons. */
       libraryFailed = true;
-      line.warn({ ...errorFields(err) }, "dig deeper: the library search failed");
+      libraryTimedOut = deadline.aborted;
+      line.warn(
+        { ...errorFields(err), timedOut: libraryTimedOut },
+        libraryTimedOut
+          ? "dig deeper: the library search hit the search deadline"
+          : "dig deeper: the library search failed",
+      );
     }
   }
 
@@ -446,6 +471,7 @@ export async function searchFirst(req: DigRequest): Promise<DigFindings> {
       libraryQueried: libraryQuery !== null && req.library !== undefined,
       libraryHits: library.length,
       libraryFailed,
+      libraryTimedOut,
     },
     "dig deeper: searched",
   );

@@ -34,6 +34,7 @@ const seen = vi.hoisted(() => ({
   answer: "allowed" as "allowed" | "rate" | "concurrency" | "global",
   searches: [] as unknown[],
   explains: [] as unknown[],
+  searchFailure: null as Error | null,
 }));
 
 vi.mock("../src/store/index.js", async (importOriginal) => ({
@@ -53,6 +54,7 @@ vi.mock("../src/dig-deeper.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/dig-deeper.js")>()),
   async searchFirst(input: unknown) {
     seen.searches.push(input);
+    if (seen.searchFailure) throw seen.searchFailure;
     return { sources: [], searches: 1, libraryQuery: null, library: [] };
   },
 }));
@@ -125,6 +127,7 @@ describe("Dig deeper on a comment", { timeout: 60_000 }, () => {
     seen.finished.length = 0;
     seen.searches.length = 0;
     seen.explains.length = 0;
+    seen.searchFailure = null;
     const long = article.blocks.find((b) => b.text.length > 40);
     if (!long) throw new Error("the fixture has no block long enough to quote");
     await asTestOwner(async () => {
@@ -167,6 +170,28 @@ describe("Dig deeper on a comment", { timeout: 60_000 }, () => {
     expect(seen.explains).toHaveLength(1);
     expect(seen.explains[0]).toMatchObject({ searches: 1 });
     expect(seen.finished).toEqual(["lease"]);
+  });
+
+  it("leaves the old answer untouched when the forced search fails", async () => {
+    seen.answer = "allowed";
+    seen.searchFailure = Object.assign(new Error("The forced search failed."), { status: 502 });
+
+    const got = await post(`/api/comments/${SLUG}/${id}/answer`, { deep: true, useProfile: false });
+    expect(got.status).toBe(502);
+    expect(seen.explains).toEqual([]);
+    const row = (await asTestOwner(() => commentStore.load(SLUG))).find((c) => c.id === id);
+    expect(row).toMatchObject({ status: "done", answer: "an old explanation" });
+    expect(seen.finished).toEqual(["lease"]);
+  });
+
+  it("refuses a press on a comment already being answered before spending anything", async () => {
+    seen.answer = "allowed";
+    await asTestOwner(() => commentStore.beginAnswer(SLUG, id));
+
+    const got = await post(`/api/comments/${SLUG}/${id}/answer`, { deep: true, useProfile: false });
+    expect(got.status).toBe(409);
+    expect(seen.taken).toEqual([]);
+    expect(seen.searches).toEqual([]);
   });
 
   it("does not spend the allowance on an answer that is not a dig", async () => {

@@ -152,6 +152,29 @@ describe("the search badge", () => {
     expect(card?.textContent).toContain("found 3 sources");
     expect(card?.textContent).not.toContain("cited");
   });
+
+  it("does not claim an empty sources list is shown above", async () => {
+    await act(async () => {
+      root.render(
+        createElement(CommentDialog, {
+          comment: { ...comment("done"), searches: 1, citations: [] },
+          position: 1,
+          total: 1,
+          hasPrev: false,
+          hasNext: false,
+          onPrev: () => {},
+          onNext: () => {},
+          onClose: () => {},
+          access: { kind: "visitor" as const },
+        }),
+      );
+    });
+    const badge = container.querySelector<HTMLElement>(".cmt-search");
+    await act(async () => badge?.focus());
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(card?.textContent).toContain("The model ran one search.");
+    expect(card?.textContent).not.toContain("listed above");
+  });
 });
 
 describe("a whole-paragraph bookmark", () => {
