@@ -25,7 +25,6 @@ import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { jobEngine } from "../src/web/jobEngine.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 import { visitorGap } from "../src/web/visitor.js";
-import { SKETCH_WAIT } from "../src/web/sketch-cost.js";
 
 /** A 64-character hex string, because the plate route's pattern demands one. */
 const HASH = "a".repeat(64);
@@ -872,7 +871,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
          became what each step is. */
       for (const said of [
         "one model call",
-        SKETCH_WAIT,
+        "about a minute",
         "a brief plus one image call per plate",
         "four to seven minutes",
       ]) {

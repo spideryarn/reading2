@@ -148,6 +148,15 @@ export const WAITING_TO_CONTINUE = "Waiting to continue.";
 export const STARTING = "Starting…";
 
 /**
+ * One Sketch model call takes 30–101 seconds at `low`, averaging 42 seconds
+ * over sixteen draws on eight articles (research 261001c). Kept beside the
+ * progress sentence so every reader-facing surface imports the same rounded
+ * wording from an existing shared leaf. The price is deliberately not exported
+ * or shown to readers (docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md).
+ */
+export const SKETCH_WAIT = "about a minute";
+
+/**
  * Past what this step has ever taken. **It names the way out**, because the
  * one thing worse than a long wait is a long wait you cannot end.
  *
@@ -221,11 +230,10 @@ export const KEEP_A_TAB_OPEN =
  * in front of it, which put "This step usually a few minutes." on the card and
  * would have needed fixing in two places.
  *
- * **Vague on purpose, and vague to the width of the actual spread** — thirteen
- * `sketch` runs between 121 and 199 seconds, so "two or three minutes" is the
- * honest width. What it does not say is a single number, because a number the
- * data cannot support is docs/reusable/silent-success.md with a decimal point
- * on it.
+ * **Rounded from the current spread** — sixteen `low`-effort Sketch draws ran
+ * in 30–101 seconds, averaging 42 seconds (research 261001c). `SKETCH_WAIT` is
+ * shared with every pre-press surface, so the progress card cannot keep quoting
+ * the old `high`-effort wait after those surfaces move.
  *
  * There was a second sentence here, `STEP_USUALLY_A_FEW_MINUTES`, and
  * `hierarchy` had it. It was deleted on 2026-09-01 rather than reworded,
@@ -233,7 +241,7 @@ export const KEEP_A_TAB_OPEN =
  * — see `STEP_TIMING`. A constant nothing can say truthfully is worse than no
  * constant, because the next step to be measured will reach for it.
  */
-export const STEP_USUALLY_A_COUPLE_OF_MINUTES = "This step usually takes two or three minutes.";
+export const STEP_USUALLY_ABOUT_A_MINUTE = `This step usually takes ${SKETCH_WAIT}.`;
 
 /**
  * The poll works and the driver does not.
@@ -365,23 +373,22 @@ interface StepTiming {
  *
  * ## `sketch` keeps its sentence, and this is exactly what is under it
  *
- * One `job_step` too — but a `sketch` step is **one model call**, and there are
- * **thirteen** of those in `data/_ai-calls.jsonl` under `job: "sketch"`, every
- * one of them `ok`: 121, 124, 125, 129, 135, 143, 144, 145, 159, 166, 181, 194,
- * 199 seconds. Median 144s.
+ * One `job_step` too — but a `sketch` step is **one model call**. The 2026-10-01
+ * effort eval has sixteen successful `low`-effort draws across eight articles:
+ * 30–101 seconds, mean 42 seconds.
  *
- * Substituting a call duration for a step duration is only allowed because the
- * one occasion we can compare them says they are the same: the single real
- * ingest step ran **159s** and its single model call ran **159s**. So "two or
- * three minutes" is thirteen successful observations wide, not one.
+ * Substituting a call duration for a step duration remains safe because the
+ * step has no work around that one call large enough to change the rounded
+ * sentence. The earlier `high`-effort measurements also found the recorded step
+ * and its one model call both took 159 seconds.
  *
- * (Twelve of the thirteen are `eval` and `cli` rather than reader traffic. That
- * is a real caveat about *what was drawn*, not about the clock, and it is why
- * the sentence gives a range rather than a number.)
+ * (These sixteen are eval traffic rather than reader traffic. That is a real
+ * caveat about provider load, so the sentence stays rounded rather than quoting
+ * the 42-second mean.)
  *
- * Threshold seven minutes: past twice the worst of the thirteen. The cost of
- * being early is one unnecessary sentence; the cost of being late is a reader
- * watching a spinner with nothing to go on.
+ * Threshold three minutes: comfortably past the worst of the sixteen. The cost
+ * of being early is one unnecessary sentence; the cost of being late is a
+ * reader watching a spinner with nothing to go on.
  *
  * ## Nothing else gets a `usually`
  *
@@ -430,7 +437,7 @@ const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
      never run under its own name at all. A guessed-shaped threshold does not buy
      a "usual" — see `SLOW_AFTER_MS` below. */
   labels: { slowAfterMs: 600_000 },
-  sketch: { slowAfterMs: 420_000, usually: STEP_USUALLY_A_COUPLE_OF_MINUTES },
+  sketch: { slowAfterMs: 180_000, usually: STEP_USUALLY_ABOUT_A_MINUTE },
   illustrated: { slowAfterMs: 600_000 },
 };
 

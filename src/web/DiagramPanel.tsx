@@ -1627,8 +1627,8 @@ export function DiagramPanel({
                      It matters more here than in the bottom bar, and that is
                      the reason this one is written up rather than just deleted:
                      the third chip is the **sketch**, and selecting it now
-                     starts a job on its own (docs/plans/260831ai-…) — 121–194
-                     seconds and about $0.20. An arrow press must not be able to
+                     starts a job on its own (docs/plans/260831ai-…) — 30–101
+                     seconds at `low`. An arrow press must not be able to
                      buy that. Dock.tsx § DockModes has the full reasoning and
                      the cost of the tab stops;
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
@@ -1639,7 +1639,7 @@ export function DiagramPanel({
                        token is minted here rather than in `onKind`: `?diagram=`
                        is query state, so Back and Forward move it too, and a
                        pasted `?mode=diagram&diagram=sketch` must not buy a
-                       two-minute, $0.20 model call. Opening Diagram itself
+                       model call. Opening Diagram itself
                        costs nothing, so only these two chips arm anything.
 
                        **Two of them since 2026-09-03**, and the second is

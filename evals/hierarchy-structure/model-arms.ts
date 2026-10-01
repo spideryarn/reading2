@@ -40,7 +40,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { declaredFetch, withDeclaredExternalCall } from "../declared-spend.js";
 import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
-import { parseJsonAnswer, stripFence } from "../../src/parse-json.js";
+import { stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
 import { buildTree, parseStructureAnswer, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
@@ -842,8 +842,8 @@ the authority.`;
 const senderFor = (model: string): MessagesSend =>
   model.startsWith("anthropic/") ? sendMessages : sendChat;
 
-function parseWave(raw: string, what: string): ModelNode {
-  const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, what);
+function parseWave(raw: string): ModelNode {
+  const { root } = parseStructureAnswer(raw);
   return root;
 }
 
@@ -894,7 +894,7 @@ async function runWaves(
     wave: 1,
   });
   calls.push(l1.stats);
-  const root = parseWave(l1.raw, "the wave-1 response");
+  const root = parseWave(l1.raw);
   if (!root.children?.length) throw new Error("wave 1 proposed no chapters at all");
   if (root.children.some((c) => c.children?.length)) {
     /* The wave discipline is part of what the arm tests; silently stripping
@@ -931,7 +931,7 @@ async function runWaves(
             wave,
           });
           calls.push(answer.stats);
-          const sub = parseWave(answer.raw, "a later-wave response");
+          const sub = parseWave(answer.raw);
           if (sub.range[0] !== child.range[0] || sub.range[1] !== child.range[1]) {
             throw new Error(
               "a later wave answered about a different range than the part it was given",

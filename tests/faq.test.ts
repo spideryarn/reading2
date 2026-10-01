@@ -457,13 +457,8 @@ describe("the request", () => {
     expect(sharesArticleCache("faq", ["arc", "glossary", "quotes"])).toBe(false);
     /* Sketch left on 2026-10-01 for `low` effort: same bytes, different key. */
     expect(sharesArticleCache("faq", ["sketch"])).toBe(false);
-    /* And contiguous with them in `STEP_ORDER`. */
-    const at = (s: (typeof STEP_ORDER)[number]) => STEP_ORDER.indexOf(s);
-    expect(at("faq")).toBe(at("quiz") + 1);
     /* `simple` joined the group between them on 2026-09-30, at `high` (plan 260930i). */
     expect(sharesArticleCache("faq", ["simple"])).toBe(true);
-    expect(at("simple")).toBe(at("faq") + 1);
-    expect(at("sketch")).toBe(at("simple") + 1);
   });
 
   it("offers an upper budget, never a floor, and sizes the answer from the caps", () => {

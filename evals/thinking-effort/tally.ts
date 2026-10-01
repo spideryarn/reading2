@@ -29,6 +29,33 @@ export const TYPICAL_MAX_CHARS = 100_000;
 
 type Key = Record<string, string>; // label -> arm, e.g. { W: "low-a" }
 
+export function judgingSubdir(argv: readonly string[], mode: string): string {
+  const at = argv.indexOf("--judging");
+  if (at < 0) return mode;
+  const value = argv[at + 1];
+  if (!value || value.startsWith("--")) throw new Error("--judging needs a subdirectory");
+  return value;
+}
+
+export function armSelection(key: Key): { candidatePrefix: string; judgedArms: Set<string> } {
+  const arms = Object.values(key);
+  const judgedArms = new Set(arms);
+  const base = arms.filter((arm) => arm.startsWith("base-"));
+  const candidates = arms.filter((arm) => !arm.startsWith("base-"));
+  if (base.length !== 2 || candidates.length !== 2 || judgedArms.size !== 4) {
+    throw new Error(`expected two distinct base and two distinct candidate arms, got ${arms.join(", ")}`);
+  }
+  const prefixes = new Set(
+    candidates.map((arm) => {
+      const match = /^(.*)-[ab]$/.exec(arm);
+      if (!match?.[1]) throw new Error(`candidate arm has no -a/-b suffix: ${arm}`);
+      return `${match[1]}-`;
+    }),
+  );
+  if (prefixes.size !== 1) throw new Error(`expected one candidate family, got ${candidates.join(", ")}`);
+  return { candidatePrefix: [...prefixes][0] as string, judgedArms };
+}
+
 /** U from a quality value per arm (higher is better). */
 export function uStatistic(quality: Record<string, number>): number {
   const arms = Object.keys(quality);
@@ -112,8 +139,7 @@ async function main(): Promise<void> {
   }
   /* `--judging <subdir>` for a second round kept beside the first, e.g.
      `judging/illustrated-low/` next to the medium round's `judging/illustrated/`. */
-  const judgingAt = argv.indexOf("--judging");
-  const dir = path.join(results, "judging", judgingAt >= 0 ? (argv[judgingAt + 1] ?? mode) : mode);
+  const dir = path.join(results, "judging", judgingSubdir(argv, mode));
   const out: Record<string, unknown> = { mode };
   const lines: string[] = [`# ${mode}`, ""];
 
@@ -149,6 +175,7 @@ async function main(): Promise<void> {
   ];
 
   const verdicts: string[] = [];
+  let judgedSlug: string | null = null;
   for (const [name, load] of judges) {
     let per: Record<string, Record<string, number>>;
     try {
@@ -159,6 +186,7 @@ async function main(): Promise<void> {
       verdicts.push("undecided");
       continue;
     }
+    judgedSlug ??= Object.keys(per)[0] ?? null;
     const us = Object.entries(per).map(([slug, q]) => ({ slug, u: uStatistic(q), q }));
     if (us.length !== 8) lines.push(`**${name}: ${us.length} articles, not 8 — undecided.**`);
     const mean = us.reduce((s, x) => s + x.u, 0) / us.length;
@@ -193,10 +221,8 @@ async function main(): Promise<void> {
      keys, never guessed from which rows exist: the JSONL keeps every round, so
      "any low rows → low" reported low's cost under the medium round's verdict
      (GPT Sol, decision review D2). */
-  const someKey = await keyFor(dir, (await readJson<RankVerdict>(path.join(dir, "verdict-rank.json"))).articles[0]?.slug ?? "");
-  const candidateArms = Object.values(someKey).filter((a) => !a.startsWith("base-"));
-  const candPrefix = candidateArms[0]?.replace(/-[ab]$/, "-") ?? "low-";
-  const judgedArms = new Set(Object.values(someKey));
+  if (!judgedSlug) throw new Error("neither judge supplied an article, so the judged arms are unknown");
+  const { candidatePrefix: candPrefix, judgedArms } = armSelection(await keyFor(dir, judgedSlug));
   const bySlug = new Map<string, Row[]>();
   for (const r of rows.filter((x) => judgedArms.has(x.arm))) bySlug.set(r.slug, [...(bySlug.get(r.slug) ?? []), r]);
   const invalid = rows.filter((r) => !r.valid && judgedArms.has(r.arm)).map((r) => `${r.slug} ${r.arm}`);
