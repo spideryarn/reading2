@@ -1,0 +1,241 @@
+== a1.sql
+purpose | wire | requested_model | calls | arts | usd | prompt_tok | out_tok | reas_tok | cr | cw | avg_prompt | avg_out
+hierarchy | messages | anthropic/claude-sonnet-5 | 38 | 35 | 8.25 | 2001914 | 424882 | 224828 | 0 | 0 | 52682 | 11181
+sketch | messages | anthropic/claude-sonnet-5 | 24 | 20 | 6.77 | 1362064 | 404637 | 296513 | 0 | 0 | 56753 | 16860
+labels | messages | anthropic/claude-sonnet-5 | 146 | 32 | 5.35 | 1473105 | 258190 | 957 | 121031 | 87517 | 10090 | 1768
+ideas | messages | anthropic/claude-sonnet-5 | 28 | 25 | 5.29 | 1027689 | 323529 | 216227 | 0 | 0 | 36703 | 11555
+illustrated | messages | anthropic/claude-sonnet-5 | 15 | 15 | 5.08 | 721234 | 363860 | 273733 | 0 | 0 | 48082 | 24257
+glossary | messages | anthropic/claude-sonnet-5 | 37 | 25 | 4.61 | 1795788 | 102181 | 20244 | 0 | 0 | 48535 | 2762
+pdf | chat | openai/gpt-5.6-luna | 549 | 25 | 3.89 | 4192331 | 2581219 | 221984 | 1124687 | 3066000 | 7636 | 4702
+chat | chat | anthropic/claude-sonnet-5 | 43 | 13 | 3.73 | 3008848 | 45414 | 23625 | 1859934 | 1130991 | 69973 | 1056
+debate | chat | anthropic/claude-sonnet-5 | 28 | 10 | 3.72 | 1560670 | 94668 | 55319 | 583528 | 362525 | 55738 | 3381
+quotes | messages | anthropic/claude-sonnet-5 | 36 | 27 | 3.28 | 1179547 | 92076 | 3730 | 0 | 0 | 32765 | 2558
+arc | messages | anthropic/claude-sonnet-5 | 38 | 36 | 2.83 | 1194350 | 43754 | 25324 | 0 | 0 | 31430 | 1151
+timeline | messages | anthropic/claude-sonnet-5 | 15 | 12 | 2.22 | 706044 | 80396 | 64954 | 0 | 0 | 47070 | 5360
+illustrate | images | google/gemini-3.1-flash-image | 33 | 11 | 2.04 | 52510 | 33600 | 0 | 0 | 0 | 1591 | 1018
+tweets | messages | anthropic/claude-sonnet-5 | 18 | 17 | 1.85 | 701692 | 44171 | 14496 | 0 | 0 | 38983 | 2454
+referee-criteria | chat | anthropic/claude-sonnet-5 | 10 | 6 | 1.53 | 527915 | 26765 | 8546 | 22765 | 504209 | 52792 | 2677
+quiz | messages | anthropic/claude-sonnet-5 | 12 | 11 | 1.50 | 332235 | 83323 | 41736 | 0 | 0 | 27686 | 6944
+citations | messages | anthropic/claude-sonnet-5 | 11 | 11 | 1.23 | 192999 | 84773 | 25845 | 0 | 0 | 17545 | 7707
+explain | chat | anthropic/claude-sonnet-5 | 5 | 5 | 1.21 | 467100 | 4389 | 1090 | 0 | 466789 | 93420 | 878
+search | chat | anthropic/claude-sonnet-5 | 18 | 9 | 1.19 | 521909 | 18011 | 4126 | 128044 | 392958 | 28995 | 1001
+faq | messages | anthropic/claude-sonnet-5 | 10 | 7 | 0.83 | 219491 | 38649 | 23093 | 0 | 0 | 21949 | 3865
+live_conversation | realtime | gpt-realtime-2.1 | 16 | 4 | 0.74 | 259923 | 4055 | 0 | 145664 | 0 | 16245 | 253
+simple | messages | anthropic/claude-sonnet-5 | 14 | 5 | 0.67 | 272393 | 12295 | 2786 | 0 | 0 | 19457 | 878
+debate | chat | anthropic/claude-opus-5.5 | 3 | 1 | 0.48 | 118995 | 9005 | 3883 | 68727 | 46912 | 39665 | 3002
+referee-claims | chat | anthropic/claude-sonnet-5 | 3 | 3 | 0.44 | 63426 | 28376 | 15687 | 0 | 63303 | 21142 | 9459
+sketch | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.43 | 23795 | 16840 | 10022 | 0 | 0 | 23795 | 16840
+trajectory | messages | anthropic/claude-sonnet-5 | 14 | 11 | 0.31 | 90430 | 12752 | 2491 | 0 | 0 | 6459 | 911
+pdf-frontmatter | chat | anthropic/claude-sonnet-5 | 24 | 19 | 0.29 | 131352 | 3207 | 748 | 0 | 0 | 5473 | 134
+simple | messages | anthropic/claude-opus-5.5 | 3 | 1 | 0.28 | 53340 | 3192 | 1594 | 0 | 0 | 17780 | 1064
+ideas | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.27 | 19507 | 9472 | 4575 | 0 | 0 | 19507 | 9472
+illustrate | images | openai/gpt-image-2 | 12 | 4 | 0.19 | 19362 | 1896 | 0 | 0 | 0 | 1614 | 158
+faq | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.18 | 18693 | 5350 | 2708 | 0 | 0 | 18693 | 5350
+timeline | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.17 | 18988 | 4755 | 2231 | 0 | 0 | 18988 | 4755
+citations | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.17 | 18186 | 4802 | 998 | 0 | 0 | 18186 | 4802
+referee-candidates | chat | anthropic/claude-sonnet-5 | 2 | 2 | 0.17 | 51083 | 3976 | 1612 | 0 | 24265 | 25542 | 1988
+tweets | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.16 | 18511 | 4455 | 3102 | 0 | 0 | 18511 | 4455
+quotes | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.15 | 18804 | 3587 | 0 | 0 | 0 | 18804 | 3587
+hierarchy | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.14 | 19193 | 2968 | 0 | 0 | 0 | 19193 | 2968
+glossary | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.13 | 19918 | 2380 | 0 | 0 | 0 | 19918 | 2380
+labels | messages | anthropic/claude-opus-5.5 | 2 | 1 | 0.12 | 20459 | 2268 | 0 | 1275 | 1275 | 10230 | 1134
+citation-investigate | chat | anthropic/claude-sonnet-5 | 1 | 1 | 0.08 | 47260 | 683 | 23 | 21740 | 25516 | 47260 | 683
+arc | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.08 | 18112 | 480 | 0 | 0 | 0 | 18112 | 480
+citations-find | chat | anthropic/claude-sonnet-5 | 3 | 2 | 0.07 | 22553 | 529 | 32 | 3860 | 12539 | 7518 | 176
+embeddings | embeddings | voyageai/voyage-4 | 114 | 9 | 0.06 | 1037143 | 0 | 0 | 0 | 0 | 9098 | 0
+pdf-frontmatter | chat | anthropic/claude-opus-5.5 | 2 | 1 | 0.05 | 12227 | 160 | 0 | 0 | 0 | 6114 | 80
+pdf-figure-locate | chat | google/gemini-3-flash-preview | 20 | 4 | 0.04 | 73122 | 1049 | 403 | 0 | 0 | 3656 | 52
+trajectory | messages | anthropic/claude-opus-5.5 | 1 | 1 | 0.04 | 7497 | 685 | 0 | 0 | 0 | 7497 | 685
+upload-source-guess | chat | anthropic/claude-sonnet-5 | 2 | 2 | 0.04 | 13097 | 243 | 10 | 2447 | 10642 | 6549 | 122
+shelf-topics | chat | openai/gpt-6-luna | 25 | 0 | 0.03 | 80957 | 32982 | 21222 | 10111 | 70798 | 3238 | 1319
+crossrefs | messages | anthropic/claude-sonnet-5 | 1 | 1 | 0.03 | 13052 | 734 | 0 | 0 | 0 | 13052 | 734
+quiz-mark | chat | anthropic/claude-sonnet-5 | 1 | 1 | 0.03 | 12237 | 65 | 0 | 0 | 11992 | 12237 | 65
+live_conversation | realtime | gpt-live-transcribe | 13 | 4 | 0.02 | 0 | 0 | 0 | 0 | 0 | 0 | 0
+dictation | chat | google/gemini-3.1-flash-lite | 31 | 0 | 0.02 | 40531 | 2990 | 0 | 0 | 0 | 1307 | 96
+link-summary | chat | openai/gpt-5.6-luna | 3 | 0 | 0.00 | 5983 | 272 | 0 | 0 | 5974 | 1994 | 91
+dictation | transcription | openai/gpt-transcribe | 142 | 1 | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 0
+
+== a2.sql
+requested_model | calls | arts | usd | prompt_tok | out_tok
+anthropic/claude-sonnet-5 | 597 | 41 | 62.62 | 19711477 | 2596528
+openai/gpt-5.6-luna | 552 | 25 | 3.89 | 4198314 | 2581491
+anthropic/claude-opus-5.5 | 21 | 1 | 2.86 | 406225 | 70399
+google/gemini-3.1-flash-image | 33 | 11 | 2.04 | 52510 | 33600
+gpt-realtime-2.1 | 16 | 4 | 0.74 | 259923 | 4055
+openai/gpt-image-2 | 12 | 4 | 0.19 | 19362 | 1896
+voyageai/voyage-4 | 114 | 9 | 0.06 | 1037143 | 0
+google/gemini-3-flash-preview | 20 | 4 | 0.04 | 73122 | 1049
+openai/gpt-6-luna | 25 | 0 | 0.03 | 80957 | 32982
+gpt-live-transcribe | 13 | 4 | 0.02 | 0 | 0
+google/gemini-3.1-flash-lite | 31 | 0 | 0.02 | 40531 | 2990
+openai/gpt-transcribe | 142 | 1 | 0.00 | 0 | 0
+
+== a3.sql
+arts | unattributed_usd | attributed_usd | p50 | p75 | p90 | mx | n_ge1 | n_ge2
+45 | 0.05 | 72.46 | 0.841 | 1.900 | 2.660 | 17.910 | 18 | 11
+
+== a4.sql
+usd | calls | prompt_tok | out_tok | chars | blocks | top6
+17.91 | 218 | 9330839 | 816027 | 1019970 | 2030 | hierarchy×3 2.74, glossary×4 2.12, sketch×4 2.11, labels×28 1.53, chat×5 1.28, illustrated×1 1.18
+6.35 | 86 | 1601570 | 321608 | 46856 | 87 | debate×9 1.28, sketch×3 0.83, ideas×3 0.52, simple×6 0.40, timeline×3 0.38, hierarchy×3 0.35
+4.08 | 56 | 1093261 | 239028 | 57008 | 176 | ideas×1 0.40, chat×6 0.39, debate×2 0.34, illustrated×1 0.32, sketch×1 0.30, referee-criteria×4 0.29
+3.16 | 57 | 1042158 | 171509 | 137122 | 553 | chat×3 0.37, search×2 0.30, labels×11 0.29, illustrated×1 0.27, glossary×2 0.26, sketch×1 0.24
+2.70 | 49 | 831022 | 130813 | 56902 | 103 | live_conversation×15 0.34, chat×6 0.34, debate×2 0.33, illustrated×1 0.25, illustrate×3 0.20, sketch×1 0.20
+2.60 | 40 | 622564 | 177226 | 45885 | 87 | illustrated×1 0.28, sketch×1 0.25, ideas×1 0.22, citations×1 0.21, illustrate×3 0.20, debate×2 0.20
+2.60 | 40 | 801184 | 117031 | 156370 | 695 | hierarchy×1 0.60, sketch×1 0.41, chat×2 0.38, labels×13 0.36, glossary×2 0.31, ideas×1 0.24
+2.38 | 24 | 803944 | 93842 | 141472 | 360 | debate×2 0.36, illustrated×1 0.35, sketch×1 0.28, ideas×1 0.24, quotes×2 0.23, timeline×2 0.23
+2.35 | 49 | 700714 | 155314 | 55730 | 86 | citations×1 0.25, sketch×1 0.21, debate×2 0.20, live_conversation×9 0.19, hierarchy×1 0.18, ideas×1 0.17
+2.27 | 23 | 671663 | 89893 | 79452 | 172 | debate×2 0.29, illustrated×1 0.26, simple×4 0.25, ideas×1 0.23, illustrate×3 0.20, sketch×1 0.19
+2.26 | 44 | 617451 | 98665 | 29927 | 33 | debate×6 0.79, illustrated×1 0.24, chat×10 0.23, ideas×2 0.18, glossary×4 0.15, sketch×1 0.14
+1.90 | 26 | 363178 | 141294 | 39895 | 75 | illustrated×1 0.31, sketch×1 0.28, debate×2 0.24, illustrate×3 0.20, ideas×1 0.19, hierarchy×1 0.16
+1.77 | 40 | 580516 | 155629 | 126784 | 334 | sketch×1 0.37, hierarchy×1 0.27, ideas×1 0.25, labels×6 0.20, glossary×1 0.13, quotes×2 0.13
+1.54 | 16 | 470501 | 48207 | 115340 | 214 | chat×2 0.26, hierarchy×1 0.20, live_conversation×3 0.19, ideas×1 0.18, quiz×1 0.17, labels×4 0.17
+1.41 | 27 | 433159 | 85005 | 52851 | 95 | hierarchy×1 0.15, simple×3 0.14, faq×2 0.14, ideas×1 0.13, quiz×1 0.11, timeline×1 0.11
+1.34 | 35 | 379366 | 125024 | 53820 | 77 | ideas×1 0.19, sketch×1 0.19, quotes×2 0.18, hierarchy×1 0.17, glossary×2 0.16, labels×2 0.14
+1.24 | 18 | 223980 | 78386 | 52573 | 141 | illustrated×1 0.30, sketch×1 0.22, referee-claims×1 0.17, quotes×2 0.13, ideas×1 0.12, timeline×1 0.11
+1.04 | 16 | 207972 | 85816 | 45525 | 93 | illustrated×1 0.29, illustrate×3 0.20, sketch×1 0.19, hierarchy×1 0.13, labels×2 0.07, pdf×5 0.05
+0.99 | 18 | 129082 | 73868 | 25040 | 52 | sketch×1 0.26, illustrated×1 0.25, ideas×1 0.11, quiz×1 0.08, glossary×2 0.07, hierarchy×1 0.06
+0.96 | 16 | 282568 | 42650 | 65957 | 454 | labels×9 0.22, ideas×1 0.21, chat×1 0.14, hierarchy×1 0.13, search×1 0.08, glossary×1 0.07
+0.91 | 33 | 274127 | 70709 | 26977 | 62 | hierarchy×1 0.16, citations×1 0.12, simple×3 0.11, ideas×1 0.10, labels×2 0.08, quotes×1 0.05
+0.84 | 17 | 238773 | 78521 | 76208 | 83 | ideas×1 0.21, hierarchy×1 0.19, quotes×1 0.10, labels×2 0.09, glossary×1 0.09, arc×1 0.06
+0.84 | 10 | 96960 | 54064 | 34272 | 97 | illustrated×1 0.27, sketch×1 0.21, illustrate×3 0.14, hierarchy×1 0.09, labels×2 0.06, glossary×1 0.05
+0.78 | 9 | 258489 | 26026 | 145361 | 414 | labels×6 0.26, hierarchy×1 0.22, arc×1 0.15, quotes×1 0.14
+0.75 | 16 | 222072 | 63153 | 45466 | 87 | sketch×1 0.15, ideas×1 0.11, hierarchy×1 0.10, labels×2 0.07, glossary×1 0.06, tweets×1 0.05
+0.69 | 12 | 102073 | 47099 | 25585 | 95 | illustrated×1 0.23, sketch×1 0.17, ideas×1 0.11, illustrate×3 0.05, arc×1 0.04, glossary×1 0.04
+0.68 | 91 | 653896 | 456788 |  |  | pdf×91 0.68
+0.66 | 90 | 640132 | 442817 |  |  | pdf×90 0.66
+0.66 | 88 | 629267 | 439060 |  |  | pdf×88 0.66
+0.62 | 9 | 142082 | 35351 | 100920 | 313 | hierarchy×1 0.34, labels×7 0.20, arc×1 0.08
+0.58 | 8 | 199428 | 17495 | 99379 | 245 | labels×4 0.19, hierarchy×1 0.15, quotes×1 0.13, arc×1 0.10, trajectory×1 0.02
+0.57 | 15 | 174451 | 31489 | 18583 | 44 | debate×2 0.18, citations×1 0.06, hierarchy×1 0.06, ideas×1 0.05, labels×2 0.05, glossary×1 0.04
+0.51 | 13 | 159502 | 18564 | 90049 | 364 | labels×10 0.20, hierarchy×1 0.15, search×1 0.09, arc×1 0.07
+0.41 | 16 | 142911 | 63883 | 23282 | 101 | ideas×1 0.11, hierarchy×1 0.09, pdf×8 0.07, labels×3 0.07, glossary×1 0.04, arc×1 0.03
+0.39 | 14 | 149937 | 59277 | 40868 | 134 | hierarchy×1 0.16, labels×3 0.09, arc×1 0.07, pdf×8 0.06, pdf-frontmatter×1 0.01
+0.38 | 12 | 150281 | 42951 | 41037 | 69 | hierarchy×1 0.11, glossary×1 0.07, labels×1 0.06, quotes×1 0.05, pdf×6 0.04, arc×1 0.04
+0.30 | 7 | 67221 | 16668 | 38329 | 166 | hierarchy×1 0.13, labels×5 0.12, arc×1 0.04
+0.30 | 5 | 63044 | 17091 | 43804 | 153 | hierarchy×1 0.16, labels×3 0.09, arc×1 0.04
+0.23 | 9 | 49210 | 22642 | 17450 | 83 | hierarchy×1 0.13, labels×2 0.05, arc×1 0.02, pdf×4 0.01, pdf-frontmatter×1 0.01
+0.19 | 1 | 48678 | 9375 |  |  | hierarchy×1 0.19
+0.15 | 1 | 27099 | 10003 |  |  | hierarchy×1 0.15
+0.14 | 7 | 56240 | 16653 | 11517 | 49 | hierarchy×1 0.07, labels×1 0.03, pdf×3 0.02, arc×1 0.01, pdf-frontmatter×1 0.01
+0.06 | 1 | 19528 | 2232 | 46808 | 244 | arc×1 0.06
+0.00 | 1 | 0 | 0 |  |  | pdf×1 0.00
+0.00 | 1 | 0 | 0 |  |  | hierarchy×1 0.00
+
+== a5.sql
+purpose | wire | n | usd | tok_per_char | fixed_tok | r2 | avg_prompt | avg_chars_div4 | avg_out
+hierarchy | messages | 36 | 8.04 | 0.357 | 3648 | 1.00 | 54037 | 35335 | 11346
+sketch | messages | 25 | 7.20 | 0.163 | 20138 | 0.37 | 55434 | 54293 | 16859
+ideas | messages | 29 | 5.56 | 0.167 | 14660 | 0.42 | 36110 | 32057 | 11483
+labels | messages | 148 | 5.48 | 0.006 | 8460 | 0.14 | 10092 | 65693 | 1760
+illustrated | messages | 15 | 5.08 | 0.354 | 4770 | 1.00 | 48082 | 30625 | 24257
+glossary | messages | 38 | 4.74 | 0.240 | 8958 | 0.69 | 47782 | 40495 | 2752
+debate | chat | 31 | 4.21 | 0.260 | 40834 | 0.04 | 54183 | 12832 | 3344
+chat | chat | 43 | 3.73 | 0.351 | 7524 | 0.65 | 69973 | 44454 | 1056
+quotes | messages | 37 | 3.43 | 0.155 | 13721 | 0.42 | 32388 | 30126 | 2585
+arc | messages | 39 | 2.91 | 0.326 | 2951 | 0.97 | 31089 | 21584 | 1134
+timeline | messages | 16 | 2.39 | 0.165 | 14595 | 0.40 | 45315 | 46579 | 5322
+tweets | messages | 19 | 2.01 | 0.326 | 2245 | 1.00 | 37905 | 27387 | 2559
+referee-criteria | chat | 10 | 1.53 | 0.351 | 1410 | 1.00 | 52792 | 36575 | 2677
+quiz | messages | 12 | 1.50 | 0.375 | 1869 | 0.98 | 27686 | 17222 | 6944
+citations | messages | 12 | 1.40 | 0.295 | 3890 | 0.88 | 17599 | 11603 | 7465
+explain | chat | 5 | 1.21 | 0.352 | 4574 | 1.00 | 93420 | 63141 | 878
+search | chat | 18 | 1.19 | 0.356 | 1115 | 0.97 | 28995 | 19567 | 1001
+faq | messages | 11 | 1.01 | 0.358 | 844 | 0.99 | 21653 | 14543 | 4000
+simple | messages | 17 | 0.94 | 0.274 | 4905 | 0.96 | 19161 | 13005 | 911
+referee-claims | chat | 3 | 0.44 | 0.723 | -18672 | 0.75 | 21142 | 13776 | 9459
+pdf-frontmatter | chat | 26 | 0.35 | -0.017 | 6360 | 0.09 | 5522 | 12578 | 130
+trajectory | messages | 15 | 0.35 | 0.019 | 5356 | 0.14 | 6528 | 15119 | 896
+citations-find | chat | 3 | 0.07 | -0.495 | 34362 | 0.33 | 7518 | 13559 | 176
+
+== a6.sql
+outlier | claude_usd | article_input_usd_list | other_input_usd_list | output_usd_list | article_calls | arts | gross_5m | prem_5m | gross_1h | prem_1h | gross_forever | prem_forever
+false | 48.52 | 16.08 | 9.57 | 24.41 | 357 | 37 | 8.48 | 0.78 | 10.48 | 2.55 | 12.16 | 1.70
+true | 16.95 | 14.02 | 1.79 | 3.32 | 20 | 1 | 3.13 | 0.54 | 8.80 | 1.39 | 9.41 | 0.71
+
+== a7.sql
+scen | outlier | calls | net_5m | net_1h | gross_concurrent_lt10s
+all | false | 363 | 7.73 | 7.96 | 1.52
+now_groups | false | 189 | 2.71 | 1.86 | 0.79
+now_groups_ill | false | 203 | 3.14 | 2.27 | 0.88
+pipe_eff | false | 287 | 3.96 | 3.34 | 0.95
+pipe_eff_nohier | false | 254 | 3.96 | 3.34 | 0.95
+pipe_one | false | 287 | 6.33 | 6.15 | 1.35
+all | true | 27 | 2.78 | 7.41 | 0.00
+now_groups | true | 15 | 0.46 | 4.23 | 0.00
+now_groups_ill | true | 16 | 0.46 | 4.87 | 0.00
+pipe_eff | true | 20 | 0.46 | 6.13 | 0.00
+pipe_eff_nohier | true | 17 | 0.46 | 5.56 | 0.00
+pipe_one | true | 20 | 1.67 | 6.13 | 0.00
+
+== a8.sql
+purpose | calls | reas_gt_out | thinking_usd | answer_usd | outlier_output_usd
+ | 618 | 0 | 12.71 | 11.70 | 3.32
+sketch | 25 | 0 | 2.69 | 1.13 | 0.64
+illustrated | 15 | 0 | 2.37 | 0.82 | 0.45
+hierarchy | 39 | 0 | 2.17 | 1.62 | 0.54
+ideas | 29 | 0 | 2.08 | 1.14 | 0.26
+debate | 31 | 0 | 0.65 | 0.52 | 
+timeline | 16 | 0 | 0.45 | 0.21 | 0.26
+quiz | 12 | 0 | 0.42 | 0.42 | 
+faq | 11 | 0 | 0.30 | 0.22 | 
+citations | 12 | 0 | 0.28 | 0.68 | 
+arc | 39 | 0 | 0.25 | 0.19 | 0.00
+tweets | 19 | 0 | 0.22 | 0.20 | 0.13
+glossary | 38 | 0 | 0.20 | 0.77 | 0.11
+chat | 43 | 0 | 0.20 | 0.19 | 0.06
+referee-claims | 3 | 0 | 0.16 | 0.13 | 
+simple | 17 | 0 | 0.07 | 0.14 | 
+referee-criteria | 10 | 0 | 0.06 | 0.17 | 0.04
+search | 18 | 0 | 0.04 | 0.14 | 
+quotes | 37 | 0 | 0.04 | 0.95 | 0.02
+trajectory | 15 | 0 | 0.02 | 0.12 | 
+referee-candidates | 2 | 0 | 0.02 | 0.02 | 
+explain | 5 | 0 | 0.01 | 0.02 | 0.01
+labels | 148 | 0 | 0.01 | 1.84 | 0.79
+pdf-frontmatter | 26 | 0 | 0.01 | 0.03 | 
+citations-find | 3 | 0 | 0.00 | 0.00 | 
+crossrefs | 1 | 0 | 0.00 | 0.01 | 
+upload-source-guess | 2 | 0 | 0.00 | 0.00 | 
+quiz-mark | 1 | 0 | 0.00 | 0.00 | 
+citation-investigate | 1 | 0 | 0.00 | 0.01 | 
+
+== a9.sql
+scen | outlier | tpc | net_5m_oracle | net_5m_always | net_1h_always
+all | false | 0.30 | 6.66 | 6.09 | 6.00
+now_groups | false | 0.30 | 1.89 | 1.23 | -0.14
+now_groups_ill | false | 0.30 | 2.26 | 1.62 | 0.15
+pipe_eff | false | 0.30 | 2.83 | 2.05 | 0.54
+pipe_one | false | 0.30 | 4.75 | 4.24 | 3.87
+pipe_one_nohier | false | 0.30 | 4.22 | 3.75 | 3.24
+all | false | 0.35 | 7.73 | 7.07 | 6.98
+now_groups | false | 0.35 | 2.20 | 1.43 | -0.15
+now_groups_ill | false | 0.35 | 2.62 | 1.89 | 0.19
+pipe_eff | false | 0.35 | 3.29 | 2.38 | 0.65
+pipe_one | false | 0.35 | 5.51 | 4.92 | 4.49
+pipe_one_nohier | false | 0.35 | 4.89 | 4.35 | 3.77
+all | false | 0.40 | 8.47 | 7.73 | 7.69
+now_groups | false | 0.40 | 2.42 | 1.59 | -0.15
+now_groups_ill | false | 0.40 | 2.89 | 2.08 | 0.23
+pipe_eff | false | 0.40 | 3.62 | 2.62 | 0.75
+pipe_one | false | 0.40 | 6.05 | 5.39 | 4.92
+pipe_one_nohier | false | 0.40 | 5.36 | 4.76 | 4.13
+all | true | 0.30 | 2.45 | 1.07 | 6.49
+now_groups | true | 0.30 | 0.40 | -0.67 | 3.79
+now_groups_ill | true | 0.30 | 0.40 | -0.83 | 4.35
+pipe_eff | true | 0.30 | 0.40 | -0.98 | 4.90
+pipe_one | true | 0.30 | 1.50 | -0.03 | 5.39
+pipe_one_nohier | true | 0.30 | 1.50 | 0.43 | 4.90
+all | true | 0.35 | 2.78 | 1.21 | 7.41
+now_groups | true | 0.35 | 0.46 | -0.73 | 4.23
+now_groups_ill | true | 0.35 | 0.46 | -0.91 | 4.87
+pipe_eff | true | 0.35 | 0.46 | -1.08 | 5.56
+pipe_one | true | 0.35 | 1.67 | -0.07 | 6.13
+pipe_one_nohier | true | 0.35 | 1.67 | 0.46 | 5.56
+all | true | 0.40 | 2.88 | 1.29 | 7.60
+now_groups | true | 0.40 | 0.47 | -0.74 | 4.24
+now_groups_ill | true | 0.40 | 0.47 | -0.92 | 4.90
+pipe_eff | true | 0.40 | 0.47 | -1.09 | 5.63
+pipe_one | true | 0.40 | 1.68 | -0.09 | 6.21
+pipe_one_nohier | true | 0.40 | 1.68 | 0.46 | 5.63
+

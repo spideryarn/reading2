@@ -1,5 +1,8 @@
 # Show each summary level once it has passed its check — sized, and not built
 
+**Decided 2026-10-01: keep it as built.** Greg answered "Q-summaries-sooner A" when asked whether
+to keep the press as built or accept route 1's one-tab trade-off.
+
 **Status: stopped after the plan review, as the brief told it to.** No code was written. The answer
 is that option 3 of [261001j](261001j-simple-press-cost-and-latency.md) (its section *Streaming — for Greg*)
 **needs a new transport or a new storage shape**, and either one goes past what Greg said he would

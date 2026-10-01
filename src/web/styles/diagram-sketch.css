@@ -200,6 +200,12 @@
   /* Wide enough that a 760-unit canvas lands near 1.4x — text at 17px — and
      capped so an ultrawide window does not scale it to something silly. */
   width: min(94vw, 1120px);
+  /* **`flex: none`, or the `width` above is decoration** — the trap
+     `.ill-in-full` fell into first. This div is also `.sk`, which is `flex: 1`,
+     and a non-`auto` `flex-basis` beats `width` in the dialog's flex row, so the
+     panel filled the window: 1280px at 1280, 1600 at 1600, and no backdrop
+     left to click to dismiss it. Measured in Playwright, 2026-10-01. */
+  flex: none;
   height: 100dvh;
   background: var(--page);
   border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);

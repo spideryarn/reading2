@@ -13,16 +13,18 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-01 · no Sentry issue (Overseer dispatch) · one article cache shared across modes: the
+  ceiling is about 15–16% of a normal article, and what can be built without changing any output is
+  about 4%. Thinking is about a quarter of the bill. The recommendation is an effort-vs-quality eval
+  of Sketch, Illustrated, Hierarchy and Ideas first, and no caching plumbing yet ·
+  [261001o § Recommendation](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md) ·
+  [note](261001_1738-one-article-cache-shared-across-modes.md)
+
 - 2026-09-30 · `spya-chhzxv` (no Sentry issue found) · bulk import of many papers at about 0.05p each
   needs four answers first: no slot for a minimal paper (and its own ceiling), a card rather than an
   article, keeping unread PDFs, and minimal-only batches first ·
   [261001m § Questions for Greg](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md) ·
   [note](260930_0721-bulk-import-of-many-papers-cheaply.md)
-- 2026-10-01 · no Sentry issue (Overseer-dispatched) · show each Simple level once it has passed its
-  check: out of budget except by streaming `advance`, which reaches only the tab running the job.
-  Keep as built, or accept that trade-off? ·
-  [261001o](../plans/261001o-summaries-show-each-level-when-checked.md) ·
-  [note](261001_1716-summaries-show-each-level-when-checked.md)
 
 ## Attempted abuse, not yet seen by Greg
 
