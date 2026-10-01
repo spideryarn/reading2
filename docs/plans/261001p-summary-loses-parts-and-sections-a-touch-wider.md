@@ -129,3 +129,28 @@ No P0s. Each finding checked against the code:
   to both `fitView` and `notesFit`; `visitor.ts`'s explanation updated (the policy stays
   `available`); `subModeParams()` clears `?summary=` for the new default `simple`; `bandTarget`
   returns `simple` for Summary unconditionally.
+
+## What was built, and how it was checked
+
+Two commits: 9e5cb2cca (stages 1–2) and 742bbe1e4 (GPT Sol's code-review fixes and the docs). Sol's
+code review ([261001p-summary-loses-parts-and-sections-code-review-sol.md](261001p-summary-loses-parts-and-sections-code-review-sol.md))
+found no P0/P1 in scope and fixed four P2s: the end icons became named, focusable buttons with 44px
+touch targets, tests press a visitor's end icon and a real command-bar row, one `bandShape` for
+both fits, and stale comments. The add-page checkbox omitting Summary stays with fb7t-7v.
+
+**The end icons are lucide's `TextAlignStart` and `TextAlignJustify`**, the current names of the
+`AlignLeft` / `AlignJustify` that Sonnet's research recommended: the small-glyph / large-glyph pair at
+the two ends of a size slider, as on Apple's text-size control.
+
+**Browser, Playwright on the box, 2026-10-01:** at 1440 wide the Summary band is 448px and Chat's is
+400px; no Parts/Sections and no level name; the arrow keys and the end icons move `?summary=`;
+`?summary=gists&deep=2` lands on the middle stop; at 390 wide the band covers the article with no
+sideways scroll. Shots: `261001p-shot-summary-desktop-paragraphs.png`, `-phone.png`,
+`-tooltip.png`. Moving the slider on an article with nothing stored started the press, which is the
+slider's rule from 261001b and not new.
+
+**Full suite:** 10 failures in 7 files. Re-run alone: `a-band-link-steps-the-band-aside-on-a-phone`
+was real, because it used the outline's gist rows as its band link; it now uses a plain-words
+paragraph's link, and it went from red to green. `feedback-endings` was stale until this change's
+note was in. The rest (`fleet-*`, `cold-start-lazy-imports`, `pdf-bundle-trace`) need `api-dist/` or
+the fleet build, which a fresh worktree does not have.

@@ -22,8 +22,10 @@
  * `onJump={jumpTo}` — the first case goes red on `.band-away` (the band never
  * steps aside), and so do the focus and herald cases.
  *
- * Summary is the band because it is drawn from the payload with no fetch of its
- * own, and every non-root row carries a `BlockRange` of real `BlockRef` links.
+ * Summary is the band because its one read is a stored artefact this file can
+ * answer in a line (`SIMPLE_BODY`), and every plain-words paragraph carries
+ * real `BlockRef` links. It was the gist outline's rows until that outline went
+ * on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
  *
  * **How width is set.** jsdom lays nothing out, so the width `useWindowWidth`
  * reads (measure.ts § `layoutViewportWidth`: the larger of `innerWidth` and the
@@ -43,7 +45,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import type { Article } from "../src/types.js";
+import type { Article, BlockId, SimpleSummary } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
 const who = vi.hoisted(() => {
@@ -255,8 +257,31 @@ const TRAJECTORY_BODY = {
   notOnRoute: 0,
 };
 
+/* **Summary's stored plain-words levels**, each paragraph citing the band link's
+   passage — what the owner's band reads on mount (`useSimple`). */
+const SIMPLE_BODY: { simpleSummary: SimpleSummary; stale: false; outdated: false; profileChanged: false } = {
+  simpleSummary: {
+    version: "simple/2",
+    generator: "test",
+    slug: SLUG,
+    sourceHash: "hash",
+    generatedAt: "2026-09-28T09:00:00.000Z",
+    elapsedMs: 1,
+    profileHash: null,
+    levels: {
+      brief: [{ text: "It starts with a plain point.", ids: [BAND_TARGET as BlockId] }],
+      simple: [{ text: "It starts with a plain point, then builds on it.", ids: [BAND_TARGET as BlockId] }],
+      fuller: [{ text: "It starts with a plain point, and the rest follows from it.", ids: [BAND_TARGET as BlockId] }],
+    },
+  },
+  stale: false,
+  outdated: false,
+  profileChanged: false,
+};
+
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
+  if (url === `/api/simple/${SLUG}`) return json(SIMPLE_BODY);
   if (url === `/api/quotes/${SLUG}`) return json(QUOTES_BODY);
   if (url === `/api/trajectory/${SLUG}`) return json(TRAJECTORY_BODY);
   if (url.startsWith("/api/ideas/")) return new Response(null, { status: 404 });
@@ -359,7 +384,7 @@ const pill = (): HTMLButtonElement | null => host.querySelector(".band-back-chip
 /** `ReturnChip`'s "back to ⟨section⟩" — the one that is *not* the band pill. */
 const sectionChip = (): Element | null => host.querySelector(".return-chip:not(.band-back-chip)");
 
-/** A passage link in the Summary band — the first row's, a `BlockRef` (its title). */
+/** A passage link in the Summary band — the first paragraph's, a `BlockRef`. */
 function bandLink(): HTMLAnchorElement {
   const link = band()?.querySelector<HTMLAnchorElement>(`a.block-ref[data-block-link="${BAND_TARGET}"]`);
   if (!link) throw new Error(`the Summary band drew no link to ${BAND_TARGET}`);
