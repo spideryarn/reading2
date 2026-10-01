@@ -3840,8 +3840,9 @@ export interface CitedWork {
    * article's own characters, sliced by code: the text of the `reference`
    * block, or, for a PDF, the entry found in the reference list read from its
    * text layer (src/citation-reference-list.ts), which is not a block because
-   * stage 2 does not render it. Plan 260930i. Owner-only: `publicCitedWork`
-   * does not name it.
+   * stage 2 does not render it. Plan 260930i. A visitor gets it only when it
+   * is its `reference` block's own text — never a PDF list's, which can hold a
+   * download stamp (`publicEntry` in src/public/dto.ts, plan 261001b).
    */
   entry?: string;
   /** Where the text cites it, ≤ 3. */
@@ -5325,9 +5326,9 @@ export interface Debate {
    * be confused. Read it through `readStoredSynthesis` (src/debate-synthesis.ts), never directly — JSONB
    * comes back unchecked.
    *
-   * **Owner-only.** The public DTO builds a visitor's debate field by field
-   * (src/public/dto.ts § `publicDebate`) and does not carry this one; widening
-   * that boundary is Greg's call, not an unattended run's.
+   * **A visitor gets it since 2026-10-01** (plan 261001b), re-settled against
+   * the rows they are sent, and not at all when the boundary withheld a row —
+   * src/public/dto.ts § `publicSynthesis`.
    */
   synthesis?: DebateSynthesis;
 }

@@ -69,6 +69,9 @@ const NO_ARTEFACTS = {
   simpleSummary: null,
   citations: null,
   debate: null,
+  /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
+  crossrefs: null,
+  crossrefsFresh: false,
   /* **An empty array, not `null`** — comments are not an artefact, so there is
      no "nobody built one" state for them to be in. src/public-types.ts
      § PublicArticle.comments. */
@@ -1189,6 +1192,8 @@ describe("the artefacts a shared link carries", () => {
     arc: null,
     assets: null,
     navLabelStatus: "ready" as const,
+    crossrefs: null,
+    crossrefsFresh: false,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
        `publicArticle` will not take — and vitest would never have said so,
        because it does not typecheck. `npm run typecheck` is the only thing that
@@ -1764,10 +1769,10 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
-   * **Nor a work's reference entry** (plan 260930i, GPT Sol's plan review F9).
-   * It is the article's own text, but for a PDF it is text the public page does
-   * not show, and widening the projection is a change to a defence
-   * (docs/project/security-map.md), left for Greg.
+   * **Nor a work's reference entry that is not its block's own text** — this
+   * fixture's is the PDF case, read from a text layer the public page does not
+   * show (plan 260930i, Sol F9). Since 2026-10-01 a block's own entry crosses
+   * (plan 261001b); tests/public-dto-owner-only-fields.test.ts has both.
    */
   it("carries no cited work's reference entry, anywhere", () => {
     const json = JSON.stringify(built);
@@ -1868,6 +1873,8 @@ describe("the artefacts a shared link carries", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      crossrefs: null,
+      crossrefsFresh: false,
       comments: [],
       searches: [],
       sketch: null,

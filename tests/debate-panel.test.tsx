@@ -1944,20 +1944,23 @@ describe("DebatePanel — threads", () => {
     expect(host.querySelector(".dbt-thread-showing")).toBeNull();
   });
 
-  it("never reads synthesis on a visitor's PublicDebate", () => {
-    const shared = {
-      searchedAt: "2026-09-05T10:00:00.000Z",
-      direct: { rows: [], sourceNotPublishable: 0 },
-      claims: { rows: [rowA, rowB, rowC], sourceNotPublishable: 0 },
-    } as unknown as PublicDebate;
-    Object.defineProperty(shared, "synthesis", {
-      get: () => {
-        throw new Error("the owner-only synthesis was read");
-      },
-    });
-    expect(() => paintShared(shared, "claim")).not.toThrow();
+  /* Until 2026-10-01 this case said a visitor's synthesis was never read: the
+     public DTO did not carry it. Greg approved it crossing (plan 261001b), so
+     the rule is now the reverse — a visitor's threads draw like the owner's,
+     and one without a synthesis (the boundary withheld a row) draws none. */
+  it("draws a visitor's threads from their PublicDebate, and none when it has no synthesis", () => {
+    const shared = (synthesis?: DebateSynthesis) =>
+      ({
+        searchedAt: "2026-09-05T10:00:00.000Z",
+        direct: { rows: [], sourceNotPublishable: 0 },
+        claims: { rows: [rowA, rowB, rowC], sourceNotPublishable: 0 },
+        ...(synthesis ? { synthesis } : {}),
+      }) as unknown as PublicDebate;
+    paintShared(shared(made), "claim");
+    expect(host.querySelector(".dbt-threads")?.textContent).toContain("replication");
+    expect(host.querySelector(".dbt-key-line")).not.toBeNull();
+    paintShared(shared(), "claim");
     expect(host.querySelector(".dbt-threads")).toBeNull();
-    expect(host.querySelector(".dbt-key-line")).toBeNull();
     expect(titles()).toEqual(["One", "Two", "Three"]);
   });
 

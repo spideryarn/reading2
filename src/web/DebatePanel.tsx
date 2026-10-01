@@ -918,8 +918,9 @@ interface Props {
   articleYear: number | null;
   /**
    * Which thread narrows the list — `?debatethread=`, a theme id or `key`, or
-   * `null` for none (debate-threads.ts). Owner-only in effect: a visitor's
-   * debate carries no synthesis, so there is nothing for it to name.
+   * `null` for none (debate-threads.ts). A visitor's debate carries the
+   * synthesis since 2026-10-01 unless the public boundary withheld a row
+   * (src/public/dto.ts § `publicSynthesis`), and then there is nothing to name.
    */
   thread: string | null;
   onThread(thread: string | null): void;
@@ -998,14 +999,16 @@ export function DebatePanel({
   /**
    * **The threads, and the one the address names** — plan 260930j. The owner's
    * stored synthesis read through `readStoredSynthesis`, never directly: JSONB
-   * comes back unchecked. A visitor's debate has none (the public DTO does not
-   * carry it), so for them this is empty and the filter is a no-op.
+   * comes back unchecked. A visitor's is read the same way, against the rows
+   * they were sent — the public DTO has already re-settled it against exactly
+   * those (plan 261001b), so this second reading agrees with it, and one reader
+   * serves both arms.
    *
    * **The third narrowing, after both bars.** Each button's count is its rows
    * the bars left (`shownInThread`), and the list below is those rows only.
    */
   const synthesis = useMemo(
-    () => (debate !== null && !isShared(debate) ? readStoredSynthesis(debate) : null),
+    () => (debate !== null ? readStoredSynthesis(debate) : null),
     [debate],
   );
   const threads = useMemo(() => threadsOf(synthesis), [synthesis]);

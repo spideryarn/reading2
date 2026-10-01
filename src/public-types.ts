@@ -65,8 +65,11 @@ import type {
   BlockId,
   BlockKind,
   CommentAnchor,
+  Crossref,
+  DebateBears,
   DebateLean,
   DebateRelation,
+  DebateSynthesis,
   FaqQuestion,
   SimpleParagraph,
   GlossaryKind,
@@ -250,6 +253,26 @@ export interface PublicArticle extends PublicArtefactSet {
    * whole of it, and none of them is about a person.
    */
   navLabelStatus: NavLabelStatus;
+  /**
+   * **The cross-references the prose draws** — since 2026-10-01 (plan 261001b,
+   * SPIDERYARN-READING2-5Z; Greg's approval of the defence edit).
+   *
+   * Absent when none were built, and also **when they are stale**: the public
+   * reader asks `isStale` (src/crossrefs-fingerprint.ts) exactly as the owner's
+   * read does, because a link can still name two surviving blocks and a phrase
+   * that still matches while no longer being true, and the prose has nowhere to
+   * say "out of date" (Sol F8 on 260930f). So a present key is always drawable.
+   *
+   * Only the links, and only `{from, phrase, to}` each: a phrase is the
+   * article's own characters and both ends are blocks of this payload. `dropped`
+   * and the pipeline stamp stay behind. No profile goes into the call.
+   */
+  crossrefs?: PublicCrossrefs;
+}
+
+/** The cross-references, as a visitor gets them. `PublicArticle.crossrefs`. */
+export interface PublicCrossrefs {
+  links: Crossref[];
 }
 
 /**
@@ -523,6 +546,18 @@ export interface PublicCitedWork {
   relevance?: number;
   influence?: number;
   reference?: CitationPlace;
+  /**
+   * **The work's entry, only when it is the text of its own `reference`
+   * block** — since 2026-10-01 (plan 261001b, SPIDERYARN-READING2-6K). Then
+   * every character of it is already in this payload's `blocks`.
+   *
+   * **An entry read from a PDF's text layer does not cross.** Furniture is
+   * removed only when a line repeats on three or more pages (src/pdf.ts), so a
+   * publisher's "Downloaded by …" stamp printed on one page can sit inside an
+   * entry, and that would name the person who downloaded the PDF — the owner,
+   * usually. GPT Sol, plan review P1. `publicCitedWork` checks.
+   */
+  entry?: string;
   mentions: CitationPlace[];
   citedAt: BlockId[];
   firstCited: BlockId;
@@ -584,6 +619,14 @@ interface PublicDebateRowBase {
   lean: DebateLean;
   applies: string;
   limits?: string;
+  /**
+   * **How much the passage bears on the row's target** — since 2026-10-01
+   * (plan 261001b, SPIDERYARN-READING2-5P). One of three closed words, the
+   * model's judgement of a stranger's page against the article, read through
+   * `readStoredBears` so a value outside the vocabulary is absent, never
+   * defaulted. Nothing about the reader goes into it.
+   */
+  bears?: DebateBears;
 }
 
 /** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */
@@ -634,6 +677,21 @@ export interface PublicDebate {
   searchedAt: string;
   direct: PublicDebateGroup<PublicDirectDebateRow>;
   claims: PublicDebateGroup<PublicClaimDebateRow>;
+  /**
+   * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
+   * SPIDERYARN-READING2-6M). The model's words over the rows both passes kept;
+   * no profile goes into the call.
+   *
+   * **A `made` synthesis crosses only when no row was withheld** in either
+   * group. The call saw every row, so a theme kept over two published rows can
+   * still summarise a withheld one in its gist without quoting its address,
+   * and nothing at this boundary could tell (GPT Sol, plan review P1). Even
+   * then it is re-settled against the published rows (`settleSynthesis`), so
+   * every row id it names is one this payload carries. `failed` and `too-few`
+   * carry no prose and cross as they are. Absent when the debate was searched
+   * before 2026-09-30, or when withholding took it off.
+   */
+  synthesis?: DebateSynthesis;
 }
 
 /**

@@ -379,6 +379,10 @@ const WIRE_ROW = {
      *still arriving* from *this article has none*, and draws a run of blank
      cells either way. src/web/nav-labels.ts. */
   navLabelStatus: "structure",
+  /* Cross-references, since 2026-10-01 (plan 261001b): links drawn in the
+     prose between its own passages, so they are the text's row, whose sentence
+     says so. */
+  crossrefs: "text",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {

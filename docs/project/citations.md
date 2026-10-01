@@ -102,8 +102,10 @@ other work claims it — a shared footnote would show one work its neighbour's v
 
 **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
 the article's own reference list, which we have not looked up; the prose hover card shows the entry
-in full, since a card is what a finger gets. `entry` is owner-only: `publicCitedWork` does not name
-it, and widening that projection is a change to a defence, left for Greg.
+in full, since a card is what a finger gets. **A visitor gets the entry only when it is its own
+bibliography block's text**, every character of which is already on their page. An entry read from
+a PDF's text layer stays owner-only: it can carry a publisher's one-page "Downloaded by …" stamp
+that the furniture filter missed ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
 
 ## The orders, and the bar
 
@@ -422,7 +424,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a DOI or arXiv id in a PDF's entry used as the row's link; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a DOI or arXiv id in a PDF's entry used as the row's link; a PDF list's entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

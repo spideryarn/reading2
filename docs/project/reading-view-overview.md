@@ -129,8 +129,9 @@ readers never are.
   re-judged at the boundary and a refused row withheld and counted — only running a search is the
   owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
   Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
-  as filters above the list, owner-only for now
-  ([260930j](../plans/260930j-debate-themes-and-key-sources.md)).
+  as filters above the list ([260930j](../plans/260930j-debate-themes-and-key-sources.md)); since
+  2026-10-01 a visitor sees those and each row's relevance too, unless the boundary withheld a row
+  ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
   thresholded the way the glossary is. Open it for the one safety property: every address a row
   shows was in the article, and a search says it is one. Behind the switch; a visitor to a public

@@ -6,10 +6,9 @@
  * § 2, the data path (Sol F7): this hook → `OwnedReader` (ArticlePage.tsx) →
  * `ReaderCapability` → `Reader` → `TableView` and the block-link card.
  *
- * **Mounted only in `OwnedReader`, and that is the whole of the visitor rule.**
- * There is no public twin of this route in v1 — adding cross-references to the
- * public DTO is a defence edit left for Greg (the plan's § Left for Greg) — so a
- * signed-out or non-owning reader must make no authenticated request for them,
+ * **Mounted only in `OwnedReader`.** A visitor's links arrive inside the
+ * public article payload, already judged fresh by the same `isStale` (plan
+ * 261001b), so a signed-out or non-owning reader makes no request for them,
  * and does not: the component that calls this is never mounted for them.
  *
  * **Unconditional**, like the other standing annotations (`useCitationsRead`,
