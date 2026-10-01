@@ -191,7 +191,7 @@ const listedOfKind = (kind: RowKind): string[] =>
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockLists = (): string[] =>
-  /* The radios and Annotations' toggle after them (261001i), in DOM order. */
+  /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
   [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
@@ -538,7 +538,7 @@ describe("the backdrop", () => {
  * one level down.
  */
 const GENERATES: Record<Mode, boolean> = {
-  annotations: false,
+  marginalia: false,
   plain: false,
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */

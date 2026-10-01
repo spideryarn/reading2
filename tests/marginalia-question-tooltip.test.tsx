@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* Annotations' question notes say what they are on hover. Greg, 2026-10-01
+/* Marginalia's question notes say what they are on hover. Greg, 2026-10-01
    (SPIDERYARN-READING2-84): "There are vertical lines now next to some blocks.
    What are they for? They should ideally have tooltips to explain themselves."
    A question note is drawn with a rule down its left edge, beside only the
@@ -7,7 +7,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { MarginNotesSlot } from "../src/web/annotations/AnnotationsColumn.js";
+import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

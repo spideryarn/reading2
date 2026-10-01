@@ -1,7 +1,9 @@
 /**
  * **The notes are a switch of their own, not a mode** — `?margin=1` beside any
- * `?mode=`, and `?mode=annotations` reading as Plain.
- * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+ * `?mode=`, and `?mode=marginalia` (or the old `?mode=annotations`) reading as
+ * Plain. docs/plans/261001i-annotations-column-beside-a-band-mode.md; the
+ * rename is
+ * docs/plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md.
  */
 import { describe, expect, it } from "vitest";
 import { modeFromParam } from "../src/modes.js";
@@ -13,12 +15,20 @@ import { marginInSearch, marginParam, modeParam } from "../src/web/params.js";
 
 type FeedbackMode = FeedbackArticleContext["mode"];
 const acceptFeedbackMode = (_mode: FeedbackMode) => {};
-// @ts-expect-error Annotations is never the current band in diagnostics.
+// @ts-expect-error Marginalia is never the current band in diagnostics.
+acceptFeedbackMode("marginalia");
+// @ts-expect-error Nor its word until 2026-10-01, which is no mode at all now.
 acceptFeedbackMode("annotations");
 // @ts-expect-error The herald names a band press, not the margin toggle.
+const marginaliaHerald: HeraldPress = { mode: "marginalia", nonce: 1 };
+void marginaliaHerald;
+// @ts-expect-error The same for the old word.
 const retiredHerald: HeraldPress = { mode: "annotations", nonce: 1 };
 void retiredHerald;
 // @ts-expect-error The server title receives the parsed band mode.
+const marginaliaTitle = documentTitle("A piece", "marginalia");
+void marginaliaTitle;
+// @ts-expect-error The same for the old word.
 const retiredTitle = documentTitle("A piece", "annotations");
 void retiredTitle;
 
@@ -34,12 +44,17 @@ describe("the margin switch", () => {
     expect(modeFromParam("annotations")).toBe(null);
     expect(modeParam.parse("annotations")).toBe(null);
     expect(readMode("/read/x?mode=annotations")).toBe("plain");
+    /* Nor does the mode's own word since 261001n: it is a mode, not a band. */
+    expect(modeFromParam("marginalia")).toBe(null);
+    expect(modeParam.parse("marginalia")).toBe(null);
+    expect(readMode("/read/x?mode=marginalia")).toBe("plain");
     /* The positive control: a band mode still parses. */
     expect(modeParam.parse("glossary")).toBe("glossary");
   });
 
   it("an old ?mode=annotations link still asks for the notes", () => {
     expect(marginInSearch("?mode=annotations")).toBe(true);
+    expect(marginInSearch("?mode=marginalia")).toBe(true);
     expect(marginInSearch("?margin=1&mode=glossary")).toBe(true);
     expect(marginInSearch("?mode=glossary")).toBe(false);
     expect(marginInSearch("?margin=0")).toBe(false);

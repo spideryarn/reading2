@@ -246,7 +246,7 @@ import {
   type Mode,
   type Panel,
 } from "./params.js";
-import { modeFromParam } from "../modes.js";
+import { isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
 import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
@@ -353,7 +353,7 @@ interface Props {
    */
   onMode?(next: Mode, sub?: SubMode): void;
   /**
-   * **Whether Annotations' column is on** (`?margin=1`) — the reading view
+   * **Whether Marginalia's column is on** (`?margin=1`) — the reading view
    * passes it; off it, the carried query string says (`marginInSearch`).
    * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
    */
@@ -974,7 +974,7 @@ const MODES_UI = [
        exactly one, so there is no second thing it could be confused with. */
     icon: Brain,
   },
-  /* **Annotations, 2026-10-01** — a run of its own at the right-hand end since
+  /* **Marginalia, 2026-10-01** — a run of its own at the right-hand end since
      the same day, when its column became a switch beside whichever band is
      open rather than one of the bands (`MarginToggle`). Last because its
      column is the rightmost thing on the page, and because the toggle is drawn
@@ -985,7 +985,7 @@ const MODES_UI = [
      docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   {
-    mode: "annotations",
+    mode: "marginalia",
     group: "margin",
     icon: PanelRight,
   },
@@ -1053,7 +1053,7 @@ export type ModesMissingFromDock<
 export function visibleModes(
   on: boolean,
   current: BandMode | undefined,
-  /* Annotations' column is on (`?margin=1`). Its button is a toggle rather than
+  /* Marginalia's column is on (`?margin=1`). Its button is a toggle rather than
      the current mode since 2026-10-01, and it is kept for the same reason the
      current mode is: the one control that turns the notes off must not vanish
      with the switch. */
@@ -1063,7 +1063,7 @@ export function visibleModes(
     shownBehindTheSwitch({
       experimental: MODE_CATALOG[m.mode].experimental,
       on,
-      current: m.mode === current || (m.mode === "annotations" && margin),
+      current: m.mode === current || (m.mode === "marginalia" && margin),
     }),
   );
 }
@@ -1277,7 +1277,7 @@ export function fitSignature(
   variant: ExperimentalVariant | null,
   feedback: boolean,
   /**
-   * **Whether Annotations' toggle is pressed** (261001i). Pressed is `.on`, and
+   * **Whether Marginalia's toggle is pressed** (261001i). Pressed is `.on`, and
    * § the bar's fit ladder gives an `.on` button its word back at rung 2, so
    * turning the notes on draws one more label with nothing else here changed —
    * the reason `active` below is in the string, for the second axis.
@@ -1559,13 +1559,14 @@ function useActivateSubMode(
  * function so the two doors cannot land in different places.
  */
 function modeLinkHref(slug: string, search: string, mode: Mode): string {
-  /* A metadata URL can itself carry the retired spelling. Translate it before
-     following either axis: choosing a band must keep the notes, and choosing
-     Annotations must not mint `mode=annotations` again. */
+  /* A metadata URL can itself carry `mode=marginalia`, or the retired
+     `mode=annotations` (`isMarginaliaModeWord`). Translate it before following
+     either axis: choosing a band must keep the notes, and choosing Marginalia
+     must not mint a `mode=` for it again. */
   const canonical = marginInSearch(search) ? withMargin(search, true) : search;
-  /* Annotations is not a band: its link opens the article with the notes on
+  /* Marginalia is not a band: its link opens the article with the notes on
      and whatever band the reader came from still open. */
-  if (mode === "annotations") {
+  if (mode === "marginalia") {
     return readHref(slug, withMargin(canonical, true), "article");
   }
   return readHref(slug, withMode(canonical, mode), "article");
@@ -2408,12 +2409,13 @@ export function withMode(search: string, mode: BandMode): string {
   return params.toString();
 }
 
-/** A carried query string with Annotations' independent switch set or cleared. */
+/** A carried query string with Marginalia's independent switch set or cleared. */
 export function withMargin(search: string, margin: boolean): string {
   const params = new URLSearchParams(search);
-  /* The old spelling means this switch, not a band. Removing it here keeps a
-     metadata link from sending the Reader through a second legacy rewrite. */
-  if (params.get("mode") === "annotations") params.delete("mode");
+  /* Either spelling — `marginalia`, or the old `annotations` — means this
+     switch, not a band. Removing it here keeps a metadata link from sending
+     the Reader through a second rewrite. */
+  if (isMarginaliaModeWord(params.get("mode"))) params.delete("mode");
   if (margin) params.set("margin", "1");
   else params.delete("margin");
   return params.toString();
@@ -2537,7 +2539,7 @@ function DockModes({
    */
   onActivate(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
-  /** Whether Annotations' column is on — `?margin=1`, the toggle's pressed state. */
+  /** Whether Marginalia's column is on — `?margin=1`, the toggle's pressed state. */
   margin: boolean;
 }) {
   /**
@@ -2579,15 +2581,15 @@ function DockModes({
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
   const starts = groupStarts(modes);
-  /* **Annotations is a toggle, not one of the radios**, since 2026-10-01: its
+  /* **Marginalia is a toggle, not one of the radios**, since 2026-10-01: its
      column sits right of the prose beside whichever band is open, so it is not
      one of the things the middle column shows and cannot be the one checked
      radio. It is last in `MODES_UI`, and drawn after the radiogroup (which
      has one flex share per radio, so the segment still grows as one row of
      equal controls) — `MarginToggle` and dock-fit.css.
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
-  const radios = modes.filter((m) => m.mode !== "annotations");
-  const toggle = modes.find((m) => m.mode === "annotations");
+  const radios = modes.filter((m) => m.mode !== "marginalia");
+  const toggle = modes.find((m) => m.mode === "marginalia");
   return (
     <div className="dock-modes">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
@@ -2699,7 +2701,7 @@ function DockModes({
 }
 
 /**
- * **Annotations' button: on or off, beside the radios** — `aria-pressed` with a
+ * **Marginalia's button: on or off, beside the radios** — `aria-pressed` with a
  * fixed name, the APG toggle (`PRESS` above says why never both a moving name
  * and `aria-pressed`). A press goes through the same `onActivate` door as a
  * mode, so the command bar and this button cannot mean different things; the

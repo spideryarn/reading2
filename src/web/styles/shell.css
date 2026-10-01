@@ -630,7 +630,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    columns, on 2026-09-29.) */
 .spine,
 .mode-band,
-.marg-head, /* Annotations' fixed head follows the same bar-bottom edge. */
+.marg-head, /* Marginalia's fixed head follows the same bar-bottom edge. */
 .mode-herald-slot, /* the band's own box, so it has to travel with it — mode-band.css § the herald */
 .reader:has(table.zoom.overflowing)::after {
   transition: top 0.18s ease;

@@ -1,5 +1,5 @@
 /**
- * `fitView({ margin: true })` — Annotations' column right of the prose.
+ * `fitView({ margin: true })` — Marginalia's column right of the prose.
  * layout.ts § `fitMargin`;
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  *
@@ -38,7 +38,7 @@ function tableLeft(fit: ReturnType<typeof fitView>, windowWidth: number): number
   return spine + (content - fit.tableW) / 2;
 }
 
-describe("the annotations column", () => {
+describe("the marginalia column", () => {
   it("moves the fixed head with the top bar instead of jumping to its new edge", () => {
     const transitionRule =
       SHELL_CSS.match(/([^{}]+)\{\s*transition:\s*top 0\.18s ease;\s*\}/)?.[1] ?? "";
@@ -46,7 +46,7 @@ describe("the annotations column", () => {
     expect(NARROW_CSS).toContain("  .marg-head,");
   });
 
-  it("hides the panel-only small-screen advice when Annotations keeps the prose visible", () => {
+  it("hides the panel-only small-screen advice when Marginalia keeps the prose visible", () => {
     expect(NARROW_CSS).toContain(
       ".reader.band-covers:has(.mode-band, .marg-narrow) .small-screen-hint { display: none; }",
     );

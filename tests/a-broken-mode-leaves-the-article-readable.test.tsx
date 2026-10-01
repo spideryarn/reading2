@@ -1445,10 +1445,10 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
   ],
   /* No band: what `modeBand()` returns for it is the column's head (and the
      owner's read of the ideas), so that is what throws here. The notes in the
-     table's cells have a boundary of their own — § Annotations' notes, below. */
-  annotations: [
-    { label: "AnnotationsHead", as: "owner" },
-    { label: "AnnotationsHead", as: "visitor" },
+     table's cells have a boundary of their own — § Marginalia's notes, below. */
+  marginalia: [
+    { label: "MarginaliaHead", as: "owner" },
+    { label: "MarginaliaHead", as: "visitor" },
   ],
 };
 
@@ -1501,13 +1501,13 @@ function containedInside(mode: AnyMode): void {
 }
 
 /**
- * **Annotations' notes are drawn in the table's own cells**, outside the
+ * **Marginalia's notes are drawn in the table's own cells**, outside the
  * mode's boundary, so each block's notes carry a boundary of their own
- * (AnnotationsColumn.tsx § MarginNotesSlot). A throw in one must cost the
+ * (MarginaliaColumn.tsx § MarginNotesSlot). A throw in one must cost the
  * reader that note and nothing else: the prose, the spine and the dock stay,
  * the head is not replaced by a fallback, and it is reported once.
  */
-describe("Annotations' notes", () => {
+describe("Marginalia's notes", () => {
   it("a throw in a block's notes loses the notes and keeps the article", async () => {
     who.set(OWNER_A);
     experimentalSince = "2026-09-01T09:00:00.000Z";
@@ -1523,7 +1523,48 @@ describe("Annotations' notes", () => {
     expect(host.querySelector(SPINE), "the spine went with it").not.toBeNull();
     expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
     expect(probe.reports.length, "reported").toBeGreaterThan(0);
-    expect(probe.reports.every((r) => r.context?.feature === "Annotations")).toBe(true);
+    expect(probe.reports.every((r) => r.context?.feature === "Marginalia")).toBe(true);
+  });
+});
+
+/**
+ * **Either word for the notes on `?mode=` lands on `?margin=1` on arrival** —
+ * `marginalia`, the mode's word since 261001n, and `annotations`, its word
+ * until then, which old links still carry. The mounted Reader rewrites both
+ * (`isMarginaliaModeWord`), for an owner and for a visitor alike: the notes'
+ * column is drawn, no band opens, and no `mode=` is left on the address.
+ */
+describe("a ?mode= word for the notes, on arrival", () => {
+  it.each([
+    { word: "annotations", as: "owner" },
+    { word: "annotations", as: "visitor" },
+    { word: "marginalia", as: "owner" },
+    { word: "marginalia", as: "visitor" },
+  ])("?mode=$word as $as opens Plain with the notes on", async ({ word, as }) => {
+    if (as === "owner") who.set(OWNER_A);
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    await open(`?mode=${word}`);
+    const toggle = () => host.querySelector<HTMLElement>('.dock-modes [aria-pressed="true"]');
+    for (let i = 0; i < 40 && toggle() === null; i++) await settle();
+
+    const query = new URLSearchParams(location.search);
+    expect(query.get("mode"), "the word stayed on the address").toBeNull();
+    expect(query.get("margin")).toBe("1");
+    expect(host.querySelector(".mode-band"), "a band opened for the notes").toBeNull();
+    /* The Reader's own state, not only the address: the Dock draws the notes'
+       toggle pressed. */
+    expect(toggle()?.getAttribute("aria-label"), "the notes' toggle is not pressed").toBe(
+      MODE_LABEL.marginalia,
+    );
+    /* The owner's fixture has parts with questions, so the column draws; the
+       visitor's payload here carries no arc and no questions, so the head has
+       nothing to say and draws nothing — the toggle above is its witness. */
+    if (as === "owner") {
+      expect(
+        host.querySelector(".marg-head, .marg-narrow, [data-marg-note]"),
+        "the notes' column is not on screen",
+      ).not.toBeNull();
+    }
   });
 });
 
@@ -1568,10 +1609,10 @@ describe("a throw inside any band leaves the article", () => {
        switch on; the band itself opens from the address either way. */
     experimentalSince = "2026-09-01T09:00:00.000Z";
     probe.throwAt = label;
-    /* Annotations is `?margin=1`, a switch beside the band, since 2026-10-01
+    /* Marginalia is `?margin=1`, a switch beside the band, since 2026-10-01
        (261001i): it is reached by that address and left by turning it off —
        Plain closes a band and leaves the notes' switch alone. */
-    const margin = mode === "annotations";
+    const margin = mode === "marginalia";
     await open(margin ? `?margin=1${extra}` : `?mode=${mode}${extra}`);
 
     containedInside(mode);
@@ -1580,7 +1621,7 @@ describe("a throw inside any band leaves the article", () => {
     /* And the reader can still leave it. */
     if (margin) {
       const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
-      expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
+      expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
       await act(async () => (toggle as HTMLButtonElement).click());
       await settle();
       expect(new URLSearchParams(location.search).get("margin")).toBeNull();

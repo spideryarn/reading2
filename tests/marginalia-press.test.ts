@@ -1,8 +1,8 @@
-/* What pressing Annotations does — the most recent press wins on a window too
+/* What pressing Marginalia does — the most recent press wins on a window too
    narrow for the band and the notes together (SPIDERYARN-READING2-7P).
    docs/plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md */
 import { describe, expect, it } from "vitest";
-import { annotationsPress, notesFit } from "../src/web/annotations/press.js";
+import { marginaliaPress, notesFit } from "../src/web/marginalia/press.js";
 
 /* The hypothetical fits the press reads, at their thresholds (GPT Sol on the
    plan): alone from 612 with the rail and 600 without; beside a band from 900
@@ -30,9 +30,9 @@ describe("notesFit", () => {
 });
 
 const press = (margin: boolean, bandOpen: boolean, bothFit: boolean, aloneFit: boolean) =>
-  annotationsPress({ margin, bandOpen, bothFit, aloneFit });
+  marginaliaPress({ margin, bandOpen, bothFit, aloneFit });
 
-describe("annotationsPress", () => {
+describe("marginaliaPress", () => {
   it("turns the notes on with no band", () => {
     expect(press(false, false, false, true)).toEqual({ margin: true, closeBand: false });
   });

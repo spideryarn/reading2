@@ -26,13 +26,18 @@ function modeIn(search: string): string | null {
 }
 
 describe("withMode", () => {
-  // @ts-expect-error Annotations is the margin switch, not a value of `?mode=`.
+  // @ts-expect-error Marginalia is the margin switch, not a value of `?mode=`.
+  const marginaliaModeHref = withMode("", "marginalia");
+  void marginaliaModeHref;
+  // @ts-expect-error Nor is its word until 2026-10-01, which is no mode at all now.
   const retiredModeHref = withMode("", "annotations");
   void retiredModeHref;
   type DockMode = ComponentProps<typeof Dock>["mode"];
   const acceptDockMode = (_mode: DockMode) => {};
   acceptDockMode("glossary");
-  // @ts-expect-error The Dock reads a band mode; Annotations is only an output button.
+  // @ts-expect-error The Dock reads a band mode; Marginalia is only an output button.
+  acceptDockMode("marginalia");
+  // @ts-expect-error Nor its old word, `annotations`, which is not a mode any more.
   acceptDockMode("annotations");
 
   it("writes the parameter for a mode that is not the default", () => {

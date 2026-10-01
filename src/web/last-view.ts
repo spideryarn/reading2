@@ -53,6 +53,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { onAddressChange, parseRoute } from "./router.js";
+import { isMarginaliaModeWord } from "../modes.js";
 
 /**
  * The parameters worth putting back, and every one of them is inert on arrival:
@@ -67,7 +68,7 @@ export const REMEMBERED = [
   "at", // the section you were reading
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
-  "margin", // Annotations' column of notes, right of the prose — draws only what is already there
+  "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
   "deep", // how far down summary mode goes
   "summary", // gists or one of three plain levels — only a slider gesture spends
   "diagram", // which of the five pictures
@@ -248,16 +249,18 @@ export function hasArticleState(search: string): boolean {
  * what we replay unasked.
  */
 export function rememberableSearch(search: string): string {
-  /* **`mode=annotations` is `margin=1` now** (2026-10-01): Annotations was a
-     mode for its first day, and a browser that remembered it then should get
-     the notes back rather than a word `modeParam` reads as Plain. Translated
-     here, on the way in and on the way out, so a restore never puts the old
-     spelling on the address — docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+  /* **`mode=annotations` is `margin=1` now** (2026-10-01): Marginalia (called
+     Annotations until later that day) was a value of `?mode=` for its first
+     day, and a browser that remembered it then should get the notes back
+     rather than a word `modeParam` reads as Plain. `mode=marginalia` takes the
+     same road (`isMarginaliaModeWord`, 261001n). Translated here, on the way in
+     and on the way out, so a restore never puts either spelling on the address
+     — docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   const raw = pairs(search);
   const firstMode = raw.find((p) => pairKey(p) === "mode");
-  const oldAnnotations = firstMode !== undefined && pairValue(firstMode) === "annotations";
+  const marginaliaWord = firstMode !== undefined && isMarginaliaModeWord(pairValue(firstMode));
   let wroteMargin = false;
-  const translated = oldAnnotations
+  const translated = marginaliaWord
     ? raw.flatMap((p) => {
         const key = pairKey(p);
         /* Match the Reader's atomic rewrite: the legacy mode wins over any

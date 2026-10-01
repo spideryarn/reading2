@@ -855,10 +855,10 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   /* The way out: the article and nothing else — no band, and nothing to check
      beyond its absence. */
   plain: { where: null, says: null },
-  /* Annotations: no band, so `where` is null (the check above is that no
+  /* Marginalia: no band, so `where` is null (the check above is that no
      `.mode-band` opened) — and the page must still carry the idea the
      visitor's payload holds, which only the column's stamp draws. */
-  annotations: { where: null, says: PUBLIC_IDEA },
+  marginalia: { where: null, says: PUBLIC_IDEA },
   /* Structure, free for a visitor on the terms Outline was (slice 1b): the same
      tree, in columns — or, on a narrow band, in the nested list that was Outline
      mode until 2026-09-10. jsdom lays nothing out, so this file always gets the
@@ -1940,16 +1940,16 @@ describe("a signed-out browser on a shared document", () => {
        the branch a POST would hide in. */
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
-      /* **Annotations is a toggle beside the radios** since 2026-10-01, and its
+      /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
          address is `?margin=1` (261001i): kept drawn and pressed while the notes
          are on, and pressing it — which turns them off — stays public too. */
-      if (mode === "annotations") {
+      if (mode === "marginalia") {
         await remount();
         await open("?margin=1");
         trace.length = 0;
         const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
         expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
-          MODE_LABEL.annotations,
+          MODE_LABEL.marginalia,
         );
         expect(toggle?.getAttribute("aria-pressed")).toBe("true");
         expect(
@@ -1958,8 +1958,8 @@ describe("a signed-out browser on a shared document", () => {
         ).not.toBeNull();
         await act(async () => (toggle as HTMLButtonElement).click());
         await settle();
-        expect(outsidePublic(), "after pressing annotations").toEqual([]);
-        expect(trace.filter((r) => r.method !== "GET"), "after pressing annotations").toEqual([]);
+        expect(outsidePublic(), "after pressing marginalia").toEqual([]);
+        expect(trace.filter((r) => r.method !== "GET"), "after pressing marginalia").toEqual([]);
         expect(new URLSearchParams(location.search).get("margin")).toBeNull();
         pressed.push(mode);
         continue;
@@ -2768,19 +2768,19 @@ describe("a signed-in reader who does not own it", () => {
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
 
-    /* **And Annotations' toggle after the radios** (261001i): the notes on and
+    /* **And Marginalia's toggle after the radios** (261001i): the notes on and
        off again, both presses inside the public namespace. */
     const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
-    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
+    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
     for (const want of ["1", null]) {
       await act(async () => (toggle as HTMLButtonElement).click());
       await settle();
       const extra = outsidePublic().filter((r) => r.url !== "/api/jobs");
-      expect(extra, `after pressing Annotations to ${want}`).toEqual([]);
+      expect(extra, `after pressing Marginalia to ${want}`).toEqual([]);
       expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
       expect(new URLSearchParams(location.search).get("margin")).toBe(want);
     }
-    pressed.push("annotations");
+    pressed.push("marginalia");
 
     expect([...pressed].sort()).toEqual([...MODES].sort());
   }, SWEEP_MS);
