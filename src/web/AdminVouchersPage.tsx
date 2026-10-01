@@ -20,16 +20,20 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RefreshCw } from "lucide-react";
 
+import type { VoucherEmailState } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { exactly } from "./relative-time.js";
 import { ADMIN_HREF } from "./router.js";
 import {
   type AdminVoucherRow,
+  type CreateAnswer,
   type UseAdminVouchers,
   useAdminVouchers,
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
+import { useNow } from "./useNow.js";
 
 const INPUT =
   "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25";
@@ -64,9 +68,11 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    setDone(null);
     const count = wholeNumber(articles);
     if (count === null) {
       setRefusal("Articles must be a whole number.");
@@ -75,8 +81,9 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
     setBusy(true);
     const answer = await create({ email, articles: count, note: note.trim() === "" ? null : note });
     setBusy(false);
-    setRefusal(answer);
-    if (answer === null) {
+    setRefusal(answer.kind === "refused" ? answer.message : null);
+    if (answer.kind === "created") {
+      setDone(createdSentence(answer));
       setEmail("");
       setArticles(String(DEFAULT_ARTICLES));
       setNote("");
@@ -91,6 +98,11 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
     >
       <h2 className="tw:m-0 tw:mb-3 tw:text-sm tw:font-medium tw:text-foreground">New voucher</h2>
       {refusal && <Refusal message={refusal} />}
+      {done && (
+        <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">
+          {done}
+        </p>
+      )}
       <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-3">
         <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
           Email address
@@ -139,6 +151,101 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
   );
 }
 
+/**
+ * What the create form says once the server has the voucher. A replay is a
+ * resubmit whose first answer was lost: the server sent nothing the second
+ * time, and the table says how the first one went.
+ */
+function createdSentence(answer: Extract<CreateAnswer, { kind: "created" }>): string {
+  return answer.email === "replayed"
+    ? "That voucher had already been created, so nothing new was sent. Its email is in the table below."
+    : "Voucher created. The email to them is on its way.";
+}
+
+/**
+ * How long a send may say *sending* before the page warns it may not have
+ * gone: the server's own ten minutes, after which Retry may take it. Plan
+ * 261001p.
+ */
+const STUCK_AFTER_MS = 10 * 60_000;
+
+/** `sent 1 Oct 2026, 17:20` / `failed (Resend answered 422)` / … — one email's state, in words. */
+function emailState(e: VoucherEmailState, now: number): string {
+  switch (e.status) {
+    case "sent": {
+      const when = exactly(e.updatedAt);
+      return when ? `sent ${when}` : "sent";
+    }
+    case "skipped":
+      return e.detail ? `not sent (${e.detail})` : "not sent";
+    case "failed":
+      return e.detail ? `failed (${e.detail})` : "failed";
+    case "queued":
+      return "waiting to send";
+    case "sending": {
+      const since = e.attemptStartedAt ?? undefined;
+      const started = since === undefined ? Number.NaN : Date.parse(since);
+      return Number.isFinite(started) && now - started > STUCK_AFTER_MS
+        ? `sending… since ${exactly(since) ?? "a while ago"}; it may or may not have gone`
+        : "sending…";
+    }
+  }
+}
+
+/**
+ * One line per email a voucher has: *Email to them* is the gift to the
+ * recipient, *Email to you* the notice when it was claimed. Retry appears only
+ * where the server's own `retryable` says it would be taken, and is disabled
+ * while its request is out, so one click is one send.
+ */
+function EmailLine({
+  label,
+  email,
+  now,
+  retry,
+}: {
+  label: string;
+  email: VoucherEmailState;
+  now: number;
+  retry: UseAdminVouchers["retry"];
+}) {
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  async function again() {
+    if (busy) return;
+    setBusy(true);
+    setRefusal(null);
+    const answer = await retry(email.id);
+    setBusy(false);
+    setRefusal(answer);
+  }
+
+  return (
+    <div className="tw:mt-1 tw:text-xs tw:text-muted-foreground">
+      <span>
+        {label}: {emailState(email, now)}
+      </span>
+      {email.retryable && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void again()}
+          aria-label={`Retry the ${label.toLowerCase()}`}
+          className={`${BUTTON} tw:ml-2 tw:h-6 tw:px-2`}
+        >
+          Retry
+        </button>
+      )}
+      {refusal && (
+        <p role="alert" className="tw:m-0 tw:mt-1 tw:text-destructive">
+          {refusal}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Waiting / Claimed by … on … / Revoked — the status column. */
 function status(v: AdminVoucherRow): string {
   if (v.revokedAt !== null) {
@@ -172,7 +279,17 @@ function usage(v: AdminVoucherRow): string {
   }
 }
 
-function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: UseAdminVouchers["update"] }) {
+function VoucherRow({
+  voucher,
+  update,
+  retry,
+  now,
+}: {
+  voucher: AdminVoucherRow;
+  update: UseAdminVouchers["update"];
+  retry: UseAdminVouchers["retry"];
+  now: number;
+}) {
   const [editing, setEditing] = useState(false);
   const [articles, setArticles] = useState(String(voucher.articles));
   const [note, setNote] = useState(voucher.note ?? "");
@@ -287,7 +404,13 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
         )}
       </td>
       <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
-      <td className={`${CELL} tw:min-w-48`}>{status(voucher)}</td>
+      <td className={`${CELL} tw:min-w-48`}>
+        {status(voucher)}
+        {voucher.emails.gift && <EmailLine label="Email to them" email={voucher.emails.gift} now={now} retry={retry} />}
+        {voucher.emails.claimed && (
+          <EmailLine label="Email to you" email={voucher.emails.claimed} now={now} retry={retry} />
+        )}
+      </td>
       <td className={`${CELL} tw:min-w-56`}>{usage(voucher)}</td>
       <td className={CELL}>
         {refusal && (
@@ -330,7 +453,9 @@ function VoucherRow({ voucher, update }: { voucher: AdminVoucherRow; update: Use
 
 export function AdminVouchersPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "vouchers" }));
-  const { vouchers, error, loading, reload, create, update } = useAdminVouchers();
+  const { vouchers, error, loading, reload, create, update, retry } = useAdminVouchers();
+  /* For the *may or may not have gone* warning on a send stuck past ten minutes. */
+  const now = useNow();
 
   return (
     <Shell title="Gift vouchers" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
@@ -388,7 +513,7 @@ export function AdminVouchersPage() {
             </thead>
             <tbody>
               {vouchers.map((v) => (
-                <VoucherRow key={v.id} voucher={v} update={update} />
+                <VoucherRow key={v.id} voucher={v} update={update} retry={retry} now={now} />
               ))}
             </tbody>
           </table>

@@ -49,6 +49,7 @@ const VOUCHERS = [
     claimedAt: null,
     revokedAt: null,
     claimantEmail: null,
+    emails: { gift: null, claimed: null },
   },
   {
     id: CLAIMED,
@@ -63,6 +64,7 @@ const VOUCHERS = [
     revokedAt: null,
     claimantEmail: "claimed-now@example.test",
     claimant: { kind: "free", used: 4, limit: 13, remaining: 9, lapsed: false },
+    emails: { gift: null, claimed: null },
   },
   {
     id: REVOKED,
@@ -76,16 +78,24 @@ const VOUCHERS = [
     claimedAt: null,
     revokedAt: "2026-09-11T10:00:00Z",
     claimantEmail: null,
+    emails: { gift: null, claimed: null },
   },
 ];
 
 type Call = { method: string; url: string; body: unknown };
 let calls: Call[];
 let patchAnswer: { status: number; body: unknown };
+/** Status 0 is a network failure: `fetch` throws. */
+let postAnswer: { status: number; body: unknown };
+let retryAnswer: { status: number; body: unknown } | Promise<{ status: number; body: unknown }>;
+let listAnswer: unknown[];
 
 beforeEach(() => {
   calls = [];
   patchAnswer = { status: 200, body: { ok: true } };
+  postAnswer = { status: 201, body: { id: "new", email: "queued" } };
+  retryAnswer = { status: 202, body: { id: "x", email: "sending" } };
+  listAnswer = VOUCHERS;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -97,8 +107,15 @@ beforeEach(() => {
         headers: { "content-type": "application/json" },
       });
     if (method === "PATCH") return json(patchAnswer.status, patchAnswer.body);
-    if (method === "POST") return json(201, { id: "new" });
-    return json(200, { vouchers: VOUCHERS });
+    if (method === "POST" && url.includes("/retry")) {
+      const answer = await retryAnswer;
+      return json(answer.status, answer.body);
+    }
+    if (method === "POST") {
+      if (postAnswer.status === 0) throw new TypeError("Failed to fetch");
+      return json(postAnswer.status, postAnswer.body);
+    }
+    return json(200, { vouchers: listAnswer });
   }) as typeof fetch;
 });
 
@@ -284,5 +301,221 @@ describe("/admin/vouchers", () => {
     });
     await settle();
     expect(host.textContent).toContain("fresh@example.test");
+  });
+
+  describe("its emails", () => {
+    const GIFT_ID = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
+    const NOTICE_ID = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
+    const delivery = (over: Record<string, unknown>) => ({
+      id: GIFT_ID,
+      kind: "gift",
+      status: "sent",
+      attempts: 1,
+      detail: null,
+      updatedAt: "2026-10-01T16:20:00Z",
+      attemptStartedAt: "2026-10-01T16:19:59Z",
+      retryable: false,
+      ...over,
+    });
+    const withEmails = (gift: unknown, claimed: unknown = null) => [
+      { ...VOUCHERS[1], emails: { gift, claimed } },
+    ];
+    const statusCell = () => rowFor("claimed@example.test")?.querySelectorAll("td")[4];
+
+    it("says an email was sent, and when", async () => {
+      listAnswer = withEmails(delivery({}), delivery({ id: NOTICE_ID, kind: "claimed" }));
+      await mount();
+      const text = statusCell()?.textContent ?? "";
+      expect(text).toMatch(/Email to them: sent \S/);
+      expect(text).toMatch(/Email to you: sent \S/);
+      expect(text).toContain("2026");
+    });
+
+    it("says why one was not sent, or failed", async () => {
+      listAnswer = withEmails(
+        delivery({ status: "skipped", detail: "not production" }),
+        delivery({ id: NOTICE_ID, kind: "claimed", status: "failed", detail: "Resend answered 422" }),
+      );
+      await mount();
+      const text = statusCell()?.textContent ?? "";
+      expect(text).toContain("Email to them: not sent (not production)");
+      expect(text).toContain("Email to you: failed (Resend answered 422)");
+    });
+
+    it("says waiting and sending, and warns when a send has been stuck for over ten minutes", async () => {
+      const fresh = new Date(Date.now() - 60_000).toISOString();
+      listAnswer = withEmails(
+        delivery({ status: "queued", attemptStartedAt: null }),
+        delivery({ id: NOTICE_ID, kind: "claimed", status: "sending", attemptStartedAt: fresh }),
+      );
+      await mount();
+      let text = statusCell()?.textContent ?? "";
+      expect(text).toContain("Email to them: waiting to send");
+      expect(text).toContain("Email to you: sending…");
+      expect(text).not.toContain("may or may not have gone");
+
+      act(() => root.unmount());
+      host.remove();
+      const stale = new Date(Date.now() - 11 * 60_000).toISOString();
+      listAnswer = withEmails(delivery({ status: "sending", attemptStartedAt: stale }));
+      await mount();
+      text = statusCell()?.textContent ?? "";
+      expect(text).toContain("Email to them: sending…");
+      expect(text).toContain("may or may not have gone");
+    });
+
+    it("offers Retry only where the server says it may be retried", async () => {
+      listAnswer = withEmails(
+        delivery({ status: "failed", detail: "Resend answered 500", retryable: true }),
+        delivery({ id: NOTICE_ID, kind: "claimed", status: "sent", retryable: false }),
+      );
+      await mount();
+      const retries = [...(statusCell()?.querySelectorAll("button") ?? [])].filter(
+        (b) => b.textContent?.trim() === "Retry",
+      );
+      expect(retries).toHaveLength(1);
+    });
+
+    it("posts Retry to that email's route, once, and reads the list again", async () => {
+      listAnswer = withEmails(delivery({ status: "failed", detail: "Resend answered 500", retryable: true }));
+      let answer: (value: { status: number; body: unknown }) => void = () => {};
+      retryAnswer = new Promise((resolve) => {
+        answer = resolve;
+      });
+      await mount();
+      const before = calls.length;
+      await act(async () => buttonIn(statusCell(), "Retry")?.click());
+      await settle();
+      expect(buttonIn(statusCell(), "Retry")?.disabled).toBe(true);
+      await act(async () => buttonIn(statusCell(), "Retry")?.click());
+      await settle();
+      const posts = calls.slice(before).filter((c) => c.method === "POST");
+      expect(posts).toEqual([
+        { method: "POST", url: `/api/admin/voucher-emails/${GIFT_ID}/retry`, body: undefined },
+      ]);
+      await act(async () => answer({ status: 202, body: { id: GIFT_ID, email: "sending" } }));
+      await settle();
+      expect(calls.slice(before).some((c) => c.method === "GET")).toBe(true);
+    });
+
+    it("shows a refused Retry in the server's words", async () => {
+      listAnswer = withEmails(delivery({ status: "failed", detail: "Resend answered 500", retryable: true }));
+      retryAnswer = { status: 409, body: { error: "That email cannot be retried." } };
+      await mount();
+      await act(async () => buttonIn(statusCell(), "Retry")?.click());
+      await settle();
+      expect(statusCell()?.textContent).toContain("That email cannot be retried.");
+    });
+  });
+
+  describe("creating one", () => {
+    const form = () => host.querySelector('form[aria-label="New gift voucher"]') as HTMLFormElement;
+
+    async function fill(email: string) {
+      const input = host.querySelector("#voucher-new-email") as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(input, email);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    async function submit() {
+      await act(async () => form().requestSubmit());
+      await settle();
+    }
+
+    const creates = () => calls.filter((c) => c.method === "POST" && c.url === "/api/admin/vouchers");
+    const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
+
+    it("sends an id it minted, and the same one again when the same form is resubmitted", async () => {
+      await mount();
+      await fill("new@example.test");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      await submit();
+      const [first, second] = creates();
+      const id = idOf(first);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(idOf(second)).toBe(id);
+      expect(first?.body).toMatchObject({ email: "new@example.test", articles: 20, note: null });
+
+      /* A changed form is a different voucher. */
+      await fill("other@example.test");
+      postAnswer = { status: 201, body: { id: "x", email: "queued" } };
+      await submit();
+      const third = creates()[2];
+      expect(idOf(third)).not.toBe(id);
+
+      /* After a success, the next voucher is a new one even with the same fields. */
+      await fill("other@example.test");
+      await submit();
+      expect(idOf(creates()[3])).not.toBe(idOf(third));
+    });
+
+    it("says the email is on its way", async () => {
+      await mount();
+      await fill("new@example.test");
+      await submit();
+      expect(form().textContent).toContain("Voucher created. The email to them is on its way.");
+    });
+
+    it("says so when the voucher had already been created", async () => {
+      postAnswer = { status: 200, body: { id: "x", email: "replayed" } };
+      await mount();
+      await fill("new@example.test");
+      await submit();
+      expect(form().textContent).toContain("already been created");
+      expect(form().textContent).not.toContain("on its way");
+    });
+
+    it("reads the list again straight away, and once more four seconds later", async () => {
+      await mount();
+      await fill("new@example.test");
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const reads = () => calls.filter((c) => c.method === "GET").length;
+        const start = reads();
+        await act(async () => form().requestSubmit());
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        expect(reads()).toBe(start + 1);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3_000);
+        });
+        expect(reads()).toBe(start + 1);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_000);
+        });
+        expect(reads()).toBe(start + 2);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(10_000);
+        });
+        expect(reads()).toBe(start + 2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("drops the later read when the page goes away", async () => {
+      await mount();
+      await fill("new@example.test");
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        await act(async () => form().requestSubmit());
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        const reads = calls.filter((c) => c.method === "GET").length;
+        act(() => root.unmount());
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(calls.filter((c) => c.method === "GET").length).toBe(reads);
+        /* afterEach unmounts again; give it a root to unmount. */
+        root = createRoot(host);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
