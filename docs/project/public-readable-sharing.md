@@ -47,6 +47,15 @@ code* names. **A rights-holder cannot check any of it and is relying on us to ha
 | "we check with users before making things public" | **True as a mechanism, and it is not a check.** A dialog, a tick-box, a server that returns 400 without it ([`src/routes.ts`](../../src/routes.ts)), and an audit row in `article_visibility_changes`. The page says all of that **and** says plainly that nobody reviews an article before it appears |
 | "we hope this will increase human readership and appreciation of your work" | True, and the one most likely to read as self-serving. Last on the page, one section, making a claim about *our tool* rather than about the author's benefit, and conceding the point in its final sentence |
 
+The origin line is prominent because Greg asked for it to be —
+[260906e](../plans/260906e-the-origin-url-under-the-masthead-title.md):
+
+> Show the url from which the original came (if there is one) right underneath the title in the
+> masthead. I know we have the view-the-original button, but I think it's important that we are
+> prominent about the origin.
+>
+> — Greg, 2026-09-06
+
 **"We want to behave legally and ethically" is not said.** Nobody who is behaving legally says so;
 it invites *"so are you?"* and it is the sentence somebody would quote back. The facts and the offer
 say it instead.

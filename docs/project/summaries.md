@@ -1,5 +1,7 @@
 # Summaries — a sentence on every part of the article
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-26. Cut back to the gists 2026-08-31.** A **mode** in the band between the spine and
 the prose: the whole article, each of its parts and each of its sections, one sentence each, as deep
 into the piece as you ask. Press `Summary` in the bottom bar. It costs nothing and it is there on

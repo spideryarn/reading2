@@ -1,5 +1,7 @@
 # The tools chat can reach for
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-26.** Chat could already search the web. What it could not do was anything with
 *the reader's own things* — the article's exact words, the other articles they have saved, a page
 one of them links to. It can now, through a **tool loop**: the model asks for a tool by name, the

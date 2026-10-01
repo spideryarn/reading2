@@ -11,6 +11,10 @@
  * tests/explain-request-snapshot.test.ts pins what explain hands it.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § Mechanism.
  *
+ * The shared server shell for a streamed answer; the hand-rolled loops in
+ * search and the referee runners are older copies of the same shape —
+ * comments.md#streaming.
+ *
  * ## What is here, and what is deliberately not
  *
  * Here: the deadline and the stall clock, the `openRouterStream` loop, the

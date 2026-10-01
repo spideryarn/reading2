@@ -35,6 +35,28 @@ The check is one line in the console, at whatever width you are worried about:
 document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
 ```
 
+### A row that pushes a phone page sideways
+
+The same check works on the reading view, at 390px with the mode open — a mode band covers the
+article on a phone (§ below), so its header and sort rows are rows like the shelf's. Driving a
+browser is [browser-control.md](browser-control.md). Three things learned the hard way on
+2026-10-01, in [261001e](../plans/261001e-masthead-facts-line-overflows-a-phone.md):
+
+- **Injection, rather than reading the CSS, found the culprit.** Listing the elements whose right
+  edge was past the viewport, then injecting one rule at a time (`display: none` on a suspect, a
+  candidate fix), brought `scrollWidth` back to 390. The first guess there — the figures — was wrong.
+- **Inline items made `white-space: nowrap` one by one, with no whitespace between them, leave no
+  wrap opportunity anywhere in the run**, so the whole tail of the line becomes one unbreakable
+  piece. `display: inline-block` on the items keeps each whole and lets the line break between
+  them.
+- **The regression is pinned in real Chrome, with a control.** jsdom cannot see a line break.
+  [`tests/masthead-facts-wrap-in-chrome.test.tsx`](../../tests/masthead-facts-wrap-in-chrome.test.tsx),
+  after [`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts), is the
+  pattern: the real component rendered to markup, the token and reader sheets inlined, a 390px
+  viewport, skipped where there is no Chrome. Its control forces the old rule back and asserts the
+  page *does* overflow, because the test has no webfont and a narrower fallback font could
+  otherwise make the run fit and the test pass for nothing.
+
 ## The reading view's narrow window, which is a different problem
 
 Everything above is the shelf, where a narrow window breaks *rows*. On the reading view it breaks
@@ -186,8 +208,8 @@ that the incident was never reproduced, and that a floor is not a diagnosis).
 
 Two rules now live there beside the dock's, and both are floors rather than fixes:
 
-- **40px minimum on the two order rows**, the same number the dock's buttons answer to — Apple's
-  44pt less the hairline a neighbour shares.
+- **40px minimum on the two order rows**, the dock's old floor and still these rows' own. The dock
+  moved to 44px on 2026-10-01; these independent controls did not.
 - **16px minimum on every text field**, in its own section (§ a field iOS zooms into) and under
   **`any-pointer: coarse`** rather than `pointer: coarse`. iOS Safari zooms the whole page in when a
   field under 16px takes focus and does not zoom back out, and every piece of this app's chrome is

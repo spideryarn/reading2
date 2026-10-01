@@ -1,5 +1,7 @@
 # Glossary — the terms this piece uses, and where it uses them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.
@@ -101,6 +103,10 @@ occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching r
 [`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` in
 [`src/web/styles/glossary.css`](../../src/web/styles/glossary.css). Tests:
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
+
+What every band shares rather than the Glossary alone — the waiting and empty states, what a visitor
+sees, the checklist for changing a band — is in [new-mode.md](new-mode.md) and
+[web-client.md § The waiting state](web-client.md#the-waiting-state).
 
 ## Where it lives, and why that cost nothing
 

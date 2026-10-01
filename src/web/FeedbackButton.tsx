@@ -24,7 +24,7 @@
  *  - **`FeedbackHost`** wraps the signed-in app, holds the `open` state and the
  *    dialog, and offers `open()` through a context whose value is stable, so a
  *    press does not re-render every consumer.
- *  - **`FeedbackTrigger`** is a button and its hover card, in one of three
+ *  - **`FeedbackTrigger`** is a button and its hover card, in one of four
  *    shapes, and does nothing but call `open()`.
  *
  * **Not a portal**, which is the other way a single component could have been
@@ -84,15 +84,17 @@
  * spacing is each page's own and there is no shared number — see that file,
  * which carries the whole note.
  *
- * **That set is "no `Dock`" minus the shelf, since 2026-09-08.** The shelf has
- * a masthead cluster of its own, so a fixed corner there was a second top-right
- * competing with the page's first — see `FEEDBACK_SHAPE.masthead`, which has
- * the report that said so. App.tsx names both exclusions in one line.
+ * **That set is "no `Dock`" minus pages with their own chrome cluster.** The
+ * shelf's masthead took the trigger in 2026-09-08; the four pages with a
+ * `SiteNav` followed on 2026-10-01. A fixed corner beside either row is a
+ * second top-right competing with the page's first — see
+ * `FEEDBACK_SHAPE.masthead` and `.nav`. App.tsx names all three exclusions in
+ * one predicate.
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-/* Type only, so that the two `placement` strings in `FEEDBACK_SHAPE` below are
+/* Type only, so that the `placement` strings in `FEEDBACK_SHAPE` below are
    checked against the vocabulary `Tooltip` actually accepts rather than being
-   two hopeful literals. */
+   hopeful literals. */
 import type { Placement } from "@floating-ui/react";
 import { MessageSquareWarning } from "lucide-react";
 
@@ -219,7 +221,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
 }
 
 /**
- * Which of the three shapes a trigger wears.
+ * Which of the four shapes a trigger wears.
  *
  * **`corner`** is the original: `position: fixed` in the top-right of the
  * window, `--feedback-w` wide. Every page that does not mount a `Dock` draws
@@ -241,16 +243,19 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
  * reason `dock` does one page further on: the shelf has a chrome cluster of its
  * own, and a fixed corner beside it reads as a second one. The row above
  * `FEEDBACK_SHAPE.masthead` has the report that prompted it.
+ *
+ * **`nav`** is the same move again, for the marketing nav (`SiteNav`) on the
+ * four pages a signed-in reader can see it on, since 2026-10-01.
  */
-export type FeedbackVariant = "corner" | "dock" | "masthead";
+export type FeedbackVariant = "corner" | "dock" | "masthead" | "nav";
 
 /**
- * **The three shapes, as a table rather than as ternaries in the markup.**
+ * **The shapes, as a table rather than as ternaries in the markup.**
  *
- * Everything that differs between them is here, and it is six things: the class
+ * Everything that differs between them is here, and it is seven things: the class
  * a test counts this trigger by, the classes the button wears, the class its
- * word wears, how big its glyph is, which way its card opens, and whether that
- * card may flip onto the cross axis.
+ * word wears, how big its glyph is, which way its card opens, whether that card
+ * may flip onto the cross axis, and whether the glyph has a ring of its own.
  *
  * A table because each row is a claim somebody has to be able to check, and two
  * of them are claims a browser is needed to falsify — `placement` and
@@ -287,6 +292,7 @@ export const FEEDBACK_SHAPE = {
        would otherwise be thrown onto the cross axis and land *left* of the
        button, over the article's title. */
     keepSide: true,
+    ring: "",
   },
   dock: {
     hook: "dock-feedback",
@@ -298,6 +304,14 @@ export const FEEDBACK_SHAPE = {
     placement: "top",
     /* Inside the row, with room either side, so the ordinary flip is right. */
     keepSide: false,
+    /* **The glyph in a circle of its own**, Greg, 2026-09-30 (spya-xgqv50):
+       *"move the Feedback icon all the way to the right, and perhaps wrap it in
+       its own circle or something to show it's something a little different
+       from the other modes."* The circle is round the glyph rather than the
+       button, so it stays a circle on the rung where the word shows beside it
+       and on a tablet where the button grows to share the bar. dock.css §
+       the Feedback circle. */
+    ring: "dock-feedback-ring",
   },
   /**
    * **The shelf's own masthead row**, since 2026-09-08 — the third shape, and
@@ -318,9 +332,9 @@ export const FEEDBACK_SHAPE = {
    * here would be a second place for the two to drift apart.
    * docs/plans/260908e-feedback-button-in-the-shelf-masthead.md.
    *
-   * **`word` is empty, and that is a decision rather than an omission.** Both
-   * other shapes give the word up when their space runs out — the corner's
-   * under the 731px query, the bar's under the fit ladder — and this row does
+   * **`word` is empty, and that is a decision rather than an omission.** The
+   * corner and dock shapes give the word up when their space runs out — the
+   * corner under the 731px query, the dock under the fit ladder — and this row does
    * not: it wraps instead (Library.tsx's `flex-wrap`), so the label survives at
    * every width. That is worth having here, because the label is most of what
    * makes this findable at all, and losing it was half of what went wrong with
@@ -364,10 +378,50 @@ export const FEEDBACK_SHAPE = {
        last control, so a 22rem card that cannot centre would otherwise flip
        onto the cross axis and land over the shelf's own heading. */
     keepSide: true,
+    ring: "",
+  },
+  /**
+   * **The site nav's last entry**, on `/features`, `/pricing`, `/read/public`
+   * and the public-sharing page when signed in — the fourth shape, 2026-10-01.
+   *
+   * Greg, 2026-09-05 (spya-xgn06m): *"The Feedback and Logo get in the way at
+   * the top of /read/public."* The logo half came off in
+   * docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md;
+   * this is the other half. The corner trigger sat over the nav's own
+   * right-hand link — *Home* at 390px, *Privacy* at 1280 — on all four pages.
+   * The masthead's answer for the same reason: a page with a chrome row of its
+   * own takes the trigger into the row, and App.tsx stops drawing the corner.
+   *
+   * Styled as the nav's own links (SiteBits.tsx § `SiteNav`'s `link`), so it
+   * reads as one of them. **The word goes below `sm`**, where the nav was
+   * measured to fit at 320px with one link and the plain-text *Sign in*; the
+   * icon is narrower than *Sign in*, and a signed-in nav has no *Sign in*.
+   * GPT Sol, plan review of docs/plans/261001j-….
+   */
+  nav: {
+    hook: "fb-nav",
+    button:
+      "fb-nav tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-sm tw:text-muted-foreground tw:transition-colors tw:pointer-coarse:min-h-10 tw:hover:text-foreground",
+    word: "tw:hidden tw:sm:inline",
+    icon: 14,
+    /* Downwards and kept there, the masthead's settings and reasons: the top
+       of the page, and the last control in a right-aligned row. */
+    placement: "bottom",
+    keepSide: true,
+    ring: "",
   },
 } as const satisfies Record<
   FeedbackVariant,
-  { hook: string; button: string; word: string; icon: number; placement: Placement; keepSide: boolean }
+  {
+    hook: string;
+    button: string;
+    word: string;
+    icon: number;
+    placement: Placement;
+    keepSide: boolean;
+    /** A class for a box drawn round the glyph alone, or `""` for none. */
+    ring: string;
+  }
 >;
 
 /**
@@ -431,12 +485,11 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
       <button
         type="button"
         /* **Every shape's class string carries its `hook`**, and two of the
-           three hooks style nothing on their own — `dock-feedback` the way
-           `dock-experimental` next to it does not, and `fb-masthead` not at
-           all. They are how a count finds this button among the twenty
+           four hooks style nothing on their own — `fb-masthead` and `fb-nav`.
+           They are how a count finds this button among the twenty
            `dock-btn`s or the three masthead controls, which is the rule
            `FEEDBACK_TRIGGER_SELECTOR` above is built on; `dock-feedback` is
-           additionally how § the bar's fit ladder finds it.
+           additionally how § the bar's fit ladder and its circle find it.
 
            No `--feedback-w` outside the corner — that is the corner button's
            own width and nothing else reads it, and a 7.5rem fixed-width
@@ -445,8 +498,9 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
         className={shape.button}
         onClick={api.open}
         /* **The accessible name, now that `title` is not supplying one.**
-           Two of the three shapes hide the word at some width — the corner's
-           under the 731px query, the bar's under the fit ladder — and
+           Three of the four shapes hide the word at some width — the corner's
+           under the 731px query, the dock's under the fit ladder, and the
+           nav's below `sm` — and
            `display: none` takes it out of the accessibility tree as well as off
            the screen, so without this the button is an unlabelled icon on
            exactly the widths where a tooltip cannot be opened either.
@@ -459,7 +513,13 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
            a `word` class staying non-empty. */
         aria-label="Feedback"
       >
-        <MessageSquareWarning size={shape.icon} />
+        {shape.ring === "" ? (
+          <MessageSquareWarning size={shape.icon} />
+        ) : (
+          <span className={shape.ring}>
+            <MessageSquareWarning size={shape.icon} />
+          </span>
+        )}
         {/* Given up when the space runs out, the way the wordmark gives up its
             word — styles.css § feedback for the corner, § the bar's fit ladder
             for the bar. The icon and the `aria-label` carry it from there.

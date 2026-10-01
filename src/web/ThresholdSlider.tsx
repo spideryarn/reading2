@@ -17,6 +17,8 @@
  * there wherever the slider is, and the reset appears only once there is
  * something to undo. A native range input, for its keyboard, touch and screen
  * reader behaviour for free.
+ *
+ * The shared "show items above a score" row — web-client.md#shared-code-client.
  */
 import { RotateCcw } from "lucide-react";
 import { GATE_STEP } from "./threshold.js";

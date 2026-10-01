@@ -80,8 +80,8 @@ import { onFontsChanged } from "./fonts.js";
  *  - `dock-fit-1`: **the app cluster's words only** — the wordmark's and
  *    Feedback's (`.dock-home`, `.dock-feedback`). Every mode keeps its label.
  *  - `dock-fit-2`: the modes lose their labels too (all but `keepLabel`), and
- *    close up to 0.6rem. The old `max-width: 1100px` rule.
- *  - `dock-fit-3`: *every* button loses its label and closes to 0.45rem. What
+ *    keep 0.6rem of icon padding. The old `max-width: 1100px` rule.
+ *  - `dock-fit-3`: *every* button loses its label and closes to 0.55rem. What
  *    § a narrow window did at 731px.
  *
  * **Rung 1 is new on 2026-09-06 and the rungs below it shifted down one**, when

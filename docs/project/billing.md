@@ -1113,7 +1113,13 @@ a reader could hold two payable Checkout pages at once and complete both. Measur
 test customer already holding an `active` subscription was served a full "Subscribe with obligation
 to pay" page for a second one, so the gap is real rather than theoretical.
 
-**Greg's call, 2026-09-03: not worth closing.** It takes two Checkout pages opened before either is
+**Greg's call, 2026-09-03: not worth closing.**
+
+> we can stop worrying about this unlikely edge case for now.
+>
+> — Greg, 2026-09-03, [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md)
+
+It takes two Checkout pages opened before either is
 paid, and then two card forms filled in on purpose — `useBilling`'s `if (busy) return` already eats
 the double-click, and `subscriptionState` already turns the ordinary second attempt into the
 Portal.
@@ -1189,7 +1195,12 @@ automatic tax failing — turns out to be one Stripe's own documentation contrad
 says it cannot finalise at all. Both read 2026-09-04. A stored, entitlement-suppressing billing hold
 is not something to build on a premise the vendor disagrees with itself about — and detection is also
 the generous reading, since being wrong costs us a month of service rather than costing a paying
-reader their access. `past_due` is entitled here on purpose for the same reason.
+reader their access. `past_due` is entitled here on purpose for the same reason. The principle
+behind both, and behind several billing choices that do not say so:
+
+> If in doubt, keep things simple, and err on the side of being fair and generous to the user.
+>
+> — Greg, 2026-09-03, [260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md)
 
 So there are two instruments and no policy:
 

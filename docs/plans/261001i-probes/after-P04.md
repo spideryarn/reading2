@@ -1,0 +1,34 @@
+# P04 (after) - Citations band header row overflows at 375px
+
+## 1. Docs opened, in order
+- `AGENTS.md` / CLAUDE.md (in context): signpost; pointed to reading-view-overview and design-css-overview.
+- `docs/project/citations.md`: helped for the code map (`CitationsPanel.tsx`, `citations.css`); says the band reuses `.gloss-*` / `.tl-*` rules from glossary.css and timeline.css.
+- `docs/project/narrow-windows.md`: very helpful. "A row that pushes a phone page sideways" gives the recipe (scrollWidth check, inject one rule at a time) and the rule "a row of things whose widths you do not control must wrap".
+- (read, not a doc) `src/web/styles/mode-band.css`, `glossary.css`, `citations.css`.
+
+## 2. Code files you would edit
+- `src/web/styles/glossary.css` (`.gloss-gate-row`, `.gloss-sort`) or `src/web/styles/mode-band.css` (`.band-head`) - whichever the browser measurement names; fix goes in the shared rule only if Glossary/Quotes share the culprit, else in `src/web/styles/citations.css`.
+- `src/web/CitationsPanel.tsx` only if a class must be added (head fragment ~line 640, `BarSlider` ~line 826).
+- New test: `tests/citations-header-wrap-in-chrome.test.tsx`.
+
+## 3. Existing helpers/components to reuse
+- `tests/masthead-facts-wrap-in-chrome.test.tsx` and `tests/mark-sign-in-chrome.test.ts`: the real-Chrome 390px pattern with a control (named in narrow-windows.md). Would mimic with a 375px viewport.
+- `src/web/ModeSurface.tsx` wraps `head` in `.band-head`.
+- No new helper; a CSS fix (`flex-wrap: wrap`, `min-width: 0`) only.
+
+## 4. Rules/policies
+- Reproduce first: failing Chrome test with a control that forces the old rule (narrow-windows.md, silent-success.md).
+- Wrap, do not shrink; scroll only content that cannot reflow (narrow-windows.md).
+- Check: `document.documentElement.scrollWidth - clientWidth` must be 0 (narrow-windows.md).
+- Work in a worktree, `npm test` + `npm run typecheck`, commit own files by name, push to dev (CLAUDE.md).
+- Plan doc under `docs/plans/` named via `scripts/plan-name.ts`; GPT Sol review of the code (CLAUDE.md).
+- Browser check in a Sonnet subagent (CLAUDE.md, browser-control.md).
+- No migrations, no model call, so no streaming or cost-tracking rules apply.
+
+## 5. Where you got lost
+- The brief says "header row", but in the code the Citations band head (`.band-head`) holds only a count, and the `.gloss-sort` and `.gloss-gate-row` rows already wrap or are tiny. By reading I could not find what overflows at 375px. `.gloss-gate-row` is the only non-wrapping flex row (label, value, reset button) but looks too small to overflow. The real culprit may be a row title or `.cite-title` link inside the list instead.
+- I could not run a browser (probe rules), so the exact element is unconfirmed; the doc's injection method is how I would find it.
+- narrow-windows.md covers shelf rows and the reading-view spine, not mode-band header rows specifically at 375px; its 390px section is about the masthead.
+
+## 6. Confidence
+5/10 on the culprit element; 8/10 on the process and test pattern.

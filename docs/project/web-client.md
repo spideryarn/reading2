@@ -35,8 +35,8 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the prose column. It was the whole table — gist columns beside the prose — until Hierarchy mode was retired on 2026-09-29 ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); the columns went, the prose stayed |
 | [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) | **whether to draw the paragraph-label layer at all, and what to say instead** — four surfaces read the one rule, so it is not four `=== "ready"`s. An absent `navLabel` has always meant *deliberately unlabelled*, so a label that is merely not written yet draws a blank cell; while `Article.navLabelStatus` says otherwise the whole layer is withheld — [hierarchy.md § Absence on a node](hierarchy.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column) |
-| [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Directly under the title is the **origin line**: the article's own web address, host first with the path faded and truncated after it, or — for the owner, and never for a visitor — the words *Uploaded from a file* / *No web address was recorded*. It was a ↗ glyph beside the title until 2026-09-06, when Greg asked to be *"prominent about the origin"*. Beside the title, for the owner only, one mark is left, saying **who can read it**: a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (fourteen of them, `MODES_UI`), your questions, and the link to the metadata page — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **five** kinds — navigate, open a drawer, switch mode, the experimental-features toggle, and, since 2026-09-06, open a modal (Feedback, and since 2026-09-07 the command bar) — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`; a modal opener carries `aria-haspopup="dialog"` and none of the other four, because it neither goes anywhere nor holds a state). The order is Greg's, set by hand. **The way home came back on 2026-09-06** as `DockHome` at the left-hand end, along with a Feedback trigger at the right, when both left the window's top corners on the pages that mount a bar (the article and its metadata page, in both an owner's and a visitor's shape) — [260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md). Neither is a mode: the wordmark is outside the `role="radiogroup"`, is a `Link`, and wears `.dock-home` rather than `.dock-btn` so it cannot take the hover wash |
+| [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Directly under the title is the **origin line**: the article's own web address, host first with the path faded and truncated after it, or — for the owner, and never for a visitor — the words *Uploaded from a file* / *No web address was recorded*. It was a ↗ glyph beside the title until 2026-09-06, when Greg asked to be *"prominent about the origin"* (his words in full are [below the table](#the-origin-line)). Beside the title, for the owner only, one mark is left, saying **who can read it**: a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (one button per row of `MODES_UI`), your questions, and the link to the metadata page — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **five** kinds — navigate, open a drawer, switch mode, the experimental-features toggle, and, since 2026-09-06, open a modal (Feedback, and since 2026-09-07 the command bar) — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`; a modal opener carries `aria-haspopup="dialog"` and none of the other four, because it neither goes anywhere nor holds a state). The order is Greg's, set by hand. **The way home came back on 2026-09-06** as `DockHome` at the left-hand end, along with a Feedback trigger at the right, when both left the window's top corners on the pages that mount a bar (the article and its metadata page, in both an owner's and a visitor's shape) — [260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md). Neither is a mode: the wordmark is outside the `role="radiogroup"`, is a `Link`, and wears `.dock-home` rather than `.dock-btn` so it cannot take the hover wash |
 | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | **what each mode *is***, as opposed to how the bar draws it: the **two sentences** on its bar-button card (`description`, and `how` — the half a press would not have told you, added 2026-09-07 in [260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)), the words they might type meaning it, and whether it is behind the experimental switch. `how` is written about the **artefact** rather than about pressing anything, and that is load-bearing rather than stylistic: the same string is read on the reading view, on the metadata page where the same modes are loose links that arm nothing, and by a visitor who gets an explanatory band instead of a generator — so *"opening it runs a model pass"* is false on three of those four. Outside `src/web/` on purpose — it imports only [`modes.ts`](../../src/modes.ts), so both runtimes can read it and neither drags React across the seam ([`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) lists it and checks the claim). The two pre-existing fields were `blurb` and `experimental` on a `MODES_UI` row until 2026-09-07, when a second reader was arriving that could not import a 2,300-line component — [260906h](../plans/260906h-mode-catalog-and-a-command-bar.md). The **name** is not here: that is `MODE_LABEL` in [`src/title-text.ts`](../../src/title-text.ts) |
 | [`src/web/CommandBar.tsx`](../../src/web/CommandBar.tsx) | **⌘/Ctrl-K, and the ⌘ button at the left-hand end of the bar, just after the wordmark since 2026-09-08**: type a command's name and press Enter. Most rows are modes. On the reading view one opens *exactly as pressing its Dock button does* — same activation, same generate-on-open, same cost; on the Metadata page it follows the mode link drawn there and arms nothing, as that link does. A native `<dialog>` + `showModal()`, following [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) down to its visual-viewport treatment, because `showModal()` alone leaves the box under the iOS keyboard. **It imports nothing from `Dock.tsx`** — the visible modes and one `activateMode` callback arrive as props, and an import back the other way would close a cycle. Its styling is `tw:` utilities rather than a sheet under `src/web/styles/`, which is an exception argued in its own header. It was modes only until 2026-09-07 and modes plus `/changelog` until 2026-09-08, when Greg named six more and left "a few more" to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)); `besideTheModes` is the whole non-mode list and includes the current article's Metadata row only while the bar is mounted over an article. What it deliberately still cannot do is named in [260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) — [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) |
 | [`src/web/command-match.ts`](../../src/web/command-match.ts) | **what the command bar shows once you have typed something**, as a pure function of the words and the list: `canonical()` (lowercase, trim, collapse internal whitespace) and `rankCommands()`, whose five tiers are one ordered array so the position *is* the rank. Ties break in the order the caller handed the commands in — the Dock's modes first, then the bar's own `besideTheModes` — so the result is total and testable, and everything else sitting below the modes is that arrangement rather than a rule. A `Command` is a mode, a **page** (2026-09-07, when `/changelog` arrived) or an **action** (2026-09-08, for Feedback and Comments, which are not places), and `commandId()` prefixes the kind onto the row id so a page whose href is spelled like a mode cannot collide with it. Every row that is not a mode carries a **required** `generates` boolean, which is what the bar's spending marker is drawn off — optional was refused, because a row that spends could then omit it and ship unmarked. `canonical` is the **same function** [`tests/mode-catalog.test.ts`](../../tests/mode-catalog.test.ts) checks the alias table with — two normalisers that agree today is how `"peer review"` and `"peer  review"` both pass uniqueness and then collide |
@@ -49,7 +49,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the 37 files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
@@ -64,6 +64,16 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
+
+<a id="the-origin-line"></a>Why the masthead's origin line is under the title rather than a glyph
+beside it —
+[260906e-the-origin-url-under-the-masthead-title.md](../plans/260906e-the-origin-url-under-the-masthead-title.md):
+
+> Show the url from which the original came (if there is one) right underneath the title in the
+> masthead. I know we have the view-the-original button, but I think it's important that we are
+> prominent about the origin.
+>
+> — Greg, 2026-09-06
 
 Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
 ([library.md](library.md)) and an article is `/read/<slug>`. Old `/?slug=<slug>` links are rewritten
@@ -83,6 +93,44 @@ An article has **two pages**, and which one is a third path segment: the reading
 `/metadata` ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)). The Tweets thread was a third page
 ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)) until 2026-09-29, when it became a mode ([plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)). They share the fetch, the bottom bar and the
 query string, so moving between them keeps your place and costs no request.
+
+## Shared code (client) <a id="shared-code-client"></a>
+
+Only the helpers that more than one area uses, or that somebody has already written a second copy
+of. The server's list is [architecture.md § Shared code (server)](architecture.md#shared-code-server).
+
+- **`src/web/lib/api.ts` § `apiFetch`, `fetchOk`, `readJson`** — any call to our own API: the
+  session, offline, and an error the reader can be shown ([§ Reading an API response](#reading-an-api-response)).
+- **`src/web/lib/sse.ts` § `readAnswerStream`** — a streamed answer: an optional `begin`, `delta`s,
+  then exactly one `done` or `error`.
+  The lower-level `readEvents` is what most older hooks loop over by hand —
+  [comments.md § streaming](comments.md#streaming).
+- **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's
+  artefact read, its job, running on arrival, and the progress card. The state glue around them is
+  still copied hook to hook — [new-mode.md](new-mode.md).
+- **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
+  "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
+  private copy with neither the switch to a date nor the clock.
+- **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
+  ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
+- **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
+  `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
+  passing confirmation.
+- **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
+  `applyThreshold`** — "show the items above this score". The FAQ uses the component; the
+  Glossary's `GateSlider` and the `BarSlider`s in Citations and Quotes draw the same row for
+  themselves, and share only `applyThreshold`.
+- **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
+  the URL.
+- **`src/web/key-chord.ts` § `isTyping`, `isModChord`; `src/web/keynav.ts` § `useArrowNav`;
+  `src/web/useEscapeToClose.ts`** — a keyboard shortcut that must not fire while the reader is
+  typing ([keyboard.md](keyboard.md)).
+- **`src/web/useSlow.ts` § `useSlow`, and `<LoaderCircle className="cmt-spinner">`** — a spinner
+  that appears only once a wait is long enough to mention, in the house shape
+  ([§ The waiting state](#the-waiting-state)). `.srch-spin`, `.spin` and `.chat-dialog-spinner` are
+  copies of the same keyframes.
+- **No shared copy button.** `src/web/Tweets.tsx` § `CopyButton` is private to that file, and the
+  other clipboard writers each have their own.
 
 ## The middle is a slot
 
@@ -215,6 +263,11 @@ written and had been wrong by an order of magnitude for a while: a proportion pi
 absolute numbers goes stale twice as fast as one.)*
 **So there are two ways of styling here, permanently** — utilities for chrome, semantic CSS for
 everything utilities cannot express. Nobody is going to convert the rest, and nobody should try.
+
+**Two utilities that set one property are not decided by their order in the class string.**
+Tailwind's stylesheet order decides, so `tw:mt-20 tw:mt-auto` gave a margin of 0 on five pages out
+of six, and every screenshot of them looked fine. Only `getComputedStyle` on the running page showed
+it — [260908d § The bug this change nearly shipped](../plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md#the-bug-this-change-nearly-shipped-and-how-it-was-caught).
 
 ### Four guards, all in `tailwind.css`
 
@@ -640,9 +693,10 @@ setStatus((was) => (was === "loading" ? "error" : was));
 Only the opening read has nothing to fall back on. **The error is still
 reported** — `error` is a separate field from `status`, and the panels put it
 above the list — so this is not a swallowed failure, it is a failure said beside
-the thing it failed to replace. [`Tweets.tsx`](../../src/web/Tweets.tsx) has to
-say it in a second state (`reloadError`) because its `Loaded` union cannot hold a
-thread and a message at once.
+the thing it failed to replace. `Tweets.tsx` used to say it in a second state
+(`reloadError`), because its `Loaded` union could not hold a thread and a message
+at once; since the read moved into [`useTweets.ts`](../../src/web/useTweets.ts) it
+has the same `status` and `error` pair as the others.
 
 [`useGlossary`](../../src/web/useGlossary.ts) learned this from a GPT Sol review
 of the built code on 2026-08-28. **Three hooks had been copied from it before
@@ -763,6 +817,23 @@ it wrong are the three fixed here: `useChat`/`ChatPanel`, `useComments`/`Dock`,
 and `ProfilePage`'s shelf — plus `useSearch`/`SearchPanel`, which had the
 loading half already and was missing the failed half.
 
+### Three more ways client state goes wrong without saying so <a id="client-state-traps"></a>
+
+- **Freshness follows the order requests were issued, not the order they completed.** Two GETs for
+  one URL can answer out of order, and stamping the answer when it lands lets the older one win.
+  The fix was a sequence reserved before the request goes out —
+  [260905e](../postmortems/260905e-a-slow-response-overwrites-a-fast-one.md), and
+  [library.md](library.md) for `useShelf`'s `issued`/`settled` pair. An artefact mode gets this
+  from [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts).
+- **An effect with `[]` deps that reads a ref can only ever see the first render's DOM.** If the
+  element is behind any conditional — an early return, a `status === "ready"` branch — the effect
+  measured nothing and nothing says so. A callback ref is the usual way out —
+  [260831a](../postmortems/260831a-the-scroller-that-mounted-after-the-measure.md).
+- **A flag something outside the reader's hand sets, with no answer to *what clears it, and what
+  does the screen say while it is true?***, is a state the reader can be stuck in. Live conversation
+  had five of them, and each one stalled silently —
+  [260915b](../postmortems/260915b-live-conversation-stalls-silently.md).
+
 ## A store React subscribes to tells React once per task
 
 **`useSyncExternalStore` re-renders at `SyncLane`, always**, so a store that
@@ -805,8 +876,10 @@ tripped it.
 - **Generated text is rendered as text, never as HTML.** The explanation in
   [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) is React children, not
   `dangerouslySetInnerHTML` — model output sits beside the author's prose and must not be able to
-  dress itself up as it. The one `dangerouslySetInnerHTML` in the client is the author's own
-  block html. See [comments.md](comments.md).
+  dress itself up as it. Every `dangerouslySetInnerHTML` in the client draws the article's own
+  stored html, sanitised at ingest — the prose column, the note preview, the figure lightbox — or a
+  fixed specimen on `/design`; `grep` for it rather than trusting a count. See
+  [comments.md](comments.md).
 - **The height of the sticky bars is measured, never written down.** Deep links, the `?at=` tracker
   and the arrow keys all offset by it, and it used to be the literal `84` in two places with a
   comment asking you to keep it in step with `--bar-h` and the head's height. `stickyOffset()`

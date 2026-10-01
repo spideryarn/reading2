@@ -12,6 +12,10 @@
  * because that file was being rewritten by somebody else at the time, and
  * editing a file another session is mid-way through is how work gets lost —
  * docs/project/version-control.md.
+ *
+ * The place for fan-out with a stop, the adaptive width limit and an abortable
+ * wait; the private sleeps in pdf-read.ts and embeddings.ts are copies —
+ * architecture.md#shared-code-server.
  */
 
 /**

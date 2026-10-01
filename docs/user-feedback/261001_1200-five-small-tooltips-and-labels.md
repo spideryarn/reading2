@@ -59,7 +59,8 @@ read-only.
 
 > And in Metadata mode, perhaps also amalgamate "What we did to it" and "Re-run AI processing"
 
-**Ending: Shipped**, in part for two of them, with the rest named below. On `dev`, not deployed.
+**Ending: Shipped**, in part for two of them, with the rest named below. On `dev` as `7ce6b35b`, not
+deployed.
 
 What we did:
 

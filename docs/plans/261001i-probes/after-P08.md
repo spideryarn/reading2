@@ -1,0 +1,44 @@
+# P08 (after) — preferred summary depth setting
+
+## 1. Docs opened, in order
+- `AGENTS.md` / CLAUDE.md (context) — pointed to reading-view-overview, database.md, worktree/commit rules; helpful.
+- `docs/project/reader-profile.md` — found via grep for the reader row; explains `reader_profiles` and "Where the pieces are"; helpful.
+- `docs/project/experimental-features.md` — best find: its "Where it lives" table is a worked template for a per-reader setting across every layer (column, contract, wire, client store, UI). Very helpful.
+- `docs/project/summaries.md` (grep only) — confirmed "depth cut-off" is the existing depth concept; partial.
+- `docs/project/database.md` (grep only) — migration notes; skimmed.
+
+## 2. Code files you would edit
+- `src/db/schema.ts` (`readerProfiles`, ~line 4049: new nullable column) + new `drizzle/<n>_*.sql` via `npm run db:generate`
+- `src/store/contracts.ts` (`ReaderStore`, near `readExperimental`)
+- `src/store/pg-reader.ts` (read/write pair, upsert on `owner_id`)
+- `src/routes.ts` (`GET`/`PATCH /api/reader`, ~5925 and ~7554; header comment ~20; `one field per PATCH` rule)
+- `src/web/ProfilePage.tsx` and `src/web/SettingsSection.tsx` (control), a new client store/hook modelled on `src/web/experimental-store.ts` / `useExperimental.ts`
+- `src/web/experimental-copy.ts`-style copy file for the label/tooltip
+- Docs: `docs/project/reader-profile.md` (and summaries.md) updated.
+
+## 3. Existing helpers to reuse
+- `src/store/pg-reader.ts` § `writeExperimental` / `readExperimental` (pattern, upsert)
+- `src/web/experimental-store.ts` § module store, `src/web/useExperimental.ts` § hook (pattern)
+- `src/web/SettingsSection.tsx` § checkbox row layout, `ControlTip`/`Tooltip` from `src/web/Tooltip.tsx`
+- `src/routes.ts` § `READER_PATH` handler and its body parsing
+- No existing "summary depth" preference exists; I would write a new column and parsing validator. Unclear whether the depth is an integer or a named level; I did not find a canonical type for the depth cut-off (summaries.md talks about it in prose).
+
+## 4. Rules to follow
+- Work in a worktree, commit own files by name, push to `dev` (AGENTS.md).
+- Reproduce/test first; `npm test`, `npm run typecheck`, lint on touched files (AGENTS.md, code-quality-overview).
+- Additive migration is fine to apply; read the `Target:` line (AGENTS.md, database.md).
+- Settings-on-the-row rule: revisit a settings table at three or four settings (schema.ts comment; this would be the second).
+- Nullable column over boolean/default; nothing to backfill (sql.md).
+- One change per PATCH; response must name the field or client treats as error (experimental-features.md).
+- Let types catch it: discriminated unions, named types (AGENTS.md, typechecking.md).
+- Plan doc in `docs/plans/` plus GPT Sol review before and after (AGENTS.md).
+- Failure copy goes in `src/messages.ts` (copy.md); no logging of profile data (logging.md).
+- No streaming, no model call, so no cost tracking.
+
+## 5. Where I got lost
+- Not obvious where "summary depth" would be consumed; the setting would be stored but the summaries panel reading it is a second task I did not scope.
+- Schema comment cites `drizzle/0037...` while the latest migrations are timestamp-named; unclear which numbering new migrations use. Did not verify.
+- Did not open the client store or ProfilePage in full; wiring details are inferred from the docs.
+
+## 6. Confidence
+7/10

@@ -1,5 +1,7 @@
 # Page titles
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **What the browser tab says.** One rule — *what is different about this tab goes first* — and one
 place it is implemented: [`src/web/page-title.ts`](../../src/web/page-title.ts), a pure function
 plus a hook, tested in [`tests/page-title.test.ts`](../../tests/page-title.test.ts).
