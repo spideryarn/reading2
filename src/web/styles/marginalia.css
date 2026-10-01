@@ -132,13 +132,30 @@
 .marg-head p {
   margin: 0;
 }
+/* The part above, small caps and faint; the section under it, in the head's
+   own voice. Each wraps rather than ending in an ellipsis — Greg, 7M: "the
+   text is truncated too much" (261001k). Two lines each, so the path is at most
+   four and the head (with the arc's three) at most seven — the backstop for a
+   long title, not the ordinary case (GPT Sol on the plan). */
 .marg-path {
+  display: grid;
+  gap: 0.125rem;
+}
+.marg-path-step {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.marg-path-step[data-depth="0"] {
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   font-variant: small-caps;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.marg-path-step[data-depth="1"] {
+  color: var(--ink-soft);
 }
 .marg-arc {
   all: unset;

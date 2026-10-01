@@ -148,20 +148,36 @@ export function AnnotationsHead({
       <aside className="marg-narrow" aria-label="Annotations">
         <p>
           {beside
-            ? "The notes need a wider window, or the panel closed — they sit to the right of the text."
+            ? "The notes need a wider window — press Annotations again to swap them in for the panel."
             : "The notes need a wider window — they sit to the right of the text."}
         </p>
       </aside>
     );
   }
   if (path.length === 0 && arc === null) return null;
-  /* **Orientation, not a summary**: the path on one line and the arc cut at
-     three, the whole of both in a card on hover, focus or tap. A head that
-     grew to the arc's full six or seven lines dominated the margin it is meant
-     to sit quietly at the top of (GPT Astra's design pass, 2026-10-01). */
+  /* **Orientation, not a summary**: the arc cut at three, the whole of it in a
+     card on hover, focus or tap. A head that grew to the arc's full six or
+     seven lines dominated the margin it is meant to sit quietly at the top of
+     (GPT Astra's design pass, 2026-10-01).
+
+     **The path is not cut**: each title on a line of its own, wrapping. It was
+     one line with an ellipsis, and in a 200–288px column the part's title left
+     the section a word or two — Greg, 7M: *"the text is truncated too much"*.
+     261001k. */
   return (
     <aside className="marg-head" aria-label="Where you are">
-      {path.length > 0 && <p className="marg-path">{path.join(" › ")}</p>}
+      {path.length > 0 && (
+        <p className="marg-path">
+          {path.map((title, depth) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the path is a fixed ancestry, part then section; position is its identity.
+            <span key={depth} className="marg-path-step" data-depth={depth} title={title}>
+              {/* Read aloud as one path, as the ` › ` join was; seen as lines. */}
+              {depth > 0 && <span className="sr-only"> › </span>}
+              {title}
+            </span>
+          ))}
+        </p>
+      )}
       {arc !== null && <ArcLine arc={arc} />}
     </aside>
   );
