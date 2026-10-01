@@ -1763,8 +1763,11 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  *
  * `ideas` sends `articleWithIds`, because every occurrence it returns is a block
  * id and the ids therefore have to be on the page (src/article-prompt.ts says
- * why the other four deliberately omit them). So it can never share a prefix
- * with arc, tweets or glossary however its effort is set — and
+ * why the stages that return no ids deliberately omit them). So it can never
+ * share a prefix with arc, glossary or quotes however its effort is set. (This
+ * said "arc, tweets or glossary" until 2026-10-01; `tweets` has sent the ids too
+ * since `tweets/5` on 2026-09-29, and is in `ideas`' group — see its row below.)
+ * And
  * `sharesArticleCache` in src/pipeline.ts reads both tables rather than the one,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
  *

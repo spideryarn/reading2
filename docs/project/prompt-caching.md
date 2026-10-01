@@ -129,7 +129,8 @@ drift back out of agreement with it.
 **Half, since 2026-08-27, and it used to say "the".** Effort is the *surprising* half, which is why
 it got written down first — but the bytes are the obvious half, and they stopped being uniform when
 [ideas](ideas.md) arrived. That stage answers with block ids, so it must send `articleWithIds` where
-the arc, the thread, the glossary and the summary all send `articleText`; the two renderings of one
+the arc, the glossary and the summary sent `articleText` (the thread did too until 2026-09-29, when
+it started naming its source blocks and moved to the ids rendering); the two renderings of one
 article agree on the head and on nothing after it. Matching on effort alone would have marked the
 article on an `arc` run because `ideas` was queued behind it at the same effort, paid the 1.25×
 write premium, and collected no read at all. `ARTICLE_RENDERER` in `src/models.ts` is the second
