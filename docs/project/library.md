@@ -922,6 +922,43 @@ came out of GPT Sol's review of the built code, 2026-09-04; the argument for eac
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
 [security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
 
+### A paper not read through yet
+
+> Each paper should be shown on the shelf as normal, but indicate in the UI that it hasn't been
+> AI-processed yet.
+>
+> — Greg, 2026-10-01
+
+A file added in a batch has only its title, authors, abstract and DOI read
+([ingest-queue.md § Many at once](ingest-queue.md#many-at-once)), and its `LibraryEntry` says
+`processing: "minimal"`, with `abstract` and `doi` beside it and every count at 0. It is an ordinary
+card, with four differences, all in [`ShelfCard`](../../src/web/ShelfEntry.tsx):
+
+- **The marker.** *Not AI-processed yet*, in `ArchivedMark`'s shape (`NotProcessedBadge`), on the
+  meta line of the card and in the title cell of the table.
+- **No numbers it does not have.** The meta line keeps the byline and drops length and blocks; the
+  word count goes; the table's Words cell is a dash and sorts last.
+- **The abstract, behind a closed `<details>`**, because forty open abstracts would be a wall.
+- ***Read this*, with its cost beside it** — *Uses 0.99 of an article from your allowance*
+  ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)).
+  It is `ReadThisButton` ([`ReadThis.tsx`](../../src/web/ReadThis.tsx)), handed to the card by
+  `Library` as a slot, because `ShelfEntry.tsx` is shared with the lazy `/admin` and `/design`
+  routes and the button brings the job engine behind it (`tests/eager-client-graph.test.ts`). It
+  reads the job engine, so a press here and one on the paper's own page are the same job, and the
+  card shows it running. The table has no button: a row opens the paper's page, which has one.
+
+**Rebuild is not drawn** on a minimal card, in the row or in the "⋯" menu. That breaks *five
+buttons, always five* (§ When a button cannot do its job) on purpose: there is nothing built to
+rebuild, the server refuses it, and *Read this* is the action. Edit, Open, Copy and Archive stay.
+
+**Opening it is free.** The card's link goes to the reading address as usual, where the owned route
+answers `409 not-processed` and the page draws the paper — title, authors, abstract, DOI as a
+`doi.org` link when it has the DOI shape, *Open the PDF* for a PDF, and *Read this*
+([`UnreadPaperPage.tsx`](../../src/web/article/UnreadPaperPage.tsx)). Nothing starts by itself: the
+plan's answer 6, so a reader skimming twenty titles spends nothing. When a *Read this* job on that
+paper ends `done`, the page loads the article in place. `tests/minimal-paper-ui.test.tsx` holds the
+card and the page.
+
 ### Where the numbers on it come from, and why nobody derives them twice
 
 Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by

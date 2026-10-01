@@ -46,8 +46,10 @@ import {
   BILLING_UNREACHABLE,
   NOTHING_TO_MANAGE,
   QUOTA_CODES,
+  READ_THIS_ALREADY_RUNNING,
   codeOfMessage,
   ingestQuotaReached,
+  minimalQuotaReached,
 } from "../src/messages.js";
 import { QuotaNotice } from "../src/web/QuotaNotice.js";
 
@@ -98,6 +100,11 @@ const REFUSALS = [
     refusal: ingestQuotaReached({ limit: 3, lapsed: true }),
     href: "/profile",
   },
+  {
+    why: "a minimal add needs more allowance, and plans are compared on /pricing",
+    refusal: minimalQuotaReached({ fits: 0 }),
+    href: "/pricing",
+  },
 ] as const;
 
 it("sends each of the three quota refusals where that refusal can be got out of", () => {
@@ -137,7 +144,14 @@ it("leaves an ordinary failure exactly as it was", () => {
 });
 
 it("offers no upgrade for the billing failures a subscription cannot fix", () => {
-  for (const failure of [BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE]) {
+  for (const failure of [
+    BILLING_NOT_AVAILABLE,
+    BILLING_UNREACHABLE,
+    NOTHING_TO_MANAGE,
+    /* `[pay-reading]` means this same paper is already running. It is not an
+       allowance refusal despite the prefix, and buying cannot change it. */
+    READ_THIS_ALREADY_RUNNING,
+  ]) {
     const drawn = draw(failure.message);
     expect(drawn.text).toContain(failure.message);
     expect(drawn.links).toEqual([]);

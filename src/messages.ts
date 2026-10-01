@@ -5206,7 +5206,7 @@ export const ALREADY_ON_ITS_WAY: ReaderFacingFailure = {
 };
 
 /**
- * The three codes `ingestQuotaReached` can end with — *the wall said no*.
+ * The codes a refusal of the article allowance can end with — *the wall said no*.
  *
  * A list rather than a prefix test, and the difference is the point: `pay-off`,
  * `pay-down` and `pay-none` are also `pay-` codes and none of them is a quota
@@ -5217,23 +5217,27 @@ export const ALREADY_ON_ITS_WAY: ReaderFacingFailure = {
  *
  * **Kept beside the function that produces them**, so a fourth refusal added
  * above is one line away from the list that decides what is drawn around it —
- * and `tests/billing-plan.test.ts` asserts the two agree, by building all three
- * messages and comparing their codes against this array.
+ * and `tests/billing-plan.test.ts` asserts the producers agree with this array.
  */
-export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed";
+export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal";
 
-/* A union rather than three loose strings, so that a fourth refusal added above
+/* A union rather than loose strings, so that another refusal added above
    makes every `switch` over this go red at compile time — `QuotaNotice` chooses
    a *destination* per code, and a code with no destination must not be able to
    fall through to a default that sends somebody to the wrong page. */
-export const QUOTA_CODES: readonly QuotaCode[] = ["pay-free", "pay-limit", "pay-lapsed"];
+export const QUOTA_CODES: readonly QuotaCode[] = [
+  "pay-free",
+  "pay-limit",
+  "pay-lapsed",
+  "pay-minimal",
+];
 
 /**
  * **Is this failure the quota refusing an ingest?**
  *
  * The one question `QuotaNotice` (src/web/QuotaNotice.tsx) asks before putting a
  * link beside a sentence. **Which** page that link goes to is
- * `quotaRefusalCode`'s answer, below, and it is not the same for all three.
+ * `quotaRefusalCode`'s answer, below, and it is not the same for all of them.
  *
  * Asked of the **message**, because that is all a client has where these are
  * read: `readJson` throws the server's own sentence and the code is the last
@@ -5254,7 +5258,7 @@ export function isQuotaRefusal(message: string | null | undefined): boolean {
  * **Which** quota refusal this is, or `null` for anything else.
  *
  * The same question as `isQuotaRefusal` and one answer further on, because the
- * three refusals do not share a remedy: a free account can buy, a subscriber at
+ * the refusals do not share a remedy: a free account can buy, a subscriber at
  * their monthly limit has nothing to buy and is waiting for a date, and a lapsed
  * one may or may not be able to start again. `QuotaNotice` sends each of them
  * somewhere different, and the finding that made this necessary is in the

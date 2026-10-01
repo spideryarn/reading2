@@ -46,6 +46,7 @@ import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
+import { UnreadPaperPage } from "./UnreadPaperPage.js";
 
 /**
  * One article, fetched **once for all of its views**.
@@ -97,7 +98,11 @@ export function ArticlePage({
      re-runs that file. src/web/last-view.ts has the whole of it, including why
      a shared link always beats the memory. */
   useLastView(slug);
-  const access = useArticleAccess(slug, readerId);
+  /* Bumped by the not-yet-read page once *Read this* is done, to load the
+     article it made in place. */
+  const [attempt, setAttempt] = useState(0);
+  const reread = useCallback(() => setAttempt((n) => n + 1), []);
+  const access = useArticleAccess(slug, readerId, attempt);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -149,6 +154,12 @@ export function ArticlePage({
      this one, and the error page is a `<pre>` with nothing to press. It draws
      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
+
+  /* **Yours, and not read through yet** (plan 261001m): the paper's title,
+     authors and abstract, and *Read this*. It draws its own corner pair. Every
+     view of the article — the metadata page, the thread — lands here too,
+     because none of them has an article to draw. */
+  if (access.kind === "unread") return <UnreadPaperPage paper={access.paper} onRead={reread} />;
 
   /* **The corner pair, on the two branches with no bar to put it in.**
      `App` stopped drawing the corner Feedback trigger on the `read` route on

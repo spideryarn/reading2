@@ -444,7 +444,7 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
 ### A minimal upload, and Read this
 
 **Built 2026-10-01, the server half** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md),
-Stage 3; the browser is Stage 4). A *minimal paper* is a file added with only its title, authors,
+Stage 3; the browser is Stage 4, [§ Many at once](#many-at-once)). A *minimal paper* is a file added with only its title, authors,
 abstract and DOI read — no blocks, no tree — at a hundredth of an article
 ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)). It
 is an ordinary shelf entry whose `articles.processing` is `'minimal'`. Any file a single upload
@@ -518,6 +518,75 @@ supersedes the minimal row — a zero there, while the paper has a minimal row, 
 back. A failed *Read this* releases its reservation and the paper stays minimal; its Retry goes back
 through `withUpgradeSlot`, bound to the same paper. `tests/minimal-paper.test.ts` holds all of it
 against a real database, through the real routes.
+
+### Many at once
+
+**The browser half, built 2026-10-01** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md)
+Stage 4). Drop or pick **two or more** files on the add box and each becomes a minimal paper; one
+file is today's full import, unchanged. The file input takes `multiple`, and a mix of PDFs and web
+pages is fine — each file gets the same `uploadProblem` check a single upload does.
+
+> … if you upload multiple PDFs at the same time, ideally it would be possible to do that. … by
+> default, maybe it wouldn't run AI processing when you do that, only when you open each of them for
+> the first time.
+>
+> — Greg, 2026-10-01 (report `spya-eym66s`)
+
+**[`batchUpload.ts`](../../src/web/batchUpload.ts)** is a module singleton, bound to the reader in
+`useJobSession` beside `uploadEngine` and for its reason: the shelf unmounts when the reader goes
+elsewhere, and the batch must not. For each file:
+
+```
+  waiting ─► hashing ─► sending ─► reading ─► on the shelf
+   (a slot)   (one worker)  grant + PUT   POST /api/jobs {uploadId, level: "minimal"}
+                                          and held until watchTerminal says the job ENDED
+```
+
+- **Three in flight, and in flight lasts until the job has ended**, however it ends. Backpressure,
+  not a defence: the allowance is the defence.
+- **One hashing worker.** A file's `arrayBuffer()` is read when it reaches the front, the digest is
+  kept and handed to `requestGrant` (which takes it, and `level`, from a caller that has one), and
+  the buffer goes. A thousand-file drop is never in memory together.
+- **Identical bytes in one drop are one paper** — the second says *The same file as …* and sends
+  nothing. Across drops, tabs and the archive it is the server's duplicate check: a `409` with
+  `code: "duplicate"`, said as *Already on your shelf* (or *archived*, or *being added*), linked
+  when the body names the article.
+- **The allowance stops the queue.** A `402` at the grant or the job marks that file and every file
+  not yet started *Not started: out of allowance*, with the server's `[pay-minimal]` sentence once
+  and a link to `/pricing`. Files already past their grant finish. A new drop asks again.
+- **It hears every ending**, through the job engine's `watchTerminal` (below): `done` is *On your
+  shelf* with a link, `error` is *Couldn't read this one* with the job's sentence and **Retry**
+  (`POST /api/jobs/:id/retry`; a failed job POST re-posts without re-sending, and a failed send
+  starts again), `cancelled` is *Stopped*, and a job that vanished is *Out of sight: look on your
+  shelf*. None of them stalls the queue.
+- **Stop** stops everything not yet queued — waiting files, and files being hashed or sent, whose
+  transfer is aborted and grant given back (`DELETE /api/uploads/:id`). **A file whose job is
+  already running is left to finish**, for the reason `uploadEngine.cancel` refuses during
+  `queueing`: its reservation is made and its work is seconds long.
+- **Up to 1,000 files in one drop**; beyond that the panel says how many were not taken.
+- A sign-out fences everything, as for one upload.
+
+**[`BatchPanel.tsx`](../../src/web/BatchPanel.tsx)**, under the add box on the shelf: one row per
+file, a counts line, Stop, and *Keep this tab open while it works* — the tab is the worker
+(§ The browser is the worker). Rows wrap at 390px. A minimal paper's job is left out of the add
+box's own job list, which would otherwise draw forty cards for forty seconds-long jobs.
+
+**The terminal seam** is `jobEngine.watchTerminal(jobId, onEnd)`
+([`jobEngine.ts`](../../src/web/jobEngine.ts)), Sol's plan-review P1. It is fed by every list
+reconciliation **and** by every `/advance` response, because the drive loop runs behind a hidden tab
+and the poll does not. A job is *vanished* only when a list **that began after the watcher was
+registered** leaves it out; a list already on the wire knew nothing of it. A pending watcher keeps
+the busy cadence armed, a teardown drops every watcher uncalled, and a job already terminal in the
+snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` and
+`tests/batch-upload.test.ts` hold the two halves.
+
+***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
+`POST /api/jobs {slug, process: true}` through the engine's action seam, so the job is driven at
+once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
+promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
+queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may
+be long gone by then. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
+has the card and the page.
 
 ## The add page
 

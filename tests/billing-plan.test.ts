@@ -31,7 +31,13 @@ import {
   switchingPlan,
 } from "../src/billing-plan.js";
 import type { ReaderPlan } from "../src/billing-plan.js";
-import { QUOTA_CODES, codeOfMessage, ingestQuotaReached, isQuotaRefusal } from "../src/messages.js";
+import {
+  QUOTA_CODES,
+  codeOfMessage,
+  ingestQuotaReached,
+  isQuotaRefusal,
+  minimalQuotaReached,
+} from "../src/messages.js";
 import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../src/messages.js";
 
 /** Everything one plan puts on screen, as one string to make claims about. */
@@ -467,18 +473,21 @@ describe("prices, which come off a row and are never converted here", () => {
 });
 
 describe("which failures get an upgrade link beside them", () => {
-  it("recognises all three quota refusals", () => {
+  it("recognises every quota refusal", () => {
     /* Built through `ingestQuotaReached` rather than from literal strings, so
        the day somebody reworks the copy this still asks about the real
        messages. */
     const free = ingestQuotaReached({ limit: 3 }).message;
     const monthly = ingestQuotaReached({ limit: 20, resetAt: new Date("2026-10-03") }).message;
     const lapsed = ingestQuotaReached({ limit: 3, lapsed: true }).message;
-    for (const message of [free, monthly, lapsed]) expect(isQuotaRefusal(message)).toBe(true);
-    /* And the codes those three carry are exactly the list — so a fourth
-       refusal added to `ingestQuotaReached` without being added to `QUOTA_CODES`
+    const minimal = minimalQuotaReached({ fits: 0 }).message;
+    for (const message of [free, monthly, lapsed, minimal]) expect(isQuotaRefusal(message)).toBe(true);
+    /* And the codes they carry are exactly the list — so another refusal added
+       without being added to `QUOTA_CODES`
        fails here rather than silently losing its link. */
-    expect([free, monthly, lapsed].map(codeOfMessage).sort()).toEqual([...QUOTA_CODES].sort());
+    expect([free, monthly, lapsed, minimal].map(codeOfMessage).sort()).toEqual(
+      [...QUOTA_CODES].sort(),
+    );
   });
 
   it("does not offer an upgrade for the billing failures a subscription cannot fix", () => {

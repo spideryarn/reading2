@@ -89,6 +89,7 @@ interface WayOut {
 function wayOut(code: QuotaCode): WayOut {
   switch (code) {
     case "pay-free":
+    case "pay-minimal":
       /* *Plans and prices*, not *Upgrade*: this reader is asking what carrying
          on would cost, and the page is where that is answered. */
       return { href: PRICING_HREF, label: "Plans and prices" };
