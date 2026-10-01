@@ -29,7 +29,7 @@
 import type { Mode } from "../modes.js";
 import { SIMPLE_LEVELS, type SimpleLevel } from "../types.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
-import type { RememberView } from "./params.js";
+import type { RememberView, StructureView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -41,7 +41,8 @@ export type SubMode =
   | { readonly mode: "remember"; readonly view: RememberView }
   | { readonly mode: "diagram"; readonly view: DiagramKind }
   | { readonly mode: "referee"; readonly view: RefereeView }
-  | { readonly mode: "summary"; readonly view: SimpleLevel };
+  | { readonly mode: "summary"; readonly view: SimpleLevel }
+  | { readonly mode: "structure"; readonly view: StructureView };
 
 /** The modes that have sub-modes. */
 export type ModeWithSubModes = SubMode["mode"];
@@ -151,7 +152,25 @@ export const SUMMARY_SUB_MODES: Readonly<Record<SimpleLevel, SubModeWords>> = {
   },
 };
 
-/** The words for one sub-mode. A `switch` so a fifth mode with sub-modes fails to compile here. */
+/**
+ * Structure's two views. The chips' words, StructureMode.tsx §
+ * `StructureViewToggle`. Greg, 2026-10-01 (spya-gxyhcc); the order is the
+ * toggle's, Fisheye first because it is the default.
+ */
+export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> = {
+  fisheye: {
+    label: "Fisheye",
+    description: "Every part, opened up around the one you are reading",
+    experimental: false,
+  },
+  expanded: {
+    label: "Expanded",
+    description: "Every part and section, each with its summary, in one list",
+    experimental: false,
+  },
+};
+
+/** The words for one sub-mode. A `switch` so a sixth mode with sub-modes fails to compile here. */
 export function subModeWords(sub: SubMode): SubModeWords {
   switch (sub.mode) {
     case "remember":
@@ -162,6 +181,8 @@ export function subModeWords(sub: SubMode): SubModeWords {
       return REFEREE_SUB_MODES[sub.view];
     case "summary":
       return SUMMARY_SUB_MODES[sub.view];
+    case "structure":
+      return STRUCTURE_SUB_MODES[sub.view];
     default: {
       const never: never = sub;
       return never;
@@ -187,6 +208,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return REFEREE_VIEWS.map((view) => ({ mode, view }));
     case "summary":
       return SIMPLE_LEVELS.map((view) => ({ mode, view }));
+    case "structure":
+      return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
     default:
       return [];
   }
@@ -211,6 +234,7 @@ export interface SubModeParams {
   readonly diagram?: DiagramKind | null;
   readonly referee?: RefereeView | null;
   readonly summary?: SimpleLevel;
+  readonly structure?: StructureView | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -225,6 +249,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
     case "summary":
       return { mode: "summary", summary: sub.view };
+    case "structure":
+      return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

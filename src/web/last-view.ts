@@ -71,6 +71,7 @@ export const REMEMBERED = [
   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
   "deep", // how far down summary mode goes
   "summary", // gists or one of three plain levels — only a slider gesture spends
+  "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
   "dhue", // what a dot's colour means

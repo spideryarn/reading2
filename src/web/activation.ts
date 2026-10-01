@@ -141,7 +141,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView, SummaryView } from "./params.js";
+import type { RememberView, StructureView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -607,6 +607,9 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
       return REFEREE_TARGET[sub.view] ?? null;
     case "summary":
       return "simple";
+    /* Nothing to generate in either view: the tree is in the page's payload. */
+    case "structure":
+      return null;
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
@@ -651,7 +654,13 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
+  sub: {
+    diagram: DiagramKind;
+    referee: RefereeView;
+    remember: RememberView;
+    structure: StructureView;
+    summary: SummaryView;
+  },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;

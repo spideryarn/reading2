@@ -1211,6 +1211,33 @@ export const summaryParam = createParser<SummaryView>({
   .withDefault("gists")
   .withOptions({ history: "push" });
 
+/* ---------------------------------------------------------- structure mode --
+   docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
+
+/**
+ * Structure's two views: the fisheye, which opens up around the part you are
+ * reading (both faces, StructureMode.tsx § `structureFace`), and Expanded,
+ * every part and section with its gist, in one list that scrolls.
+ */
+export const STRUCTURE_VIEWS = ["fisheye", "expanded"] as const;
+export type StructureView = (typeof STRUCTURE_VIEWS)[number];
+
+/**
+ * Which of Structure's views is open — `fisheye` (the default, omitted) or
+ * `expanded`. Greg, 2026-10-01 (spya-gxyhcc): "Add a toggle to Structure mode
+ * to switch between the Fisheye submode (which should be the default …) and
+ * Expanded mode". The shape of `?remember=` and `?summary=`: in the URL because
+ * it changes the whole band, pushed because switching is a deliberate act Back
+ * should undo, and an unknown value opens the default. Nothing to generate, so
+ * writing it never spends.
+ */
+export const structureParam = createParser<StructureView>({
+  parse: (v) => (STRUCTURE_VIEWS.includes(v as StructureView) ? (v as StructureView) : null),
+  serialize: (v) => v,
+})
+  .withDefault("fisheye")
+  .withOptions({ history: "push" });
+
 /* ------------------------------------------------------------ referee mode --
    The mode for somebody who has been asked to peer-review the piece. One
    parameter, and it names which of the four sub-modes is open.

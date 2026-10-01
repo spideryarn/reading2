@@ -24,12 +24,16 @@
  * (src/web/visitor.ts § `POLICY`).
  */
 
+import { useQueryState } from "nuqs";
 import { useLayoutEffect, useMemo, useState } from "react";
 import type { Article, BlockId, NodeId, TreeNode } from "../../../types.js";
 import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
+import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { StructurePanel } from "../../StructurePanel.js";
+import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
+import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
@@ -69,6 +73,65 @@ export function structureFace(
 ): "columns" | "list" {
   if (!proseBeside) return "list";
   return bandWidth >= structureColumnsBand(rootFontPx).min ? "columns" : "list";
+}
+
+/** The second paragraph of each chip's card: what it does that its name does not say. */
+const VIEW_HOW: Readonly<Record<StructureView, string>> = {
+  fisheye: "It opens up as you read. With room it is two columns, otherwise one list.",
+  expanded:
+    "The list scrolls on its own, and follows you each time you move into another section.",
+};
+
+/**
+ * **Fisheye / Expanded** — Greg, 2026-10-01 (spya-gxyhcc). Referee's chips are
+ * the pattern (RefereeMode.tsx § `RefereeViews`): a radiogroup of buttons, each
+ * its own tab stop, a card on each. Neither arms anything — there is nothing
+ * to generate — so the click is only the URL write.
+ */
+export function StructureViewToggle({
+  view,
+  onView,
+}: {
+  view: StructureView;
+  onView(next: StructureView): void;
+}) {
+  return (
+    <div className="struct-views" role="radiogroup" aria-label="How Structure is drawn">
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {STRUCTURE_VIEWS.map((v) => (
+          <Tooltip
+            key={v}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={STRUCTURE_SUB_MODES[v].label}
+                what={STRUCTURE_SUB_MODES[v].description}
+                how={VIEW_HOW[v]}
+              />
+            }
+          >
+            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s, the call RefereeMode.tsx, DiagramPanel.tsx and Dock.tsx already make */}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={v === view}
+              tabIndex={0}
+              className={`struct-view-btn${v === view ? " on" : ""}`}
+              onClick={() => {
+                /* Writing the value already open would push a history entry
+                   that goes nowhere. */
+                if (v !== view) onView(v);
+              }}
+            >
+              {STRUCTURE_SUB_MODES[v].label}
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
+    </div>
+  );
 }
 
 export function StructureBand({
@@ -204,7 +267,16 @@ export function StructureBand({
     return () => ro.disconnect();
   }, [band, proseBeside, rootFontPx]);
 
-  if (face === "list") {
+  /**
+   * **Fisheye or Expanded** — `?structure=` (params.ts § `structureParam`).
+   * Expanded is the list in every band width: one scrolling list of every part
+   * and section, so it has no columns face. The face is still measured while
+   * it is open, so going back to Fisheye lands on the right one.
+   */
+  const [view, setView] = useQueryState("structure", structureParam);
+  const head = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
+
+  if (view === "expanded" || face === "list") {
     return (
       <OutlinePanel
         surfaceRef={setBand}
@@ -215,6 +287,8 @@ export function StructureBand({
         proseBeside={proseBeside}
         paragraphLabels={labelsReady}
         onJump={onJump}
+        expanded={view === "expanded"}
+        head={head}
       />
     );
   }
@@ -225,6 +299,7 @@ export function StructureBand({
       focusRow={live.focusRow}
       allowParagraphs={proseBeside && labelsReady}
       onJump={onJump}
+      head={head}
     />
   );
 }
