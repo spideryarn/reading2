@@ -1,0 +1,1826 @@
+diff --git a/docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md b/docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md
+index 02e0a6ac..8c771c7d 100644
+--- a/docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md
++++ b/docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md
+@@ -4,7 +4,8 @@
+ probe provenance are built; the guard is a proposal, not built. It was measured the same day
+ (§ Measuring the guard): Luna catches 24 of the 30 known faults for about $0.0027 per complete
+ three-level press. The recommendation is to build an instrumented first version, store the retry
+-after a second flag, and fail open if the checker itself fails. Greg decides.
++after a second flag, and fail open if the checker itself fails. **Built that way the same day:
++[261001i](261001i-simple-fidelity-guard-built.md).**
+ 
+ A fidelity bug in Simple (Summary's Brief · Simple · Fuller), dispatched by the Overseer, recorded in
+ [261001b § Fidelity](261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md):
+diff --git a/docs/plans/261001i-simple-fidelity-guard-built.md b/docs/plans/261001i-simple-fidelity-guard-built.md
+new file mode 100644
+index 00000000..7bf6de86
+--- /dev/null
++++ b/docs/plans/261001i-simple-fidelity-guard-built.md
+@@ -0,0 +1,232 @@
++# Simple's fidelity guard, built: check each level against its cited passages, retry once, record it
++
++**Status as of 2026-10-01:** built; Sol's plan review taken (one P1 declined, below); one real press run.
++
++Builds the guard that
++[261001h § Measuring the guard](261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md)
++recommends, in the form that section ends on: *"check, retry once on a flag, and store the second
++attempt whatever its verdict, recording that it was flagged. If the checker call fails or answers
++unreadably, keep the current writer output unchecked and record the checker failure; do not spend
++the writer retry."* Part of [summaries.md § Simple](../project/summaries.md#simple-a-plain-words-orientation).
++
++The fault it is for: on the PID paper, Simple says synergy *"grows with more feedback loops"*,
++borrowing the paper's name for the connection type that does the opposite. A prompt rule did not
++make that rare enough (261001h). A quick-tier checker caught 24 of 30 hand-labelled faults, raised
++alarms on 1–2% of paragraphs, and cost $0.0027 a press.
++
++**Not in scope:** the Simple prompt, and the other summary voices. The guard is Simple's alone until
++the Overseer says otherwise.
++
++## What a press does now
++
++```
++   writer (one level) ──► validate ──fails──► ask again (attempt 2) ─┐
++                             │ ok                                    │
++                             ▼                                       │
++     checker: every paragraph + the text of its own cited blocks     │
++     one quick-tier call, one verdict per paragraph                  │
++        │            │                    │                          │
++      all ok      a "contradicts"     call failed / unreadable       │
++        │            │                    │                          │
++      store       attempts left?       store, unchecked              │
++     (passed)     yes ─► ask again ───────────────────────────────────┘
++                  no  ─► store anyway, flagged
++```
++
++The three levels still run side by side; each level's check follows its own writer call, so a press
++waits roughly one checker call longer (4–5 s measured). **At most two writer calls and two checker
++calls a level**, six of each a press: a flag's retry is a writer call and, if it validates, another
++check.
++
++- **One budget.** The guard shares `LEVEL_ATTEMPTS = 2` with validation. If validation used the
++  first attempt, a flag on the second cannot buy a third writer call: the level is stored flagged,
++  and the record says the budget was spent.
++- **Fail open.** A checker that throws, times out, or answers in a shape we cannot read is not a
++  verdict. The level is stored as written, recorded as unchecked, and the writer retry is not spent.
++  261001h reverses its own earlier "fail closed" for this, on availability grounds; Luna had 0 such
++  failures in 278 calls, so this path was not measured.
++- **Never fails a press.** If the retry a flag bought fails — its call refused or broken, or its
++  answer invalid — the flagged first attempt is stored, as it would have been with no guard, and the
++  record says so (`stored: 1`). A writer failure with no flag behind it still fails the press, as
++  today. (Sol's plan review, P1-1: the first draft of this plan claimed this without doing it.)
++- **A job abort is still an abort.** The checker's own 30 s deadline is a failed check, stored
++  unchecked; the job's signal, or a sibling level failing, is an abort, rethrown after the check.
++
++## The checker
++
++`src/simple-check.ts`, new. It holds:
++
++- **The probe's system prompt, verbatim.** It names the class of fault, never this paper, and it was
++  not tuned on the results. Changing it is a prompt change to be measured, so it carries its own
++  version, `simple-check/1`, stored with each record.
++- **The probe's user message**: `PARAGRAPH n`, the text, then `ITS PASSAGES` with each cited block's
++  text, levels separated as in the probe. The block text is `block.text` of the same body-evidence
++  blocks the writer saw.
++- **A strict parser.** One verdict per paragraph, in order, `ok` or `contradicts`. Any other shape is
++  "unreadable", which is a checker failure, not a pass and not a flag.
++- **A deadline** of 30 s. The measured press p90 was 5.8 s and max 12.2 s.
++
++**The call.** A new job, `simple-check`, on the quick tier (Luna today), through `openRouterJson` on
++the chat wire with `reasoning: { effort: "low" }` and `max_completion_tokens: 4000` — the request the
++probe measured through `link-summary`'s route, given its own name. Registered where every job is:
++`AiJob`, its tier, its wire, its model-override env var (`src/models.ts`), its route policy and
++reasoning (`src/ai-call.ts`, `link-summary`'s `require_parameters` and no `order`), its cost
++category (the same as `simple`'s), and a `PLAIN_WORDS_EXEMPT` line, since a verdict is not reader
++prose. High-powered AI does not move it, like `quiz-verdict`.
++
++**Where its cost lands.** The call is made inside the `simple` step's collector, so every check is an
++`ai_calls` row with `purpose = 'simple-check'`, attributed to the job, the step and the article by
++`runStep`. Nothing to add.
++
++## The record, and how to count it
++
++There are three numbers to watch: how often a level is flagged, how often a flag buys a retry, and
++how often the checker itself fails.
++
++**The ledger already counts checks and transport failures**, through the purpose above: rows, cost,
++latency, and `outcome` (`error`, `aborted`). It cannot count flags or unreadable answers, because a
++row is written when the call ends, before anyone reads the answer, and is never amended. A verdict
++column on `ai_calls` would mean amending it, or teaching the gateway about one caller's answer.
++
++**So the verdicts go on the artefact itself**, as an optional `check` field of `SimpleSummary`:
++
++```ts
++check: {
++  checker: "simple-check/1",          // the prompt version
++  requestedModel: "openai/gpt-…-luna", // what was asked; ai_calls has what answered
++  levels: { brief: LevelCheck, simple: LevelCheck, fuller: LevelCheck },
++}
++
++type LevelCheck = (
++  | { result: "passed" }
++  | { result: "flagged";   flags: { paragraph: number; why: string }[] }  // the stored text's
++  | { result: "unchecked"; failure: "call" | "unreadable" }
++) & (
++  | { attempts: 1; retriedAfterFlag: false; stored: 1 }
++  | { attempts: 2; retriedAfterFlag: boolean; stored: 1 | 2 }
++);
++```
++
++- `attempts` is writer calls for that level, so a validation retry is visible too.
++- `retriedAfterFlag` says the first valid attempt was flagged, and that bought another call.
++- `stored` is which attempt's text was kept: `1` after a retry is the retry having failed.
++- `flagged` with `retriedAfterFlag: false` and `attempts: 2` is the spent-budget case.
++- The impossible combinations do not type-check, and `isUsableSimpleSummary` refuses a record that
++  is present but not whole (Sol, P2-1), so a malformed audit record cannot pass as one.
++- `why` is the checker's one sentence, kept for a person auditing a stored flagged level. It is never
++  logged.
++
++It lives where the artefact lives (the `simple_summary` column of `article_revisions`), published
++revisions are kept, and so it is queryable with SQL for as long as the summary is. **A row without
++`check` was written before the guard, or with it switched off.** That is how the two are told apart,
++so the field is optional and `SIMPLE_VERSION` does not change: the paragraphs are the same shape,
++and no stored summary becomes absent or outdated.
++
++The visitor's copy (`publicSimpleSummary`, `src/public/dto.ts`) already picks its fields one by one,
++so `check` never reaches a stranger. The owner's GET and their export carry it, which is fine: it is
++about their own article.
++
++**The counting.** `scripts/simple-check-report.ts`, read-only, prints over a date range: levels
++checked, flagged on first check, retried, kept-first, stored flagged, unchecked by failure kind; and
++from `ai_calls`, checker calls by outcome, their median latency and their cost a press. Its tally
++(`tallyChecks`) is a pure function with a unit test; the script is the SQL around it. Run it against
++production through `.env.prod`, inside a read-only transaction, as every production read is.
++
++**What each source cannot see, and why that is enough here.** Sol's plan review (P1-2) pointed out
++that the artefact is a snapshot: a re-run replaces the record on the same revision, and a press that
++fails for another reason stores nothing. It asked for an append-only `simple_check_events` table.
++**Declined, for now**: the brief was to use the existing cost-tracking path where one fits, and the
++ledger covers most of the gap. Every checker call is an `ai_calls` row whatever happens to its
++press, so the ledger counts checks, transport failures, latency and spend over *every* press; and
++since an invalid answer is never checked, a level's second checker call exists only when a flag
++bought a retry. What stays invisible is the verdict of a check whose press then failed or was
++re-run — a survivor bias on the flag rate, small while presses rarely fail (22 of 24 stored all
++three levels before the guard; the guard adds no failures). If the beta trial's numbers turn out to
++need it, the table is the next step, and this paragraph is where to start.
++
++The step's log line gains the same counts (never the `why`), as `dropped` already does.
++
++## Accounting on the run
++
++`SimpleSummaryRun` gets `checkCalls`, `checkInputTokens` and `checkOutputTokens`, **beside** the
++writer's totals rather than added into them. The two are on different wires, and the chat wire counts
++cache reads inside its input tokens while the Messages wire does not
++([ai-gateway.md](../project/ai-gateway.md)); a sum of the two means nothing. `calls` stays the writer's.
++
++## The switch
++
++`SIMPLE_CHECK_ENABLED` in `src/simple-check.ts`, a `const` set to `true`. Setting it to `false` and
++deploying turns the guard off completely: no checker call, no retry for a flag, no `check` field. It
++is a code constant rather than an env var because changing either needs a deploy on Vercel, and the
++constant is the one a reader of the code finds. Tests override it through an injected option on
++`generateSimpleSummary`, not by flipping the constant.
++
++## Tests, red first
++
++In `tests/simple-summary.test.ts`, with `openRouterJson` stubbed beside the existing
++`streamMessage` stub:
++
++1. A level whose check passes is stored once, recorded `passed`, with one checker call per level,
++   carrying each paragraph's own cited block text and nothing else.
++2. A flag on the first attempt asks that level again; a pass on the second stores the second,
++   recorded `passed` with `retriedAfterFlag`.
++3. A flag on both stores the second, recorded `flagged` with its flags. The press succeeds.
++4. Validation spends the first attempt, the check flags the second: stored, flagged, `attempts: 2`,
++   no third writer call.
++5. The checker throws: stored, `unchecked` / `call`, no writer retry. Same for an unreadable answer
++   (`unreadable`), including a verdict count that does not match.
++6. Switched off: no checker call and no `check` field.
++7. The run's checker tokens are reported apart from the writer's.
++8. `isUsableSimpleSummary` still accepts a row without `check`, and the public DTO drops it.
++
++Plus the parser and the tally as pure functions, and the registration tests that already enumerate
++every job (tier, wire, cost category, reasoning, override variable) going red until `simple-check`
++is in each.
++
++Added after Sol's plan review, in `tests/simple-check.test.ts`:
++
++- **The real gateway against a stubbed `fetch`**: the body the checker sends equals, field for field,
++  the body the probe sent through `link-summary`'s route, and names the parts the gateway adds:
++  `reasoning: { effort: "low" }`, `max_completion_tokens: 4000` and no `max_tokens`,
++  `require_parameters` with no `order`, the quick-tier model (P1-3).
++- **The measured prompt pinned by hash**, so an edit to it goes red rather than quietly becoming an
++  unmeasured checker.
++- The deadline as a failed check, the caller's abort as a failed check that the caller rethrows, the
++  flagged first attempt kept when the retry's validation or call fails, and malformed stored records
++  refused.
++- The default-on path is the ordinary one: most guard cases call `generateSimpleSummary` with no
++  override, and a test pins `SIMPLE_CHECK_ENABLED` to `true`.
++
++Each new test was seen red: the guard cases against a stub module before any code; the fallback,
++transport, tally and validator cases by breaking the code they cover and watching them fail.
++
++## One real press
++
++`npx tsx evals/simple/probe.ts run --arm high-none-guard1 entropy-24-00930-spya-pywwkq` — production's
++own `generateSimpleSummary`, guard on, on the PID paper. It stored all three levels; the ledger has
++three `simple` rows and three `simple-check` rows, requested and answered by `openai/gpt-5.6-luna`,
++3.1–4.7 s each, billed through BYOK (`byok_upstream_nanos`) at $0.0027 for the three — the probe's
++figure. Writer spend $0.144. The probe does not save the `check` record, so this run says nothing
++about the verdicts; the unit tests do.
++
++## Passed over
++
++- **A verdict column on `ai_calls`.** Simpler to query, but the ledger records a call when it ends
++  and is never amended; putting one caller's answer into the gateway's write is the coupling the
++  ledger was designed without.
++- **A new table of guard events** (Sol's P1-2). Would also count the verdicts of failed and re-run
++  presses. Not worth a migration and a second write path for a beta trial; see § The record.
++- **Log lines only.** Not queryable a month later.
++- **An env var switch.** Same deploy either way on Vercel, and less obvious in the code. (The job
++  does have a model-override variable, `SPIDERYARN_SIMPLE_CHECK_MODEL`, because every chat-wire job
++  must — `tests/models.test.ts` — but that changes the model, not whether it runs.)
++- **Passing the checker's reason to the retry.** 261001h's first follow-up. It is a prompt change and
++  needs measuring like one; the retry here is a fresh sample.
++
++## Reviews
++
++- Plan: [261001i-simple-fidelity-guard-plan-review-sol.md](261001i-simple-fidelity-guard-plan-review-sol.md).
++  No P0. Taken: P1-1 (the flagged first attempt kept when its retry fails; deadline vs abort), P1-3
++  (the wire-level test and the pinned prompt), and all three P2s (a validator and a type that refuses
++  impossible states, the spend bound stated, `requestedModel`). Declined: P1-2's events table, for
++  the reasons in § The record.
+diff --git a/docs/plans/261001i-simple-fidelity-guard-plan-review-prompt.md b/docs/plans/261001i-simple-fidelity-guard-plan-review-prompt.md
+new file mode 100644
+index 00000000..27a8d86e
+--- /dev/null
++++ b/docs/plans/261001i-simple-fidelity-guard-plan-review-prompt.md
+@@ -0,0 +1,19 @@
++# Plan review: Simple's fidelity guard, built (261001i)
++
++Review the plan docs/plans/261001i-simple-fidelity-guard-built.md before it is built. Read-only.
++
++Background and evidence, read these:
++- docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md, especially "## The guard" and "## Measuring the guard (2026-10-01)" and its recommendation.
++- scripts/probes/261001h-fidelity-guard-probe.ts — the checker prompt and request that were measured (Luna through link-summary's route).
++- src/simple-summary.ts (writeLevel, LEVEL_ATTEMPTS, generateSimpleSummary), src/types.ts (SimpleSummary, isUsableSimpleSummary), src/public/dto.ts (publicSimpleSummary), src/quiz-verdict.ts (an existing quick-tier openRouterJson job), src/ai-call.ts (openRouterJson, route policy, CHAT_REASONING), src/models.ts (job registry), src/db/schema.ts (ai_calls), docs/project/cost-tracking.md.
++
++The brief: after each level, one checker call (each paragraph with its cited blocks, one verdict each); on a flag retry once, then store the second attempt whatever its verdict and record the flag; on checker error store unchecked and record it; instrument flag rate, retry rate and checker failures so they are queryable later through the existing cost tracking / ai-call path where one fits; one obvious off switch. No change to the Simple prompt or other voices.
++
++Questions I most want answered:
++1. Is putting the verdict record on the artefact (an optional `check` field of SimpleSummary) right, versus a column on ai_calls or a new table? Will it break any read boundary, staleness check, export, public DTO, or the client?
++2. Is the retry/budget logic correct, including the validation-then-flag case, aborts, and fail-open? Any path where the guard can lose a press or spend more than planned?
++3. Is reusing the probe's exact request (chat wire, effort low, max_completion_tokens 4000, require_parameters) as a new `simple-check` job sound? Anything the registration will miss?
++4. Is a code constant the right off switch?
++5. Are the tests enough to catch silent success (a guard that never actually checks)?
++
++Give P0/P1/P2 findings with file:line where possible, then a verdict. Be concrete; say what you would change.
+diff --git a/docs/plans/261001i-simple-fidelity-guard-plan-review-sol.md b/docs/plans/261001i-simple-fidelity-guard-plan-review-sol.md
+new file mode 100644
+index 00000000..316637ee
+--- /dev/null
++++ b/docs/plans/261001i-simple-fidelity-guard-plan-review-sol.md
+@@ -0,0 +1,65 @@
++No P0 findings.
++
++## P1
++
++1. The guard can still lose a press.
++
++The plan says the checker cannot make a press store nothing ([plan:46](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/docs/plans/261001i-simple-fidelity-guard-built.md:46)). But after a valid first output is flagged, the guard starts a second writer call. That call can fail at transport/refusal/truncation ([simple-summary.ts:617](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/simple-summary.ts:617)) or validation ([simple-summary.ts:661](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/simple-summary.ts:661)); the current all-or-none orchestration then aborts the press ([simple-summary.ts:670](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/simple-summary.ts:670)). Without the guard, the valid first output would have been stored.
++
++Change: retain the first valid flagged output until the retry produces another valid level. If the guard-triggered writer retry fails for a non-abort reason, store the retained first output and record `retryFailure: "call" | "validation"`. If losing the press is actually intended, remove “never fails a press” and measure that availability cost.
++
++Also distinguish the checker’s private 30-second timeout from the job/sibling signal. A timeout should become `unchecked`; a job or sibling abort must be rethrown. Add tests for both. The current test list does not test aborts.
++
++2. The artefact cannot provide the promised historical rates.
++
++A Simple rerun replaces the column on the same revision ([pipeline.ts:3870](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/pipeline.ts:3870)). Therefore the proposed report ([plan:120](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/docs/plans/261001i-simple-fidelity-guard-built.md:120)) sees only the latest check for each revision, not every flag or retry. Failed presses store no artefact at all, so their flags, unreadable answers, and retries disappear. `ai_calls` retains the calls but not their semantic verdicts ([plan:82](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/docs/plans/261001i-simple-fidelity-guard-built.md:82)).
++
++That produces a survivor-biased snapshot, not flag/retry/failure rates over production calls.
++
++Change: keep `check` on `SimpleSummary` as the audit record for the currently stored text, but add an append-only `simple_check_events` table for longitudinal instrumentation. One row per checked attempt should record article/job/run, level, writer attempt, outcome (`passed`, `flagged`, `call_failure`, `unreadable`), flag count, checker version/model, and timestamp—without article prose. This is the case where the new table rejected at [plan:169](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/docs/plans/261001i-simple-fidelity-guard-built.md:169) is justified. Leave `ai_calls` generic and use it for cost/transport accounting.
++
++3. The tests do not yet prove that production sends the measured request.
++
++The orchestration tests stub `openRouterJson`, so they can verify the caller’s body but not the gateway-owned reasoning and provider route. `reasoning` is injected later by `outgoing` ([ai-call.ts:1413](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/ai-call.ts:1413)), while the measured probe depended on the exact low-effort, `require_parameters`, no-`order` request ([probe:178](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/scripts/probes/261001h-fidelity-guard-probe.ts:178), [probe:203](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/scripts/probes/261001h-fidelity-guard-probe.ts:203)). Exhaustive registration proves that a row exists, not that it matches the measured row.
++
++Change: add one transport-level test using the real checker plus a stubbed `fetch`, asserting the actual outgoing request has:
++
++- the measured system and user messages;
++- `max_completion_tokens: 4000`, with no `max_tokens`;
++- `reasoning: { effort: "low" }`;
++- `provider: { require_parameters: true }`, with no `order`;
++- the quick-tier model.
++
++Avoid an unchecked copy of the measured prompt: either share the pure prompt/renderer with the probe or pin the measured bytes with a literal snapshot/hash. Also include a default-on test that calls `generateSimpleSummary` without the injected override and observes three checker calls; otherwise changing the production constant to `false` could leave all explicitly-enabled guard tests green.
++
++## P2
++
++1. Validate the optional record and make impossible states unrepresentable.
++
++`isUsableSimpleSummary` currently validates the whole stored contract ([types.ts:4739](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/types.ts:4739)). The plan only tests that missing `check` remains valid; it should also specify validation when `check` is present.
++
++The proposed type permits impossible combinations such as `attempts: 1, retriedAfterFlag: true`. Add an `isSimpleCheck` validator and shape the union so `retriedAfterFlag: true` requires two writer attempts. Test malformed flags, paragraph indices, failure kinds, and impossible attempt combinations.
++
++2. State the real spend bound.
++
++A successful flag retry adds another writer call and, if that output validates, another checker call—not only another writer call as [plan:37](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/docs/plans/261001i-simple-fidelity-guard-built.md:37) says. The maximum is two writer calls and two checker calls per level: six of each per press. Concurrent work already started before a sibling fails may also incur cost, though `Promise.allSettled` correctly drains it.
++
++Add exact call-count assertions for first flag/second pass, double flag, validation-then-flag, and first flag/second checker failure.
++
++3. Clarify model provenance.
++
++A single top-level `model` is ambiguous when several checker calls occur and OpenRouter can report a different answering model. Call it `requestedModel`; if the artefact needs actual provenance, store `answeredBy` per level/check. Otherwise rely on `ai_calls`, which already distinguishes requested and answered models.
++
++## Direct answers
++
++1. `check` on `SimpleSummary` is right for the currently stored text. It does not require a migration, does not affect `sourceHash` staleness, exports naturally ([export.ts:450](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/store/export.ts:450)), and the public DTO explicitly drops it ([dto.ts:527](/home/greg/code/spideryarn2/.claude/worktrees/simple-fidelity-guard/src/public/dto.ts:527)). No `SIMPLE_VERSION` bump is needed. It is not sufficient as the historical metrics store.
++
++2. Validation-then-flag correctly exhausts the two-writer budget. The missing cases are guard-triggered writer failure and careful separation of deadline aborts from job aborts.
++
++3. The new job registration is structurally sound: `Task`, tier, wire, model override, route, reasoning, cost disposition, and plain-words exemption are the right sites. Give it `step-driven` cost disposition and `modelFor("simple-check", "standard")`. The missing protection is the exact outgoing-request test.
++
++4. A code constant is a reasonable beta off switch because both code and environment changes require a Vercel deployment. Keep one production default and test it without injection.
++
++5. The proposed tests cover the ordinary state machine well, but are not yet enough for silent success. Add the default-on, real outgoing-request, abort-versus-timeout, guard-triggered writer-failure, malformed stored-check, and second-check-failure cases.
++
++Verdict: **not ready to build until the three P1s are resolved**. The core guard and artefact choice are sound; the gaps are availability, durable measurement, and proving that production runs the request that was actually measured.
+\ No newline at end of file
+diff --git a/docs/project/setup-dev.md b/docs/project/setup-dev.md
+index a19fcf63..64dbc6ed 100644
+--- a/docs/project/setup-dev.md
++++ b/docs/project/setup-dev.md
+@@ -412,12 +412,14 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
+ ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
+ caller.
+ 
+-**Every job is on the capable tier except two.** The quick tier is about a tenth the price, and both
++**Every job is on the capable tier except three.** The quick tier is about a tenth the price, and all
+ of its jobs were **written for it** rather than moved onto it: `link-summary` — how a hovered link's
+ destination stands to the piece being read
+-([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05, and
++([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05,
+ `quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
+-nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07.
++nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07,
++and `simple-check` — Simple's fidelity guard, measured against Sonnet before it was built
++([summaries.md](summaries.md#simple-a-plain-words-orientation)) — on 2026-10-01.
+ That distinction is the whole of the policy: a new job may be born on the quick tier by judgment, and
+ **moving an existing one still means running an eval under [`evals/`](../../evals/README.md) first
+ and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
+@@ -491,6 +493,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
+ | `SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL` | The same search for an uploaded paper itself, once, to guess where it lives on the web ([ingest-queue.md](ingest-queue.md#a-guessed-web-address-looked-for-once)) |
+ | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Investigate*: one streamed answer about one cited work, written with a few web searches over the whole article (explain's tier) |
+ | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — the other quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
++| `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
+ | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
+ 
+ `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index 74dfced7..4d35bad0 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -686,6 +686,34 @@ Code: [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx),
+ [`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx); the stage is
+ [`src/simple-summary.ts`](../../src/simple-summary.ts).
+ 
++### The fidelity guard (since 2026-10-01)
++
++Plain words pull a model towards the everyday name for a thing, and on the PID paper that name was
++the paper's word for a different thing: synergy *"grows with more feedback loops"*, where the paper
++finds feedback connections lower it. A prompt rule did not make that rare
++([261001h](../plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md)). So each
++level, once written and valid, is **checked**: one quick-tier call reads every paragraph beside the
++text of the blocks it cites and says, per paragraph, whether those passages contradict it.
++
++- **A flag buys the level's one remaining attempt**; the retry is stored whatever its verdict, and if
++  the retry itself fails, the flagged first attempt is. The guard can make a press slower (4–5 s,
++  more on a retry) but never makes it store nothing.
++- **A checker that fails or answers unreadably** leaves the level stored unchecked, and does not
++  spend the retry.
++- **It cannot catch what the cited passages do not say**: a claim wrong about the article but not
++  contradicted by its own passages passes. Measured, it caught 24 of 30 hand-labelled faults and
++  alarmed on 1–2% of other paragraphs, for about $0.0027 a press.
++- **Each stored summary carries a `check` record** (per level: passed, flagged with the reasons, or
++  unchecked, and how many attempts), the owner's and never a visitor's; a summary without one was
++  written before the guard or with it off. Every check is also an `ai_calls` row of purpose
++  `simple-check`. `npx tsx scripts/simple-check-report.ts` reads both, read-only — what each can and
++  cannot see is in its header.
++- **Off is one line**: `SIMPLE_CHECK_ENABLED` in [`src/simple-check.ts`](../../src/simple-check.ts),
++  then a deploy.
++
++It is Simple's alone; the other summary voices are not checked. The design, the review and the
++first real press are in [261001i](../plans/261001i-simple-fidelity-guard-built.md).
++
+ ## What this deliberately does not have
+ 
+ **A length control.** See [above](#why-there-is-no-length-control). The two generated rungs and the
+diff --git a/scripts/simple-check-report.ts b/scripts/simple-check-report.ts
+new file mode 100644
+index 00000000..5b89d92a
+--- /dev/null
++++ b/scripts/simple-check-report.ts
+@@ -0,0 +1,142 @@
++/**
++ * **How Simple's fidelity guard is doing** — flags, retries and checker
++ * failures, read-only, by construction. Plan 261001i § The record.
++ *
++ *     npx tsx scripts/simple-check-report.ts                      # the local stack, the last 30 days
++ *     npx tsx scripts/simple-check-report.ts --days 7
++ *     DATABASE_URL='<remote>' npx tsx scripts/simple-check-report.ts   # production: read the Target line
++ *
++ * **Two sources, because each sees what the other cannot.**
++ *
++ * - **The artefacts**: the `check` record on every stored Simple summary
++ *   (`article_revisions.simple_summary`), counted once each — a draft copies
++ *   the artefact forward, so a record is keyed on its article and its
++ *   `generatedAt`. They say what each check *answered*: flagged, passed,
++ *   unreadable. They cannot see a press that failed for another reason (it
++ *   stored nothing), or a record a re-run replaced.
++ * - **The ledger**: `ai_calls` rows of purpose `simple-check`. They see every
++ *   checker call, failed presses and replaced records included, with its
++ *   outcome, latency and cost. They cannot see what a check answered, because
++ *   a row is written when the call ends and never amended.
++ *
++ * Neither is the guard's whole story alone, which is why both are printed.
++ * The rates 261001h measured, to compare against: flags on 1–2% of
++ * paragraphs, a third of levels on the PID paper, about 2% of control levels;
++ * $0.0027 a press; 0 checker failures in 278 calls.
++ *
++ * **It cannot write.** Every statement runs inside `begin read only` and the
++ * script checks `transaction_read_only` first. **It prints no article text, no
++ * slugs and no checker reasons** — only counts and money.
++ *
++ * `console.log`, not `log()` — this is a CLI. CLAUDE.md § Writing code.
++ */
++import { sql } from "drizzle-orm";
++import { drizzle } from "drizzle-orm/node-postgres";
++import { Pool } from "pg";
++
++import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
++import { resolveTargetUrl } from "../src/env.js";
++import { tallyChecks } from "../src/simple-check.js";
++import { isUsableSimpleSummary, SIMPLE_LEVELS, type SimpleLevelCheck } from "../src/types.js";
++
++const daysArg = process.argv.indexOf("--days");
++const days = daysArg >= 0 ? Number(process.argv[daysArg + 1]) : 30;
++if (!Number.isFinite(days) || days <= 0) {
++  console.error("--days takes a positive number");
++  process.exit(1);
++}
++
++/* Shell wins: a URL on the command line names the database to read, and must
++   not be buried by `.env.local`. docs/project/database.md. */
++const url = resolveTargetUrl({ shellWins: true });
++if (!url) {
++  console.error("DATABASE_URL is not set. Local: npm run db:start. See docs/project/supabase-local.md.");
++  process.exit(1);
++}
++console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
++console.log(`Window: the last ${days} day(s)`);
++
++const ssl = sslDecisionFor(url);
++if (ssl.mode === "encrypted-unverified") console.warn(`⚠ ${ssl.why}`);
++const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl, application_name: "spideryarn simple-check-report (read-only)" });
++const db = drizzle(pool);
++
++const pct = (n: number, d: number) => (d === 0 ? "—" : `${((100 * n) / d).toFixed(1)}%`);
++const num = (v: unknown) => Number(v ?? 0);
++
++try {
++  await db.transaction(
++    async (tx) => {
++      const [ro] = (await tx.execute(sql`select current_setting('transaction_read_only') as ro`)).rows as { ro: string }[];
++      if (ro?.ro !== "on") throw new Error(`refusing to go on: the transaction is not read-only (${ro?.ro})`);
++
++      /* One row per stored artefact, however many revisions carry a copy. */
++      const stored = (
++        await tx.execute(sql`
++          select distinct on (article_id, simple_summary->>'generatedAt') simple_summary as s
++          from spideryarn.article_revisions
++          where simple_summary ? 'check'
++            and (simple_summary->>'generatedAt')::timestamptz > now() - make_interval(days => ${days})
++          order by article_id, simple_summary->>'generatedAt'`)
++      ).rows as { s: unknown }[];
++      const checks: SimpleLevelCheck[] = [];
++      let unusable = 0;
++      for (const { s } of stored) {
++        if (!isUsableSimpleSummary(s) || !s.check) {
++          unusable += 1;
++          continue;
++        }
++        for (const level of SIMPLE_LEVELS) checks.push(s.check.levels[level]);
++      }
++      const t = tallyChecks(checks);
++      const presses = stored.length - unusable;
++
++      console.log(`\nStored summaries with a check record: ${presses} (${t.levels} levels)`);
++      if (unusable) console.log(`  ✗ ${unusable} record(s) that do not read as a whole check — look at them`);
++      console.log(`  first check flagged a level:   ${t.firstFlagged} of ${t.firstAnswered} answered (${pct(t.firstFlagged, t.firstAnswered)})`);
++      console.log(`  retried after a flag:          ${t.retriedAfterFlag} (${pct(t.retriedAfterFlag, t.levels)} of levels)`);
++      console.log(`    … the retry failed, first kept: ${t.keptFirst}`);
++      console.log(`  flag, but validation had spent the retry: ${t.budgetSpent}`);
++      console.log(`  stored with a flag:            ${t.storedFlagged} (${pct(t.storedFlagged, t.levels)} of levels)`);
++      console.log(`  stored unchecked:              call failed ${t.unchecked.call}, unreadable ${t.unchecked.unreadable}`);
++
++      /* The ledger: every checker call, whether or not its press stored anything. */
++      const calls = (
++        await tx.execute(sql`
++          select outcome,
++                 count(*) as n,
++                 count(distinct job_id) as jobs,
++                 coalesce(sum(coalesce(credits_used_nanos, 0) + coalesce(byok_upstream_nanos, 0) + coalesce(computed_cost_nanos, 0)), 0) as nanos,
++                 count(*) filter (where cost_source = 'none') as unpriced,
++                 percentile_cont(0.5) within group (order by duration_ms) as median_ms
++          from spideryarn.ai_calls
++          where purpose = 'simple-check'
++            and started_at > now() - make_interval(days => ${days})
++          group by outcome
++          order by outcome`)
++      ).rows as Record<string, unknown>[];
++      const total = calls.reduce((n, r) => n + num(r.n), 0);
++      const jobs = (
++        (await tx.execute(sql`
++          select count(distinct job_id) as jobs from spideryarn.ai_calls
++          where purpose = 'simple-check' and started_at > now() - make_interval(days => ${days})`)).rows as { jobs: unknown }[]
++      )[0];
++      const nanos = calls.reduce((n, r) => n + num(r.nanos), 0);
++      console.log(`\nChecker calls in the ledger: ${total}, across ${num(jobs?.jobs)} press(es)`);
++      for (const r of calls) {
++        console.log(
++          `  ${String(r.outcome).padEnd(8)} ${String(num(r.n)).padStart(5)}  median ${Math.round(num(r.median_ms))} ms` +
++            (num(r.unpriced) ? `  (${num(r.unpriced)} unpriced)` : ""),
++        );
++      }
++      console.log(`  spend: $${(nanos / 1e9).toFixed(4)}${num(jobs?.jobs) ? `, $${(nanos / 1e9 / num(jobs?.jobs)).toFixed(4)} a press` : ""}`);
++      console.log(
++        "\nThe ledger counts presses that stored nothing and records a re-run replaced; the artefacts do not.\n" +
++          "A ledger total well above the artefacts' checks is those, not a bug.",
++      );
++    },
++    { accessMode: "read only" },
++  );
++} finally {
++  await pool.end();
++}
+diff --git a/src/ai-call.ts b/src/ai-call.ts
+index 76c898a9..d5833990 100644
+--- a/src/ai-call.ts
++++ b/src/ai-call.ts
+@@ -584,6 +584,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
+     wire: "chat",
+     provider: { require_parameters: true },
+   },
++  /* **Simple's fidelity guard** (src/simple-check.ts) — `link-summary`'s row,
++     because it is the request plan 261001h measured, sent through that route.
++     The same two reasons: no `order` on a quick-tier OpenAI model, and
++     `require_parameters` so an upstream cannot quietly drop the token ceiling
++     or the low effort. */
++  "simple-check": {
++    path: "/v1/chat/completions",
++    wire: "chat",
++    provider: { require_parameters: true },
++  },
+   /* **Find one cited work's own page** (src/citation-find.ts). `debate`'s
+      policy and its reason: the request sends `openrouter:web_search`, and a
+      fallback that silently dropped the tool leaves a model answering from
+@@ -864,6 +874,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
+      says why, and that the documented 1,024-token floor means even `low` buys
+      a thousand tokens of thinking. Sent from here since 2026-09-28. */
+   "link-summary": { effort: "low" },
++  /* The effort plan 261001h measured at, through `link-summary`'s row: a
++     verdict per paragraph, not a piece of writing. */
++  "simple-check": { effort: "low" },
+   "citations-find": {
+     providerDefault: "Not measured. One cited work and a web search, not the article.",
+   },
+diff --git a/src/cost-categories.ts b/src/cost-categories.ts
+index 7d66f468..3acc083b 100644
+--- a/src/cost-categories.ts
++++ b/src/cost-categories.ts
+@@ -184,6 +184,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
+   faq: "step-driven",
+   crossrefs: "step-driven",
+   simple: "step-driven",
++  /* Simple's fidelity guard, made inside the `simple` step's collector. */
++  "simple-check": "step-driven",
+   trajectory: "step-driven",
+   debate: "step-driven",
+   citations: "step-driven",
+diff --git a/src/models.ts b/src/models.ts
+index 85e5f637..7ec8b4e8 100644
+--- a/src/models.ts
++++ b/src/models.ts
+@@ -611,6 +611,13 @@ export type Task =
+      Quick tier, and it can be: it never sees the article. The mark it reads has
+      already done the comparing, with citations. */
+   | "quiz-verdict"
++  /* **Simple's fidelity guard** (src/simple-check.ts, plan 261001i): each
++     written level's paragraphs beside the passages they cite, one verdict
++     each. Its own job so the ledger can count the checks, their failures and
++     their cost apart from the writing — the step's spend would otherwise hide a
++     second tier inside it. Quick tier, as measured in plan 261001h; it never
++     sees the whole article. */
++  | "simple-check"
+   | "search"
+   /* The model reading a referee's own notes rather than the paper —
+      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
+@@ -946,6 +953,7 @@ export const TASK_TIER: Record<Task, Tier> = {
+   chat: "capable",
+   "quiz-mark": "capable",
+   "quiz-verdict": "quick",
++  "simple-check": "quick",
+   search: "capable",
+   "referee-mirror": "capable",
+   /* Capable, like search — this reads a whole paper and answers with quoted
+@@ -1179,6 +1187,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
+   chat: "chat",
+   "quiz-mark": "chat",
+   "quiz-verdict": "chat",
++  /* Inside the `simple` step, but on the chat wire: the request plan 261001h
++     measured, through the quick tier's only wire. */
++  "simple-check": "chat",
+   search: "chat",
+   "referee-mirror": "chat",
+   "referee-criteria": "chat",
+@@ -1311,6 +1322,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
+   chat: "SPIDERYARN_CHAT_MODEL",
+   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
+   "quiz-verdict": "SPIDERYARN_QUIZ_VERDICT_MODEL",
++  /* For a comparison run only: the checker's rates (plan 261001h) were
++     measured on the quick tier's model, and a different one is a new
++     measurement. */
++  "simple-check": "SPIDERYARN_SIMPLE_CHECK_MODEL",
+   search: "SPIDERYARN_SEARCH_MODEL",
+   /* It has one because comparing two models on the same cached transcriptions is
+      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index cd199db0..956dc08c 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -3927,6 +3927,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           /* Counts only — never the prose. `unanchored` and `unknownIds` are
+              the ones to watch: a paragraph the piece does not back. */
+           ...run.dropped,
++          /* The fidelity guard (plan 261001i): its calls and chat-wire tokens,
++             kept apart from the writer's, and each level's outcome as
++             "passed/flagged/unchecked" in the slider's order. Never the
++             checker's reasons, which quote the article's claims. */
++          checkCalls: run.checkCalls,
++          checkInputTokens: run.checkInputTokens,
++          checkOutputTokens: run.checkOutputTokens,
++          ...(run.simpleSummary.check
++            ? { checks: SIMPLE_LEVELS.map((level) => run.simpleSummary.check?.levels[level].result).join("/") }
++            : {}),
+         },
+         `simple ${ctx.slug}: ${counts} paragraphs, ${words} words`,
+       );
+diff --git a/src/plain-words.ts b/src/plain-words.ts
+index 48e7eff5..591bff46 100644
+--- a/src/plain-words.ts
++++ b/src/plain-words.ts
+@@ -96,6 +96,7 @@ export function plainWords(...kinds: PlainKind[]): string {
+  */
+ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
+   "src/quiz-verdict.ts": "writes one word — right, wrong or unclear — that no reader sees",
++  "src/simple-check.ts": "writes a verdict per paragraph — ok or contradicts — that no reader sees",
+   "src/source-guess-run.ts": "no prompt of its own: it sends citation-find.ts's, whose answer is a URL or null",
+   "src/pdf-frontmatter.ts": "writes block ids",
+   "src/pdf-authors.ts":
+diff --git a/src/simple-check.ts b/src/simple-check.ts
+new file mode 100644
+index 00000000..9d363ac9
+--- /dev/null
++++ b/src/simple-check.ts
+@@ -0,0 +1,236 @@
++/**
++ * **Simple's fidelity guard** — after a level is written, a second, cheaper
++ * model reads each paragraph beside the passages it cites and says whether
++ * those passages contradict it.
++ *
++ * docs/plans/261001i-simple-fidelity-guard-built.md is the design; the evidence
++ * is docs/plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md
++ * § Measuring the guard. The fault it was built for: on the PID paper, Simple
++ * wrote that synergy *"grows with more feedback loops"*, borrowing the paper's
++ * name for the connection type that does the opposite. A prompt rule did not
++ * make that rare; this checker caught 24 of 30 hand-labelled faults, alarmed
++ * on 1–2% of other paragraphs, and costs about $0.0027 a press.
++ *
++ * What it can't do: it reads only each paragraph's own cited passages, so a
++ * claim that is wrong about the article but not contradicted by those passages
++ * passes (3 of the 30). That is the price of a small evidence packet.
++ *
++ * src/simple-summary.ts § `writeLevel` decides what a verdict does: a flag buys
++ * the level's one remaining attempt, and the second attempt is stored whatever
++ * its verdict. **This file never throws.** A failed or unreadable check is an
++ * outcome, `failed`, and the level is stored unchecked: the guard can cost a
++ * reader a few seconds, never a summary.
++ */
++
++import { openRouterJson } from "./ai-call.js";
++import { modelFor } from "./models.js";
++import type { SimpleCheckFailure, SimpleCheckFlag, SimpleLevelCheck, SimpleParagraph } from "./types.js";
++
++/**
++ * **The switch.** `false`, and deployed, turns the guard off completely: no
++ * checker call, no retry for a flag, and no `check` record on the artefact —
++ * which is how a row written without the guard reads. For when the spend or the
++ * wait turns out to be wrong in production.
++ */
++export const SIMPLE_CHECK_ENABLED = true;
++
++/**
++ * Which checker prompt judged a level, stored in every record. Bump it when
++ * `SIMPLE_CHECK_SYSTEM` or the message shape changes: the rates measured in
++ * 261001h belong to `/1`, and a changed prompt is a new measurement.
++ */
++export const SIMPLE_CHECK_VERSION = "simple-check/1";
++
++/**
++ * A check that has not answered in this long is a failed check. The measured
++ * three-call press took 4.4 s median, 5.8 s p90 and 12.2 s at worst.
++ */
++export const CHECK_TIMEOUT_MS = 30_000;
++
++/** The answer's ceiling: the measured request's, which no answer reached. */
++export const CHECK_MAX_TOKENS = 4_000;
++
++/**
++ * The checker's instructions — **byte for byte the prompt 261001h measured**
++ * (scripts/probes/261001h-fidelity-guard-probe.ts). It names the class of
++ * fault, never the PID paper or the word "feedback", and it was not tuned on
++ * the results. Not plain words, on purpose: a verdict nobody reads
++ * (`PLAIN_WORDS_EXEMPT`, src/plain-words.ts).
++ */
++export const SIMPLE_CHECK_SYSTEM = `You check a short plain-words summary of an article against the article's own passages.
++
++You get numbered summary paragraphs. Each comes with the passages it cites, quoted exactly from the article. For each paragraph, decide whether anything it says is contradicted by its passages:
++
++- "contradicts": a claim the passages say the opposite of, or a finding pinned to the wrong thing. That includes a direction turned round (a rise called a fall, A causing B called B causing A), and calling something by the name the passages use for a different thing, so that a finding about one is told about the other — even when the everyday meaning of the words would fit.
++- "ok": everything it says agrees with its passages, or is simply not covered by them. Simplifying, leaving things out, and everyday wording are fine. Something the passages do not mention is "ok", not "contradicts".
++
++Be strict about contradictions and lenient about everything else. Only the passages count: not what you know about the subject.
++
++Answer with JSON only, no prose around it:
++{"verdicts":[{"n":1,"verdict":"ok"|"contradicts","why":"<one short sentence, only for contradicts>"}]}
++with one entry per paragraph, in order.`;
++
++/** Every paragraph with the text of its own cited blocks, and nothing else of the article. */
++export function checkMessage(paragraphs: readonly SimpleParagraph[], textOf: ReadonlyMap<string, string>): string {
++  return paragraphs
++    .map((p, i) => {
++      const passages = p.ids.map((id) => `[${id}] ${textOf.get(id) ?? ""}`).join("\n\n");
++      return `PARAGRAPH ${i + 1}\n${p.text}\n\nITS PASSAGES\n${passages}`;
++    })
++    .join("\n\n=====\n\n");
++}
++
++export type CheckVerdict = { verdict: "ok" } | { verdict: "contradicts"; why: string };
++
++/**
++ * One verdict per paragraph, in order, or `null` for anything else — a count
++ * that does not match, a verdict we do not know, numbering out of order, no
++ * JSON at all. `null` is a failed check, never a pass: a guard that read an
++ * unreadable answer as "ok" would be one that never checks.
++ */
++export function parseCheckVerdicts(content: string, count: number): CheckVerdict[] | null {
++  const start = content.indexOf("{");
++  const end = content.lastIndexOf("}");
++  if (start < 0 || end < start) return null;
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(content.slice(start, end + 1));
++  } catch {
++    return null;
++  }
++  const list = parsed && typeof parsed === "object" ? (parsed as { verdicts?: unknown }).verdicts : undefined;
++  if (!Array.isArray(list) || list.length !== count) return null;
++  const out: CheckVerdict[] = [];
++  for (const [i, item] of list.entries()) {
++    if (!item || typeof item !== "object") return null;
++    const v = item as { n?: unknown; verdict?: unknown; why?: unknown };
++    if (v.n !== undefined && v.n !== i + 1) return null;
++    if (v.verdict === "ok") out.push({ verdict: "ok" });
++    else if (v.verdict === "contradicts") out.push({ verdict: "contradicts", why: typeof v.why === "string" ? v.why.trim() : "" });
++    else return null;
++  }
++  return out;
++}
++
++/** What one check came to. `failed` is the checker's own failure, never the level's. */
++export type CheckOutcome =
++  | { kind: "passed" }
++  | { kind: "flagged"; flags: SimpleCheckFlag[] }
++  | { kind: "failed"; failure: SimpleCheckFailure };
++
++export interface CheckResult {
++  outcome: CheckOutcome;
++  /** Chat-wire token counts, when the provider reported them. Never added to the writer's. */
++  inputTokens: number;
++  outputTokens: number;
++}
++
++/**
++ * Check one written level. **Never throws**: every failure is an outcome. The
++ * call is metered by the gateway like any other, as job `simple-check`, inside
++ * whatever collector the caller is in — the `simple` step's, in a press.
++ *
++ * The caller's signal is passed through, so a cancelled job or an aborted
++ * sibling stops the check; the caller decides whether that is an abort.
++ */
++export async function checkLevel(
++  paragraphs: readonly SimpleParagraph[],
++  textOf: ReadonlyMap<string, string>,
++  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
++): Promise<CheckResult> {
++  const { signal } = opts;
++  /* The checker's own deadline is a failed check, stored unchecked; the
++     caller's signal is the job's, and the caller turns that into an abort. */
++  const deadline = AbortSignal.timeout(opts.timeoutMs ?? CHECK_TIMEOUT_MS);
++  try {
++    const call = await openRouterJson(
++      "simple-check",
++      {
++        /* Quick tier: High-powered AI does not move it, as with `quiz-verdict`. */
++        model: modelFor("simple-check", "standard"),
++        max_completion_tokens: CHECK_MAX_TOKENS,
++        messages: [
++          { role: "system", content: SIMPLE_CHECK_SYSTEM },
++          { role: "user", content: checkMessage(paragraphs, textOf) },
++        ],
++      },
++      { signal: signal ? AbortSignal.any([signal, deadline]) : deadline },
++    );
++    const body = call.json as {
++      choices?: { message?: { content?: unknown } }[];
++      usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
++    } | null;
++    const tokens = {
++      inputTokens: typeof body?.usage?.prompt_tokens === "number" ? body.usage.prompt_tokens : 0,
++      outputTokens: typeof body?.usage?.completion_tokens === "number" ? body.usage.completion_tokens : 0,
++    };
++    const content = body?.choices?.[0]?.message?.content;
++    const verdicts = typeof content === "string" ? parseCheckVerdicts(content, paragraphs.length) : null;
++    if (!verdicts) return { outcome: { kind: "failed", failure: "unreadable" }, ...tokens };
++    const flags = verdicts.flatMap((v, paragraph) => (v.verdict === "contradicts" ? [{ paragraph, why: v.why }] : []));
++    return { outcome: flags.length ? { kind: "flagged", flags } : { kind: "passed" }, ...tokens };
++  } catch {
++    /* A refusal, a timeout, a network failure, an abort. The gateway has
++       already metered the attempt, with its outcome; nothing else here is
++       worth logging, and the why would carry the article's words. */
++    return { outcome: { kind: "failed", failure: "call" }, inputTokens: 0, outputTokens: 0 };
++  }
++}
++
++/* ---------------------------------------------------------- the counting -- */
++
++/**
++ * The guard's rates over a set of stored levels — what
++ * scripts/simple-check-report.ts prints. Pure, so its arithmetic is tested
++ * rather than trusted.
++ *
++ * **What it sees and does not**: only levels that were stored, once each. A
++ * press that failed for another reason stores nothing, and a re-run replaces
++ * the record it had; the checker calls of both are still `ai_calls` rows of
++ * purpose `simple-check`, which the report counts beside this.
++ */
++export interface CheckTally {
++  /** Stored levels with a record. */
++  levels: number;
++  /** Levels whose first check answered (passed or flagged), the flag rate's denominator. */
++  firstAnswered: number;
++  /** Levels whose first check flagged them: a retry bought, or a spent budget. */
++  firstFlagged: number;
++  /** A flag bought another writer call. */
++  retriedAfterFlag: number;
++  /** That retry failed and the flagged first attempt was kept. */
++  keptFirst: number;
++  /** Validation had spent the first attempt, so a flag could not buy another. */
++  budgetSpent: number;
++  /** Stored with a flag on the text the reader sees. */
++  storedFlagged: number;
++  /** Stored unchecked, by why — on the first check or the retry's. */
++  unchecked: Record<SimpleCheckFailure, number>;
++}
++
++export function tallyChecks(checks: Iterable<SimpleLevelCheck>): CheckTally {
++  const t: CheckTally = {
++    levels: 0,
++    firstAnswered: 0,
++    firstFlagged: 0,
++    retriedAfterFlag: 0,
++    keptFirst: 0,
++    budgetSpent: 0,
++    storedFlagged: 0,
++    unchecked: { call: 0, unreadable: 0 },
++  };
++  for (const c of checks) {
++    t.levels += 1;
++    if (c.retriedAfterFlag) t.retriedAfterFlag += 1;
++    if (c.retriedAfterFlag && c.stored === 1) t.keptFirst += 1;
++    if (c.result === "flagged") t.storedFlagged += 1;
++    if (c.result === "flagged" && !c.retriedAfterFlag) t.budgetSpent += 1;
++    if (c.result === "unchecked") t.unchecked[c.failure] += 1;
++    /* The first check flagged it if it bought a retry, or if it is stored
++       flagged without one; it failed if it is stored unchecked without one. */
++    const firstFailed = c.result === "unchecked" && !c.retriedAfterFlag;
++    if (!firstFailed) t.firstAnswered += 1;
++    if (c.retriedAfterFlag || (c.result === "flagged" && !c.retriedAfterFlag)) t.firstFlagged += 1;
++  }
++  return t;
++}
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index 00b91255..f8a74822 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -86,10 +86,11 @@ import { isBodyEvidence } from "./block-policy.js";
+ import { stageFailure } from "./job-failure.js";
+ import { MODEL_REFUSED } from "./messages.js";
+ import { streamMessage, wasRefused } from "./messages-stream.js";
+-import { effortFor, generatorFor, type ModelPower } from "./models.js";
++import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js";
+ import { parseJsonAnswer } from "./parse-json.js";
+ import { plainWords } from "./plain-words.js";
+ import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
++import { checkLevel, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
+ import {
+   type BlockFingerprint,
+   fallbackHeadTitle,
+@@ -103,7 +104,10 @@ import {
+   SIMPLE_MAX_IDS,
+   type BlockId,
+   type Meta,
++  type SimpleCheckAttempts,
++  type SimpleCheckFlag,
+   type SimpleLevel,
++  type SimpleLevelCheck,
+   type SimpleParagraph,
+   type SimpleSummary,
+   type Tree,
+@@ -529,8 +533,17 @@ export interface SimpleSummaryRun {
+   cacheWriteTokens: number;
+   maxTokens: number;
+   elapsedMs: number;
+-  /** Requests made, across every level and retry — three when nothing was asked twice. */
++  /** Writer requests made, across every level and retry — three when nothing was asked twice. */
+   calls: number;
++  /**
++   * The fidelity guard's calls and chat-wire tokens, **beside** the writer's
++   * rather than added in: the chat wire counts cache reads inside its input
++   * tokens and the Messages wire does not, so a sum would mean nothing.
++   * Zero with the guard off.
++   */
++  checkCalls: number;
++  checkInputTokens: number;
++  checkOutputTokens: number;
+ }
+ 
+ export async function generateSimpleSummary(opts: {
+@@ -547,6 +560,11 @@ export async function generateSimpleSummary(opts: {
+   cacheArticle?: boolean;
+   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
+   power: ModelPower;
++  /**
++   * Run the fidelity guard (src/simple-check.ts). Defaults to the switch,
++   * `SIMPLE_CHECK_ENABLED`; tests pass it rather than flipping the constant.
++   */
++  guard?: boolean;
+ }): Promise<SimpleSummaryRun> {
+   const { blocks, tree, meta: realMeta } = opts.article;
+ 
+@@ -561,6 +579,9 @@ export async function generateSimpleSummary(opts: {
+      so an id from the bibliography is an invented one. */
+   const evidence = blocks.filter(isBodyEvidence);
+   const evidenceIds = new Set(evidence.map((b) => b.id as string));
++  /* What the checker quotes beside each paragraph: the same blocks' text. */
++  const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
++  const guard = opts.guard ?? SIMPLE_CHECK_ENABLED;
+   const started = Date.now();
+   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
+   const article = articleWithIds(meta, evidence);
+@@ -653,17 +674,76 @@ export async function generateSimpleSummary(opts: {
+    */
+   const writeLevel = async (level: SimpleLevel) => {
+     const usages: Anthropic.Usage[] = [];
++    const checked = { calls: 0, inputTokens: 0, outputTokens: 0 };
++    /** A valid attempt the checker flagged, kept in case the retry it bought cannot be stored. */
++    let flagged: { paragraphs: SimpleParagraph[]; tally: SimpleDropped; flags: SimpleCheckFlag[] } | null = null;
++    const keep = (paragraphs: SimpleParagraph[], tally: SimpleDropped, attempts: number, check: SimpleLevelCheck | null) => {
++      for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
++      return { paragraphs, usages, attempts, check, checked };
++    };
++    /* **The guard never costs a press.** If the retry a flag bought fails —
++       its call or its validation — the flagged first attempt is stored, as it
++       would have been with no guard at all. An abort is still an abort. */
++    const fallBack = (err: unknown, attempt: number) => {
++      if (!flagged || signal.aborted) throw err;
++      /* A flag on the first attempt is the only way to get here. */
++      return keep(flagged.paragraphs, flagged.tally, attempt, {
++        result: "flagged",
++        attempts: 2,
++        retriedAfterFlag: true,
++        stored: 1,
++        flags: flagged.flags,
++      });
++    };
+     for (let attempt = 1; ; attempt += 1) {
+-      const { raw, usage } = await askLevel(level);
+-      usages.push(usage);
++      let raw: string;
++      try {
++        const asked = await askLevel(level);
++        usages.push(asked.usage);
++        raw = asked.raw;
++      } catch (err) {
++        return fallBack(err, attempt);
++      }
+       const tally = emptyDropped();
++      let paragraphs: SimpleParagraph[];
+       try {
+-        const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
+-        for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
+-        return { paragraphs, usages, attempts: attempt };
++        paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
+       } catch (err) {
+-        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) throw err;
++        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) return fallBack(err, attempt);
++        continue;
++      }
++      if (!guard) return keep(paragraphs, tally, attempt, null);
++
++      /* **The fidelity guard** (src/simple-check.ts, plan 261001i): only valid
++         text is checked, and it shares this level's attempts with validation. */
++      const result = await checkLevel(paragraphs, textOf, { signal });
++      checked.calls += 1;
++      checked.inputTokens += result.inputTokens;
++      checked.outputTokens += result.outputTokens;
++      /* A cancelled job, or a sibling that failed, is an abort — never a check
++         that failed and a level stored unchecked. */
++      signal.throwIfAborted();
++      const { outcome } = result;
++      if (outcome.kind === "flagged" && attempt < LEVEL_ATTEMPTS) {
++        flagged = { paragraphs, tally, flags: outcome.flags };
++        continue;
+       }
++      /* Two attempts at most (`LEVEL_ATTEMPTS`), and `SimpleCheckAttempts` says
++         which combinations of them can happen. */
++      const base: SimpleCheckAttempts =
++        attempt === 1
++          ? { attempts: 1, retriedAfterFlag: false, stored: 1 }
++          : { attempts: 2, retriedAfterFlag: flagged !== null, stored: 2 };
++      return keep(
++        paragraphs,
++        tally,
++        attempt,
++        outcome.kind === "passed"
++          ? { result: "passed", ...base }
++          : outcome.kind === "flagged"
++            ? { result: "flagged", ...base, flags: outcome.flags }
++            : { result: "unchecked", ...base, failure: outcome.failure },
++      );
+     }
+   };
+ 
+@@ -699,13 +779,34 @@ export async function generateSimpleSummary(opts: {
+   const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
+     written.reduce((n, w) => n + w.usages.reduce((m, u) => m + (pick(u) ?? 0), 0), 0);
+ 
+-  const simpleSummary = stamped(levels, {
++  const stamp = stamped(levels, {
+     power: opts.power,
+     slug: opts.article.slug,
+     sourceHash,
+     profile: opts.profile,
+     elapsedMs: Date.now() - started,
+   });
++  /* The guard's record goes on the artefact, beside what it judged (plan
++     261001i § The record): the ledger counts checker calls, but cannot say
++     what they answered. With the guard off there is no record at all. */
++  const simpleSummary: SimpleSummary = guard
++    ? {
++        ...stamp,
++        check: {
++          checker: SIMPLE_CHECK_VERSION,
++          requestedModel: modelFor("simple-check", "standard"),
++          levels: Object.fromEntries(
++            SIMPLE_LEVELS.map((level, i) => {
++              const check = written[i]!.check;
++              if (!check) throw new Error(`the "${level}" level was written with the guard on and has no check record`);
++              return [level, check];
++            }),
++          ) as Record<SimpleLevel, SimpleLevelCheck>,
++        },
++      }
++    : stamp;
++  const checkSum = (pick: (c: { calls: number; inputTokens: number; outputTokens: number }) => number) =>
++    written.reduce((n, w) => n + pick(w.checked), 0);
+ 
+   /* Nothing is written here — the caller writes through the store. */
+   return {
+@@ -721,6 +822,9 @@ export async function generateSimpleSummary(opts: {
+     cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
+     maxTokens,
+     calls: written.reduce((n, w) => n + w.usages.length, 0),
++    checkCalls: checkSum((c) => c.calls),
++    checkInputTokens: checkSum((c) => c.inputTokens),
++    checkOutputTokens: checkSum((c) => c.outputTokens),
+     elapsedMs: Date.now() - started,
+   };
+ }
+diff --git a/src/types.ts b/src/types.ts
+index fbee2e52..20006f69 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -4728,8 +4728,94 @@ export interface SimpleSummary {
+   profileHash: string | null;
+   /** Every level, always — validation stores all of them or none. */
+   levels: Record<SimpleLevel, SimpleParagraph[]>;
++  /**
++   * What the fidelity guard said about each stored level (src/simple-check.ts,
++   * plan 261001i). **Absent on a row written before the guard, or with it
++   * switched off** — that is how the two are told apart, so it is optional and
++   * not part of the usability check. Never sent to a visitor
++   * (`publicSimpleSummary`, src/public/dto.ts).
++   */
++  check?: SimpleCheck;
++}
++
++/** The guard's record for one artefact: which checker, and each level's outcome. */
++export interface SimpleCheck {
++  /** The checker prompt's version, `SIMPLE_CHECK_VERSION`. */
++  checker: string;
++  /**
++   * The model the checks were asked of. Which one answered each call is in
++   * `ai_calls.answered_model`, rows of purpose `simple-check`.
++   */
++  requestedModel: string;
++  levels: Record<SimpleLevel, SimpleLevelCheck>;
++}
++
++/** Is this a well-formed `check` record, about a stored level of this length? */
++export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, SimpleParagraph[]>): value is SimpleCheck {
++  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
++  const c = value as Partial<Record<keyof SimpleCheck, unknown>>;
++  if (typeof c.checker !== "string" || !c.checker || typeof c.requestedModel !== "string" || !c.requestedModel) return false;
++  const byLevel = c.levels;
++  if (typeof byLevel !== "object" || byLevel === null) return false;
++  return SIMPLE_LEVELS.every((level) =>
++    isLevelCheck((byLevel as Record<string, unknown>)[level], levels[level].length),
++  );
+ }
+ 
++function isLevelCheck(value: unknown, paragraphs: number): boolean {
++  if (typeof value !== "object" || value === null) return false;
++  const v = value as Record<string, unknown>;
++  const attemptsOk =
++    (v.attempts === 1 && v.retriedAfterFlag === false && v.stored === 1) ||
++    (v.attempts === 2 && typeof v.retriedAfterFlag === "boolean" && (v.stored === 2 || (v.stored === 1 && v.retriedAfterFlag)));
++  if (!attemptsOk) return false;
++  if (v.result === "passed") return true;
++  if (v.result === "unchecked") return v.failure === "call" || v.failure === "unreadable";
++  if (v.result !== "flagged" || !Array.isArray(v.flags) || v.flags.length === 0) return false;
++  return v.flags.every((f: unknown) => {
++    const flag = f as Partial<SimpleCheckFlag> | null;
++    return (
++      typeof flag === "object" &&
++      flag !== null &&
++      Number.isInteger(flag.paragraph) &&
++      (flag.paragraph as number) >= 0 &&
++      (flag.paragraph as number) < paragraphs &&
++      typeof flag.why === "string"
++    );
++  });
++}
++
++/** A paragraph of the stored level the checker said its passages contradict. */
++export interface SimpleCheckFlag {
++  /** Index into the stored level's paragraphs, from 0. */
++  paragraph: number;
++  /** The checker's one sentence — for a person auditing it. Never logged. */
++  why: string;
++}
++
++/** Why a level was stored unchecked: the call failed, or its answer could not be read. */
++export type SimpleCheckFailure = "call" | "unreadable";
++
++/**
++ * One level's outcome, **about the text that was stored**.
++ *
++ * - `attempts` is writer calls for the level (validation retries included).
++ * - `retriedAfterFlag`: the first valid attempt was flagged, and that bought
++ *   another writer call.
++ * - `stored` is which attempt's text was kept. Usually the last; `1` after a
++ *   retry is the retry having failed, and the flagged first attempt kept,
++ *   because the guard never costs a press.
++ * - `flagged` with `attempts: 2` and no `retriedAfterFlag` is the spent-budget
++ *   case — validation used the first attempt, so a flag could not buy another.
++ */
++export type SimpleCheckAttempts =
++  | { attempts: 1; retriedAfterFlag: false; stored: 1 }
++  | { attempts: 2; retriedAfterFlag: boolean; stored: 1 | 2 };
++export type SimpleLevelCheck =
++  | ({ result: "passed" } & SimpleCheckAttempts)
++  | ({ result: "flagged"; flags: SimpleCheckFlag[] } & SimpleCheckAttempts)
++  | ({ result: "unchecked"; failure: SimpleCheckFailure } & SimpleCheckAttempts);
++
+ /**
+  * **Is this a complete, current-shape Simple artefact?** One answer for every
+  * read boundary. Checking `levels` alone is not enough: an imported or edited
+@@ -4753,7 +4839,9 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
+     Number.isFinite(simple.elapsedMs) &&
+     simple.elapsedMs >= 0 &&
+     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+-    isSimpleLevels(simple.levels)
++    isSimpleLevels(simple.levels) &&
++    /* Absent is a row from before the guard, or with it off; present must be whole. */
++    (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))
+   );
+ }
+ 
+diff --git a/tests/env-names-are-inventoried.test.ts b/tests/env-names-are-inventoried.test.ts
+index 7d276910..520d1691 100644
+--- a/tests/env-names-are-inventoried.test.ts
++++ b/tests/env-names-are-inventoried.test.ts
+@@ -267,6 +267,7 @@ const ALLOWED: readonly AllowGroup[] = [
+       "SPIDERYARN_CHAT_MODEL",
+       "SPIDERYARN_QUIZ_MARK_MODEL",
+       "SPIDERYARN_QUIZ_VERDICT_MODEL",
++      "SPIDERYARN_SIMPLE_CHECK_MODEL",
+       "SPIDERYARN_SEARCH_MODEL",
+       "SPIDERYARN_PDF_FRONTMATTER_MODEL",
+       "SPIDERYARN_REFEREE_MIRROR_MODEL",
+diff --git a/tests/public-dto.test.ts b/tests/public-dto.test.ts
+index e760aee7..42734ed0 100644
+--- a/tests/public-dto.test.ts
++++ b/tests/public-dto.test.ts
+@@ -1072,6 +1072,22 @@ describe("the artefacts a shared link carries", () => {
+         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
+       ],
+     },
++    /* The fidelity guard's audit record (plan 261001i) — the owner's, not a visitor's. */
++    check: {
++      checker: "simple-check/1",
++      requestedModel: "checker-model",
++      levels: {
++        brief: { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 },
++        simple: { result: "unchecked", attempts: 1, retriedAfterFlag: false, stored: 1, failure: "call" },
++        fuller: {
++          result: "flagged",
++          attempts: 2,
++          retriedAfterFlag: true,
++          stored: 2,
++          flags: [{ paragraph: 1, why: "checker-why-sentence" }],
++        },
++      },
++    },
+   };
+ 
+   /**
+@@ -1730,7 +1746,18 @@ describe("the artefacts a shared link carries", () => {
+     );
+     expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
+     const json = JSON.stringify(built.simpleSummary);
+-    for (const provenance of ["simple/2", "some-model", "abc123", "generatedAt", "elapsedMs", "profileHash", "0f1e2d3c4b5a6978"]) {
++    for (const provenance of [
++      "simple/2",
++      "some-model",
++      "abc123",
++      "generatedAt",
++      "elapsedMs",
++      "profileHash",
++      "0f1e2d3c4b5a6978",
++      "simple-check/1",
++      "checker-model",
++      "checker-why-sentence",
++    ]) {
+       expect(json, provenance).not.toContain(provenance);
+     }
+   });
+diff --git a/tests/simple-check.test.ts b/tests/simple-check.test.ts
+new file mode 100644
+index 00000000..fb990e50
+--- /dev/null
++++ b/tests/simple-check.test.ts
+@@ -0,0 +1,211 @@
++/**
++ * **Simple's fidelity guard, on the wire** — plan 261001i.
++ *
++ * The rates that justified building it (24 of 30 faults caught, 1–2% false
++ * alarms, $0.0027 a press) belong to one exact request: the probe's prompt,
++ * through `link-summary`'s route, at low effort, with its token ceiling
++ * (scripts/probes/261001h-fidelity-guard-probe.ts). The guard's other tests stub
++ * the gateway, so they cannot see what the gateway adds — the reasoning effort
++ * and the provider policy. This file runs the real gateway against a stubbed
++ * `fetch` and holds the bytes that go out to the bytes that were measured
++ * (Sol's plan review, P1-3).
++ *
++ * It also holds the store boundary: a `check` record is optional, and one that
++ * is present must be whole.
++ */
++import { createHash } from "node:crypto";
++
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import { type AiRequestBody, openRouterJson } from "../src/ai-call.js";
++import { modelFor } from "../src/models.js";
++import { checkLevel, checkMessage, SIMPLE_CHECK_SYSTEM, tallyChecks } from "../src/simple-check.js";
++import { type BlockId, isUsableSimpleSummary, type SimpleParagraph, type SimpleSummary } from "../src/types.js";
++
++const A = "spya-aaaaaa" as BlockId;
++const B = "spya-bbbbbb" as BlockId;
++const PARAGRAPHS: SimpleParagraph[] = [
++  { text: "Synergy grows with more loops.", ids: [A] },
++  { text: "Feedback lowers it.", ids: [A, B] },
++];
++const TEXT = new Map<string, string>([
++  [A, "Recurrent connections raised synergy."],
++  [B, "Feedback connections reduced synergy."],
++]);
++
++/** What the stubbed provider does next. `hang` answers only when the request's signal fires. */
++let reply: { kind: "answer"; content: string } | { kind: "hang" } = { kind: "answer", content: "" };
++let fetchMock: ReturnType<typeof vi.fn>;
++
++beforeEach(() => {
++  process.env.OPENROUTER_API_KEY = "test-key";
++  reply = { kind: "answer", content: '{"verdicts":[{"n":1,"verdict":"ok"},{"n":2,"verdict":"ok"}]}' };
++  fetchMock = vi.fn(async (_url: string, init: { signal?: AbortSignal }) => {
++    if (reply.kind === "hang") {
++      return new Promise<Response>((_resolve, reject) => {
++        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
++      });
++    }
++    const content = reply.content;
++    return {
++      ok: true,
++      status: 200,
++      headers: new Headers(),
++      text: async () =>
++        JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 120, completion_tokens: 9 } }),
++    } as unknown as Response;
++  });
++  vi.stubGlobal("fetch", fetchMock);
++});
++afterEach(() => vi.unstubAllGlobals());
++
++const lastBody = () => {
++  const init = fetchMock.mock.calls.at(-1)?.[1] as { body?: string } | undefined;
++  if (!init?.body) throw new Error("nothing was sent");
++  return JSON.parse(init.body) as Record<string, unknown>;
++};
++
++describe("the request the checker sends", () => {
++  it("is the prompt 261001h measured, byte for byte", () => {
++    /* The SHA-256 of the probe's `SYSTEM` at 596653d0. A change here is a new
++       checker, to be measured and to bump `SIMPLE_CHECK_VERSION`. */
++    expect(createHash("sha256").update(SIMPLE_CHECK_SYSTEM, "utf8").digest("hex")).toBe(
++      "b4144c9f998ca8b3f32df592bf84454593d673341ab4d8526a58f51fc81d15da",
++    );
++  });
++
++  it("sends exactly what the probe sent through link-summary's route", async () => {
++    await openRouterJson("link-summary", {
++      model: modelFor("link-summary", "standard"),
++      max_completion_tokens: 4000,
++      messages: [
++        { role: "system", content: SIMPLE_CHECK_SYSTEM },
++        { role: "user", content: checkMessage(PARAGRAPHS, TEXT) },
++      ],
++    } as AiRequestBody);
++    const measured = lastBody();
++    await checkLevel(PARAGRAPHS, TEXT);
++    const built = lastBody();
++    expect(built).toEqual(measured);
++    /* And, named, the parts the gateway adds that the probe depended on. */
++    expect(built.model).toBe(modelFor("simple-check", "standard"));
++    expect(built.max_completion_tokens).toBe(4000);
++    expect(built).not.toHaveProperty("max_tokens");
++    expect(built.reasoning).toEqual({ effort: "low" });
++    expect(built.provider).toMatchObject({ require_parameters: true });
++    expect(built.provider).not.toHaveProperty("order");
++  });
++
++  it("quotes each paragraph's own passages and nothing else", () => {
++    expect(checkMessage(PARAGRAPHS, TEXT)).toBe(
++      "PARAGRAPH 1\nSynergy grows with more loops.\n\nITS PASSAGES\n[spya-aaaaaa] Recurrent connections raised synergy." +
++        "\n\n=====\n\n" +
++        "PARAGRAPH 2\nFeedback lowers it.\n\nITS PASSAGES\n[spya-aaaaaa] Recurrent connections raised synergy.\n\n" +
++        "[spya-bbbbbb] Feedback connections reduced synergy.",
++    );
++  });
++});
++
++describe("checkLevel", () => {
++  it("reads a flag, with its paragraph and its reason, and the chat-wire tokens", async () => {
++    reply = {
++      kind: "answer",
++      content: '{"verdicts":[{"n":1,"verdict":"contradicts","why":"Loops are recurrent."},{"n":2,"verdict":"ok"}]}',
++    };
++    await expect(checkLevel(PARAGRAPHS, TEXT)).resolves.toEqual({
++      outcome: { kind: "flagged", flags: [{ paragraph: 0, why: "Loops are recurrent." }] },
++      inputTokens: 120,
++      outputTokens: 9,
++    });
++  });
++
++  it("calls a check that runs past its own deadline a failed check, not an abort", async () => {
++    reply = { kind: "hang" };
++    const out = await checkLevel(PARAGRAPHS, TEXT, { timeoutMs: 20 });
++    expect(out.outcome).toEqual({ kind: "failed", failure: "call" });
++  });
++
++  it("stops when the caller's signal fires, and never throws", async () => {
++    reply = { kind: "hang" };
++    const job = new AbortController();
++    const pending = checkLevel(PARAGRAPHS, TEXT, { signal: job.signal });
++    job.abort();
++    await expect(pending).resolves.toMatchObject({ outcome: { kind: "failed", failure: "call" } });
++  });
++
++  it("calls an unreadable answer unreadable", async () => {
++    reply = { kind: "answer", content: "Both look fine." };
++    await expect(checkLevel(PARAGRAPHS, TEXT)).resolves.toMatchObject({
++      outcome: { kind: "failed", failure: "unreadable" },
++    });
++  });
++});
++
++describe("tallyChecks", () => {
++  it("counts each kind of outcome once, and the first check's flags from both of their traces", () => {
++    const t = tallyChecks([
++      { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 },
++      { result: "passed", attempts: 2, retriedAfterFlag: false, stored: 2 },
++      { result: "passed", attempts: 2, retriedAfterFlag: true, stored: 2 },
++      { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 2, flags: [{ paragraph: 0, why: "" }] },
++      { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, flags: [{ paragraph: 0, why: "" }] },
++      { result: "flagged", attempts: 2, retriedAfterFlag: false, stored: 2, flags: [{ paragraph: 1, why: "" }] },
++      { result: "unchecked", attempts: 1, retriedAfterFlag: false, stored: 1, failure: "call" },
++      { result: "unchecked", attempts: 2, retriedAfterFlag: true, stored: 2, failure: "unreadable" },
++    ]);
++    expect(t).toEqual({
++      levels: 8,
++      /* All but the one whose first check failed. */
++      firstAnswered: 7,
++      /* Three retries bought by a flag, one spent-budget flag. */
++      firstFlagged: 5,
++      retriedAfterFlag: 4,
++      keptFirst: 1,
++      budgetSpent: 1,
++      storedFlagged: 3,
++      unchecked: { call: 1, unreadable: 1 },
++    });
++  });
++});
++
++describe("the store boundary", () => {
++  const p = (text: string): SimpleParagraph => ({ text, ids: [A] });
++  const BASE: SimpleSummary = {
++    version: "simple/2",
++    generator: "m",
++    slug: "s",
++    sourceHash: "h",
++    generatedAt: "2026-10-01T00:00:00.000Z",
++    elapsedMs: 1,
++    profileHash: null,
++    levels: { brief: [p("a"), p("b")], simple: [p("a"), p("b")], fuller: [p("a"), p("b"), p("c")] },
++  };
++  const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 };
++  const withCheck = (fuller: unknown) => ({
++    ...BASE,
++    check: { checker: "simple-check/1", requestedModel: "q", levels: { brief: passed, simple: passed, fuller } },
++  });
++
++  it("reads a row with no record, and one with a whole record", () => {
++    expect(isUsableSimpleSummary(BASE)).toBe(true);
++    expect(isUsableSimpleSummary(withCheck(passed))).toBe(true);
++    expect(
++      isUsableSimpleSummary(
++        withCheck({ result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, flags: [{ paragraph: 2, why: "" }] }),
++      ),
++    ).toBe(true);
++  });
++
++  it.each([
++    ["a retry after a flag in one attempt", { result: "passed", attempts: 1, retriedAfterFlag: true, stored: 1 }],
++    ["the first attempt kept with no flag to explain it", { result: "passed", attempts: 2, retriedAfterFlag: false, stored: 1 }],
++    ["three attempts", { result: "passed", attempts: 3, retriedAfterFlag: false, stored: 3 }],
++    ["a failure kind it does not know", { ...passed, result: "unchecked", failure: "timeout" }],
++    ["a flag with no flags", { ...passed, result: "flagged", flags: [] }],
++    ["a flag past the level's last paragraph", { ...passed, result: "flagged", flags: [{ paragraph: 3, why: "" }] }],
++    ["a result it does not know", { ...passed, result: "maybe" }],
++    ["no record for the level", undefined],
++  ])("refuses a record with %s", (_, fuller) => {
++    expect(isUsableSimpleSummary(withCheck(fuller))).toBe(false);
++  });
++});
+diff --git a/tests/simple-summary.test.ts b/tests/simple-summary.test.ts
+index 9d12e4e5..6b8d54c3 100644
+--- a/tests/simple-summary.test.ts
++++ b/tests/simple-summary.test.ts
+@@ -27,7 +27,14 @@ import {
+   inputFingerprint,
+   renderPrompt,
+ } from "../src/simple-summary.js";
+-import { HIGH_POWER_MODEL, STAGE_EFFORT } from "../src/models.js";
++import { HIGH_POWER_MODEL, modelFor, STAGE_EFFORT } from "../src/models.js";
++import {
++  parseCheckVerdicts,
++  SIMPLE_CHECK_ENABLED,
++  SIMPLE_CHECK_SYSTEM,
++  SIMPLE_CHECK_VERSION,
++} from "../src/simple-check.js";
++import { isUsableSimpleSummary } from "../src/types.js";
+ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
+ 
+ /* ------------------------------------------------------- the stubbed model -- */
+@@ -100,7 +107,49 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+   };
+ });
+ 
++/* ----------------------------------------------------- the stubbed checker -- */
++
++/**
++ * What the checker says to one call, given the user message it was sent: a
++ * string is the answer's content, an Error is the call itself failing. The
++ * default passes every paragraph, so the cases above are about the writer.
++ */
++let checkerReply: (user: string) => string | Error = (user) => okFor(user);
++const checks: { job: string; body: unknown; signal: AbortSignal | undefined }[] = [];
++
++/** How many paragraphs one checker message carries. */
++const paragraphsIn = (user: string) => (user.match(/^PARAGRAPH \d+$/gm) ?? []).length;
++const verdicts = (...v: ("ok" | "contradicts")[]) =>
++  JSON.stringify({
++    verdicts: v.map((verdict, i) => ({ n: i + 1, verdict, ...(verdict === "contradicts" ? { why: `turned round ${i + 1}` } : {}) })),
++  });
++const okFor = (user: string) => verdicts(...Array.from({ length: paragraphsIn(user) }, () => "ok" as const));
++/** Flags the first paragraph, and passes the rest. */
++const flagFirst = (user: string) =>
++  verdicts("contradicts", ...Array.from({ length: paragraphsIn(user) - 1 }, () => "ok" as const));
++
++vi.mock("../src/ai-call.js", async (importOriginal) => {
++  const real = await importOriginal<typeof import("../src/ai-call.js")>();
++  return {
++    ...real,
++    openRouterJson: async (job: string, body: unknown, options?: { signal?: AbortSignal }) => {
++      checks.push({ job, body: JSON.parse(JSON.stringify(body)), signal: options?.signal });
++      const user = (body as { messages: { role: string; content: string }[] }).messages.find((m) => m.role === "user")
++        ?.content;
++      const reply = checkerReply(user ?? "");
++      if (reply instanceof Error) throw reply;
++      return {
++        json: { choices: [{ message: { content: reply } }], usage: { prompt_tokens: 100, completion_tokens: 10 } },
++        answeredBy: "stub-checker",
++        generationId: null,
++      };
++    },
++  };
++});
++
+ beforeEach(() => {
++  checkerReply = okFor;
++  checks.length = 0;
+   answer = "";
+   stop = "end_turn";
+   waitForAbort = null;
+@@ -540,3 +589,239 @@ describe("the request", () => {
+     for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
+   });
+ });
++
++/* ------------------------------------------------------ the fidelity guard -- */
++
++describe("the fidelity guard (plan 261001i)", () => {
++  const article = (): Article => ({ ...example, slug: "simple-test", blocks: BLOCKS });
++  const run = (extra: { guard?: boolean; signal?: AbortSignal } = {}) =>
++    generateSimpleSummary({ power: "standard", article: article(), profile: null, ...extra });
++  const messagesOf = (i: number) =>
++    (checks[i]?.body as { messages?: { role: string; content: string }[] } | undefined)?.messages ?? [];
++  const userOf = (i: number) => messagesOf(i).find((m) => m.role === "user")?.content ?? "";
++  const isBrief = (user: string) => user.includes("Can a model read?") || user.includes("Could a model learn");
++  const writerCalls = (level: SimpleLevel) => sent.filter((c) => levelOf(c.body) === level).length;
++  /** A second Brief that a checker can tell from the first. */
++  const BRIEF_AGAIN = [para("Could a model learn to read?", INTRO.id), para("It read faster.", RESULT.id)];
++  const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 };
++  /* A good answer at every level unless the case says otherwise. */
++  beforeEach(() => {
++    answer = {};
++  });
++
++  it("checks every level once, on its own job, each paragraph with only its own cited passages", async () => {
++    const out = await run();
++    expect(checks).toHaveLength(3);
++    expect(checks.map((c) => c.job)).toEqual(["simple-check", "simple-check", "simple-check"]);
++    for (const c of checks) expect((c.body as { model: string }).model).toBe(modelFor("simple-check", "standard"));
++    expect(messagesOf(0)[0]).toEqual({
++      role: "system",
++      content: SIMPLE_CHECK_SYSTEM,
++    });
++    const brief = checks.map((_, i) => userOf(i)).find(isBrief) ?? "";
++    /* BRIEF cites INTRO and RESULT: their words go, and nothing else's. */
++    expect(brief).toContain(`PARAGRAPH 1\nCan a model read?\n\nITS PASSAGES\n[${INTRO.id}] ${INTRO.text}`);
++    expect(brief).toContain(`PARAGRAPH 2\nIt read faster.\n\nITS PASSAGES\n[${RESULT.id}] ${RESULT.text}`);
++    expect(brief).not.toContain(WHY.text);
++    expect(brief).not.toContain(METHOD.text);
++    expect(out.simpleSummary.check).toEqual({
++      checker: SIMPLE_CHECK_VERSION,
++      requestedModel: modelFor("simple-check", "standard"),
++      levels: { brief: passed, simple: passed, fuller: passed },
++    });
++    expect(sent).toHaveLength(3);
++  });
++
++  it("asks a flagged level again and stores the second when it passes", async () => {
++    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
++    checkerReply = (user) => (user.includes("Can a model read?") ? flagFirst(user) : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(2);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({ result: "passed", attempts: 2, retriedAfterFlag: true, stored: 2 });
++    expect(out.simpleSummary.check?.levels.simple).toEqual(passed);
++    expect(checks).toHaveLength(4);
++    expect(out.calls).toBe(4);
++  });
++
++  it("stores the second attempt when it is flagged too, and records its flags — the press is not lost", async () => {
++    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
++    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(2);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "flagged",
++      attempts: 2,
++      retriedAfterFlag: true,
++      stored: 2,
++      flags: [{ paragraph: 0, why: "turned round 1" }],
++    });
++  });
++
++  it("does not buy a third writer call when validation spent the first attempt", async () => {
++    const overCeiling = answerOf([para(words(SIMPLE_LIMITS.brief.maxWords + 1), INTRO.id), para("Two.", WHY.id)]);
++    answer = { brief: [JSON.stringify(overCeiling), JSON.stringify(answerOf(BRIEF))] };
++    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(2);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "flagged",
++      attempts: 2,
++      retriedAfterFlag: false,
++      stored: 2,
++      flags: [{ paragraph: 0, why: "turned round 1" }],
++    });
++    /* The invalid answer was never checked: only valid text is. */
++    expect(checks).toHaveLength(3);
++  });
++
++  it("stores a level unchecked when the checker call fails, and does not spend the writer retry", async () => {
++    checkerReply = (user) => (isBrief(user) ? new Error("upstream 502") : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(1);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "unchecked",
++      attempts: 1,
++      retriedAfterFlag: false,
++      stored: 1,
++      failure: "call",
++    });
++    expect(out.simpleSummary.check?.levels.fuller).toEqual(passed);
++  });
++
++  it.each([
++    ["prose", () => "Looks fine to me."],
++    ["too few verdicts", () => verdicts("ok")],
++    ["a verdict it does not know", (user: string) => okFor(user).replace('"ok"', '"maybe"')],
++    ["an empty answer", () => ""],
++  ])("treats an unreadable answer (%s) as a checker failure, not a pass", async (_, reply) => {
++    checkerReply = (user) => (isBrief(user) ? reply(user) : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(1);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "unchecked",
++      attempts: 1,
++      retriedAfterFlag: false,
++      stored: 1,
++      failure: "unreadable",
++    });
++  });
++
++  it("records an unchecked retry after a flag as unchecked, and says a flag bought it", async () => {
++    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
++    checkerReply = (user) =>
++      user.includes("Can a model read?") ? flagFirst(user) : isBrief(user) ? new Error("timeout") : okFor(user);
++    const out = await run();
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "unchecked",
++      attempts: 2,
++      retriedAfterFlag: true,
++      stored: 2,
++      failure: "call",
++    });
++  });
++
++  it("keeps the flagged first attempt when the retry it bought fails validation — the press is not lost", async () => {
++    answer = { brief: [JSON.stringify(answerOf(BRIEF)), "{ not json"] };
++    checkerReply = (user) => (isBrief(user) ? flagFirst(user) : okFor(user));
++    const out = await run();
++    expect(writerCalls("brief")).toBe(2);
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++    expect(out.simpleSummary.check?.levels.brief).toEqual({
++      result: "flagged",
++      attempts: 2,
++      retriedAfterFlag: true,
++      stored: 1,
++      flags: [{ paragraph: 0, why: "turned round 1" }],
++    });
++  });
++
++  it("keeps the flagged first attempt when the retry's call is refused", async () => {
++    answer = { brief: [JSON.stringify(answerOf(BRIEF)), JSON.stringify(answerOf(BRIEF_AGAIN))] };
++    checkerReply = (user) => {
++      if (isBrief(user)) stop = "refusal";
++      return isBrief(user) ? flagFirst(user) : okFor(user);
++    };
++    const out = await run();
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++    expect(out.simpleSummary.check?.levels.brief).toMatchObject({ result: "flagged", stored: 1, retriedAfterFlag: true });
++  });
++
++  it("switched off: no checker call, no retry for a flag, and no record", async () => {
++    checkerReply = flagFirst;
++    const out = await run({ guard: false });
++    expect(checks).toHaveLength(0);
++    expect(sent).toHaveLength(3);
++    expect("check" in out.simpleSummary).toBe(false);
++    expect(out.checkCalls).toBe(0);
++  });
++
++  it("is on unless switched off", () => {
++    expect(SIMPLE_CHECK_ENABLED).toBe(true);
++  });
++
++  it("reports the checker's calls and tokens beside the writer's, never summed into them", async () => {
++    const out = await run();
++    expect(out.calls).toBe(3);
++    expect(out.outputTokens).toBe(3);
++    expect(out.checkCalls).toBe(3);
++    expect(out.checkInputTokens).toBe(300);
++    expect(out.checkOutputTokens).toBe(30);
++  });
++
++  it("an aborted job stops at the check rather than storing an unchecked level", async () => {
++    const job = new AbortController();
++    checkerReply = (user) => {
++      job.abort();
++      return new Error(`aborted ${paragraphsIn(user)}`);
++    };
++    await expect(run({ signal: job.signal })).rejects.toThrow();
++  });
++
++  it("hands the checker the job's signal, so a cancelled press stops checking", async () => {
++    const job = new AbortController();
++    await run({ signal: job.signal });
++    job.abort();
++    expect(checks).toHaveLength(3);
++    for (const c of checks) expect(c.signal?.aborted).toBe(true);
++  });
++
++  it("reads a row with no record as usable — written before the guard, or with it off", async () => {
++    const out = await run({ guard: false });
++    expect(isUsableSimpleSummary(out.simpleSummary)).toBe(true);
++    const checked = await run();
++    expect(isUsableSimpleSummary(checked.simpleSummary)).toBe(true);
++  });
++});
++
++describe("parseCheckVerdicts", () => {
++  it("reads one verdict per paragraph, in order, and the reason for a flag", () => {
++    expect(parseCheckVerdicts(verdicts("ok", "contradicts", "ok"), 3)).toEqual([
++      { verdict: "ok" },
++      { verdict: "contradicts", why: "turned round 2" },
++      { verdict: "ok" },
++    ]);
++  });
++
++  it("finds the JSON inside a fence or a sentence", () => {
++    expect(parseCheckVerdicts(`Here:\n\`\`\`json\n${verdicts("ok")}\n\`\`\``, 1)).toEqual([{ verdict: "ok" }]);
++  });
++
++  it("refuses a count that does not match, an unknown verdict, numbering out of order, and non-JSON", () => {
++    expect(parseCheckVerdicts(verdicts("ok"), 2)).toBeNull();
++    expect(parseCheckVerdicts('{"verdicts":[{"n":1,"verdict":"fine"}]}', 1)).toBeNull();
++    expect(parseCheckVerdicts('{"verdicts":[{"n":2,"verdict":"ok"},{"n":1,"verdict":"ok"}]}', 2)).toBeNull();
++    expect(parseCheckVerdicts("no", 1)).toBeNull();
++    expect(parseCheckVerdicts("", 1)).toBeNull();
++  });
++
++  it("gives a flag with no reason an empty one rather than refusing it", () => {
++    expect(parseCheckVerdicts('{"verdicts":[{"n":1,"verdict":"contradicts"}]}', 1)).toEqual([
++      { verdict: "contradicts", why: "" },
++    ]);
++  });
++});

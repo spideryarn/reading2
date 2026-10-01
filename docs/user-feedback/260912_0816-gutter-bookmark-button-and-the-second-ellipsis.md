@@ -1,5 +1,5 @@
 ---
-reports: spya-xcguqc, spya-u24r88
+reports: spya-xcguqc, spya-u24r88, spya-mxsans, spya-sgf8g6
 ending: shipped
 ---
 # The gutter: a second "…" inside its own menu, and the bookmark button that never arrived
@@ -49,3 +49,15 @@ leaves those bookmarks out for old tabs on purpose, because the old code would c
 
 [260912c](../plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md); the postmortem for 38
 is [260912c-a-disclosure-that-draws-itself-inside-what-it-discloses](../postmortems/260912c-a-disclosure-that-draws-itself-inside-what-it-discloses.md).
+
+## Two earlier reports asking for the same button
+
+`spya-mxsans` (2026-09-05 08:37Z) and `spya-sgf8g6` (2026-09-05 20:54Z), both from Greg, read from
+their rows in production on 2026-10-01. Neither got a note, so the Earlier tab showed them as not
+shipped. They ask for the gutter bookmark that 37 asked for again, and the work above built it:
+
+> Alongside permalink, comment, question mark buttons in vertical gutter of text, add a bookmark
+> button. It may still be represented by the same underlying Comment representation, but this will
+> be an easier/more understandable UI for the user.
+
+> I'm still not seeing a Flag/Bookmark icon in the vertical gutter
