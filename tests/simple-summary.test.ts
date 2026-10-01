@@ -657,6 +657,9 @@ describe("the fidelity guard (plan 261001i)", () => {
       stored: 2,
       flags: [{ paragraph: 0, why: "turned round 1" }],
     });
+    expect(checks).toHaveLength(4);
+    expect(out.calls).toBe(4);
+    expect(out.checkCalls).toBe(4);
   });
 
   it("does not buy a third writer call when validation spent the first attempt", async () => {
@@ -723,6 +726,10 @@ describe("the fidelity guard (plan 261001i)", () => {
       stored: 2,
       failure: "call",
     });
+    expect(writerCalls("brief")).toBe(2);
+    expect(checks).toHaveLength(4);
+    expect(out.calls).toBe(4);
+    expect(out.checkCalls).toBe(4);
   });
 
   it("keeps the flagged first attempt when the retry it bought fails validation — the press is not lost", async () => {
@@ -736,6 +743,7 @@ describe("the fidelity guard (plan 261001i)", () => {
       attempts: 2,
       retriedAfterFlag: true,
       stored: 1,
+      retryFailure: "validation",
       flags: [{ paragraph: 0, why: "turned round 1" }],
     });
   });
@@ -748,7 +756,16 @@ describe("the fidelity guard (plan 261001i)", () => {
     };
     const out = await run();
     expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
-    expect(out.simpleSummary.check?.levels.brief).toMatchObject({ result: "flagged", stored: 1, retriedAfterFlag: true });
+    expect(out.simpleSummary.check?.levels.brief).toMatchObject({
+      result: "flagged",
+      stored: 1,
+      retriedAfterFlag: true,
+      retryFailure: "call",
+    });
+    /* The refused response was still a writer request with reported usage. */
+    expect(out.calls).toBe(4);
+    expect(out.inputTokens).toBe(4);
+    expect(out.outputTokens).toBe(4);
   });
 
   it("switched off: no checker call, no retry for a flag, and no record", async () => {
@@ -817,6 +834,15 @@ describe("parseCheckVerdicts", () => {
     expect(parseCheckVerdicts('{"verdicts":[{"n":2,"verdict":"ok"},{"n":1,"verdict":"ok"}]}', 2)).toBeNull();
     expect(parseCheckVerdicts("no", 1)).toBeNull();
     expect(parseCheckVerdicts("", 1)).toBeNull();
+  });
+
+  it("reads a verdict without its number by position, as the measured probe did", () => {
+    /* The probe behind the 24-of-30 figure ignored `n`; refusing an answer
+       without it would turn a check that was measured into an unchecked level. */
+    expect(parseCheckVerdicts('{"verdicts":[{"verdict":"ok"},{"verdict":"contradicts","why":"x"}]}', 2)).toEqual([
+      { verdict: "ok" },
+      { verdict: "contradicts", why: "x" },
+    ]);
   });
 
   it("gives a flag with no reason an empty one rather than refusing it", () => {

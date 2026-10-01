@@ -104,6 +104,9 @@ export function parseCheckVerdicts(content: string, count: number): CheckVerdict
   for (const [i, item] of list.entries()) {
     if (!item || typeof item !== "object") return null;
     const v = item as { n?: unknown; verdict?: unknown; why?: unknown };
+    /* A wrong number is refused; a missing one is read by position, as the
+       measured probe read every answer (Sol's code review wanted it required;
+       that would be an unmeasured stricter checker). */
     if (v.n !== undefined && v.n !== i + 1) return null;
     if (v.verdict === "ok") out.push({ verdict: "ok" });
     else if (v.verdict === "contradicts") out.push({ verdict: "contradicts", why: typeof v.why === "string" ? v.why.trim() : "" });

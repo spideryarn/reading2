@@ -90,7 +90,7 @@ import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js"
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
-import { checkLevel, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
+import { checkLevel, type CheckOutcome, SIMPLE_CHECK_ENABLED, SIMPLE_CHECK_VERSION } from "./simple-check.js";
 import {
   type BlockFingerprint,
   fallbackHeadTitle,
@@ -104,10 +104,11 @@ import {
   SIMPLE_MAX_IDS,
   type BlockId,
   type Meta,
-  type SimpleCheckAttempts,
+  type SimpleLatestCheckAttempts,
   type SimpleCheckFlag,
   type SimpleLevel,
   type SimpleLevelCheck,
+  type SimpleRetryFailure,
   type SimpleParagraph,
   type SimpleSummary,
   type Tree,
@@ -473,6 +474,39 @@ export function buildLevel(
   return paragraphs;
 }
 
+type LevelAttempt =
+  | { ok: true; paragraphs: SimpleParagraph[]; tally: SimpleDropped }
+  | { ok: false; error: unknown };
+
+/** Parse and validate one writer answer without making the retry loop a nested try/catch. */
+function readLevelAttempt(raw: string, level: SimpleLevel, evidenceIds: ReadonlySet<string>): LevelAttempt {
+  const tally = emptyDropped();
+  try {
+    return {
+      ok: true,
+      paragraphs: buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally),
+      tally,
+    };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/** The check record for text kept from the latest writer attempt. */
+function checkedLatest(outcome: CheckOutcome, attempt: number, retriedAfterFlag: boolean): SimpleLevelCheck {
+  if (outcome.kind === "flagged") {
+    if (attempt !== 2) throw new Error("a first-attempt flag must spend its available retry");
+    return { result: "flagged", attempts: 2, retriedAfterFlag, stored: 2, flags: outcome.flags };
+  }
+  const base: SimpleLatestCheckAttempts =
+    attempt === 1
+      ? { attempts: 1, retriedAfterFlag: false, stored: 1 }
+      : { attempts: 2, retriedAfterFlag, stored: 2 };
+  return outcome.kind === "passed"
+    ? { result: "passed", ...base }
+    : { result: "unchecked", ...base, failure: outcome.failure };
+}
+
 interface StampOptions {
   slug: string;
   /** The power it was written at — the stamp names the model (plan 260930f). */
@@ -605,8 +639,12 @@ export async function generateSimpleSummary(opts: {
     opts.onProgress(`${chars.toLocaleString("en-GB")} characters so far`);
   };
 
-  /** One request for one level: its answer text, or a throw for the call itself failing. */
-  const askLevel = async (level: SimpleLevel): Promise<{ raw: string; usage: Anthropic.Usage }> => {
+  let writerCalls = 0;
+
+  /** One request for one level: its answer, or a failure with usage when the provider answered. */
+  const askLevel = async (
+    level: SimpleLevel,
+  ): Promise<{ raw: string; usage: Anthropic.Usage } | { failure: unknown; usage: Anthropic.Usage }> => {
     let message: Anthropic.Message;
     try {
       const call = streamMessage(
@@ -631,6 +669,7 @@ export async function generateSimpleSummary(opts: {
         },
         { power: opts.power, signal },
       );
+      writerCalls += 1;
       call.onText(onText);
       /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
          is what records what this call cost. src/messages-stream.ts. */
@@ -639,17 +678,23 @@ export async function generateSimpleSummary(opts: {
       throw anthropicCallFailed(err);
     }
     if (wasRefused(message)) {
-      throw stageFailure(MODEL_REFUSED, {
-        authored: `the model answered the "${level}" request with stop_reason: refusal`,
-      });
+      return {
+        failure: stageFailure(MODEL_REFUSED, {
+          authored: `the model answered the "${level}" request with stop_reason: refusal`,
+        }),
+        usage: message.usage,
+      };
     }
     if (message.stop_reason === "max_tokens") {
-      throw truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
-        outputTokens: message.usage.output_tokens,
-        answerChars: message.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .reduce((n, b) => n + b.text.length, 0),
-      });
+      return {
+        failure: truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
+          outputTokens: message.usage.output_tokens,
+          answerChars: message.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .reduce((n, b) => n + b.text.length, 0),
+        }),
+        usage: message.usage,
+      };
     }
     const raw = message.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -670,7 +715,8 @@ export async function generateSimpleSummary(opts: {
    * retried here: those have their own handling, and the job can be re-run.
    *
    * A rejected attempt's tally is discarded, so `dropped` counts what the kept
-   * answer lost; every attempt's tokens are returned, because they were spent.
+   * answer lost. Every response's reported tokens are returned; a transport
+   * failure has none to report here, while the ledger still records its call.
    */
   const writeLevel = async (level: SimpleLevel) => {
     const usages: Anthropic.Usage[] = [];
@@ -684,14 +730,15 @@ export async function generateSimpleSummary(opts: {
     /* **The guard never costs a press.** If the retry a flag bought fails —
        its call or its validation — the flagged first attempt is stored, as it
        would have been with no guard at all. An abort is still an abort. */
-    const fallBack = (err: unknown, attempt: number) => {
+    const fallBack = (err: unknown, retryFailure: SimpleRetryFailure) => {
       if (!flagged || signal.aborted) throw err;
       /* A flag on the first attempt is the only way to get here. */
-      return keep(flagged.paragraphs, flagged.tally, attempt, {
+      return keep(flagged.paragraphs, flagged.tally, LEVEL_ATTEMPTS, {
         result: "flagged",
         attempts: 2,
         retriedAfterFlag: true,
         stored: 1,
+        retryFailure,
         flags: flagged.flags,
       });
     };
@@ -700,18 +747,17 @@ export async function generateSimpleSummary(opts: {
       try {
         const asked = await askLevel(level);
         usages.push(asked.usage);
+        if ("failure" in asked) return fallBack(asked.failure, "call");
         raw = asked.raw;
       } catch (err) {
-        return fallBack(err, attempt);
+        return fallBack(err, "call");
       }
-      const tally = emptyDropped();
-      let paragraphs: SimpleParagraph[];
-      try {
-        paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
-      } catch (err) {
-        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) return fallBack(err, attempt);
+      const built = readLevelAttempt(raw, level, evidenceIds);
+      if (!built.ok) {
+        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) return fallBack(built.error, "validation");
         continue;
       }
+      const { paragraphs, tally } = built;
       if (!guard) return keep(paragraphs, tally, attempt, null);
 
       /* **The fidelity guard** (src/simple-check.ts, plan 261001i): only valid
@@ -728,22 +774,7 @@ export async function generateSimpleSummary(opts: {
         flagged = { paragraphs, tally, flags: outcome.flags };
         continue;
       }
-      /* Two attempts at most (`LEVEL_ATTEMPTS`), and `SimpleCheckAttempts` says
-         which combinations of them can happen. */
-      const base: SimpleCheckAttempts =
-        attempt === 1
-          ? { attempts: 1, retriedAfterFlag: false, stored: 1 }
-          : { attempts: 2, retriedAfterFlag: flagged !== null, stored: 2 };
-      return keep(
-        paragraphs,
-        tally,
-        attempt,
-        outcome.kind === "passed"
-          ? { result: "passed", ...base }
-          : outcome.kind === "flagged"
-            ? { result: "flagged", ...base, flags: outcome.flags }
-            : { result: "unchecked", ...base, failure: outcome.failure },
-      );
+      return keep(paragraphs, tally, attempt, checkedLatest(outcome, attempt, flagged !== null));
     }
   };
 
@@ -821,7 +852,7 @@ export async function generateSimpleSummary(opts: {
     cacheReadTokens: sum((u) => u.cache_read_input_tokens),
     cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
     maxTokens,
-    calls: written.reduce((n, w) => n + w.usages.length, 0),
+    calls: writerCalls,
     checkCalls: checkSum((c) => c.calls),
     checkInputTokens: checkSum((c) => c.inputTokens),
     checkOutputTokens: checkSum((c) => c.outputTokens),

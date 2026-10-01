@@ -98,18 +98,22 @@ check: {
 }
 
 type LevelCheck = (
-  | { result: "passed" }
-  | { result: "flagged";   flags: { paragraph: number; why: string }[] }  // the stored text's
-  | { result: "unchecked"; failure: "call" | "unreadable" }
-) & (
-  | { attempts: 1; retriedAfterFlag: false; stored: 1 }
-  | { attempts: 2; retriedAfterFlag: boolean; stored: 1 | 2 }
+  | ({ result: "passed" } | { result: "unchecked"; failure: "call" | "unreadable" }) & (
+      | { attempts: 1; retriedAfterFlag: false; stored: 1 }
+      | { attempts: 2; retriedAfterFlag: boolean; stored: 2 }
+    )
+  | { result: "flagged"; flags: { paragraph: number; why: string }[] } & (
+      | { attempts: 2; retriedAfterFlag: false; stored: 2 }
+      | { attempts: 2; retriedAfterFlag: true; stored: 2 }
+      | { attempts: 2; retriedAfterFlag: true; stored: 1; retryFailure: "call" | "validation" }
+    )
 );
 ```
 
 - `attempts` is writer calls for that level, so a validation retry is visible too.
 - `retriedAfterFlag` says the first valid attempt was flagged, and that bought another call.
-- `stored` is which attempt's text was kept: `1` after a retry is the retry having failed.
+- `stored` is which attempt's text was kept: `1` after a retry is the retry having failed, and
+  `retryFailure` says whether its call or validation failed.
 - `flagged` with `retriedAfterFlag: false` and `attempts: 2` is the spent-budget case.
 - The impossible combinations do not type-check, and `isUsableSimpleSummary` refuses a record that
   is present but not whole (Sol, P2-1), so a malformed audit record cannot pass as one.
@@ -128,7 +132,8 @@ about their own article.
 
 **The counting.** `scripts/simple-check-report.ts`, read-only, prints over a date range: levels
 checked, flagged on first check, retried, kept-first, stored flagged, unchecked by failure kind; and
-from `ai_calls`, checker calls by outcome, their median latency and their cost a press. Its tally
+from `ai_calls`, product checker calls by outcome, their median latency and their known cost per
+checker-active press. Its tally
 (`tallyChecks`) is a pure function with a unit test; the script is the SQL around it. Run it against
 production through `.env.prod`, inside a read-only transaction, as every production read is.
 
@@ -137,7 +142,8 @@ that the artefact is a snapshot: a re-run replaces the record on the same revisi
 fails for another reason stores nothing. It asked for an append-only `simple_check_events` table.
 **Declined, for now**: the brief was to use the existing cost-tracking path where one fits, and the
 ledger covers most of the gap. Every checker call is an `ai_calls` row whatever happens to its
-press, so the ledger counts checks, transport failures, latency and spend over *every* press; and
+press, so the ledger counts checks, transport failures, latency and spend over every press that
+reached the checker; and
 since an invalid answer is never checked, a level's second checker call exists only when a flag
 bought a retry. What stays invisible is the verdict of a check whose press then failed or was
 re-run — a survivor bias on the flag rate, small while presses rarely fail (22 of 24 stored all
@@ -230,3 +236,14 @@ about the verdicts; the unit tests do.
   (the wire-level test and the pinned prompt), and all three P2s (a validator and a type that refuses
   impossible states, the spend bound stated, `requestedModel`). Declined: P1-2's events table, for
   the reasons in § The record.
+- Code: [261001i-simple-fidelity-guard-code-review-sol.md](261001i-simple-fidelity-guard-code-review-sol.md)
+  (diff: [261001i-simple-fidelity-guard-code-review.diff](261001i-simple-fidelity-guard-code-review.diff)).
+  No P0. Sol fixed, and I kept: the report counting only product `simple`-step checks, by collector
+  run rather than job, with unpriced BYOK calls named; `retryFailure: "call" | "validation"` on a
+  kept-first record; a refused or truncated retry counted in the writer's calls and tokens; the
+  record's type and validator narrowed so a first-attempt flag cannot be stored without its retry;
+  the transport test pinned to the measured Luna model by name. It judged declining the events table
+  reasonable for a beta trial, and not for unbiased historical verdict rates. **One fix reversed**:
+  it made the parser refuse a verdict without its paragraph number. The measured probe read every
+  answer by position, so that would be a stricter, unmeasured checker whose refusals land as
+  "unchecked"; a missing number is read by position again, a wrong one is still refused, with a test.

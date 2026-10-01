@@ -14,10 +14,11 @@
  *   `generatedAt`. They say what each check *answered*: flagged, passed,
  *   unreadable. They cannot see a press that failed for another reason (it
  *   stored nothing), or a record a re-run replaced.
- * - **The ledger**: `ai_calls` rows of purpose `simple-check`. They see every
- *   checker call, failed presses and replaced records included, with its
- *   outcome, latency and cost. They cannot see what a check answered, because
- *   a row is written when the call ends and never amended.
+ * - **The ledger**: product `simple` step rows of purpose `simple-check`. They
+ *   see every checker call, failed presses and replaced records included, with
+ *   its outcome, latency and cost. Eval and CLI calls are excluded: they are
+ *   measurements, not reader presses. The ledger cannot see what a check
+ *   answered, because a row is written when the call ends and never amended.
  *
  * Neither is the guard's whole story alone, which is why both are printed.
  * The rates 261001h measured, to compare against: flags on 1–2% of
@@ -100,38 +101,51 @@ try {
       console.log(`  stored with a flag:            ${t.storedFlagged} (${pct(t.storedFlagged, t.levels)} of levels)`);
       console.log(`  stored unchecked:              call failed ${t.unchecked.call}, unreadable ${t.unchecked.unreadable}`);
 
-      /* The ledger: every checker call, whether or not its press stored anything. */
+      /* The ledger: every product checker call, whether or not its press stored anything. */
       const calls = (
         await tx.execute(sql`
           select outcome,
                  count(*) as n,
-                 count(distinct job_id) as jobs,
                  coalesce(sum(coalesce(credits_used_nanos, 0) + coalesce(byok_upstream_nanos, 0) + coalesce(computed_cost_nanos, 0)), 0) as nanos,
-                 count(*) filter (where cost_source = 'none') as unpriced,
+                 count(*) filter (
+                   where cost_source = 'none'
+                      or (is_byok is true and byok_upstream_nanos is null)
+                 ) as unpriced,
                  percentile_cont(0.5) within group (order by duration_ms) as median_ms
           from spideryarn.ai_calls
           where purpose = 'simple-check'
+            and scope_kind = 'job_step'
+            and step_name = 'simple'
             and started_at > now() - make_interval(days => ${days})
           group by outcome
           order by outcome`)
       ).rows as Record<string, unknown>[];
       const total = calls.reduce((n, r) => n + num(r.n), 0);
-      const jobs = (
+      const pressRow = (
         (await tx.execute(sql`
-          select count(distinct job_id) as jobs from spideryarn.ai_calls
-          where purpose = 'simple-check' and started_at > now() - make_interval(days => ${days})`)).rows as { jobs: unknown }[]
+          select count(distinct run_id) as presses from spideryarn.ai_calls
+          where purpose = 'simple-check'
+            and scope_kind = 'job_step'
+            and step_name = 'simple'
+            and started_at > now() - make_interval(days => ${days})`)).rows as { presses: unknown }[]
       )[0];
+      const ledgerPresses = num(pressRow?.presses);
       const nanos = calls.reduce((n, r) => n + num(r.nanos), 0);
-      console.log(`\nChecker calls in the ledger: ${total}, across ${num(jobs?.jobs)} press(es)`);
+      const unpriced = calls.reduce((n, r) => n + num(r.unpriced), 0);
+      console.log(`\nChecker calls in the product ledger: ${total}, across ${ledgerPresses} checker-active press(es)`);
       for (const r of calls) {
         console.log(
           `  ${String(r.outcome).padEnd(8)} ${String(num(r.n)).padStart(5)}  median ${Math.round(num(r.median_ms))} ms` +
             (num(r.unpriced) ? `  (${num(r.unpriced)} unpriced)` : ""),
         );
       }
-      console.log(`  spend: $${(nanos / 1e9).toFixed(4)}${num(jobs?.jobs) ? `, $${(nanos / 1e9 / num(jobs?.jobs)).toFixed(4)} a press` : ""}`);
       console.log(
-        "\nThe ledger counts presses that stored nothing and records a re-run replaced; the artefacts do not.\n" +
+        `  known spend: $${(nanos / 1e9).toFixed(4)}` +
+          (ledgerPresses ? `, $${(nanos / 1e9 / ledgerPresses).toFixed(4)} per checker-active press` : "") +
+          (unpriced ? ` (short by ${unpriced} unpriced call(s))` : ""),
+      );
+      console.log(
+        "\nThe ledger keeps checker calls from presses that stored nothing and records a re-run replaced; the artefacts do not.\n" +
           "A ledger total well above the artefacts' checks is those, not a bug.",
       );
     },

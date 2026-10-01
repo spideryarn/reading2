@@ -4731,8 +4731,9 @@ export interface SimpleSummary {
   /**
    * What the fidelity guard said about each stored level (src/simple-check.ts,
    * plan 261001i). **Absent on a row written before the guard, or with it
-   * switched off** — that is how the two are told apart, so it is optional and
-   * not part of the usability check. Never sent to a visitor
+   * switched off** — that is how the two are told apart, so its absence does
+   * not make the artefact unusable. When present it is validated as a whole.
+   * Never sent to a visitor
    * (`publicSimpleSummary`, src/public/dto.ts).
    */
   check?: SimpleCheck;
@@ -4765,13 +4766,20 @@ export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, Simple
 function isLevelCheck(value: unknown, paragraphs: number): boolean {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  const attemptsOk =
+  const storedLatest =
     (v.attempts === 1 && v.retriedAfterFlag === false && v.stored === 1) ||
-    (v.attempts === 2 && typeof v.retriedAfterFlag === "boolean" && (v.stored === 2 || (v.stored === 1 && v.retriedAfterFlag)));
-  if (!attemptsOk) return false;
-  if (v.result === "passed") return true;
-  if (v.result === "unchecked") return v.failure === "call" || v.failure === "unreadable";
-  if (v.result !== "flagged" || !Array.isArray(v.flags) || v.flags.length === 0) return false;
+    (v.attempts === 2 && typeof v.retriedAfterFlag === "boolean" && v.stored === 2);
+  const storedFlaggedFirst = v.attempts === 2 && v.retriedAfterFlag === true && v.stored === 1;
+  const retryFailed = v.retryFailure === "call" || v.retryFailure === "validation";
+  if (v.result === "passed") return storedLatest && v.retryFailure === undefined;
+  if (v.result === "unchecked")
+    return storedLatest && v.retryFailure === undefined && (v.failure === "call" || v.failure === "unreadable");
+  /* A first-attempt flag must spend the available retry. The only way the
+     first attempt is stored is when that retry itself could not be stored. */
+  const flaggedAttempts =
+    (storedFlaggedFirst && retryFailed) ||
+    (storedLatest && v.attempts === 2 && v.retryFailure === undefined);
+  if (v.result !== "flagged" || !flaggedAttempts || !Array.isArray(v.flags) || v.flags.length === 0) return false;
   return v.flags.every((f: unknown) => {
     const flag = f as Partial<SimpleCheckFlag> | null;
     return (
@@ -4795,6 +4803,8 @@ export interface SimpleCheckFlag {
 
 /** Why a level was stored unchecked: the call failed, or its answer could not be read. */
 export type SimpleCheckFailure = "call" | "unreadable";
+/** Why a flag-triggered writer retry could not replace the valid first attempt. */
+export type SimpleRetryFailure = "call" | "validation";
 
 /**
  * One level's outcome, **about the text that was stored**.
@@ -4805,16 +4815,22 @@ export type SimpleCheckFailure = "call" | "unreadable";
  * - `stored` is which attempt's text was kept. Usually the last; `1` after a
  *   retry is the retry having failed, and the flagged first attempt kept,
  *   because the guard never costs a press.
+ * - `retryFailure` distinguishes a failed writer call from a valid call whose
+ *   answer failed validation; it exists only when `stored` is `1` after a flag.
  * - `flagged` with `attempts: 2` and no `retriedAfterFlag` is the spent-budget
  *   case — validation used the first attempt, so a flag could not buy another.
  */
-export type SimpleCheckAttempts =
-  | { attempts: 1; retriedAfterFlag: false; stored: 1 }
-  | { attempts: 2; retriedAfterFlag: boolean; stored: 1 | 2 };
+export type SimpleLatestCheckAttempts =
+  | { attempts: 1; retriedAfterFlag: false; stored: 1; retryFailure?: never }
+  | { attempts: 2; retriedAfterFlag: boolean; stored: 2; retryFailure?: never };
+export type SimpleFlaggedCheckAttempts =
+  | { attempts: 2; retriedAfterFlag: false; stored: 2; retryFailure?: never }
+  | { attempts: 2; retriedAfterFlag: true; stored: 2; retryFailure?: never }
+  | { attempts: 2; retriedAfterFlag: true; stored: 1; retryFailure: SimpleRetryFailure };
 export type SimpleLevelCheck =
-  | ({ result: "passed" } & SimpleCheckAttempts)
-  | ({ result: "flagged"; flags: SimpleCheckFlag[] } & SimpleCheckAttempts)
-  | ({ result: "unchecked"; failure: SimpleCheckFailure } & SimpleCheckAttempts);
+  | ({ result: "passed" } & SimpleLatestCheckAttempts)
+  | ({ result: "flagged"; flags: SimpleCheckFlag[] } & SimpleFlaggedCheckAttempts)
+  | ({ result: "unchecked"; failure: SimpleCheckFailure } & SimpleLatestCheckAttempts);
 
 /**
  * **Is this a complete, current-shape Simple artefact?** One answer for every

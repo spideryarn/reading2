@@ -18,12 +18,11 @@
  * > (Sonnet-latest), and then use your judgment about which tasks to use for
  * > which (default to capable-model for now).
  *
- * So there are now two tiers rather than one model. **Every task but one is on
- * the capable tier** — the exception is `link-summary`, which arrived on the
- * quick tier on 2026-09-05 and is what turned the warnings below from
- * hypotheticals into things somebody had to check. See `TASK_TIER` below, which
- * is where a task changes tier and where the reasoning for each one is written
- * down.
+ * So there are now two tiers rather than one model. **Three tasks are on the
+ * quick tier**: `link-summary`, `quiz-verdict`, and `simple-check`. Each was
+ * written and measured for that tier rather than moved onto it. See `TASK_TIER`
+ * below, which is where a task changes tier and where the reasoning for each
+ * one is written down.
  *
  * ## The three literals
  *
@@ -236,13 +235,12 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  * and structured outputs both supported. What it does not take is `stop` or
  * `verbosity`, neither of which this app sends.
  *
- * **One job runs on it, and no job has been *moved* to it.** `link-summary`
- * (src/link-summary.ts) was written for this tier on 2026-09-05 and is the only
- * evidence about it this repo has: it works, at latencies and prices recorded in
- * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
- * That is a reason to try another task on it and not a reason to move one; the
- * way to move one is still an eval under evals/ that says what was gained and
- * what was lost, in the shape of evals/results/effort-vs-quality.md.
+ * **Three jobs run on it, and no job has been *moved* to it.** `link-summary`,
+ * `quiz-verdict`, and `simple-check` were each written for this tier. Their
+ * evidence belongs to their own job: Simple's checker, for example, was
+ * measured in plan 261001h. That is a reason to try another task on it and not
+ * a reason to move one; moving one still needs an eval under `evals/` that says
+ * what was gained and what was lost.
  */
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
@@ -905,12 +903,11 @@ export type AiJob =
  * **Which tier each task is on — and the file's actual decision, rather than its
  * constants, which are only the vocabulary for it.**
  *
- * Everything is `capable` except `link-summary`. That default is what Greg
- * asked for ("default to capable-model for now") and is also the honest state:
- * no task here has been *moved* to the quick tier, and a tier is not a
- * preference to be guessed at per task, it is a trade to be checked. The one
- * exception was written for the quick tier rather than moved onto it, which is
- * the difference between a decision and an unmeasured migration.
+ * Everything is `capable` except `link-summary`, `quiz-verdict`, and
+ * `simple-check`. The capable default is what Greg asked for ("default to
+ * capable-model for now"). No task here has been *moved* to the quick tier: all
+ * three exceptions were written for it, which is the difference between a
+ * decision and an unmeasured migration.
  *
  * **Flipping a row is not the whole of switching a task** — read the header's
  * list of what has to move with the model first. For the seven pipeline tasks it

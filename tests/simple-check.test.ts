@@ -14,6 +14,7 @@
  * is present must be whole.
  */
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -89,6 +90,9 @@ describe("the request the checker sends", () => {
     expect(built).toEqual(measured);
     /* And, named, the parts the gateway adds that the probe depended on. */
     expect(built.model).toBe(modelFor("simple-check", "standard"));
+    /* The rates in 261001h belong to Luna, not merely to whichever model the
+       quick tier happens to name later. A tier move is a new measurement. */
+    expect(built.model).toBe("openai/gpt-5.6-luna");
     expect(built.max_completion_tokens).toBe(4000);
     expect(built).not.toHaveProperty("max_tokens");
     expect(built.reasoning).toEqual({ effort: "low" });
@@ -148,7 +152,7 @@ describe("tallyChecks", () => {
       { result: "passed", attempts: 2, retriedAfterFlag: false, stored: 2 },
       { result: "passed", attempts: 2, retriedAfterFlag: true, stored: 2 },
       { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 2, flags: [{ paragraph: 0, why: "" }] },
-      { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, flags: [{ paragraph: 0, why: "" }] },
+      { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, retryFailure: "call", flags: [{ paragraph: 0, why: "" }] },
       { result: "flagged", attempts: 2, retriedAfterFlag: false, stored: 2, flags: [{ paragraph: 1, why: "" }] },
       { result: "unchecked", attempts: 1, retriedAfterFlag: false, stored: 1, failure: "call" },
       { result: "unchecked", attempts: 2, retriedAfterFlag: true, stored: 2, failure: "unreadable" },
@@ -191,14 +195,19 @@ describe("the store boundary", () => {
     expect(isUsableSimpleSummary(withCheck(passed))).toBe(true);
     expect(
       isUsableSimpleSummary(
-        withCheck({ result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, flags: [{ paragraph: 2, why: "" }] }),
+        withCheck({ result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, retryFailure: "validation", flags: [{ paragraph: 2, why: "opposite" }] }),
       ),
     ).toBe(true);
   });
 
   it.each([
     ["a retry after a flag in one attempt", { result: "passed", attempts: 1, retriedAfterFlag: true, stored: 1 }],
+    ["a first-attempt flag that did not spend the available retry", { result: "flagged", attempts: 1, retriedAfterFlag: false, stored: 1, flags: [{ paragraph: 0, why: "x" }] }],
     ["the first attempt kept with no flag to explain it", { result: "passed", attempts: 2, retriedAfterFlag: false, stored: 1 }],
+    ["a passed result while the flagged first attempt was kept", { result: "passed", attempts: 2, retriedAfterFlag: true, stored: 1 }],
+    ["an unchecked result while the flagged first attempt was kept", { result: "unchecked", attempts: 2, retriedAfterFlag: true, stored: 1, failure: "call" }],
+    ["a kept first attempt with no retry failure", { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, flags: [{ paragraph: 0, why: "x" }] }],
+    ["a kept first attempt with an unknown retry failure", { result: "flagged", attempts: 2, retriedAfterFlag: true, stored: 1, retryFailure: "timeout", flags: [{ paragraph: 0, why: "x" }] }],
     ["three attempts", { result: "passed", attempts: 3, retriedAfterFlag: false, stored: 3 }],
     ["a failure kind it does not know", { ...passed, result: "unchecked", failure: "timeout" }],
     ["a flag with no flags", { ...passed, result: "flagged", flags: [] }],
@@ -207,5 +216,20 @@ describe("the store boundary", () => {
     ["no record for the level", undefined],
   ])("refuses a record with %s", (_, fuller) => {
     expect(isUsableSimpleSummary(withCheck(fuller))).toBe(false);
+  });
+});
+
+describe("the report's SQL claims", () => {
+  const report = readFileSync(new URL("../scripts/simple-check-report.ts", import.meta.url), "utf8");
+
+  it("counts checker-active product step runs as presses, excluding eval calls and retries of the same job", () => {
+    expect(report).toContain("scope_kind = 'job_step'");
+    expect(report).toContain("step_name = 'simple'");
+    expect(report).toContain("count(distinct run_id) as presses");
+    expect(report).not.toContain("count(distinct job_id) as jobs");
+  });
+
+  it("calls a BYOK row with no upstream figure unpriced", () => {
+    expect(report).toContain("is_byok is true and byok_upstream_nanos is null");
   });
 });
