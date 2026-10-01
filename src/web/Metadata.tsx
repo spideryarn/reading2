@@ -927,7 +927,10 @@ export function Metadata({
             One TooltipGroup so that once the pointer has opened one card's
             explanation, sweeping across the rest is instant rather than six
             separate waits — the same reasoning as the spine's bands. */}
-        <Section label="At a glance">
+        <Section
+          label="At a glance"
+          keywords="words read time reading duration long blocks parts sections levels length size count statistics"
+        >
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:sm:grid-cols-3">
               <Stat
@@ -1044,7 +1047,10 @@ export function Metadata({
         {/* ------------------------------------------------ 6. your reading --
             Reader state, and the only section on the page that is about you
             rather than about the article. */}
-        <Section label="Your reading">
+        <Section
+          label="Your reading"
+          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off"
+        >
           {/* The per-article half of the reader profile. The global half is
               read-only here with a link to /profile, because a global value
               edited inside one article's page is a global value nobody can
@@ -1163,7 +1169,7 @@ export function Metadata({
             takes the article off the shelf, followed only by permanent
             deletion. Both belong past everything somebody might have come here
             to read. */}
-        <Section label="Archive this article">
+        <Section label="Archive this article" keywords="remove from shelf">
           <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
 
@@ -1179,7 +1185,12 @@ export function Metadata({
             Authors and Export). Kept mounted, so a confirm half-way through
             survives the reader shutting it; the confirm itself is unchanged,
             and shutting the section only adds a press in front of it. */}
-        <Section label="Delete this article" collapsible keepMounted>
+        <Section
+          label="Delete this article"
+          keywords="permanent permanently forever"
+          collapsible
+          keepMounted
+        >
           <DeletePermanently
             slug={slug}
             /* **`||`, not `??`, and a browser pass is what found that.** An
@@ -1253,7 +1264,10 @@ function SharingSection({
 }) {
   if (!offer) return null;
   return (
-    <Section label="Access & sharing">
+    <Section
+      label="Access & sharing"
+      keywords="anyone everybody readers signed in account permission public link privacy visible who can read"
+    >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
           page background — Greg: *"the section should be inside a box like the
@@ -1797,7 +1811,7 @@ function CostSection({ slug }: { slug: string }) {
   return (
     <Section
       label="What it cost"
-      keywords="calls models tokens breakdown"
+      keywords="ai calls models tokens breakdown"
       collapsible={!failed}
       aside={articleCostSummary(load)}
     >
@@ -1910,7 +1924,7 @@ function ExportSection({
        Its error, if one arrives while shut, is inside `hidden` and so is not
        announced until the section is opened — accepted: the reader shut it
        themselves, mid-wait. GPT Sol, plan review. */
-    <Section label="Export" collapsible keepMounted>
+    <Section label="Export" keywords="data files zip" collapsible keepMounted>
       <div className={`${CARD} tw:p-4`}>
         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
@@ -2184,7 +2198,10 @@ function CameFrom({ meta }: { meta: Meta }) {
        "uploaded from a file" line under the title, three inches up. What is
        actually in here is a transcription and how far to trust it, so the
        heading now says that. Fable, 2026-09-03. */
-    <Section label="How well we read the PDF">
+    <Section
+      label="How well we read the PDF"
+      keywords="transcription missed missing words pages"
+    >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           <Row icon={FileType} label="Made from">
@@ -2311,7 +2328,7 @@ function TechnicalDetails({
   return (
     <Section
       label="Technical details"
-      keywords="address url source original stored fingerprint hash slug id revision"
+      keywords="address url source original stored storage location link fingerprint hash slug id revision"
       collapsible
     >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>

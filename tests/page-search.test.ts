@@ -21,16 +21,32 @@ function section(
 }
 
 const PAGE: SearchableSection[] = [
+  section("In one sentence"),
   section("Authors", { keywords: "names writers byline who wrote it affiliations", aside: "2" }),
-  section("At a glance"),
-  section("Your reading"),
-  section("Access & sharing"),
-  section("AI processing", { keywords: "rerun summaries glossary steps", aside: "9 of 9 stages" }),
-  section("What it cost", { keywords: "calls models tokens breakdown", aside: "$0.0123 · 12 calls" }),
-  section("Export"),
-  section("Technical details", { keywords: "slug files storage fingerprint" }),
-  section("Archive this article"),
-  section("Delete this article"),
+  section("At a glance", {
+    keywords: "words read time reading duration long blocks parts sections levels length size count statistics",
+  }),
+  section("How well we read the PDF", { keywords: "transcription missed missing words pages" }),
+  section("Access & sharing", {
+    keywords: "anyone everybody readers signed in account permission public link privacy visible who can read",
+  }),
+  section("Your reading", {
+    keywords: "purpose reason goal notes comments questions annotations highlights bookmarks progress left off",
+  }),
+  section("Technical details", {
+    keywords: "address url source original stored storage location link fingerprint hash slug id revision",
+  }),
+  section("What it cost", {
+    keywords: "ai calls models tokens breakdown",
+    aside: "$0.0123 · 12 calls",
+  }),
+  section("Export", { keywords: "data files zip" }),
+  section("AI processing", {
+    keywords: "steps stages pipeline models summaries glossary structure hierarchy",
+    aside: "9 of 9 stages",
+  }),
+  section("Archive this article", { keywords: "remove from shelf" }),
+  section("Delete this article", { keywords: "permanent permanently forever" }),
 ];
 
 const find = (q: string) => searchSections(q, PAGE);
@@ -122,13 +138,36 @@ describe("searchSections", () => {
 
   it("needs every word to hit somewhere — two words narrow rather than widen", () => {
     expect(find("delete cost")).toEqual([]);
-    expect(find("technical slug")).toEqual(["Technical details"]);
+    expect(find("source fingerprint")).toEqual(["Technical details"]);
   });
 
   it("drops the words a question is made of, so a question finds its answer", () => {
     expect(find("how much did this cost")[0]).toBe("What it cost");
     expect(find("where can I download it")[0]).toBe("Export");
     expect(find("who wrote this")[0]).toBe("Authors");
+  });
+
+  it("handles natural reader queries against the page's actual sections", () => {
+    const cases: [string, string][] = [
+      ["comments and notes", "Your reading"],
+      ["where I left off", "Your reading"],
+      ["reading progress", "Your reading"],
+      ["remove from shelf", "Archive this article"],
+      ["delete permanently", "Delete this article"],
+      ["download my data", "Export"],
+      ["where is the zip", "Export"],
+      ["which processing stages were used", "AI processing"],
+      ["how do I make this public", "Access & sharing"],
+      ["who can read it", "Access & sharing"],
+      ["storage location", "Technical details"],
+      ["original link", "Technical details"],
+      ["AI cost", "What it cost"],
+      ["read time", "At a glance"],
+      ["how long to read", "At a glance"],
+      ["what's the cost", "What it cost"],
+      ["I'd like to download my data", "Export"],
+    ];
+    for (const [query, expected] of cases) expect(find(query)[0], query).toBe(expected);
   });
 
   it("keeps those words when they are all there is", () => {

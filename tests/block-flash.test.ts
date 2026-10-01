@@ -155,6 +155,17 @@ describe("flashElement — a Metadata section, plan 261001s", () => {
 describe("the flash stylesheet", () => {
   const css = readFileSync("src/web/styles/prose.css", "utf8");
 
+  it("turns the element flash class into a visible, pointer-transparent overlay", () => {
+    const overlay = css.match(
+      /\.element-flash::after,\s*\.element-flash-still::after\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(overlay).toContain('content: ""');
+    expect(overlay).toContain("background: var(--spideryarn-orange)");
+    expect(overlay).toContain("pointer-events: none");
+    expect(css).toMatch(/\.element-flash::after\s*\{\s*animation: element-flash/);
+    expect(css).toMatch(/\.element-flash-still::after\s*\{\s*opacity: 0\.22/);
+  });
+
   it("composes the still wash with a literal search-hit rail", () => {
     const body = css.match(
       /td\.text\.has-hit:not\(\[data-hues\]\)\.block-flash-still\s*\{([^}]*)\}/,

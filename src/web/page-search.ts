@@ -57,10 +57,11 @@ const SYNONYMS: readonly (readonly string[])[] = [
   ["share", "public", "private", "link", "visibility", "visible", "access", "publish", "permission"],
   ["export", "download", "backup", "save", "copy", "json"],
   ["rerun", "regenerate", "redo", "refresh", "retry", "rebuild", "again", "run", "restart", "processing"],
-  ["author", "writer", "byline", "wrote", "written", "who"],
-  ["reading", "progress", "read", "finished", "time"],
+  ["author", "writer", "byline", "wrote", "written"],
+  ["reading", "read", "finished"],
+  ["time", "duration", "long"],
   ["technical", "debug", "file", "storage", "raw", "slug", "internal"],
-  ["glance", "stat", "statistic", "overview", "count", "length", "word", "size"],
+  ["glance", "stat", "statistic", "overview", "count", "length", "size"],
   ["pdf", "scan", "ocr", "extraction", "quality"],
   ["sentence", "summary", "gist", "tldr", "abstract"],
 ];
@@ -105,9 +106,13 @@ for (const group of SYNONYMS) {
  */
 const STOPWORDS = new Set(
   [
-    "a", "an", "the", "of", "to", "in", "on", "for", "and", "or", "is", "are", "was", "it", "its",
-    "this", "that", "my", "me", "i", "how", "much", "many", "what", "which", "where", "when", "why",
-    "do", "does", "did", "can", "show", "see", "find", "about", "article", "page",
+    "a", "an", "the", "of", "to", "in", "on", "for", "from", "and", "or", "is", "are", "was",
+    "were", "be", "been", "it", "its", "this", "that", "my", "me", "i", "you", "your", "we", "our",
+    "how", "much", "many", "what", "which", "where", "when", "why", "do", "does", "did", "can",
+    "show", "see", "find", "about", "make", "change", "used", "want", "need", "like", "article", "page",
+    /* Fragments produced when punctuation splits ordinary contractions:
+       "what's", "you're", "I've", "I'll", "I'd", "can't". */
+    "s", "re", "ve", "ll", "d", "m", "t",
   ].map(stem),
 );
 

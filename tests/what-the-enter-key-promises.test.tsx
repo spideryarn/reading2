@@ -82,6 +82,8 @@ const PROMISES: Record<string, string> = {
      the keyboard, so the promise has something behind it. */
   "GlossaryPanel.tsx › Look up a term in this article": "search",
   "Library.tsx › Search the library": "search",
+  /* Enter goes to the first matching section (plan 261001s). */
+  "PageContents.tsx › Search this page's sections": "search",
   "SearchPanel.tsx › srch-input": "search",
   /* The sign-in form: the first field moves to the second, the second signs in.
      `next` really moves — SignInControls.tsx says why it has to. */

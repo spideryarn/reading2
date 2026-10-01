@@ -92,12 +92,14 @@ That is the deferred version, if the table proves too small.
 
 ## Deferred, named
 
-- **Landing on the matching line inside a section**, rather than the section's heading. v1 lands on
-  the section; the section is at most a screenful or two, and the flash marks it.
+- **Landing on the matching line inside a section**, rather than the section's heading. v1 searches
+  only the section's label, authored keywords and heading aside, so the heading is the honest
+  destination for every result. Searching body text and landing on its matching line are one later
+  feature; *AI processing* is long enough that doing only the first half would be misleading.
 - **Narrow windows.** The contents list is `xl`-only, and the search box lives with it, so below
-  1280px neither is drawn. A separate report (9M, the contents list on an iPad) is waiting on Greg
-  about what the margin list should become on a narrow window; the search box follows that answer
-  rather than inventing a second narrow-window design now.
+  1280px neither is drawn. A separate report (9M, the contents list on an iPad) has its own session
+  deciding what the margin list becomes on a narrow window; the search box follows that rather than
+  inventing a second narrow-window design now.
 - **⌘-F / `/` to focus the box.** ⌘-K already opens the command bar on this page; a key for this
   box can come when it is asked for.
 
@@ -147,3 +149,53 @@ Taken, each one checked against the code:
 
 Not taken: `useId()` for the input — it has no `id`, only an `aria-label`, so two pages cannot
 collide on it.
+
+## After GPT Sol's code review — what changed
+
+1. **Only the newest reveal may flash** (P2). Each click used to leave its own two timers and window
+   scroll listener behind, so a quick second choice could still flash the first section on its old
+   clock. `PageContents` now cancels the superseded wait and cancels it on unmount; a test advances
+   through the first deadline before the second and proves the old destination stays dark.
+2. **The authored vocabulary covers the page readers actually see** (P2). With body search removed,
+   *comments*, *where I left off*, *remove from shelf*, *download my data*, *who can read it*,
+   *storage location*, and *read time* had no reliable route. The relevant sections now carry those
+   words, ordinary question and contraction fragments are ignored, and the overly broad
+   reading/progress/time synonym group was split so *read time* does not rank the PDF or personal
+   reading section above *At a glance*. The pure tests use the real section order and vocabulary.
+3. **Character changes outside an aside no longer rebuild the index** (P3). The observer still sees
+   subtree mutations so conditional sections cannot arrive unnoticed, but it rescans only when a
+   section, `data-keywords`, or `[data-section-aside]` may have changed. A component test changes
+   unrelated text and then an aside, proving only the latter takes the scan path.
+4. **Filtered results are announced** (P2 accessibility). A permanently mounted `role="status"`
+   reports the result count while remaining visually hidden; the existing empty-result sentence is
+   visible. This covers the otherwise silent change to the list under a focused search field.
+5. **The flash test now tests paint, not only state** (P2 test gap). The component test already
+   proved the class arrived, but would stay green if the CSS that made the class visible vanished.
+   The stylesheet test now pins the orange overlay, its animation/still forms, and
+   `pointer-events: none`.
+
+The native `SECTION_REVEAL` listener's `flushSync` was exercised through the real React click path:
+the collapsed body is in the DOM at the instant `scrollIntoView` runs, with no React warning. The
+fixed margin clears `--dock-space`, the shared `wash` keeps the reading view's block and passage
+behaviour, and the old *Share…* caller still focuses the *Access & sharing* heading; no change was
+needed in those three areas.
+
+## The browser pass, and the one thing it changed
+
+Playwright against system Chrome on the box, 1440×900 and 390×844, as an admin on a local article.
+Everything held: a shut *Technical details* or *Delete this article* opens, its heading takes focus,
+and the orange layer (0.22, fading to nothing by ~1.9 s after the click) covers the cards with their
+text legible; *download*, *fingerprint*, *slug*, *price*, *remove* and *how much did this cost* each
+list the right section; the search box stays at the same top while the list filters; Escape brings
+the whole list back; no console errors; at 390px neither box nor list is drawn and there is no
+sideways scroll.
+
+**Found:** a section too near the foot of the page cannot be scrolled to the top, so the page
+bottoms out, and the margin's "you are here" rule says *at the bottom, the last entry* — it marked
+*Delete this article* beside a flash on *Technical details*. Now, at the bottom, the entry the
+reader just chose is marked while its heading is on screen; scroll it away and the old rule
+returns. A reveal that neither scrolls nor resizes anything asks for a measure itself. Test: *marks
+the entry it went to, even when the page cannot scroll that far*, red without the fix.
+
+Headings land at 96px when there is room below them, and lower when there is not; that is the page
+being short, not the reveal being wrong, and padding the foot to make it reach was not worth it.

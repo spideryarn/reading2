@@ -85,6 +85,7 @@ function article(): Article {
 
 let host: HTMLDivElement;
 let root: Root;
+let mounted: boolean;
 
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -117,6 +118,7 @@ beforeEach(async () => {
       }),
     );
   });
+  mounted = true;
   /* After the mount, so the page's own requests resolved on real timers; from
      here only the reveal's scroll-idle wait and the flash's timer are ours. */
   vi.useFakeTimers();
@@ -124,7 +126,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.useRealTimers();
-  await act(async () => root.unmount());
+  if (mounted) await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
 });
@@ -166,6 +168,19 @@ async function settle() {
 }
 
 describe("clicking an entry in the contents list (7Y)", () => {
+  it("marks the entry it went to, even when the page cannot scroll that far", async () => {
+    /* jsdom has no layout: every page is "at the bottom" and every heading at
+       top 0, so this is the case the browser pass found — a section too near
+       the foot to reach the top, which used to leave the LAST entry marked
+       beside a flash on the one the reader chose. */
+    const current = () => nav()?.querySelector('li button[aria-current="true"]')?.textContent;
+    await settle();
+    expect(current()).toBe(entries()[entries().length - 1]);
+    await act(async () => entry("Technical details")?.click());
+    await settle();
+    expect(current()).toBe("Technical details");
+  });
+
   it("opens a shut section, then flashes it", async () => {
     expect(toggle("Technical details")?.getAttribute("aria-expanded")).toBe("false");
     expect(host.textContent).not.toContain(DIR);
@@ -262,6 +277,37 @@ describe("clicking an entry in the contents list (7Y)", () => {
     await settle();
     expect(section("At a glance")?.classList.contains("element-flash")).toBe(true);
   });
+
+  it("cancels an older settle wait when the reader chooses another section", async () => {
+    await act(async () => entry("Technical details")?.click());
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+      entry("Export")?.click();
+      vi.advanceTimersByTime(70);
+    });
+    expect(
+      section("Technical details")?.classList.contains("element-flash"),
+      "the superseded destination flashed on its old clock",
+    ).toBe(false);
+    expect(section("Export")?.classList.contains("element-flash")).toBe(false);
+
+    await act(async () => vi.advanceTimersByTime(60));
+    expect(section("Technical details")?.classList.contains("element-flash")).toBe(false);
+    expect(section("Export")?.classList.contains("element-flash")).toBe(true);
+  });
+
+  it("cancels the settle timers and listener when the page unmounts", async () => {
+    await act(async () => entry("Technical details")?.click());
+    const whileWaiting = vi.getTimerCount();
+    expect(whileWaiting).toBeGreaterThanOrEqual(2);
+
+    await act(async () => root.unmount());
+    mounted = false;
+    /* Metadata's other controls may schedule their own teardown timer. The two
+       timers this reveal owned must both be gone. Its listener is removed by
+       the same `cancel` call that clears them. */
+    expect(vi.getTimerCount()).toBeLessThanOrEqual(whileWaiting - 2);
+  });
 });
 
 describe("the search box above it (83)", () => {
@@ -279,6 +325,7 @@ describe("the search box above it (83)", () => {
     await type("download");
     expect(entries()[0]).toBe("Export");
     expect(entries().length).toBeLessThan(all.length);
+    expect(nav()?.querySelector('[role="status"]')?.textContent).toBe("1 section match.");
 
     await press("Enter");
     expect(toggle("Export")?.getAttribute("aria-expanded")).toBe("true");
@@ -292,6 +339,28 @@ describe("the search box above it (83)", () => {
     expect(host.textContent?.toLowerCase()).not.toContain("fingerprint");
     await type("fingerprint");
     expect(entries()[0]).toBe("Technical details");
+  });
+
+  it("does not rescan the index for unrelated text mutations", async () => {
+    const main = host.querySelector("main");
+    const aside = section("AI processing")?.querySelector("[data-section-aside]");
+    if (!main || !aside) throw new Error("the test page is incomplete");
+    const unrelated = document.createTextNode("A changing status elsewhere on the page.");
+    main.append(unrelated);
+    await act(async () => Promise.resolve());
+    const scan = vi.spyOn(main, "querySelectorAll");
+
+    await act(async () => {
+      unrelated.data = "The status changed.";
+      await Promise.resolve();
+    });
+    expect(scan).not.toHaveBeenCalledWith("[data-section]");
+
+    await act(async () => {
+      aside.textContent = "3";
+      await Promise.resolve();
+    });
+    expect(scan).toHaveBeenCalledWith("[data-section]");
   });
 
   it("says so when nothing matches, and Escape puts the whole list back", async () => {

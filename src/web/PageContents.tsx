@@ -97,33 +97,56 @@ function sectionIn(root: HTMLElement | null, id: string): HTMLElement | null {
  * Open the section, scroll to it, put focus on its heading, flash it. Resolved
  * inside `root`, for the duplicate-ids reason the click handler below gives.
  */
-function reveal(root: HTMLElement | null, id: string): void {
+function reveal(root: HTMLElement | null, id: string): (() => void) | null {
   const el = sectionIn(root, id);
-  if (!el) return;
+  if (!el) return null;
   /* The section commits its open state synchronously on this event
      (Metadata.tsx § Section, `flushSync`), so its body is in the DOM before the
      scroll is asked for — near the foot of the page a shut section may not
      leave the scroll range to bring its heading up. Sol, plan review. */
   el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
+  let finished = false;
+  let idle = setTimeout(done, SCROLL_IDLE_MS);
+  const cap = setTimeout(done, SCROLL_MAX_MS);
+  window.addEventListener("scroll", onScroll, { passive: true });
   /* Optional-called: jsdom has none. */
   el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
   /* **Focus follows the eye**: the heading, which every section makes
      focusable from a script, without a second scroll. Otherwise a keyboard or
      screen-reader user is left in the margin while the page has moved. */
   el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
-  let idle = setTimeout(done, SCROLL_IDLE_MS);
-  const cap = setTimeout(done, SCROLL_MAX_MS);
   function onScroll(): void {
     clearTimeout(idle);
     idle = setTimeout(done, SCROLL_IDLE_MS);
   }
-  function done(): void {
+  function cancel(): void {
+    if (finished) return;
+    finished = true;
     clearTimeout(idle);
     clearTimeout(cap);
     window.removeEventListener("scroll", onScroll);
+  }
+  function done(): void {
+    if (finished) return;
+    cancel();
     if (el?.isConnected) flashElement(el);
   }
-  window.addEventListener("scroll", onScroll, { passive: true });
+  return cancel;
+}
+
+/** Whether a mutation can change the labels, keywords or asides in the index. */
+function changesIndex(record: MutationRecord): boolean {
+  if (record.type === "attributes") return true;
+  const parent = record.target instanceof Element ? record.target : record.target.parentElement;
+  if (parent?.closest("[data-section-aside]")) return true;
+  if (record.type !== "childList") return false;
+  return [...record.addedNodes, ...record.removedNodes].some((node) => {
+    if (!(node instanceof Element || node instanceof DocumentFragment)) return false;
+    return (
+      (node instanceof Element && node.matches("[data-section], [data-section-aside]")) ||
+      node.querySelector("[data-section], [data-section-aside]") !== null
+    );
+  });
 }
 
 /**
@@ -167,13 +190,30 @@ export function PageContents({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [here, setHere] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  /* One navigation owns one settle wait. A quick second click cancels the
+     first one's timers and listener, so the old section cannot flash after the
+     reader has already chosen another one. The unmount cleanup matters too:
+     the ceiling otherwise leaves a window listener alive for 1.5 seconds. */
+  const cancelReveal = useRef<(() => void) | null>(null);
+  /** The section the reader last went to from here — `measure` at the page foot. */
+  const chosen = useRef<string | null>(null);
+  /** Ask for a `measure` — set by the effect that owns it, below. A reveal of a
+      section already in place neither scrolls nor resizes anything. */
+  const remeasure = useRef<(() => void) | null>(null);
+  const revealSection = useCallback(
+    (id: string) => {
+      chosen.current = id;
+      cancelReveal.current?.();
+      cancelReveal.current = reveal(containerRef.current, id);
+      remeasure.current?.();
+    },
+    [containerRef],
+  );
+  useEffect(() => () => cancelReveal.current?.(), []);
 
-  /* Re-read the page's sections, now. Called on mount and on every mutation
-     inside the container, which is affordable because it is one
-     `querySelectorAll` over one subtree — and because the result is only
-     committed when it actually differs, so a mutation that changed something
-     else does not re-render this. Without that comparison every keystroke in
-     the purpose box below would replace the array and repaint the nav. */
+  /* Re-read the page's sections, now. Called on mount and when the observer
+     sees a section, keyword or aside change. The result is only committed when
+     it actually differs, so an equivalent update does not repaint the nav. */
   const rescan = useCallback(() => {
     const root = containerRef.current;
     if (!root) return;
@@ -204,7 +244,9 @@ export function PageContents({
     rescan();
     const root = containerRef.current;
     if (!root) return;
-    const watch = new MutationObserver(rescan);
+    const watch = new MutationObserver((records) => {
+      if (records.some(changesIndex)) rescan();
+    });
     /* `characterData` because an aside can change by its text node alone (a
        cost arriving), and the keywords attribute because a section could
        change its own. */
@@ -238,6 +280,24 @@ export function PageContents({
       const atBottom =
         window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
       if (atBottom && root) {
+        /* **Unless the reader has just chosen a section that is on screen.**
+           Clicking *Technical details* on a page too short to bring it to the
+           top lands at the bottom, and the rule above then marked *Delete
+           this article* beside a flash on the section they asked for — the
+           browser pass for plan 261001s. While the chosen heading is in view
+           it is the honest answer; scroll it away and the rule returns. */
+        const chosenTop = chosen.current
+          ? sectionIn(root, chosen.current)?.getBoundingClientRect().top
+          : undefined;
+        if (
+          chosen.current &&
+          chosenTop !== undefined &&
+          chosenTop >= 0 &&
+          chosenTop < window.innerHeight
+        ) {
+          setHere(chosen.current);
+          return;
+        }
         setHere(entries[entries.length - 1]?.id ?? null);
         return;
       }
@@ -259,6 +319,7 @@ export function PageContents({
     const onScroll = () => {
       if (frame.current === null) frame.current = requestAnimationFrame(measure);
     };
+    remeasure.current = onScroll;
     measure();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
@@ -282,6 +343,7 @@ export function PageContents({
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      remeasure.current = null;
       resize?.disconnect();
       if (frame.current !== null) cancelAnimationFrame(frame.current);
     };
@@ -337,7 +399,7 @@ export function PageContents({
           if (e.key === "Enter") {
             e.preventDefault();
             const first = matches?.[0];
-            if (first) reveal(containerRef.current, first.id);
+            if (first) revealSection(first.id);
           } else if (e.key === "Escape" && query !== "") {
             /* Only when there is something to clear, so an Escape in an empty
                box still reaches whatever else on the page listens for it. */
@@ -347,14 +409,29 @@ export function PageContents({
           }
         }}
         placeholder="Search this page"
+        enterKeyHint="search"
         aria-label="Search this page's sections"
         className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
       />
-      {matches !== null && matches.length === 0 && (
-        <p role="status" className="tw:m-0 tw:pl-3 tw:text-xs tw:text-ink-faint">
-          Nothing on this page matches.
-        </p>
-      )}
+      {/* Kept mounted before the first keystroke: a live region inserted with
+          its first message is not announced consistently. Sighted readers only
+          need the empty result; a screen reader also needs to know that a
+          filtered list has, say, two choices rather than the original twelve. */}
+      <p
+        role="status"
+        aria-atomic="true"
+        className={
+          matches !== null && matches.length === 0
+            ? "tw:m-0 tw:pl-3 tw:text-xs tw:text-ink-faint"
+            : "tw:sr-only"
+        }
+      >
+        {matches === null
+          ? ""
+          : matches.length === 0
+            ? "Nothing on this page matches."
+            : `${matches.length} section${matches.length === 1 ? "" : "s"} match.`}
+      </p>
       <ul className="tw:m-0 tw:min-h-0 tw:list-none tw:overflow-y-auto tw:p-0">
         {shown.map((entry) => (
           <li key={entry.id}>
@@ -370,7 +447,7 @@ export function PageContents({
                    ids are derived from headings, so two of these pages mounted
                    at once carry duplicates and a document-wide lookup scrolls
                    to the wrong one. */
-                reveal(containerRef.current, entry.id);
+                revealSection(entry.id);
               }}
               /* `aria-current` as well as the colour: the highlight is the
                  answer to "where am I", and a screen reader is owed it too. */
