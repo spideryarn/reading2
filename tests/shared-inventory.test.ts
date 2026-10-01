@@ -42,7 +42,7 @@ const NOTHING: PublicArtefacts = {
   quotes: false,
   timeline: false,
   sketch: false,
-  trajectory: false,
+  skim: false,
   faq: false,
   simpleSummary: false,
   citations: false,
@@ -56,7 +56,7 @@ const EVERYTHING: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
-  trajectory: true,
+  skim: true,
   faq: true,
   simpleSummary: true,
   citations: true,
@@ -79,7 +79,7 @@ const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
  * until then, which is the line that moved.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
  *
- * `trajectory` is the seventh row, since 2026-09-29, by the same move: it was
+ * `skim` is the seventh row, since 2026-09-29, by the same move: it was
  * `owners-only` until a visitor to a public article with a stored route was
  * refused it (SPIDERYARN-READING2-56).
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
@@ -96,7 +96,7 @@ const FLAG = {
   arc: "arc",
   tweets: "tweets",
   timeline: "timeline",
-  trajectory: "trajectory",
+  skim: "skim",
   faq: "faq",
   citations: "citations",
   debate: "debate",
@@ -341,7 +341,7 @@ const WIRE_ROW = {
   timeline: "timeline",
   /* The stored route, since 2026-09-29 — its own mode, like the timeline.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  trajectory: "trajectory",
+  skim: "skim",
   /* The FAQ and the Citations list, the same day and the same way.
      A cited work's address is re-judged on its way out (src/public/dto.ts §
      `publicCitedWork`), which is invisible to this table. */
@@ -404,7 +404,7 @@ describe("reading the flags off the wire", () => {
       quotes: true,
       timeline: true,
       sketch: true,
-      trajectory: true,
+      skim: true,
       faq: true,
       simpleSummary: true,
       citations: true,
@@ -484,7 +484,7 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: null,
       citations: null,
@@ -506,7 +506,7 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: null,
       citations: null,
@@ -521,7 +521,7 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: null,
       citations: null,
@@ -539,7 +539,7 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: {
         version: "simple/2",
@@ -580,7 +580,7 @@ describe("what counts as shareable", () => {
       tweets: null,
       timeline: null,
       sketch: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: {
         version: "simple/1",

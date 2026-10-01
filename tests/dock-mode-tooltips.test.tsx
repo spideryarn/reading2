@@ -391,7 +391,7 @@ describe("a mode a visitor cannot have", () => {
       quotes: false,
       timeline: false,
       sketch: false,
-      trajectory: false,
+      skim: false,
       faq: false,
       simpleSummary: false,
       citations: false,

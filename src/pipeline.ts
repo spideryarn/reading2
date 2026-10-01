@@ -118,11 +118,11 @@ import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta } from "./paper-metadata.js";
 import {
-  generateTrajectory,
-  PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
-  trajectoryInput,
-  trajectoryInputHash,
-} from "./trajectory.js";
+  generateSkim,
+  PROMPT_VERSION as SKIM_PROMPT_VERSION,
+  skimInput,
+  skimInputHash,
+} from "./skim.js";
 import {
   generateIllustrated,
   inputFingerprint as illustratedFingerprint,
@@ -174,8 +174,8 @@ import {
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
-  TRAJECTORY_NO_QUOTES,
-  TRAJECTORY_ONLY_ABSTRACT_QUOTES,
+  SKIM_NO_QUOTES,
+  SKIM_ONLY_ABSTRACT_QUOTES,
 } from "./messages.js";
 import {
   canonicalKey,
@@ -489,7 +489,7 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      quote identities, offered words and priorities, so when Find more adds quotes it re-runs without
      being forced. And it replaces rather than appends.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  "trajectory",
+  "skim",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
      buy a model call for nothing. Unlike the glossary, forcing it does not
@@ -519,13 +519,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      a stored `sourceHash`, so a moved article re-runs without being forced.
      And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
   "faq",
-  /* The same two reasons, and a third that is about the clock rather than the
-     money. `sketch` is the slowest call here — 194s measured on the
-     constitution — and every step self-aborts at 400s inside an 800s
-     invocation that must also fit a `hierarchy` measured at 320s. A positional
-     cascade that swept this in beside `hierarchy` would not merely waste a call, it
-     would run the invocation out of time, and the way that fails is a platform
-     kill that takes the whole job rather than a recorded failure. */
+  /* The same two reasons: it reads the blocks and tree, and nothing except the
+     separately requested `illustrated` stage reads what it writes, so a
+     positional cascade would buy a model call the reader did not ask for. At
+     `high`, its 194-second measured maximum supplied a third, timeout-specific
+     reason; the move to `low` (42 seconds on average) removes that reason, not
+     the two ordinary ones. */
   "sketch",
   /* All three of `sketch`'s reasons and it is dearer than any of them: $0.27 to
      $0.40 an article measured, of which 86–89% is the brief call, plus one
@@ -4417,7 +4416,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    *    that has gone is simply not offered (`usableQuotes`). Without Ideas it
    *    plans on the quotes alone (plan 260928a § Stage 6).
    * 2. **Its fingerprint is what the prompt renders, not the article** —
-   *    `trajectoryInputHash` over `trajectoryInput`: the offered quotes, the
+   *    `skimInputHash` over `skimInput`: the offered quotes, the
    *    Ideas they carry, and the top-level outline. `stamp` and `run` build
    *    the same input from the same reads, so *Find more* adding a quote, or
    *    the Ideas being regenerated or arriving, makes the route not-current
@@ -4427,12 +4426,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * unlike `illustrated`, which inherits the Sketch's. The route is exactly the
    * thing a profile should change, and none → some counts: `sameStamp` compares
    * a recorded `null` against an expected hash as a mismatch, which is the
-   * stricter rule the plan asks for (src/trajectory.ts § `routeProfileIsStale`).
+   * stricter rule the plan asks for (src/skim.ts § `routeProfileIsStale`).
    */
-  trajectory: {
-    name: "trajectory",
+  skim: {
+    name: "skim",
     label: "Planning the route",
-    produces: ["trajectory"],
+    produces: ["skim"],
     stamp: async (ctx, store) => {
       const quotes = await store.read(ctx.slug, "quotes", "quotes");
       /* `null` is "we cannot tell", which makes the step run — and running is
@@ -4441,11 +4440,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
       if (input.offered.length === 0) return null;
       return {
-        inputHash: trajectoryInputHash(input),
-        promptVersion: TRAJECTORY_PROMPT_VERSION,
+        inputHash: skimInputHash(input),
+        promptVersion: SKIM_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
       };
@@ -4457,15 +4456,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          refuses loudly when they are missing. */
       const article = await readArticle(ctx.slug, store);
       const ideas = await store.read(ctx.slug, "ideas", "ideas");
-      const input = trajectoryInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
+      const input = skimInput({ quotes, blocks: article.blocks, tree: article.tree, ideas });
       if (!quotes || input.offered.length === 0) {
         if (input.abstractQuoteIds.length > 0) {
-          throw stageFailure(TRAJECTORY_ONLY_ABSTRACT_QUOTES);
+          throw stageFailure(SKIM_ONLY_ABSTRACT_QUOTES);
         }
-        throw stageFailure(TRAJECTORY_NO_QUOTES);
+        throw stageFailure(SKIM_NO_QUOTES);
       }
 
-      const run = await generateTrajectory({
+      const run = await generateSkim({
         slug: ctx.slug,
         input,
         profile: ctx.profile ?? null,
@@ -4473,11 +4472,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         power: ctx.power,
       });
-      const [gist, more, most] = run.trajectory.visible;
+      const [gist, more, most] = run.skim.visible;
       plog.info(
         {
           slug: ctx.slug,
-          step: "trajectory",
+          step: "skim",
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
@@ -4501,10 +4500,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           /* The profile's LENGTH, never the profile. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,
         },
-        `trajectory ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
+        `skim ${ctx.slug}: ${gist}/${more}/${most} stops over ${run.offered} quotes`,
       );
       return {
-        parts: { trajectory: run.trajectory },
+        parts: { skim: run.skim },
         detail: `${most} ${most === 1 ? "stop" : "stops"} over ${run.offered} quotes`,
       };
     },

@@ -1,0 +1,210 @@
+```json
+{
+  "style": "An illuminated manuscript page — iron-gall ink line work, muted blue and burgundy wash, and gold-leaf highlights for the \"information\" at the centre of the argument — because the article's own neurons, lattices and ladders are already branching, vine-like shapes that this register draws naturally.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Spine with a Fan",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-rxcze4",
+          "quote": "brains take in sensory signals from the environment and use that information to generate adaptive behavior informed by their surroundings",
+          "depicts": "An animal figure stands under descending rays of golden light falling from clouds above, its body turning toward a winding path across the land below.",
+          "title": "SENSES INTO BEHAVIOR"
+        },
+        {
+          "node": "n2",
+          "block": "spya-p4pyuy",
+          "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity",
+          "depicts": "Two small branching neuron-trees are joined by two different threads: a pair of mirrored, looping lines between them, and beside it a single arrow-headed ribbon running in one direction only.",
+          "title": "TWO KINDS OF CONNECTION"
+        },
+        {
+          "node": "n3",
+          "block": "spya-s0db2g",
+          "quote": "it is limited in its ability to reveal how different streams of information “interact”",
+          "depicts": "Two winding rivers of light run side by side down toward a single pool but pass its edge without braiding together, each keeping its own ribbon of flow.",
+          "title": "STREAMS THAT DON'T MIX"
+        },
+        {
+          "node": "n4",
+          "block": "spya-h5jzvm",
+          "quote": "the information about Y that can only be learned by observing the joint states of X₁ and X₂ together",
+          "depicts": "Two branching source-vines pour light into a single target-vine; the combined glow is held inside a roundel of four interlocking coloured fields, redrawn from FIGURE A, with the largest unshared field marking what the two vines together can make.",
+          "title": "JOINT INFORMATION SPLIT OPEN"
+        },
+        {
+          "node": "n5",
+          "block": "spya-rc76qn",
+          "quote": "There are, at present, close to a dozen competing redundancy functions",
+          "depicts": "A market stall hung with about a dozen differently shaped measuring rods, with a scribe standing before them unable to choose which to use.",
+          "title": "A DOZEN COMPETING RULERS"
+        },
+        {
+          "node": "n6",
+          "block": "spya-sw5ukx",
+          "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse",
+          "depicts": "A dish holding a thin disc of brain tissue rests atop a wide grid of fine wires, redrawn in the margin from FIGURE C, with rows of tiny ink marks streaming off it.",
+          "title": "CULTURE ON AN ARRAY"
+        },
+        {
+          "node": "s1",
+          "block": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich",
+          "depicts": "A walled citadel bristling with interlinked towers sits inside a wide plain of scattered huts; golden banners rise thickest from the citadel, far outnumbering thin wisps from the huts outside.",
+          "title": "THE RICH CLUB'S SHARE"
+        },
+        {
+          "node": "s2",
+          "block": "spya-sd9fzd",
+          "quote": "we found that triads with more recurrent connections also had greater synergy",
+          "depicts": "A looped road circles twice between two outlying towns before both roads run on to a third town, its granary drawn fuller and more golden than one reached by a plain single road.",
+          "title": "LOOPS THAT ADD UP"
+        },
+        {
+          "node": "s4",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A monkey's arm reaches and closes its grasp around an object, the same bright signal-ribbon drawn twice over, side by side, the length of the arm.",
+          "title": "REACH AND GRASP"
+        },
+        {
+          "node": "n7",
+          "block": "spya-tz99zn",
+          "quote": "care should be taken to ensure that there are enough data for it to be possible to robustly infer the",
+          "depicts": "A robed scholar stands at a great balance scale, piling scrolls of recorded data onto one pan against a single engraved stone, checking if the pile is heavy enough.",
+          "title": "WEIGHING THE DATA"
+        },
+        {
+          "node": "n9",
+          "block": "spya-sp50v3",
+          "quote": "neurons do not appear to blindly sum the number of inputs and fire in response to the total",
+          "depicts": "A small neuron-figure at a clerk's desk ignores a simple tally-board of single strokes and instead studies a fan of differently patterned ribbons laid before it.",
+          "title": "PATTERNS, NOT JUST SUMS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page on cream parchment, iron-gall ink line work with gold-leaf highlights for glowing 'information,' and muted blue-and-burgundy wash, arranged in a single vertical column of eleven roundels read top to bottom, joined by a thin inked vine that forks and rejoins. Top: SENSES INTO BEHAVIOR, an animal under golden rays. Below it, TWO KINDS OF CONNECTION, two neuron-trees joined by a mirrored loop and a one-way arrow-ribbon. Next, STREAMS THAT DON'T MIX, two rivers of light running side by side without braiding. The vine now enters a dashed-border enclosure holding two roundels (no lettering on the enclosure itself): JOINT INFORMATION SPLIT OPEN, two source-vines pouring into a target-vine held inside a four-field roundel redrawn from FIGURE A; and beside it A DOZEN COMPETING RULERS, a market stall of mismatched measuring rods. The vine exits this enclosure and enters a second, larger enclosure holding: CULTURE ON AN ARRAY, a brain-tissue disc on a wire grid redrawn from FIGURE C, from which the path forks three ways into THE RICH CLUB'S SHARE (a walled citadel bright amid scattered huts), LOOPS THAT ADD UP (a road looping twice into a golden-granaried village), and REACH AND GRASP (a monkey's arm closing around an object with a doubled signal-ribbon) — these three roundels sit side by side across the width of the page before the vine gathers them back into one line. Below the enclosure: WEIGHING THE DATA, a scholar piling scrolls onto a balance scale. Finally at the bottom: PATTERNS, NOT JUST SUMS, a neuron-clerk studying a fan of patterned ribbons rather than a tally-board. Use the full width of the page for the three-wide fan so no scene is cramped; leave the parchment bare at the margins rather than adding ornament."
+    },
+    {
+      "sceneId": "pid-framework",
+      "title": "Inside: Building the Decomposition",
+      "vignettes": [
+        {
+          "node": "n4",
+          "block": "spya-h5jzvm",
+          "quote": "the information about Y that can only be learned by observing the joint states of X₁ and X₂ together",
+          "depicts": "The same four-field roundel from the overview, two source-vines pouring into a target-vine held inside a ring of four coloured fields, redrawn from FIGURE A, opening this plate.",
+          "title": "JOINT INFORMATION SPLIT OPEN"
+        },
+        {
+          "node": "a1",
+          "block": "spya-h5dz45",
+          "quote": "it cannot be assumed that the joint mutual information (the “whole”) is reducible to a sum of all its component",
+          "depicts": "A council of small parent-neuron figures each lay a single scroll before a target-neuron figure, while a larger sealed scroll above them, their combined message, is shown differently shaped from the stack added together.",
+          "title": "WHOLE VS THE PARTS"
+        },
+        {
+          "node": "a2",
+          "block": "spya-e94ury",
+          "quote": "the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation”",
+          "depicts": "The target-neuron drawn as a small stone mill wheel, grain pouring in from two separate chutes and a new kind of flour pouring out beneath, neither chute alone could have made.",
+          "title": "THE INTEGRATING MILL"
+        },
+        {
+          "node": "a3",
+          "block": "spya-t02v4p",
+          "quote": "that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts",
+          "depicts": "Two scholars lean together over a lectern on which a fresh diagram has just been inked, one pointing at the new figure in triumph.",
+          "title": "WILLIAMS AND BEER'S FORMULA"
+        },
+        {
+          "node": "a4",
+          "block": "spya-q2b0e5",
+          "quote": "it is instructive to consider the particular case of two parent neurons (X₁, X₂) synapsing onto a single target neuron (Y)",
+          "depicts": "Two parent-neuron vines, clearly separate, both reach down and twist their branches together just before touching a single target-vine below.",
+          "title": "TWO PARENTS, ONE TARGET"
+        },
+        {
+          "node": "a5",
+          "block": "spya-bgsd4n",
+          "quote": "If any of the unknown terms can be defined, then the other three emerge “for free”",
+          "depicts": "A locksmith turns one large key in a single lock, and through a chain of linked bars three further locks on a chest spring open on their own.",
+          "title": "ONE KEY, THREE LOCKS"
+        },
+        {
+          "node": "a6",
+          "block": "spya-q9gytb",
+          "quote": "the resulting system of equations is not as constrained as in the two-element case",
+          "depicts": "On the left a simple two-road crossroads sits neat and resolved; on the right the same crossroads has grown into a tangled knot of many more crossing roads.",
+          "title": "BEYOND TWO SOURCES"
+        },
+        {
+          "node": "a7",
+          "block": "spya-aft2rx",
+          "quote": "the information about Y that is only disclosed by the various Aᵢ ∈ α is that information",
+          "depicts": "A tall wooden ladder rises through the page, its rungs redrawn from FIGURE B as a branching lattice, with small figures climbing and uncovering fresh light at each rung not visible below it.",
+          "title": "CLIMBING THE LATTICE"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, same parchment, ink, and gold-leaf palette as the overview, arranged as a single vertical chain of eight roundels linked by a thin inked vine, no branching, read top to bottom. The page opens with JOINT INFORMATION SPLIT OPEN, the four-field roundel redrawn from FIGURE A, exactly as it appeared in the overview, establishing that this plate is the inside of that piece of the argument. The vine then descends to WHOLE VS THE PARTS, a council of parent-neuron figures laying scrolls before a target-neuron while a larger sealed scroll above them is drawn a different shape than their stack combined. Next, THE INTEGRATING MILL, the target-neuron as a stone mill wheel with grain pouring from two chutes and new flour emerging below. Next, WILLIAMS AND BEER'S FORMULA, two scholars bent over a freshly inked diagram at a lectern. Next, TWO PARENTS, ONE TARGET, two source-vines twisting their branches together just before a single target-vine. Next, ONE KEY, THREE LOCKS, a locksmith's single key opening three further locks on a chest through a linked chain. Next, BEYOND TWO SOURCES, a simple crossroads on the left beside a tangled many-road knot on the right. Finally, at the foot of the page, CLIMBING THE LATTICE, a tall ladder whose rungs are redrawn from FIGURE B as a branching lattice, with tiny figures climbing and uncovering new light at each rung. Keep every roundel large enough to read clearly, spaced generously down the page's full height, with bare parchment between them rather than any decorative filler."
+    },
+    {
+      "sceneId": "empirical-findings",
+      "title": "Inside: What the Circuits Showed",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-sw5ukx",
+          "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse",
+          "depicts": "The same dish-and-array scene from the overview, a brain-tissue disc on a wire grid redrawn from FIGURE C, opening this plate.",
+          "title": "CULTURE ON AN ARRAY"
+        },
+        {
+          "node": "e2",
+          "block": "spya-kqkb58",
+          "quote": "the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy for that",
+          "depicts": "A wide river of light runs toward a mill, with one narrow quarter-width channel visibly diverted into a smaller side pool, redrawn in part from FIGURE D, panel A.",
+          "title": "A QUARTER OF THE FLOW"
+        },
+        {
+          "node": "e3",
+          "block": "spya-fud8q3",
+          "quote": "the rich club triads accounted for ∼88% of the network-wide synergy",
+          "depicts": "A small walled citadel, no larger than a fifth of the surrounding farmland, has its granary piled almost to overflowing, while the wide farmland beyond the walls holds only a thin scattering of grain.",
+          "title": "THE WALLED CITY'S HARVEST"
+        },
+        {
+          "node": "e4",
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "A central village reached by a road looped twice back to each of two outlying villages has a granary noticeably fuller than a neighbouring village reached by a single plain road.",
+          "title": "DOUBLE LOOP, FULLER STORE"
+        },
+        {
+          "node": "e5",
+          "block": "spya-ybmve2",
+          "quote": "The peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A single hill rises from flat ground with its brightest light at the summit, the ground falling away into a shadowed valley beyond the peak where the light dims again.",
+          "title": "THE PEAK OF SYNERGY"
+        },
+        {
+          "node": "e6",
+          "block": "spya-j4cy9j",
+          "quote": "the demands placed on a circuit in the context of a behaving animal are certain to differ from those placed",
+          "depicts": "A glass dish holding a thin disc of cultured tissue sits on one side of an inked border line on the parchment; on the other side stands a full living monkey figure.",
+          "title": "FROM DISH TO LIVING BRAIN"
+        },
+        {
+          "node": "e7",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "The monkey's arm reaches and closes around an object, the same bright signal-ribbon drawn twice over along its length, both copies glowing equally strong as the hand closes.",
+          "title": "REDUNDANCY IN THE REACH"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, same parchment, ink, and gold-leaf palette as the other plates, arranged top to bottom: a single opening roundel, then a short chain that forks into three side-by-side roundels, then converges again into two closing roundels. At the top, CULTURE ON AN ARRAY, the brain-tissue disc on its wire grid redrawn from FIGURE C, exactly as in the overview, opening this plate. Below it, A QUARTER OF THE FLOW, a wide river of light with one narrow channel visibly diverted off, drawn with a small inset redrawn from FIGURE D panel A. From here the vine forks into three roundels set side by side across the page's width: THE WALLED CITY'S HARVEST, a small walled citadel with an overflowing granary beside a thinly-scattered farmland; DOUBLE LOOP, FULLER STORE, a village reached by a twice-looped road with a fuller granary than its plain-road neighbour; and THE PEAK OF SYNERGY, a single hill whose brightest light sits at the summit before dimming into a shadowed valley beyond it. The three forked roads then gather back into one vine descending to FROM DISH TO LIVING BRAIN, a glass dish of cultured tissue on one side of an inked border line and a full living monkey figure on the other. Finally, at the foot of the page, REDUNDANCY IN THE REACH, the monkey's arm closing around an object with its signal-ribbon drawn twice over, equally bright both times. Give the three forked roundels generous equal width so the page reads as one-then-three-then-one, and leave the parchment bare between scenes rather than filling it with ornament."
+    }
+  ]
+}
+```

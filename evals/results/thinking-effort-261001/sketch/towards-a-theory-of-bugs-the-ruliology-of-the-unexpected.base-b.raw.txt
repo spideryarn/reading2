@@ -1,0 +1,119 @@
+{
+  "caption": "The piece runs as one chain of escalating evidence for a single claim — bugs come from computational irreducibility — broken once by a genuine fork (can this particular case be proven bug-free, yes or no?) and ending in two parallel strands (math's own bugs, and practical ways to hold bugs back) that meet in a final reframing.",
+  "title": "A Chain, One Fork, Two Strands",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "Down the page: the claim, its demonstration in toy machines, a real fork (provable or not?), the irreducibility this reveals, and two parallel consequences meeting in one closing thought.",
+      "height": 1360,
+      "items": [
+        {"kind":"node","id":"A","shape":"ellipse","x":230,"y":40,"w":300,"h":70,"text":"Bugs come from irreducibility","sub":"even the simplest programs have it","size":"md","block":"spya-sx0zyh","detail":"The computational process a program actually runs can be far more sophisticated than the simple mental picture we have of what it should do."},
+
+        {"kind":"node","id":"B","shape":"box","x":230,"y":150,"w":300,"h":70,"text":"Tiny Turing machines built for n+1 glitch","sub":"bugs appear after many correct steps","size":"sm","tone":1,"block":"spya-s7uc4u","detail":"A 3-state machine that looks like it computes n+1 suddenly outputs 9 instead of 8 at n=7."},
+
+        {"kind":"node","id":"C","shape":"box","x":230,"y":260,"w":300,"h":70,"text":"Whether it's a bug depends on the spec","sub":"behavior, equivalence, or a forbidden outcome","size":"sm","tone":1,"block":"spya-gjut02","detail":"Judging a program buggy needs some independent statement of what it should do — and machines can escape almost any such statement."},
+
+        {"kind":"node","id":"D","shape":"box","x":230,"y":370,"w":300,"h":70,"text":"Cellular automata built to double input glitch too","sub":"same pattern, a different kind of machine","size":"sm","tone":1,"block":"spya-cy4dgs","detail":"A rule that correctly doubles its input for many steps suddenly fails, for instance at n=14."},
+
+        {"kind":"node","id":"E","shape":"diamond","x":280,"y":490,"w":200,"h":90,"text":"Provable bug-free?","size":"sm","block":"spya-gt6430","detail":"For some specific rule or machine, can you actually show in advance that it will never misbehave?"},
+
+        {"kind":"node","id":"E1","shape":"box","x":90,"y":630,"w":220,"h":80,"text":"Yes — simple enough, or reduces to a known rule","sub":"e.g. the interior obeys rule 122","size":"sm","block":"spya-gagsuk","detail":"Even a visually complex pattern can be proven to always stabilize once its interior dynamics are identified."},
+
+        {"kind":"node","id":"E2","shape":"box","x":460,"y":630,"w":220,"h":80,"text":"No — no proof turns up, a real bug lurks","sub":"same effort as just running it","size":"sm","block":"spya-ypka68","detail":"Searching the space of possible proofs forever fails for a buggy machine, because the claim is simply false."},
+
+        {"kind":"node","id":"F","shape":"box","x":230,"y":760,"w":300,"h":80,"text":"Only running the program reveals what it does","sub":"computational irreducibility, laid bare","size":"sm","tone":2,"block":"spya-wcnws7","detail":"Because irreducibility is ubiquitous, no bounded amount of analysis can rule out every surprise."},
+
+        {"kind":"node","id":"G","shape":"box","x":230,"y":870,"w":300,"h":70,"text":"Testing alone can't be trusted","sub":"rare bugs hide from even massive sampling","size":"sm","tone":2,"block":"spya-yc9e2z","detail":"Scientific induction from repeated tests works only where reducible regularities exist; raw computation has no such guarantee."},
+
+        {"kind":"node","id":"H","shape":"box","x":230,"y":980,"w":300,"h":70,"text":"Ruliology keeps turning up dramatic surprises","sub":"rule 30, a 137-million-step halt, and more","size":"sm","tone":3,"block":"spya-kjsjh5","detail":"Exploring the space of simple programs, startling exceptions to apparent regularities show up again and again, sometimes only after exhaustive search."},
+
+        {"kind":"node","id":"I1","shape":"box","x":60,"y":1110,"w":300,"h":80,"text":"Mathematics has its own rare counterexamples","sub":"a trend reverses at the 23-billionth prime","size":"sm","tone":4,"block":"spya-bhwh4d","detail":"Conjectures can hold for enormous numbers of tested cases, then suddenly fail far out."},
+
+        {"kind":"node","id":"I2","shape":"box","x":400,"y":1110,"w":300,"h":80,"text":"Good language design & visualization help","sub":"but never erase the risk entirely","size":"sm","tone":4,"block":"spya-kdks69","detail":"Primitives that match human intent, and seeing a computation's whole pattern, are the best practical defenses — not a cure."},
+
+        {"kind":"node","id":"J","shape":"ellipse","x":230,"y":1240,"w":300,"h":80,"text":"Bug to an engineer, discovery to a scientist","size":"md","block":"spya-xdwm97","detail":"An unexpected result is a failure if you wanted reliability, but exactly the kind of thing ruliology is built to find."},
+
+        {"kind":"region","x":24,"y":115,"w":712,"h":745,"label":"TURING MACHINES & PROOFS","style":"band","tone":1,"opens":"inside-tm-bugs"},
+        {"kind":"region","x":24,"y":950,"w":712,"h":250,"label":"RULIOLOGY & BEYOND","style":"band","tone":3,"opens":"inside-ruliology-beyond"},
+
+        {"kind":"edge","from":"A","to":"B","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"B","to":"C","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"C","to":"D","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"D","to":"E","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"E","to":"E1","via":"curve","arrow":"end","label":"yes"},
+        {"kind":"edge","from":"E","to":"E2","via":"curve","arrow":"end","label":"no"},
+        {"kind":"edge","from":"E1","to":"F","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"E2","to":"F","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"F","to":"G","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"G","to":"H","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"H","to":"I1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"H","to":"I2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"I1","to":"J","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"I2","to":"J","via":"curve","arrow":"end"}
+      ]
+    },
+
+    {
+      "id": "inside-tm-bugs",
+      "title": "Turing machines and their proofs",
+      "caption": "A straight chain in close-up: simple Turing machines develop bugs at specific, often startlingly delayed inputs, and a formal proof can only ever be built for the ones that turn out to be truly bug-free.",
+      "height": 1020,
+      "items": [
+        {"kind":"node","id":"t1","shape":"box","x":230,"y":60,"w":300,"h":70,"text":"A seeming n+1 machine glitches at n=7","sub":"outputs 9 instead of 8","size":"sm","block":"spya-h3jx6h"},
+        {"kind":"node","id":"t2","shape":"box","x":230,"y":155,"w":300,"h":70,"text":"Glitches recur whenever n = 8k−1","sub":"binary ending in 111 triggers extra 'scribbling'","size":"sm","block":"spya-z99x4e"},
+        {"kind":"node","id":"t3","shape":"box","x":230,"y":250,"w":300,"h":70,"text":"Thousands of machines compute n+1 correctly","sub":"but first bugs still show up eventually","size":"sm","block":"spya-rhc6t0"},
+        {"kind":"node","id":"t4","shape":"box","x":230,"y":345,"w":300,"h":70,"text":"One machine is flawless through n=14","sub":"then fails at n=15, giving 20 not 16","size":"sm","block":"spya-pt0hmz"},
+        {"kind":"node","id":"t5","shape":"box","x":230,"y":440,"w":300,"h":70,"text":"Bigger machines hide bugs even longer","sub":"a 4-state machine first fails at n=63","size":"sm","block":"spya-hqukdz"},
+        {"kind":"node","id":"t6","shape":"box","x":230,"y":535,"w":300,"h":70,"text":"Being 'buggy' depends on the spec chosen","sub":"judge by behavior, equivalence, or a forbidden outcome","size":"sm","block":"spya-gjut02"},
+        {"kind":"node","id":"t7","shape":"box","x":230,"y":630,"w":300,"h":70,"text":"Two seemingly identical machines diverge","sub":"they first disagree at n=27","size":"sm","block":"spya-txuteu"},
+        {"kind":"node","id":"t8","shape":"box","x":230,"y":725,"w":300,"h":70,"text":"A correct machine's behavior gets proved","sub":"symbolic axioms plus mathematical induction","size":"sm","block":"spya-q8fg9q"},
+        {"kind":"node","id":"t9","shape":"box","x":230,"y":820,"w":300,"h":70,"text":"A buggy machine yields no proof, ever","sub":"the search finds nothing, because the claim is false","size":"sm","block":"spya-ypka68"},
+
+        {"kind":"edge","from":"t1","to":"t2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t2","to":"t3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t3","to":"t4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t4","to":"t5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t5","to":"t6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t6","to":"t7","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t7","to":"t8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"t8","to":"t9","via":"straight","arrow":"end"}
+      ]
+    },
+
+    {
+      "id": "inside-ruliology-beyond",
+      "title": "Ruliology's surprises, and beyond",
+      "caption": "The tail of the chain opened up: ruliology keeps finding dramatic last-minute surprises, then splits into two things that are simply both true at once — math has its own rare counterexamples, and practical fixes exist — before converging on one closing thought.",
+      "height": 1080,
+      "items": [
+        {"kind":"node","id":"r1","shape":"box","x":230,"y":60,"w":300,"h":70,"text":"Rule 30 erupts into sudden complexity","sub":"among cellular automata that mostly look tame","size":"sm","tone":3,"block":"spya-zbsh70"},
+        {"kind":"node","id":"r2","shape":"box","x":230,"y":155,"w":300,"h":70,"text":"One Turing machine finally does something wild","sub":"machine 596440, among 2-state, 3-color machines","size":"sm","tone":3,"block":"spya-tgkahp"},
+        {"kind":"node","id":"r3","shape":"box","x":230,"y":250,"w":300,"h":70,"text":"Changing a rule's input brings new surprises","sub":"a cascade of ever stranger behavior","size":"sm","tone":3,"block":"spya-n7j593"},
+        {"kind":"node","id":"r4","shape":"box","x":230,"y":345,"w":300,"h":70,"text":"A combinator seems to grow forever","sub":"then halts, after exactly 137,356,329 steps","size":"sm","tone":3,"block":"spya-msgzxc"},
+        {"kind":"node","id":"r5","shape":"box","x":230,"y":440,"w":300,"h":70,"text":"A circular pattern sprouts a 'beak'","sub":"breaking symmetry after about 3000 steps","size":"sm","tone":3,"block":"spya-p3ume6"},
+        {"kind":"node","id":"r6","shape":"box","x":230,"y":535,"w":300,"h":70,"text":"A system that seems able to grow forever halts","sub":"a cluster of moves simply can't be grown further","size":"sm","tone":3,"block":"spya-ey7bx7"},
+
+        {"kind":"node","id":"r7","shape":"box","x":60,"y":660,"w":300,"h":80,"text":"Math conjectures can break after huge success","sub":"a factoring pattern fails at x^105 − 1","size":"sm","tone":4,"block":"spya-y7q6q3"},
+        {"kind":"node","id":"r8","shape":"box","x":60,"y":760,"w":300,"h":80,"text":"Pure math mostly dodges this","sub":"by sticking to human-graspable, reducible questions","size":"sm","tone":4,"block":"spya-zcpn8u"},
+
+        {"kind":"node","id":"r9","shape":"box","x":400,"y":660,"w":300,"h":80,"text":"Good language design heads off many bugs","sub":"primitives that already match human intent","size":"sm","tone":4,"block":"spya-kdks69"},
+        {"kind":"node","id":"r10","shape":"box","x":400,"y":760,"w":300,"h":80,"text":"Trained AI systems stay especially exposed","sub":"their learned mechanisms resist human understanding","size":"sm","tone":4,"block":"spya-sggbeh"},
+
+        {"kind":"node","id":"r11","shape":"ellipse","x":230,"y":900,"w":300,"h":90,"text":"Bug to an engineer, discovery to a scientist","size":"md","block":"spya-xdwm97"},
+
+        {"kind":"edge","from":"r1","to":"r2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r2","to":"r3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r3","to":"r4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r4","to":"r5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r5","to":"r6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r6","to":"r7","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"r6","to":"r9","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"r7","to":"r8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r9","to":"r10","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r8","to":"r11","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"r10","to":"r11","via":"curve","arrow":"end"}
+      ]
+    }
+  ]
+}

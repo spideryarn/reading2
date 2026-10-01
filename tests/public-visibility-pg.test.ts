@@ -57,7 +57,7 @@ import { citedMetaFingerprintOf } from "../src/source-hash.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Citations, Debate, Faq, Glossary, Ideas, Trajectory, Tree, TweetThread } from "../src/types.js";
+import type { Citations, Debate, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -104,7 +104,7 @@ const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
 const PUBLIC_TERM = "Integrated information theory";
 const PUBLIC_IDEA = "You cannot theorise about what you have no way to measure.";
 const PUBLIC_TWEET = "The first post of the thread.";
-/** A stored Trajectory stop's cue — on the wire once published, never before. */
+/** A stored Skim stop's cue — on the wire once published, never before. */
 const PUBLIC_CUE = "Look for what the measurement is being asked to carry.";
 /** A stored FAQ question and a stored cited work's title — the same, since plan 260929c stages 2 and 3. */
 const PUBLIC_QUESTION = "What would a measurement of consciousness have to show?";
@@ -167,7 +167,7 @@ const ARTEFACTS: {
   glossary: Glossary;
   ideas: Ideas;
   tweets: TweetThread;
-  trajectory: Trajectory;
+  skim: Skim;
   faq: Faq;
   citations: Citations;
   debate: Debate;
@@ -232,9 +232,9 @@ const ARTEFACTS: {
   },
   /* **The stored route, since 2026-09-29** (SPIDERYARN-READING2-56), with the
      profile hash planted like every artefact above: it is who the route was
-     planned for, and `publicTrajectory` must drop it. The quote id need not
+     planned for, and `publicSkim` must drop it. The quote id need not
      resolve — the projection does not look it up. */
-  trajectory: {
+  skim: {
     version: "trajectory/7",
     generator: "test",
     slug: SLUG,
@@ -830,7 +830,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        ideas and thread at a public URL, and the assertions further
        down would not notice, because they all run after publication. */
     /* The route's cue joined 2026-09-29: a private article's stored
-       Trajectory is on this row too, and must not be readable either. */
+       Skim is on this row too, and must not be readable either. */
     /* The FAQ's question and the cited work's title joined the same day. */
     /* And the Debate's claim quotation, since plan 260929c stage 4. */
     for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_DEBATE_QUOTE]) {
@@ -1069,29 +1069,29 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
-   * **The stored Trajectory route, since 2026-09-29** — the bug was a visitor
+   * **The stored Skim route, since 2026-09-29** — the bug was a visitor
    * to a public article with a built route being refused it
    * (SPIDERYARN-READING2-56). The stops and `offered` cross; who the route was
    * planned for does not, and neither does the pipeline around it. Read off a
    * real row, because the question is whether the public `select` fetches the
    * column at all — a DTO test only ever sees what it was handed.
    */
-  it("serves the stored trajectory, and not who it was planned for", async () => {
+  it("serves the stored skim, and not who it was planned for", async () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     expect(r.status).toBe(200);
-    const body = r.body as { trajectory?: Record<string, unknown> };
-    expect(body.trajectory).toEqual({
+    const body = r.body as { skim?: Record<string, unknown> };
+    expect(body.skim).toEqual({
       stops: [{ quoteId: "spya-wpvvqq", depth: 1, role: null, cue: PUBLIC_CUE }],
       offered: 4,
     });
     expect(r.text).toContain(PUBLIC_CUE);
-    expect(JSON.stringify(body.trajectory)).not.toContain("profileHash");
+    expect(JSON.stringify(body.skim)).not.toContain("profileHash");
     expect(r.text).not.toContain(PRIVATE_PROFILE_HASH);
   });
 
   /**
    * **The stored FAQ and Citations list, since 2026-09-29** (plan 260929c
-   * stages 2 and 3), off a real row for the reason the trajectory's case above
+   * stages 2 and 3), off a real row for the reason the skim's case above
    * gives: only a row answers whether the public `select` fetches the column.
    * The cited work crosses with its address taken off — a credential in it —
    * and without its `key`, which embeds the same address.
@@ -1490,7 +1490,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
          The order is `STEP_ORDER`'s, which is what the store walks.
          The case below plants a mixed set, and asserts the empty reading too,
          so this is not the only shape this field is ever seen in. */
-      personalised: ["tweets", "glossary", "ideas", "trajectory"],
+      personalised: ["tweets", "glossary", "ideas", "skim"],
       /**
        * **What a shared link would carry, against a real Postgres** — and the
        * only place that claim is checked end to end.
@@ -1521,7 +1521,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         timeline: false,
         sketch: false,
         /* Planted since 2026-09-29, so present. */
-        trajectory: true,
+        skim: true,
         faq: true,
         /* Not planted, so absent — the `false` is the half that matters. */
         simpleSummary: false,
@@ -1594,7 +1594,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        canary, so it is asserted deliberately here instead of being lost. */
     await db
       .update(articleRevisions)
-      .set({ glossary: null, ideas: null, tweets: null, trajectory: null })
+      .set({ glossary: null, ideas: null, tweets: null, skim: null })
       .where(eq(articleRevisions.id, REVISION_ID));
     const none = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
     expect((none.body.sharing as { personalised: string[] }).personalised).toEqual([]);
@@ -1634,7 +1634,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
            carries a `profileHash` — would put another name in the list. The
            route, since 2026-09-29, for the same reason. */
         tweets: null,
-        trajectory: null,
+        skim: null,
       })
       .where(eq(articleRevisions.id, REVISION_ID));
     try {

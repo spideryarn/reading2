@@ -38,6 +38,7 @@ import { parseJsonFrom } from "../../src/parse-json.js";
 import { supplementIndex } from "../../src/supplement.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
+import { mulberry32 } from "../debate/label-sheet.js";
 
 interface Lineup {
   label: string;
@@ -46,7 +47,12 @@ interface Lineup {
 }
 
 /** One tree, rendered for judging: L1 outline plus sampled deep gists. */
-export function renderForJudging(blocks: Block[], tree: Tree, label: string): string {
+export function renderForJudging(
+  blocks: Block[],
+  tree: Tree,
+  label: string,
+  random: () => number = mulberry32(0x5eed1234),
+): string {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   const supplement = supplementIndex(tree);
   const root = tree.nodes[tree.rootId];
@@ -88,7 +94,7 @@ export function renderForJudging(blocks: Block[], tree: Tree, label: string): st
   const sampled: TreeNode[] = [];
   const pool = [...deep];
   while (sampled.length < 3 && pool.length > 0) {
-    sampled.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]!);
+    sampled.push(pool.splice(Math.floor(random() * pool.length), 1)[0]!);
   }
   if (sampled.length > 0) {
     lines.push("", "Sampled deeper gists, each beside the prose it stands in for:");

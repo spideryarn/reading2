@@ -1,0 +1,175 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-abv59t",
+      "name": "Synaptic weight changes are too slow/costly for moment-to-moment control",
+      "provenance": "assumed",
+      "statement": "Routing information flexibly among neurons cannot be achieved by changing synapses on the fly, because that would require a controller to know and rewire exactly which synapses are involved within fractions of a second.",
+      "whyYouNeedIt": "Without this assumption, the whole motivation for proposing wave-based control instead of synaptic control collapses—synapses could in principle explain flexibility too.",
+      "occurrences": [
+        {
+          "blockId": "spya-d73kfb",
+          "quote": "That would require a control system to “know” which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.",
+          "reasoning": "This claim is asserted but not independently argued; the rest of the piece depends on accepting it.",
+          "start": 372
+        },
+        {
+          "blockId": "spya-dtnkkk",
+          "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights.",
+          "reasoning": "Reasserts the same unproven premise as a launching point for the wave theory.",
+          "start": 210
+        }
+      ]
+    },
+    {
+      "id": "spya-t6bfww",
+      "name": "Low-dimensional population structure is a real, meaningful compression, not just noise",
+      "provenance": "assumed",
+      "statement": "When population spiking activity collapses onto a lower-dimensional subspace, that compression itself carries information and reflects genuine computational organization, rather than being an incidental statistical artifact.",
+      "whyYouNeedIt": "The argument that waves explain subspace coding only matters if the subspace structure is doing real computational work; otherwise there is nothing to explain.",
+      "occurrences": [
+        {
+          "blockId": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional “subspace” or “manifold” within the high-dimensional space defined by all possible population activity patterns",
+          "reasoning": "Takes for granted that this compression is functionally significant rather than incidental.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-ns23sq",
+          "quote": "Structuring activity via subspace coding is thought to organize information processing, for example by segregating different computations into independent (orthogonal) subspaces to minimize interference",
+          "reasoning": "Assumes without independent proof that orthogonal subspaces exist to serve a functional purpose.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-updvzh",
+      "name": "Convergent physiological outcome despite divergent molecular causes implicates the outcome, not the cause, as the key variable",
+      "provenance": "assumed",
+      "statement": "If very different drugs acting on different molecular targets all produce the same large-scale brain pattern and the same loss of consciousness, that shared pattern—rather than any specific molecular pathway—is what consciousness actually depends on.",
+      "whyYouNeedIt": "The anesthesia argument only supports a wave-based theory of consciousness if convergence on a shared systems-level pattern is treated as evidence about the true causal level, rather than as a coincidence across drugs.",
+      "occurrences": [
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "reasoning": "The inference from convergence to causal locus is assumed rather than argued.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "reasoning": "Draws the conclusion that depends on treating convergence as diagnostic of the real causal level.",
+          "start": 173
+        }
+      ]
+    },
+    {
+      "id": "spya-tbdy67",
+      "name": "Waves as a distinct causal layer above spiking",
+      "provenance": "introduced",
+      "statement": "Brain waves are not just a byproduct of neuron spiking; they actively feed back to change which neurons spike and when, forming a two-way loop between spikes and fields.",
+      "occurrences": [
+        {
+          "blockId": "spya-z9g2s3",
+          "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+          "reasoning": "States the bidirectional causal claim directly.",
+          "start": 602
+        },
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons' membrane potentials, allowing interaction and coordination independent of synapses",
+          "reasoning": "Gives the mechanism for waves acting back on spiking.",
+          "start": 156
+        }
+      ]
+    },
+    {
+      "id": "spya-ah3aua",
+      "name": "Mixed selectivity as the signature of flexible, non-modular cognition",
+      "provenance": "introduced",
+      "statement": "Neurons that respond to nonlinear combinations of variables (object identity times context, say) rather than one fixed thing are what give a population its ability to represent and compute flexibly.",
+      "occurrences": [
+        {
+          "blockId": "spya-njs6ff",
+          "quote": "nonlinear mixed selectivity seems to reflect a core computational principle",
+          "reasoning": "States the idea directly.",
+          "start": 660
+        },
+        {
+          "blockId": "spya-d6h3pv",
+          "quote": "Mixed selectivity instead predicts that neurons reflect nonlinear combinations of variables, often integrating",
+          "reasoning": "Defines the concept.",
+          "start": 389
+        }
+      ]
+    },
+    {
+      "id": "spya-e7kd0e",
+      "name": "Push-pull gating by alpha/beta over gamma determines what gets expressed",
+      "provenance": "introduced",
+      "statement": "Spatially patterned alpha/beta waves act as temporary stencils that suppress gamma-driven spiking in some cortical locations while leaving others free, so the same sensory drive produces different spiking patterns depending on context.",
+      "occurrences": [
+        {
+          "blockId": "spya-gkfdys",
+          "quote": "Alpha/beta rhythms thus dampen or suppress gamma and associated spiking in targeted locations, creating a push-pull dynamic that determines where feedforward signals are suppressed.",
+          "reasoning": "States the mechanism directly.",
+          "start": 473
+        },
+        {
+          "blockId": "spya-ectcj5",
+          "quote": "Each goal or context creates a unique, temporary alpha/beta “stencil” that suppresses gamma and spiking in some locations while sparing others",
+          "reasoning": "Applies the mechanism to explain mixed selectivity.",
+          "start": 189
+        }
+      ]
+    },
+    {
+      "id": "spya-xgyggj",
+      "name": "Oscillation frequency sets spatial scale of influence",
+      "provenance": "introduced",
+      "statement": "Faster rhythms like gamma organize activity over small patches of cortex while slower rhythms like alpha/beta and theta coordinate activity over much larger areas, so frequency band predicts the spatial reach of a wave's control.",
+      "occurrences": [
+        {
+          "blockId": "spya-q606tk",
+          "quote": "The spatial scale of influence of waves covaries with temporal frequency",
+          "reasoning": "States the frequency-scale link explicitly.",
+          "start": 47
+        },
+        {
+          "blockId": "spya-jcpyd5",
+          "quote": "Theta (~3–8 Hz) traveling waves, given their lower frequency and spatial scale, may organize and coordinate neural activity on a larger scale.",
+          "reasoning": "Applies the same principle to theta.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-etuztn",
+      "name": "Physical wave superposition can constitute genuine computation",
+      "provenance": "introduced",
+      "statement": "When physical waves overlap and interfere, the resulting combined pattern can itself carry out a calculation—not merely represent one—because the physics of addition and interference mirrors mathematical operations like addition, filtering, and constraint satisfaction.",
+      "analogy": "Like how two ripples crossing a pond add their heights at every point simultaneously, computing a sum everywhere at once rather than one point at a time.",
+      "occurrences": [
+        {
+          "blockId": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "reasoning": "States the core claim that physical wave interaction performs computation.",
+          "start": 328
+        },
+        {
+          "blockId": "spya-mgnqxk",
+          "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+          "reasoning": "Elaborates why this counts as genuine, efficient computation.",
+          "start": 330
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T18:40:52.313Z",
+  "elapsedMs": 24933
+}

@@ -1,0 +1,173 @@
+{
+  "caption": "A forward chain from definitions through the crisis's origins into a wide convergence of disciplinary evidence, which forks into two families of causes before reconverging into the response and reform that followed.",
+  "title": "Converging evidence, forking causes",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "The replication crisis: from definition to reform",
+      "caption": "Down the page is the article's own order: definitions lead to the crisis's naming, four kinds of evidence converge on one verdict, that verdict forks into two families of cause, and both feed the response and reform that close the piece.",
+      "height": 1140,
+      "items": [
+        {"kind":"node","shape":"ellipse","id":"start","x":280,"y":40,"w":200,"h":70,
+         "text":"Defining the replication crisis","size":"sm","block":"spya-kv0w8d",
+         "detail":"Widespread failure to reproduce published findings, and the new field of metascience studying why."},
+
+        {"kind":"node","shape":"box","id":"origins","x":280,"y":150,"w":200,"h":70,
+         "text":"Early-2010s failures name a crisis","size":"sm","block":"spya-yru28f",
+         "detail":"Failed social-priming and ESP replications, low cancer-biology replication, and p-hacking studies together triggered the crisis."},
+
+        {"kind":"region","id":"reg-evidence","x":16,"y":235,"w":728,"h":165,
+         "label":"EVIDENCE ACROSS FIELDS","style":"band","tone":1,"opens":"inside-evidence"},
+
+        {"kind":"node","shape":"box","id":"ev-psych","x":30,"y":275,"w":160,"h":70,
+         "text":"Psychology: ~36-50% replicate","size":"xs","tone":1,"block":"spya-bha57y",
+         "detail":"Large projects replicating dozens of studies found success rates of only 36-50%, with shrunken effects."},
+        {"kind":"node","shape":"box","id":"ev-med","x":210,"y":275,"w":160,"h":70,
+         "text":"Cancer studies rarely replicate","size":"xs","tone":1,"block":"spya-esjmns",
+         "detail":"Pre-clinical oncology findings confirmed as little as 11% of the time."},
+        {"kind":"node","shape":"box","id":"ev-other","x":390,"y":275,"w":160,"h":70,
+         "text":"Nutrition, economics also shaky","size":"xs","tone":1,"block":"spya-acfh3t",
+         "detail":"Most food-cancer claims and roughly a third of economics findings fail to hold up."},
+        {"kind":"node","shape":"box","id":"ev-llm","x":570,"y":275,"w":160,"h":70,
+         "text":"LLMs bring new replication risks","size":"xs","tone":1,"block":"spya-ypznph",
+         "detail":"Closed, fast-changing AI models create fresh reproducibility hazards, prompting new reporting standards."},
+
+        {"kind":"node","shape":"hex","id":"synthesis","x":280,"y":440,"w":200,"h":70,
+         "text":"About half of findings fail to replicate","sub":"surveys & citations","size":"sm",
+         "block":"spya-fuynra","detail":"Most scientists have failed to reproduce others' work, yet unreplicable studies get cited more."},
+
+        {"kind":"region","id":"reg-causes","x":16,"y":540,"w":728,"h":170,
+         "label":"CAUSES OF THE CRISIS","style":"band","tone":2,"opens":"inside-causes"},
+
+        {"kind":"node","shape":"box","id":"cause-pub","x":90,"y":580,"w":280,"h":70,
+         "text":"Publication system favors flashy results","size":"sm","tone":2,"block":"spya-d040tg",
+         "detail":"Publication bias, math errors, publish-or-perish incentives, and thin reporting standards."},
+        {"kind":"node","shape":"box","id":"cause-stat","x":410,"y":580,"w":280,"h":70,
+         "text":"Flawed practices & low power","size":"sm","tone":3,"block":"spya-bfx638",
+         "detail":"Questionable research practices, chronic low power, meta-analysis flaws, and misused p-values."},
+
+        {"kind":"node","shape":"box","id":"perception","x":280,"y":750,"w":200,"h":70,
+         "text":"Public trust & academic clashes","size":"sm","block":"spya-qht6nk",
+         "detail":"Most of the public is unaware of replication failures; psychologists publicly clashed over how to respond."},
+
+        {"kind":"node","shape":"box","id":"reform","x":280,"y":850,"w":200,"h":70,
+         "text":"Reforming publishing & statistics","size":"sm","block":"spya-h32yv9",
+         "detail":"Better reporting, result-blind review, preregistration, tracking tools, stricter thresholds, larger samples."},
+
+        {"kind":"node","shape":"box","id":"broader","x":280,"y":950,"w":200,"h":70,
+         "text":"Rebuilding science's infrastructure","size":"sm","block":"spya-hc3p7c",
+         "detail":"Funders, educators, and researchers build databases, involve original authors, and rethink theory-building itself."},
+
+        {"kind":"node","shape":"bare","id":"refs","x":260,"y":1050,"w":240,"h":50,
+         "text":"References & further reading","size":"xs","block":"spya-eu3adf"},
+
+        {"kind":"edge","from":"start","to":"origins","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"origins","to":"ev-psych","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"origins","to":"ev-med","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"origins","to":"ev-other","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"origins","to":"ev-llm","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ev-psych","to":"synthesis","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ev-med","to":"synthesis","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ev-other","to":"synthesis","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ev-llm","to":"synthesis","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthesis","to":"cause-pub","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthesis","to":"cause-stat","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"cause-pub","to":"perception","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"cause-stat","to":"perception","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"perception","to":"reform","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"reform","to":"broader","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"broader:left","to":"start:left","via":"curve","arrow":"end","line":"dashed",
+         "label":"revisits what reproducibility means"}
+      ]
+    },
+
+    {
+      "id": "inside-evidence",
+      "title": "Evidence across disciplines",
+      "caption": "Six separate literatures - each checked by its own replication effort - converge on the same verdict: roughly half of published findings do not hold up, a pattern confirmed by broad researcher surveys.",
+      "height": 520,
+      "items": [
+        {"kind":"node","shape":"box","id":"psych","x":40,"y":100,"w":200,"h":72,
+         "text":"Psychology projects: 36-50% replicate","size":"sm","tone":1,"block":"spya-bha57y",
+         "detail":"Of 97 psychology studies with significant original effects, only 36% replicated; a later 60-lab effort found 50% failure."},
+        {"kind":"node","shape":"box","id":"brain","x":270,"y":100,"w":200,"h":72,
+         "text":"Brain studies need huge samples","size":"sm","tone":1,"block":"spya-ekg3fe",
+         "detail":"Brain-phenotype studies often reach invalid conclusions because their tiny effect sizes require thousands of subjects to replicate."},
+        {"kind":"node","shape":"box","id":"cancer","x":500,"y":100,"w":220,"h":72,
+         "text":"Cancer & medical findings often fail","size":"sm","tone":1,"block":"spya-esjmns",
+         "detail":"Pre-clinical oncology findings replicated only 11% of the time; effect sizes were 85% smaller on average on retest."},
+
+        {"kind":"node","shape":"box","id":"nutri-econ","x":40,"y":220,"w":200,"h":72,
+         "text":"Nutrition & economics claims shaky","size":"sm","tone":1,"block":"spya-acfh3t",
+         "detail":"Most cookbook ingredients have cancer-risk claims attached; about a third of economics findings fail to replicate."},
+        {"kind":"node","shape":"box","id":"water","x":270,"y":220,"w":220,"h":72,
+         "text":"Water studies rarely reproducible","size":"sm","tone":1,"block":"spya-ac3f22",
+         "detail":"Of nearly 2,000 water-management articles, as few as 0.6% to 6.8% could plausibly be reproduced, mostly from thin reporting."},
+        {"kind":"node","shape":"box","id":"llm","x":520,"y":220,"w":200,"h":72,
+         "text":"LLM research brings new hazards","size":"sm","tone":1,"block":"spya-ypznph",
+         "detail":"Closed models that change without notice, undisclosed training data, and run-to-run variation make LLM findings hard to reproduce."},
+
+        {"kind":"node","shape":"hex","id":"surveys","x":140,"y":360,"w":460,"h":80,
+         "text":"Surveys: most scientists couldn't reproduce others' results","sub":"yet unreplicable studies get cited more","size":"sm",
+         "block":"spya-fuynra","detail":"Over 70% of surveyed researchers failed to reproduce another scientist's experiment; nonreplicable papers are cited more, not less."},
+
+        {"kind":"edge","from":"psych","to":"surveys","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"brain","to":"surveys","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"cancer","to":"surveys","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"nutri-econ","to":"surveys","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"water","to":"surveys","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"llm","to":"surveys","via":"curve","arrow":"end"}
+      ]
+    },
+
+    {
+      "id": "inside-causes",
+      "title": "Two families of cause",
+      "caption": "A two-column comparison: on the left, flaws built into how papers get published; on the right, flaws in how studies are designed and analysed. Both run in article order top to bottom, and neither depends on the other.",
+      "height": 640,
+      "items": [
+        {"kind":"region","id":"reg-a","x":14,"y":60,"w":350,"h":450,
+         "label":"PUBLICATION SYSTEM","style":"band","tone":2},
+        {"kind":"region","id":"reg-b","x":394,"y":60,"w":350,"h":540,
+         "label":"RESEARCH PRACTICES & STATISTICS","style":"band","tone":3},
+
+        {"kind":"node","shape":"box","id":"a1","x":30,"y":100,"w":320,"h":72,
+         "text":"Publication bias creates a 'file drawer'","size":"sm","tone":2,"block":"spya-d040tg",
+         "detail":"Only positive, significant results tend to get published, leaving negative results unpublished and literature skewed."},
+        {"kind":"node","shape":"box","id":"a2","x":30,"y":200,"w":320,"h":72,
+         "text":"Even top journals have frequent stats errors","size":"sm","tone":2,"block":"spya-xxd5as",
+         "detail":"11% of statistical results in Nature and BMJ in 2001 were mathematically inconsistent with the reported test statistic."},
+        {"kind":"node","shape":"box","id":"a3","x":30,"y":300,"w":320,"h":72,
+         "text":"'Publish or perish' punishes replication work","size":"sm","tone":2,"block":"spya-h2nvfj",
+         "detail":"Career pressure to publish prioritizes publishable results over validity, and replications earn little recognition."},
+        {"kind":"node","shape":"box","id":"a4","x":30,"y":400,"w":320,"h":72,
+         "text":"Papers often lack detail needed to replicate","size":"sm","tone":2,"block":"spya-wjstmr",
+         "detail":"Many studies, such as most cancer-biology papers checked, don't report enough method detail for others to redo them."},
+
+        {"kind":"node","shape":"box","id":"b1","x":410,"y":100,"w":320,"h":72,
+         "text":"Flexible choices inflate false positives","size":"sm","tone":3,"block":"spya-bfx638",
+         "detail":"Questionable research practices like data dredging, selective reporting, and HARKing exploit researcher degrees of freedom."},
+        {"kind":"node","shape":"box","id":"b2","x":410,"y":200,"w":320,"h":72,
+         "text":"Chronic low power (~20-35%) in many fields","size":"sm","tone":3,"block":"spya-p7pun6",
+         "detail":"Average statistical power in psychology, neuroscience, and economics is far below the 80% considered adequate."},
+        {"kind":"node","shape":"box","id":"b3","x":410,"y":300,"w":320,"h":72,
+         "text":"Underpowered studies overstate effect sizes","size":"sm","tone":3,"block":"spya-nqwfh4",
+         "detail":"When a study replicates at all, the replicated effect is typically much smaller than originally reported."},
+        {"kind":"node","shape":"box","id":"b4","x":410,"y":400,"w":320,"h":72,
+         "text":"Many analysis paths enable p-hacking","size":"sm","tone":3,"block":"spya-qsad7n","
+         detail":"Choices in data collection, outlier removal, and stopping rules can push the false-positive rate above 60% without any misconduct."},
+        {"kind":"node","shape":"box","id":"b5","x":410,"y":500,"w":320,"h":72,
+         "text":"Null-hypothesis testing misfits soft sciences","size":"sm","tone":3,"block":"spya-h9wzrk",
+         "detail":"Critics argue that in fields like social psychology the null hypothesis is always technically false, so rejecting it proves little."},
+
+        {"kind":"edge","from":"a1","to":"a2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"a2","to":"a3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"a3","to":"a4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b1","to":"b2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b2","to":"b3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b3","to":"b4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b4","to":"b5","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

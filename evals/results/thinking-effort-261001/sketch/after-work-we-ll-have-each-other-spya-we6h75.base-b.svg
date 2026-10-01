@@ -1,0 +1,309 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3159.45" width="760" height="3159.45">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3159.45" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel into converge, then chain</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The piece funnels from one forecast into three independent case studies of relationship-only societies that all</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">land on the same finding, then follows that finding forward into a claim about what paid work actually gives us —</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">ending in a hedge that loops back to the opening worry.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">One forecast (AI ends work) opens into three unrelated case studies of relationship-only life, which converge on the</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">same pattern, and that pattern is then carried forward into a claim about work and friendship — with a closing hedge</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">that loops back to the start.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 80.85)"><rect x="24" y="170" width="220" height="280" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="260" y="170" width="220" height="280" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<rect x="496" y="170" width="220" height="280" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<path d="M380 120 C380 160.5 134 169.5 134 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="134,210 130.5,200 137.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 120 C380 160.5 370 169.5 370 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,210 366.5,200 373.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 120 C380 160.5 606 169.5 606 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="606,210 602.5,200 609.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M134 270 L134 290" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="134,290 130.5,280 137.5,280" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M134 350 L134 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="134,370 130.5,360 137.5,360" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 270 L370 290" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,290 366.5,280 373.5,280" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 350 L370 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,370 366.5,360 373.5,360" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M606 270 L606 290" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="606,290 602.5,280 609.5,280" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M606 350 L606 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="606,370 602.5,360 609.5,360" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M134 430 C134 461.5 380 468.5 380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 376.5,490 383.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 430 C370 461.5 380 468.5 380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 376.5,490 383.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M606 430 C606 461.5 380 468.5 380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 376.5,490 383.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 580 L380 620" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,620 376.5,610 383.5,610" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 700 L380 740" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,740 376.5,730 383.5,730" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 820 L380 860" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,860 376.5,850 383.5,850" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 940 L380 980" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,980 376.5,970 383.5,970" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M230 1010 C8 1010 8 80 230 80" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="230,80 220,83.5 220,76.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>AI ends work: relationships take over — the relational-sector thesis — If machines do all economically necessary labor, status and meaning may revert to who you know. — → spya-eq7rkm</title>
+<ellipse cx="380" cy="80" rx="150" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="68.09" font-size="15" text-anchor="middle" fill="#f7f7f7">AI ends work: relationships take</text>
+<text x="380" y="86.84" font-size="15" text-anchor="middle" fill="#f7f7f7">over</text>
+<text x="380" y="107.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">the relational-sector thesis</text>
+</g>
+<g>
+<title>Court life ran on heraldic precedence — → spya-y827zc</title>
+<rect x="40" y="210" width="188" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="134" y="236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Court life ran on heraldic</text>
+<text x="134" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">precedence</text>
+</g>
+<g>
+<title>Salons and courts ran on gossip, not ideas — → spya-bm2xyv</title>
+<rect x="40" y="290" width="188" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="134" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Salons and courts ran on</text>
+<text x="134" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">gossip, not ideas</text>
+</g>
+<g>
+<title>Etiquette curbed ape-like instincts — Elias: not an inevitable regression, so a future workless world need not repeat it. — → spya-cz0cgg</title>
+<rect x="40" y="370" width="188" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="134" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Etiquette curbed ape-like</text>
+<text x="134" y="411.4" font-size="12" text-anchor="middle" fill="#f7f7f7">instincts</text>
+</g>
+<g>
+<title>Upper-class wives never work, feel no need to — → spya-uum3xk</title>
+<rect x="276" y="210" width="188" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="370" y="236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Upper-class wives never</text>
+<text x="370" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">work, feel no need to</text>
+</g>
+<g>
+<title>Fundraising gives an 'illusion of being useful' — → spya-mdncme</title>
+<rect x="276" y="290" width="188" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="370" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Fundraising gives an</text>
+<text x="370" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">'illusion of being useful'</text>
+</g>
+<g>
+<title>A comfortable but narrow social world — → spya-r7r7ap</title>
+<rect x="276" y="370" width="188" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="370" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">A comfortable but narrow</text>
+<text x="370" y="411.4" font-size="12" text-anchor="middle" fill="#f7f7f7">social world</text>
+</g>
+<g>
+<title>West End peer groups replaced careers — → spya-y02mr5</title>
+<rect x="512" y="210" width="188" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="606" y="236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">West End peer groups</text>
+<text x="606" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replaced careers</text>
+</g>
+<g>
+<title>Conformity enforced, outsiders excluded — → spya-j337dx</title>
+<rect x="512" y="290" width="188" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="606" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Conformity enforced,</text>
+<text x="606" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">outsiders excluded</text>
+</g>
+<g>
+<title>That mistrust fades as conditions improve — → spya-dma27v</title>
+<rect x="512" y="370" width="188" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="606" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">That mistrust fades as</text>
+<text x="606" y="411.4" font-size="12" text-anchor="middle" fill="#f7f7f7">conditions improve</text>
+</g>
+<g>
+<title>All three: gossip defends group reputation — When dignity depends on group membership, policing the group's reputation becomes everyone's main activity. — → spya-qsfkqr</title>
+<polygon points="270,500 490,500 530,540 490,580 270,580 230,540" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="535.5" font-size="15" text-anchor="middle" fill="#f7f7f7">All three: gossip defends group</text>
+<text x="380" y="554.25" font-size="15" text-anchor="middle" fill="#f7f7f7">reputation</text>
+</g>
+<g>
+<title>Work offers respect for what you do, not who you know — → spya-zd83ts</title>
+<rect x="230" y="620" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="656.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Work offers respect for what you do, not who</text>
+<text x="380" y="671.4" font-size="12" text-anchor="middle" fill="#f7f7f7">you know</text>
+</g>
+<g>
+<title>Surveys and oral histories: workers want competence and respect — → spya-t9qyhk</title>
+<rect x="230" y="740" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="776.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Surveys and oral histories: workers want</text>
+<text x="380" y="791.4" font-size="12" text-anchor="middle" fill="#f7f7f7">competence and respect</text>
+</g>
+<g>
+<title>Commercial markets freed friendship from necessity — → spya-hdbtc0</title>
+<rect x="230" y="860" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="896.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Commercial markets freed friendship from</text>
+<text x="380" y="911.4" font-size="12" text-anchor="middle" fill="#f7f7f7">necessity</text>
+</g>
+<g>
+<title>Still, I'll miss my job and liberal individualism — → spya-dhj4jr</title>
+<path d="M230 980 L516 980 L530 994 L530 1040 L230 1040 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 980 L516 994 L530 994" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="380" y="1006.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Still, I'll miss my job and liberal</text>
+<text x="380" y="1021.4" font-size="12" text-anchor="middle" fill="#f7f7f7">individualism</text>
+</g>
+<text x="380" y="16" font-size="10" text-anchor="middle" fill="#8f8f8f" letter-spacing="0.06em">AFTER WORK, WE'LL HAVE EACH OTHER</text>
+<text x="270" y="185" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">LADIES WHO LUNCH</text>
+<rect x="14.449999999999996" y="531" width="98.10000000000001" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="63.5" y="541" font-size="10" text-anchor="middle" fill="#8f8f8f">the worry returns</text></g>
+</g>
+<g transform="translate(0 1301.6499999999999)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Power and sex among apes</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain down the page, with the salons and Catherine the Great's court set beside Saint-Simon's Versailles as a second</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">confirming example before the two rejoin into the same conclusion about honor and status.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">ZOOM-ARISTOCRATS</text>
+<g transform="translate(0 65.9)"><path d="M410 110 L410 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,140 406.5,130 413.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 210 L410 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,240 406.5,230 413.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 320 L410 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,350 406.5,340 413.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 420 C410 510 645 330 645 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="645,420 641.5,410 648.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M645 490 L645 510" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="645,510 641.5,500 648.5,500" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 545 C540 545 560 495 540 495" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="540,495 550,491.5 550,498.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 420 L410 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,460 406.5,450 413.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 530 L410 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,560 406.5,550 413.5,550" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 630 L410 660" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,660 406.5,650 413.5,650" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Wealth came from connections, not labor — no need to work — → spya-c4s3en</title>
+<rect x="280" y="40" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="72.97200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">Wealth came from connections, not labor</text>
+<text x="410" y="89.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no need to work</text>
+</g>
+<g>
+<title>They didn't work, and work gave them no meaning — → spya-w7jf25</title>
+<rect x="280" y="140" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">They didn't work, and work gave them no</text>
+<text x="410" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">meaning</text>
+</g>
+<g>
+<title>Saint-Simon: brilliant court, petty memoirist — obsessed with precedence — → spya-x4w0zk</title>
+<rect x="280" y="240" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="270.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Saint-Simon: brilliant court, petty</text>
+<text x="410" y="285.472" font-size="12" text-anchor="middle" fill="#f7f7f7">memoirist</text>
+<text x="410" y="301.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">obsessed with precedence</text>
+</g>
+<g>
+<title>Court life's real activity was intrigue — → spya-bm2xyv</title>
+<rect x="280" y="350" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="388.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Court life's real activity was intrigue</text>
+</g>
+<g>
+<title>Salons too ran on gossip, not philosophy — → spya-wue7zn</title>
+<path d="M560 420 L716 420 L730 434 L730 490 L560 490 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 420 L716 434 L730 434" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="645" y="452" font-size="10" text-anchor="middle" fill="#f7f7f7">Salons too ran on gossip, not</text>
+<text x="645" y="464.5" font-size="10" text-anchor="middle" fill="#f7f7f7">philosophy</text>
+</g>
+<g>
+<title>Catherine's court: the same favor-seeking — → spya-f90g2h</title>
+<path d="M560 510 L716 510 L730 524 L730 580 L560 580 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 510 L716 524 L730 524" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="645" y="542" font-size="10" text-anchor="middle" fill="#f7f7f7">Catherine's court: the same</text>
+<text x="645" y="554.5" font-size="10" text-anchor="middle" fill="#f7f7f7">favor-seeking</text>
+</g>
+<g>
+<title>Their dignity was honor: family and rank — → spya-de69sf</title>
+<rect x="280" y="460" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="491.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Their dignity was honor: family and</text>
+<text x="410" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">rank</text>
+</g>
+<g>
+<title>Elias: etiquette curbed ape-like instinct — → spya-cz0cgg</title>
+<rect x="280" y="560" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="591.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Elias: etiquette curbed ape-like</text>
+<text x="410" y="606.4" font-size="12" text-anchor="middle" fill="#f7f7f7">instinct</text>
+</g>
+<g>
+<title>Not fate: Versailles's history isn't ours — → spya-k26ath</title>
+<rect x="280" y="660" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="691.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Not fate: Versailles's history isn't</text>
+<text x="410" y="706.4" font-size="12" text-anchor="middle" fill="#f7f7f7">ours</text>
+</g></g>
+</g>
+<g transform="translate(0 2195.5499999999997)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">The working classes</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Another chain, with the quote on what counted as status set beside the main line before both feed into the same ending:</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">the ethos was a rational response to poverty, and it fades as poverty does.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">ZOOM-WORKINGCLASS</text>
+<g transform="translate(0 65.9)"><path d="M410 110 L410 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,140 406.5,130 413.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 210 L410 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,240 406.5,230 413.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 310 L410 340" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,340 406.5,330 413.5,330" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 410 C410 500 645 320 645 410" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="645,410 641.5,400 648.5,400" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 445 C540 445 560 495 540 495" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="540,495 550,491.5 550,498.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 410 L410 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,460 406.5,450 413.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 530 L410 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,560 406.5,550 413.5,550" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 630 L410 660" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,660 406.5,650 413.5,650" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 730 L410 760" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,760 406.5,750 413.5,750" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Gans studied Boston's Italian-American West End — → spya-ftk9a7</title>
+<rect x="280" y="40" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="71.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Gans studied Boston's Italian-American</text>
+<text x="410" y="86.4" font-size="12" text-anchor="middle" fill="#f7f7f7">West End</text>
+</g>
+<g>
+<title>Rooted in peasant Sicily, not the Yankee ethic — → spya-urfe43</title>
+<rect x="280" y="140" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Rooted in peasant Sicily, not the</text>
+<text x="410" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Yankee ethic</text>
+</g>
+<g>
+<title>Life centered on the peer group, not the job — → spya-ghqg2t</title>
+<rect x="280" y="240" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="271.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Life centered on the peer group, not</text>
+<text x="410" y="286.4" font-size="12" text-anchor="middle" fill="#f7f7f7">the job</text>
+</g>
+<g>
+<title>Deviance was punished, even too much success — → spya-tyj2mt</title>
+<rect x="280" y="340" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="371.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Deviance was punished, even too much</text>
+<text x="410" y="386.4" font-size="12" text-anchor="middle" fill="#f7f7f7">success</text>
+</g>
+<g>
+<title>Status came from loyalty, not achievement — → spya-weazcy</title>
+<path d="M560 410 L716 410 L730 424 L730 480 L560 480 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 410 L716 424 L730 424" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="645" y="442" font-size="10" text-anchor="middle" fill="#f7f7f7">Status came from loyalty, not</text>
+<text x="645" y="454.5" font-size="10" text-anchor="middle" fill="#f7f7f7">achievement</text>
+</g>
+<g>
+<title>Unable to organize, they lost their homes — → spya-dma27v</title>
+<rect x="280" y="460" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="491.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Unable to organize, they lost their</text>
+<text x="410" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">homes</text>
+</g>
+<g>
+<title>Banfield: 'amoral familism' — trust only family — → spya-sd6cmd</title>
+<rect x="280" y="560" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="591.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Banfield: 'amoral familism' — trust</text>
+<text x="410" y="606.4" font-size="12" text-anchor="middle" fill="#f7f7f7">only family</text>
+</g>
+<g>
+<title>Gans: a rational answer to real poverty — → spya-x5hb7k</title>
+<rect x="280" y="660" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="698.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Gans: a rational answer to real poverty</text>
+</g>
+<g>
+<title>As conditions improved, the old ethos faded — → spya-t4xpae</title>
+<rect x="280" y="760" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="791.4" font-size="12" text-anchor="middle" fill="#f7f7f7">As conditions improved, the old ethos</text>
+<text x="410" y="806.4" font-size="12" text-anchor="middle" fill="#f7f7f7">faded</text>
+</g></g>
+</g>
+</svg>

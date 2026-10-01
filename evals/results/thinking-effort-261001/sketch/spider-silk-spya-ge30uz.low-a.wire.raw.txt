@@ -1,0 +1,44 @@
+{"caption":"A chain down the page: the article moves from what silk is and how it behaves, through its ecological uses and the glands that make it, to how spiders spin it naturally, how humans try to copy that, and finally what humans do with it.","title":"Natural-to-artificial spinning chain","scenes":[
+{"id":"overview","title":"Spider silk: from gland to synthetic copy","caption":"A single chain of stages: properties set up uses and types, uses and types are explained by glands, glands explain natural spinning, which artificial synthesis tries (and struggles) to copy, feeding into human applications.","height":1180,"items":[
+ {"kind":"node","id":"intro","shape":"ellipse","x":280,"y":30,"w":200,"h":70,"text":"Silk: a protein fibre spiders spin for many jobs","size":"md","block":"spya-gp4t9x"},
+ {"kind":"node","id":"props","shape":"box","x":260,"y":140,"w":240,"h":80,"text":"Structure gives strength, toughness, stretch, adhesion","sub":"beta-sheets + amorphous matrix","size":"md","tone":1,"block":"spya-py9zw6"},
+ {"kind":"node","id":"uses","shape":"box","x":60,"y":270,"w":220,"h":80,"text":"Used for trapping, mating, nesting, dispersal, food","size":"sm","tone":2,"block":"spya-rty5kb"},
+ {"kind":"node","id":"types","shape":"box","x":480,"y":270,"w":220,"h":80,"text":"Seven silk types, one per gland, one per job","size":"sm","tone":2,"block":"spya-hg7j7e"},
+ {"kind":"node","id":"gland-corr","shape":"box","x":260,"y":380,"w":240,"h":70,"text":"A silk's job traces back to its gland","size":"sm","tone":2,"block":"spya-bgtqr0"},
+ {"kind":"node","id":"spin","shape":"hex","x":260,"y":490,"w":240,"h":90,"text":"Natural spinning: pulled, not squeezed, through a tapering duct","sub":"liquid crystal to solid fibre","size":"md","tone":3,"block":"spya-g3h8qq"},
+ {"kind":"node","id":"artificial","shape":"hex","x":260,"y":640,"w":240,"h":90,"text":"Artificial synthesis copies feedstock and spinning conditions","sub":"still thicker, weaker than natural","size":"md","tone":3,"block":"spya-d7d7m8"},
+ {"kind":"node","id":"research","shape":"note","x":560,"y":640,"w":160,"h":70,"text":"Decades of research mapped the chemistry","size":"xs","block":"spya-jvxbb8"},
+ {"kind":"node","id":"synth-silk","shape":"box","x":260,"y":790,"w":240,"h":70,"text":"Engineered bacteria, yeast, goats, silkworms make silk-like protein","size":"sm","block":"spya-j7hems"},
+ {"kind":"node","id":"human","shape":"box","x":260,"y":910,"w":240,"h":80,"text":"Humans weave, heal, and build instruments with it","size":"md","tone":4,"block":"spya-chy97m"},
+ {"kind":"node","id":"medtech","shape":"note","x":40,"y":1020,"w":200,"h":70,"text":"Medicine: wound dressing, nerve regrowth","size":"xs","block":"spya-ce0yqp"},
+ {"kind":"node","id":"scitech","shape":"note","x":280,"y":1020,"w":200,"h":70,"text":"Crosshairs, lenses, fusion-target supports","size":"xs","block":"spya-vr82sv"},
+ {"kind":"node","id":"backmatter","shape":"bare","x":540,"y":1020,"w":180,"h":50,"text":"References & related topics","size":"xs","tone":0,"block":"spya-jdybu5"}
+],
+"regions":[
+ {"kind":"region","x":30,"y":120,"w":690,"h":350,"label":"PROPERTIES, USES & TYPES","style":"dashed","tone":1,"opens":"inside-properties"},
+ {"kind":"region","x":30,"y":470,"w":690,"h":270,"label":"NATURAL vs ARTIFICIAL SPINNING","style":"band","tone":3,"opens":"inside-spinning"}
+]}
+,
+{"id":"inside-properties","title":"Structure, uses, and types","caption":"A hub: silk's layered structure is the central fact, with its mechanical consequences, ecological uses, and the specialised silk types all branching from it and converging again on which gland made which silk.","height":760,"items":[
+ {"kind":"node","id":"structure","shape":"ellipse","x":280,"y":30,"w":220,"h":80,"text":"Crystalline beta-sheets in an amorphous matrix","size":"md","block":"spya-p263u9"},
+ {"kind":"node","id":"mech","shape":"box","x":40,"y":160,"w":210,"h":80,"text":"High strength + high stretch = exceptional toughness","size":"sm","tone":1,"block":"spya-nwva2u"},
+ {"kind":"node","id":"adhesive","shape":"box","x":280,"y":160,"w":210,"h":80,"text":"Attachment discs polymerise instantly into glue-like bonds","size":"sm","tone":1,"block":"spya-m8z9e7"},
+ {"kind":"node","id":"supercontraction","shape":"note","x":520,"y":160,"w":200,"h":80,"text":"Wet silk shrinks up to 50%, re-tensioning webs","size":"xs","block":"spya-qdjb0x"},
+ {"kind":"node","id":"usetable","shape":"box","x":40,"y":300,"w":300,"h":90,"text":"Trapping, mating, dispersal, nesting, alarm, pheromone trails","size":"sm","tone":2,"block":"spya-jyg3uw"},
+ {"kind":"node","id":"sevenkinds","shape":"box","x":420,"y":300,"w":300,"h":90,"text":"Dragline, capture-spiral, wrapping, egg-sac, glue, attachment silks","size":"sm","tone":2,"block":"spya-gu2z3s"},
+ {"kind":"node","id":"glandtable","shape":"box","x":200,"y":440,"w":360,"h":90,"text":"Each gland (ampullate, flagelliform, tubuliform...) makes one silk for one job","size":"sm","tone":2,"block":"spya-nprqdc"},
+ {"kind":"node","id":"speciesvary","shape":"note","x":200,"y":580,"w":360,"h":80,"text":"Species vary in gland number and specialisation","size":"xs","block":"spya-nn5s8z"}
+]},
+{"id":"inside-spinning","title":"Spinning: natural then artificial","caption":"A chain followed by two columns: the natural spinning process runs step by step down the gland, and then artificial synthesis sits beside it as an attempted copy, split into matching feedstock and matching geometry.","height":820,"items":[
+ {"kind":"node","id":"pultrusion","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"Silk is pulled out on demand, not grown or pushed","size":"md","block":"spya-g2gw42"},
+ {"kind":"node","id":"tail","shape":"box","x":260,"y":130,"w":240,"h":60,"text":"Tail secretes the silk proteins","size":"sm","tone":3,"block":"spya-f29a84"},
+ {"kind":"node","id":"ampulla","shape":"box","x":260,"y":210,"w":240,"h":60,"text":"Ampulla stores the liquid silk dope","size":"sm","tone":3,"block":"spya-jezt06"},
+ {"kind":"node","id":"duct","shape":"box","x":260,"y":290,"w":240,"h":70,"text":"Tapering duct: shear, acid, water removal align and solidify it","size":"sm","tone":3,"block":"spya-ba6knb"},
+ {"kind":"node","id":"valve","shape":"note","x":540,"y":290,"w":170,"h":70,"text":"A valve may regulate thickness, rejoin breaks","size":"xs","block":"spya-s5073r"},
+ {"kind":"node","id":"garden","shape":"note","x":20,"y":290,"w":190,"h":80,"text":"One garden spider: 800+ glands of six kinds","size":"xs","block":"spya-zrcs7h"},
+ {"kind":"node","id":"feedstock","shape":"box","x":120,"y":440,"w":230,"h":90,"text":"Copying the protein feedstock: E. coli, silkworms, goats, plants","size":"sm","tone":4,"block":"spya-rw0wtg"},
+ {"kind":"node","id":"geometry","shape":"box","x":410,"y":440,"w":230,"h":90,"text":"Copying the duct: syringes, microfluidics, electrospinning","size":"sm","tone":4,"block":"spya-x4bwhf"},
+ {"kind":"node","id":"gap","shape":"box","x":260,"y":580,"w":240,"h":90,"text":"Artificial fibres: thicker, weaker than natural dragline","size":"md","tone":4,"block":"spya-jzcepa"},
+ {"kind":"node","id":"commercial","shape":"note","x":260,"y":710,"w":240,"h":70,"text":"Still, commercial spidroin products now exist","size":"xs","block":"spya-m99ub7"}
+]}
+]}

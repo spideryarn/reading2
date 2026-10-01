@@ -92,7 +92,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   structure: BAND,
   citations: BAND,
   faq: BAND,
-  trajectory: BAND,
+  skim: BAND,
   tweets: BAND,
   /* No band, but a column of its own on the right, and that column is inside
      the same boundary at its own call site in Reader.tsx — so a throw in it

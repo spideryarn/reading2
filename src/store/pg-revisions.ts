@@ -359,7 +359,7 @@ export const REVISION_CARRY_POLICY: Record<
      quotes is its `sourceHash`, answered at read time. Minting would empty the
      band until somebody paid for the call again.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  trajectory: "carry",
+  skim: "carry",
   /* Carries like the seven above, and it is the one where carrying costs
      nothing at all: the plates are content-addressed objects in the blob store
      and the column holds only their hashes, so a new draft inherits pictures

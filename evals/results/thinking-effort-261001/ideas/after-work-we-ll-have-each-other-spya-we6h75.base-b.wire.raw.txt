@@ -1,0 +1,62 @@
+{"ideas": [
+  {
+    "name": "Group-based dignity breeds exclusion",
+    "provenance": "introduced",
+    "statement": "When a person's sense of worth comes from belonging to a group rather than from individual achievement, that group inevitably starts controlling who can join it and punishing those who deviate.",
+    "whyYouNeedIt": "This is the mechanism that ties together the aristocrats, the society ladies, and the West End Italians: in each case, status tied to membership turns warm sociability into gatekeeping.",
+    "occurrences": [
+      {"blockId": "spya-hdbtc0", "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.", "reasoning": "States directly that group-based dignity causes policing and clannishness."},
+      {"blockId": "spya-tyj2mt", "quote": "Finally, they all spend an enormous amount of energy policing deviant behavior. In the West End, this usually means sexual promiscuity for women, effeminacy for men, and class aspirations for anyone.", "reasoning": "Shows the same policing-of-deviance pattern as a concrete instance of group-based dignity enforcing conformity."},
+      {"blockId": "spya-j3vvp7", "quote": "The central activities of one’s life all involve preserving and defending one’s own place in that system.", "reasoning": "Generalizes the pattern across both aristocrats and society ladies as defending one's position within a status group."}
+    ]
+  },
+  {
+    "name": "Work supplies impersonal respect",
+    "provenance": "introduced",
+    "statement": "Beyond paying the bills, a job lets people earn esteem based on skill and contribution rather than on birth, family, or who they know, and this impersonal form of respect is what modern workers actually value in their jobs.",
+    "occurrences": [
+      {"blockId": "spya-zd83ts", "quote": "all of us benefit from living in a system where we can earn respect and dignity as adults from what we do, not who we know, or who we are.", "reasoning": "States plainly that work's value lies in conferring respect independent of social connections or identity."},
+      {"blockId": "spya-ms0vr5", "quote": "unlike members of relational societies, the things we want respect for are impersonal: our skills, our accomplishments, our contributions to a shared goal.", "reasoning": "Draws the explicit contrast between impersonal, work-based respect and group-based respect."}
+    ]
+  },
+  {
+    "name": "Dignity-from-labor is a modern bourgeois invention",
+    "provenance": "introduced",
+    "statement": "The idea that working itself is dignified or meaningful is a recent, culturally specific development; older societies grounded a person's worth in honor and family standing instead.",
+    "occurrences": [
+      {"blockId": "spya-zy53n3", "quote": "Relatedly, before industrialization, there was very little sense that working, in itself, could be dignified or meaningful.", "reasoning": "States directly that work-as-dignity is a post-industrial phenomenon."},
+      {"blockId": "spya-de69sf", "quote": "We’re bourgeois: Our idea of dignity involves being diligent, productive, responsible citizens. (That is, it involves working.) Aristocratic dignity comes from honor, which is to say it comes from maintaining distinctions of family and class.", "reasoning": "Contrasts bourgeois work-based dignity with aristocratic honor-based dignity as two distinct historical value systems."}
+    ]
+  },
+  {
+    "name": "Markets freed friendship from necessity",
+    "provenance": "introduced",
+    "statement": "Before people could support themselves through impersonal paid work, every personal bond had to double as a survival alliance; commercial society, by removing that necessity, allowed relationships to be based on genuine affection rather than mutual need.",
+    "occurrences": [
+      {"blockId": "spya-hb8vvc", "quote": "In the bad old days before impersonal markets and bureaucracies, the only way to survive was through personal ties to allies or to kin. As a result, every personal relationship was transactional.", "reasoning": "States the pre-market condition where relationships were forced to be transactional out of necessity."},
+      {"blockId": "spya-d6v2bb", "quote": "For Smith, the absence of necessity created room for a better form of friendship, based on “natural sympathy” instead of mutual need.", "reasoning": "States directly that removing survival necessity is what enables sympathy-based friendship."},
+      {"blockId": "spya-y0xcuz", "quote": "The modern labor market has dissolved the bonds of tradition, family, and clan. In the modern world, relationships matter less. And because they matter less, we can do much more inside them. They are freer.", "reasoning": "Extends the claim to the modern labor market generally, linking reduced relational necessity to relational freedom."}
+    ]
+  },
+  {
+    "name": "Past workless societies model a coming post-work future",
+    "provenance": "introduced",
+    "statement": "Because history has already produced groups who did not need to labor for a living (courtiers, idle-rich housewives), their actual behavior is a reliable guide to how people will live once AI removes the need to work, rather than this being an unknowable novelty.",
+    "occurrences": [
+      {"blockId": "spya-xcg5en", "quote": "our degree of ignorance about the future is greatly exaggerated. If the future looks anything like the past — and there’s good reason to believe it will — then we can make progress with case studies.", "reasoning": "States directly the premise that past cases can forecast the post-work future."},
+      {"blockId": "spya-c4s3en", "quote": "Let’s start with 18th-century aristocrats. Aristocrats are (typically) rich, which we certainly will be if we have robots capable of all normal nonrelational labor.", "reasoning": "Treats historical aristocrats as a direct analog for a future robot-rich populace, applying the forecasting premise."},
+      {"blockId": "spya-pjnh37", "quote": "I think this book is about the best modern case study of a relational society as we’re going to find.", "reasoning": "Explicitly frames a 1984 ethnography as evidence for what a relational future society would look like."}
+    ]
+  },
+  {
+    "name": "Status is positional, so it must exclude",
+    "provenance": "assumed",
+    "statement": "Status only has meaning relative to other people, so any arrangement built to confer status on some people automatically requires ranking, excluding, or outranking others.",
+    "whyYouNeedIt": "The examples of obsessive rank-litigation, keeping professionals out of charity boards, and policing deviance only make sense as instances of a single logic if the reader already grants that status is inherently comparative and scarce; the piece shows the behavior repeatedly without ever stating why it must follow this pattern.",
+    "occurrences": [
+      {"blockId": "spya-x4w0zk", "quote": "Most of his life was spent in incomprehensible litigation over which families might be entitled to a certain heraldic emblem or whether parliamentary magistrates could wear a particular bit of ceremonial headgear in the presence of dukes.", "reasoning": "The obsession with minute precedence only reads as rational, not absurd, if rank is understood as a zero-sum resource worth fighting over."},
+      {"blockId": "spya-f6f8d4", "quote": "Many of the women emphasize how undesirable it would be for either the paid professionals who manage these organizations or the clients they serve to have too much influence over the way things are run.", "reasoning": "Keeping outsiders powerless only serves the stated goal of staying 'on top' if status is assumed to be a relative position that others could otherwise take."},
+      {"blockId": "spya-tyj2mt", "quote": "Finally, they all spend an enormous amount of energy policing deviant behavior.", "reasoning": "Policing deviance is explained as status-protection only if the reader supplies the premise that any member's deviation threatens the group's relative standing."}
+    ]
+  }
+]}

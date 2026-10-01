@@ -1,0 +1,201 @@
+{
+  "style": "An illuminated manuscript page — gold-leafed capitals, vine-work borders, and small bordered scenes — because the article's own diagrams (nested ovals, branching lattices) already read like the illuminated capitals and roundels of a medieval folio.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Spine: From the Question to the Summa",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-rxcze4",
+          "quote": "A grand challenge of modern neuroscience is to discover how brains “process information”",
+          "depicts": "A robed scholar at a lectern gazes up at a glowing brain suspended in the sky like a sun, quill poised over a blank page — the opening puzzle of the whole folio.",
+          "title": "THE GRAND CHALLENGE"
+        },
+        {
+          "node": "n2",
+          "block": "spya-f6sbgx",
+          "quote": "It can be thought of as a nonlinear correlation between two patterns of activity",
+          "depicts": "Two small bell-ringers pulling ropes in matched rhythm, their two bells drawn touching in a shared halo of sound — likeness without direction.",
+          "title": "TWO BELLS IN STEP"
+        },
+        {
+          "node": "n3",
+          "block": "spya-s0db2g",
+          "quote": "Information transfer captures the overall “flow” of information through the system",
+          "depicts": "A river of ink flowing from one scribe's inkwell into a second scribe's page, but the second scribe's hand is shown frozen mid-stroke, unable to say what pattern the ink will form.",
+          "title": "THE RIVER OF FLOW"
+        },
+        {
+          "node": "n4",
+          "block": "spya-wer4cd",
+          "quote": "This parsing is accomplished using the partial information decomposition (PID) framework",
+          "depicts": "A master mason cutting a single stone block into labelled wedges with chisel and compass — the article's own nested-oval diagram rendered as FIGURE A set into a roundel beside him.",
+          "title": "CUTTING THE STONE"
+        },
+        {
+          "node": "n6",
+          "block": "spya-sw5ukx",
+          "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices",
+          "depicts": "A workshop scene: a thin slice of brain tissue laid on a wide grid-plate studded with hundreds of pins, each pin trailing a thread toward a scribe tallying triads.",
+          "title": "THE GRIDDED SLICE"
+        },
+        {
+          "node": "s1",
+          "block": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club",
+          "depicts": "A walled inner court holding a few richly dressed figures glowing brightly, set inside a larger plain courtyard of dimmer figures — the rich few outshining the common many.",
+          "title": "THE INNER COURT"
+        },
+        {
+          "node": "s2",
+          "block": "spya-sd9fzd",
+          "quote": "triads with more recurrent connections also had greater synergy",
+          "depicts": "Two source-figures holding hands in a closed loop while a third feedback-thread from the target above hangs slack and unused.",
+          "title": "THE CLASPED LOOP"
+        },
+        {
+          "node": "s3",
+          "block": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "A mountain path with a bright banner planted at a modest rise partway up, while the summit beyond lies in shadow — synergy's single peak before the climb overshoots it.",
+          "title": "THE MODEST SUMMIT"
+        },
+        {
+          "node": "s4",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A monkey's arm reaching to grasp a fruit, with many identical scrolls fluttering down the arm at once, each repeating the same instruction — duplicated signals for a safe grasp.",
+          "title": "THE REACHING ARM"
+        },
+        {
+          "node": "n7",
+          "block": "spya-aby2dp",
+          "quote": "in the case of six parent neurons, there are 7,828,354 distinct PI atoms",
+          "depicts": "A clerk buried under an impossibly tall, toppling stack of labelled tablets, overwhelmed by their sheer number.",
+          "title": "THE TOPPLING TABLETS"
+        },
+        {
+          "node": "n9",
+          "block": "spya-rc5z33",
+          "quote": "neurons do not appear to blindly sum the number of inputs and fire in response to the total",
+          "depicts": "A weighing-scale figure deliberately ignoring a pile of coins to instead read the pattern stamped on them — judging the arrangement, not the count.",
+          "title": "READING THE PATTERN"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum-toned, with gold-leaf initials and vine-work borders, ten small bordered roundel scenes arranged in a single vertical column from top to bottom, connected by thin gilded cord-lines showing the flow of the argument (the fan nodes s1-s4 branching side by side from the recording-workshop roundel before converging into the toppling-tablets roundel). From top: a robed scholar beneath a glowing sun-brain (THE GRAND CHALLENGE); two bell-ringers in matched rhythm (TWO BELLS IN STEP); an ink river flowing scribe to scribe (THE RIVER OF FLOW); a mason chiselling a stone block into wedges, with FIGURE A redrawn in the manuscript's own linework as a small cartouche beside him showing the nested ovals of redundant/unique/synergistic information (CUTTING THE STONE); a workshop with a pinned brain-slice and tallying scribe (THE GRIDDED SLICE); then branching into four side-by-side roundels at the same height — a walled inner court of glowing figures (THE INNER COURT), two figures clasping hands in a loop (THE CLASPED LOOP), a banner on a modest mountain rise (THE MODEST SUMMIT), a monkey's reaching arm trailing scrolls (THE REACHING ARM) — all four cords rejoining into a clerk crushed under toppling tablets (THE TOPPLING TABLETS); ending at a weighing figure reading a coin's pattern instead of its count (READING THE PATTERN). Include a small cartouche near the fan-roundels redrawn in manuscript linework after FIGURE D, showing its branching result-panels as a cluster of small marked charts held by a figure comparing them. Palette: aged parchment cream, iron-gall brown ink, muted gold leaf, dusty blue and oxblood red accents. No lettering anywhere except the exact titles given, lettered in plain capitals beneath each roundel. Vignettes large and legible, filling the page width and height; margins bear only sparse vine-work, no crowding."
+    },
+    {
+      "sceneId": "pid-framework",
+      "title": "Inside: Cutting the Stone of Joint Information",
+      "vignettes": [
+        {
+          "node": "a1",
+          "block": "spya-h5dz45",
+          "quote": "it cannot be assumed that the joint mutual information (the “whole”) is reducible to a sum of all its component marginal “parts”",
+          "depicts": "A merchant weighing a single large sack on one scale-pan against several small sacks on the other, the pans refusing to balance.",
+          "title": "THE UNBALANCED SCALES"
+        },
+        {
+          "node": "a2",
+          "block": "spya-e94ury",
+          "quote": "the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation”",
+          "depicts": "A single hooded figure at a table combining two separate ingredients in a mortar to produce a third substance that glows, unlike either ingredient alone.",
+          "title": "THE MORTAR AND PESTLE"
+        },
+        {
+          "node": "a3",
+          "block": "spya-t02v4p",
+          "quote": "it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information",
+          "depicts": "Two master masons presenting a finished set of stone wedges to an assembly, as if unveiling a new technique for cutting a single block cleanly.",
+          "title": "THE MASONS' UNVEILING"
+        },
+        {
+          "node": "a4",
+          "block": "spya-h5jzvm",
+          "quote": "Syn(X₁, X₂;Y) is the information about Y that can only be learned by observing the joint states of X₁ and X₂ together",
+          "depicts": "FIGURE A redrawn large as a central roundel: the nested ovals showing two source-circles overlapping within a larger outer oval, a sliver of the outer oval reserved for what neither circle alone covers.",
+          "title": "THE FOUR STONE WEDGES"
+        },
+        {
+          "node": "a5",
+          "block": "spya-bgsd4n",
+          "quote": "The result is an underdetermined system of linear equations, with three known values",
+          "depicts": "A clerk holding a balance-sheet with three filled columns and a fourth column left blank, waiting on a decision before the ledger can close.",
+          "title": "THE UNFINISHED LEDGER"
+        },
+        {
+          "node": "a6",
+          "block": "spya-pvavq4",
+          "quote": "define the set of information sources, i.e., all subsets of X (including X itself) that can uniquely disclose information about Y",
+          "depicts": "A cartographer laying out every possible grouping of three small islands on a chart, drawing lines between each possible cluster of them.",
+          "title": "CHARTING THE ISLANDS"
+        },
+        {
+          "node": "a7",
+          "block": "spya-m37w5y",
+          "quote": "it is possible to recursively quantify the value of every partial information atom (Π(α)) via Mobius inversion",
+          "depicts": "FIGURE B redrawn as a large branching lattice of linked nodes climbing a trellis, a gardener's hand reaching to prune each node once, working upward from the simplest below.",
+          "title": "THE PRUNED TRELLIS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page continuing the same hand, vellum cream ground, iron-gall brown line, gold leaf accents, oxblood and dusty blue highlights. Seven roundels run top to bottom in a single reading column, connected by thin gilt cord. Top: a merchant with unbalanced scales, one large sack opposite several small sacks (THE UNBALANCED SCALES). Next: a hooded figure combining two ingredients in a mortar to make a glowing third (THE MORTAR AND PESTLE). Next: two masons unveiling finished stone wedges to onlookers (THE MASONS' UNVEILING). Next, the largest roundel on the page: FIGURE A redrawn in the manuscript's own linework — nested ovals, two overlapping source-circles within one outer oval, a reserved sliver standing for what neither circle covers alone (THE FOUR STONE WEDGES). Next: a clerk's ledger with three columns filled and one blank (THE UNFINISHED LEDGER). Next: a cartographer charting every cluster of three islands on a map, (CHARTING THE ISLANDS). Last, a second large roundel: FIGURE B redrawn as a branching trellis-lattice of linked wooden nodes climbing upward, a gardener's hand pruning them one at a time from the bottom rungs up (THE PRUNED TRELLIS). No lettering anywhere on the page except the given titles in plain capitals beneath each roundel. Vignettes large, filling the page's width, with only sparse vine-work in the margins — no crowding, no extra ornament."
+    },
+    {
+      "sceneId": "empirical-findings",
+      "title": "Inside: What the Decomposition Found",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-sw5ukx",
+          "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices",
+          "depicts": "The same gridded-slice workshop scene from the overview, opening this plate: a thin brain slice pinned to a wide grid-plate, threads running to a tallying scribe — the entry point into the empirical findings.",
+          "title": "THE GRIDDED SLICE REVISITED"
+        },
+        {
+          "node": "e2",
+          "block": "spya-kqkb58",
+          "quote": "the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy for that triad",
+          "depicts": "A miller filling one small sack exactly one quarter full from a larger sack of grain labelled as the flow between neurons, FIGURE D's left-hand scatter redrawn small in a cartouche beside him.",
+          "title": "ONE SACK IN FOUR"
+        },
+        {
+          "node": "e3",
+          "block": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club",
+          "depicts": "The walled inner court of glowing figures again, this time with a second plainer courtyard beside it for comparison, a scribe marking the brighter court as holding far more light.",
+          "title": "THE BRIGHTER COURT"
+        },
+        {
+          "node": "e4",
+          "block": "spya-sd9fzd",
+          "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+          "depicts": "Two figures clasped hand in hand in a closed loop glowing half again as bright as a neighbouring pair of figures standing apart, unlinked.",
+          "title": "THE DOUBLED CLASP"
+        },
+        {
+          "node": "e5",
+          "block": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value",
+          "depicts": "The banner-on-the-mountain scene again: a small bright flag planted at a low rise on a long path, with the shadowed summit far beyond it still unclaimed.",
+          "title": "THE FLAG AT THE RISE"
+        },
+        {
+          "node": "e6",
+          "block": "spya-j4cy9j",
+          "quote": "bivariate analyses overestimate the significance of bivariate edges",
+          "depicts": "A surveyor using a single short rope to measure a field and marking far more boundary-posts than the field truly has — an instrument that overcounts its own lines.",
+          "title": "THE OVER-EAGER SURVEYOR"
+        },
+        {
+          "node": "e7",
+          "block": "spya-t8fayf",
+          "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "depicts": "A monkey's reaching arm again, now shown mid-grasp at a fruit, with a dense flock of identical scrolls cascading down the whole limb at once.",
+          "title": "THE CASCADE OF SCROLLS"
+        }
+      ],
+      "prompt": "An illuminated manuscript page in the same hand as the prior plates: parchment cream ground, iron-gall brown ink, gold leaf, dusty blue and oxblood accents. Seven roundels run top to bottom joined by thin gilt cord, with a fork partway down the column (three roundels set side by side at the same height before rejoining). Top: the gridded brain-slice workshop opening the plate, repeated from the overview, pins and threads to a tallying scribe (THE GRIDDED SLICE REVISITED). Next: a miller filling one sack a quarter full from a larger sack, with FIGURE D's feedforward-versus-synergy scatter redrawn small in manuscript linework in a cartouche beside him (ONE SACK IN FOUR). Then the column forks into three roundels abreast: a bright walled court beside a plainer court, a scribe marking the difference (THE BRIGHTER COURT); two clasped figures glowing brighter than an unlinked pair beside them (THE DOUBLED CLASP); a small flag on a low mountain rise with a shadowed summit beyond (THE FLAG AT THE RISE). The three cords rejoin into a surveyor using one short rope yet marking too many boundary-posts around a field (THE OVER-EAGER SURVEYOR). Final roundel: a monkey's arm reaching to grasp a fruit, a dense flock of identical scrolls cascading down the limb (THE CASCADE OF SCROLLS). No lettering anywhere on the page except the given titles lettered in plain capitals beneath each roundel. Scenes large and clear, filling the page's width as well as its height; margins hold only sparse vine-work, never crowding the roundels."
+    }
+  ]
+}

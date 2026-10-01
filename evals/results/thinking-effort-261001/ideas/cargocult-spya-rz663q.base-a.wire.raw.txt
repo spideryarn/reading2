@@ -1,0 +1,56 @@
+{"ideas": [
+  {
+    "name": "Following science's form does not guarantee its results",
+    "provenance": "introduced",
+    "statement": "A field can reproduce every visible ritual of scientific investigation—theories, studies, published results—and still produce nothing real, because the thing that actually makes science work is missing even though everything looks right.",
+    "occurrences": [
+      {"blockId": "spya-fd2muf", "quote": "They're doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn't work. No airplanes land. So I call these things Cargo Cult Science, because they follow all the apparent precepts and forms of scientific investigation, but they're missing something essential", "reasoning": "This states the idea directly by naming it."},
+      {"blockId": "spya-afgs74", "quote": "there is one feature I notice that is generally missing in Cargo Cult Science", "reasoning": "Identifies the missing ingredient as the key diagnostic for the whole category."},
+      {"blockId": "spya-rub3a2", "quote": "A great deal of their difficulty is, of course, the difficulty of the subject and the inapplicability of the scientific method to the subject. Nevertheless, it should be remarked that this is not the only difficulty. That's why the planes don't land—but they don't land.", "reasoning": "Reaffirms that something beyond subject difficulty explains the failure, keeping the cargo-cult diagnosis in play."}
+    ]
+  },
+  {
+    "name": "Integrity means disclosing what could prove you wrong, not just avoiding lies",
+    "provenance": "introduced",
+    "statement": "Scientific honesty is not simply refusing to state falsehoods; it requires actively reporting every detail, alternative explanation, and disconfirming fact you know of, even when none of it is technically untrue to omit.",
+    "occurrences": [
+      {"blockId": "spya-afgs74", "quote": "a kind of scientific integrity, a principle of scientific thought that corresponds to a kind of utter honesty—a kind of leaning over backwards. For example, if you're doing an experiment, you should report everything that you think might make it invalid", "reasoning": "States the principle directly and distinguishes it from mere truth-telling."},
+      {"blockId": "spya-rxj5wa", "quote": "Details that could throw doubt on your interpretation must be given, if you know them.", "reasoning": "Extends the principle to theory-building, requiring disclosure of disagreeing facts."},
+      {"blockId": "spya-bpyx8n", "quote": "The fact that should be added to that advertising statement is that no oils soak through food, if operated at a certain temperature... So it's the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.", "reasoning": "Shows a statement can be factually true yet violate integrity through misleading implication, sharpening the distinction from simple honesty."},
+      {"blockId": "spya-qpwryx", "quote": "the idea is to try to give all of the information to help others to judge the value of your contribution; not just the information that leads to judgment in one particular direction or another", "reasoning": "Summarizes the standard as completeness of disclosure rather than absence of falsehood."}
+    ]
+  },
+  {
+    "name": "You are your own easiest dupe",
+    "provenance": "introduced",
+    "statement": "The hardest person to deceive you from is yourself, so guarding against your own unconscious bias toward the answer you expect must come before worrying about being honest with others.",
+    "occurrences": [
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "States the idea as the foundational principle underlying everything else in the talk."},
+      {"blockId": "spya-uj9v2h", "quote": "When they got a number that was too high above Millikan's, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan's value they didn't look so hard.", "reasoning": "Shows the mechanism of self-deception in action, where unconscious bias toward an expected answer distorted supposedly careful measurements."},
+      {"blockId": "spya-bvx2u8", "quote": "this long history of learning how to not fool ourselves—of having utter scientific integrity", "reasoning": "Frames the entire corrective tradition of method as aimed at self-deception specifically, not just deceiving others."}
+    ]
+  },
+  {
+    "name": "A field's reality is judged by whether its methods produce the predicted result, not by its theoretical apparatus",
+    "provenance": "assumed",
+    "statement": "The right test of whether a body of belief or practice counts as genuine knowledge is whether applying it actually produces the effect it claims, regardless of how elaborate, traditional, or official its theory looks.",
+    "whyYouNeedIt": "Without this premise, none of the judgments in the piece follow: reading programs, criminal rehabilitation, and witch-doctor remedies all have theories and institutional backing, so calling them failures only makes sense if outcome, not apparatus, is the real test — and the piece never argues for this standard, it simply applies it.",
+    "occurrences": [
+      {"blockId": "spya-ddrr9m", "quote": "a method was discovered for separating the ideas—which was to try one to see if it worked, and if it didn't work, to eliminate it", "reasoning": "States the working/not-working test as the origin of science but never defends it as the criterion applied later to modern fields."},
+      {"blockId": "spya-aww976", "quote": "if you notice, you'll see the reading scores keep going down—or hardly going up—in spite of the fact that we continually use these same people to improve the methods... We obviously have made no progress—lots of theory, but no progress—in decreasing the amount of crime", "reasoning": "Declares these fields failures purely on outcome despite acknowledging they have theory, which only counts as a valid judgment if outcome overrides theoretical sophistication."},
+      {"blockId": "spya-re4634", "quote": "Yet these things are said to be scientific. We study them.", "reasoning": "Treats being 'said to be scientific' and having institutional study as irrelevant to the real question, presupposing that only producing results counts."}
+    ]
+  },
+  {
+    "name": "A fair comparison requires matching every condition except the one being tested",
+    "provenance": "assumed",
+    "statement": "To credit an effect to the factor you intend to study, every other possible cause or difference in the setup must be held identical; comparing results gathered under different apparatus, skipped baselines, or uncontrolled extra cues invalidates the conclusion.",
+    "whyYouNeedIt": "The criticisms of the Cornell student, the deuterium experiment, and the praise for Young's rat study only make sense as criticisms or praise if the reader already holds this standard — the piece shows the standard being violated or met but never states it as a general rule.",
+    "occurrences": [
+      {"blockId": "spya-tf8rj2", "quote": "it was necessary first to repeat in her laboratory the experiment of the other person—to do it under condition X to see if she could also get result A—and then change to Y and see if A changed. Then she would know that the real difference was the thing she thought she had under control.", "reasoning": "The advice only counts as correct method if isolating the single changed variable against an identically-reproduced baseline is required for a valid conclusion."},
+      {"blockId": "spya-m95kqm", "quote": "he had to use data from someone else's experiment on light hydrogen, which was done on different apparatus", "reasoning": "This is presented as a scientific failure only because using different apparatus for the comparison breaks the implicit requirement that all conditions besides the test variable match."},
+      {"blockId": "spya-npdc6n", "quote": "Then he thought maybe the rats were smelling the food, so he used chemicals to change the smell after each run. Still the rats could tell... So he covered one after another of all possible clues", "reasoning": "Young's experiment is held up as exemplary only because it systematically eliminates every alternative cue, which matters only if a result is worthless unless all but the intended variable is controlled."},
+      {"blockId": "spya-yzzxkw", "quote": "that is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it's using", "reasoning": "Calling this the model experiment presupposes that uncontrolled alternative cues, not just the assumed variable, can invisibly drive results unless eliminated."}
+    ]
+  }
+]}

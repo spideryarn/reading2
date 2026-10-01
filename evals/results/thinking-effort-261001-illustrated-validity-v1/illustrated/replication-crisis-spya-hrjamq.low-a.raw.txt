@@ -1,0 +1,285 @@
+{
+  "style": "An illuminated manuscript page, with small framed vignettes in gold-edged panels descending the page like scenes from an old chronicle",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Chronicle of Non-Repeating Results",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "A scholar holds up two identical experiment-tablets side by side, one glowing true and one crumbling to dust, showing a result that will not repeat.",
+          "title": "THE FAILED REPEAT"
+        },
+        {
+          "node": "n2",
+          "block": "spya-xrc2re",
+          "quote": "Certain terms commonly used in discussions of the replication crisis have technically precise meanings",
+          "depicts": "A lexicon-scroll unrolled before three robed scholars, each pointing to a different precise word on it.",
+          "title": "THE GLOSSARY OF TERMS"
+        },
+        {
+          "node": "n3",
+          "block": "spya-yru28f",
+          "quote": "The replication crisis dates to a number of events in the early 2010s",
+          "depicts": "A sundial marked with the early 2010s, around which several small broken experiment-vials lie scattered.",
+          "title": "EVENTS OF THE EARLY 2010S"
+        },
+        {
+          "node": "n4",
+          "block": "spya-dg8j93",
+          "quote": "led prominent scholars to declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A council of robed scholars raising a banner reading nothing but drawn as a torn, unlettered pennant, faces alarmed.",
+          "title": "A CRISIS OF CONFIDENCE"
+        },
+        {
+          "node": "n5",
+          "block": "spya-u3tg84",
+          "quote": "the works of Paul Meehl, Jacob Cohen, and Tversky and Kahneman in the 1960s-70s were early warnings",
+          "depicts": "Three older sages writing in separate books decades before the council scene, each unheeded, their books gathering dust on a high shelf.",
+          "title": "THE UNHEEDED SAGES"
+        },
+        {
+          "node": "n6",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A field of 97 small identical plant-seedlings, only about a third of them grown tall and the rest withered.",
+          "title": "THIRTY-SIX OF NINETY-SEVEN"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions",
+          "depicts": "A row of 53 sealed jars on a physician's shelf, nearly all cracked and leaking, only a handful intact.",
+          "title": "ELEVEN OF FIFTY-THREE"
+        },
+        {
+          "node": "n8",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A merchant's ledger of coin-stacks, the second stack beside each original noticeably shorter than the first.",
+          "title": "SHRUNKEN LEDGER SUMS"
+        },
+        {
+          "node": "n9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A great gathering of robed figures from many guilds, more than seven in ten shaking their heads over a failed trial.",
+          "title": "SEVEN IN TEN CONFESS"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y782zn",
+          "quote": "the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A scribe stuffing unwanted negative-result scrolls into a locked drawer while handing only the bright scrolls to the printer.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "node": "n12",
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates",
+          "depicts": "A gambler at a many-branched game-board, choosing which path through the branches to report after seeing where the dice landed.",
+          "title": "THE FORKING CHOICES"
+        },
+        {
+          "node": "n11",
+          "block": "spya-gjx6ut",
+          "quote": "articles often come with insufficient descriptions for other scholars to reproduce the study",
+          "depicts": "A reader squinting at a torn, half-blank recipe-scroll missing half its instructions, unable to follow it.",
+          "title": "THE HALF-WRITTEN RECIPE"
+        },
+        {
+          "node": "n13",
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A carpenter trying to measure soft clay with a hard iron ruler meant for stone, the ruler bending uselessly.",
+          "title": "THE WRONG RULER"
+        },
+        {
+          "node": "n14",
+          "block": "spya-t88q4a",
+          "quote": "drew controversy for speaking against critics of psychology for what she called bullying and undermining the science",
+          "depicts": "Two scholars shouting across a courtyard, one pointing an accusing finger at the other labeled only by posture as defender and accuser.",
+          "title": "THE COURTYARD QUARREL"
+        },
+        {
+          "node": "n15",
+          "block": "spya-qthy2u",
+          "quote": "emphasizing transparency and openness, preregistering research projects, and replicating research with higher standards for evidence",
+          "depicts": "A scholar nailing an open ledger to a public post before beginning an experiment, in full view of onlookers.",
+          "title": "THE OPEN LEDGER NAILED UP"
+        },
+        {
+          "node": "n16",
+          "block": "spya-astgqn",
+          "quote": "replication alone will get us only so far (and) might actually make matters worse",
+          "depicts": "A single bridge-plank laid across a chasm snapping underfoot, while beside it several different bridges of different materials stand firm.",
+          "title": "ONE PLANK IS NOT ENOUGH"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum-toned, bordered in faded gold leaf, divided into sixteen small framed panels arranged in a descending chronicle from top to bottom, each panel a hand-drawn miniature scene in muted ochre, rust-red, and faded blue ink with fine black linework, in the style of a medieval chronicle illustration. At the top: a scholar holding two experiment-tablets, one glowing, one crumbling (THE FAILED REPEAT); beside it a lexicon-scroll before three scholars (THE GLOSSARY OF TERMS). Below, a sundial amid scattered broken vials (EVENTS OF THE EARLY 2010S) leading down to a council raising a torn pennant (A CRISIS OF CONFIDENCE), which connects upward by a thin ink line to three older sages writing unheeded books on a dusty shelf (THE UNHEEDED SAGES). These converge downward into a wide shared ground labeled by scene (no lettering except titles) holding four panels side by side: a field of withered seedlings (THIRTY-SIX OF NINETY-SEVEN), a shelf of cracked jars (ELEVEN OF FIFTY-THREE), a ledger of shrinking coin-stacks (SHRUNKEN LEDGER SUMS), feeding into one large panel of a crowd of robed figures shaking their heads (SEVEN IN TEN CONFESS). From that crowd, two paths fork downward into two clusters: on the left a scribe hiding scrolls in a drawer (THE FILE DRAWER) and a reader with a torn recipe scroll (THE HALF-WRITTEN RECIPE); on the right a gambler at a branching game-board (THE FORKING CHOICES) and a carpenter bending an iron ruler on soft clay (THE WRONG RULER). These two forks converge again at the bottom into a final sequence: two scholars shouting across a courtyard (THE COURTYARD QUARREL), a scholar nailing an open ledger to a post before onlookers (THE OPEN LEDGER NAILED UP), and a snapping single bridge-plank beside several sturdy varied bridges (ONE PLANK IS NOT ENOUGH). Thin connecting ink-lines link each panel to the next in reading order, flowing downward like a river through the page. Each panel has its title lettered beneath it in small capital serif script; nothing else on the page is lettered. Wide clean vellum margins, sparse gold filigree only at the page border, no crowding."
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "The Eight Fields That Would Not Repeat",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "The same field of 97 seedlings from the overview, a third grown and the rest withered.",
+          "title": "THIRTY-SIX OF NINETY-SEVEN"
+        },
+        {
+          "node": "e2",
+          "block": "spya-ekg3fe",
+          "quote": "replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A physician straining to weigh a feather-light object on a scale, needing thousands of tiny feathers piled on to register any weight at all.",
+          "title": "A SCALE FOR FEATHERS"
+        },
+        {
+          "node": "e3",
+          "block": "spya-d8g53k",
+          "quote": "Results from The Reproducibility Project: Cancer Biology suggest most studies of the cancer research sector may not be replicable",
+          "depicts": "A row of sealed cancer-study jars, most cracked and dripping, under a banner-less arch.",
+          "title": "THE CANCER JARS AGAIN"
+        },
+        {
+          "node": "e4",
+          "block": "spya-esjmns",
+          "quote": "92% found that the studied therapies were effective",
+          "depicts": "A physician displaying nearly a full tray of gleaming cure-vials, almost all marked effective, before patients.",
+          "title": "NINETY-TWO IN A HUNDRED CURES"
+        },
+        {
+          "node": "e5",
+          "block": "spya-d977mu",
+          "quote": "out of a random sample of 50 ingredients from a cookbook, 80% had articles reporting on their cancer risk",
+          "depicts": "A cook's table of 50 ingredients from an open cookbook, most of them tagged with small warning-scrolls about cancer risk.",
+          "title": "FIFTY INGREDIENTS, FORTY WARNED"
+        },
+        {
+          "node": "e6",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66% of the original",
+          "depicts": "A merchant's ledger with two coin-columns, the right column visibly shorter than the left for most entries.",
+          "title": "SHRUNKEN LEDGER SUMS"
+        },
+        {
+          "node": "e7",
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A waterwheel-engineer's chart with almost all of its measurement-markers washed away by a flood, only a handful surviving.",
+          "title": "THE FLOODED CHART"
+        },
+        {
+          "node": "e8",
+          "block": "spya-ch4h0b",
+          "quote": "their outputs can shift from one run to the next even when settings are held constant",
+          "depicts": "A mechanical oracle giving a different answer each time the same question is asked of it, shown as three repeated panels of shifting speech-shapes with no legible words.",
+          "title": "THE SHIFTING ORACLE"
+        },
+        {
+          "node": "e9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "All eight field-scenes feeding downward into one great gathering of robed scholars from many guilds, shaking their heads together.",
+          "title": "SEVEN IN TEN CONFESS"
+        },
+        {
+          "node": "e10",
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "A crowd of scribes eagerly copying from one broken, cracked scroll while ignoring a sound, uncracked one beside it.",
+          "title": "THE BROKEN SCROLL, MOST COPIED"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum-toned with gold-leaf border, in the same hand as a chronicle: muted ochre, rust-red and faded blue ink, fine black linework. At the top, eight small framed panels arranged in two columns of four, each a miniature scene: a field of withered seedlings among a few grown ones (THIRTY-SIX OF NINETY-SEVEN); a physician piling tiny feathers onto a scale (A SCALE FOR FEATHERS); a shelf of cracked sealed jars (THE CANCER JARS AGAIN); a physician's tray of cure-vials mostly marked effective (NINETY-TWO IN A HUNDRED CURES); a cook's table of fifty tagged ingredients (FIFTY INGREDIENTS, FORTY WARNED); a merchant's ledger with shrinking coin-columns (SHRUNKEN LEDGER SUMS); a waterwheel-engineer's flood-washed chart (THE FLOODED CHART); a mechanical oracle giving different wordless answers across three repeated panels (THE SHIFTING ORACLE). Thin gold connecting lines run from all eight panels down to one large central panel below them: a great gathering of robed scholars from many different guilds, standing together shaking their heads over a cracked experiment-vial (SEVEN IN TEN CONFESS). From this panel a single line continues further down to the final panel: a crowd of scribes crowding to copy from one visibly broken, cracked scroll while a sound unbroken scroll lies ignored beside it (THE BROKEN SCROLL, MOST COPIED). Each panel titled beneath it in small capital serif lettering; nothing else on the page carries writing. Generous vellum margin, sparse gold filigree only at the border, panels large enough to read clearly, page uncluttered."
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Columns of Causes",
+      "vignettes": [
+        {
+          "node": "c1",
+          "block": "spya-v697nj",
+          "quote": "generation of new data and scientific publications at an unprecedented rate",
+          "depicts": "A printing-press overflowing with scrolls pouring out faster than scribes can catch them.",
+          "title": "THE OVERFLOWING PRESS"
+        },
+        {
+          "node": "c2",
+          "block": "spya-y782zn",
+          "quote": "the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A scribe locking dull, negative-result scrolls into a drawer while handing bright ones to the printer.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "node": "c3",
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A clerk's ledger with mismatched sums, some entries crossed out where the totals do not add up.",
+          "title": "THE MISMATCHED SUMS"
+        },
+        {
+          "node": "c4",
+          "block": "spya-cw2g6v",
+          "quote": "incentivizes researchers to prioritize publishable results over validity",
+          "depicts": "A scholar weighing two scrolls on a balance, choosing the heavier gaudy one over the plain true one.",
+          "title": "THE TIPPED BALANCE"
+        },
+        {
+          "node": "c5",
+          "block": "spya-gjx6ut",
+          "quote": "articles often come with insufficient descriptions for other scholars to reproduce the study",
+          "depicts": "A reader squinting at a half-blank recipe scroll missing its instructions.",
+          "title": "THE HALF-WRITTEN RECIPE"
+        },
+        {
+          "node": "d1",
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates",
+          "depicts": "A gambler at a many-branched game-board, choosing the path to report only after seeing where the dice fell.",
+          "title": "THE FORKING CHOICES"
+        },
+        {
+          "node": "d2",
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "A hunter's bow drawn too weakly, its arrow falling short of the target more often than it strikes.",
+          "title": "THE WEAK-DRAWN BOW"
+        },
+        {
+          "node": "d3",
+          "block": "spya-hw9d4p",
+          "quote": "noise tends to cause the regression factor to be overestimated",
+          "depicts": "A surveyor's measuring-chain stretched too far by wind, reading a larger distance than the field truly holds.",
+          "title": "THE WIND-STRETCHED CHAIN"
+        },
+        {
+          "node": "d4",
+          "block": "spya-th90w0",
+          "quote": "Meta-analyses have their own methodological problems and disputes",
+          "depicts": "Two scholars arguing over a great combined ledger made of many smaller ledgers stitched together unevenly.",
+          "title": "THE STITCHED LEDGER DISPUTE"
+        },
+        {
+          "node": "d5",
+          "block": "spya-ddw4ya",
+          "quote": "high heterogeneity of the to-be-replicated effects",
+          "depicts": "Many different-shaped stones laid side by side where identical stones were expected, each oddly unlike the others.",
+          "title": "THE MISMATCHED STONES"
+        },
+        {
+          "node": "d6",
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A carpenter's hard iron ruler bending uselessly against soft clay it was never meant to measure.",
+          "title": "THE WRONG RULER"
+        }
+      ],
+      "prompt": "An illuminated manuscript page, vellum-toned, gold-leaf bordered, same hand as the prior pages: muted ochre, rust-red, faded blue ink, fine black linework. The page is divided into two parallel columns separated by a thin gold rule, descending top to bottom, echoing a chronicle's twin registers. The left column, headed by a small overflowing printing-press scene (THE OVERFLOWING PRESS), descends through: a scribe locking scrolls in a drawer (THE FILE DRAWER); a clerk's mismatched ledger sums (THE MISMATCHED SUMS); a scholar tipping a balance toward a gaudy scroll (THE TIPPED BALANCE); a reader squinting at a half-blank recipe scroll (THE HALF-WRITTEN RECIPE). The right column, beginning level with the press scene, shows: a gambler choosing a path on a branching game-board after the dice have fallen (THE FORKING CHOICES); a hunter's weakly drawn bow with arrows falling short (THE WEAK-DRAWN BOW); a surveyor's measuring-chain stretched by wind (THE WIND-STRETCHED CHAIN); two scholars arguing over an unevenly stitched combined ledger (THE STITCHED LEDGER DISPUTE); mismatched differently-shaped stones laid where identical ones were expected (THE MISMATCHED STONES); a carpenter's iron ruler bending against soft clay (THE WRONG RULER). Each panel is a small framed miniature scene with its title lettered beneath it in small capital serif script; nothing else on the page carries lettering, no column headers, no banners. The two columns run down the page at matching heights, connected top to bottom by thin thread-like ink lines within each column only, keeping the two families of causes visually distinct. Generous vellum margin, sparse gold filigree at the border only, panels large and clear, page uncrowded."
+    }
+  ]
+}

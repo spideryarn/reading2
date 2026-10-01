@@ -101,7 +101,7 @@ export interface UseTimeline {
  * **The read alone** — `GET /api/timeline/:slug` and what it said, with no job
  * machinery: no `useStepJob`, no `useAutoRun`, no verb that spends.
  *
- * Split out for Trajectory's stop card (Sol F22), which shows where a passage
+ * Split out for Skim's stop card (Sol F22), which shows where a passage
  * sits in the study only when the timeline already exists. `useGlossaryRead`
  * is the model; `useTimeline` layers its job on this and behaves exactly as
  * before.

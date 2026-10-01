@@ -1,0 +1,95 @@
+{"ideas": [
+  {
+    "name": "Synergy as irreducible higher-order information",
+    "provenance": "introduced",
+    "statement": "The information that a set of sources jointly carries about a target can be split into redundant, unique, and synergistic parts, where the synergistic part is information available only from the joint pattern of the sources and is not present in any single source taken alone.",
+    "occurrences": [
+      {"blockId": "spya-e94ury", "quote": "If the left-hand side of Equation (4) (the \u201cwhole\u201d) is greater than the right-hand side (the sum of the \u201cparts\u201d), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.", "reasoning": "States the core claim that joint information can exceed the sum of individual contributions."},
+      {"blockId": "spya-h5jzvm", "quote": "Syn(X\u2081, X\u2082;Y) is the information about Y that can only be learned by observing the joint states of X\u2081 and X\u2082 together.", "reasoning": "Defines synergy as the component unreachable from either source alone."},
+      {"blockId": "spya-pjdgu6", "quote": "the joint state of X1 and X2 can account for the activity of Y to some degree. This information is not accounted for by either source independently and is the synergistic information", "reasoning": "Restates the idea visually via the Venn-diagram figure description."}
+    ]
+  },
+  {
+    "name": "Undirected dependency versus directed information flow",
+    "provenance": "introduced",
+    "statement": "Mutual information measures instantaneous, undirected statistical dependence between two signals, while transfer entropy measures how much a source's past reduces uncertainty about a target's future beyond what the target's own past already explains, capturing directed flow.",
+    "occurrences": [
+      {"blockId": "spya-f6sbgx", "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as \u201ctransfer\u201d or \u201cflow.\u201d", "reasoning": "States explicitly the limitation of mutual information relative to directed transfer."},
+      {"blockId": "spya-p4pyuy", "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation.", "reasoning": "Draws the explicit functional/effective connectivity distinction between the two measures."}
+    ]
+  },
+  {
+    "name": "Synergy indexes genuine computation, not mere flow",
+    "provenance": "introduced",
+    "statement": "Because information transfer only shows how much a source's past predicts a target's future, understanding how a neuron actually 'processes' or 'computes' on multiple inputs requires isolating the part of the joint information that depends on the combination of sources, i.e., synergy, rather than any single source's contribution.",
+    "occurrences": [
+      {"blockId": "spya-s0db2g", "quote": "Information transfer captures the overall \u201cflow\u201d of information through the system; however, it is limited in its ability to reveal how different streams of information \u201cinteract\u201d and how neurons produce novel or modified information from multiple sources", "reasoning": "Motivates the shift from transfer-based to decomposition-based analysis as the way to study processing."},
+      {"blockId": "spya-wer4cd", "quote": "to understand \u201cprocessing\u201d, we are interested in how the interaction between the two source variables\u2019 past influences the target\u2019s future in a way that is not reducible to either source considered individually", "reasoning": "Explicitly equates synergistic interaction with the concept of processing."},
+      {"blockId": "spya-rc5z33", "quote": "We have focused particularly on statistical synergy, i.e., the information about the future of a target neuron that is disclosed by the higher-order patterns instantiated by multiple upstream neurons and is irreducible to any single source, as a measure of processing or computation.", "reasoning": "Confirms synergy is being used throughout as the operational stand-in for computation."}
+    ]
+  },
+  {
+    "name": "Redundancy is underdetermined by classical information theory",
+    "provenance": "introduced",
+    "statement": "Knowing only the mutual information values leaves the decomposition into redundant, unique, and synergistic parts mathematically underdetermined; a separate, independently chosen measure of redundancy must be supplied before the other quantities can be derived, and no single redundancy measure is universally agreed upon.",
+    "occurrences": [
+      {"blockId": "spya-bgsd4n", "quote": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms).", "reasoning": "States the core mathematical gap that motivates the whole redundancy-function literature."},
+      {"blockId": "spya-rc76qn", "quote": "Applying PID analyses to real data requires some notion of redundant information (I\u2229(\u00b7)) to be operationalized. To date, no single universally accepted measure has been proposed.", "reasoning": "Confirms the lack of a unique solution and the resulting choice problem."}
+    ]
+  },
+  {
+    "name": "Rich clubs as dense cores of computation",
+    "provenance": "introduced",
+    "statement": "Rich clubs—sets of highly and densely interconnected hub neurons—carry a disproportionate share of a network's synergistic (computational) information relative to their size, because they concentrate the strong feedforward information propagation that synergy depends on.",
+    "occurrences": [
+      {"blockId": "spya-fud8q3", "quote": "Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for \u223c88% of the network-wide synergy.", "reasoning": "Gives the concrete empirical statement of disproportionate synergy concentration in rich clubs."},
+      {"blockId": "spya-e3ghxj", "quote": "The observation that information propagation correlates with information processing suggests that rich clubs may be dense cores of information processing.", "reasoning": "States the hypothesis that motivates the rich-club analysis."}
+    ]
+  },
+  {
+    "name": "Recurrent connections boost synergy, feedback does not",
+    "provenance": "introduced",
+    "statement": "Among a triad's connections, more recurrent links between the two source neurons reliably increase synergistic integration, whereas feedback links from the target back to the sources have little or even a mildly negative association with synergy.",
+    "occurrences": [
+      {"blockId": "spya-sd9fzd", "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.", "reasoning": "States the asymmetric effect of recurrent versus feedback connectivity on synergy directly."},
+      {"blockId": "spya-xs5660": "", "quote": "", "reasoning": ""}
+    ]
+  },
+  {
+    "name": "Synergy peaks at intermediate input similarity",
+    "provenance": "introduced",
+    "statement": "As the correlation between two converging input signals increases, synergistic output first rises but then falls once the inputs become too similar, with redundancy taking over; the point of maximum synergy occurs at a particular, relatively low, intermediate level of shared information regardless of timescale.",
+    "occurrences": [
+      {"blockId": "spya-ybmve2", "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease", "reasoning": "States the non-monotonic relationship between input similarity and synergy directly."},
+      {"blockId": "spya-cs9fdy", "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.", "reasoning": "Explains the mechanism behind the peak-then-decline pattern."}
+    ]
+  },
+  {
+    "name": "PID lattice size explodes combinatorially with more sources",
+    "provenance": "introduced",
+    "statement": "The number of distinct partial-information atoms needed to fully decompose information among k sources grows according to the Dedekind numbers, a sequence that increases so fast that complete decomposition becomes computationally intractable for even modest numbers of inputs.",
+    "occurrences": [
+      {"blockId": "spya-aby2dp", "quote": "the number of distinct PI atoms is given by the kth Dedekind number (minus two) [30]. This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms", "reasoning": "States the scalability limitation explicitly with a concrete number."}
+    ]
+  },
+  {
+    "name": "Statistical synergy is taken as evidence of real neural computation",
+    "provenance": "assumed",
+    "statement": "Finding that a network of neurons exhibits statistical synergy is treated as evidence that the neurons are actually performing an integrative computational operation on their inputs, rather than merely reflecting a byproduct of correlated or nonlinear statistics with no biological significance.",
+    "whyYouNeedIt": "Every empirical finding in the article (rich-club synergy, recurrence effects, task-dependent synergy shifts) is interpreted as revealing 'information processing' in the brain; this interpretive leap from a statistical quantity to a claim about biological computation is never independently justified, only later flagged as a caveat.",
+    "occurrences": [
+      {"blockId": "spya-h6h922", "quote": "while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated", "reasoning": "This caveat only makes sense if the preceding sections had been treating synergy as more than a statistical dependency, i.e., as processing itself."},
+      {"blockId": "spya-b32ecw", "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.", "reasoning": "Draws a conclusion about brain function and behavior from a purely statistical measure, which requires assuming synergy tracks real computation."},
+      {"blockId": "spya-u5ra3d", "quote": "To understand how Y processes input from the sources, we are interested in knowing how the past states of X1 and X2 reduce our uncertainty about the future state of Y.", "reasoning": "Frames an information-theoretic reduction-of-uncertainty quantity as equivalent to the neuron's act of 'processing', taking the equivalence for granted."}
+    ]
+  },
+  {
+    "name": "Finite data undermines high-dimensional probability estimation",
+    "provenance": "introduced",
+    "statement": "Because multivariate information measures require estimating a joint probability distribution over all combinations of states, the number of needed samples grows exponentially with the number of variables, so with limited recordings these estimates become biased or unreliable, especially as more sources or finer discretization are added.",
+    "occurrences": [
+      {"blockId": "spya-tz99zn", "quote": "For a system of binary elements such as spiking neurons, there are 2 k possible combinations of 0s and 1s. When analyzing recordings with hundreds or thousands of neurons... care should be taken to ensure that there are enough data for it to be possible to robustly infer the probabilities of all configurations", "reasoning": "States the exponential sampling problem that constrains any real-world PID analysis."},
+      {"blockId": "spya-qa7gt2", "quote": "When naively estimating probabilities from a finite dataset, it is known that the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information", "reasoning": "Explains the specific statistical bias that results from the sampling limitation."}
+    ]
+  }
+]}

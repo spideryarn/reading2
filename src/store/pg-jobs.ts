@@ -757,7 +757,7 @@ async function tryEnqueue(
  * **Then each candidate is let off if the two may overlap** — `mayOverlap` in
  * src/sharing-steps.ts, since 2026-09-29: two mode jobs that make different
  * columns and read nothing the other makes run side by side, and anything else
- * (an ingest, a re-extraction, `hierarchy`, `labels`, a reset, Trajectory
+ * (an ingest, a re-extraction, `hierarchy`, `labels`, a reset, Skim
  * behind the Quotes it routes through) waits exactly as before.
  * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md. FIFO is kept
  * for every pair that may not overlap, so a mode job newer than a queued

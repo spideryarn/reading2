@@ -1,0 +1,334 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — small framed scenes in ink and muted pigment, bordered by thin gold-leaf rule-lines, suited to a talk that is itself a kind of monkish rule for honesty.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Funnel and the Loop",
+      "prompt": "An illuminated manuscript page, tall format, cream vellum ground, thin gold-leaf rule-lines dividing the page into four horizontal bands from top to bottom, each band a cluster of small framed ink-and-muted-pigment scenes in strict reading order, connected by fine red hairline paths with small arrowheads. TOP BAND (three scenes left to right): THE RHINOCEROS HORN — an apothecary holding a curved horn to a customer while a scribe crosses the remedy off a list; THE KEY UNDER WATER — a man rubbing a key over running water in a crowded bathroom, the key unbent; THE COCKTAIL PARTY TEST — two guests chatting easily while an unconcerned hostess looks on. A path leads down into the SECOND BAND (three scenes): THE BAMBOO CONTROLLER — an islander in a reed hut wearing wooden headphone-shapes and bamboo antennas, staring at an empty runway with unlit fires; LEANING OVER BACKWARDS — a robed scholar bent backward over his own open ledger, pen still raised; a short path branching to MILLIKAN'S FALLING DROP in the THIRD BAND — a scientist watching an oil drop fall between brass plates, recording a figure. The THIRD BAND continues with THE EASIEST PERSON TO FOOL — the same scholar holding a round mirror to his own doubting face; and THE LOW-NICOTINE CIGARETTE — a merchant holding up a cigarette packet while a second packet hides in shadow behind his back. A path descends to the FOURTH BAND: THE CORRIDOR OF SAND — a researcher pouring sand along a long corridor of identical doors as a rat pauses on the new floor; THE SHRINKING EFFECT — a line of robed figures each holding a fainter glowing card, the last an empty palm. At the bottom, alone, FREEDOM TO KEEP FAITH — a scholar standing at an open hilltop gate at dusk, looking back down the road. From this final scene, a long thin gold ribbon-path curves up the right margin of the page and loops back to re-enter the top band beside THE RHINOCEROS HORN, closing the circuit. Palette: faded ochre, iron-gall brown ink, muted blue and dull red pigment, gold leaf only on the rule-lines and the looping ribbon. Each scene sits in its own thin rectangular ink frame with generous interior space so the figures read clearly; modest foliate scrollwork fills gaps between frames but never crowds them. Each vignette has its capitalized title lettered directly beneath its frame in a plain manuscript hand; nothing else on the page is lettered — no headings, no banners, no scrolls bearing writing, no signature.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a piece of rhinoceros horn would increase potency",
+          "depicts": "A medieval apothecary holding up a curved horn to a customer, both in Middle-Ages dress, as a scribe beside them crosses the remedy off a list.",
+          "title": "THE RHINOCEROS HORN",
+          "node": "n1"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "Geller rubbed it, and nothing happened",
+          "depicts": "A man in a hotel bathroom rubbing a key over running water while onlookers crowd around, the key lying perfectly straight and unchanged.",
+          "title": "THE KEY UNDER WATER",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "Two guests at a cocktail party leaning close in easy conversation, a hostess glancing over with no concern, wine glasses in hand.",
+          "title": "THE COCKTAIL PARTY TEST",
+          "node": "n4"
+        },
+        {
+          "block": "spya-fd2muf",
+          "quote": "two wooden pieces on his head like headphones and bars of bamboo sticking out like antennas",
+          "depicts": "An islander sits in a reed hut wearing wooden headphone-shapes and bamboo antenna-sticks, staring up an empty runway lined with unlit fires.",
+          "title": "THE BAMBOO CONTROLLER",
+          "node": "n5"
+        },
+        {
+          "block": "spya-afgs74",
+          "quote": "a kind of utter honesty—a kind of leaning over backwards",
+          "depicts": "A robed scholar bends backward at the waist over his own open ledger, still holding his pen steady above the page.",
+          "title": "LEANING OVER BACKWARDS",
+          "node": "n6"
+        },
+        {
+          "block": "spya-s9msxy",
+          "quote": "Millikan measured the charge on an electron by an experiment with falling oil drops",
+          "depicts": "A scientist at a tall brass apparatus watches a single oil drop fall between glass plates, recording a number in a bound notebook.",
+          "title": "MILLIKAN'S FALLING DROP",
+          "node": "n9"
+        },
+        {
+          "block": "spya-ed9mzv",
+          "quote": "you must not fool yourself—and you are the easiest person to fool",
+          "depicts": "The same scholar now holds up a small round mirror before his own face, studying his reflection with narrowed, doubting eyes.",
+          "title": "THE EASIEST PERSON TO FOOL",
+          "node": "n10"
+        },
+        {
+          "block": "spya-jk7mj4",
+          "quote": "suppose some particular cigarette has some particular property, like low nicotine",
+          "depicts": "A merchant holds up a cigarette packet on a banner-less sign before a crowd, while behind his back a second, unshown packet lies in shadow.",
+          "title": "THE LOW-NICOTINE CIGARETTE",
+          "node": "n12"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "he could only fix that by putting his corridor in sand",
+          "depicts": "A researcher pours sand along the floor of a long wooden corridor lined with identical doors, a rat paused mid-step upon the new surface.",
+          "title": "THE CORRIDOR OF SAND",
+          "node": "n13b"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "depicts": "A line of robed researchers each hold up a smaller and fainter glowing card than the one before, the last hand showing an empty palm.",
+          "title": "THE SHRINKING EFFECT",
+          "node": "n13c"
+        },
+        {
+          "block": "spya-ndyj3t",
+          "quote": "the good luck to be somewhere where you are free to maintain the kind of integrity I have described",
+          "depicts": "A single scholar stands at an open gate on a hilltop at dusk, free of chains or ledgers, looking back down the winding road he has climbed.",
+          "title": "FREEDOM TO KEEP FAITH",
+          "node": "n14"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A medieval apothecary holding up a curved horn to a customer, both in Middle-Ages dress, as a scribe beside them crosses the remedy off a list.",
+          "title": "THE RHINOCEROS HORN"
+        },
+        {
+          "where": "A man in a hotel bathroom rubbing a key over running water while onlookers crowd around, the key lying perfectly straight and unchanged.",
+          "title": "THE KEY UNDER WATER"
+        },
+        {
+          "where": "Two guests at a cocktail party leaning close in easy conversation, a hostess glancing over with no concern, wine glasses in hand.",
+          "title": "THE COCKTAIL PARTY TEST"
+        },
+        {
+          "where": "An islander sits in a reed hut wearing wooden headphone-shapes and bamboo antenna-sticks, staring up an empty runway lined with unlit fires.",
+          "title": "THE BAMBOO CONTROLLER"
+        },
+        {
+          "where": "A robed scholar bends backward at the waist over his own open ledger, still holding his pen steady above the page.",
+          "title": "LEANING OVER BACKWARDS"
+        },
+        {
+          "where": "A scientist at a tall brass apparatus watches a single oil drop fall between glass plates, recording a number in a bound notebook.",
+          "title": "MILLIKAN'S FALLING DROP"
+        },
+        {
+          "where": "The same scholar now holds up a small round mirror before his own face, studying his reflection with narrowed, doubting eyes.",
+          "title": "THE EASIEST PERSON TO FOOL"
+        },
+        {
+          "where": "A merchant holds up a cigarette packet on a banner-less sign before a crowd, while behind his back a second, unshown packet lies in shadow.",
+          "title": "THE LOW-NICOTINE CIGARETTE"
+        },
+        {
+          "where": "A researcher pours sand along the floor of a long wooden corridor lined with identical doors, a rat paused mid-step upon the new surface.",
+          "title": "THE CORRIDOR OF SAND"
+        },
+        {
+          "where": "A line of robed researchers each hold up a smaller and fainter glowing card than the one before, the last hand showing an empty palm.",
+          "title": "THE SHRINKING EFFECT"
+        },
+        {
+          "where": "A single scholar stands at an open gate on a hilltop at dusk, free of chains or ledgers, looking back down the winding road he has climbed.",
+          "title": "FREEDOM TO KEEP FAITH"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-pseudoscience",
+      "title": "The Survey of What Fails",
+      "prompt": "An illuminated manuscript page, tall format, cream vellum ground, a single continuous winding path in faded red ink running top to bottom and linking eight framed scenes in order, like a pilgrim's road through a survey of false cures. First scene, top: THE RHINOCEROS HORN — an apothecary offers a curved horn across a counter while a scholar crosses it from a list of trials. The path descends to A CONVERSATION ABOUT UFO'S — a man gestures at a glowing disc in the sky to seated listeners surrounded by charts. Next, FLOATING IN THE TANK — a man floats eyes-closed in a dark salted-water tank, lid ajar. The path forks briefly to two neighboring scenes sharing one frame-width: THE DENT IN THE TOE — a man presses a woman's bare toe on a massage table while a skeptical bather watches; and BETTER UNDER WATER — a small crowd huddles at a running sink, one holding a key beneath the water while another rubs it. The path rejoins and continues to THE SINKING SCORES — a teacher holds a chart whose line of marks dips lower each year before empty desks. Then THE COCKTAIL PARTY TEST — two guests converse easily over glasses while an unconcerned hostess passes. Last scene, bottom: UNTESTED REMEDIES — a patient reclines on a couch before a robed figure and a shelf of identical unlabeled jars, a long pinned list of remedies behind them. Palette throughout: faded ochre vellum, iron-gall brown line work, muted dull blue and red pigment, a little gold leaf only on the connecting path and the thin rectangular frames around each scene. Leave generous space inside each frame so every figure and gesture is clearly visible; modest foliate scrollwork may fill the narrow gaps between frames but must never crowd the scenes themselves, and the scenes should use the full width of the page rather than huddling in a central column. Each vignette carries its capitalized title lettered plainly beneath its frame in a manuscript hand. Nothing else on the page is lettered — no headings, no banners, no scrolls or ledgers bearing writing, no signature, no date.",
+      "vignettes": [
+        {
+          "block": "spya-ddrr9m",
+          "quote": "a piece of rhinoceros horn would increase potency",
+          "depicts": "An apothecary in Middle-Ages dress offers a curved horn across a counter, while a scholar behind a lectern crosses the remedy from a long scroll-less list of trial marks.",
+          "title": "THE RHINOCEROS HORN",
+          "node": "p1"
+        },
+        {
+          "block": "spya-bcgpc3",
+          "quote": "conversation about UFO's, or astrology, or some form of mysticism",
+          "depicts": "A man at a gathering gestures upward at a glowing disc in the sky while listeners around a table lean in, charts and stars scattered before them.",
+          "title": "A CONVERSATION ABOUT UFO'S",
+          "node": "p2"
+        },
+        {
+          "block": "spya-q4502k",
+          "quote": "isolation tanks (they’re dark and quiet and you float in Epsom salts)",
+          "depicts": "A man floats inside a dark enclosed tank filled with pale salted water, eyes closed, the lid ajar beside him.",
+          "title": "FLOATING IN THE TANK",
+          "node": "p3"
+        },
+        {
+          "block": "spya-xm9a87",
+          "quote": "“I feel a kind of dent. Is that the pituitary?”",
+          "depicts": "A man kneels over a woman's bare foot on a massage table, pressing her big toe, while a third figure nearby looks on skeptically from a steaming bath.",
+          "title": "THE DENT IN THE TOE",
+          "node": "p4"
+        },
+        {
+          "block": "spya-mmhbvn",
+          "quote": "he told us it works better under water",
+          "depicts": "A small crowd huddles around a sink with the tap running, one man holding a key beneath the stream while another rubs it with his finger.",
+          "title": "BETTER UNDER WATER",
+          "node": "p5"
+        },
+        {
+          "block": "spya-aww976",
+          "quote": "the reading scores keep going down—or hardly going up—in spite of the fact",
+          "depicts": "A teacher stands before a chalkless board holding a chart whose line of marks sinks lower with each year, children's desks empty before her.",
+          "title": "THE SINKING SCORES",
+          "node": "p6"
+        },
+        {
+          "block": "spya-wc4h5s",
+          "quote": "you can be sure you are talking about something about which nobody knows anything",
+          "depicts": "Two guests converse easily at a party table, glasses raised, an unbothered hostess passing by without pausing to listen.",
+          "title": "THE COCKTAIL PARTY TEST",
+          "node": "p9"
+        },
+        {
+          "block": "spya-ankp3d",
+          "quote": "the efficacy of various forms of psychotherapy",
+          "depicts": "A patient reclines on a couch while a robed figure beside a shelf of identical unlabeled jars gestures vaguely, a long list of untested remedies pinned to the wall behind.",
+          "title": "UNTESTED REMEDIES",
+          "node": "p10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "An apothecary in Middle-Ages dress offers a curved horn across a counter, while a scholar behind a lectern crosses the remedy from a long scroll-less list of trial marks.",
+          "title": "THE RHINOCEROS HORN"
+        },
+        {
+          "where": "A man at a gathering gestures upward at a glowing disc in the sky while listeners around a table lean in, charts and stars scattered before them.",
+          "title": "A CONVERSATION ABOUT UFO'S"
+        },
+        {
+          "where": "A man floats inside a dark enclosed tank filled with pale salted water, eyes closed, the lid ajar beside him.",
+          "title": "FLOATING IN THE TANK"
+        },
+        {
+          "where": "A man kneels over a woman's bare foot on a massage table, pressing her big toe, while a third figure nearby looks on skeptically from a steaming bath.",
+          "title": "THE DENT IN THE TOE"
+        },
+        {
+          "where": "A small crowd huddles around a sink with the tap running, one man holding a key beneath the stream while another rubs it with his finger.",
+          "title": "BETTER UNDER WATER"
+        },
+        {
+          "where": "A teacher stands before a chalkless board holding a chart whose line of marks sinks lower with each year, children's desks empty before her.",
+          "title": "THE SINKING SCORES"
+        },
+        {
+          "where": "Two guests converse easily at a party table, glasses raised, an unbothered hostess passing by without pausing to listen.",
+          "title": "THE COCKTAIL PARTY TEST"
+        },
+        {
+          "where": "A patient reclines on a couch while a robed figure beside a shelf of identical unlabeled jars gestures vaguely, a long list of untested remedies pinned to the wall behind.",
+          "title": "UNTESTED REMEDIES"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-case-studies",
+      "title": "The Four Checks Skipped",
+      "prompt": "An illuminated manuscript page, tall format, cream vellum ground, a single continuous winding path in faded red ink running top to bottom through eight framed scenes, like a corridor the reader walks down. First, top: THE RAT'S OLD DOOR — a researcher sketches a maze at a desk beside a small rat and a chalk-marked door. The path leads to REPEATING THE FIRST RUN — the same figure builds a matching maze beside the first and places an identical rat at its start. Next, THE PROFESSOR'S REFUSAL — an older robed professor holds up a flat hand, turning the young researcher away from her second maze. The path continues to THE MISSING COMPARISON — a technician beside a vast ringed machine directs a beam into one labeled vessel of heavy hydrogen while a second vessel for light hydrogen sits empty and unused nearby. Then THE CORRIDOR OF DOORS — a long wooden corridor lined with identical doors on each side, a rat running straight down its middle toward one marked door. Next, THE SOUND OF THE FLOOR — the researcher kneels with ear to the floorboards as the rat's feet strike the wood, small sound-lines drawn radiating from its paws. Then GONE THE SECOND TIME — a robed researcher holds a glowing card bright before a seated subject in one frame, and the same card faded to blankness in the neighboring frame. Last, bottom: ONLY THE ONES WHO SCORE — a teacher at a lectern waves away a row of hopeful students with empty hands, beckoning forward only the one holding a glowing card. Palette: faded ochre vellum, iron-gall brown ink line work, muted dull blue and red pigment, gold leaf only on the connecting path and the thin rectangular frames. Give each scene generous interior space so every figure, door, and gesture reads clearly across the width of the page, not crowded into a narrow column; modest foliate scrollwork may fill the gaps between frames but must never crowd the scenes. Each vignette carries its capitalized title lettered plainly beneath its frame in a manuscript hand. Nothing else on the page is lettered — no headings, no banners, no scrolls or ledgers bearing writing, no signature, no date.",
+      "vignettes": [
+        {
+          "block": "spya-w9nnq6",
+          "quote": "under certain circumstances, X, rats did something, A",
+          "depicts": "A young researcher at a desk sketches a maze diagram, a small rat beside a marked door labeled only with a chalk mark, no writing.",
+          "title": "THE RAT'S OLD DOOR",
+          "node": "c1"
+        },
+        {
+          "block": "spya-tf8rj2",
+          "quote": "to repeat in her laboratory the experiment of the other person",
+          "depicts": "The same researcher sets up a matching wooden maze beside the first, placing an identical rat at its start, comparing the two side by side.",
+          "title": "REPEATING THE FIRST RUN",
+          "node": "c2"
+        },
+        {
+          "block": "spya-v0xcd7",
+          "quote": "no, you cannot do that, because the experiment has already been done",
+          "depicts": "An older professor in academic robes holds up a flat hand toward the young researcher, turning her away from the matching maze.",
+          "title": "THE PROFESSOR'S REFUSAL",
+          "node": "c3"
+        },
+        {
+          "block": "spya-m95kqm",
+          "quote": "an experiment done at the big accelerator at the National Accelerator Laboratory",
+          "depicts": "A technician stands beside a vast ringed machine, directing a beam toward a single labeled vessel of heavy hydrogen while a second empty vessel for light hydrogen sits unused nearby.",
+          "title": "THE MISSING COMPARISON",
+          "node": "c4"
+        },
+        {
+          "block": "spya-fvenms",
+          "quote": "He had a long corridor with doors all along one side where the rats came in",
+          "depicts": "A long wooden corridor lined with many identical doors on one side and food trays behind matching doors on the other, a rat running straight down the middle.",
+          "title": "THE CORRIDOR OF DOORS",
+          "node": "c5"
+        },
+        {
+          "block": "spya-npdc6n",
+          "quote": "He finally found that they could tell by the way the floor sounded when they ran over it",
+          "depicts": "The researcher kneels, ear close to the floorboards, as a rat's small feet strike the wood, sound-lines radiating from each footfall.",
+          "title": "THE SOUND OF THE FLOOR",
+          "node": "c6"
+        },
+        {
+          "block": "spya-rbpppq",
+          "quote": "Next time they try it they don’t get it any more",
+          "depicts": "A robed researcher holds up a glowing card before a seated subject, the card bright in one frame and faded to nothing in the matching frame beside it.",
+          "title": "GONE THE SECOND TIME",
+          "node": "c8"
+        },
+        {
+          "block": "spya-g203mu",
+          "quote": "be sure they only train students who have shown their ability to get PSI results",
+          "depicts": "A teacher at a lectern waves away a row of hopeful students while beckoning forward only one holding a glowing card, the others' hands empty.",
+          "title": "ONLY THE ONES WHO SCORE",
+          "node": "c9"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A young researcher at a desk sketches a maze diagram, a small rat beside a marked door labeled only with a chalk mark, no writing.",
+          "title": "THE RAT'S OLD DOOR"
+        },
+        {
+          "where": "The same researcher sets up a matching wooden maze beside the first, placing an identical rat at its start, comparing the two side by side.",
+          "title": "REPEATING THE FIRST RUN"
+        },
+        {
+          "where": "An older professor in academic robes holds up a flat hand toward the young researcher, turning her away from the matching maze.",
+          "title": "THE PROFESSOR'S REFUSAL"
+        },
+        {
+          "where": "A technician stands beside a vast ringed machine, directing a beam toward a single labeled vessel of heavy hydrogen while a second empty vessel for light hydrogen sits unused nearby.",
+          "title": "THE MISSING COMPARISON"
+        },
+        {
+          "where": "A long wooden corridor lined with many identical doors on one side and food trays behind matching doors on the other, a rat running straight down the middle.",
+          "title": "THE CORRIDOR OF DOORS"
+        },
+        {
+          "where": "The researcher kneels, ear close to the floorboards, as a rat's small feet strike the wood, sound-lines radiating from each footfall.",
+          "title": "THE SOUND OF THE FLOOR"
+        },
+        {
+          "where": "A robed researcher holds up a glowing card before a seated subject, the card bright in one frame and faded to nothing in the matching frame beside it.",
+          "title": "GONE THE SECOND TIME"
+        },
+        {
+          "where": "A teacher at a lectern waves away a row of hopeful students while beckoning forward only one holding a glowing card, the others' hands empty.",
+          "title": "ONLY THE ONES WHO SCORE"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "cargocult-spya-rz663q",
+  "profileHash": null
+}

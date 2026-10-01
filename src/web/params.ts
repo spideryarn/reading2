@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type TrajectoryDepth } from "../types.js";
+import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type SkimDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -426,28 +426,28 @@ export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
 export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * **Trajectory's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
+ * **Skim's depth** — `depth=1|2|3`, Gist · More · Most. Absent is Gist, the
  * first pass. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § URL.
  *
  * `push`: changing depth is choosing a different walk through the piece, and
  * Back should undo it. It is always written **together with `?stop=`**, in one
- * `useQueryStates` update (`useTrajectoryMode`), so a depth change and the stop
+ * `useQueryStates` update (`useSkimMode`), so a depth change and the stop
  * it lands on are one history entry rather than two.
  *
  * A depth the route does not offer is not refused here — this parser cannot see
- * the route — but `effectiveDepth` (src/web/trajectory-route.ts) draws the
+ * the route — but `effectiveDepth` (src/web/skim-route.ts) draws the
  * deepest offered pass below it. **A `?stop=` on the route wins over this**
  * (`locate`): each pass walks only its own stops (plan 260929e), so the stop's
  * own pass is drawn whatever the depth says.
  */
-export const depthParam = createParser<TrajectoryDepth>({
+export const depthParam = createParser<SkimDepth>({
   parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
   serialize: (v) => String(v),
 }).withOptions({ history: "push" });
 
 /**
- * **The Trajectory stop the reader is on** — the quote's id, which is minted
+ * **The Skim stop the reader is on** — the quote's id, which is minted
  * by `mintId` and so validated by `parseAsBlockId` like `?quote=`.
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not

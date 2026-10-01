@@ -1,0 +1,272 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2674.5" width="760" height="2674.5">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2674.5" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel, converge, loop back</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The essay funnels from cultural hype about conscious machines into a hub of psychological biases, then into four</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">independent arguments that converge on one verdict — real machine consciousness looks unlikely — which fans out</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">into two live ethical worries, and finally loops back, changed, to the opening worry about mistaking machines for…</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Hype and bias feed the dream of conscious AI; four arguments converge against it; the practical fallout fans into two</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">risks that both lead back to a renewed, embodied sense of what makes us conscious.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="450" width="712" height="180" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<rect x="24" y="770" width="712" height="170" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<path d="M380 100 L380 115 L380 115 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 200 L380 220 L380 220 L380 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,240 376.5,230 383.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 C380 340 120 330 120 350" fill="none" stroke="rgba(232,112,58,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M380 320 C380 340 620 330 620 350" fill="none" stroke="rgba(232,112,58,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M115 575 C115 613.25 380 621.75 380 660" fill="none" stroke="rgba(47,191,149,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,660 376.5,650 383.5,650" fill="rgba(47,191,149,0.8)" stroke="none"/>
+<path d="M295 575 C295 613.25 380 621.75 380 660" fill="none" stroke="rgba(47,191,149,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,660 376.5,650 383.5,650" fill="rgba(47,191,149,0.8)" stroke="none"/>
+<path d="M475 575 C475 613.25 380 621.75 380 660" fill="none" stroke="rgba(47,191,149,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,660 376.5,650 383.5,650" fill="rgba(47,191,149,0.8)" stroke="none"/>
+<path d="M655 575 C655 613.25 380 621.75 380 660" fill="none" stroke="rgba(47,191,149,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,660 376.5,650 383.5,650" fill="rgba(47,191,149,0.8)" stroke="none"/>
+<path d="M380 740 C380 776 200 784 200 820" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,820 196.5,810 203.5,810" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 740 C380 776 560 784 560 820" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,820 556.5,810 563.5,810" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 900 C200 936 380 944 380 980" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,980 376.5,970 383.5,970" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 900 C560 936 380 944 380 980" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,980 376.5,970 383.5,970" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 1020 C8 1020 8 165 260 165" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="260,165 250,168.5 250,161.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Fantasies of conscious machines — Lemoine's LaMDA claim, 2022 — From Frankenstein to a Google engineer insisting a chatbot has feelings. — → spya-u6w37a</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="62.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Fantasies of conscious machines</text>
+<text x="380" y="79.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Lemoine's LaMDA claim, 2022</text>
+</g>
+<g>
+<title>Why machine consciousness matters — It matters for AI welfare, for our own psychology, and for how we see ourselves. — → spya-e68t9h</title>
+<rect x="260" y="130" width="240" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="168.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Why machine consciousness matters</text>
+</g>
+<g>
+<title>Why AI seems conscious — 3 overlapping biases — Anthropocentrism, human exceptionalism, and anthropomorphism bundle intelligence with consciousness. — → spya-cvaqgs</title>
+<ellipse cx="380" cy="280" rx="120" ry="40" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="277.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Why AI seems conscious</text>
+<text x="380" y="297.92499999999995" font-size="11.4" text-anchor="middle" fill="#8f8f8f">3 overlapping biases</text>
+</g>
+<g>
+<title>Fluent language fuels illusion — Chatbots that talk well feel conscious; protein-folders that don't talk don't. — → spya-k6fpme</title>
+<path d="M20 350 L206 350 L220 364 L220 420 L20 420 Z" fill="rgba(232,112,58,0.09)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M206 350 L206 364 L220 364" fill="none" stroke="rgba(232,112,58,0.5)" stroke-width="1"/>
+<text x="120" y="381.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Fluent language fuels</text>
+<text x="120" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">illusion</text>
+</g>
+<g>
+<title>Exponential hype &amp; tech-rapture — Every point on an exponential curve feels like the brink of transcendence. — → spya-cke6sj</title>
+<path d="M520 350 L706 350 L720 364 L720 420 L520 420 Z" fill="rgba(232,112,58,0.09)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 350 L706 364 L720 364" fill="none" stroke="rgba(232,112,58,0.5)" stroke-width="1"/>
+<text x="620" y="381.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Exponential hype &amp;</text>
+<text x="620" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">tech-rapture</text>
+</g>
+<g>
+<title>Brains aren't computers — → spya-sk4su6</title>
+<rect x="40" y="495" width="150" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="115" y="531.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Brains aren't</text>
+<text x="115" y="546.4" font-size="12" text-anchor="middle" fill="#f7f7f7">computers</text>
+</g>
+<g>
+<title>Beyond algorithms — → spya-affgsh</title>
+<rect x="220" y="495" width="150" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="295" y="538.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Beyond algorithms</text>
+</g>
+<g>
+<title>Being alive may matter — → spya-e7jqx4</title>
+<rect x="400" y="495" width="150" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="475" y="538.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Being alive may matter</text>
+</g>
+<g>
+<title>Simulating ≠ creating — → spya-cqh5wq</title>
+<rect x="580" y="495" width="150" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="655" y="538.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Simulating ≠ creating</text>
+</g>
+<g>
+<title>Functionalism looks shaky — AI consciousness seems unlikely — → spya-uzr60x</title>
+<ellipse cx="380" cy="700" rx="120" ry="40" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="697.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Functionalism looks shaky</text>
+<text x="380" y="717.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">AI consciousness seems unlikely</text>
+</g>
+<g>
+<title>Don't deliberately build conscious AI — → spya-e7fdmb</title>
+<rect x="40" y="820" width="320" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="200" y="863.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Don't deliberately build conscious AI</text>
+</g>
+<g>
+<title>AI that merely seems conscious is risky — → spya-mxxutn</title>
+<rect x="400" y="820" width="320" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="560" y="863.9" font-size="12" text-anchor="middle" fill="#f7f7f7">AI that merely seems conscious is risky</text>
+</g>
+<g>
+<title>More breath than machine — soul as embodied awareness — Recovering an embodied sense of soul, against the mechanizing mirror of AI. — → spya-zv36xq</title>
+<ellipse cx="380" cy="1020" rx="120" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1017.465" font-size="15" text-anchor="middle" fill="#f7f7f7">More breath than machine</text>
+<text x="380" y="1037.9250000000002" font-size="11.4" text-anchor="middle" fill="#8f8f8f">soul as embodied awareness</text>
+</g>
+<rect x="40.5" y="578.5" width="61" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="71" y="588.5" font-size="10" text-anchor="middle" fill="#8f8f8f">loops back</text></g>
+</g>
+<g transform="translate(0 1306.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Four arguments against computational AI</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Each argument opens onto a concrete detail, and all four reinforce one guarded conclusion: machine consciousness is</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">unlikely, though not strictly impossible.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-THE-CASE</text>
+<g transform="translate(0 65.9)"><path d="M380 100 C380 122.5 105 127.5 105 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="105,150 101.5,140 108.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 285 127.5 285 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="285,150 281.5,140 288.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 465 127.5 465 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="465,150 461.5,140 468.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 645 127.5 645 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="645,150 641.5,140 648.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M105 220 L105 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M285 220 L285 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M465 220 L465 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M645 220 L645 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M105 340 C105 362.5 380 367.5 380 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,390 376.5,380 383.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M285 340 C285 362.5 380 367.5 380 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,390 376.5,380 383.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M465 340 C465 362.5 380 367.5 380 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,390 376.5,380 383.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M645 340 C645 362.5 380 367.5 380 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,390 376.5,380 383.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 470 L380 510" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,510 376.5,500 383.5,500" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Assumes computation suffices — Computational functionalism: the right information processing is enough for consciousness. — → spya-d3g67c</title>
+<rect x="270" y="30" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Assumes computation suffices</text>
+</g>
+<g>
+<title>Brains aren't computers — → spya-sk4su6</title>
+<rect x="25" y="150" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="105" y="188.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Brains aren't computers</text>
+</g>
+<g>
+<title>Beyond algorithms — → spya-affgsh</title>
+<rect x="205" y="150" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="285" y="188.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Beyond algorithms</text>
+</g>
+<g>
+<title>Being alive may matter — → spya-e7jqx4</title>
+<rect x="385" y="150" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="465" y="188.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Being alive may matter</text>
+</g>
+<g>
+<title>Simulating ≠ creating — → spya-cqh5wq</title>
+<rect x="565" y="150" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="645" y="188.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Simulating ≠ creating</text>
+</g>
+<g>
+<title>No software/hardware divide — A biological neuron can't be swapped for silicon without inventing a silicon metabolism. — → spya-b0086e</title>
+<path d="M25 260 L171 260 L185 274 L185 340 L25 340 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M171 260 L171 274 L185 274" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="105" y="303.25" font-size="10" text-anchor="middle" fill="#f7f7f7">No software/hardware divide</text>
+</g>
+<g>
+<title>Steam valves aren't computers — The Watt governor regulates an engine with plain mechanics, not calculation. — → spya-sq9v5k</title>
+<path d="M205 260 L351 260 L365 274 L365 340 L205 340 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M351 260 L351 274 L365 274" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="285" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Steam valves aren't</text>
+<text x="285" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">computers</text>
+</g>
+<g>
+<title>Perception ties mind to body — Conscious experience as controlled hallucination, rooted in keeping a body alive. — → spya-xhvztm</title>
+<path d="M385 260 L531 260 L545 274 L545 340 L385 340 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M531 260 L531 274 L545 274" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="465" y="303.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Perception ties mind to body</text>
+</g>
+<g>
+<title>Simulated rain never gets wet — A simulation of X brings about X only if X is itself computational. — → spya-npjt4j</title>
+<path d="M565 260 L711 260 L725 274 L725 340 L565 340 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M711 260 L711 274 L725 274" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="645" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Simulated rain never gets</text>
+<text x="645" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">wet</text>
+</g>
+<g>
+<title>The arguments reinforce each other — → spya-nv6tp0</title>
+<ellipse cx="380" cy="430" rx="120" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="425.5" font-size="15" text-anchor="middle" fill="#f7f7f7">The arguments reinforce each</text>
+<text x="380" y="444.25" font-size="15" text-anchor="middle" fill="#f7f7f7">other</text>
+</g>
+<g>
+<title>Unlikely, but not impossible — for silicon digital computers — → spya-c5ve5t</title>
+<rect x="260" y="510" width="240" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="547.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Unlikely, but not impossible</text>
+<text x="380" y="567.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">for silicon digital computers</text>
+</g></g>
+</g>
+<g transform="translate(0 2020.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Real versus seeming consciousness</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Two risks run side by side rather than forking: actually-conscious AI and merely conscious-seeming AI raise distinct,</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">equally live worries, both resisting any clean test.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-THE-ETHICS</text>
+<g transform="translate(0 65.9)"><path d="M380 100 C380 122.5 200 127.5 200 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,150 196.5,140 203.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 560 127.5 560 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,150 556.5,140 563.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 230 L200 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,270 196.5,260 203.5,260" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 230 L560 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,270 556.5,260 563.5,260" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 350 L640 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<path d="M200 350 C200 381.5 400 388.5 400 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,420 396.5,410 403.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 350 C560 381.5 400 388.5 400 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,420 396.5,410 403.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Don't deliberately create conscious AI — → spya-yverz7</title>
+<rect x="260" y="30" width="240" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="61.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Don't deliberately create conscious</text>
+<text x="380" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">AI</text>
+</g>
+<g>
+<title>Real conscious AI: new moral subjects, suffering — → spya-vs0vpj</title>
+<rect x="40" y="150" width="320" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="200" y="193.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Real conscious AI: new moral subjects, suffering</text>
+</g>
+<g>
+<title>Seeming-conscious AI is already here — → spya-x63ycg</title>
+<rect x="400" y="150" width="320" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="560" y="193.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Seeming-conscious AI is already here</text>
+</g>
+<g>
+<title>No test can settle the question — the 'Garland test' problem — → spya-kqs33c</title>
+<path d="M40 270 L346 270 L360 284 L360 350 L40 350 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M346 270 L346 284 L360 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="200" y="307.972" font-size="12" text-anchor="middle" fill="#f7f7f7">No test can settle the question</text>
+<text x="200" y="324.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">the 'Garland test' problem</text>
+</g>
+<g>
+<title>The feeling persists like a visual illusion — Müller-Lyer — → spya-xk9gne</title>
+<path d="M400 270 L706 270 L720 284 L720 350 L400 350 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 270 L706 284 L720 284" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="560" y="307.972" font-size="12" text-anchor="middle" fill="#f7f7f7">The feeling persists like a visual illusion</text>
+<text x="560" y="324.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Müller-Lyer</text>
+</g>
+<g>
+<title>Leaders flag the danger too — → spya-fdefb5</title>
+<path d="M560 370 L706 370 L720 384 L720 440 L560 440 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 370 L706 384 L720 384" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="640" y="408.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Leaders flag the danger too</text>
+</g>
+<g>
+<title>Here, false positives are the bigger risk — unlike historical denial of animal minds — → spya-d89xf7</title>
+<rect x="260" y="420" width="280" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="453.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Here, false positives are the</text>
+<text x="400" y="471.84" font-size="15" text-anchor="middle" fill="#f7f7f7">bigger risk</text>
+<text x="400" y="492.29999999999995" font-size="11.4" text-anchor="middle" fill="#8f8f8f">unlike historical denial of animal minds</text>
+</g></g>
+</g>
+</svg>

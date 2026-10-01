@@ -6,7 +6,7 @@
  * now relative to the wider course hierarchy."*
  *
  * Pure, and generic over the node shape, because its two callers hold the
- * outline differently: Trajectory has the stored `Tree` and a block
+ * outline differently: Skim has the stored `Tree` and a block
  * (`whereForBlock`), the spine has its `OutlineEntry` bands. Both reduce to the
  * same question — the top-level sections, and the path of section ids down to
  * the place — so there is one answer to "where is this", not two
@@ -93,7 +93,7 @@ export function treeShape(tree: Tree): WhereShape<TreeNode> {
 }
 
 /**
- * Where a block sits, from the stored tree — Trajectory's rows. `[]` for a flat
+ * Where a block sits, from the stored tree — Skim's rows. `[]` for a flat
  * tree (no sections, only paragraphs off the root) or a block the tree does
  * not cover, and the caller then shows no card.
  */

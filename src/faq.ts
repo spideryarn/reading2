@@ -15,7 +15,7 @@
  * **The request is Ideas' byte for byte up to the breakpoint** —
  * `articleWithIds(meta, blocks.filter(isBodyEvidence))` first, carrying the
  * cache breakpoint, then this stage's instructions — so it joins the
- * `ideas`/`timeline`/`quiz`/`sketch` cached prefix (src/models.ts §
+ * `ideas`/`timeline`/`quiz` cached prefix (src/models.ts §
  * `ARTICLE_RENDERER`). The user message carries the tree skeleton, which is why
  * the tree is in the fingerprint.
  *
@@ -634,7 +634,9 @@ export async function generateFaq(opts: {
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("faq") },
         /* Article first, then this stage's instructions: byte-identical to
-           `ideas`, `timeline`, `quiz` and `sketch` up to the breakpoint. */
+           `ideas`, `timeline`, `quiz` and `sketch` up to the breakpoint —
+           though `sketch`'s `low` effort keeps it out of the cache group
+           (src/models.ts § STAGE_EFFORT). */
         system: [
           {
             type: "text" as const,

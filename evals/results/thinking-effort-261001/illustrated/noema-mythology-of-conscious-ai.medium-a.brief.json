@@ -1,0 +1,287 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map in sepia ink and faded washes, with little vignette scenes scattered across the parchment like towns and landmarks — fitting an essay that charts a territory of argument from myth to verdict.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Map of the Mythology of Conscious AI",
+      "prompt": "Draw an antique hand-drawn map in sepia ink on aged parchment, with faded brown and ochre washes, in the style of a 17th-century explorer's chart — but the territory being mapped is an argument, not a coastline, so the 'landmarks' are small labeled vignette scenes connected by a winding inked path running top to bottom. At the top: a candlelit workshop with a glass vial and a half-built humanlike android on a table (DREAMS OF ARTIFICIAL BEINGS). Just below, robed figures ring the android, one holding out a parchment (MORAL STATUS AT STAKE). Next, three hooded figures face three tilted mirrors throwing a human face onto a blank machine face (THREE BAKED-IN BIASES), which forks into two neighboring scenes at the same map-level: a talking machine drawing a crowd beside a silent thread-folding machine ignored on a hill (ALPHABOLD STAYS SILENT), and a steep curve-ridge with tiny figures at every point pointing ahead (EVERY POINT AN INFLECTION). The path narrows into a stone bridge carrying four bundled scrolls toward a gear-marked hub (FOUR ARGUMENTS BUNDLED), which leads to a cracked stone tablet with arrows pressing into it from four sides (A SHAKY ASSUMPTION CRACKS). From the tablet the path forks again into two scenes side by side: an inventor pulling his hands back from a glowing figure on a workbench (REFUSING TO BUILD ONE), and two hooded figures, one glowing faintly within, one dark (TWO LOOK-ALIKE MACHINES). Both paths converge at the bottom into a final scene: a figure standing on bare earth exhaling visible breath, gears scattering and fading at their feet, with a thin inked line curling back up the page toward the workshop at the very top, closing the loop (MORE BREATH THAN MACHINE). Render all figures as fine ink linework with hatching for shadow, sparse warm wash color (ochre, faded red, muted green), decorative compass-rose flourishes only in empty corners, never crowding the scenes. Each vignette is lettered beneath it in small neat capitals matching the titles given, and nothing else on the page carries any words — no banners, no scrollwork text, no signature.",
+      "vignettes": [
+        {
+          "block": "spya-u6w37a",
+          "quote": "the prospect of human cloning, and with robotics that of humanlike androids",
+          "depicts": "At the top of the map, an old workshop scene: a glass vial marked with a coiled thread beside a half-built humanlike android figure on a table, candlelight flickering over both.",
+          "title": "DREAMS OF ARTIFICIAL BEINGS",
+          "node": "n1"
+        },
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "A ring of robed figures gathered around the android, one holding out a parchment toward it as if debating what is owed to it.",
+          "title": "MORAL STATUS AT STAKE",
+          "node": "n2"
+        },
+        {
+          "block": "spya-cvaqgs",
+          "quote": "three baked-in psychological biases",
+          "depicts": "Three hooded figures standing before three tilted mirrors, each mirror throwing a human face onto the android's blank one.",
+          "title": "THREE BAKED-IN BIASES",
+          "node": "n3"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind's AlphaFold is conscious",
+          "depicts": "Two machines side by side on a low hill: one with a speech-scroll pouring from its mouth drawing a crowd, the other silently folding a thread-like ribbon, ignored.",
+          "title": "ALPHAFOLD STAYS SILENT",
+          "node": "n4"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A steep rising curve drawn across the parchment like a mountain ridge, with tiny figures standing at every point along it, each pointing ahead and declaring themselves at the summit.",
+          "title": "EVERY POINT AN INFLECTION",
+          "node": "n5"
+        },
+        {
+          "block": "spya-cv97j7",
+          "quote": "four related arguments that undermine the idea that computation, at least of the sort implemented",
+          "depicts": "Four sealed scrolls bundled with cord, resting on a stone bridge that leads down toward a central hub marked with gears.",
+          "title": "FOUR ARGUMENTS BUNDLED",
+          "node": "b1"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "is a very strong assumption that looks increasingly shaky",
+          "depicts": "A cracked stone tablet inscribed with interlocking gears, four arrows pressing in from the sides as fissures spread across its face.",
+          "title": "A SHAKY ASSUMPTION CRACKS",
+          "node": "concl"
+        },
+        {
+          "block": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI",
+          "depicts": "An inventor in a workshop pulling his hands back from a glowing, half-assembled synthetic figure on the bench before him.",
+          "title": "REFUSING TO BUILD ONE",
+          "node": "d1"
+        },
+        {
+          "block": "spya-x63ycg",
+          "quote": "systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+          "depicts": "Two nearly identical hooded figures standing together; a faint inner glow lights one from within, while the other is dark inside despite looking the same.",
+          "title": "TWO LOOK-ALIKE MACHINES",
+          "node": "d2"
+        },
+        {
+          "block": "spya-w8z40d",
+          "quote": "more breath than thought and more meat than machine",
+          "depicts": "At the bottom of the map, a human figure stands on bare earth exhaling a visible breath-mist, while loose gears and cogs scatter and fade away at their feet, a path curling back up toward the workshop at the top.",
+          "title": "MORE BREATH THAN MACHINE",
+          "node": "loop"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "At the top of the map, an old workshop scene: a glass vial marked with a coiled thread beside a half-built humanlike android figure on a table, candlelight flickering over both.",
+          "title": "DREAMS OF ARTIFICIAL BEINGS"
+        },
+        {
+          "where": "A ring of robed figures gathered around the android, one holding out a parchment toward it as if debating what is owed to it.",
+          "title": "MORAL STATUS AT STAKE"
+        },
+        {
+          "where": "Three hooded figures standing before three tilted mirrors, each mirror throwing a human face onto the android's blank one.",
+          "title": "THREE BAKED-IN BIASES"
+        },
+        {
+          "where": "Two machines side by side on a low hill: one with a speech-scroll pouring from its mouth drawing a crowd, the other silently folding a thread-like ribbon, ignored.",
+          "title": "ALPHAFOLD STAYS SILENT"
+        },
+        {
+          "where": "A steep rising curve drawn across the parchment like a mountain ridge, with tiny figures standing at every point along it, each pointing ahead and declaring themselves at the summit.",
+          "title": "EVERY POINT AN INFLECTION"
+        },
+        {
+          "where": "Four sealed scrolls bundled with cord, resting on a stone bridge that leads down toward a central hub marked with gears.",
+          "title": "FOUR ARGUMENTS BUNDLED"
+        },
+        {
+          "where": "A cracked stone tablet inscribed with interlocking gears, four arrows pressing in from the sides as fissures spread across its face.",
+          "title": "A SHAKY ASSUMPTION CRACKS"
+        },
+        {
+          "where": "An inventor in a workshop pulling his hands back from a glowing, half-assembled synthetic figure on the bench before him.",
+          "title": "REFUSING TO BUILD ONE"
+        },
+        {
+          "where": "Two nearly identical hooded figures standing together; a faint inner glow lights one from within, while the other is dark inside despite looking the same.",
+          "title": "TWO LOOK-ALIKE MACHINES"
+        },
+        {
+          "where": "At the bottom of the map, a human figure stands on bare earth exhaling a visible breath-mist, while loose gears and cogs scatter and fade away at their feet, a path curling back up toward the workshop",
+          "title": "MORE BREATH THAN MACHINE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-case",
+      "title": "The Four Roads Against Computed Consciousness",
+      "prompt": "Draw an antique hand-drawn map in sepia ink on aged parchment, matching the same hand, palette, and register as a wider map of an argument about conscious machines. This plate is the close-up of one region of that larger map: the stone shrine carved with gears where four paths once began. Open the plate with that shrine enlarged at the top, interlocking gears carved into its stone face, four inked paths radiating from it down the page (THE COMPUTING ASSUMPTION). Along the first path, draw a single neuron resting on an alchemist's table, ringed by small silicon chips that do not fit against it, a thin curl of steam rising from the neuron (NO SILICON METABOLISM). Along the second path, draw an old brass steam-engine governor: two heavy balls on hinged arms swinging outward, closing a valve, with steam hissing from a pipe beside the engine (THE STEAM ENGINE'S GOVERNOR). Along the third path, draw a lantern shaped like a brain, casting painted scenes outward onto a dim landscape, tethered by a cord down to a sleeping human body below it (A CONTROLLED HALLUCINATION). Along the fourth path, draw a mechanical stomach built from visible gears and cogs, with a loaf of bread passing through its workings whole and untouched on the far side (THE STOMACH THAT CANNOT DIGEST). Beneath these four scenes, draw the four paths narrowing into four thin ink streams that bend together and merge into one river (FOUR STREAMS CONVERGE). At the bottom of the page, where the river ends, draw a barred iron gate set into a wall built of silicon chips, one corner of the gate left slightly ajar with a sliver of light leaking through (A LOCKED SILICON GATE). Use fine ink linework, cross-hatched shading, and sparse warm wash coloring in ochre and faded rust, consistent with an old explorer's map. Keep the vignettes large enough to read clearly, arranged to use the full width of the page, with only light decorative flourishes in any empty corners. Each vignette is lettered beneath it in small plain capitals matching the titles given, and nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-un9fjn",
+          "quote": "would require inventing a whole new silicon-based metabolism, too",
+          "depicts": "Down the first path, a single neuron rests on an alchemist's table surrounded by tiny silicon chips that fail to connect to it, thin steam curling upward from the neuron itself.",
+          "title": "NO SILICON METABOLISM",
+          "node": "b1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve",
+          "depicts": "Down the second path, an old steam engine governor: two weighted balls swinging outward on hinged arms, closing a valve, steam hissing from the pipe beside it.",
+          "title": "THE STEAM ENGINE'S GOVERNOR",
+          "node": "b2"
+        },
+        {
+          "block": "spya-xhvztm",
+          "quote": "Conscious experience in this light is a kind of controlled hallucination",
+          "depicts": "Down the third path, a lantern shaped like a brain casts painted images outward onto a dim landscape, a tether of cord running down from it to a sleeping body.",
+          "title": "A CONTROLLED HALLUCINATION",
+          "node": "b3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything.",
+          "depicts": "Down the fourth path, a mechanical model stomach built of gears and cogs, with a loaf of bread passing through its workings untouched and whole on the far side.",
+          "title": "THE STOMACH THAT CANNOT DIGEST",
+          "node": "b4"
+        },
+        {
+          "block": "spya-nv6tp0",
+          "quote": "Questioning computational functionalism reinforces the importance of distinguishing simulation from instantiation.",
+          "depicts": "The four paths bend inward and become four narrow streams of ink that join into a single river below the four scenes.",
+          "title": "FOUR STREAMS CONVERGE",
+          "node": "c"
+        },
+        {
+          "block": "spya-c5ve5t",
+          "quote": "achieving it may well be impossible for AI systems in general, at least for the silicon-based digital computers",
+          "depicts": "At the river's end, a barred gate set into a wall of silicon chips, one corner of the gate left slightly ajar, a sliver of light showing through the gap.",
+          "title": "A LOCKED SILICON GATE",
+          "node": "d"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "This plate opens where the bundled scrolls met the gear-marked hub on the overview map: here it is drawn large as a stone shrine carved with interlocking gears, from which four paths radiate outward.",
+          "title": "THE COMPUTING ASSUMPTION"
+        },
+        {
+          "where": "Down the first path, a single neuron rests on an alchemist's table surrounded by tiny silicon chips that fail to connect to it, thin steam curling upward from the neuron itself.",
+          "title": "NO SILICON METABOLISM"
+        },
+        {
+          "where": "Down the second path, an old steam engine governor: two weighted balls swinging outward on hinged arms, closing a valve, steam hissing from the pipe beside it.",
+          "title": "THE STEAM ENGINE'S GOVERNOR"
+        },
+        {
+          "where": "Down the third path, a lantern shaped like a brain casts painted images outward onto a dim landscape, a tether of cord running down from it to a sleeping body.",
+          "title": "A CONTROLLED HALLUCINATION"
+        },
+        {
+          "where": "Down the fourth path, a mechanical model stomach built of gears and cogs, with a loaf of bread passing through its workings untouched and whole on the far side.",
+          "title": "THE STOMACH THAT CANNOT DIGEST"
+        },
+        {
+          "where": "The four paths bend inward and become four narrow streams of ink that join into a single river below the four scenes.",
+          "title": "FOUR STREAMS CONVERGE"
+        },
+        {
+          "where": "At the river's end, a barred gate set into a wall of silicon chips, one corner of the gate left slightly ajar, a sliver of light showing through the gap.",
+          "title": "A LOCKED SILICON GATE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-ethics",
+      "title": "Two Roads of Real and Seeming Minds",
+      "prompt": "Draw an antique hand-drawn map in sepia ink on aged parchment, in the same hand, palette and register as a wider map of an argument about conscious machines. This plate is the close-up of the region of that map where an inventor was shown stepping back from a glowing creation. Open with that scene enlarged at the top: a candle guttering as the inventor withdraws his hands from a half-built glowing machine on a workbench (STEPPING BACK FROM CREATION). Below it, the path forks into two. Down the left fork: first a glass jar on a wooden shelf holding a small glowing brain-like growth sprouted from tiny labeled seeds (THE CEREBRAL ORGANOID JAR), then further down a scene of a robed creator pulling back a cloth to reveal gears beneath a figure's skin while a second man watching still cannot stop believing it is alive (THE GARLAND TEST REVEAL). Down the right fork: first a smooth painted mask with words pouring from its mouth, tilted ajar to reveal hollow darkness behind it (A CONVINCING EMPTY MASK), then further down the classical illusion of two arrow-tipped lines of equal length, with a figure leaning close and still seeing them as unequal (THE MÜLLER-LYER ILLUSION), then two named figures in long coats pointing warning fingers up toward the mask above them (LEADERS SOUND THE ALARM). At the bottom of the page the two forks meet: a speaking mask and a living, breathing creature stand close together with a strip of bare empty parchment drawn between them, showing how alike their surfaces seem and how unlike their depths are (SIMILAR IN THE WRONG WAYS). Render everything in fine ink linework with cross-hatched shading and sparse warm sepia and ochre wash, matching an old explorer's chart. Keep every vignette large and legible, spread across the full width of the page, with only light decorative border flourishes in empty corners and no crowding. Each vignette is lettered beneath it in small plain capitals matching the titles given, and nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-yverz7",
+          "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture",
+          "depicts": "This plate opens where the overview map showed hands pulling back from a glowing figure on a workbench; here it is drawn larger, the inventor's candle guttering as he steps away from the half-built machine.",
+          "title": "STEPPING BACK FROM CREATION",
+          "node": "e0"
+        },
+        {
+          "block": "spya-vs0vpj",
+          "quote": "the accidental emergence of consciousness in cerebral organoids",
+          "depicts": "Down the left path, a glass jar on a shelf holding a small brain-like growth, faintly glowing, grown from a cluster of tiny labeled seeds.",
+          "title": "THE CEREBRAL ORGANOID JAR",
+          "node": "f1"
+        },
+        {
+          "block": "spya-x63ycg",
+          "quote": "those that persuasively seem to be conscious but are, in fact, not",
+          "depicts": "Down the right path, a smooth painted mask speaking fluent words from its mouth, the mask tilted slightly ajar to show hollow darkness behind it.",
+          "title": "A CONVINCING EMPTY MASK",
+          "node": "f2"
+        },
+        {
+          "block": "spya-xk9gne",
+          "quote": "The two lines in the Müller-Lyer illusion (Figure 5) are the same length, but they will always look different.",
+          "depicts": "Further down the right path, the classic illusion drawn on parchment: two arrow-tipped lines of equal length, a figure leaning close and still seeing them as unequal.",
+          "title": "THE MÜLLER-LYER ILLUSION",
+          "node": "g1"
+        },
+        {
+          "block": "spya-fdefb5",
+          "quote": "Mustafa Suleyman (CEO of Microsoft AI) and Yoshua Bengio",
+          "depicts": "Two named figures in long coats stand at the base of the right path, pointing warning fingers up toward the hollow mask above them.",
+          "title": "LEADERS SOUND THE ALARM",
+          "node": "k"
+        },
+        {
+          "block": "spya-d89xf7",
+          "quote": "the apparent wonders of AI may be more similar to us in ways that do not matter",
+          "depicts": "Where both paths meet at the bottom, a speaking mask and a breathing, living creature stand close together, a visible gap of empty parchment drawn between them showing how alike they seem and how unlike they are.",
+          "title": "SIMILAR IN THE WRONG WAYS",
+          "node": "h"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "This plate opens where the overview map showed hands pulling back from a glowing figure on a workbench; here it is drawn larger, the inventor's candle guttering as he steps away from the half-built ma",
+          "title": "STEPPING BACK FROM CREATION"
+        },
+        {
+          "where": "Down the left path, a glass jar on a shelf holding a small brain-like growth, faintly glowing, grown from a cluster of tiny labeled seeds.",
+          "title": "THE CEREBRAL ORGANOID JAR"
+        },
+        {
+          "where": "Down the right path, a smooth painted mask speaking fluent words from its mouth, the mask tilted slightly ajar to show hollow darkness behind it.",
+          "title": "A CONVINCING EMPTY MASK"
+        },
+        {
+          "where": "Further down the left path, a scene of a creator pulling back a robe to reveal gears beneath, while a second man watching still cannot stop believing what he sees is alive.",
+          "title": "THE GARLAND TEST REVEAL"
+        },
+        {
+          "where": "Further down the right path, the classic illusion drawn on parchment: two arrow-tipped lines of equal length, a figure leaning close and still seeing them as unequal.",
+          "title": "THE MÜLLER-LYER ILLUSION"
+        },
+        {
+          "where": "Two named figures in long coats stand at the base of the right path, pointing warning fingers up toward the hollow mask above them.",
+          "title": "LEADERS SOUND THE ALARM"
+        },
+        {
+          "where": "Where both paths meet at the bottom, a speaking mask and a breathing, living creature stand close together, a visible gap of empty parchment drawn between them showing how alike they seem and how unli",
+          "title": "SIMILAR IN THE WRONG WAYS"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

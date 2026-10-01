@@ -1,7 +1,7 @@
 # Trajectory mode — skim a paper at increasing depth
 
 The vision, with Greg's dictated brief verbatim, his two answers, and the Questions for Greg, is
-[trajectory.md](../project/trajectory.md). This is the build. It is run unattended by a session the
+[trajectory.md](../project/skim.md). This is the build. It is run unattended by a session the
 Overseer started on 2026-09-28. Greg approved the build and said he cannot answer questions, so every
 product call below is a default, recorded in trajectory.md § Questions for Greg. The exceptions are
 the two he did answer mid-run: the mode stays behind the experimental switch, and v2 is the

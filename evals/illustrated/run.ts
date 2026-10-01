@@ -49,7 +49,7 @@ import {
   readStoredIllustrated,
 } from "../../src/illustrated-plate.js";
 import type { IllustratedRun } from "../../src/illustrated.js";
-import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
+import { parseJsonAnswer, parseJsonFrom } from "../../src/parse-json.js";
 import type { SpendRecord } from "../../src/ai-spend.js";
 import type { Sketch } from "../../src/sketch-scene.js";
 import type { Block } from "../../src/types.js";
@@ -188,13 +188,16 @@ async function checkOnly(
   target: Target,
   opts: { stored: boolean },
 ): Promise<void> {
-  /* **`stripFence` first, exactly as `parseJson` in src/illustrated.ts does it.**
+  /* **`parseJsonAnswer`, exactly as `parseJson` in src/illustrated.ts does it.**
      `<slug>.raw.json` is the model's own answer, saved before anything touched
-     it, so it may still be wrapped in a ```json fence — and it was on
-     2026-09-03. Without this the free re-check throws `MalformedJson` on
-     precisely the answers worth re-checking, which is the "harness takes a
-     different road from the shipping stage" trap this file's header names. */
-  const raw = parseJsonFrom<unknown>(stripFence(await readFile(file, "utf-8")), file);
+     it, so it may still carry a ```json fence (it did on 2026-09-03), or a
+     sentence before the JSON. This used to say `stripFence` + `parseJsonFrom`,
+     which was production's road until 2026-09-03 and stopped being it that day;
+     the free re-check then refused answers the stage accepts — the "harness
+     takes a different road from the shipping stage" trap this file's header
+     names, arrived by standing still.
+     docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md. */
+  const raw = parseJsonAnswer<unknown>(await readFile(file, "utf-8"), file);
   const sketch = parseJsonFrom<Sketch>(await readFile(target.sketch, "utf-8"), target.sketch);
   const read = opts.stored ? readStoredIllustrated : readModelBrief;
   const { illustrated, report } = read(raw, {

@@ -1,0 +1,97 @@
+{"ideas": [
+{
+"name": "Synergy as the signature of genuine computation",
+"provenance": "introduced",
+"statement": "When a target's activity is better predicted by the joint pattern of two inputs than by either input alone, that extra predictability (synergy) is not just a statistical curiosity but the mark of the target actually integrating or computing on its inputs, rather than simply relaying them.",
+"occurrences": [
+{"blockId": "spya-e94ury", "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs considered jointly", "reasoning": "States directly that synergy is equated with computation/information modification."},
+{"blockId": "spya-s0db2g", "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources", "reasoning": "Motivates needing synergy because mere flow-tracking cannot show integration."},
+{"blockId": "spya-sp50v3", "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total ... but instead they are also sensitive to the particular patterns of incoming stimuli.", "reasoning": "Closing statement reaffirming synergy as evidence of pattern-sensitive computation."}
+]
+},
+{
+"name": "The whole can exceed or fall short of the sum of its parts",
+"provenance": "introduced",
+"statement": "Joint information two sources carry about a target is not generally equal to the sum of what each source carries individually — it can be greater (synergy) or smaller (redundancy), because information can be shared, unique, or only emergent in combination.",
+"occurrences": [
+{"blockId": "spya-h5dz45", "quote": "I(X;Y) 6= ∑ i=1 |X| I(Xi;Y).", "reasoning": "States the core inequality that motivates the whole decomposition project."},
+{"blockId": "spya-e94ury", "quote": "if the whole is less than the sum of its parts, then there must be redundant information about Y instantiated multiple times over the parent neurons that is “double counted” when summing the marginals", "reasoning": "Explains the redundancy side of the same non-additivity idea."}
+]
+},
+{
+"name": "Partial information decomposition is mathematically underdetermined without an extra assumption",
+"provenance": "introduced",
+"statement": "Splitting total joint information into redundant, unique, and synergistic pieces produces more unknowns than equations from classical information theory alone, so one must independently define a measure of redundancy before the rest can be derived.",
+"occurrences": [
+{"blockId": "spya-bgsd4n", "quote": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms). If any of the unknown terms can be defined, then the other three emerge “for free”.", "reasoning": "Directly states the underdetermination and its resolution strategy."},
+{"blockId": "spya-rc76qn", "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks", "reasoning": "Shows that the choice of redundancy function is an open, consequential modeling decision, not a settled fact."}
+]
+},
+{
+"name": "Undirected association versus directed propagation are different kinds of relationship",
+"provenance": "assumed",
+"statement": "A statistical dependency between two variables measured without regard to time order (like correlation or mutual information) is a fundamentally different claim from a measure of one variable's past constraining another's future; the first says 'these covary,' the second says 'this flows into that.'",
+"whyYouNeedIt": "The passage's distinction between mutual information as functional connectivity and transfer entropy as effective connectivity only makes sense if the reader already accepts that undirected association and directed influence are categorically different things worth separate tools.",
+"occurrences": [
+{"blockId": "spya-f6sbgx", "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as “transfer” or “flow.”", "reasoning": "This contrast only matters if the reader already distinguishes association from directed influence as separate concepts."},
+{"blockId": "spya-p4pyuy": "placeholder"}
+]
+},
+{
+"name": "Local structural position predicts functional computational role",
+"provenance": "introduced",
+"statement": "A node's position in a network's connectivity pattern (being in a densely interconnected 'rich club', having many recurrent links, having high degree or clustering) systematically predicts how much synergistic computation happens at that node, linking topology directly to information processing.",
+"occurrences": [
+{"blockId": "spya-fud8q3", "quote": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club", "reasoning": "Direct empirical link between network position and synergy."},
+{"blockId": "spya-sd9fzd", "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy", "reasoning": "Further ties connectivity motif to computational output."},
+{"blockId": "spya-wr7f6y", "quote": "there was also a positive correlation between the local clustering coefficient and the synergy, which is significant because it points to a relationship between the local computational structure of a single neuron and its local environment", "reasoning": "Generalizes the topology-computation link to another network measure in a different dataset."}
+]
+},
+{
+"name": "Synergy peaks at intermediate input similarity rather than increasing monotonically",
+"provenance": "introduced",
+"statement": "The relationship between how correlated two input sources are and how much synergistic (integrative) information their convergence produces is not simply 'more correlated inputs, more synergy'; instead synergy rises with correlation up to a point and then falls, because beyond that point extra similarity becomes redundant rather than newly integrative.",
+"occurrences": [
+{"blockId": "spya-ybmve2", "quote": "synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease", "reasoning": "States the non-monotonic relationship directly."},
+{"blockId": "spya-cs9fdy", "quote": "synergy increased only at the shorter timescales and decreased at the longer timescales. Observing the redundancy offered an explanation. Redundancy was positively related to mutual information at all timescales.", "reasoning": "Explains the mechanism (redundancy absorbing the information) behind the non-monotonic synergy pattern."}
+]
+},
+{
+"name": "The temporal scale chosen for analysis determines what dynamics are visible",
+"provenance": "assumed",
+"statement": "A given underlying neural process can look completely different — or be invisible — depending on how finely or coarsely time is divided into bins for analysis, so the choice of timescale is itself a substantive decision rather than a neutral technical detail.",
+"whyYouNeedIt": "The claim that synergy behaves one way at short timescales and the opposite way at long timescales, and that avalanches have distinct 'profiles' over time, only makes sense if the reader accepts that the same system can exhibit qualitatively different information dynamics purely as a function of the chosen temporal resolution.",
+"occurrences": [
+{"blockId": "spya-bdrp5d", "quote": "The choice of bin size (i.e., the temporal scale) is important for determining the sensitivity of the analysis to transformations at a given scale.", "reasoning": "States the assumption that timescale choice changes what can be detected, which later sections rely on without re-arguing."},
+{"blockId": "spya-urrypy", "quote": "The timescale varies from left to right across panels, ranging from short ... to long ... At short timescales ... both synergy ... and redundancy ... were positively related to the similarity ... At long timescales ... only redundancy was positively related", "reasoning": "This figure's contrast across timescales presupposes that timescale is a meaningful axis along which dynamics genuinely differ."}
+]
+},
+{
+"name": "The number of distinct information-sharing modes explodes combinatorially with the number of sources",
+"provenance": "introduced",
+"statement": "As more input sources are considered jointly, the number of distinct redundant/unique/synergistic 'atoms' needed to fully describe how they share information grows far faster than the number of sources itself, following the Dedekind numbers, making a complete decomposition practically intractable beyond a handful of sources.",
+"occurrences": [
+{"blockId": "spya-q9gytb", "quote": "in the case of three or more parents, the resulting system of equations is not as constrained as in the two-element case, as the number of distinct partial information atoms grows much faster than the number of known mutual information terms", "reasoning": "Introduces the scaling problem conceptually."},
+{"blockId": "spya-aby2dp", "quote": "the number of distinct PI atoms is given by the kth Dedekind number (minus two) ... in the case of six parent neurons, there are 7,828,354 distinct PI atoms ... Dedekind numbers greater than nine are currently unknown.", "reasoning": "Gives the concrete explosive growth that limits practical application."}
+]
+},
+{
+"name": "Behavioral task demands reshape the balance between synergy and redundancy",
+"provenance": "introduced",
+"statement": "The relative dominance of synergistic versus redundant information processing in a brain region is not fixed but shifts depending on what cognitive or motor function is currently being performed, suggesting information-sharing mode serves specific functional purposes (e.g., redundancy for reliable signal transmission during action).",
+"occurrences": [
+{"blockId": "spya-t8fayf", "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically. This increase in relative redundancy was interpreted as a response to the practical requirements of the task", "reasoning": "Directly ties task phase to shift in information-sharing mode."},
+{"blockId": "spya-b32ecw", "quote": "synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex", "reasoning": "Generalizes the task-dependence of synergy as a broader conclusion."}
+]
+},
+{
+"name": "Finite data systematically biases information estimates upward",
+"provenance": "assumed",
+"statement": "Estimating entropy and mutual information from a limited number of samples tends to make dependencies look stronger than they really are, since the plug-in estimators underestimate entropy and inflate apparent mutual information even between unrelated variables.",
+"whyYouNeedIt": "The repeated cautions about needing 'enough data', avoiding too many bins, and using null-model comparisons only make sense if the reader already knows that undersampling does not just add noise but creates a one-directional inflation of apparent dependency.",
+"occurrences": [
+{"blockId": "spya-qa7gt2", "quote": "the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information (for example, two processes that are uncorrelated can have non-zero apparent mutual information)", "reasoning": "States the bias explicitly, which the earlier sampling warnings presuppose."},
+{"blockId": "spya-tz99zn", "quote": "undersampling and finite-size effects can severely compromise the estimated entropies and mutual information data", "reasoning": "Relies on the reader understanding why undersampling specifically corrupts these estimates rather than just adding random error."}
+]
+}
+]}

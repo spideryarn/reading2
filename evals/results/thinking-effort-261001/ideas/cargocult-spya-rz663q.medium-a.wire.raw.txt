@@ -1,0 +1,54 @@
+{"ideas": [
+  {
+    "name": "Working is the only test that separates real knowledge from ritual",
+    "provenance": "introduced",
+    "statement": "A practice counts as genuine knowledge only if it reliably produces results when tried; following the correct-looking procedure is not enough.",
+    "occurrences": [
+      {"blockId": "spya-ddrr9m", "quote": "which was to try one to see if it worked, and if it didn’t work, to eliminate it", "reasoning": "states the basic criterion that separates science from witch-doctoring"},
+      {"blockId": "spya-fd2muf", "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.", "reasoning": "defines cargo cult science as correct form without the working result"},
+      {"blockId": "spya-aww976", "quote": "if you notice, you’ll see the reading scores keep going down—or hardly going up—in spite of the fact that we continually use these same people to improve the methods", "reasoning": "applies the working-test to education to show it fails despite scientific trappings"}
+    ]
+  },
+  {
+    "name": "Scientific integrity means actively disclosing what undermines your own result",
+    "provenance": "introduced",
+    "statement": "Honesty in science is not merely avoiding false statements; it requires volunteering all the facts, flaws, and alternative explanations that could weaken your own claim, even unprompted.",
+    "occurrences": [
+      {"blockId": "spya-afgs74", "quote": "if you’re doing an experiment, you should report everything that you think might make it invalid", "reasoning": "defines the positive duty of disclosure beyond mere truth-telling"},
+      {"blockId": "spya-rxj5wa", "quote": "you must also put down all the facts that disagree with it, as well as those that agree with it", "reasoning": "extends the duty to theories, requiring disconfirming evidence be reported"},
+      {"blockId": "spya-bpyx8n", "quote": "It’s not dishonest; but the thing I’m talking about is not just a matter of not being dishonest, it’s a matter of scientific integrity, which is another level.", "reasoning": "distinguishes mere truthfulness from the stronger standard being proposed"},
+      {"blockId": "spya-qpwryx", "quote": "the idea is to try to give all of the information to help others to judge the value of your contribution", "reasoning": "summarizes the principle as full disclosure rather than selective truth"}
+    ]
+  },
+  {
+    "name": "You are your own first and hardest source of bias to catch",
+    "provenance": "introduced",
+    "statement": "Self-deception precedes and enables deception of others, so guarding against fooling yourself is the foundational discipline, prior to any concern about honesty toward colleagues or the public.",
+    "occurrences": [
+      {"blockId": "spya-ed9mzv", "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.", "reasoning": "states the priority of self-deception over other-deception directly"},
+      {"blockId": "spya-s9msxy", "quote": "one is a little bigger than Millikan’s, and the next one’s a little bit bigger than that, and the next one’s a little bit bigger than that, until finally they settle down to a number which is higher", "reasoning": "the gradual drift only makes sense as evidence of unconscious self-bias rather than deliberate fraud"},
+      {"blockId": "spya-uj9v2h": "quote": "they would look for and find a reason why something might be wrong", "reasoning": "shows researchers unconsciously applying more scrutiny to inconvenient results, the signature of self-deception"} if False else {"blockId": "spya-uj9v2h", "quote": "they would look for and find a reason why something might be wrong", "reasoning": "shows researchers unconsciously applying more scrutiny to inconvenient results, the signature of self-deception"}
+    ]
+  },
+  {
+    "name": "A result only counts once it survives independent replication under controlled conditions",
+    "provenance": "assumed",
+    "statement": "A single observed effect is not yet knowledge; it must be reproducible by others, and only isolating and controlling every possible alternative cause establishes what is really producing it.",
+    "whyYouNeedIt": "Without assuming this, the praise for Young's rat experiment and the criticism of Rhine's shrinking ESP effects make no sense, since both arguments depend on replicability and elimination of confounds being the mark of a real finding rather than an optional extra.",
+    "occurrences": [
+      {"blockId": "spya-npdc6n", "quote": "he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door", "reasoning": "only matters if eliminating every alternative cue is what makes a result trustworthy"},
+      {"blockId": "spya-rbpppq", "quote": "All the parapsychologists are looking for some experiment that can be repeated—that you can do again and get the same effect", "reasoning": "treats repeatability itself as the criterion of a real effect, not stated as a general principle but relied upon"},
+      {"blockId": "spya-tf8rj2", "quote": "it was necessary first to repeat in her laboratory the experiment of the other person...and then change to Y and see if A changed", "reasoning": "the advice only works if replicating under original conditions before varying them is necessary to isolate the true cause"}
+    ]
+  },
+  {
+    "name": "Institutional incentives push researchers to report only favorable results",
+    "provenance": "introduced",
+    "statement": "Pressure from funding, publicity, or political convenience leads scientists and institutions to publish or act on only the results that serve their interests, which corrupts the evidence available to everyone else.",
+    "occurrences": [
+      {"blockId": "spya-jk7mj4", "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.", "reasoning": "states the principle that selective publication driven by desired outcomes is a core failure"},
+      {"blockId": "spya-s05sub", "quote": "if it comes out the other way, they don’t publish it at all. That’s not giving scientific advice.", "reasoning": "applies the same selective-reporting failure to policy advice"},
+      {"blockId": "spya-m95kqm", "quote": "the men in charge of programs at NAL are so anxious for new results, in order to get more money to keep the thing going for public relations purposes, they are destroying—possibly—the value of the experiments themselves", "reasoning": "shows institutional funding pressure directly degrading the rigor of an experiment"}
+    ]
+  }
+]}

@@ -1,0 +1,70 @@
+Looking at this structure, I'll trace the natural argument flow: pseudoscience survey → naming Cargo Cult Science → scientific integrity defined → integrity toward laypeople → case studies of bad/good science → closing wish.
+
+{"root": {"title": "Cargo Cult Science", "gist": "Much research follows science's outward form but lacks the strict self-honesty needed to avoid fooling yourself and others.", "question": "What is missing from fields that look scientific but don't work? (a diagnosis and examples)", "range": ["spya-arxt8r", "spya-ndyj3t"], "sourceHeading": "Cargo Cult Science", "children": [
+
+{"title": "Credits", "gist": "Byline and framing note identifying this as Feynman's 1974 Caltech commencement address on avoiding self-deception.", "range": ["spya-arxt8r", "spya-wv9g0v"], "sourceHeading": "Cargo Cult Science", "children": [
+  {"title": "Cargo Cult Science", "gist": "A title and read-time marker introduce the piece before any argument begins.", "range": ["spya-arxt8r", "spya-hwqz3q"], "sourceHeading": "Cargo Cult Science", "children": []},
+  {"title": "Author and framing", "gist": "The piece is credited to Richard Feynman and framed as a commencement speech about science, pseudoscience, and self-deception.", "range": ["spya-f6b5fs", "spya-wv9g0v"], "children": []}
+]},
+
+{"title": "A survey of modern pseudoscience", "gist": "Investigating popular beliefs like mysticism, ESP, and key-bending reveals widespread claims that never actually work when tested.", "question": "What did Feynman find when he investigated popular beliefs? (several personal encounters)", "range": ["spya-ddrr9m", "spya-mmhbvn"], "children": [
+  {"title": "From witch doctors to science", "gist": "Medieval cures like rhinoceros horn were abandoned once people learned to test ideas and discard the ones that failed, which became science.", "range": ["spya-ddrr9m", "spya-ddrr9m"], "children": []},
+  {"title": "UFOs and mysticism today", "gist": "Despite the scientific age, many people still embrace UFOs, astrology, and expanded consciousness, suggesting the world is not truly scientific.", "range": ["spya-bcgpc3", "spya-bcgpc3"], "children": []},
+  {"title": "Investigating the junk", "gist": "Curiosity about why people believe strange things led Feynman into isolation tanks and Esalen, uncovering far more mysticism than he expected.", "range": ["spya-q4502k", "spya-q4502k"], "children": []},
+  {"title": "A reflexology encounter", "gist": "A bathhouse story about a man probing a woman's toe for her supposed pituitary gland illustrates the absurdity of pseudoscientific practices like reflexology.", "range": ["spya-xm9a87", "spya-xm9a87"], "children": []},
+  {"title": "The Uri Geller test", "gist": "A hotel-room demonstration of Uri Geller's supposed mind reading and key bending produced no results at all, even underwater.", "range": ["spya-mmhbvn", "spya-mmhbvn"], "children": []}
+]},
+
+{"title": "Pseudoscience disguised as expertise", "gist": "Fields like education and criminal reform claim scientific status yet show no real improvement, and this false authority intimidates people with good instincts.", "question": "Which respected fields quietly fail the test that doomed witch doctors? (two examples)", "range": ["spya-aww976", "spya-wc4h5s"], "children": [
+  {"title": "Education and crime as witch doctoring", "gist": "Reading scores stay flat despite constant new teaching methods, and crime remains unreduced by official treatments, yet both fields are called scientific.", "range": ["spya-aww976", "spya-aww976"], "children": []},
+  {"title": "Intimidation by false expertise", "gist": "Teachers and parents with sound instincts are overridden by official methods and expert opinion, even though those methods show no real results.", "range": ["spya-re4634", "spya-g2cwvy"], "children": []},
+  {"title": "A test for empty expertise", "gist": "Topics nobody actually understands can be spotted because people discuss them casually, without the discomfort that comes from talking about real work.", "range": ["spya-wc4h5s", "spya-wc4h5s"], "children": []}
+]},
+
+{"title": "Naming Cargo Cult Science", "gist": "Like islanders who rebuild runways hoping planes will land, some research copies science's outward form while missing the thing that makes it actually work.", "question": "What should we call research that mimics science but produces no results? (an analogy)", "range": ["spya-ankp3d", "spya-fd2muf"], "children": [
+  {"title": "Psychotherapy and limits of time", "gist": "Library research into the effectiveness of psychotherapy uncovered too much material to cover, so Feynman narrows his talk to a few key examples.", "range": ["spya-ankp3d", "spya-ankp3d"], "children": []},
+  {"title": "The Cargo Cult analogy", "gist": "South Sea islanders built fake runways and control towers hoping planes would land again, performing every visible step of the ritual while missing its substance.", "range": ["spya-fd2muf", "spya-fd2muf"], "children": []}
+]},
+
+{"title": "Scientific integrity defined", "gist": "Real science requires leaning over backwards to report every fact that might undermine your own conclusion, not just the evidence that supports it.", "question": "What quality separates real science from its imitation? (a definition with examples)", "range": ["spya-afgs74", "spya-az6z7k"], "children": [
+  {"title": "Leaning over backwards", "gist": "The missing ingredient in failed science is a kind of utter honesty: reporting every possible flaw in an experiment, not just what supports your conclusion.", "range": ["spya-afgs74", "spya-afgs74"], "children": []},
+  {"title": "Disclosing contrary evidence", "gist": "Honest theorizing means publishing every fact that disagrees with your idea as well as those that support it, and testing it against things beyond its original basis.", "range": ["spya-rxj5wa", "spya-qpwryx"], "children": []},
+  {"title": "True facts, false implications", "gist": "An advertisement can state a literal truth, like oil not soaking through food, while still misleading through what it implies compared to full scientific disclosure.", "range": ["spya-bpyx8n", "spya-bpyx8n"], "children": []},
+  {"title": "Reputation depends on care", "gist": "Because other experimenters will eventually repeat your work and nature itself will agree or disagree, lasting scientific reputation depends on careful honesty, not temporary excitement.", "range": ["spya-az6z7k", "spya-az6z7k"], "children": []}
+]},
+
+{"title": "Learning not to fool yourself", "gist": "The Millikan oil-drop story shows how scientists unconsciously filter out data that disagrees with an authority's earlier result, a bias later experiments learned to guard against.", "question": "How did past scientists fool themselves without realizing it? (a historical example)", "range": ["spya-rub3a2", "spya-bvx2u8"], "children": [
+  {"title": "The subject is hard, but not only that", "gist": "Difficult subjects make scientific method hard to apply, but Feynman insists that is not the whole reason these fields fail to produce results.", "range": ["spya-rub3a2", "spya-rub3a2"], "children": []},
+  {"title": "Millikan's drifting measurement", "gist": "Successive measurements of the electron's charge crept slowly upward from Millikan's flawed original value instead of jumping straight to the correct number.", "range": ["spya-s9msxy", "spya-s9msxy"], "children": []},
+  {"title": "Why the correction crept", "gist": "Scientists quietly discarded results too far above Millikan's number by hunting for errors, while accepting close results without scrutiny, a bias now recognized and guarded against.", "range": ["spya-uj9v2h", "spya-bvx2u8"], "children": []}
+]},
+
+{"title": "Honesty toward laypeople", "gist": "Scientific integrity extends beyond fellow scientists to the public: researchers must honestly disclose a study's limits even when funding or support is at stake.", "question": "Does scientific integrity extend to how researchers talk to the public? (two examples)", "range": ["spya-ed9mzv", "spya-mjty2q"], "children": [
+  {"title": "Fooling yourself first", "gist": "The first rule of scientific integrity is not fooling yourself, since you are the easiest person to deceive; honesty toward others follows naturally after that.", "range": ["spya-ed9mzv", "spya-ed9mzv"], "children": []},
+  {"title": "Not fooling the layman", "gist": "Beyond ordinary honesty in daily life, scientists owe the public a special duty to bend over backwards showing where they might be wrong.", "range": ["spya-c46yyu", "spya-c46yyu"], "children": []},
+  {"title": "The cosmology funding example", "gist": "A researcher considered claiming practical applications for cosmology research purely to secure funding, which Feynman calls dishonest toward the public that pays for it.", "range": ["spya-mjty2q", "spya-mjty2q"], "children": []}
+]},
+
+{"title": "Publish regardless of outcome", "gist": "Honest research and honest advice require publishing results whichever way they come out, not just the ones that favor a product, a policy, or a sponsor.", "question": "What happens when publication depends on getting a favorable answer? (two examples)", "range": ["spya-jk7mj4", "spya-s05sub"], "children": [
+  {"title": "The cigarette advertising case", "gist": "A cigarette maker advertising only its low-nicotine property while hiding other harmful traits exemplifies results being published only when they favor the sponsor.", "range": ["spya-jk7mj4", "spya-jk7mj4"], "children": []},
+  {"title": "Government advice as science", "gist": "Advice to politicians is not scientific unless unfavorable findings, like a bad drilling location, are published as readily as favorable ones, regardless of political convenience.", "range": ["spya-s05sub", "spya-s05sub"], "children": []}
+]},
+
+{"title": "Case studies in poor method", "gist": "Rat and physics experiments that skip replication or reuse mismatched prior data show how convenience and pressure for new results quietly erode scientific integrity.", "question": "How does skipping replication corrupt results, in practice? (two case studies)", "range": ["spya-w9nnq6", "spya-fvenms"], "children": [
+  {"title": "A psychology student's proposal", "gist": "A student wanted to test whether rats would still perform behavior A under new condition Y, without first confirming she could replicate the original result under condition X.", "range": ["spya-w9nnq6", "spya-tf8rj2"], "children": []},
+  {"title": "A professor's discouragement", "gist": "The student's professor forbade replicating the earlier experiment as a waste of time, reflecting a 1935 norm of changing conditions without first confirming the baseline result.", "range": ["spya-v0xcd7", "spya-v0xcd7"], "children": []},
+  {"title": "Mismatched data at the accelerator", "gist": "A physicist compared heavy-hydrogen results to an old light-hydrogen dataset from different apparatus because scarce accelerator time and pressure for new results discouraged a proper matched experiment.", "range": ["spya-m95kqm", "spya-m95kqm"], "children": []},
+  {"title": "Setting up the contrast", "gist": "Not all psychology experiments show this flaw, setting up a contrasting example of research done with real rigor.", "range": ["spya-fvenms", "spya-fvenms"], "children": []}
+]},
+
+{"title": "Mr. Young's rigorous experiment", "gist": "Systematically eliminating every sensory clue, sound included, let one researcher prove which cues rats truly used, a model of rigor that later researchers ignored entirely.", "question": "What does genuine scientific rigor look like, and why was it ignored? (one detailed case)", "range": ["spya-rndcqw", "spya-wye8g6"], "children": [
+  {"title": "Eliminating every clue", "gist": "A researcher methodically ruled out texture, smell, and light as cues rats used to find food, each time finding the rats could still tell the right door.", "range": ["spya-rndcqw", "spya-npdc6n"], "children": []},
+  {"title": "A model experiment ignored", "gist": "Discovering that rats used floor sound as their final clue made this a model experiment for controlling variables, yet later researchers never cited it or adopted its methods.", "range": ["spya-yzzxkw", "spya-wye8g6"], "children": []}
+]},
+
+{"title": "ESP and the closing wish", "gist": "Parapsychology's shrinking, unrepeatable effects and selective training of successful subjects show Cargo Cult Science in action, and Feynman closes wishing listeners the freedom to stay honest.", "question": "What happens to a field that refuses to demand repeatable results? (a case and a closing wish)", "range": ["spya-rbpppq", "spya-ndyj3t"], "children": [
+  {"title": "Shrinking psychic effects", "gist": "As parapsychologists refine their techniques, the statistical effects they detect keep shrinking toward nothing, yet repeatability itself is dismissed as an irrelevant demand.", "range": ["spya-rbpppq", "spya-g203mu"], "children": []},
+  {"title": "A closing wish for integrity", "gist": "Feynman wishes graduates the freedom to maintain scientific integrity without being pressured by career or funding concerns, and advises against speaking without a clear point.", "range": ["spya-ndyj3t", "spya-ndyj3t"], "children": []}
+]}
+
+]}}

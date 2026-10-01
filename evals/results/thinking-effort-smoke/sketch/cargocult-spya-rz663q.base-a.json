@@ -1,0 +1,736 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel, Then Converge, Twice",
+  "caption": "The talk runs as one long chain from noticing what doesn't work to a closing wish, but widens twice into a funnel-and-converge: first a survey of failed pseudosciences narrowing to one test for spotting them, later a set of case studies that all converge on the same lesson about honesty.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Cargo Cult Science — overview",
+      "height": 1560,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 30,
+          "w": 300,
+          "h": 70,
+          "text": "Preview: don't fool yourself",
+          "size": "md",
+          "sub": "1974 Caltech commencement",
+          "block": "spya-wv9g0v"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 220,
+          "y": 140,
+          "w": 320,
+          "h": 70,
+          "text": "Science tests ideas; superstition persists",
+          "size": "sm",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 250,
+          "w": 680,
+          "h": 260,
+          "style": "band",
+          "label": "SEARCHING FOR WHAT DOESN'T WORK",
+          "opens": "inside-investigating",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 70,
+          "y": 300,
+          "w": 280,
+          "h": 80,
+          "text": "Mysticism, ESP, Geller — nothing worked",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 410,
+          "y": 300,
+          "w": 280,
+          "h": 80,
+          "text": "Education, justice show no progress",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "box",
+          "x": 240,
+          "y": 410,
+          "w": 280,
+          "h": 70,
+          "text": "Cocktail-party test spots empty topics",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "n6",
+          "shape": "hex",
+          "x": 250,
+          "y": 540,
+          "w": 260,
+          "h": 80,
+          "text": "Cargo Cult Science named",
+          "size": "md",
+          "tone": 2,
+          "block": "spya-fd2muf"
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "box",
+          "x": 230,
+          "y": 660,
+          "w": 300,
+          "h": 80,
+          "text": "Report evidence against your own theory",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-afgs74"
+        },
+        {
+          "kind": "node",
+          "id": "n8",
+          "shape": "note",
+          "x": 550,
+          "y": 665,
+          "w": 180,
+          "h": 70,
+          "text": "Not mere advertising spin",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-bpyx8n"
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "box",
+          "x": 220,
+          "y": 780,
+          "w": 320,
+          "h": 70,
+          "text": "Careless work eventually exposed",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-az6z7k"
+        },
+        {
+          "kind": "node",
+          "id": "n10",
+          "shape": "box",
+          "x": 210,
+          "y": 890,
+          "w": 340,
+          "h": 80,
+          "text": "Millikan's charge value crept upward over time",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-s9msxy"
+        },
+        {
+          "kind": "node",
+          "id": "n11",
+          "shape": "box",
+          "x": 230,
+          "y": 1010,
+          "w": 300,
+          "h": 70,
+          "text": "First rule: you fool yourself easiest",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-bvx2u8"
+        },
+        {
+          "kind": "node",
+          "id": "n12",
+          "shape": "box",
+          "x": 220,
+          "y": 1120,
+          "w": 320,
+          "h": 90,
+          "text": "Owe laymen, policymakers same honesty",
+          "size": "sm",
+          "sub": "and publish every result",
+          "tone": 3,
+          "block": "spya-c46yyu"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 1250,
+          "w": 680,
+          "h": 170,
+          "style": "band",
+          "label": "CASE STUDIES IN POOR SCIENCE",
+          "opens": "inside-case-studies",
+          "tone": 4
+        },
+        {
+          "kind": "node",
+          "id": "n13",
+          "shape": "box",
+          "x": 200,
+          "y": 1300,
+          "w": 360,
+          "h": 90,
+          "text": "Psychology, physics, ESP skip real checks",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "n14",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 1460,
+          "w": 300,
+          "h": 70,
+          "text": "Freedom to keep integrity",
+          "size": "md",
+          "sub": "closing wish",
+          "block": "spya-ndyj3t"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "n7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n9",
+          "to": "n10",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n10",
+          "to": "n11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n11",
+          "to": "n12",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n12",
+          "to": "n13",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n13",
+          "to": "n14",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A main chain runs top to bottom; it widens into three parallel failures that converge on a name, then narrows again through the integrity principle to a final wish."
+    },
+    {
+      "id": "inside-investigating",
+      "title": "Searching for what doesn't work — detail",
+      "height": 800,
+      "items": [
+        {
+          "kind": "node",
+          "id": "a1",
+          "shape": "ellipse",
+          "x": 120,
+          "y": 40,
+          "w": 320,
+          "h": 70,
+          "text": "Science tests ideas, keeps what works",
+          "size": "sm",
+          "sub": "vs medieval superstition",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "a2",
+          "shape": "box",
+          "x": 120,
+          "y": 150,
+          "w": 320,
+          "h": 70,
+          "text": "Yet UFOs, astrology, ESP widely believed",
+          "size": "sm",
+          "block": "spya-bcgpc3"
+        },
+        {
+          "kind": "node",
+          "id": "a3",
+          "shape": "box",
+          "x": 120,
+          "y": 260,
+          "w": 320,
+          "h": 80,
+          "text": "Explored isolation tanks and Esalen firsthand",
+          "size": "sm",
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "a3a",
+          "shape": "note",
+          "x": 520,
+          "y": 255,
+          "w": 200,
+          "h": 70,
+          "text": "Reflexology: toe isn't a gland",
+          "size": "xs",
+          "block": "spya-xm9a87"
+        },
+        {
+          "kind": "node",
+          "id": "a3b",
+          "shape": "note",
+          "x": 520,
+          "y": 345,
+          "w": 200,
+          "h": 70,
+          "text": "Geller's keys never bent",
+          "size": "xs",
+          "block": "spya-mmhbvn"
+        },
+        {
+          "kind": "node",
+          "id": "a4",
+          "shape": "box",
+          "x": 120,
+          "y": 380,
+          "w": 320,
+          "h": 80,
+          "text": "Education, justice: no real progress",
+          "size": "sm",
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "a5",
+          "shape": "box",
+          "x": 120,
+          "y": 480,
+          "w": 320,
+          "h": 70,
+          "text": "Commonsense teachers, parents feel intimidated",
+          "size": "sm",
+          "block": "spya-re4634"
+        },
+        {
+          "kind": "node",
+          "id": "a6",
+          "shape": "box",
+          "x": 120,
+          "y": 580,
+          "w": 320,
+          "h": 70,
+          "text": "Cocktail-party test spots empty topics",
+          "size": "sm",
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "a7",
+          "shape": "box",
+          "x": 120,
+          "y": 680,
+          "w": 320,
+          "h": 70,
+          "text": "More topics found: psychotherapy's effectiveness",
+          "size": "sm",
+          "block": "spya-ankp3d"
+        },
+        {
+          "kind": "edge",
+          "from": "a1",
+          "to": "a2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a2",
+          "to": "a3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a3",
+          "to": "a3a",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a3",
+          "to": "a3b",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a3",
+          "to": "a4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a4",
+          "to": "a5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a5",
+          "to": "a6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a6",
+          "to": "a7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of personal investigations, with two anecdotes hanging off the mysticism stop, running down to the one rule of thumb that ties them together."
+    },
+    {
+      "id": "inside-case-studies",
+      "title": "Case studies in poor science — detail",
+      "height": 1020,
+      "items": [
+        {
+          "kind": "node",
+          "id": "c1",
+          "shape": "box",
+          "x": 130,
+          "y": 40,
+          "w": 340,
+          "h": 70,
+          "text": "Student proposes skipping replication step",
+          "size": "sm",
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "c2",
+          "shape": "box",
+          "x": 130,
+          "y": 140,
+          "w": 340,
+          "h": 70,
+          "text": "Feynman: repeat original condition first",
+          "size": "sm",
+          "block": "spya-tf8rj2"
+        },
+        {
+          "kind": "node",
+          "id": "c3",
+          "shape": "note",
+          "x": 540,
+          "y": 145,
+          "w": 180,
+          "h": 70,
+          "text": "Refused: deemed wasteful",
+          "size": "xs",
+          "block": "spya-v0xcd7"
+        },
+        {
+          "kind": "node",
+          "id": "c4",
+          "shape": "box",
+          "x": 130,
+          "y": 250,
+          "w": 340,
+          "h": 90,
+          "text": "Deuterium run skipped light-hydrogen comparison",
+          "size": "sm",
+          "block": "spya-m95kqm"
+        },
+        {
+          "kind": "node",
+          "id": "c5",
+          "shape": "box",
+          "x": 130,
+          "y": 370,
+          "w": 340,
+          "h": 70,
+          "text": "Young's maze test: rule out every clue",
+          "size": "sm",
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "c6",
+          "shape": "box",
+          "x": 130,
+          "y": 460,
+          "w": 340,
+          "h": 80,
+          "text": "Painted doors, masked smells — rats still knew",
+          "size": "sm",
+          "block": "spya-rndcqw"
+        },
+        {
+          "kind": "node",
+          "id": "c7",
+          "shape": "box",
+          "x": 130,
+          "y": 560,
+          "w": 340,
+          "h": 80,
+          "text": "Floor sound was the real cue; fixed with sand",
+          "size": "sm",
+          "block": "spya-npdc6n"
+        },
+        {
+          "kind": "node",
+          "id": "c8",
+          "shape": "box",
+          "x": 130,
+          "y": 660,
+          "w": 340,
+          "h": 70,
+          "text": "A model experiment: finds the rat's true cue",
+          "size": "sm",
+          "block": "spya-yzzxkw"
+        },
+        {
+          "kind": "node",
+          "id": "c9",
+          "shape": "note",
+          "x": 540,
+          "y": 665,
+          "w": 180,
+          "h": 70,
+          "text": "Later work ignored Young",
+          "size": "xs",
+          "block": "spya-wye8g6"
+        },
+        {
+          "kind": "node",
+          "id": "c10",
+          "shape": "box",
+          "x": 130,
+          "y": 760,
+          "w": 340,
+          "h": 80,
+          "text": "Rhine's ESP effects shrink as controls tighten",
+          "size": "sm",
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "c11",
+          "shape": "box",
+          "x": 130,
+          "y": 870,
+          "w": 340,
+          "h": 90,
+          "text": "Institute trains only students who score hits",
+          "size": "sm",
+          "block": "spya-g203mu"
+        },
+        {
+          "kind": "edge",
+          "from": "c1",
+          "to": "c2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2",
+          "to": "c3",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2",
+          "to": "c4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c4",
+          "to": "c5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c5",
+          "to": "c6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c6",
+          "to": "c7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c7",
+          "to": "c8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c8",
+          "to": "c9",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c8",
+          "to": "c10",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c10",
+          "to": "c11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four separate examples, each its own small chain, all arriving at the same point: skipping checks and controls is what lets Cargo Cult Science pass as real science."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null
+}

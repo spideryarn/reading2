@@ -14,7 +14,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ARMS, armByName, CANDIDATES, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
+import { ARMS, armByName, CANDIDATES, effortOf, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
 import type { ArmResult } from "../evals/hierarchy-structure/run.js";
 import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
@@ -23,10 +23,12 @@ import {
   assertCallAccounted,
   type CallStats,
   chatBody,
+  messagesBody,
   parseStructureResponse,
   renderHeadingList,
   renderSeedProposal,
   runModelArm,
+  thinkingOffFailure,
 } from "../evals/hierarchy-structure/model-arms.js";
 import { compareTrees, scoreTree } from "../evals/hierarchy-structure/score.js";
 import { zdrVerdict } from "../evals/hierarchy-structure/verify-zdr.js";
@@ -365,6 +367,20 @@ describe("parseStructureResponse", () => {
     expect(score.validity.gistProblems).toBe(0); // this answer wrote its gists
   });
 
+  /* Production reads this answer with `parseJsonAnswer` (src/hierarchy.ts §
+     parseJson), which takes a sentence of prose before the JSON in its stride.
+     The harness used `stripFence` + `parseJsonFrom` — production's recipe
+     before 2026-09-03 — and so refused a thinking-off answer production
+     accepts, which nearly decided plan 261001p's Hierarchy result on a parser
+     nothing ships. GPT Sol, decision review D1. */
+  it("accepts a prose preamble before the JSON, as production does", () => {
+    const blocks = Array.from({ length: 6 }, () => block());
+    const raw =
+      "Looking at this structure, I'll trace the natural argument flow:\n\n" + answer(blocks, [[0, 2], [3, 5]]);
+    const tree = parseStructureResponse(raw, blocks, "preamble");
+    expect(scoreTree(blocks, tree).parts.count).toBe(2);
+  });
+
   it("refuses an answer the pipeline refuses - the arm is judged on the pipeline's rules", () => {
     /* **The fixture has been walked back twice, by the same argument each
        time**, and the claim under test survived both: an arm is judged on
@@ -526,7 +542,7 @@ describe("the challenger field", () => {
       expect(c.supportedEfforts, `${c.name} does not support "${FIELD_EFFORT}"`).toContain(FIELD_EFFORT);
       const arm = armByName(c.name);
       if (arm.kind !== "one-call") throw new Error(`${c.name} changed kind`);
-      expect(arm.call.effort).toBe(FIELD_EFFORT);
+      expect(effortOf(arm.call)).toBe(FIELD_EFFORT);
       expect(arm.call.model).toBe(c.model);
     }
   });
@@ -542,7 +558,7 @@ describe("the challenger field", () => {
        and the field needs its Sonnet arm back. */
     const incumbent = armByName("incumbent");
     if (incumbent.kind !== "one-call") throw new Error("the incumbent changed kind");
-    expect(incumbent.call.effort).toBe(FIELD_EFFORT);
+    expect(effortOf(incumbent.call)).toBe(FIELD_EFFORT);
     expect(incumbent.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 });
@@ -600,6 +616,52 @@ describe("chatBody", () => {
          retention or the parameter requirement, which is what this guards. */
       expect(chatBody({ ...req, call: arm.call }).provider, `${arm.name} must ask for ZDR`).toMatchObject(ZDR);
     }
+  });
+});
+
+/**
+ * **The thinking switch has to reach the wire** — the `chatBody` argument
+ * again, for `smart-off` (plan 261001p). A thinking-off arm that sent adaptive
+ * thinking would answer 200 and be reported as "thinking off is as good".
+ */
+describe("messagesBody", () => {
+  const req = { system: "sys", user: "usr", maxTokens: 1000 };
+
+  it("sends production's adaptive thinking and effort for the incumbent", () => {
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("expected a one-call arm");
+    const on = messagesBody({ ...req, call: incumbent.call });
+    expect(on.thinking).toEqual({ type: "adaptive" });
+    /* Written out, not read from PRODUCTION_EFFORT — the parity pin's reason. */
+    expect(on.output_config).toEqual({ effort: "low" });
+  });
+
+  it("sends disabled thinking and NO output_config for both thinking-off draws", () => {
+    const incumbent = armByName("incumbent");
+    if (incumbent.kind !== "one-call") throw new Error("expected a one-call arm");
+    for (const name of ["smart-off", "smart-off-repeat"]) {
+      const off = armByName(name);
+      if (off.kind !== "one-call") throw new Error(`${name}: expected a one-call arm`);
+      const body = messagesBody({ ...req, call: off.call });
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect("output_config" in body).toBe(false);
+      expect(body.model).toBe(incumbent.call.model);
+      expect(effortOf(off.call)).toBeNull();
+    }
+  });
+
+  it("refuses thinking off on the chat wire rather than dropping it", () => {
+    expect(() => chatBody({ ...req, call: { model: "x/y", thinking: "off" } })).toThrow(/Messages-wire/);
+  });
+});
+
+describe("thinking-off response proof", () => {
+  it("requires a reported zero, no thinking blocks, and end_turn", () => {
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 0, stopReason: "end_turn" })).toBeNull();
+    expect(thinkingOffFailure({ reasoningTokens: null, thinkingBlocks: 0, stopReason: "end_turn" })).toMatch(/did not report/);
+    expect(thinkingOffFailure({ reasoningTokens: 1, thinkingBlocks: 0, stopReason: "end_turn" })).toMatch(/1 thinking token/);
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 1, stopReason: "end_turn" })).toMatch(/thinking block/);
+    expect(thinkingOffFailure({ reasoningTokens: 0, thinkingBlocks: 0, stopReason: "tool_use" })).toMatch(/end_turn/);
   });
 });
 

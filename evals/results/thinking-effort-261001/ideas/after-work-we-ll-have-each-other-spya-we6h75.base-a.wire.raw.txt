@@ -1,0 +1,64 @@
+{"ideas": [
+  {
+    "name": "Work buys relationships their freedom from necessity",
+    "provenance": "introduced",
+    "statement": "When paid work lets people support themselves, their personal relationships no longer have to carry the weight of survival, so those relationships can be based on genuine liking rather than transaction. Take away work, and personal ties have to do that survival-and-status work again, which makes them heavier and more constrained.",
+    "whyYouNeedIt": "This is the essay's answer to why a workless, relationship-centered future is a loss rather than a gain, so the reader needs to see it stated to follow the final argument.",
+    "occurrences": [
+      {"blockId": "spya-tmepex", "quote": "Specifically, they believed that commercial society made friendship possible. In the bad old days before impersonal markets and bureaucracies, the only way to survive was through personal ties to allies or to kin. As a result, every personal relationship was transactional.", "reasoning": "States directly that impersonal economic structures are what free friendship from being transactional."},
+      {"blockId": "spya-hb8vvc", "quote": "When we can all support ourselves by our own labor, these transactions are no longer necessary. For Smith, the absence of necessity created room for a better form of friendship, based on \u201cnatural sympathy\u201d instead of mutual need.", "reasoning": "Spells out the mechanism: paid labor removes the need for relationships to serve survival, which is what allows warmer, freer bonds."},
+      {"blockId": "spya-d6v2bb", "quote": "Today, work makes our personal independence materially possible. But even if our material needs are met, relying on our personal relationships to meet all our needs for identity and belonging creates a similar kind of dependence.", "reasoning": "Restates the idea as the reason a post-work relational world recreates dependency rather than freedom."}
+    ]
+  },
+  {
+    "name": "Group-based dignity turns societies clannish",
+    "provenance": "introduced",
+    "statement": "When a person's sense of worth comes from belonging to a particular family, class, or peer group rather than from individual accomplishment, that group has to protect its reputation by controlling who can join it and how members behave, which makes the whole society exclusive and intolerant of deviation.",
+    "occurrences": [
+      {"blockId": "spya-hdbtc0", "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.", "reasoning": "States the causal link between group-sourced dignity and exclusionary, boundary-policing behavior."},
+      {"blockId": "spya-j337dx", "quote": "both societies share the same fundamental source of value: one's family and the system it belongs to. And in both societies, this leads to the same result: The central activities of one's life all involve preserving and defending one's own place in that system.", "reasoning": "Applies the idea across the aristocrat and upper-class-women case studies as the shared mechanism."},
+      {"blockId": "spya-tyj2mt", "quote": "they all spend an enormous amount of energy policing deviant behavior. In the West End, this usually means sexual promiscuity for women, effeminacy for men, and class aspirations for anyone.", "reasoning": "Shows the same mechanism operating in a working-class peer-group society, confirming it as a general pattern rather than a quirk of one class."}
+    ]
+  },
+  {
+    "name": "Material conditions reshape what people want, not just what they have",
+    "provenance": "introduced",
+    "statement": "Changes in economic circumstance don't just change the resources available to people; they change their values, ambitions, and sense of what is normal or desirable.",
+    "occurrences": [
+      {"blockId": "spya-t4xpae", "quote": "In other words, our material conditions don't just change what we have, but what we want. We may not have a choice.", "reasoning": "States the principle directly as the lesson drawn from the West End's fading amoral familism."},
+      {"blockId": "spya-b3pf45", "quote": "In America, unlike in Italy, women were able to work outside the home \u2014 and West End girls enjoyed significantly more freedom to go where they wanted and marry who they chose than their mothers and grandmothers.", "reasoning": "Gives the concrete case the principle is drawn from: changed economic opportunity changed what people wanted for themselves."},
+      {"blockId": "spya-zd83ts", "quote": "It's very clear that humans don't need work or anything like it to live meaningful lives.", "reasoning": "Depends on the same premise in reverse: removing work changes what structures meaning, not merely what people can afford."}
+    ]
+  },
+  {
+    "name": "Past case studies, not speculation, forecast cultural change",
+    "provenance": "introduced",
+    "statement": "Because the future tends to resemble the past under similar conditions, the most reliable way to anticipate a coming social change is to study real historical or present-day groups that already lived under comparable conditions, rather than to reason abstractly about what might happen.",
+    "occurrences": [
+      {"blockId": "spya-xcg5en", "quote": "At the same time, our degree of ignorance about the future is greatly exaggerated. If the future looks anything like the past \u2014 and there's good reason to believe it will \u2014 then we can make progress with case studies.", "reasoning": "States the forecasting method the whole essay then follows."},
+      {"blockId": "spya-c4s3en", "quote": "Let's start with 18th-century aristocrats. Aristocrats are (typically) rich, which we certainly will be if we have robots capable of all normal nonrelational labor.", "reasoning": "Puts the method into practice by selecting a historical analogue as evidence for a future condition."}
+    ]
+  },
+  {
+    "name": "Group status is a scarce, positional good",
+    "provenance": "assumed",
+    "statement": "Standing within a status group is not something everyone can simply have more of; one member's security depends on controlling who shares that standing and how they behave, because admitting the wrong people or tolerating the wrong conduct dilutes or damages everyone else's position.",
+    "whyYouNeedIt": "Without this premise, the constant policing of membership and behavior described in every case study would be pointless busywork rather than a rational defense of something finite, so the reader needs it to see why these societies bother.",
+    "occurrences": [
+      {"blockId": "spya-f6f8d4", "quote": "the only path to advancement was through politics, and all politics was relentlessly personal. Daily life was, again, gossip: who was seen speaking to whom, who's too religious or not religious enough, who's having an affair, who's offended or might offend", "reasoning": "This obsessive tracking only makes sense if any one person's missteps can cost others their relative standing, not just their own."},
+      {"blockId": "spya-xnesxg", "quote": "they are exclusive. A West Ender knows all the same people from early childhood. They're very skeptical of outsiders, including members of other ethnic groups who've lived in the same neighborhood their whole lives.", "reasoning": "Skepticism toward long-term neighbors only follows if admitting outsiders threatens something the existing members hold in common and in limited supply."},
+      {"blockId": "spya-f90g2h": "Daily life was, again, gossip", "quote": "There was no freedom, no privacy, and almost no conversation that is not ultimately about jockeying for favor with someone closer to the center of power.", "reasoning": "Constant jockeying implies favor and standing are limited goods that rise for some only as they fall for others."}
+    ]
+  },
+  {
+    "name": "Earned status is open to all; inherited status is not",
+    "provenance": "assumed",
+    "statement": "A hierarchy built on demonstrated skill or contribution is one that, in principle, anyone could rise within, while a hierarchy built on birth or group membership is closed to those outside the group from the start; this difference in openness is what makes one kind of hierarchy compatible with treating people as equals and the other not.",
+    "whyYouNeedIt": "The claim that work supports moral equality while relational status does not only follows if achievement-based ranking is actually open to outsiders in a way ascribed ranking is not; the piece never argues this distinction, it just relies on it.",
+    "occurrences": [
+      {"blockId": "spya-hdbtc0", "quote": "Moral equality is something relational societies struggle with. They tend to be more restrictive and more exclusionary.", "reasoning": "Asserts the contrast with work-based society without explaining why achievement-based ranking would be less exclusionary, which only holds if earned status is open to newcomers in a way ascribed status is not."},
+      {"blockId": "spya-ms0vr5", "quote": "unlike members of relational societies, the things we want respect for are impersonal: our skills, our accomplishments, our contributions to a shared goal.", "reasoning": "The claim that impersonal respect is different in kind, not just degree, from relational respect depends on skills and accomplishments being attainable by anyone, regardless of birth or group."},
+      {"blockId": "spya-hb0y", "quote": "American servants do not believe themselves degraded because they work; for around them everyone works. They do not feel debased by the idea that they receive a salary; for the President of the United States also works for a salary.", "reasoning": "This example of a servant and a president sharing equal dignity through work only supports moral equality if the position of 'working for a salary' is genuinely open to both, unlike inherited rank."}
+    ]
+  }
+]}

@@ -75,11 +75,11 @@ export interface PassageSlots {
   readonly referee: PassageSlot;
   readonly search: PassageSlot;
   /**
-   * The Trajectory's current stop, and only it: one quote's passage, rung.
-   * Published by `TrajectoryBand` through `usePassageLifecycle`, so leaving
-   * the mode clears it (src/web/modes/trajectory/TrajectoryMode.tsx).
+   * The Skim's current stop, and only it: one quote's passage, rung.
+   * Published by `SkimBand` through `usePassageLifecycle`, so leaving
+   * the mode clears it (src/web/modes/skim/SkimMode.tsx).
    */
-  readonly trajectory: PassageSlot;
+  readonly skim: PassageSlot;
 }
 
 /**
@@ -132,8 +132,8 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
        and the rail point at exactly where the route has put them, and the ring
        says which phrase. docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
        § Prose. */
-    case "trajectory":
-      return slots.trajectory;
+    case "skim":
+      return slots.skim;
     /* The ones with nothing to mark. `plain` has no band at all; `chat`,
        `glossary`, `summary`, `diagram`, `remember`, `structure` and `debate`
        have one that publishes no passages — verified rather than
@@ -239,8 +239,8 @@ export function proseFound(active: Found[], quotes: Found[]): Found[] {
   if (active === quotes) return active;
   if (quotes.length === 0) return active;
   if (active.length === 0) return quotes;
-  /* **Trajectory's passage is a quote's own `Found`**, the same object
-     `useQuoteMarks` built (`resolveTrajectoryStop` in search-hits.ts hands it
+  /* **Skim's passage is a quote's own `Found`**, the same object
+     `useQuoteMarks` built (`resolveSkimStop` in search-hits.ts hands it
      back rather than resolving a second copy), so concatenating would draw that
      phrase twice, one mark on top of the other. This is **identity**, not the
      key comparison the paragraph above refuses: an object that is in both lists

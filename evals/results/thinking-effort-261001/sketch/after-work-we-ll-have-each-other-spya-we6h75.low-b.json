@@ -1,0 +1,526 @@
+{
+  "version": "sketch/3",
+  "title": "Three Cases Converge",
+  "caption": "A funnel opens with the thesis that AI-driven leisure will revive relational status-societies, three historical case studies converge to test it, and the argument funnels to one conclusion about what work actually gives us.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "After Work, We'll Have Each Other",
+      "height": 880,
+      "items": [
+        {
+          "kind": "node",
+          "id": "thesis",
+          "shape": "ellipse",
+          "x": 220,
+          "y": 30,
+          "w": 320,
+          "h": 80,
+          "text": "If AI ends necessary work, relationships (not jobs) will supply status and meaning",
+          "size": "md",
+          "detail": "The relational-sector thesis the author sets out to test.",
+          "block": "spya-eq7rkm"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 150,
+          "w": 220,
+          "h": 230,
+          "style": "band",
+          "label": "ARISTOCRATS",
+          "opens": "inside-aristocrats",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "court",
+          "shape": "box",
+          "x": 45,
+          "y": 190,
+          "w": 190,
+          "h": 70,
+          "text": "Versailles court: petty, status-obsessed",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-y827zc"
+        },
+        {
+          "kind": "node",
+          "id": "apes",
+          "shape": "box",
+          "x": 45,
+          "y": 280,
+          "w": 190,
+          "h": 70,
+          "text": "Civilizing restraint on primate instincts, not inevitable",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-cz0cgg"
+        },
+        {
+          "kind": "region",
+          "x": 270,
+          "y": 150,
+          "w": 220,
+          "h": 230,
+          "style": "band",
+          "label": "UPPER-CLASS WOMEN",
+          "opens": "inside-ladies",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "ostrander",
+          "shape": "box",
+          "x": 285,
+          "y": 190,
+          "w": 190,
+          "h": 70,
+          "text": "Never-worked wives: life organized around class standing",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-uum3xk"
+        },
+        {
+          "kind": "node",
+          "id": "illusion",
+          "shape": "box",
+          "x": 285,
+          "y": 280,
+          "w": 190,
+          "h": 70,
+          "text": "Charity work valued for \"illusion of being useful\"",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-mdncme"
+        },
+        {
+          "kind": "region",
+          "x": 510,
+          "y": 150,
+          "w": 220,
+          "h": 230,
+          "style": "band",
+          "label": "WORKING-CLASS WEST END",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "peergroup",
+          "shape": "box",
+          "x": 525,
+          "y": 190,
+          "w": 190,
+          "h": 70,
+          "text": "Minimal work; life centers on tight peer groups",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-y02mr5"
+        },
+        {
+          "kind": "node",
+          "id": "conformity",
+          "shape": "box",
+          "x": 525,
+          "y": 280,
+          "w": 190,
+          "h": 70,
+          "text": "Conformity enforced, outsiders and ambition punished",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-j337dx"
+        },
+        {
+          "kind": "node",
+          "id": "converge",
+          "shape": "hex",
+          "x": 220,
+          "y": 440,
+          "w": 320,
+          "h": 80,
+          "text": "All three: dignity from group membership, not achievement",
+          "size": "md",
+          "block": "spya-j3vvp7"
+        },
+        {
+          "kind": "node",
+          "id": "workgives",
+          "shape": "box",
+          "x": 190,
+          "y": 560,
+          "w": 380,
+          "h": 80,
+          "text": "Surveys and oral histories show work gives impersonal respect: competence, usefulness, skill",
+          "size": "sm",
+          "block": "spya-t9qyhk"
+        },
+        {
+          "kind": "node",
+          "id": "friendship",
+          "shape": "box",
+          "x": 190,
+          "y": 680,
+          "w": 380,
+          "h": 90,
+          "text": "Commercial society freed friendship from necessity (Smith, Hume) — a liberal gain worth keeping",
+          "size": "sm",
+          "block": "spya-s2680p"
+        },
+        {
+          "kind": "node",
+          "id": "worry",
+          "shape": "ellipse",
+          "x": 220,
+          "y": 800,
+          "w": 320,
+          "h": 60,
+          "text": "Author hopes AI won't force a return to the clannish, relational world",
+          "size": "sm",
+          "block": "spya-dhj4jr"
+        },
+        {
+          "kind": "edge",
+          "from": "thesis",
+          "to": "court",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "thesis",
+          "to": "ostrander",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "thesis",
+          "to": "peergroup",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "court",
+          "to": "apes",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ostrander",
+          "to": "illusion",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "peergroup",
+          "to": "conformity",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "apes",
+          "to": "converge",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "illusion",
+          "to": "converge",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "conformity",
+          "to": "converge",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "converge",
+          "to": "workgives",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "workgives",
+          "to": "friendship",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "friendship",
+          "to": "worry",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "The thesis up top fans out into three historical case studies of workless or near-workless life, which converge on a single conclusion about why work matters."
+    },
+    {
+      "id": "inside-aristocrats",
+      "title": "Power and sex among apes",
+      "height": 700,
+      "items": [
+        {
+          "kind": "node",
+          "id": "saintsimon",
+          "shape": "box",
+          "x": 60,
+          "y": 40,
+          "w": 300,
+          "h": 80,
+          "text": "Saint-Simon's memoirs: Versailles obsessed with heraldic precedence, not culture",
+          "size": "sm",
+          "block": "spya-x4w0zk"
+        },
+        {
+          "kind": "node",
+          "id": "salons",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 300,
+          "h": 80,
+          "text": "Salons were mostly political gossip, not philosophy",
+          "size": "sm",
+          "block": "spya-k0yet6"
+        },
+        {
+          "kind": "node",
+          "id": "catherine",
+          "shape": "box",
+          "x": 60,
+          "y": 280,
+          "w": 300,
+          "h": 80,
+          "text": "Catherine the Great's St. Petersburg: same gossip and jockeying for favor",
+          "size": "sm",
+          "block": "spya-f90g2h"
+        },
+        {
+          "kind": "node",
+          "id": "honor",
+          "shape": "box",
+          "x": 60,
+          "y": 400,
+          "w": 300,
+          "h": 70,
+          "text": "Aristocratic dignity comes from honor, not work",
+          "size": "sm",
+          "block": "spya-de69sf"
+        },
+        {
+          "kind": "node",
+          "id": "chimps",
+          "shape": "hex",
+          "x": 60,
+          "y": 500,
+          "w": 300,
+          "h": 70,
+          "text": "\"Aristocrats are basically chimpanzees\"",
+          "size": "sm",
+          "block": "spya-cz0cgg"
+        },
+        {
+          "kind": "node",
+          "id": "eliasturn",
+          "shape": "box",
+          "x": 60,
+          "y": 600,
+          "w": 300,
+          "h": 80,
+          "text": "But this was a civilizing restraint, not an inevitable regression — we start from a saner place",
+          "size": "sm",
+          "block": "spya-k26ath"
+        },
+        {
+          "kind": "edge",
+          "from": "saintsimon",
+          "to": "salons",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "salons",
+          "to": "catherine",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "catherine",
+          "to": "honor",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "honor",
+          "to": "chimps",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "chimps",
+          "to": "eliasturn",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain from Saint-Simon's Versailles through salon gossip to Catherine's court, read through Elias's theory of civilizing restraint on ape-like status instincts."
+    },
+    {
+      "id": "inside-ladies",
+      "title": "Ladies who lunch",
+      "height": 680,
+      "items": [
+        {
+          "kind": "node",
+          "id": "noneed",
+          "shape": "box",
+          "x": 60,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "Never worked, feel no obligation to — class, not ambition, structures life",
+          "size": "sm",
+          "block": "spya-pjnh37"
+        },
+        {
+          "kind": "node",
+          "id": "network",
+          "shape": "box",
+          "x": 60,
+          "y": 140,
+          "w": 300,
+          "h": 70,
+          "text": "Main task: keep the \"social network of congenial people\" in order",
+          "size": "sm",
+          "block": "spya-a94czy"
+        },
+        {
+          "kind": "node",
+          "id": "boards",
+          "shape": "box",
+          "x": 60,
+          "y": 240,
+          "w": 300,
+          "h": 70,
+          "text": "Volunteer on nonprofit boards, fundraising among their own rich peers",
+          "size": "sm",
+          "block": "spya-xn6rzj"
+        },
+        {
+          "kind": "node",
+          "id": "illusion2",
+          "shape": "box",
+          "x": 60,
+          "y": 340,
+          "w": 300,
+          "h": 90,
+          "text": "\"It's that illusion of being useful that's satisfying\" — results don't matter",
+          "size": "sm",
+          "block": "spya-mc24jb"
+        },
+        {
+          "kind": "node",
+          "id": "separates",
+          "shape": "box",
+          "x": 60,
+          "y": 460,
+          "w": 300,
+          "h": 80,
+          "text": "Volunteering marks them off from the lower orders and keeps control inside the org",
+          "size": "sm",
+          "block": "spya-f6f8d4"
+        },
+        {
+          "kind": "node",
+          "id": "restricted",
+          "shape": "box",
+          "x": 60,
+          "y": 570,
+          "w": 300,
+          "h": 80,
+          "text": "A comfortable but narrow life, defending inherited family position",
+          "size": "sm",
+          "block": "spya-r7r7ap"
+        },
+        {
+          "kind": "edge",
+          "from": "noneed",
+          "to": "network",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "network",
+          "to": "boards",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "boards",
+          "to": "illusion2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "illusion2",
+          "to": "separates",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "separates",
+          "to": "restricted",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain showing how Ostrander's upper-class women fill a workless life with status-preserving volunteer work that admits its own uselessness."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "sourceHash": "01f7bd1e81b8b33a.fdae19af9862492e.d4a0aca1a37cfbff",
+  "profileHash": null
+}

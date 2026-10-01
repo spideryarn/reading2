@@ -1,6 +1,6 @@
 /**
  * **Where am I in the article** — src/web/where.ts, the fisheye of the outline
- * that Trajectory's rows and the spine's band cards share (plan 260929f § 3).
+ * that Skim's rows and the spine's band cards share (plan 260929f § 3).
  */
 import { describe, expect, it } from "vitest";
 import type { BlockId, NodeId, Tree, TreeNode } from "../src/types.js";

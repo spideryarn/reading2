@@ -48,7 +48,6 @@ import {
   DRIVER_STALLED,
   KEEP_A_TAB_OPEN,
   RUNNING_A_WHILE,
-  STEP_USUALLY_A_COUPLE_OF_MINUTES,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -270,7 +269,7 @@ it("says a step usually takes minutes only where that was measured", () => {
       ],
     }),
   );
-  expect(row("Drawing the argument")?.textContent).toContain(STEP_USUALLY_A_COUPLE_OF_MINUTES);
+  expect(row("Drawing the argument")?.textContent).toContain("This step usually takes about a minute.");
 
   card(
     job({
@@ -282,7 +281,7 @@ it("says a step usually takes minutes only where that was measured", () => {
   expect(row("Fetching the page"), "no step row rendered, so the assertion below proves nothing")
     .toBeDefined();
   expect(host.textContent, "invented a duration for an unmeasured step").not.toContain(
-    STEP_USUALLY_A_COUPLE_OF_MINUTES,
+    "This step usually takes about a minute.",
   );
 
   /* `hierarchy` is the one that lost its sentence, and it is the case worth
@@ -291,7 +290,7 @@ it("says a step usually takes minutes only where that was measured", () => {
   card(job());
   expect(row("Building the hierarchy")).toBeDefined();
   expect(host.textContent, "promised a duration off one successful run").not.toContain(
-    STEP_USUALLY_A_COUPLE_OF_MINUTES,
+    "This step usually takes about a minute.",
   );
 });
 

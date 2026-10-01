@@ -34,7 +34,7 @@ function flush(t: number) {
 
 /**
  * Each row's top **in the document**, which a test may move — the way the
- * Trajectory door leaving the row above does. `getBoundingClientRect` answers
+ * Skim door leaving the row above does. `getBoundingClientRect` answers
  * relative to the viewport, as a browser's does, so it moves as the page
  * scrolls. (It used to return a constant, which only worked while the target
  * was measured exactly once.)
@@ -201,7 +201,7 @@ describe("scrollToBlock says how it ended", () => {
 /**
  * **A glide aims at the element, not at the pixel it was at when asked.**
  *
- * Trajectory's "Next stop ›" door hangs inside the *current* stop's row. A
+ * Skim's "Next stop ›" door hangs inside the *current* stop's row. A
  * press measured the next stop's row at click time, and only then did React
  * move the door to the new row — so when the next stop was below, ~75px of door
  * vanished from above the target after it was measured, and the fixed-pixel

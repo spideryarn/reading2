@@ -1,0 +1,326 @@
+{
+  "version": "illustrated/4",
+  "style": "An illuminated manuscript page — gold-leaf roundels linked by painted cords, each roundel a small scene, fits a chain of reasoning climbing toward one culminating revelation.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "From Fixed Neurons to Conscious Waves",
+      "prompt": "An illuminated manuscript page, gold leaf and faded vellum, vertical 2:3 composition, reading top to bottom as a chain of eleven gold-ringed roundels joined by a painted cord that threads down the page, branching once near the bottom into a small side cartouche. Register: medieval scientific manuscript, muted ochres, blues, and gold leaf, no modern shading. TOP: a roundel of a brain crowded with tiny robed figures reaching toward a conductor's baton (MILLIONS MUST MOVE AT ONCE). Below it, a courtyard of identical scribes copying fixed scrolls while a third of them rise together (ONE THIRD RISE AT ONCE). Next, a roundel showing one scribe ringing a bell differently for a first and second object, with a small hand-ruled panel in the corner redrawing FIGURE B's schematic of pure versus mixed selectivity (ONE BELL, TWO MEANINGS). Then two lantern-bearers whose flames bend together with no wire between them (LIGHT WITHOUT A WIRE). Below, a stencil-plate held over a field of lanterns darkening some, brightening others (THE DARKENING STENCIL), echoed by a cartouche of FIGURE A's feedforward hierarchy folded faintly into the courtyard's cobblestones. Next, the same lantern-bearer shown twice, caught in shadow then free of it (SAME LAMP, TWO SHADOWS). Then the stencil sliding like a sundial's shadow across the courtyard (THE STENCIL ON THE MOVE), with a small panel redrawing FIGURE C's spatial pattern of alpha/beta regions. Below, two ripples crossing on painted water merging into one new ripple (RIPPLES MEETING). Then the lantern-field falling into one slow heavy synchronized pulse (THE SLOW HEAVY PULSE). Near the bottom, a stone archive wall of fixed grooves draped with a shifting woven tapestry of light, a cartouche beside it redrawing FIGURE H's hybrid synapse/wave diagram (STONE WALL, MOVING TAPESTRY). From this, the cord forks: a small side cartouche with three modest separate towers, and the main path ending in a single courtyard glowing as one unified dome of light (ONE DOME OF LIGHT). No lettering anywhere except the eleven titles in capitals beneath their roundels.",
+      "vignettes": [
+        {
+          "block": "spya-amx5qf",
+          "quote": "any given task engages around a third of all neurons in the prefrontal cortex",
+          "depicts": "A courtyard of identical robed scribes, each assigned one fixed scroll to copy forever, but a third of them all rise for the same single task, breaking the old rule that each has only one job.",
+          "title": "ONE THIRD RISE AT ONCE",
+          "node": "n2"
+        },
+        {
+          "block": "spya-gkfdys",
+          "quote": "Alpha/beta rhythms thus dampen or suppress gamma and associated spiking in targeted locations, creating a push-pull dynamic",
+          "depicts": "A painted stencil-plate held over a field of lanterns, darkening some and leaving others burning bright, a hand pressing the stencil down from above.",
+          "title": "THE DARKENING STENCIL",
+          "node": "n5"
+        },
+        {
+          "block": "spya-mrsvfu",
+          "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+          "depicts": "The stencil-plate shown sliding across the cortical field like a sundial's shadow crossing a courtyard, the lit lanterns rearranging into a new pattern as it passes.",
+          "title": "THE STENCIL ON THE MOVE",
+          "node": "n7"
+        },
+        {
+          "block": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "depicts": "Two ripples drawn crossing on painted water, their crests combining into a single new ripple-pattern where they meet, no oar or hand touching the water.",
+          "title": "RIPPLES MEETING",
+          "node": "n8"
+        },
+        {
+          "block": "spya-wnqgmn",
+          "quote": "transitions to high-power slow delta (~1–4 Hz) oscillations across frontal, parietal, and sensory regions",
+          "depicts": "The lantern-field under a sleeping draught: all the once-flickering lights slow to one heavy, synchronized, sluggish pulse across the whole courtyard.",
+          "title": "THE SLOW HEAVY PULSE",
+          "node": "n9"
+        },
+        {
+          "block": "spya-f0dqyd",
+          "quote": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns.",
+          "depicts": "A stone archive wall etched with permanent grooves (the synapses) while above it a woven tapestry of moving light (the waves) drapes and shifts across the same wall. FIGURE H is shown as an illuminated diagram set into a cartouche beside the wall.",
+          "title": "STONE WALL, MOVING TAPESTRY",
+          "node": "n10"
+        },
+        {
+          "block": "spya-m9exy5",
+          "quote": "Consciousness, then, emerges when these dynamic wave patterns bring the cortex into an organized, globally integrated state",
+          "depicts": "A side cartouche showing three small rival towers (global workspace, integrated information, higher-order theories) set apart, while the main courtyard below glows as one unified field of light, all lanterns joined into a single luminous dome.",
+          "title": "ONE DOME OF LIGHT",
+          "node": "n11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A roundel of a brain crowded with countless tiny figures (neurons) all reaching toward a single conductor's baton above them, suggesting an impossibly vast crowd that must move together in an instant.",
+          "title": "MILLIONS MUST MOVE AT ONCE"
+        },
+        {
+          "where": "A courtyard of identical robed scribes, each assigned one fixed scroll to copy forever, but a third of them all rise for the same single task, breaking the old rule that each has only one job.",
+          "title": "ONE THIRD RISE AT ONCE"
+        },
+        {
+          "where": "A single scribe-figure shown twice in one roundel: ringing a bell only when object A arrives first, and only when object B arrives second, showing one cell doing two jobs by context. FIGURE B is drawn",
+          "title": "ONE BELL, TWO MEANINGS"
+        },
+        {
+          "where": "Two neighbouring lantern-bearers whose flames bend toward each other though no wire connects their lanterns, light alone passing between them.",
+          "title": "LIGHT WITHOUT A WIRE"
+        },
+        {
+          "where": "A painted stencil-plate held over a field of lanterns, darkening some and leaving others burning bright, a hand pressing the stencil down from above.",
+          "title": "THE DARKENING STENCIL"
+        },
+        {
+          "where": "The same lantern-bearer from before shown twice: once caught under the stencil's shadow, once standing free of it, its light changing meaning by position alone.",
+          "title": "SAME LAMP, TWO SHADOWS"
+        },
+        {
+          "where": "The stencil-plate shown sliding across the cortical field like a sundial's shadow crossing a courtyard, the lit lanterns rearranging into a new pattern as it passes.",
+          "title": "THE STENCIL ON THE MOVE"
+        },
+        {
+          "where": "Two ripples drawn crossing on painted water, their crests combining into a single new ripple-pattern where they meet, no oar or hand touching the water.",
+          "title": "RIPPLES MEETING"
+        },
+        {
+          "where": "The lantern-field under a sleeping draught: all the once-flickering lights slow to one heavy, synchronized, sluggish pulse across the whole courtyard.",
+          "title": "THE SLOW HEAVY PULSE"
+        },
+        {
+          "where": "A stone archive wall etched with permanent grooves (the synapses) while above it a woven tapestry of moving light (the waves) drapes and shifts across the same wall. FIGURE H is shown as an illuminate",
+          "title": "STONE WALL, MOVING TAPESTRY"
+        },
+        {
+          "where": "A side cartouche showing three small rival towers (global workspace, integrated information, higher-order theories) set apart, while the main courtyard below glows as one unified field of light, all l",
+          "title": "ONE DOME OF LIGHT"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE B",
+          "block": "spya-x7vunr",
+          "sha256": "33b2a3895c3699fda06f44e608398db500b86e347f6b58fea8f4550b1a9747af",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE A",
+          "block": "spya-hec5rz",
+          "sha256": "72af7829ae0422f45d28ba2a65de2b189ba666f755339d368d83d33c6b116d8d",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE C",
+          "block": "spya-vzew3p",
+          "sha256": "8cf6a5ad96d86e7971aeced04d0d69e946af51fd85ffb8b32e0b7cf6fc938f92",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-mechanism",
+      "title": "Why Multifunctional Neurons Need a Router",
+      "prompt": "An illuminated manuscript page, 2:3 vertical, continuing the same gold-leaf and vellum register as the overview page it zooms into. Eight roundels in a single gold cord running top to bottom, this plate opening with the overview's own 'ONE THIRD RISE AT ONCE' image recalled faintly as a watermark behind the first roundel. First: a ledger-keeper's archive with only three overflowing shelves and scrolls piling on the floor (ONLY THREE SHELVES). Next: one scribe shown twice, ringing a bell for an object only when it leads a procession and again only when it follows, with a small ruled panel redrawing FIGURE B's ordered-object task (ONE BELL, TWO ORDERS). Then a guild-hall where the same craftsmen wear different badges in different rooms (ONE GUILD, MANY BADGES). Below, a tangle of knotted ropes strung between many hands with an overwhelmed rope-master (THE TANGLED ROPES). Then a great slow tide lifting sets of ropes together in rhythm beneath the tangle (THE ORGANIZING TIDE). Next, a cluster of bell-towers ringing in unison though their connecting ropes are visibly cut (BELLS WITH CUT ROPES). Then a beam of painted light crossing a courtyard in one brushstroke, outracing a runner with a scroll (LIGHT OUTRUNS THE RUNNER). Finally, a single raised conductor's hand over a courtyard of lantern-bearers, some dimming and some brightening together (ONE HAND, MANY LANTERNS). Palette: faded ochre, indigo, and gold leaf on cream vellum, fine ink linework, no shading beyond manuscript hatching. No lettering anywhere on the page except the eight titles in capitals beneath their roundels.",
+      "vignettes": [
+        {
+          "block": "spya-amx5qf",
+          "quote": "we can only learn about three different cognitive functions before essentially all prefrontal neurons have been “assigned a function”",
+          "depicts": "A ledger-keeper's archive with only three shelves, already overflowing with scrolls, while a line of unread scrolls piles on the floor, showing the archive has run out of room.",
+          "title": "ONLY THREE SHELVES",
+          "node": "a1"
+        },
+        {
+          "block": "spya-fnm872",
+          "quote": "cortical neurons have the capacity to participate in multiple networks, shifting membership as needed",
+          "depicts": "A guild-hall where the same craftsmen are shown wearing different guild-badges in different rooms, moving freely from one room's banner to another's within the same hall.",
+          "title": "ONE GUILD, MANY BADGES",
+          "node": "a5"
+        },
+        {
+          "block": "spya-dtnkkk",
+          "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights.",
+          "depicts": "A tangle of knotted ropes strung between many hands, a single overwhelmed rope-master trying and failing to sort which rope leads where using only the knots themselves.",
+          "title": "THE TANGLED ROPES",
+          "node": "a6"
+        },
+        {
+          "block": "spya-trb3jf",
+          "quote": "organizing information, routing it between circuits, and coordinating memory and control processes",
+          "depicts": "A great slow tide rolling beneath the tangled ropes, lifting and lowering sets of them together in rhythm, offering an alternative to sorting knot by knot.",
+          "title": "THE ORGANIZING TIDE",
+          "node": "a7"
+        },
+        {
+          "block": "spya-j7k4hu",
+          "quote": "spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous on neuronal timescales",
+          "depicts": "A beam of painted light crossing an entire courtyard in one brushstroke, outracing a runner with a message scroll who is only halfway across.",
+          "title": "LIGHT OUTRUNS THE RUNNER",
+          "node": "a9"
+        },
+        {
+          "block": "spya-f59f0p",
+          "quote": "They can align spike timing, activate or suppress ensembles, and flexibly route information across overlapping networks",
+          "depicts": "A single conductor's hand raised over the whole courtyard of lantern-bearers, some dimming, some brightening, all turning in step at once as the hand moves.",
+          "title": "ONE HAND, MANY LANTERNS",
+          "node": "a10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A ledger-keeper's archive with only three shelves, already overflowing with scrolls, while a line of unread scrolls piles on the floor, showing the archive has run out of room.",
+          "title": "ONLY THREE SHELVES"
+        },
+        {
+          "where": "One scribe-figure shown in two side-by-side scenes, ringing a bell for object A only when it leads a procession, and for object B only when it follows, with a small panel redrawing FIGURE B's task dia",
+          "title": "ONE BELL, TWO ORDERS"
+        },
+        {
+          "where": "A guild-hall where the same craftsmen are shown wearing different guild-badges in different rooms, moving freely from one room's banner to another's within the same hall.",
+          "title": "ONE GUILD, MANY BADGES"
+        },
+        {
+          "where": "A tangle of knotted ropes strung between many hands, a single overwhelmed rope-master trying and failing to sort which rope leads where using only the knots themselves.",
+          "title": "THE TANGLED ROPES"
+        },
+        {
+          "where": "A great slow tide rolling beneath the tangled ropes, lifting and lowering sets of them together in rhythm, offering an alternative to sorting knot by knot.",
+          "title": "THE ORGANIZING TIDE"
+        },
+        {
+          "where": "A cluster of bell-towers ringing in unison though the ropes between them have been visibly cut, their sound alone carrying the rhythm from tower to tower.",
+          "title": "BELLS WITH CUT ROPES"
+        },
+        {
+          "where": "A beam of painted light crossing an entire courtyard in one brushstroke, outracing a runner with a message scroll who is only halfway across.",
+          "title": "LIGHT OUTRUNS THE RUNNER"
+        },
+        {
+          "where": "A single conductor's hand raised over the whole courtyard of lantern-bearers, some dimming, some brightening, all turning in step at once as the hand moves.",
+          "title": "ONE HAND, MANY LANTERNS"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE B",
+          "block": "spya-x7vunr",
+          "sha256": "33b2a3895c3699fda06f44e608398db500b86e347f6b58fea8f4550b1a9747af",
+          "ext": "png"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-spatial-computing",
+      "title": "Spatial Computing, Traveling Waves, and Wave Arithmetic",
+      "prompt": "An illuminated manuscript page, 2:3 vertical, same gold-leaf vellum register as the earlier pages, this plate opening by recalling the overview's own 'THE DARKENING STENCIL' roundel faintly at the top before descending into eight linked roundels on a gold cord. First: a straining horse with a hand pressing a brake-lever beside it, lifting as motion begins (THE BRAKE ON MOTION). Next: a hand laying a carved stencil-plate over a field of small lanterns, a small panel redrawing FIGURE C's colored stencil regions (THE STENCIL LAID DOWN). Then a monk comparing two painted maps, circling in red ink where they disagree, a stumbling traveler marking the error (WHERE THE MAPS DISAGREE). Below, the same lantern shown twice glowing different colors under two stencil positions, a small panel redrawing FIGURE D's grid of objects and contexts (ONE LANTERN, TWO COLORS). Then the stencil-plate shown mid-slide across the lantern-field, trailing a wake of change (THE STENCIL SLIDING). Next, two linked frames joined by a curved arrow showing one lit pattern dissolving into another, a small panel redrawing FIGURE E's stencil transition (ONE PATTERN BECOMES ANOTHER). Then two painted ripple-waves crossing a pool and merging into a new ripple-shape, a small panel redrawing FIGURE F's summed sine waves (TWO RIPPLES BECOME ONE). Finally, a single steady oil-lamp beside a row of ten lamps burning out in sequence, the one lamp outlasting them all (ONE LAMP OUTLASTS TEN). Palette: faded ochre, indigo, and gold leaf on cream vellum, fine ink hatching, no modern shading. No lettering anywhere on the page except the eight titles in capitals beneath their roundels.",
+      "vignettes": [
+        {
+          "block": "spya-thnz7b",
+          "quote": "beta acts like a brake on movement execution",
+          "depicts": "A roundel of a horse straining at a harness while a hand presses a visible brake-lever beside it, the brake lifting slightly as the horse begins to move, recalling the overview's 'THE DARKENING STENCIL' image now set into a moving limb.",
+          "title": "THE BRAKE ON MOTION",
+          "node": "b1"
+        },
+        {
+          "block": "spya-gkfdys",
+          "quote": "They function as temporary inhibitory “stencils” across the surface of cortex.",
+          "depicts": "A hand laying a carved wooden stencil-plate over a wide painted field of small lanterns, blocking light in some squares and leaving others open, with a small panel redrawing FIGURE C's blue-and-purple stencil regions.",
+          "title": "THE STENCIL LAID DOWN",
+          "node": "b2"
+        },
+        {
+          "block": "spya-azz3c8",
+          "quote": "predicted behavioral errors through mismatches in contextual representation",
+          "depicts": "A monk comparing two painted maps side by side, one of lantern-light and one of the stencil's shadow, circling in red ink the places where the two maps disagree, a mistake shown as a stumbling traveler at that very spot.",
+          "title": "WHERE THE MAPS DISAGREE",
+          "node": "b3"
+        },
+        {
+          "block": "spya-ectcj5",
+          "quote": "This context-dependent gating can make a neuron effectively change its selectivity, producing the nonlinear mixed selectivity observed by many studies",
+          "depicts": "The same lantern shown twice under two different stencil positions, glowing one color under one stencil and a different color under the other, with a small panel redrawing FIGURE D's grid of objects against contexts.",
+          "title": "ONE LANTERN, TWO COLORS",
+          "node": "b5"
+        },
+        {
+          "block": "spya-vp5h33",
+          "quote": "they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "depicts": "Two painted ripple-waves crossing on a pool, their crests and troughs shown merging into a wholly new ripple-shape where they overlap, with a small panel redrawing FIGURE F's two sine waves summing.",
+          "title": "TWO RIPPLES BECOME ONE",
+          "node": "b9"
+        },
+        {
+          "block": "spya-mgnqxk",
+          "quote": "analog computation can improve energy efficiency over digital by more than an order of magnitude",
+          "depicts": "A single small oil-lamp burning steadily beside a row of ten identical lamps burning out one after another, the single lamp outlasting them all while giving the same light.",
+          "title": "ONE LAMP OUTLASTS TEN",
+          "node": "b10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A roundel of a horse straining at a harness while a hand presses a visible brake-lever beside it, the brake lifting slightly as the horse begins to move, recalling the overview's 'THE DARKENING STENCI",
+          "title": "THE BRAKE ON MOTION"
+        },
+        {
+          "where": "A hand laying a carved wooden stencil-plate over a wide painted field of small lanterns, blocking light in some squares and leaving others open, with a small panel redrawing FIGURE C's blue-and-purple",
+          "title": "THE STENCIL LAID DOWN"
+        },
+        {
+          "where": "A monk comparing two painted maps side by side, one of lantern-light and one of the stencil's shadow, circling in red ink the places where the two maps disagree, a mistake shown as a stumbling travele",
+          "title": "WHERE THE MAPS DISAGREE"
+        },
+        {
+          "where": "The same lantern shown twice under two different stencil positions, glowing one color under one stencil and a different color under the other, with a small panel redrawing FIGURE D's grid of objects a",
+          "title": "ONE LANTERN, TWO COLORS"
+        },
+        {
+          "where": "The stencil-plate now shown mid-slide, dragged by an unseen hand across the lantern-field, leaving a visible trailing wake of brightening and dimming behind it.",
+          "title": "THE STENCIL SLIDING"
+        },
+        {
+          "where": "The lantern-field shown in two linked frames joined by a curved arrow, one pattern of lit lanterns dissolving into a wholly different pattern as the stencil's shadow finishes its slide, with a small p",
+          "title": "ONE PATTERN BECOMES ANOTHER"
+        },
+        {
+          "where": "Two painted ripple-waves crossing on a pool, their crests and troughs shown merging into a wholly new ripple-shape where they overlap, with a small panel redrawing FIGURE F's two sine waves summing.",
+          "title": "TWO RIPPLES BECOME ONE"
+        },
+        {
+          "where": "A single small oil-lamp burning steadily beside a row of ten identical lamps burning out one after another, the single lamp outlasting them all while giving the same light.",
+          "title": "ONE LAMP OUTLASTS TEN"
+        }
+      ],
+      "figures": [
+        {
+          "label": "FIGURE C",
+          "block": "spya-vzew3p",
+          "sha256": "8cf6a5ad96d86e7971aeced04d0d69e946af51fd85ffb8b32e0b7cf6fc938f92",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE D",
+          "block": "spya-az9405",
+          "sha256": "afe03e0052ffa8f569bf933634a9a4a9eef2dad4050ab510b48145a0d9b70952",
+          "ext": "png"
+        },
+        {
+          "label": "FIGURE E",
+          "block": "spya-gbpnax",
+          "sha256": "f73874d7056e605551a95eb83d6c7b850ed84249d70b7ee689b9a7d89418e884",
+          "ext": "png"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "profileHash": null
+}

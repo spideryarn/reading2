@@ -1,0 +1,273 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-r7j9nc",
+      "name": "Testing two effects separately isn't the same as testing their difference",
+      "provenance": "assumed",
+      "statement": "Showing that one measured effect is statistically significant while another is not does not by itself establish that the two effects are significantly different from each other; that requires a direct statistical test of the difference between them.",
+      "whyYouNeedIt": "The passage reports that 78 of 157 papers 'erroneously' tested the two effects separately instead of testing their difference, but calls this an error without explaining why—so the reader can only recognize it as a mistake by already knowing that significance-of-each is a distinct question from significance-of-difference.",
+      "occurrences": [
+        {
+          "blockId": "spya-mtsaxw",
+          "quote": "78 erroneously tested instead for whether one effect is significant while the other is not, and 79 correctly tested for whether their difference is significantly different from 0",
+          "reasoning": "Labels one approach as erroneous and the other as correct without ever stating the underlying statistical principle that makes the first approach wrong.",
+          "start": 135
+        }
+      ]
+    },
+    {
+      "id": "spya-dkcjv6",
+      "name": "Published effect sizes are systematically inflated",
+      "provenance": "introduced",
+      "statement": "Because only striking, significant-looking results tend to get published, and because small samples produce noisy estimates, the effect sizes that make it into print are typically larger than the true effect, so replications almost always find a smaller effect even when the finding is real.",
+      "occurrences": [
+        {
+          "blockId": "spya-r42sms",
+          "quote": "Even when the study replicates, the replication typically has a smaller effect size. Underpowered[clarification needed] studies have a large effect size bias.",
+          "reasoning": "States the general inflation pattern as a standalone statistical fact.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-hw9d4p",
+          "quote": "when the dataset is small, noise tends to cause the regression factor to be overestimated",
+          "reasoning": "Explains the mechanism (small-sample noise) that produces inflated published estimates.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-bha57y",
+          "quote": "36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude",
+          "reasoning": "Gives the concrete empirical shrinkage that the inflation idea predicts.",
+          "start": 476
+        },
+        {
+          "blockId": "spya-f76az5",
+          "quote": "a high proportion of false positives in the published literature can explain why many findings are nonreproducible",
+          "reasoning": "Links publication bias to the inflated, nonreplicable literature.",
+          "start": 266
+        }
+      ]
+    },
+    {
+      "id": "spya-dj48b8",
+      "name": "Incentives for individual publishability conflict with collective truth-seeking",
+      "provenance": "introduced",
+      "statement": "When a researcher's career rewards (grants, citations, promotion) depend on producing publishable results rather than on those results being correct, the goals of the individual scientist and the goals of science as a whole pull apart, and the published record degrades even though every individual acted rationally.",
+      "occurrences": [
+        {
+          "blockId": "spya-huxt52",
+          "quote": "the goals and values of single scientists (e.g., publishability) are not aligned with the general goals of science (e.g., pursuing scientific truth)",
+          "reasoning": "States the misalignment explicitly as the mechanism damaging research validity.",
+          "start": 133
+        },
+        {
+          "blockId": "spya-cw2g6v",
+          "quote": "incentivizes researchers to prioritize publishable results over validity",
+          "reasoning": "Connects career pressure directly to the same individual/collective mismatch.",
+          "start": 196
+        },
+        {
+          "blockId": "spya-jk4f5n",
+          "quote": "Replications \"bring less recognition and reward, including grant money, to their authors\"",
+          "reasoning": "Shows a concrete case where rational self-interest (avoiding low-reward replications) harms the collective scientific record.",
+          "start": 572
+        },
+        {
+          "blockId": "spya-ftd2ng",
+          "quote": "the population of labs converge to maximum productivity even at the price of very high false positive rates",
+          "reasoning": "Formal model showing selection on individual-level success (productivity) can drive the whole field toward unreliable output.",
+          "start": 736
+        }
+      ]
+    },
+    {
+      "id": "spya-ccedxv",
+      "name": "Flexible analysis choices inflate false positives without fraud",
+      "provenance": "introduced",
+      "statement": "Ordinary, well-intentioned choices made during data collection and analysis—which test to run, when to stop collecting data, which outliers to drop—multiply into many hidden chances to find a 'significant' result, so honest researchers can produce false positives at a much higher rate than the nominal 5% implies.",
+      "occurrences": [
+        {
+          "blockId": "spya-kqvxfb",
+          "quote": "Questionable research practices are behaviors that exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates and undermine reproducibility.",
+          "reasoning": "States the core mechanism directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-umu7gf",
+          "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\".",
+          "reasoning": "Names and generalizes the mechanism across every stage of a study.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-qsad7n",
+          "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%",
+          "reasoning": "Quantifies how severely ordinary flexibility, not misconduct, can distort results.",
+          "start": 128
+        },
+        {
+          "blockId": "spya-kf0t33",
+          "quote": "The problem is that p-value of an optionally stopped statistical test is larger than it seems.",
+          "reasoning": "Applies the degrees-of-freedom idea specifically to the practice of optional stopping.",
+          "start": 146
+        }
+      ]
+    },
+    {
+      "id": "spya-jgmq93",
+      "name": "Replication probability tracks power, not truth",
+      "provenance": "introduced",
+      "statement": "The chance that a second study will again find a significant result depends mathematically on the statistical power of the test, which means that an underpowered line of research will keep failing to replicate even when the original effect is completely real.",
+      "whyYouNeedIt": "Without this, low replication rates look like proof that findings were false, when in fact the math shows the same failure rate would occur even with true effects if power stayed low.",
+      "occurrences": [
+        {
+          "blockId": "spya-x7d5t5",
+          "quote": "Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.",
+          "reasoning": "States directly that replication failure is a mathematical consequence of power, independent of truth.",
+          "start": 174
+        },
+        {
+          "blockId": "spya-zvfgme",
+          "quote": "implying that a positive result would replicate with probability less than 10%, regardless of whether the positive result was a true positive or a false positive",
+          "reasoning": "Applies the power-replication link to real psychology data to explain the field's low replication rate.",
+          "start": 443
+        },
+        {
+          "blockId": "spya-hdubm3",
+          "quote": "low-power replications have reduced ability to detect true effects",
+          "reasoning": "Introduces power as the causal mechanism behind replication failure that later sections build on.",
+          "start": 65
+        }
+      ]
+    },
+    {
+      "id": "spya-wa5eew",
+      "name": "True effects can genuinely vary by context",
+      "provenance": "introduced",
+      "statement": "An effect's size is not always a single fixed number; it can legitimately differ across populations, settings, and time periods, so a later study finding a different result doesn't automatically mean the earlier study was wrong.",
+      "occurrences": [
+        {
+          "blockId": "spya-ddw4ya",
+          "quote": "Heterogeneity (variance in research findings due to multiple true effect sizes rather than one)",
+          "reasoning": "Defines the core claim that there can be multiple true effect sizes rather than one fixed truth.",
+          "start": 148
+        },
+        {
+          "blockId": "spya-r23rs2",
+          "quote": "heterogeneity could have been a genuine characteristic of the phenomena being investigated",
+          "reasoning": "Uses the direct-replication heterogeneity finding to argue variation is real, not just noise or error.",
+          "start": 691
+        },
+        {
+          "blockId": "spya-qn347b",
+          "quote": "failures to replicate might be explained by contextual differences between the original experiment and the replication, often called \"hidden moderators\"",
+          "reasoning": "Generalizes the same idea to context sensitivity as an alternative explanation for non-replication besides falsity.",
+          "start": 201
+        },
+        {
+          "blockId": "spya-audpsj",
+          "quote": "attempting a replication in a different time, place or with a different sample can significantly alter an experiment's results",
+          "reasoning": "Draws the conclusion that depends on treating effect size as context-dependent rather than fixed.",
+          "start": 566
+        }
+      ]
+    },
+    {
+      "id": "spya-xe5e6w",
+      "name": "A significant p-value is not the probability the hypothesis is true",
+      "provenance": "introduced",
+      "statement": "Passing a significance test at the 5% level does not mean there is a 95% chance the alternative hypothesis is correct; the actual probability depends on how plausible the hypothesis was before the data came in.",
+      "occurrences": [
+        {
+          "blockId": "spya-fhcf00",
+          "quote": "rejecting the null hypothesis at significance level 5% does not mean that the posterior probability for the alternative hypothesis is 95%, and the posterior probability is also different from the probability of replication",
+          "reasoning": "States the idea directly as the premise for the Bayesian calculation that follows.",
+          "start": 61
+        },
+        {
+          "blockId": "spya-gn5b3a",
+          "quote": "the posterior probability of actually being true is not",
+          "reasoning": "Walks through the formula showing the gap between p-value and true posterior probability.",
+          "start": 84
+        },
+        {
+          "blockId": "spya-esjk29",
+          "quote": "if the prior probability of the null hypothesis is , and the study found a positive result, then the posterior probability for is",
+          "reasoning": "Numeric illustration that only makes sense once the reader accepts that priors, not p-values alone, set the posterior.",
+          "start": 13
+        }
+      ]
+    },
+    {
+      "id": "spya-z5zk3s",
+      "name": "Rejecting the null is weak evidence for any one specific alternative",
+      "provenance": "introduced",
+      "statement": "When many different theories would all predict the same simple result (such as 'these two variables are correlated'), finding that result rules out chance but does not tell you which of the many competing theories is correct.",
+      "occurrences": [
+        {
+          "blockId": "spya-j0ubfk",
+          "quote": "evidence against the null hypothesis \"there is no correlation\" is no evidence for one of the many alternative hypotheses that equally well predict \"there is a correlation\"",
+          "reasoning": "States the idea directly as the reason NHST works differently in soft versus hard sciences.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-pknetn",
+          "quote": "it does not imply the alternative hypothesis \"ESP exists\"",
+          "reasoning": "Applies the idea to explain why Bem's significant result didn't prove his preferred theory.",
+          "start": 150
+        },
+        {
+          "blockId": "spya-ew7pwx",
+          "quote": "the null hypothesis is always false since any two variables are correlated by a \"crud factor\" of about 0.30. The net effect is an accumulation of theories that remain unfalsified, but with no empirical evidence for preferring one over the others.",
+          "reasoning": "Extends the idea into a general diagnosis of why soft-science theories never get properly tested against each other.",
+          "start": 593
+        }
+      ]
+    },
+    {
+      "id": "spya-knk6kp",
+      "name": "Changing the significance threshold alone can't fix the underlying problem",
+      "provenance": "introduced",
+      "statement": "Lowering the conventional cutoff for 'statistical significance' (say from p<0.05 to p<0.005) does not by itself solve the reproducibility problem, because the deeper issues are in research practices and because any single fixed threshold is itself an arbitrary convention that needs case-by-case justification.",
+      "occurrences": [
+        {
+          "blockId": "spya-c9bf7m",
+          "quote": "statistical standards of evidence for claiming new discoveries in many fields of science are simply too low",
+          "reasoning": "States the proposal to fix reproducibility by tightening the threshold.",
+          "start": 525
+        },
+        {
+          "blockId": "spya-vxp8je",
+          "quote": "\"redefining\" the threshold would not fix current problems, would lead to some new ones, and that in the end, all thresholds needed to be justified case-by-case instead of following general conventions",
+          "reasoning": "Directly rebuts the idea that a new fixed threshold is itself a solution.",
+          "start": 78
+        }
+      ]
+    },
+    {
+      "id": "spya-gj7m08",
+      "name": "Converging independent methods beat mere repetition",
+      "provenance": "introduced",
+      "statement": "A conclusion is more trustworthy when it is reached through several different methods with unrelated weaknesses than when the same method is simply repeated, because repetition can reproduce a shared flaw while convergence across different approaches cannot.",
+      "occurrences": [
+        {
+          "blockId": "spya-astgqn",
+          "quote": "research should emphasize triangulation, not just replication, to protect against flawed ideas",
+          "reasoning": "States the comparative claim that triangulation is a superior safeguard to replication alone.",
+          "start": 112
+        },
+        {
+          "blockId": "spya-w073xf",
+          "quote": "Each approach has its own unrelated assumptions, strengths and weaknesses. Results that agree across different methodologies are less likely to be artefacts.",
+          "reasoning": "Gives the reasoning for why convergence across unrelated methods is stronger evidence than repeated use of one method.",
+          "start": 171
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T18:22:55.523Z",
+  "elapsedMs": 104720
+}

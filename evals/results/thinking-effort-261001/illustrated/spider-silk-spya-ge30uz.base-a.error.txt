@@ -1,0 +1,11 @@
+Error: Anthropic SDK request failed, status 402. [ai-no-credit]
+    at stageFailure (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/job-failure.ts:241:26)
+    at anthropicCallFailed (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/anthropic-call.ts:78:17)
+    at generateIllustrated (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/illustrated.ts:1085:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async collectSpend.attribution.scopeKind (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:936:23)
+    at async collectSpend (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/src/ai-spend.ts:929:20)
+    at async runOne (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:901:19)
+    at async <anonymous> (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:785:25)
+    at async main (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:762:5)
+    at async <anonymous> (/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:1205:3)

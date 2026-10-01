@@ -85,8 +85,8 @@ import type {
   SearchRun,
   Timeline,
   TimelineEvent,
-  Trajectory,
-  TrajectoryStop,
+  Skim,
+  SkimStop,
   TimelineOccurrence,
   Tree,
   TreeNode,
@@ -126,7 +126,7 @@ import type {
   PublicSearchRun,
   PublicSketch,
   PublicTimeline,
-  PublicTrajectory,
+  PublicSkim,
   PublicTweets,
 } from "../public-types.js";
 import { publicCitationUrl, publicSourceUrl } from "../urls.js";
@@ -470,26 +470,26 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
 }
 
 /**
- * **The Trajectory route, rebuilt stop by stop** — since 2026-09-29
+ * **The Skim route, rebuilt stop by stop** — since 2026-09-29
  * (SPIDERYARN-READING2-56).
  *
  * Four fields of a stop and `offered`, and nothing else: `profileHash` is
  * who the route was planned for and never crosses, and the rest of the
  * document is pipeline provenance. `cue` is optional on a stored stop (routes
  * before `trajectory/5` have none), so it goes through `opt`.
- * src/public-types.ts § `PublicTrajectory` is the argument for each.
+ * src/public-types.ts § `PublicSkim` is the argument for each.
  */
-function publicTrajectory(trajectory: Trajectory): PublicTrajectory {
+function publicSkim(skim: Skim): PublicSkim {
   return {
-    stops: trajectory.stops.map(
-      (stop): TrajectoryStop => ({
+    stops: skim.stops.map(
+      (stop): SkimStop => ({
         quoteId: stop.quoteId,
         depth: stop.depth,
         role: stop.role,
         ...opt(stop, "cue"),
       }),
     ),
-    offered: trajectory.offered,
+    offered: skim.offered,
   };
 }
 
@@ -1165,7 +1165,7 @@ export function publicArticle(row: {
   quotes: Quotes | null;
   tweets: TweetThread | null;
   timeline: Timeline | null;
-  trajectory: Trajectory | null;
+  skim: Skim | null;
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
@@ -1231,7 +1231,7 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
-    ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
+    ...(row.skim !== null ? { skim: publicSkim(row.skim) } : {}),
     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
     ...(isUsableSimpleSummary(row.simpleSummary)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }

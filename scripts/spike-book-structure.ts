@@ -14,13 +14,17 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
-import { buildTree, structureRequest, type BuildReport } from "../src/hierarchy.js";
+import {
+  buildTree,
+  parseStructureAnswer,
+  structureRequest,
+  type BuildReport,
+} from "../src/hierarchy.js";
 import { loadEnvLocal } from "../src/env.js";
 import { streamMessage } from "../src/messages-stream.js";
-import { parseJsonAnswer, parseJsonFrom } from "../src/parse-json.js";
+import { parseJsonFrom } from "../src/parse-json.js";
 import { splitBlocks } from "../src/supplement.js";
 import type { Block } from "../src/types.js";
-import type { ModelNode } from "../src/hierarchy.js";
 
 async function main(): Promise<void> {
   const [, , blocksPath, outPath] = process.argv;
@@ -88,7 +92,7 @@ async function main(): Promise<void> {
     "utf-8",
   );
 
-  const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, "the table of contents");
+  const { root } = parseStructureAnswer(raw);
   const report: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
   const tree = buildTree(root, {}, body, "spike", report);
   console.log(
