@@ -54,7 +54,7 @@ import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
 import type { FindNote, UseCitations } from "./useCitations.js";
-import { BandAbout } from "./BandAbout.js";
+import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { citePassageKey } from "./rows.js";
@@ -647,22 +647,31 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   const ready = citations !== null && (owner === null || owner.status === "ready");
   const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
   /* Empty with fewer than two works or two orders, and then there is no order
-     row and the head row carries the count and the (i) instead. */
+     row and an empty head row holds the top of the band instead. */
   const orders = citations && all.length > 1 ? orderOptions(all) : [];
-  const count = citations && (
-    <span className="gloss-count">
-      {all.length} {all.length === 1 ? "work" : "works"}
-    </span>
-  );
-  /* The two sentences about the whole list, behind an (i) — only once the list
-     is ready and has something in it, which is when the foot used to draw
-     them. */
+  /* What the band's (i) adds after the mode's own words: the two sentences
+     about the whole list (plan 261001l moved them off the foot), the count, and
+     who made it — only once the list is ready and has something in it, which
+     is when the foot used to draw them. In the band's corner since 2026-10-01
+     (spya-ucu35y, plan 261001m); it was at the order row's end. */
+  const made = owner?.citations ?? null;
   const about =
     ready && all.length > 0 ? (
-      <BandAbout label="About this list">
+      <>
         {citations.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
-      </BandAbout>
+        <p>
+          {all.length} {all.length === 1 ? "work" : "works"} cited.
+        </p>
+        {made && (
+          <AboutMade
+            generator={made.generator}
+            version={made.version}
+            generatedAt={made.generatedAt}
+            elapsedMs={made.elapsedMs}
+          />
+        )}
+      </>
     ) : null;
 
   const run = (label: string, again = false) =>
@@ -685,24 +694,20 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
     <ModeSurface
       label="Citations"
       feature="gloss citations"
+      mode="citations"
+      about={about}
       /* **No head row while the order row is drawn**, since 2026-10-01 — the
           move Glossary made (plan 260929a), for Greg's *"it says at the top how
           many works there are. I feel like that's maybe there's a more
-          space-efficient way to say that"* (`spya-nca765`). The count goes to
-          the order row's end, and only outside *prioritised*, whose threshold
-          row already says "8 of 24". With one work, or one order on offer,
-          there is no order row, so the head row stays and carries both.
+          space-efficient way to say that"* (`spya-nca765`). The count went to
+          the order row's end, and since 2026-10-01 into the band's (i) with
+          Glossary's and Quotes' (spya-ucu35y, plan 261001m); *prioritised*'s
+          threshold row still says "8 of 24". With one work, or one order on
+          offer, there is no order row, so an empty head row stays.
 
           Otherwise a fragment, not a conditional, so the row stays put while
           the list loads — the choice Timeline and Glossary make. Plan 261001l. */
-      head={
-        orders.length > 0 ? null : (
-          <>
-            {count}
-            {about}
-          </>
-        )
-      }
+      head={orders.length > 0 ? null : <></>}
       /* Pinned under the scroller, and **only a job's status now**. The two
          sentences about the whole list that were here went behind the (i) on
          2026-10-01 — Greg: *"at the bottom, there's an explanation of what
@@ -721,17 +726,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
       foot={showJob ? <div className="cite-foot">{run("Find them again", true)}</div> : null}
     >
       {orders.length > 0 && (
-        <OrderBar
-          options={orders}
-          order={order}
-          onOrder={onOrder}
-          trailing={
-            <>
-              {order !== "prioritised" && count}
-              {about}
-            </>
-          }
-        />
+        <OrderBar options={orders} order={order} onOrder={onOrder} />
       )}
 
       {/* Only in the order it belongs to: a number that means nothing in the
@@ -854,21 +849,17 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
 }
 
 /**
- * The order buttons, and at the right-hand end whatever the panel hands
- * `trailing`: the count and the (i), which came here from the head row and the
- * foot on 2026-10-01 (plan 261001l). **Beside the group, not in it**, for the
- * reason GlossaryPanel.tsx § SortBar gives.
+ * The order buttons. The count and the (i) that sat at this row's end (plan
+ * 261001l) are in the band's (i) since 2026-10-01 (plan 261001m).
  */
 function OrderBar({
   options,
   order,
   onOrder,
-  trailing,
 }: {
   options: readonly { key: CiteOrder; label: string; title: string }[];
   order: CiteOrder;
   onOrder(order: CiteOrder): void;
-  trailing: ReactNode;
 }) {
   return (
     <div className="gloss-sort">
@@ -888,7 +879,6 @@ function OrderBar({
           </button>
         ))}
       </div>
-      <span className="gloss-sort-trail">{trailing}</span>
     </div>
   );
 }

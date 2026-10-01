@@ -46,6 +46,7 @@ import { BlockRef } from "./BlockRef.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
@@ -152,10 +153,37 @@ export function IdeasPanel({
       </div>
     );
 
+  /* What the band's (i) adds after the mode's own words: how many ideas, in
+     which group, and who found them. Greg, 2026-10-01 (spya-ucu35y): *"how
+     many X (of y) … what model was used"*; plan 261001m. The total was the
+     head row's until then; each group's own count stays beside its heading,
+     where it labels the group. The provenance is the owner's artefact's — a
+     visitor's carries none (src/public-types.ts). */
+  const made = owner?.ideas ?? null;
+  const assumed = all.filter((i) => i.provenance === "assumed").length;
+  const about = ideas ? (
+    <>
+      <p>
+        {all.length === 1 ? "One idea" : `${all.length} ideas`}
+        {all.length > 0 ? `: ${assumed} you need to bring, ${all.length - assumed} the piece adds.` : "."}
+      </p>
+      {made && (
+        <AboutMade
+          generator={made.generator}
+          version={made.version}
+          generatedAt={made.generatedAt}
+          elapsedMs={made.elapsedMs}
+        />
+      )}
+    </>
+  ) : null;
+
   return (
     <ModeSurface
       label="Ideas"
       feature="gloss ideas"
+      mode="ideas"
+      about={about}
       /* **A fragment, so the row survives an absent artefact.** Both children
           are gated on `ideas`, so the header is empty while the list is coming
           — and `head={ideas && …}` would hand the surface `null`, which draws
@@ -163,13 +191,10 @@ export function IdeasPanel({
       head={
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the count below it. */}
-          {ideas && (
-            <span className="gloss-count">
-              {all.length} {all.length === 1 ? "idea" : "ideas"}
-            </span>
-          )}
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md), and
+              the count on 2026-10-01, to the band's (i) (plan 261001m). The
+              row stays for the profile label below, and as the row the (i)
+              sits in. */}
           {/* A label rather than a control, and on the head line rather than in
               a banner: it is provenance, not a warning. It matters more here
               than anywhere else it appears — a changed profile does not merely

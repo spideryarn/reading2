@@ -131,4 +131,5 @@ export function gutterCss(levels: ReadonlyMap<BlockId, ReadLevel>): string {
   return rules.join("\n");
 }
 
-const SAFE_ID = /^spya-[a-z0-9]+$/;
+/** A block id in the closed format (docs/project/block-ids.md) — safe inside an attribute selector as it stands. */
+export const SAFE_ID = /^spya-[a-z0-9]+$/;

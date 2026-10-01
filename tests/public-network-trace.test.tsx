@@ -1483,8 +1483,16 @@ describe("a signed-out browser on a shared document", () => {
     expect(text).toContain(PUBLIC_DEBATE_QUOTE);
     expect(text).toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
-    /* The row the boundary withheld is said, not silently missing. */
-    expect(text).toContain("1 more result that is not shown on a shared link");
+    /* The row the boundary withheld is said, not silently missing — in the
+       band's (i) since 2026-10-01, with Debate's other counts (plan 261001m). */
+    expect(text).not.toContain("1 more result that is not shown on a shared link");
+    const about = band?.querySelector<HTMLButtonElement>(":scope > .band-about");
+    expect(about, "the band's (i)").not.toBeNull();
+    await act(async () => about?.click());
+    expect(document.querySelector(".band-about-card")?.textContent).toContain(
+      "1 more result that is not shown on a shared link",
+    );
+    await act(async () => about?.click());
     expect(host.textContent).not.toContain("Debate is for whoever added this article");
     /* None of the owner's verbs: no first search, no search again, no retry. */
     expect(host.textContent).not.toContain("Search the web");

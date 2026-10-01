@@ -185,6 +185,7 @@ import {
 import { readStoredSynthesis } from "../debate-synthesis.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
+import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
@@ -555,28 +556,6 @@ export function withheldLines(debate: PublicDebate): string[] {
 }
 
 /**
- * **When the search ran, as a date.**
- *
- * Exported so a test can assert the panel's own spelling rather than pinning
- * `en-GB` — the browser's locale decides the word order and a test that hardcodes
- * one is testing the box it runs on.
- *
- * The string is unchanged if it does not parse. That cannot happen from
- * `src/debate.ts`, which writes `new Date().toISOString()`, but this is the only
- * function that reads the artefact's date characters and an odd string beats
- * `Invalid Date`.
- */
-export function searchedOn(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return iso;
-  return new Date(t).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-/**
  * **The site a row came from**, on the line under the row's title — or the
  * row's headline's stand-in when the search gave no title (`addressOf`).
  *
@@ -622,8 +601,8 @@ export function headCount(rows: readonly { url: string }[]): string {
 }
 
 /**
- * **What the order on screen is, in a sentence** — one per order, after
- * *"Searched on …"*. `messages.ts` § `DEBATE_ORDER_BY_CLAIM` has the argument.
+ * **What the order on screen is, in a sentence** — one per order, on the line
+ * over the list. `messages.ts` § `DEBATE_ORDER_BY_CLAIM` has the argument.
  * A `Record`, so a fifth order cannot arrive without a sentence.
  */
 const ORDER_SENTENCE: Record<DebateOrder, string> = {
@@ -1094,28 +1073,49 @@ export function DebatePanel({
     />
   );
 
+  /* **What the band's (i) adds after the mode's own words** — moved there on
+     2026-10-01 (spya-ucu35y, plan 261001m): the head's count, the foot lines
+     that were under the last row, the extracts-only sentence, and when the
+     search ran. The count is **the rows on screen**, so it still moves with
+     the bar; `headCount` says why it is excerpts *and* pages. It and the foot
+     lines are different facts: **what is on screen**, **responses the bar is
+     holding back** (still at the slider), and **pages each search returned**,
+     each naming its own search. A visitor's debate keeps `searchedAt` and
+     nothing else of provenance (src/public-types.ts). */
+  const made = owner?.debate ?? null;
+  const about =
+    debate && ready ? (
+      <>
+        <p>{headCount(rows)} on screen.</p>
+        {foot.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+        <p>{DEBATE_EXTRACTS_ONLY}</p>
+        <AboutMade
+          verb="Searched"
+          generator={made?.generator}
+          version={made?.version}
+          generatedAt={debate.searchedAt}
+          elapsedMs={made?.elapsedMs}
+        />
+      </>
+    ) : null;
+
   return (
     <ModeSurface
       label="Debate"
       feature="gloss dbt"
+      mode="debate"
+      about={about}
       /* **The one header that cannot come out empty** — the globe and the
-          `<h2>` are unconditional and only the count is gated — which is what
-          makes Debate the control for the five bands whose headers do empty
-          out. A fragment all the same, so the shape here reads the same as
-          theirs rather than looking like a second pattern. */
+          `<h2>` are unconditional, which is what makes Debate the control for
+          the five bands whose headers do empty out. A fragment all the same,
+          so the shape here reads the same as theirs rather than looking like a
+          second pattern. Its count went into the (i) on 2026-10-01. */
       head={
         <>
           <Globe size={14} className="band-head-icon" />
           <h2>Debate</h2>
-          {/* **The rows on screen, so it moves with the bar** — a head reading
-              *"7 excerpts"* over four rows would be the disagreement
-              `threshold.ts` refuses one line lower down. `headCount` says why
-              it is excerpts *and* pages. It is one of three counts a reader can
-              see at once, and they are three different facts in three places:
-              **what is on screen** here, **responses the bar is holding back**
-              at the slider, and **pages each search returned** in the lead and
-              the foot lines, each naming its own search. */}
-          {debate && <span className="gloss-count">{headCount(rows)}</span>}
         </>
       }
       /* No standing redo button under the list any more. Greg, 2026-09-29
@@ -1196,25 +1196,14 @@ export function DebatePanel({
               give the same list, is a control that visibly does nothing. */}
           {orders.length > 0 && <OrderBar options={orders} order={order} onOrder={onOrder} />}
 
-          {/* **Two of the three disclosures at the top, and the third at the
-              foot**, because they are needed at different moments and all three
-              together were an eight-line wall over the first row in a 288px
-              band (measured in a browser, 2026-09-05).
-
-              *When it was asked* and *what the order is* both govern how you
-              read the list, so they have to arrive before it: a reader looking
-              at a list assumes its order carries a claim, and by the time they
-              reach a foot line they have already read it that way. One line,
-              since 2026-09-29 — the negative result that used to sit here too
-              moved to where it is true (`leadPlacement`). *What the quotation
-              was checked against* is a question you ask **of a quotation**, so
-              it is under the list and inside every row's `more` — at the point
-              of use, twice, rather than in front of everybody before there is
-              anything to apply it to. */}
-          <p className="dbt-frame">
-            <span className="dbt-searched">Searched on {searchedOn(debate.searchedAt)}.</span>{" "}
-            {ORDER_SENTENCE[order]}
-          </p>
+          {/* **What the order is, before the list** — a reader looking at a
+              list assumes its order carries a claim, and by the time they
+              reach anything after it they have already read it that way. So it
+              stays out of the (i) (GPT Sol, plan review 261001m, P2). *When it
+              was searched* and *what the quotations were checked against* went
+              into the band's (i) on 2026-10-01 (spya-ucu35y); the second is
+              inside every row's `more` too, at the point of use. */}
+          <p className="dbt-frame">{ORDER_SENTENCE[order]}</p>
 
           {/* **The bar, above the list and outside the scroller**, where every
               other threshold in this app sits: it is a control on the list, not
@@ -1281,20 +1270,9 @@ export function DebatePanel({
 
             <Lead text={lead} placement={placement} order={order} at="after" />
 
-            {/* Both searches' numbers, once, under the last row. `footLines`
-                has the argument for four sentences rather than two. */}
-            {foot.length > 0 && (
-              <div className="dbt-foot">
-                {foot.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            )}
-
-            {/* Inside the scroller, so it sits under the last row rather than
-                pinned above the button — it is provenance to read after the
-                list, not a control. */}
-            <p className="dbt-verified">{DEBATE_EXTRACTS_ONLY}</p>
+            {/* Both searches' numbers (`footLines`) and the extracts-only
+                sentence were here, under the last row, until 2026-10-01; they
+                are in the band's (i) now (spya-ucu35y). */}
           </div>
 
         </>

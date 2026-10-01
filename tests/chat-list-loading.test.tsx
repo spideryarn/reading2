@@ -69,6 +69,7 @@ function paint(
         onDiscard: () => {},
         onRename: () => {},
         onDelete: () => {},
+        canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},

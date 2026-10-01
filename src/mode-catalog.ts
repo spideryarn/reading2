@@ -255,7 +255,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   search: {
     description: "Find a passage by the words it uses, or by what it says",
-    how: "Two matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words.",
+    how: "Two matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.",
     /* `highlight` because highlighting is what search *does to the page* rather
        than a separate thing to press — the two dimmed placeholders this mode
        was built out of are one mode now, and the word should still land.
@@ -322,7 +322,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   remember: {
     description:
       "Say what you took from this and find out where it holds up — not saved notes or flashcards",
-    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. Four stances change how hard it pushes back, from plain corrections to questions that hand the finding back to you.",
+    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. Four stances change how hard it pushes back, from plain corrections to questions that hand the finding back to you. Its replies point back to the passages they use.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 

@@ -23,7 +23,7 @@ and [-7B](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-7B) (`spya-a5y
 > — Greg, 2026-09-30 (7A — supersedes 78's layout)
 
 > Remove "Written by AI in plain words to help you get your bearings. The article says it better, and
-> each paragraph links to where." from Summary mode. And make a note in the mode.md (or similar)
+> each paragraph links to where." from Summary mode. And make a note in the new-mode.md (or similar)
 > that we don't want these mode descriptions - they waste space. Either put them as tooltips for an
 > (i) icon, or just try and make things self-explanatory.
 >

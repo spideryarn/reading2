@@ -3301,6 +3301,22 @@ export const chatThreads = spideryarn.table(
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
     check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates')`),
+    /**
+     * **One Remember thread per article.** Remember is its own single
+     * conversation, not a list. On `article_id` alone: an article has one owner
+     * and the server resolves threads per article, so an owner column here
+     * would claim a per-reader rule nothing else enforces.
+     *
+     * The client mints thread ids, so a stale tab can still ask for a second
+     * one; `targetOf` in src/chat.ts points that turn at the existing thread
+     * before it reaches this index. The migration that created it folded any
+     * existing duplicates first, by hand — `drizzle-kit generate` cannot see a
+     * data movement, the 0048 trap. drizzle/20261001143901_remember_one_thread.sql,
+     * docs/plans/261001m-remember-is-its-own-single-thread.md.
+     */
+    uniqueIndex("chat_threads_one_remember")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'remember'`),
   ],
 );
 

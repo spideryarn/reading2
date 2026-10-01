@@ -2568,6 +2568,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 260930i: the sign-up ledger. `pgReady`, its own two seeded accounts, and
      its oracle is the ledger's rows. */
   "tests/reader-arrivals.test.ts": "private-postgres",
+  /* 261001m: the Remember fold migration, run statement by statement inside a
+     transaction it always rolls back. `pgReady`, its own two articles. */
+  "tests/remember-one-thread-migration.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",

@@ -212,14 +212,12 @@ async function mount(
               blocks: new Map<string, string>(),
               sections,
               onJump: () => {},
-              onMode: () => {},
             })
           : createElement(ConversationBand, {
               slug: "a-piece",
               blocks: new Map<string, string>(),
               onJump: () => {},
               kind: "remember" as const,
-              onMode: () => {},
             }),
       ),
     );
@@ -252,32 +250,20 @@ describe("the Quiz prop seam", () => {
   });
 });
 
-describe("opening a conversation lands on Recall", () => {
-  it("clears a stale `remember=quiz` left on the URL", async () => {
-    /* Rule 3, and the registration the review warned about: this setter lives
-       in `ConversationBand`, not in `RememberBand`, and it is write-only. A
-       rename that moved only the paired registration would leave this one
-       writing `review=recall` — a dead key — and the stale `remember=quiz`
-       would survive a thread being opened, which is a conversation selected
-       and invisible. */
-    await mount("?mode=remember&remember=quiz", "conversation");
-    const onThread = panel?.onThread as (id: string) => void;
-    expect(typeof onThread).toBe("function");
-
-    await act(async () => onThread(STORED.id));
-    await until(() => param("thread") === STORED.id);
-
-    expect(param("thread")).toBe(STORED.id);
-    /* `recall` is the parameter's default, so writing it removes the key
-       rather than spelling it out. Either way the Quiz half is shut. */
-    expect(param("remember")).not.toBe("quiz");
-  });
-
-  it("never writes the retired `review` key", async () => {
+/*
+ * Rule 3 — opening a Remember conversation from chat's shared list set
+ * `remember=recall` in the same navigation — was tested here until 2026-10-01.
+ * It went with the shared list (plan 261001m): chat no longer lists Remember
+ * conversations, so `ConversationBand` no longer registers `?remember=` at all,
+ * and Recall writes `?thread=` itself. What is left to pin is that it writes the
+ * live key and only that.
+ */
+describe("Recall writes its one conversation into `?thread=`", () => {
+  it("names the Remember conversation, and never writes the retired `review` key", async () => {
     await mount("?mode=remember", "conversation");
-    const onThread = panel?.onThread as (id: string) => void;
-    await act(async () => onThread(STORED.id));
     await until(() => param("thread") === STORED.id);
+    expect(param("thread")).toBe(STORED.id);
+    expect(panel?.threadId).toBe(STORED.id);
     expect(param("review")).toBeNull();
   });
 });
