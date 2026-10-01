@@ -68,4 +68,55 @@ Browser check after the fix: see § Evidence.
 
 ## Evidence
 
-(filled in after the browser pass and the review)
+**Browser pass after the fix.** Playwright on the box, against a Vite server running the fixed
+source.
+
+| Viewport | `.chat-scroll` scrollTop | hint top vs scroller top | last suggestion reachable | Latest pill |
+|---|---|---|---|---|
+| 844×390 | 0 | 69 vs 43 | yes (239 ≤ 249 at max) | never |
+| 932×430 | 0 | 69 vs 43 | yes | never |
+| 667×375 | 0 | 69 vs 43 | yes | never |
+| 390×844, 1280×800 | 0 | unchanged, no overflow | n/a | never |
+
+Sketch overlay after the fix:
+
+| Viewport | `.sk-in-full` width | left |
+|---|---|---|
+| 1280×800 | 1120 | 80 |
+| 1600×900 | 1120 | 240 |
+| 390×844 | 367 (94vw) | 12 |
+
+At 1280 and 1600, a press on the backdrop closed the overlay, and Escape still closed it.
+
+**Not checked in a browser:**
+
+- **A thread with turns.** The local article has none, and sending a question costs a model
+  call. The jsdom controls cover it.
+- **Illustrated's overlay.** No local article has Illustrated data. Its CSS is untouched, and the
+  stylesheet test pins its `flex: none`.
+
+## GPT Sol's code review
+
+It found no P0 or P1. It fixed two P2s and four P3s, and found no other overlay with the
+`flex: 1` trap (Lightbox, Feedback, Command Bar, Illustrated, Chat, Comment and Annotate all
+checked).
+
+**P2s, both in `ChatDialog`.** The floating dialog, unlike the band, stays mounted while
+`?thread=` changes.
+
+- It now keys `Conversation` by thread id. Before, scroll position, `stick`, the Latest pill and an
+  open editor carried from one conversation into the next.
+- Its draft now travels with its target and is set in the render that mounts the new `Composer`.
+  Before, an effect reset it one render too late, after `Composer` had already copied the previous
+  thread's half-typed question.
+
+A thread id the server overrules mid-send now remounts the dialog's conversation. That is harmless:
+it lands following the bottom, and no editor is open on a first turn.
+
+**P3s, all in the test.**
+
+- The "first answer" case now really streams an answer.
+- It adds Remember and dialog thread-switch cases. The thread-switch case went red before the
+  `ChatDialog` fix.
+- The CSS check now requires exactly one rule, in the expected sheet.
+- A comment about jsdom's `scrollTop` was wrong and is corrected.
