@@ -1,0 +1,102 @@
+{
+  "arm": "high-none-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.607Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 24084,
+  "costUsd": 0.03939,
+  "tokens": {
+    "input": 6135,
+    "output": 2712,
+    "reasoning": 1566
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 183,
+  "fullerWords": 222,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah, published in May 2023, about \"distributed representations\" - a classic idea from neuroscience and early AI research. It argues that this one term actually mixes two different ideas: composition and superposition.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "Telling these two ideas apart matters because it helps researchers understand what is really going on inside neural networks. Breaking a network's representations into simple independent parts is what makes it possible to understand them at all, instead of facing an impossibly huge number of combinations.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The note uses an example of neurons representing colored shapes. Composition means using separate features, like a \"color\" neuron and a \"shape\" neuron, that combine to represent a whole object. This needs fewer neurons and lets a network make sense of new combinations it has not seen before.",
+      "ids": [
+        "spya-qcd003",
+        "spya-xcdtte",
+        "spya-g8cztv"
+      ]
+    },
+    {
+      "text": "Superposition instead squeezes far more possible things into a small number of neurons than composition would allow, though reading out any one feature becomes much harder. The note argues these two strategies actually compete for the same limited space, but can be partly combined when combinations of features are rare.",
+      "ids": [
+        "spya-xwq6ty",
+        "spya-xcrca8",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note written by Chris Olah and published on May 4, 2023. It examines how \"superposition,\" a way neural networks pack more features into fewer neurons than they have, relates to the older idea of distributed representations from neuroscience and connectionist AI.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The author says this matters because understanding how a network's representations are structured is central to reverse-engineering and mechanistically understanding neural networks. Breaking representations into independent parts is what lets researchers escape an explosion of possible combinations and actually make sense of them.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The central claim is that \"distributed representations\" actually bundle two separate strategies, called composition and superposition. These have very different consequences for how well a network generalizes and for what can be read out using a simple straight-line calculation.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-sq6424"
+      ]
+    },
+    {
+      "text": "Using a classic example of neurons representing colored shapes, the note contrasts a \"local code\" that uses one neuron per shape-color pair, a \"semi-local\" compositional code where separate color and shape neurons combine, and a \"highly distributed\" code that uses superposition to pack many combinations into very few neurons.",
+      "ids": [
+        "spya-kcjqdw",
+        "spya-qcd003",
+        "spya-bzhkhu"
+      ]
+    },
+    {
+      "text": "The author argues composition and superposition are fundamentally in tension, since both strategies compete to use the same limited space of possible neuron states. Still, limited mixing is possible when feature combinations are rare, leaving gaps that can be used to store extra information in superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-vefv29",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

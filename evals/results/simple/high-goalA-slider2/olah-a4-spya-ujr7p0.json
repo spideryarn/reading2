@@ -1,0 +1,123 @@
+{
+  "arm": "high-goalA-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:38.949Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 8182,
+  "costUsd": 0.056438,
+  "tokens": {
+    "input": 18174,
+    "output": 2009,
+    "reasoning": 364
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 191,
+  "fullerWords": 192,
+  "briefWords": 119,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah distinguishing two things often lumped together as \"distributed representations\": composition and superposition. Using Thorpe's classic shape-and-color neuron examples, it argues these are separate strategies with different properties, not points on one spectrum from \"local\" to \"distributed\" codes.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The piece argues this distinction matters for interpretability: understanding model internals requires decomposing representations into independent pieces, which is only tractable when you know whether you're dealing with composition or superposition, since they behave very differently.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition builds objects from independent features (color, shape) that combine freely, giving exponential combinations from linear neuron count, non-local generalization, and clean interpretability, but it can't pack more features than available volume allows. Superposition instead stores exponentially many non-composing items in a fixed number of neurons by exploiting sparsity, at the cost of losing the ability to linearly probe for most individual features or represent in-between items.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-g8cztv"
+      ]
+    },
+    {
+      "text": "The note shows the two aren't fully incompatible: when composed features are sparse (combinations rare), networks can place some features in superposition while still composing others, illustrated by Thorpe's \"semi-distributed\" code where color and shape are each held in superposition yet still combine.",
+      "ids": [
+        "spya-vefv29",
+        "spya-qbuyka",
+        "spya-fknpfa"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah distinguishing two ideas often lumped together under \"distributed representations\": composition and superposition. The piece argues these are separate strategies with different properties, not points on one spectrum from \"local\" to \"distributed\" coding.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The distinction matters for interpretability: decomposing a network's representations into independent parts is necessary to escape the curse of dimensionality and actually understand what the network is doing.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using Thorpe's classic shape-and-color examples, the note shows that composition means independent features (color, shape) combine linearly, giving exponential combinations from linear neuron count, strong generalization, and clean interpretability. Superposition instead packs exponentially many unrelated items into few neurons with no composition, at the cost of needing a nonlinearity to retrieve them and losing the ability to linearly probe for most features or represent in-between cases.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g8cztv",
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "text": "The core claim is that composition and superposition compete for the same \"volume\" of representational space, so a network can't maximize both at once. But when features are sparse, so most combinations never co-occur, the unused \"holes\" in composed feature space can be filled with other features stored in superposition, letting both strategies coexist in Thorpe's semi-distributed example.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-qbuyka"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This note by Chris Olah pulls apart two things often lumped together as \"distributed representations\": composition and superposition. It argues they are different strategies with different trade-offs, not points on one spectrum.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-q4dtga",
+        "spya-dzemsa"
+      ]
+    },
+    {
+      "text": "Composition builds objects from independent features (color, shape) that combine freely; it needs few neurons, generalizes well, and stays linearly readable. Superposition instead packs more features than neurons by exploiting sparsity, but loses that linear readability and needs a nonlinearity to retrieve items.",
+      "ids": [
+        "spya-g8cztv",
+        "spya-s9fc6n",
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "text": "The two compete for the same exponential volume: fully composable features cost exponentially more room, so maximal superposition requires giving up composition. The piece shows they can be mixed only when composition is limited, leaving \"holes\" sparse enough for other features to share superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 8,
+    "unanchored": 0
+  }
+}

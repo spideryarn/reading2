@@ -23,7 +23,7 @@
  * ```
  *  ┌── spine ──┬────── SUMMARY (this panel) ──────┬──── the article ────┐
  *  │           │  SUMMARY                         │                     │
- *  │  ▇▇▇▇▇▇▇  │  Depth   article · parts · secs  │  Being You opens    │
+ *  │  ▇▇▇▇▇▇▇  │  [Parts|Sections] ○─●─○ Simple  │  Being You opens    │
  *  │  ▇▇▇▇     │ ──────────────────────────────── │  with a story about │
  *  │  ▇▇▇      │  Consciousness is what it is     │  waking from        │
  *  │  ▇▇▇▇▇▇   │  like to be a living body.       │  anaesthesia…       │
@@ -82,8 +82,8 @@ import { ChevronRight } from "lucide-react";
 import type { BlockId } from "../types.js";
 import { BlockRange, BlockRef } from "./BlockRef.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { TooltipGroup } from "./Tooltip.js";
-import { MAX_SUMMARY_DEPTH } from "./params.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { MAX_SUMMARY_DEPTH, MIN_SUMMARY_DEPTH } from "./params.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { currentEntryId, showsChildren, type SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
@@ -98,21 +98,39 @@ interface Props {
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
-   * The Gists | Simple switch, built by the band (SummaryMode.tsx), which
-   * owns `?summary=` and the press. Absent in a test about the outline alone.
+   * The rest of the one row of controls — the plain-words pair and the
+   * *written for you* badge — built by the band (SummaryMode.tsx), which owns
+   * `?summary=` and the press. Absent in a test about the outline alone.
    */
   subMode?: ReactNode;
   /**
-   * **Simple's view, when Simple is the sub-mode open** — drawn in place of
-   * the Depth row and the outline. Null or absent means Gists. Built by the
-   * band so the owner/visitor seam stays a component boundary there, and this
-   * panel stays a pure function of what it is handed.
+   * **A plain-words level's view, when one is open** — drawn in place of the
+   * outline. Null or absent means the outline. Built by the band so the
+   * owner/visitor seam stays a component boundary there, and this panel stays
+   * a pure function of what it is handed.
    * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
    */
   simple?: ReactNode;
 }
 
+/**
+ * **Parts | Sections — a ladder, not a switch.** Sections *adds* the sections
+ * under each part, so while it is chosen Parts is drawn *included* (a softer
+ * wash) as well: Greg asked for the design to *"give the user a clue about how
+ * they work and are related to each other"* (SPIDERYARN-READING2-7A).
+ * `aria-pressed` stays on the one depth chosen, so a screen reader hears one
+ * choice, not two (Sol's plan review of 261001b, P2-9).
+ *
+ * `article`, depth 0, is gone (78): the root's gist heads the outline at every
+ * depth. `deep` can still be 0 when a caller passes it; nothing is lit then.
+ */
+/** Each depth's word, lower case, for the sentences the badges say — `article` still names depth 0. */
 const DEPTH_LABELS = ["article", "parts", "sections"];
+
+const DEPTH_PILLS: readonly { depth: number; label: string; what: string }[] = [
+  { depth: 1, label: "Parts", what: "The article's parts, one sentence each." },
+  { depth: 2, label: "Sections", what: "The parts, and the sections inside each, one sentence each." },
+];
 
 export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple }: Props) {
   useRenderCount("SummaryPanel");
@@ -204,34 +222,54 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simpl
           `<h2>` was never carrying that.
           docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
 
+      {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
+          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The outline
+          pair here, then the band's plain-words pair and badge. No labels: the
+          groups are named for a screen reader by their hidden legends, and
+          the pills' cards say what each one is. */}
       <div className="summ-controls">
-        {subMode}
         {/* Their structure panel's one control, and the one thing it proved:
-            a single depth cut-off over a whole document is usable. Gists
-            only: Simple has no depth, and `?deep=` just waits for the reader
-            to come back. */}
-        {simple == null && (
-        <fieldset className="summ-row">
-          <legend className="summ-label">Depth</legend>
-          {DEPTH_LABELS.map((label, d) => (
-            <button
-              key={label}
-              type="button"
-              className={`summ-pill${d === deep ? " on" : ""}`}
-              aria-pressed={d === deep}
-              disabled={d > MAX_SUMMARY_DEPTH}
-              title={
-                d === 0
-                  ? "The whole article, and nothing under it"
-                  : `Down to the ${label}`
-              }
-              onClick={() => onDeep(d)}
-            >
-              {label}
-            </button>
-          ))}
+            a single depth cut-off over a whole document is usable. Drawn
+            under a plain-words level too, unlit, because pressing one is how
+            the reader comes back to the outline; `?deep=` waits meanwhile. */}
+        <fieldset className="summ-seg">
+          <legend className="sr-only">Outline</legend>
+          <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+            {DEPTH_PILLS.map(({ depth, label, what }) => {
+              const outline = simple == null;
+              const chosen = outline && depth === deep;
+              const included = outline && depth < deep;
+              return (
+                <Tooltip
+                  key={label}
+                  placement="bottom"
+                  keepSide
+                  className="tip-soon"
+                  content={
+                    <ControlTip
+                      head={label}
+                      what={what}
+                      how="Read from the outline built when the article was added; nothing is written for it."
+                    />
+                  }
+                >
+                  <button
+                    type="button"
+                    className={`summ-pill${chosen ? " on" : ""}${included ? " included" : ""}`}
+                    aria-pressed={chosen}
+                    disabled={depth > MAX_SUMMARY_DEPTH}
+                    /* Sections, pressed while chosen, steps back to Parts: the
+                       ladder's top rung switched off. */
+                    onClick={() => onDeep(chosen && depth > MIN_SUMMARY_DEPTH ? depth - 1 : depth)}
+                  >
+                    {label}
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </TooltipGroup>
         </fieldset>
-        )}
+        {subMode}
       </div>
 
       {simple != null ? simple : (

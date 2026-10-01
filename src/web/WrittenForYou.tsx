@@ -42,7 +42,7 @@
  * pointed at, and until 2026-08-30 it answered it with a link nobody could
  * click — see ProfilePanel.tsx for the measurement.
  *
- * ## `compact`: an icon without words, in Glossary only (2026-09-29)
+ * ## `compact`: an icon without words, in Glossary and Summary (2026-09-29)
  *
  * > Perhaps hide "written for you" as a tooltip on something or just an icon.
  * >
@@ -59,6 +59,13 @@
  * out, and until now it only described the profile as it is today. There is
  * still no hover `title`: ProfilePanel.tsx says why.
  * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+ *
+ * **And Summary's plain words, since 2026-10-01**, for the same space argument
+ * made harder: Greg asked for Summary's controls in one row with no wasted
+ * vertical space (SPIDERYARN-READING2-7A), and the badge sits at that row's
+ * end. A changed profile is also said in words there — a *Write it again*
+ * button appears under the paragraphs — so the colour is not the only signal.
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
  *
  * docs/project/reader-profile.md.
  */

@@ -259,12 +259,12 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
-  /* Opens on Gists, which are free. Its Simple chip arms for itself one level
-     down, as Remember's Quiz chip does — so pressing Summary on an address
-     that still says `?summary=simple` spends nothing. */
+  /* Opens on the outline, which is free. Its plain-words pills arm for
+     themselves one level down, as Remember's Quiz chip does — so pressing
+     Summary on an address that still says `?summary=simple` spends nothing. */
   summary: {
     kind: "none",
-    reason: "opens on Gists, from the tree the pipeline already built; the Simple chip arms itself",
+    reason: "opens on the outline, from the tree the pipeline already built; the plain-words pills arm themselves",
   },
 
   /* Nothing exists to fill until the reader has typed. */
@@ -597,8 +597,10 @@ export function bandTarget(
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
-  /* The literal the Simple chip arms (SummaryMode.tsx § `SummarySubModeToggle`). */
-  if (mode === "summary") return sub.summary === "simple" ? "simple" : null;
+  /* The literal both plain-words pills arm (SummaryMode.tsx § `SummaryControls`):
+     one job writes both levels, so Fuller arms `simple` too. Sol's plan review
+     of 261001b, P1-3. */
+  if (mode === "summary") return sub.summary === "gists" ? null : "simple";
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

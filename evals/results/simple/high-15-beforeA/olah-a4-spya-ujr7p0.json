@@ -1,0 +1,61 @@
+{
+  "arm": "high-15-beforeA",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:04.067Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 13072,
+  "costUsd": 0.024024,
+  "tokens": {
+    "input": 5442,
+    "output": 1314,
+    "reasoning": 691
+  },
+  "ok": true,
+  "words": 240,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about \"distributed representations\" - a way neural networks (and brains) store information by spreading it across many neurons instead of using one neuron per thing. The piece asks what people actually mean by \"distributed,\" since the term can hide two very different ideas.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "This matters because understanding how representations are built is key to reverse-engineering neural networks - figuring out what's really going on inside them. The author says untangling these ideas is needed to escape the \"curse of dimensionality,\" the problem where too many possible combinations make things impossible to fully understand.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The note argues \"distributed representations\" actually mixes two different strategies. \"Composition\" means separate features, like color and shape, combine together to represent things. \"Superposition\" means a network squeezes far more features than it has neurons, overlapping them so they must be pulled apart later. Using examples of neurons representing colored shapes, the note shows codes ranging from one neuron per item, to features that combine, to compressed codes that pack much more into fewer neurons but lose some flexibility.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-u4qtn4",
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "text": "These two strategies aren't just points on one spectrum - they compete for the same limited space, so gaining one often costs the other, though real networks can partly mix both when features are rare rather than common. Telling composition and superposition apart matters because they behave very differently, especially when trying to understand what a network has actually learned.",
+      "ids": [
+        "spya-dzemsa",
+        "spya-vefv29",
+        "spya-st3tz8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

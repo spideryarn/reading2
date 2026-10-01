@@ -117,16 +117,28 @@ const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came fro
 
 /** A generated artefact that both export formats must carry whole. */
 const SIMPLE: SimpleSummary = {
-  version: "simple/1",
+  version: "simple/2",
   generator: "fixture-model",
   slug: SLUG,
   sourceHash: "0123456789abcdef",
   generatedAt: "2026-09-30T12:00:00.000Z",
   elapsedMs: 321,
-  paragraphs: [
-    { text: "The article explains the question.", ids: [BLOCKS[0]] },
-    { text: "It then gives the answer and its limits.", ids: [BLOCKS[1], BLOCKS[2]] },
-  ],
+  profileHash: null,
+  levels: {
+    brief: [
+      { text: "It asks a question.", ids: [BLOCKS[0]] },
+      { text: "And answers it.", ids: [BLOCKS[1]] },
+    ],
+    simple: [
+      { text: "The article explains the question.", ids: [BLOCKS[0]] },
+      { text: "It then gives the answer and its limits.", ids: [BLOCKS[1], BLOCKS[2]] },
+    ],
+    fuller: [
+      { text: "The article explains the question and where it came from.", ids: [BLOCKS[0]] },
+      { text: "It then gives the answer.", ids: [BLOCKS[1]] },
+      { text: "And it says where that answer stops.", ids: [BLOCKS[2]] },
+    ],
+  },
 };
 
 /* A real source document, so the rollback's `readRawDocument` actually reaches
@@ -483,6 +495,17 @@ describe("the bundle is the faithful projection", () => {
       await readFile(path.join(out, SLUG, "simple-summary.json"), "utf8"),
     ) as SimpleSummary;
     expect(rollback).toEqual(SIMPLE);
+  });
+
+  /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
+     `simple/2` row does not have, and a zero row is dropped — so both levels
+     would have vanished from the page while the JSON beside it carried them. */
+  it("counts every plain-words level on the page", () => {
+    const page = bundled.get("index.html");
+    if (!page) throw new Error("no index.html");
+    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(brief\)<\/span>/)?.[1]).toBe("2");
+    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(simple\)<\/span>/)?.[1]).toBe("2");
+    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(fuller\)<\/span>/)?.[1]).toBe("3");
   });
 
   /**

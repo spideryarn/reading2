@@ -1,0 +1,101 @@
+{
+  "arm": "high-goalA-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.521Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 29051,
+  "costUsd": 0.069982,
+  "tokens": {
+    "input": 20681,
+    "output": 2862,
+    "reasoning": 1583
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 216,
+  "fullerWords": 270,
+  "paragraphs": [
+    {
+      "text": "This article reviews how scientists study the way neurons combine signals from many inputs. It uses information theory, a way of measuring how much one signal tells you about another. The main tool discussed is called partial information decomposition, or PID.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "Brains take in signals and turn them into new signals, but how this happens inside circuits is poorly understood. The authors argue that measuring only how information flows from one neuron to the next misses how neurons actually combine several inputs together into something new.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID splits the total information that two source neurons give about a target neuron into three parts. Redundant information is what both sources tell you anyway. Unique information is what only one source can tell you. Synergistic information only shows up when you look at both sources together, and it reflects the target responding to a pattern rather than just adding up each input.",
+      "ids": [
+        "spya-pjdgu6",
+        "spya-t02v4p",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "In recordings from mouse brain-slice cultures, synergy was higher among densely connected \"rich club\" neurons, and higher still when the two source neurons were connected to each other. Synergy also peaked when source neurons' activity was moderately, not too strongly, correlated. In monkeys doing a task, which brain region showed the most synergy shifted depending on the stage of the task, such as planning versus movement.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review of how multivariate information theory, especially a framework called partial information decomposition (PID), has been used to study how neural circuits process information. It aims to give an accessible introduction to the method alongside recent empirical findings from real neural recordings.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "A simpler measure, transfer entropy, tracks how much a neuron's past activity predicts another neuron's future activity, capturing information flow. But this does not reveal how two or more input streams interact when a target neuron integrates them, which is what the authors mean by information processing.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "PID decomposes the total information that two source neurons jointly carry about a target neuron into three pieces: redundant information carried by either source alone, unique information only one source provides, and synergistic information only visible from the joint pattern of both sources together. Synergy is treated as a signature of genuine computation, since it means the target is sensitive to the combination, not just the sum, of its inputs.",
+      "ids": [
+        "spya-h5dz45",
+        "spya-e94ury",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "In mouse cortical cultures, synergy tracked feedforward information flow closely, running at roughly a quarter of the transfer entropy between sources and target. Synergy was also concentrated in densely connected \"rich club\" neurons, which held about 88% of total synergy despite being under 40% of neurons, and it rose further when the two source neurons were also connected to each other.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "Synergy peaked when source neurons' activity was only moderately correlated, then declined as correlation grew further, with redundancy taking over instead. In behaving monkeys, synergy dominated overall, but redundancy rose sharply during movement execution, which the authors interpret as the brain duplicating a \"move\" signal for reliability.",
+      "ids": [
+        "spya-ybmve2",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

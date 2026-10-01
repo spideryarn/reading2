@@ -538,16 +538,28 @@ describe("what counts as shareable", () => {
       trajectory: null,
       faq: null,
       simpleSummary: {
-        version: "simple/1",
+        version: "simple/2",
         generator: "test",
         slug: "x",
         sourceHash: "0000000000000000",
         generatedAt: "2020-01-01T00:00:00.000Z",
         elapsedMs: 1,
-        paragraphs: [
-          { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
-          { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
-        ],
+        profileHash: null,
+        levels: {
+          brief: [
+            { text: "What it is.", ids: ["spya-k3m9qt"] },
+            { text: "Why it matters.", ids: ["spya-p7w2dn"] },
+          ],
+          simple: [
+            { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
+            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+          ],
+          fuller: [
+            { text: "What the piece is about, in more detail.", ids: ["spya-k3m9qt"] },
+            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+            { text: "How it makes the argument.", ids: ["spya-k3m9qt"] },
+          ],
+        },
       },
       citations: null,
       debate: null,
@@ -573,8 +585,20 @@ describe("what counts as shareable", () => {
         sourceHash: "0000000000000000",
         generatedAt: "2020-01-01T00:00:00.000Z",
         elapsedMs: 1,
-        /* Fewer than two paragraphs is not a usable or public Simple. */
-        paragraphs: [],
+        profileHash: null,
+        /* Fewer than two paragraphs at either level is not a usable or public Simple. */
+        levels: {
+          brief: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+          ],
+          simple: [],
+          fuller: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+            { text: "Three.", ids: ["spya-k3m9qt"] },
+          ],
+        },
       },
       citations: null,
       debate: null,

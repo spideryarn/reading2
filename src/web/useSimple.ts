@@ -31,6 +31,10 @@ export interface UseSimple {
   stale: boolean;
   /** The article is the same and the current prompt would write this differently. */
   outdated: boolean;
+  /** Written for a profile — derived from the artefact's `profileHash`, as `useIdeas` does. */
+  profiled: boolean;
+  /** The reader has changed their profile since. Never stale; it offers a rewrite. */
+  profileChanged: boolean;
   slug: string;
   error: string | null;
   /** The job writing this article's Simple, if one is. */
@@ -55,6 +59,7 @@ export function useSimple(slug: string): UseSimple {
   const [simple, setSimple] = useState<SimpleSummary | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /* `current()` after every `await`, before any state is set: false means this
@@ -69,6 +74,7 @@ export function useSimple(slug: string): UseSimple {
           setSimple(null);
           setStale(false);
           setOutdated(false);
+          setProfileChanged(false);
           setError(null);
           setStatus("none");
           return;
@@ -78,6 +84,7 @@ export function useSimple(slug: string): UseSimple {
         setSimple(loaded.simpleSummary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
+        setProfileChanged(loaded.profileChanged);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -124,6 +131,8 @@ export function useSimple(slug: string): UseSimple {
     simple,
     stale,
     outdated,
+    profiled: simple?.profileHash != null,
+    profileChanged,
     slug,
     error,
     job: queue.job,

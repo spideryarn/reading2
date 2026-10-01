@@ -236,78 +236,97 @@ describe("Remember's Recall | Quiz toggle", () => {
   });
 });
 
-/* ----------------------------------------------- Summary's Gists | Simple -- */
+/* ------------------------------------------ Summary's plain-words slider -- */
 
-const { SummarySubModeToggle } = await import("../src/web/modes/summary/SummaryMode.js");
+const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
 
-/** `slug: null` is the visitor's toggle, which must arm nothing. */
-function mountSummaryToggle(value: "gists" | "simple", slug: string | null = SLUG): string[] {
+/** `slug: null` is the visitor's slider, which must arm nothing. */
+function mountSummaryControls(value: "gists" | "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
   const changes: string[] = [];
   act(() => {
     root.render(
-      createElement(SummarySubModeToggle, { slug, value, onChange: (next: string) => void changes.push(next) }),
+      createElement(SummaryControls, { slug, value, onChange: (next: string) => void changes.push(next) }),
     );
   });
   return changes;
 }
 
-function summaryChip(label: string): string {
-  const buttons = [...host.querySelectorAll<HTMLElement>(".summ-views .summ-pill")];
-  const at = buttons.findIndex((b) => b.textContent?.trim() === label);
-  if (at < 0) throw new Error(`no ${label} chip`);
-  return `.summ-views .summ-pill:nth-of-type(${at + 1})`;
+function slider(): HTMLInputElement {
+  const found = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
+  if (!found) throw new Error("no plain-words slider");
+  return found;
 }
 
-describe("Summary's Gists | Simple switch", () => {
-  it("is a labelled group of focusable pressed-state controls", () => {
-    mountSummaryToggle("gists");
-    const group = host.querySelector("fieldset.summ-views");
-    const buttons = [...(group?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
-    expect(group?.querySelector("legend")?.textContent).toBe("View");
-    expect(buttons.map((button) => [button.type, button.textContent, button.getAttribute("aria-pressed")])).toEqual([
-      ["button", "Gists", "true"],
-      ["button", "Simple", "false"],
-    ]);
-    act(() => buttons[1]?.focus());
-    expect(document.activeElement).toBe(buttons[1]);
+/** Move the slider to a stop, as a drag or an arrow key does: React hears `input`. */
+function slideTo(stop: number): void {
+  const input = slider();
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, String(stop));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+describe("Summary's plain-words slider", () => {
+  it("is a named range with three stops that says which level it is on", () => {
+    mountSummaryControls("gists");
+    const group = host.querySelector("fieldset.summ-slider");
+    expect(group?.querySelector("legend")?.textContent).toBe("In plain words");
+    expect(group?.querySelector("legend")?.className).toBe("sr-only");
+    const input = slider();
+    expect([input.min, input.max, input.step, input.value]).toEqual(["0", "2", "1", "1"]);
+    expect(input.getAttribute("aria-valuetext")).toBe("Simple (not showing)");
+    mountSummaryControls("fuller");
+    expect(slider().value).toBe("2");
+    expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
   });
 
-  it("arms Simple when Simple is pressed, and moves to it", () => {
-    const changes = mountSummaryToggle("gists");
+  it("arms the run when moved to a level, and moves to it", () => {
+    const changes = mountSummaryControls("gists");
     expect(armed("simple")).toBe(false);
-    click(summaryChip("Simple"));
+    slideTo(0);
+    expect(armed("simple")).toBe(true);
+    expect(changes).toEqual(["brief"]);
+  });
+
+  it("arms Fuller's press as the one simple step, which writes every level", () => {
+    const changes = mountSummaryControls("simple");
+    slideTo(2);
+    expect(armed("simple")).toBe(true);
+    expect(changes).toEqual(["fuller"]);
+  });
+
+  it("opens the level it rests on when the idle slider is clicked", () => {
+    const changes = mountSummaryControls("gists");
+    click(".summ-slider input[type=range]");
     expect(armed("simple")).toBe(true);
     expect(changes).toEqual(["simple"]);
   });
 
-  it("arms a fresh press when Simple is pressed while already showing", () => {
+  it("arms a fresh press when clicked on the level already showing", () => {
     /* The way back from a failed read (useAutoRun.ts § A failed read is not an
        answer): nothing re-fires without a new nonce. No `onChange`, because
        writing the same value would push a history entry that goes nowhere. */
-    const changes = mountSummaryToggle("simple");
-    click(summaryChip("Simple"));
+    const changes = mountSummaryControls("simple");
+    click(".summ-slider input[type=range]");
     const first = pendingActivation(SLUG, "simple");
     expect(first).not.toBeNull();
-    click(summaryChip("Simple"));
+    click(".summ-slider input[type=range]");
     expect(pendingActivation(SLUG, "simple")).not.toBe(first);
     expect(changes).toEqual([]);
   });
 
-  it("arms nothing for Gists, or for merely being in Simple", () => {
-    /* A pasted `?summary=simple`, a Back step, a last-view restore: each
-       mounts the switch with Simple already set, and none is a press. */
-    mountSummaryToggle("simple");
-    expect(armed("simple")).toBe(false);
-    mountSummaryToggle("simple");
-    click(summaryChip("Gists"));
+  it("arms nothing for merely being on a level", () => {
+    /* A pasted `?summary=fuller`, a Back step, a last-view restore: each
+       mounts the slider with a level already set, and none is a press. */
+    mountSummaryControls("fuller");
     expect(armed("simple")).toBe(false);
   });
 
-  it("arms nothing for a visitor, who still gets to switch", () => {
-    const changes = mountSummaryToggle("gists", null);
-    click(summaryChip("Simple"));
+  it("arms nothing for a visitor, who still gets to move it", () => {
+    const changes = mountSummaryControls("gists", null);
+    slideTo(2);
     expect(armed("simple")).toBe(false);
-    expect(changes).toEqual(["simple"]);
+    expect(changes).toEqual(["fuller"]);
   });
 });
 

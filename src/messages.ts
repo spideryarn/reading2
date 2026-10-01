@@ -3825,6 +3825,7 @@ export const OWNED_ARTEFACT = {
   /* Owner-only, and listed all the same, for `illustrated`'s reason: its
      `profileHash` is the reader's own, and `ProfileCarrying` asks. */
   trajectory: "your route through the quotes",
+  simple: "your plain-words summary",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast

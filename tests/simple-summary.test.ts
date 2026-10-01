@@ -1,11 +1,14 @@
 /**
  * **Simple's validation, and the one request it sends** —
- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md § The artefact.
+ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md § The artefact, and
+ * the two levels and the reader since
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
  *
- * Every bullet of the plan's validation list has a case here. Each one is a
+ * Every bullet of the plans' validation lists has a case here. Each one is a
  * way the stage would be wrong quietly: a paragraph with no door back to the
- * piece, or a digest where an orientation was asked for, looks exactly like one
- * that works (docs/reusable/silent-success.md).
+ * piece, a digest where an orientation was asked for, or one good level stored
+ * beside a missing one, looks exactly like one that works
+ * (docs/reusable/silent-success.md).
  */
 import path from "node:path";
 
@@ -13,42 +16,55 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
 import { SHAPE, whyUnusable } from "../src/store/artifacts.js";
-import type { Block, BlockId } from "../src/types.js";
+import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../src/types.js";
 import {
   ANSWER_TOKENS,
-  MAX_WORDS,
-  SIMPLE_SYSTEM,
+  SIMPLE_SYSTEMS,
   SIMPLE_VERSION,
   buildSimpleSummary,
   emptyDropped,
   generateSimpleSummary,
   inputFingerprint,
-  simpleSystem,
+  renderPrompt,
 } from "../src/simple-summary.js";
 import { HIGH_POWER_MODEL, STAGE_EFFORT } from "../src/models.js";
+import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
 
-let answer = "";
+/** One answer for every call, or one per level — told apart by the level's system prompt. */
+let answer: string | Partial<Record<SimpleLevel, string>> = "";
 let stop: string = "end_turn";
-const sent: { task: string; body: unknown; options: unknown }[] = [];
+const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
+
+const levelOf = (body: unknown): SimpleLevel => {
+  const text = (body as { system?: { text?: string }[] }).system?.[1]?.text ?? "";
+  return text.includes("eighteen-year-old") ? "fuller" : text.includes("twelve-year-old") ? "brief" : "simple";
+};
+
+/** A level the case does not name gets a good answer, so each case is about the level it names. */
+const answerFor = (level: SimpleLevel): string =>
+  typeof answer === "string" ? answer : (answer[level] ?? JSON.stringify({ paragraphs: GOOD[level] }));
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
     streamMessage: (task: string, body: unknown, options: unknown) => {
+      const signal = (options as { signal?: AbortSignal }).signal;
       sent.push({
         task,
         body: JSON.parse(JSON.stringify(body)),
         options: JSON.parse(JSON.stringify(options)),
+        aborted: () => signal?.aborted ?? false,
       });
+      const text = answerFor(levelOf(body));
       const message = {
         id: "msg_stub",
         type: "message",
         role: "assistant",
         model: "stub",
-        content: [{ type: "text", text: answer, citations: null }],
+        content: [{ type: "text", text, citations: null }],
         stop_reason: stop,
         stop_sequence: null,
         usage: { input_tokens: 1, output_tokens: 1 },
@@ -93,84 +109,134 @@ const EVIDENCE = BLOCKS.filter((b) => b.treatment !== "supplement");
 
 const para = (text: string, ...ids: string[]) => ({ text, ids });
 
-function build(paragraphs: unknown, dropped = emptyDropped()) {
-  return buildSimpleSummary(
-    { paragraphs },
-    { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped, power: "standard" },
-  );
+/** A good Fuller level, for the cases that are about Simple. */
+const FULLER = [
+  para("It asks whether a model can learn to read, and how.", INTRO.id),
+  para("Reading matters because most knowledge is written.", WHY.id),
+  para("Trained on ten thousand pages, it read 38% faster in this sample.", RESULT.id, METHOD.id),
+];
+/** A good Simple level, for the cases that are about Fuller. */
+const SIMPLE = [para("It asks whether a model can read.", INTRO.id), para("It read faster.", RESULT.id)];
+/** A good Brief level. */
+const BRIEF = [para("Can a model read?", INTRO.id), para("It read faster.", RESULT.id)];
+/** A good answer at every level. */
+const GOOD: Record<SimpleLevel, ReturnType<typeof para>[]> = { brief: BRIEF, simple: SIMPLE, fuller: FULLER };
+
+const opts = (dropped = emptyDropped(), profile: string | null = null) => ({
+  slug: "s",
+  evidence: EVIDENCE,
+  sourceHash: "h",
+  elapsedMs: 1,
+  dropped,
+  power: "standard" as const,
+  profile,
+});
+
+/** Each level's answer, as its own call returns it. */
+const answerOf = (paragraphs: unknown) => ({ paragraphs });
+
+function build(simple: unknown, dropped = emptyDropped(), fuller: unknown = FULLER) {
+  return buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(simple), fuller: answerOf(fuller) }, opts(dropped));
 }
+
+const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
 
 /* ------------------------------------------------------------ validation -- */
 
 describe("buildSimpleSummary", () => {
-  it("keeps good paragraphs whole, in the model's order, stamped with SIMPLE_VERSION", () => {
+  it("keeps both levels whole, in the model's order, stamped with SIMPLE_VERSION", () => {
     const out = build([
       para("It asks whether a model can read.", INTRO.id),
       para("It matters because most knowledge is written.", WHY.id),
       para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
     ]);
-    expect(out.paragraphs).toEqual([
+    expect(out.levels.simple).toEqual([
       { text: "It asks whether a model can read.", ids: [INTRO.id] },
       { text: "It matters because most knowledge is written.", ids: [WHY.id] },
       { text: "It read 38% faster, in this sample.", ids: [RESULT.id, METHOD.id] },
     ]);
+    expect(out.levels.fuller).toEqual(FULLER);
     expect(out.version).toBe(SIMPLE_VERSION);
+    expect(out.version).toBe("simple/2");
     expect(out.sourceHash).toBe("h");
-    expect(SHAPE.simple.ok(out.paragraphs)).toBe(true);
+    expect(out.profileHash).toBeNull();
+    expect(SHAPE.simple.ok(out.levels)).toBe(true);
   });
 
-  it("fails on an answer with no paragraphs array", () => {
-    expect(() =>
-      buildSimpleSummary({ summary: "x" }, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
-    ).toThrow(/no `paragraphs` array/);
-    expect(() =>
-      buildSimpleSummary(null, { slug: "s", evidence: EVIDENCE, sourceHash: "h", elapsedMs: 1, dropped: emptyDropped(), power: "standard" }),
-    ).toThrow(/no `paragraphs` array/);
+  it("records the profile it was written for as its hash, never the words", () => {
+    const profile = renderProfile({ profile: "I build software.", purpose: "Methods." });
+    if (!profile) throw new Error("fixture needs a profile");
+    const out = buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts(emptyDropped(), profile));
+    expect(out.profileHash).toBe(hashProfile(profile));
+    expect(JSON.stringify(out)).not.toContain("I build software");
   });
 
-  it("fails on more than four paragraphs rather than cutting", () => {
+  it("fails on an answer missing any level, naming it — all or none", () => {
+    expect(() => buildSimpleSummary({ simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts())).toThrow(
+      /"brief" answer has no `paragraphs` array/,
+    );
+    const missing = /"simple" answer has no `paragraphs` array/;
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE) }, opts())).toThrow(
+      /"fuller" answer has no `paragraphs` array/,
+    );
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: null, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: { summary: "x" }, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+  });
+
+  it("fails the whole run when only Fuller is bad", () => {
+    expect(() => build(SIMPLE, emptyDropped(), [para("Only one.", INTRO.id)])).toThrow(
+      /Only 1 of the model's 1 "fuller" paragraphs/,
+    );
+  });
+
+  it("fails on more paragraphs than a level allows rather than cutting", () => {
     const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
-    expect(() => build(five)).toThrow(/5 paragraphs and the limit is 4/);
+    expect(() => build(five)).toThrow(/5 "simple" paragraphs and the limit is 4/);
+    /* Five is Fuller's ceiling, not a failure there; six is. */
+    expect(build(SIMPLE, emptyDropped(), five).levels.fuller).toHaveLength(5);
+    const six = [...five, para("Six.", WHY.id)];
+    expect(() => build(SIMPLE, emptyDropped(), six)).toThrow(/6 "fuller" paragraphs and the limit is 5/);
   });
 
-  it("fails over the word ceiling rather than cutting", () => {
-    const long = Array.from({ length: MAX_WORDS }, () => "word").join(" ");
-    expect(() => build([para(long, INTRO.id), para("And one more.", WHY.id)])).toThrow(
-      new RegExp(`${MAX_WORDS + 3} words and the limit is ${MAX_WORDS}`),
+  it("fails over a level's word ceiling rather than cutting", () => {
+    const max = SIMPLE_LIMITS.simple.maxWords;
+    expect(() => build([para(words(max), INTRO.id), para("And one more.", WHY.id)])).toThrow(
+      new RegExp(`${max + 3} "simple" words and the limit is ${max}`),
     );
     /* At the ceiling exactly is fine. */
-    const at = Array.from({ length: MAX_WORDS - 2 }, () => "word").join(" ");
-    expect(build([para(at, INTRO.id), para("Two words.", WHY.id)]).paragraphs).toHaveLength(2);
+    expect(build([para(words(max - 2), INTRO.id), para("Two words.", WHY.id)]).levels.simple).toHaveLength(2);
+    /* Fuller has its own, higher ceiling: Simple's is not a failure there. */
+    const fullerMax = SIMPLE_LIMITS.fuller.maxWords;
+    expect(fullerMax).toBeGreaterThan(max);
+    const roomy = [para(words(max), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
+    expect(build(SIMPLE, emptyDropped(), roomy).levels.fuller).toHaveLength(3);
+    const over = [para(words(fullerMax), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
+    expect(() => build(SIMPLE, emptyDropped(), over)).toThrow(/"fuller" words and the limit is/);
   });
 
   it("drops and counts an unknown id, a supplement's id and a non-string id", () => {
     const dropped = emptyDropped();
     const out = build(
-      [
-        para("One.", "spya-zzzzzz", INTRO.id),
-        { text: "Two.", ids: [NOTE.id, 42, WHY.id] },
-      ],
+      [para("One.", "spya-zzzzzz", INTRO.id), { text: "Two.", ids: [NOTE.id, 42, WHY.id] }],
       dropped,
     );
-    expect(out.paragraphs.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
+    expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
     expect(dropped.unknownIds).toBe(3);
   });
 
   it("dedupes ids before capping them at three, and counts both", () => {
     const dropped = emptyDropped();
     const out = build(
-      [
-        para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id),
-        para("Two.", WHY.id),
-      ],
+      [para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id), para("Two.", WHY.id)],
       dropped,
     );
-    expect(out.paragraphs[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
+    expect(out.levels.simple[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
     expect(dropped.duplicateIds).toBe(2);
     expect(dropped.overCap).toBe(1);
   });
 
-  it("drops a paragraph with no surviving id — every paragraph is a door", () => {
+  it("drops a paragraph with no surviving id — every paragraph is a door, at either level", () => {
     const dropped = emptyDropped();
     const out = build(
       [
@@ -180,49 +246,57 @@ describe("buildSimpleSummary", () => {
         para("Key idea.", RESULT.id),
       ],
       dropped,
+      [...FULLER, para("A fourth, resting on nothing.", "spya-yyyyyy")],
     );
-    expect(out.paragraphs.map((p) => p.text)).toEqual(["About.", "Key idea."]);
-    expect(dropped.unanchored).toBe(2);
+    expect(out.levels.simple.map((p) => p.text)).toEqual(["About.", "Key idea."]);
+    expect(out.levels.fuller).toEqual(FULLER);
+    expect(dropped.unanchored).toBe(3);
   });
 
   it("drops an empty paragraph and a non-object, and counts them", () => {
     const dropped = emptyDropped();
-    const out = build(
-      [para("  ", INTRO.id), "a string", para("About.", INTRO.id), para("Why.", WHY.id)],
-      dropped,
-    );
-    expect(out.paragraphs).toHaveLength(2);
+    const out = build([para("  ", INTRO.id), "a string", para("About.", INTRO.id), para("Why.", WHY.id)], dropped);
+    expect(out.levels.simple).toHaveLength(2);
     expect(dropped.empty).toBe(1);
     expect(dropped.malformed).toBe(1);
   });
 
-  it("fails with fewer than two surviving paragraphs, saying why", () => {
+  it("fails with fewer surviving paragraphs than a level needs, saying why", () => {
     expect(() => build([para("About.", INTRO.id), para("Why.", "spya-zzzzzz")])).toThrow(
-      /Only 1 of the model's 2 paragraphs.*1 with no usable passage/,
+      /Only 1 of the model's 2 "simple" paragraphs.*1 with no usable passage/,
     );
     expect(() => build([])).toThrow(/Only 0 of the model's 0/);
   });
+});
 
-  it("refuses an invalid paragraph count again at the store boundary", () => {
+/* --------------------------------------------------- the store boundary -- */
+
+describe("the store boundary", () => {
+  const good = GOOD;
+
+  it("refuses a level with the wrong paragraph count, and a missing level", () => {
     const one = [para("Only one.", INTRO.id)];
-    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) =>
-      para(`Paragraph ${i}.`, b.id),
-    );
-    expect(whyUnusable("simple", { paragraphs: [] })).toBe('no usable "paragraphs"');
-    expect(whyUnusable("simple", { paragraphs: one })).toBe('no usable "paragraphs"');
-    expect(whyUnusable("simple", { paragraphs: five })).toBe('no usable "paragraphs"');
-    expect(whyUnusable("simple", { paragraphs: [one[0], para("Two.", WHY.id)] })).toBeNull();
+    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
+    expect(whyUnusable("simple", { levels: good })).toBeNull();
+    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: one, fuller: FULLER } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: five, fuller: FULLER } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE, fuller: SIMPLE } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { levels: { brief: BRIEF, simple: SIMPLE } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { levels: null })).toBe('no usable "levels"');
+  });
+
+  it("reads a simple/1 row — one paragraphs list, no levels — as unusable", () => {
+    expect(whyUnusable("simple", { version: "simple/1", paragraphs: SIMPLE })).toBe('no usable "levels"');
   });
 
   it("refuses malformed stored paragraphs and the same word ceiling", () => {
-    const overWords = Array.from({ length: MAX_WORDS }, () => "word").join(" ");
-    for (const paragraphs of [
+    for (const simple of [
       [para("", INTRO.id), para("Two.", WHY.id)],
       [para("One.", INTRO.id, INTRO.id), para("Two.", WHY.id)],
       [para("One.", INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
-      [para(overWords, INTRO.id), para("One more.", WHY.id)],
+      [para(words(SIMPLE_LIMITS.simple.maxWords), INTRO.id), para("One more.", WHY.id)],
     ]) {
-      expect(whyUnusable("simple", { paragraphs })).toBe('no usable "paragraphs"');
+      expect(whyUnusable("simple", { levels: { brief: BRIEF, simple, fuller: FULLER } })).toBe('no usable "levels"');
     }
   });
 });
@@ -235,81 +309,161 @@ beforeAll(async () => {
   example = await readArticleFromDir(path.resolve(import.meta.dirname, "..", "example"));
 });
 
+const PROFILE = renderProfile({
+  profile: "CTO; background in cognitive science and machine learning.",
+  purpose: "How the model was trained.",
+});
+
 describe("the request", () => {
   const article = (): Article => ({ ...example, slug: "simple-test", blocks: BLOCKS });
+  const good = () => ({
+    simple: JSON.stringify(answerOf(SIMPLE)),
+    fuller: JSON.stringify(answerOf(FULLER)),
+  });
+  const userMessage = (i = 0) =>
+    (sent[i]?.body as { messages?: { content: string }[] } | undefined)?.messages?.[0]?.content ?? "";
+  const run = (profile: string | null = null, power: "standard" | "high" = "standard") =>
+    generateSimpleSummary({ power, article: article(), profile });
 
   it("fails on malformed JSON and stores nothing", async () => {
     answer = "{ this is not json";
-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
+    await expect(run()).rejects.toThrow();
   });
 
   it("fails on an empty successful answer", async () => {
     answer = "";
-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
+    await expect(run()).rejects.toThrow();
   });
 
   it("fails on a refusal", async () => {
     stop = "refusal";
     answer = "";
-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
+    await expect(run()).rejects.toThrow();
   });
 
   it("fails on a max_tokens stop rather than parsing half an answer", async () => {
     stop = "max_tokens";
-    answer = JSON.stringify({ paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)] });
-    await expect(generateSimpleSummary({ power: "standard", article: article() })).rejects.toThrow();
+    answer = good();
+    await expect(run()).rejects.toThrow();
+  });
+
+  it("makes one call per level, side by side, each with its own system prompt and the same article", async () => {
+    answer = good();
+    const out = await run();
+    expect(sent).toHaveLength(3);
+    expect(sent.map((c) => c.task)).toEqual(["simple", "simple", "simple"]);
+    const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
+    expect(systems[0]?.[0]).toEqual(systems[1]?.[0]);
+    expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS)));
+    expect(out.simpleSummary.levels).toEqual(GOOD);
+  });
+
+  it("fails the whole run when one level's call fails, and aborts the other", async () => {
+    answer = { simple: JSON.stringify(answerOf(SIMPLE)), fuller: JSON.stringify(answerOf([para("One.", INTRO.id)])) };
+    await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
+    /* The sibling's signal is aborted — the call that succeeded is not left running. */
+    expect(sent.every((c) => c.aborted())).toBe(true);
   });
 
   it("reports what it dropped on the run, and does not store it", async () => {
-    answer = JSON.stringify({
-      paragraphs: [para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)],
-    });
-    const run = await generateSimpleSummary({ power: "standard", article: article() });
-    expect(run.dropped.unknownIds).toBe(1);
-    expect(run.dropped.duplicateIds).toBe(1);
-    expect(run.words).toBe(2);
-    expect("dropped" in run.simpleSummary).toBe(false);
+    answer = {
+      simple: JSON.stringify(answerOf([para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)])),
+      fuller: JSON.stringify(answerOf(FULLER)),
+    };
+    const out = await run();
+    expect(out.dropped.unknownIds).toBe(1);
+    expect(out.dropped.duplicateIds).toBe(1);
+    expect(out.words.simple).toBe(2);
+    expect(out.words.fuller).toBeGreaterThan(out.words.simple);
+    expect("dropped" in out.simpleSummary).toBe(false);
   });
 
   it("sends Ideas' article bytes and an exact request fingerprint, at high effort, under its own task", async () => {
     const noMeta: Article = { ...example, meta: null };
-    const [first, second] = noMeta.blocks.filter((b) => b.treatment !== "supplement");
-    if (!first || !second) throw new Error("fixture needs two body blocks");
-    answer = JSON.stringify({ paragraphs: [para("About.", first.id), para("Why.", second.id)] });
-    const run = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true });
+    const [first, second, third] = noMeta.blocks.filter((b) => b.treatment !== "supplement");
+    if (!first || !second || !third) throw new Error("fixture needs three body blocks");
+    answer = {
+      brief: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
+      simple: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
+      fuller: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id), para("How.", third.id)])),
+    };
+    const out = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true, profile: null });
 
     answer = JSON.stringify({ ideas: [] });
     const { generateIdeas } = await import("../src/ideas.js");
     await generateIdeas({ power: "standard", article: noMeta, previous: null, cacheArticle: true }).catch(() => undefined);
 
-    const [call, ideasCall] = sent;
-    if (!call || !ideasCall) throw new Error("expected both calls");
-    expect(call.task).toBe("simple");
+    const [call, , , ideasCall] = sent;
+    if (!call || !ideasCall) throw new Error("expected three calls");
     const body = call.body as {
       max_tokens: number;
       system: unknown[];
       output_config: { effort: string };
     };
     expect(body.system[0]).toEqual((ideasCall.body as { system: unknown[] }).system[0]);
-    expect(body.system[1]).toEqual({ type: "text", text: SIMPLE_SYSTEM });
     expect(body.output_config.effort).toBe("high");
-    expect(body.max_tokens).toBe(run.maxTokens);
+    expect(body.max_tokens).toBe(out.maxTokens);
     expect(body.max_tokens).toBeGreaterThanOrEqual(ANSWER_TOKENS);
     expect(STAGE_EFFORT.simple).toBe("high");
-    expect(run.simpleSummary.sourceHash).toBe(inputFingerprint(noMeta.blocks, noMeta.tree, null));
+    expect(out.simpleSummary.sourceHash).toBe(inputFingerprint(noMeta.blocks, noMeta.tree, null));
+  });
+
+  it("with no profile, sends the constant ask byte for byte and records no profile", async () => {
+    answer = good();
+    const out = await run();
+    expect(userMessage(0)).toBe("Write the plain-words orientation for this article.");
+    expect(userMessage(1)).toBe(userMessage(0));
+    expect(userMessage(0)).toBe(renderPrompt(null));
+    expect(out.simpleSummary.profileHash).toBeNull();
+  });
+
+  it("puts the reader after the ask, in the shared profile section, and never in a system prompt", async () => {
+    if (!PROFILE) throw new Error("fixture needs a profile");
+    answer = good();
+    const out = await run(PROFILE);
+    /* Sol's plan review, P2-8: a blank line between the ask and the section. */
+    const expected =
+      `${renderPrompt(null)}\n\n=== WHO IS READING THIS ===\n\n${PROFILE}\n\n` +
+      "Let this change what you lead with and how much you explain. It changes nothing\n" +
+      "about what the article says, and nothing about its proportions. Do not address\n" +
+      "the reader and do not mention this.";
+    expect(userMessage(0)).toBe(expected);
+    expect(userMessage(1)).toBe(expected);
+    for (const call of sent) {
+      const system = (call.body as { system: { text: string }[] }).system;
+      expect(system.map((s) => s.text).join("\n")).not.toContain("cognitive science");
+    }
+    expect(out.simpleSummary.profileHash).toBe(hashProfile(PROFILE));
+  });
+
+  it("carries the shared profile rules in the constant half of both levels", () => {
+    expect(SIMPLE_SYSTEMS.simple).toContain(PROFILE_RULES);
+    expect(SIMPLE_SYSTEMS.fuller).toContain(PROFILE_RULES);
+  });
+
+  it("gives two profiles different requests and the same sourceHash — the stamp cannot see a profile", async () => {
+    const other = renderProfile({ profile: "A historian.", purpose: null });
+    if (!PROFILE || !other) throw new Error("fixture needs two profiles");
+    answer = good();
+    const a = await run(PROFILE);
+    const b = await run(other);
+    const none = await run(null);
+    expect(userMessage(0)).not.toBe(userMessage(3));
+    expect(a.simpleSummary.profileHash).not.toBe(b.simpleSummary.profileHash);
+    /* What `STEPS.simple.stamp` computes: the same function, with no profile. */
+    const stamp = inputFingerprint(BLOCKS, example.tree, example.meta);
+    expect(a.simpleSummary.sourceHash).toBe(stamp);
+    expect(b.simpleSummary.sourceHash).toBe(stamp);
+    expect(none.simpleSummary.sourceHash).toBe(stamp);
   });
 
   it("sends high power to the gateway and stamps the model that wrote the artefact", async () => {
-    answer = JSON.stringify({
-      paragraphs: [para("About.", INTRO.id), para("Why.", WHY.id)],
-    });
-    const run = await generateSimpleSummary({ power: "high", article: article() });
-    const [call] = sent;
-    if (!call) throw new Error("expected one call");
-
-    expect(call.options).toMatchObject({ power: "high" });
-    expect(run.model).toBe(HIGH_POWER_MODEL);
-    expect(run.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
+    answer = good();
+    const out = await run(null, "high");
+    expect(sent).toHaveLength(3);
+    for (const call of sent) expect(call.options).toMatchObject({ power: "high" });
+    expect(out.model).toBe(HIGH_POWER_MODEL);
+    expect(out.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
   });
 
   it("does not go stale when only a supplement block, which the request omits, changes", () => {
@@ -323,10 +477,11 @@ describe("the request", () => {
     );
   });
 
-  it("ships the fifteen-year-old pitch, and the probe's twelve is a different prompt", () => {
-    expect(SIMPLE_SYSTEM).toBe(simpleSystem(15));
-    expect(SIMPLE_SYSTEM).toContain("fifteen-year-old");
-    expect(simpleSystem(12)).not.toBe(SIMPLE_SYSTEM);
-    expect(SIMPLE_SYSTEM).toContain("PLAIN WORDS");
+  it("pitches Simple at fifteen and Fuller at eighteen, and both keep the plain-words rule", () => {
+    expect(SIMPLE_SYSTEMS.simple).toContain("fifteen-year-old");
+    expect(SIMPLE_SYSTEMS.fuller).toContain("eighteen-year-old");
+    expect(SIMPLE_SYSTEMS.simple).not.toContain("eighteen-year-old");
+    for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
   });
 });
+

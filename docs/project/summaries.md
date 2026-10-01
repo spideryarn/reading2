@@ -629,25 +629,60 @@ through the Feedback button (SPIDERYARN-READING2-6E):
 > — Greg, 2026-09-30
 
 It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept an **orientation,
-not a digest**: two to four paragraphs, capped by code; **every paragraph is a door** — the passages
-it rests on, drawn as the same `BlockRef` chips the gists use, and a paragraph with none is dropped
-when it is written; and a foot saying it was written by AI and that the article says it better.
-Plain text, never markdown.
+not a digest**: a few paragraphs, capped by code; **every paragraph is a door** — the passages it
+rests on, drawn as the same `BlockRef` chips the gists use, and a paragraph with none is dropped when
+it is written. Plain text, never markdown. What it is — written by AI, the article says it better —
+is said in the slider's card, not in a line under the paragraphs (below).
 
-- **The door rule.** Pressing the Simple chip with nothing stored runs the `simple` job; arriving on
+### Three levels, one row, shaped by the reader (since 2026-10-01)
+
+> In the Summary mode, let's somehow group Parts & Sections together, get rid of the Gists button
+> (since clicking on Parts or Sections is enough) … the main thing I'm trying to do is avoid wasting
+> vertical space, and use the UI design to give the user a clue about how they work and are related
+> to each other. Also, the Very-Simple and Moderately-Complex summaries should take into account
+> User-Profile and Why-are-you-reading-it.
+>
+> — Greg, 2026-09-30 (SPIDERYARN-READING2-7A)
+
+> let's provide a UI-slider with 3 level (short & very-simple, just-under-current-length and
+> fairly-simple, just-over-current-length and moderately-complex)
+>
+> — Greg, 2026-09-30 (SPIDERYARN-READING2-7J)
+
+```
+ [ Parts | Sections ]   ○──●──○ Simple   ⓤ
+```
+
+- **One row, no labels.** Parts | Sections is the outline, a joined pair; Sections *adds* the
+  sections, so Parts is drawn included under it (`aria-pressed` stays on the depth chosen). The
+  *Article* depth and the *Gists*, *View* and *Depth* words are gone. The slider is the plain words:
+  **Brief** (short, very simple, pitched at twelve), **Simple** (fairly simple, just under the first
+  version's length, at fifteen), **Fuller** (moderately complex, just over it, at eighteen). Idle and
+  faint while the outline shows; touching it opens the level it lands on. ⓤ is the owner's *written
+  for you* badge.
+- **The reader's profile and goal shape all three**, through the shared `PROFILE_RULES` and
+  `profileSection` ([src/profile.ts](../../src/profile.ts)): what the reader says they know is not
+  explained, and the goal decides what leads. Recorded as `profileHash`, not in the stamp — a changed
+  profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
+  visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
+  for the owner's profile.
+- **One press writes all three**: one model call per level, run side by side, all or none stored. A
+  `simple/1` row reads as absent and the next press replaces it.
+- **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
   public article gets the stored paragraphs off the payload, or a line saying none has been made.
-- **One level, pitched at 15.** Greg's shorter ELI12 is **deferred** until he has read ELI15 on a real
-  paper; the probe outputs of both are in the plan.
 - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
-  waits about ten seconds behind the job progress, like FAQ. Why, and the one decision left for
-  Greg, are in
+  waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
   [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
 
+The design, the measurements and the review are
+[261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+
 Code: [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx),
-[`useSimple.ts`](../../src/web/useSimple.ts), the switch in
-[`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx); the stage is
+[`useSimple.ts`](../../src/web/useSimple.ts), the row in
+[`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) and
+[`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx); the stage is
 [`src/simple-summary.ts`](../../src/simple-summary.ts).
 
 ## What this deliberately does not have
@@ -658,8 +693,8 @@ stage that wrote them were deleted on 2026-08-31.
 **The expertise axis.** Their second version crossed three lengths with three reading levels
 (beginner / intermediate / expert) behind two sliders. There is no evidence anywhere in their repo
 that anyone used it — no telemetry, no follow-up doc, no critique — and two sliders is a lot of
-interface for a thing nobody measured. The gists still have one level. Simple is a single plain level
-of its own, not a second axis across the gists, so the zoom axis keeps meaning one thing.
+interface for a thing nobody measured. The gists still have one level. Simple's three levels are one slider
+of their own, not a second axis across the gists, so the zoom axis keeps meaning one thing.
 
 **Anything generated as you move around.** Nothing is written when you move the Depth control, and
 the Gists spend nothing. The one thing here that spends is Simple, once per article on a press, and

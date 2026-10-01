@@ -1,0 +1,112 @@
+{
+  "arm": "high-goalA-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:38.964Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 11843,
+  "costUsd": 0.195042,
+  "tokens": {
+    "input": 86556,
+    "output": 2193,
+    "reasoning": 405
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 202,
+  "fullerWords": 293,
+  "briefWords": 166,
+  "paragraphs": [
+    {
+      "text": "This piece is Gwern's essay on GPT-3 and what it implies about scaling: whether just making models bigger, with more data and compute, is enough to produce general intelligence, without new architectures or clever tricks. GPT-3, at 175 billion parameters, is framed as a test case: its scaling curves kept improving smoothly rather than flattening, and it showed meta-learning (learning new tasks from a few examples at inference time) that its predecessor GPT-2 never showed, despite no architectural change.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because it bears on forecasting AI progress: if the scaling hypothesis is right, intelligence is mostly a matter of applying simple algorithms at ever-larger scale, and capabilities will keep emerging unpredictably as models grow, rather than needing to be designed in.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "Its key claim is the \"blessings of scale\": hard problems get easier, not harder, as models, data, and compute grow, because large models act as ensembles of many sub-models, and simple memorizing solutions lose out to more general ones once the data is rich enough. The essay proposes this is why GPT-3's loss curve kept falling and meta-learning emerged unbidden, and argues major labs' skepticism of scaling reflects a lack of conviction rather than evidence against it.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's 2020 essay on GPT-3, OpenAI's then-largest language model, and what its release implies for how far scaling alone can take machine learning. The core question: is making models bigger, with more data and compute, enough by itself to produce more general intelligence, or do we need fundamentally new architectures and algorithms?",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because GPT-3 showed something unplanned: it wasn't just bigger, it learned to follow instructions and pick up new tasks from a few examples, a capacity nobody specifically trained it for. That GPT-3 is a crude, architecturally outdated model and still did this, with no sign of its scaling curves flattening out, is why the author calls it a vindication of an old, unpopular view: the scaling hypothesis, that intelligence is simple learning rules applied at (currently) unreachable scale.",
+      "ids": [
+        "spya-fvqe70",
+        "spya-ag750z",
+        "spya-asr663"
+      ]
+    },
+    {
+      "text": "The essay's explanation for why this works: a large enough network trained on hard, varied enough data acts like an ensemble of countless smaller sub-models, biased toward simple solutions (an Occam's razor effect). Early on, cheap shortcuts like memorizing wins; but with enough scale and data diversity, those shortcuts stop paying off and the network is pushed toward sub-models that generalize or meta-learn, because that becomes the easiest path to lower error.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "A parallel argument, the \"pretraining thesis,\" holds that squeezing out the last fractions of a bit of prediction error on text requires real understanding, not just surface pattern-matching, since the easy statistical regularities get used up early and only reasoning-like capabilities remain to explain the rest. The author contrasts this optimism with most AI labs and researchers, who he says lack a coherent model of why GPT-3 worked at all and have been reliably wrong, in print, about deep learning's limits for a decade.",
+      "ids": [
+        "spya-n4zu5k",
+        "spya-nhgv5g",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is Gwern's analysis of GPT-3 as evidence for the scaling hypothesis: the claim that simply making neural networks much bigger, with more data and compute, is enough to produce qualitatively new capabilities, without new algorithms or architectures.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 wasn't just better than GPT-2 at the same tasks; it showed meta-learning, picking up new tasks from a few examples, despite no training designed for that. The author treats this as a sign that unsupervised scaling could be a core route toward general intelligence, yet argues most AI labs and researchers still don't take that possibility seriously.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The explanation offered is that big models act like huge ensembles of sub-models; small, memorizing shortcuts win early, but at large enough scale and data, those shortcuts get outcompeted by sub-models that generalize, including ones that implement meta-learning. The piece also surveys scaling-law curves showing GPT-3's loss still falling smoothly, with no sign yet of diminishing returns, and asks what might emerge if scaling continues further.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-vkkfzh",
+        "spya-vn0xpd"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

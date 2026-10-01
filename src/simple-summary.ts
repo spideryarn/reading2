@@ -1,7 +1,8 @@
 /**
  * Pipeline stage 5r — **Simple**: a few short paragraphs, in everyday words,
  * saying what the piece is about, why it matters and what its key ideas are,
- * each paragraph resting on the passages it came from. A sub-mode of Summary.
+ * each paragraph resting on the passages it came from. A sub-mode of Summary,
+ * written at **three levels**, one call each, side by side: `brief`, `simple` and `fuller`.
  *
  * > explain it to me like I'm 12 or 15 … a summary of, at most, I suppose, a
  * > few short paragraphs using simple language, kind of minimizing jargon, or
@@ -10,8 +11,16 @@
  * >
  * > — Greg, 2026-09-30 (SPIDERYARN-READING2-6E)
  *
- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md is the design, and GPT
- * Sol's review of it is where most of the validation below comes from.
+ * > the Very-Simple and Moderately-Complex summaries should take into account
+ * > User-Profile and Why-are-you-reading-it. ... If it's ELI12, maybe it should
+ * > be ELI15, and then the Moderately-Complex might be +3 or something.
+ * >
+ * > — Greg, 2026-09-30 (SPIDERYARN-READING2-7A)
+ *
+ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md is the first design,
+ * and GPT Sol's review of it is where most of the validation below comes from;
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md
+ * added the second level and the profile.
  *
  * **There is no command line here.** Re-running it against one article is a job:
  *
@@ -23,24 +32,48 @@
  * easy summaries"*, so three things are enforced here rather than hoped for in
  * the prompt:
  *
- * 1. **Short, and capped by code.** More than `MAX_PARAGRAPHS` paragraphs, or
- *    more than `MAX_WORDS` words, is a failure — never a cut, because a
+ * 1. **Short, and capped by code.** More paragraphs, or more words, than a
+ *    level's `SIMPLE_LIMITS` allow is a failure — never a cut, because a
  *    silently truncated orientation is a wrong one.
  * 2. **Every paragraph is a door.** Each names one to three body-evidence block
- *    ids; one left with none after validation is dropped, and fewer than
- *    `MIN_PARAGRAPHS` left is a failure that stores nothing.
- * 3. **No profile** in v1, as `faq` has none.
+ *    ids; one left with none after validation is dropped, and fewer than the
+ *    level's minimum left is a failure that stores nothing.
+ * 3. **Every level or none.** Any level failing fails the run.
  *
- * ## The request
+ * ## The reader
+ *
+ * The shared profile machinery, as Glossary and Ideas use it: `PROFILE_RULES`
+ * in the constant system prompt and `profileSection` after the breakpoint, in
+ * the user message. **The profile moves the floor, not the level**: a
+ * fifteen-year-old *who already knows what the reader says they know*, so a
+ * reader who says they build AI systems is not told what a language model is.
+ * The goal changes what the paragraphs lead with, never what the piece says.
+ *
+ * The profile is recorded as `profileHash` and is **not in `sourceHash`**: a
+ * changed profile does not make the paragraphs stale (the owner's GET reports
+ * `profileChanged`, and *Write it again* picks up the new one), and
+ * `inputFingerprint` hashes the article and the profile-free user message the
+ * pipeline's stamp can also compute (Sol's plan review, P1-1).
+ *
+ * ## The request — one call per level, side by side
  *
  * `articleWithIds(meta, blocks.filter(isBodyEvidence))` — Ideas' article block
- * byte for byte — then `SIMPLE_SYSTEM`, and a user message that is a constant.
- * At `high` effort, measured against `medium` (src/models.ts § `STAGE_EFFORT`
- * has the numbers), so it shares Ideas' cached prefix when a job holds both.
- * Its fingerprint
- * hashes the exact rendered strings it sends, as src/crossrefs.ts's does, so a
- * change the request cannot see (a supplement block, a re-cut tree) does not
- * mark a paid artefact stale.
+ * byte for byte — then the level's `simpleSystem(level)`, and a user message
+ * that is a constant plus the profile section. At `high` effort
+ * (src/models.ts § `STAGE_EFFORT` has the numbers), so it shares Ideas' cached
+ * prefix when a job holds both.
+ *
+ * **A call per level, not one asked for all.** The plan's first design was one
+ * call writing two levels; measured, it made the model think five to twenty
+ * times as long (1–15k reasoning tokens against 150–800 for one level) and the
+ * wait went from 9–18 s to 24–134 s. So each level is its own call, the shape
+ * the first plan measured, and they run at once: the wait is the slowest of
+ * three short calls. **All or none** — the first to fail aborts the others,
+ * and nothing is stored. Plan 261001b § Ledger has the tables.
+ *
+ * Its fingerprint hashes the exact rendered article it sends, as
+ * src/crossrefs.ts's does, so a change the request cannot see (a supplement
+ * block, a re-cut tree) does not mark a paid artefact stale.
  */
 
 import { createHash } from "node:crypto";
@@ -56,6 +89,7 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
+import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type BlockFingerprint,
   fallbackHeadTitle,
@@ -63,84 +97,105 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import {
+  SIMPLE_LEVELS,
+  SIMPLE_LIMITS,
   SIMPLE_MAX_IDS,
-  SIMPLE_MAX_PARAGRAPHS,
-  SIMPLE_MAX_WORDS,
-  SIMPLE_MIN_PARAGRAPHS,
   type BlockId,
   type Meta,
+  type SimpleLevel,
   type SimpleParagraph,
   type SimpleSummary,
   type Tree,
 } from "./types.js";
 
-export type { SimpleParagraph, SimpleSummary } from "./types.js";
+export type { SimpleLevel, SimpleParagraph, SimpleSummary } from "./types.js";
+export { SIMPLE_LEVELS } from "./types.js";
 
 /**
  * Bumped whenever the prompt changes what a paragraph *is*. The one constant:
  * stamped into the artefact by `buildSimpleSummary` and compared against by the
  * pipeline's stamp and the owner's read (src/pipeline.ts, src/store/pg.ts).
+ *
+ * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
+ * no `levels` and reads as absent (`isSimpleLevels`, src/types.ts).
  */
-export const SIMPLE_VERSION = "simple/1";
-
-/** More is a failure, not a cut. */
-export const MAX_PARAGRAPHS = SIMPLE_MAX_PARAGRAPHS;
-
-/** Fewer surviving validation is a failure: nothing is stored. */
-export const MIN_PARAGRAPHS = SIMPLE_MIN_PARAGRAPHS;
+export const SIMPLE_VERSION = "simple/2";
 
 /** Passages per paragraph. Extra ids are dropped and counted. */
 export const MAX_IDS = SIMPLE_MAX_IDS;
 
 /**
- * The hard ceiling on the whole text, in words. The prompt asks for well
- * under 250; this leaves room for a model that runs a little long, and refuses
- * one that has written a digest rather than an orientation.
+ * One call's answer budget in tokens, sized for the larger level: Fuller's
+ * word ceiling (450 words, ~600 tokens at 0.75 words a token, doubled for
+ * safety), plus three ids and the JSON around each of its paragraphs.
+ * Undersizing does not degrade: it throws `truncationFailure` and loses the
+ * whole pass.
  */
-export const MAX_WORDS = SIMPLE_MAX_WORDS;
-
-/**
- * The answer budget in tokens: at most four paragraphs of ~320 words in all
- * (~430 tokens at 0.75 words a token, doubled for safety), plus three ids and
- * the JSON around each. Undersizing does not degrade: it throws
- * `truncationFailure` and loses the whole pass.
- */
-export const ANSWER_TOKENS = 1_000 + MAX_PARAGRAPHS * MAX_IDS * 10;
-
-/**
- * **Who the paragraphs are pitched at.** Production ships one level, 15 (the
- * plan's § What v1 is: at 12, on a dense paper, a number, a direction or a
- * hedge is where it gets dropped). 12 exists so the stage-1 probe can put the
- * two side by side for Greg (evals/simple/probe.ts); no reader can ask for it.
- */
-export type SimplePitch = 12 | 15;
+export const ANSWER_TOKENS =
+  1_200 + Math.max(...SIMPLE_LEVELS.map((level) => SIMPLE_LIMITS[level].maxParagraphs)) * MAX_IDS * 10;
 
 /*
  * **The word asks are below what the ceiling allows, on evidence.** The first
- * probe asked for "under 250 words" and got 261–339 at 15 (two of three `high`
- * runs over `MAX_WORDS`), and "under 150" got 189–208 at 12: the model runs
- * about a third over a total it is given. So the ask is the length we want to
- * see and the sentence cap does most of the work — a sentence limit is kept
- * where a total is not. Plan 260930i § Measuring it has both rounds.
+ * probe asked for "under 250 words" and got 261–339 at 15: the model runs about
+ * a third over a total it is given. So the ask is the length we want to see
+ * and the sentence cap does most of the work — a sentence limit is kept where a
+ * total is not. Plan 260930i § Measuring it has both rounds.
+ *
+ * Lowered again with the reader (plan 261001b): asked for about 200, a
+ * profiled Simple came back at up to 338 words, two runs in twelve over the
+ * 320 ceiling; Fuller, asked for 300, reached 448 of its 450.
+ *
+ * **Three levels around the first version's length**, which came out at
+ * 240–273 words (Greg, SPIDERYARN-READING2-7J and -7F): Brief short and very
+ * simple, at twelve; Simple fairly simple and just under that length, at
+ * fifteen; Fuller moderately complex and just over it, at eighteen — Greg's
+ * *"+3 or something"* above fifteen (7A).
  */
-const PITCH: Record<SimplePitch, { reader: string; shape: string; words: number; sentence: number }> = {
-  15: {
-    reader: "a curious fifteen-year-old who has not studied this field",
+const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number; sentence: number }> = {
+  brief: {
+    reader: "A bright twelve-year-old",
+    shape: "Two or three short paragraphs, each two or three sentences",
+    words: 100,
+    sentence: 18,
+  },
+  simple: {
+    reader: "A bright fifteen-year-old",
     shape: "Two to four paragraphs, each two to four sentences",
-    words: 200,
+    words: 170,
     sentence: 25,
   },
-  12: {
-    reader: "a curious twelve-year-old who has not studied this field",
-    shape: "Two or three paragraphs, each two or three sentences",
-    words: 130,
-    sentence: 18,
+  fuller: {
+    reader: "A bright eighteen-year-old in their first year at university",
+    shape: "Three to five paragraphs, each two to four sentences",
+    words: 220,
+    sentence: 30,
   },
 };
 
-/** The system prompt for a pitch. `SIMPLE_SYSTEM` is the one that ships. */
-export function simpleSystem(pitch: SimplePitch): string {
-  const p = PITCH[pitch];
+/**
+ * What a level may do beyond the plainest — said inside that level's own
+ * prompt, never as a comparison with another version: a reader may read only
+ * one, so none refers to another.
+ */
+const NOTCH_UP: Record<SimpleLevel, string> = {
+  brief: `
+
+Keep it very simple: the one thing the piece is about, why it matters, and at
+most two key ideas. Leave out anything a first-time reader could do without.`,
+  simple: "",
+  fuller: `
+
+You may keep more of the piece's own terms than a beginner's version would (each
+still said in plain words where it first appears), and add one more layer of how
+or why.`,
+};
+
+/**
+ * The system prompt for one level. Constant per level — the reader goes in
+ * the user message, after the breakpoint.
+ */
+export function simpleSystem(level: SimpleLevel): string {
+  const p = PITCH[level];
   return `You are helping a reader get their bearings before they read the article above.
 
 WHAT YOU WRITE
@@ -151,12 +206,24 @@ wants to know first, so that the article itself makes sense when they read it.
 
 THE READER
 
-${p.reader}. Everyday words and short sentences.
+${p.reader} who has not studied this field. Everyday words and short sentences.${NOTCH_UP[level]}
 
 - Use jargon sparingly. Where you do use a term, say what it means in the same
   sentence, in everyday words. Never explain one hard word with another.
 - Keep the author's key term where the reader will meet it in the article; it
   is their handhold. Say what it means.
+- If the request describes the reader, what they say they already know counts
+  as everyday words for them: use it without explaining it. Everything else
+  stays at this pitch.
+
+LENGTH
+
+${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
+all, and never more than ${p.words + 50}. Shorter is fine; this is an
+orientation, not a digest, so leave detail to the article.${SYSTEM_TAIL}`;
+}
+
+const SYSTEM_TAIL = `
 
 THE SHAPE
 
@@ -164,11 +231,7 @@ THE SHAPE
   of piece it is.
 - Then: why it matters — why THE PIECE says it matters, not why you think it
   might.
-- Then: its key ideas or findings, in one or two paragraphs.
-
-${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
-all, and never more than ${p.words + 50}. Shorter is fine; this is an orientation,
-not a digest, so leave detail to the article.
+- Then: its key ideas or findings.
 
 FAITHFUL, NOT JUST SIMPLE
 
@@ -189,6 +252,8 @@ The ids go only in "ids". Never write an id, or "block …", in the text.
 
 ${plainWords("explain")}
 
+${PROFILE_RULES}
+
 OUTPUT
 
 JSON only, no prose, no code fence:
@@ -199,20 +264,36 @@ JSON only, no prose, no code fence:
 
 Plain text in "text": no markdown, no bullet points, no headings. Never put a
 real line break inside a string, and escape any straight double quote as \\".`;
-}
 
-export const SIMPLE_SYSTEM = simpleSystem(15);
+/** Each level's system prompt, built once. */
+export const SIMPLE_SYSTEMS = Object.fromEntries(
+  SIMPLE_LEVELS.map((level) => [level, simpleSystem(level)]),
+) as Record<SimpleLevel, string>;
 
-/** The user message — a constant, so the request is the article and the rules. */
-export function renderPrompt(): string {
-  return "Write the plain-words orientation for this article.";
+/**
+ * The user message's constant half — and all of what `inputFingerprint` hashes
+ * of it. The same for every level: the level is in the system prompt.
+ */
+const BASE_PROMPT = "Write the plain-words orientation for this article.";
+
+/**
+ * The user message: the constant ask, and the reader after it when there is
+ * one. With no profile it is `BASE_PROMPT` byte for byte — `profileSection`
+ * returns `""` — and the separator is added only when there is a section,
+ * since that function supplies no leading newline (Sol's plan review, P2-8).
+ */
+export function renderPrompt(profile: string | null): string {
+  const section = profileSection(profile);
+  return section ? `${BASE_PROMPT}\n\n${section}` : BASE_PROMPT;
 }
 
 /**
- * What this artefact was written from: the exact article bytes and user
- * message the request sends — crossrefs' approach (src/crossrefs.ts §
- * `inputFingerprint`, Sol F11 there). The tree is here only for the fallback
- * head title `articleWithIds` prints when there is no metadata.
+ * What this artefact was written from: the exact article bytes the request
+ * sends and the **profile-free** user message — crossrefs' approach
+ * (src/crossrefs.ts § `inputFingerprint`, Sol F11 there). The profile is in
+ * `profileHash`, not here, so the pipeline's stamp, which has no profile, can
+ * compute the same value (Sol's plan review, P1-1). The tree is here only for
+ * the fallback head title `articleWithIds` prints when there is no metadata.
  *
  * The instructions have their own `SIMPLE_VERSION`; the model has its own
  * stamp field.
@@ -234,7 +315,7 @@ export function inputFingerprint(
         ...(meta.url == null ? {} : { url: meta.url }),
       } as Meta)
     : ({ title: fallbackHeadTitle(tree) } as Meta);
-  const request = [articleWithIds(renderedMeta, evidence), renderPrompt()];
+  const request = [articleWithIds(renderedMeta, evidence), renderPrompt(null)];
   return createHash("sha256")
     .update(`spya-simple-input/1\n${JSON.stringify(request)}`, "utf8")
     .digest("hex")
@@ -252,9 +333,9 @@ export function isStale(
 }
 
 /**
- * What validation threw away. **Reported, logged, never stored**: the plan's
- * artefact is the paragraphs and the stamp, and a reader has no use for our
- * checking's tally.
+ * What validation threw away, across every level. **Reported, logged, never
+ * stored**: the artefact is the paragraphs and the stamp, and a reader has no
+ * use for our checking's tally.
  */
 export interface SimpleDropped {
   /** A paragraph that was not an object. */
@@ -279,6 +360,11 @@ export function emptyDropped(): SimpleDropped {
 export function wordCount(text: string): number {
   const t = text.trim();
   return t === "" ? 0 : t.split(/\s+/).length;
+}
+
+/** Words across a list of paragraphs. */
+export function paragraphWords(paragraphs: readonly SimpleParagraph[]): number {
+  return paragraphs.reduce((n, p) => n + wordCount(p.text), 0);
 }
 
 /** One paragraph's ids: known body evidence, first occurrence, at most `MAX_IDS`. */
@@ -335,54 +421,84 @@ export function toParagraphs(
 }
 
 /**
- * The artefact, from what the model said plus what we could verify of it.
- * **Every failure throws and writes nothing**: no `paragraphs` array, more than
- * `MAX_PARAGRAPHS`, more than `MAX_WORDS` in what survives, or fewer than
- * `MIN_PARAGRAPHS` surviving.
+ * One level's answer, validated against its limits. Throws, naming the level,
+ * on any failure — which is what lets the generator abort the other calls the
+ * moment one level is lost.
  */
-export function buildSimpleSummary(
+export function buildLevel(
   parsed: unknown,
-  opts: {
-    slug: string;
-    /** The body evidence the request sent — the only ids a paragraph may name. */
-    evidence: readonly { id: BlockId }[];
-    /** The power it was written at — the stamp names the model (plan 260930f). */
-    power: ModelPower;
-    sourceHash: string;
-    elapsedMs: number;
-    dropped: SimpleDropped;
-  },
-): SimpleSummary {
+  level: SimpleLevel,
+  evidenceIds: ReadonlySet<string>,
+  d: SimpleDropped,
+): SimpleParagraph[] {
+  const limits = SIMPLE_LIMITS[level];
   const list =
     parsed && typeof parsed === "object" ? (parsed as { paragraphs?: unknown }).paragraphs : undefined;
   if (!Array.isArray(list)) {
     throw new Error(
-      "The model's answer has no `paragraphs` array in it, so there is nothing to read.",
+      `The model's "${level}" answer has no \`paragraphs\` array in it, so there is nothing to read at that level.`,
     );
   }
-  if (list.length > MAX_PARAGRAPHS) {
+  if (list.length > limits.maxParagraphs) {
     throw new Error(
-      `The model wrote ${list.length} paragraphs and the limit is ${MAX_PARAGRAPHS}. ` +
+      `The model wrote ${list.length} "${level}" paragraphs and the limit is ${limits.maxParagraphs}. ` +
         "Nothing is kept rather than a cut-down version, because a truncated orientation is a wrong one.",
     );
   }
-  const d = opts.dropped;
-  const paragraphs = toParagraphs(list, new Set(opts.evidence.map((b) => b.id as string)), d);
-  const words = paragraphs.reduce((n, p) => n + wordCount(p.text), 0);
-  if (words > MAX_WORDS) {
+  const before = { ...d };
+  const paragraphs = toParagraphs(list, evidenceIds, d);
+  const words = paragraphWords(paragraphs);
+  if (words > limits.maxWords) {
     throw new Error(
-      `The model wrote ${words} words and the limit is ${MAX_WORDS}. ` +
+      `The model wrote ${words} "${level}" words and the limit is ${limits.maxWords}. ` +
         "Nothing is kept rather than a cut-down version.",
     );
   }
-  if (paragraphs.length < MIN_PARAGRAPHS) {
+  if (paragraphs.length < limits.minParagraphs) {
     throw new Error(
-      `Only ${paragraphs.length} of the model's ${list.length} paragraphs could be tied to the ` +
-        `article, and at least ${MIN_PARAGRAPHS} are needed, so there is nothing to write. ` +
-        `Dropped: ${d.unanchored} with no usable passage, ${d.empty} empty, ${d.malformed} ` +
-        `malformed; ${d.unknownIds} ids not in this article's body.`,
+      `Only ${paragraphs.length} of the model's ${list.length} "${level}" paragraphs could be tied to the ` +
+        `article, and at least ${limits.minParagraphs} are needed, so there is nothing to write. ` +
+        `Dropped: ${d.unanchored - before.unanchored} with no usable passage, ${d.empty - before.empty} empty, ` +
+        `${d.malformed - before.malformed} malformed; ${d.unknownIds - before.unknownIds} ids not in this article's body.`,
     );
   }
+  return paragraphs;
+}
+
+interface StampOptions {
+  slug: string;
+  /** The power it was written at — the stamp names the model (plan 260930f). */
+  power: ModelPower;
+  sourceHash: string;
+  /** The rendered profile the requests carried, or null — recorded as its hash. */
+  profile: string | null;
+  elapsedMs: number;
+}
+
+/**
+ * The artefact, from what the model said at each level plus what we could
+ * verify of it. **Every failure throws and writes nothing**, at either level:
+ * no `paragraphs` array, more paragraphs or words than its limits, or fewer
+ * paragraphs surviving than its minimum. Every level or none.
+ *
+ * @param answers each level's parsed answer, `{ paragraphs: [...] }`.
+ */
+export function buildSimpleSummary(
+  answers: Partial<Record<SimpleLevel, unknown>>,
+  opts: StampOptions & {
+    /** The body evidence the requests sent — the only ids a paragraph may name. */
+    evidence: readonly { id: BlockId }[];
+    dropped: SimpleDropped;
+  },
+): SimpleSummary {
+  const evidenceIds = new Set(opts.evidence.map((b) => b.id as string));
+  const levels = {} as Record<SimpleLevel, SimpleParagraph[]>;
+  for (const level of SIMPLE_LEVELS) levels[level] = buildLevel(answers[level], level, evidenceIds, opts.dropped);
+  return stamped(levels, opts);
+}
+
+/** The stamp around two validated levels. */
+function stamped(levels: Record<SimpleLevel, SimpleParagraph[]>, opts: StampOptions): SimpleSummary {
   return {
     version: SIMPLE_VERSION,
     /* The model's name for this power — every staleness check compares against it. */
@@ -391,15 +507,16 @@ export function buildSimpleSummary(
     sourceHash: opts.sourceHash,
     generatedAt: new Date().toISOString(),
     elapsedMs: opts.elapsedMs,
-    paragraphs,
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
+    levels,
   };
 }
 
 export interface SimpleSummaryRun {
   simpleSummary: SimpleSummary;
   blocks: number;
-  /** Words across the paragraphs kept. */
-  words: number;
+  /** Words kept, per level. */
+  words: Record<SimpleLevel, number>;
   dropped: SimpleDropped;
   model: string;
   inputTokens: number;
@@ -413,16 +530,15 @@ export interface SimpleSummaryRun {
 export async function generateSimpleSummary(opts: {
   /** The article, handed in — never a directory to open. src/article-input.ts. */
   article: Article;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts — or
+   * null. The job's frozen copy (`ctx.profile`), never resolved here.
+   */
+  profile: string | null;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
   cacheArticle?: boolean;
-  /**
-   * **The probe's, not a reader's** (evals/simple/probe.ts): 15 ships. A
-   * different pitch is a different prompt, so an artefact written at 12 would
-   * carry `SIMPLE_VERSION` wrongly — nothing in the app passes it.
-   */
-  pitch?: SimplePitch;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
 }): Promise<SimpleSummaryRun> {
@@ -438,91 +554,118 @@ export async function generateSimpleSummary(opts: {
   /* The body only, as `ideas` does — and ids are checked against the same set,
      so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
+  const evidenceIds = new Set(evidence.map((b) => b.id as string));
   const started = Date.now();
   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
-  const system = opts.pitch === undefined || opts.pitch === 15 ? SIMPLE_SYSTEM : simpleSystem(opts.pitch);
+  const article = articleWithIds(meta, evidence);
+  const user = renderPrompt(opts.profile);
+  const dropped = emptyDropped();
 
-  let message: Anthropic.Message;
-  try {
-    const call = streamMessage(
-      "simple",
-      {
-        max_tokens: maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: { effort: effortFor("simple") },
-        /* Article first, then this stage's instructions: Ideas' article bytes. */
-        system: [
-          {
-            type: "text" as const,
-            text: articleWithIds(meta, evidence),
-            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
-          },
-          { type: "text" as const, text: system },
-        ],
-        messages: [{ role: "user", content: renderPrompt() }],
-      },
-      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
-    );
+  /* **All or none, and the losers do not run on.** The first level to
+     fail aborts the others, so a failed press is not billed for a paragraph
+     list nobody will keep. The job's own signal still stops all of them. */
+  const sibling = new AbortController();
+  const signal = opts.signal ? AbortSignal.any([opts.signal, sibling.signal]) : sibling.signal;
 
-    if (opts.onProgress) {
-      const report = opts.onProgress;
-      let chars = 0;
-      let last = 0;
-      call.onText((delta) => {
-        chars += delta.length;
-        const now = Date.now();
-        if (now - last < 500) return;
-        last = now;
-        report(`${chars.toLocaleString("en-GB")} characters so far`);
+  let chars = 0;
+  let last = 0;
+  const onText = (delta: string) => {
+    if (!opts.onProgress) return;
+    chars += delta.length;
+    const now = Date.now();
+    if (now - last < 500) return;
+    last = now;
+    opts.onProgress(`${chars.toLocaleString("en-GB")} characters so far`);
+  };
+
+  const writeLevel = async (level: SimpleLevel) => {
+    let message: Anthropic.Message;
+    try {
+      const call = streamMessage(
+        "simple",
+        {
+          max_tokens: maxTokens,
+          thinking: { type: "adaptive" },
+          output_config: { effort: effortFor("simple") },
+          /* Article first, then this level's instructions: Ideas' article bytes. */
+          system: [
+            {
+              type: "text" as const,
+              text: article,
+              ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+            },
+            { type: "text" as const, text: SIMPLE_SYSTEMS[level] },
+          ],
+          /* The reader goes here and nowhere earlier: after the breakpoint, so
+             a profile never splits the article's cache entry (src/profile.ts §
+             `profileSection`). */
+          messages: [{ role: "user", content: user }],
+        },
+        { power: opts.power, signal },
+      );
+      call.onText(onText);
+      /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
+         is what records what this call cost. src/messages-stream.ts. */
+      message = await call.finalMessage();
+    } catch (err) {
+      throw anthropicCallFailed(err);
+    }
+    if (wasRefused(message)) {
+      throw stageFailure(MODEL_REFUSED, {
+        authored: `the model answered the "${level}" request with stop_reason: refusal`,
       });
     }
+    if (message.stop_reason === "max_tokens") {
+      throw truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
+        outputTokens: message.usage.output_tokens,
+        answerChars: message.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .reduce((n, b) => n + b.text.length, 0),
+      });
+    }
+    const raw = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, dropped);
+    return { paragraphs, usage: message.usage };
+  };
 
-    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
-       is what records what this call cost. src/messages-stream.ts. */
-    message = await call.finalMessage();
-  } catch (err) {
-    throw anthropicCallFailed(err);
-  }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const written = await Promise.all(
+    SIMPLE_LEVELS.map((level) =>
+      writeLevel(level).catch((err: unknown) => {
+        sibling.abort();
+        throw err;
+      }),
+    ),
+  );
+  const levels = Object.fromEntries(SIMPLE_LEVELS.map((level, i) => [level, written[i]!.paragraphs])) as Record<
+    SimpleLevel,
+    SimpleParagraph[]
+  >;
+  const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
+    written.reduce((n, w) => n + (pick(w.usage) ?? 0), 0);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-
-  const dropped = emptyDropped();
-  const simpleSummary = buildSimpleSummary(parseJsonAnswer<unknown>(raw, "the model's answer"), {
+  const simpleSummary = stamped(levels, {
     power: opts.power,
     slug: opts.article.slug,
-    evidence,
     sourceHash,
+    profile: opts.profile,
     elapsedMs: Date.now() - started,
-    dropped,
   });
 
   /* Nothing is written here — the caller writes through the store. */
   return {
     simpleSummary,
     blocks: blocks.length,
-    words: simpleSummary.paragraphs.reduce((n, p) => n + wordCount(p.text), 0),
+    words: Object.fromEntries(SIMPLE_LEVELS.map((l) => [l, paragraphWords(levels[l])])) as Record<SimpleLevel, number>,
     dropped,
     model: generatorFor(opts.power),
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
-    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
-    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+    /* Summed over both calls. */
+    inputTokens: sum((u) => u.input_tokens),
+    outputTokens: sum((u) => u.output_tokens),
+    cacheReadTokens: sum((u) => u.cache_read_input_tokens),
+    cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
     maxTokens,
     elapsedMs: Date.now() - started,
   };

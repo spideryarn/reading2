@@ -97,6 +97,22 @@ Then the residue, which is why this page exists:
   bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
   count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
+- **No description line in the band.** A sentence saying what the mode is, how it was made or how
+  to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
+  the top, in a foot, or under the controls:
+
+  > make a note in the new-mode.md (or similar) that we don't want these mode descriptions - they
+  > waste space. Either put them as tooltips for an (i) icon, or just try and make things
+  > self-explanatory.
+  >
+  > — Greg, 2026-09-30 (SPIDERYARN-READING2-7B)
+
+  So, in order of preference: make the control or the content say it by itself; put it in the card
+  on the control that opens it (`ControlTip`'s *what* and *how*, [tooltips.md](tooltips.md)); or,
+  when there is no control to hang it on, an (i) icon whose tooltip carries it. Empty states and
+  failures are not descriptions — they say what is happening, and stay.
+  [261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md)
+  took Simple's foot out for this. *Nothing.*
 - **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
   *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
   which derives the list rather than repeating it.
