@@ -131,6 +131,11 @@ readers never are.
   Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
   as filters above the list, owner-only for now
   ([260930j](../plans/260930j-debate-themes-and-key-sources.md)).
+  Since 2026-10-01 a source whose address carries a DOI or arXiv id (`doi.org`, `arxiv.org`, or a
+  publisher's `/doi/10.…` path) gets Crossref's or DataCite's authors and year, kept only when the
+  record's title agrees with the page's; the by-line and the date order prefer them and say where
+  they came from, and a visitor sees them too
+  ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md) stage 6).
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
   thresholded the way the glossary is. Open it for the one safety property: every address a row
   shows was in the article, and a search says it is one. Behind the switch; a visitor to a public

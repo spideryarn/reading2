@@ -76,6 +76,7 @@ import type {
   NavLabelStatus,
   Quote,
   Quotes,
+  RegistryWork,
   NodeId,
   SearchHit,
   SearchRun,
@@ -90,11 +91,13 @@ import type {
   TweetThread,
 } from "../types.js";
 import { anchorFields, identifiesOf, isSimpleParagraphs, readStoredLean } from "../types.js";
+import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import type {
   PublicArticle,
   PublicBlock,
   PublicCitations,
   PublicCitedWork,
+  PublicCitationRegistry,
   PublicClaimDebateRow,
   PublicDebate,
   PublicDirectDebateRow,
@@ -561,7 +564,19 @@ function publicCitedWork(work: CitedWork): PublicCitedWork {
     citedInBody: work.citedInBody,
     ...(url === null ? {} : { url }),
     linkFrom,
+    ...publicCitationRegistry(work.registry),
   };
+}
+
+/**
+ * **A found registry record, and nothing else** (plan 261001a stage 5) —
+ * rebuilt by `readRegistryWork`, so only its named fields cross. A `conflict`
+ * stays with the owner: it is our verdict on the article's identifier, and a
+ * visitor's row is drawn as the article gives it.
+ */
+function publicCitationRegistry(registry: unknown): { registry?: PublicCitationRegistry } {
+  const read = readCitationRegistry(registry);
+  return read?.kind === "found" ? { registry: read } : {};
 }
 
 /**
@@ -772,7 +787,14 @@ function publicDebateRowBase(
     lean: readStoredLean(row),
     applies: row.applies,
     ...(typeof row.limits === "string" ? { limits: row.limits } : {}),
+    ...publicRegistryWork(row.registry),
   };
+}
+
+/** A Debate row's registry record, rebuilt field by field (plan 261001a stage 6). */
+function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
+  const read = readRegistryWork(registry);
+  return read === null ? {} : { registry: read };
 }
 
 /**

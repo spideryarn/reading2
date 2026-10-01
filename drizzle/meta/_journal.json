@@ -743,6 +743,13 @@
       "when": 1790810574653,
       "tag": "20260930232254_bibliographic_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790813872015,
+      "tag": "20261001001752_citation_investigation_paper",
+      "breakpoints": true
     }
   ]
 }

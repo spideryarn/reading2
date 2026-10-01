@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
-import type { BlockId, Citations, CitedWork, Job } from "../src/types.js";
+import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
 import { citePassageKey } from "../src/web/rows.js";
 
@@ -34,6 +34,7 @@ const {
   citeReadAssessed,
   citeReadNoExtract,
   citeReadNotIdentified,
+  citeReadPaper,
   citeReadUnreadable,
   effectiveOrder,
   orderWorks,
@@ -809,8 +810,10 @@ describe("what a row says we have read", () => {
     const copy = `${card.head} ${card.body}`;
     expect(copy).not.toMatch(/verif|confirm|real link/i);
     expect(copy, "the card no longer says a searched row gains a link").toMatch(/scholar search/i);
-    expect(copy, "the card no longer says it does not read the full work").toMatch(
-      /never fetches the paper itself/i,
+    /* Plan 261001a stage 3: it now fetches the paper, and the card must say the
+       AI is shown it only when code has checked it is the work. */
+    expect(copy, "the card no longer bounds what of the paper the AI is shown").toMatch(
+      /shown it only when code has checked it is this work/i,
     );
   });
 });
@@ -875,6 +878,28 @@ describe("what a row says after Look it up", () => {
     /* No lookup: stage 1's two lines, unchanged. */
     expect(readNoteOf({ linkFrom: "doi" })).toBe(CITE_NOT_READ);
     expect(readNoteOf({ linkFrom: "web" })).toBe(CITE_PAGE_FOUND);
+  });
+
+  it("says the paper itself was read once Investigate read it, and only then (plan 261001a)", () => {
+    const readAt = "2026-10-01T01:00:00.000Z";
+    const investigated = (paper: unknown) => ({ paper }) as unknown as CitedWork["investigation"];
+    const read = investigated({ state: "read", host: "arxiv.org", words: 11200, readAt });
+    const said = readNoteOf({ linkFrom: "doi", lookup: ASSESSED, investigation: read });
+    expect(said).toBe(citeReadPaper(11200, "arxiv.org", readAt));
+    expect(said).toMatch(/read the paper itself on 1 October 2026/);
+    expect(said).toContain("11,200 words");
+    /* Every other paper state, and an answer from before stage 3, leave the line as it was. */
+    for (const paper of [
+      { state: "unreadable", host: "nature.com", readAt },
+      { state: "not-confirmed", host: "x.org", readAt },
+      { state: "identity-conflict", host: "doi.org", readAt },
+      { state: "no-address", readAt },
+      undefined,
+    ]) {
+      expect(readNoteOf({ linkFrom: "doi", lookup: ASSESSED, investigation: investigated(paper) })).toBe(
+        citeReadAssessed(310, "arxiv.org"),
+      );
+    }
   });
 
   it("draws an assessed row's verdict and quotes, each labelled as the extract's and the AI's", async () => {
@@ -988,8 +1013,14 @@ const {
   INVESTIGATE_FINDING,
   INVESTIGATE_LOOKUP_KEPT,
   INVESTIGATE_PREVIOUS_KEPT,
+  INVESTIGATE_READING_PAPER,
   INVESTIGATE_WAIT,
+  INVESTIGATION_LABEL,
+  INVESTIGATION_LABEL_WITH_PAPER,
   investigationProvenance,
+  noPassagesSentence,
+  PAPER_PASSAGES_LABEL,
+  paperReadSentence,
 } = await import("../src/web/CitationInvestigation.js");
 
 const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
@@ -1082,7 +1113,11 @@ describe("Investigate", () => {
     expect(card.how).toMatch(/costs money/i);
     expect(card.how).toMatch(/extracts/i);
     expect(card.how).toMatch(/may be an abstract or part of a paper/i);
-    expect(card.how).toMatch(/never fetches the paper itself/i);
+    /* Plan 261001a stage 3: the paper is fetched, shown only when checked, and only in part. */
+    expect(card.how).toMatch(/tries to fetch the paper's PDF/i);
+    expect(card.how).toMatch(/shown it only when code has checked it is this work/i);
+    expect(card.how).toMatch(/only its opening and the parts closest/i);
+    expect(card.what).toMatch(/Next it tries to read the paper itself/);
     expect(card.how).toMatch(/When the quick check finds a matching page, its result is kept on this row/);
     expect(card.how).toMatch(/The longer reading is kept on this row when it finishes/);
     expect(card.how).not.toMatch(/Both results are kept/);
@@ -1096,6 +1131,11 @@ describe("Investigate", () => {
     expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_FINDING);
     expect(INVESTIGATE_FINDING).toBe("Finding the work…");
     expect(row(FAMOUS.id).querySelector(".cite-inv-wait")).toBeNull();
+    /* Plan 261001a stage 3: the paper read is its own step, so the reader sees why a press is slower. */
+    await draw(
+      owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "reading-paper" }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-inv-wait")?.textContent).toBe(INVESTIGATE_READING_PAPER);
     await draw(
       owner({ citations: artefact([CENTRAL, FAMOUS]), investigating: CENTRAL.id, investigateStage: "reading" }),
     );
@@ -1310,6 +1350,77 @@ describe("Investigate", () => {
     expect(prov).not.toMatch(/could not confirm/);
     /* The lookup's own reading is still drawn once, by the row. */
     expect(r.querySelectorAll(".cite-verdict")).toHaveLength(1);
+  });
+
+  it("draws a read paper: the label names it, its passages are the paper's words with page and the AI's reading, then what was read (plan 261001a stage 3)", async () => {
+    const paper: InvestigatedPaper = {
+      state: "read",
+      requestedUrl: "https://arxiv.org/pdf/2001.08361",
+      finalUrl: "https://arxiv.org/pdf/2001.08361",
+      host: "arxiv.org",
+      words: 11200,
+      sentWords: 4900,
+      chunks: ["c1", "c2", "c7"],
+      matchedBy: "arxiv",
+      evidenceSha: "b".repeat(64),
+      selectionVersion: "paper-selection/1",
+      readAt: "2026-10-01T12:00:00.000Z",
+      passages: [{ chunk: "c7", page: 4, text: "The loss scales as a power-law with model size.", bears: "supports" }],
+    };
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
+    const r = row(CENTRAL.id);
+    expect(r.querySelector(".cite-inv .cite-lookup-label")?.textContent).toBe(`${INVESTIGATION_LABEL_WITH_PAPER}:`);
+    expect(r.querySelector(".cite-inv .cite-quote"), "passages show only when opened").toBeNull();
+    await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
+    const said = [...r.querySelectorAll(".cite-inv-prov")].map((n) => n.textContent);
+    expect(said).toEqual([
+      `${PAPER_PASSAGES_LABEL}:`,
+      paperReadSentence(paper),
+      investigationProvenance({ ...INVESTIGATION, paper }),
+    ]);
+    const quote = r.querySelector(".cite-inv .cite-quote");
+    expect(quote?.querySelector("blockquote")?.textContent).toBe("“The loss scales as a power-law with model size.”");
+    expect(quote?.querySelector("figcaption")?.textContent).toBe("page 4 · the AI's reading: supports the claim");
+  });
+
+  it("draws each paper state's sentence, and a read paper with no passage says so rather than 'does not support'", async () => {
+    const AT = "2026-10-01T12:00:00.000Z";
+    for (const paper of [
+      { state: "no-address", readAt: AT },
+      { state: "unreadable", requestedUrl: "https://doi.org/10.1/x", host: "nature.com", unreadableWhy: "refused", readAt: AT },
+      { state: "not-the-full-text", requestedUrl: "https://doi.org/10.1/x", finalUrl: "https://p.example/x", host: "p.example", readAt: AT },
+      { state: "not-confirmed", requestedUrl: "https://arxiv.org/pdf/1", finalUrl: "https://arxiv.org/pdf/1", host: "arxiv.org", readAt: AT },
+      { state: "identity-conflict", requestedUrl: "https://doi.org/10.1/z", host: "doi.org", readAt: AT },
+    ] as InvestigatedPaper[]) {
+      await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
+      const r = row(CENTRAL.id);
+      expect(r.querySelector(".cite-inv .cite-lookup-label")?.textContent).toBe(`${INVESTIGATION_LABEL}:`);
+      /* The same row re-rendered keeps its open state from the last turn. */
+      const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
+      if (toggle?.getAttribute("aria-expanded") !== "true") await act(async () => toggle?.click());
+      const said = [...r.querySelectorAll(".cite-inv-prov")].map((n) => n.textContent);
+      expect(said, paper.state).toEqual([paperReadSentence(paper), investigationProvenance({ ...INVESTIGATION, paper })]);
+    }
+    const none: InvestigatedPaper = {
+      state: "read",
+      requestedUrl: "https://arxiv.org/pdf/1",
+      finalUrl: "https://arxiv.org/pdf/1",
+      host: "arxiv.org",
+      words: 900,
+      sentWords: 900,
+      chunks: ["c1"],
+      matchedBy: "title-author",
+      evidenceSha: "c".repeat(64),
+      selectionVersion: "paper-selection/1",
+      readAt: AT,
+      passages: [],
+    };
+    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper: none } }]) }));
+    const r = row(CENTRAL.id);
+    const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
+    if (toggle?.getAttribute("aria-expanded") !== "true") await act(async () => toggle?.click());
+    expect(r.querySelector(".cite-inv-prov")?.textContent).toBe(noPassagesSentence([]));
+    expect(r.textContent).not.toMatch(/does not support/);
   });
 
   it("renders answer and source titles as text, and links only to http(s) sources", async () => {

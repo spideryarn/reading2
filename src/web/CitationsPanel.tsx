@@ -44,7 +44,9 @@ import {
   type CitedMatchedBy,
   type CitedWork,
   type InvestigateStage,
+  type RegistrySource,
 } from "../types.js";
+import { readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
@@ -80,7 +82,7 @@ import {
  * `CitedWork` is one of these, so the owner's path is unchanged. Since
  * 2026-09-29, plan 260929c stage 3.
  */
-export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
+export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
   /** The owner may have a private Find-it row; a public row cannot. */
   linkFrom: CitedWork["linkFrom"];
   found?: CitedWork["found"];
@@ -92,6 +94,11 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom"> & {
   inSpideryarn?: CitedWork["inSpideryarn"];
   /** The work's entry as the article gives it (plan 260930i). Not in the public projection. */
   entry?: CitedWork["entry"];
+  /**
+   * The registry's record (plan 261001a stage 5). A visitor's row carries only
+   * a `found` one; the owner's may say `conflict`. Read through `workByLine`.
+   */
+  registry?: CitedWork["registry"];
 };
 
 /* ------------------------------------------------------------- the scores -- */
@@ -178,9 +185,72 @@ export function shortAuthors(authors: string): string {
   return authors;
 }
 
-/** `Chen et al. · 2017`, or empty when the article gives neither. */
-export function byLineOf(work: Pick<ShownWork, "authors" | "year">): string {
-  return [work.authors ? shortAuthors(work.authors) : undefined, work.year].filter(Boolean).join(" · ");
+/**
+ * **The authors and year a row draws, and where each came from** (plan
+ * 261001a stage 5). The article's own, always, where it gives them; the
+ * registry's only in a field the article leaves empty, and then `filled` names
+ * the registry so the row can say so. `conflict` when the registry holds a
+ * different title under the article's identifier — then nothing of its is drawn.
+ */
+export interface WorkByLine {
+  authors?: string;
+  year?: string;
+  filled: { source: RegistrySource; fields: ("authors" | "year")[] } | null;
+  conflict: RegistrySource | null;
+}
+
+export function workByLine(work: Pick<ShownWork, "authors" | "year" | "registry">): WorkByLine {
+  const registry = readCitationRegistry(work.registry);
+  if (registry?.kind !== "found") {
+    return {
+      ...(work.authors ? { authors: work.authors } : {}),
+      ...(work.year ? { year: work.year } : {}),
+      filled: null,
+      conflict: registry?.kind === "conflict" ? registry.source : null,
+    };
+  }
+  const fields: ("authors" | "year")[] = [];
+  let authors = work.authors || undefined;
+  if (!authors) {
+    const fromRegistry = registryAuthorsText(registry);
+    if (fromRegistry) {
+      authors = fromRegistry;
+      fields.push("authors");
+    }
+  }
+  let year = work.year || undefined;
+  if (!year && registry.year !== undefined) {
+    year = String(registry.year);
+    fields.push("year");
+  }
+  return {
+    ...(authors ? { authors } : {}),
+    ...(year ? { year } : {}),
+    filled: fields.length > 0 ? { source: registry.source, fields } : null,
+    conflict: null,
+  };
+}
+
+/** `Chen et al. · 2017`, or empty when neither the article nor the registry gives either. */
+export function byLineOf(work: Pick<ShownWork, "authors" | "year" | "registry">): string {
+  const line = workByLine(work);
+  return [line.authors ? shortAuthors(line.authors) : undefined, line.year].filter(Boolean).join(" · ");
+}
+
+/** What a by-line the registry filled in says about it: *Authors and year from Crossref …* */
+export function registryFilledNote(filled: NonNullable<WorkByLine["filled"]>): string {
+  const what = filled.fields.length === 2 ? "Authors and year" : filled.fields[0] === "authors" ? "Authors" : "Year";
+  return `${what} from ${REGISTRY_NAME[filled.source]}, under the identifier the article links — the article does not give ${filled.fields.length === 2 ? "them" : "it"}.`;
+}
+
+/** The short visible mark beside a filled-in by-line. */
+export function registryFilledMark(filled: NonNullable<WorkByLine["filled"]>): string {
+  return `from ${REGISTRY_NAME[filled.source]}`;
+}
+
+/** What a row says when the registry's title disagrees with the article's. */
+export function registryConflictNote(source: RegistrySource): string {
+  return `The article's identifier points, at ${REGISTRY_NAME[source]}, to a work with a different title — the link may not be this work.`;
 }
 
 /** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
@@ -401,6 +471,11 @@ export const CITE_PAGE_FOUND = "We found a web page matching its title, but have
 export function citeReadAssessed(words: number, host: string): string {
   return `We have not read the work itself, only a search engine's extract of a page matching it (${words} ${words === 1 ? "word" : "words"}, from ${host}).`;
 }
+/** *Investigate* read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
+export function citeReadPaper(words: number, host: string, readAt: string): string {
+  const day = new Date(readAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Investigate).`;
+}
 /** `no-extract`: a page, and nothing of it to read. Never drawn as `not-in-extract`. */
 export function citeReadNoExtract(host: string): string {
   return `A page matching it was found (${host}), but the search gave no extract to read, so we have read nothing of the work.`;
@@ -419,7 +494,12 @@ export function citeReadUnreadable(host: string): string {
  * otherwise `linkFrom` decides between the two stage-1 lines. Total over both
  * unions, as `sourceOf` is. The band and the hover card both call this.
  */
-export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup">): string {
+export function readNoteOf(work: Pick<ShownWork, "linkFrom" | "lookup" | "investigation">): string {
+  /* *Investigate* read the paper itself (plan 261001a stage 3): the strongest
+     thing we have read, so it is what the row says, dated — a kept answer is a
+     snapshot. Any other paper state leaves the line to what it was before. */
+  const paper = work.investigation?.paper;
+  if (paper?.state === "read") return citeReadPaper(paper.words, paper.host, paper.readAt);
   const lookup = work.lookup;
   if (lookup !== undefined) {
     switch (lookup.state) {
@@ -827,6 +907,7 @@ function WorkRow({
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
   const note = investigate?.note ?? null;
   const scores = scoresOf(work);
+  const line = workByLine(work);
   const by = byLineOf(work);
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
@@ -857,6 +938,7 @@ function WorkRow({
       </p>
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && <ByLine work={work} by={by} />}
+      {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       <p className="cite-why">
         <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
       </p>
@@ -956,8 +1038,10 @@ function WorkRow({
  */
 function ByLine({ work, by }: { work: ShownWork; by: string }) {
   const entry = work.entry;
-  const shortened = work.authors !== undefined && shortAuthors(work.authors) !== work.authors;
-  if (!entry && !shortened) return <p className="cite-by">{by}</p>;
+  const line = workByLine(work);
+  const shortened = line.authors !== undefined && shortAuthors(line.authors) !== line.authors;
+  const filled = line.filled;
+  if (!entry && !shortened && !filled) return <p className="cite-by">{by}</p>;
   return (
     <Tooltip
       placement="bottom"
@@ -965,7 +1049,8 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
       className="tip-soon"
       content={
         <>
-          <div className="tip-soon-head">{[work.authors, work.year].filter(Boolean).join(" · ")}</div>
+          <div className="tip-soon-head">{[line.authors, line.year].filter(Boolean).join(" · ")}</div>
+          {filled && <p className="tip-soon-how">{registryFilledNote(filled)}</p>}
           {entry && <p className="cite-entry">{entry}</p>}
           {entry && <p className="tip-soon-how">{CITE_ENTRY_NOTE}</p>}
         </>
@@ -973,7 +1058,11 @@ function ByLine({ work, by }: { work: ShownWork; by: string }) {
     >
       <p className="cite-by cite-by-more">
         {by}
-        {shortened && <span className="sr-only"> — authors: {work.authors}</span>}
+        {/* The registry's words are never drawn as the article's: a visible
+            mark, and the whole sentence in the tooltip (plan 261001a stage 5). */}
+        {filled && <span className="cite-by-from"> · {registryFilledMark(filled)}</span>}
+        {shortened && <span className="sr-only"> — authors: {line.authors}</span>}
+        {filled && <span className="sr-only"> — {registryFilledNote(filled)}</span>}
         {entry && <span className="sr-only"> — {entry}</span>}
       </p>
     </Tooltip>

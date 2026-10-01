@@ -14,7 +14,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, CitationInvestigation, Citations, CitedWork } from "../src/types.js";
+import type { BlockId, CitationInvestigation, Citations, CitedWork, InvestigatedPaper } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -253,6 +253,56 @@ describe("investigate", () => {
     expect(row()?.investigation).toEqual(previous);
   });
 
+  it("takes a done whose paper is whole, and refuses one whose paper is not (plan 261001a stage 3)", async () => {
+    const paper: InvestigatedPaper = {
+      state: "read",
+      requestedUrl: "https://arxiv.org/pdf/1",
+      finalUrl: "https://arxiv.org/pdf/1",
+      host: "arxiv.org",
+      words: 900,
+      sentWords: 800,
+      chunks: ["c1", "c2"],
+      matchedBy: "arxiv",
+      evidenceSha: "d".repeat(64),
+      selectionVersion: "paper-selection/1",
+      readAt: "2026-10-01T12:00:00.000Z",
+      passages: [{ chunk: "c2", page: 2, text: "A passage the code found.", bears: "context" }],
+    };
+    for (const [sent, kept] of [
+      [{ ...investigation("2026-10-01T10:00:00.000Z"), paper }, true],
+      /* A read paper with no word count is not drawn as read. */
+      [{ ...investigation("2026-10-01T10:00:00.000Z"), paper: { ...paper, words: undefined } }, false],
+      /* A passage with an unknown bearing is not drawn. */
+      [
+        { ...investigation("2026-10-01T10:00:00.000Z"), paper: { ...paper, passages: [{ chunk: "c2", page: 2, text: "x", bears: "refutes" }] } },
+        false,
+      ],
+      [{ ...investigation("2026-10-01T10:00:00.000Z"), paper: { state: "somewhere", readAt: "x" } }, false],
+    ] as const) {
+      await open();
+      let pressed: Promise<void> | undefined;
+      await act(async () => {
+        pressed = hook?.investigate(ID);
+      });
+      await flush();
+      listed = kept ? ({ ...WORK, investigation: sent } as CitedWork) : WORK;
+      await act(async () => {
+        push?.("done", { investigation: sent });
+        end?.();
+      });
+      await act(async () => {
+        await pressed;
+      });
+      await flush();
+      if (kept) {
+        expect(hook?.investigateFailed).toBeNull();
+        expect(row()?.investigation).toEqual(sent);
+      } else {
+        expect(hook?.investigateFailed?.message, JSON.stringify(sent.paper)).toBeTruthy();
+      }
+    }
+  });
+
   it("a stream that just stops is a failure, not an answer", async () => {
     await open();
     let pressed: Promise<void> | undefined;
@@ -335,6 +385,10 @@ describe("investigate", () => {
     await act(async () => push?.("stage", { stage: "finding" }));
     await flush();
     expect(hook?.investigateStage).toBe("finding");
+    /* Plan 261001a stage 3: the paper read is a stage of its own. */
+    await act(async () => push?.("stage", { stage: "reading-paper" }));
+    await flush();
+    expect(hook?.investigateStage).toBe("reading-paper");
     await act(async () => push?.("stage", { stage: "reading" }));
     await flush();
     expect(hook?.investigateStage).toBe("reading");

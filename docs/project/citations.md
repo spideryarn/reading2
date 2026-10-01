@@ -23,6 +23,17 @@ where the link came from, and **first cited**, a jump to the passage
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
 
+**The registry's record** (since 2026-10-01,
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
+stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most 80 — is
+looked up at Crossref or DataCite through the shared, cached lookup
+([`bibliographic.ts`](../../src/bibliographic.ts)), and the record is kept on the row only when its
+title agrees with the article's. A disagreement is kept as a *conflict*, and the row says the
+article's identifier points to a different title. The by-line stays as the article gives it; where
+the article gives no authors or no year, the registry's are drawn, marked *from Crossref* / *from
+DataCite*. A visitor's row carries a found record, never a conflict. Outside the stamp and the
+prompt, and the step never fails for it ([`citation-registry.ts`](../../src/citation-registry.ts)).
+
 ## The one safety property
 
 **Every address a row presents as the work's own was in the article, and code found it.** The model
@@ -46,7 +57,9 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
 saying what we have read. Usually that is nothing: *We have not read this work, only the article that
 cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
-of a matching page, and never the work itself. `readNoteOf` in
+of a matching page, and never the work itself. Once *Investigate* has read the paper itself
+(§ [Investigate](#investigate-a-closer-look-at-one-work-on-demand)), the line says that instead,
+with the host, the length and the day. `readNoteOf` in
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
@@ -275,8 +288,8 @@ the abstract — against what the article uses the work for (`why` and the first
 *supports*, *partly*, or *the extract doesn't show it, though the full work might*. There is no
 *does not support*: an extract is not the work. Greg's clarification set the scope — *"I was
 basically thinking of ways to tweak that prompt/UI"* — so this rides on the retrieval Citations
-already had rather than fetching the paper; reading the paper itself is the plan's proposed later
-stage.
+already had rather than fetching the paper. Reading the paper itself came later, in *Investigate*
+(plan 261001a).
 
 What code decides ([`src/citation-lookup.ts`](../../src/citation-lookup.ts)):
 
@@ -330,7 +343,7 @@ checked quote land first. A provider failure there stops the press before the la
 for; finding nothing does not, and the reading goes on unconfirmed. The row and the article are
 then read again, and the reading is written from that. The quick check can land while the reading
 fails, and the row says so. One allowance covers both calls: one at a time, 8 an hour and 20 a day
-per reader, 55 a day across everyone. Then, as before, one streamed answer, written
+per reader, 50 a day across everyone. Then, as before, one streamed answer, written
 from a few web searches and kept on the row: *does it back the claim*, *how else it bears on this
 article*, and *for you* when the reader has written a profile or *why you're reading this one*.
 Nothing runs for every row. The design, its two plan reviews, the probe and the code reviews are
@@ -353,6 +366,38 @@ that any result is this work itself* — and the prompt forbids describing a loo
 "Earlier" is deliberate: the match may come from this press's quick check or a previous one
 (260930d, the C-2 ruling).
 
+**It reads the paper itself, when it can, and says what it did.** Greg, on 5G and 5Q:
+
+> Oh, Citations definitely needs to read the paper! Especially the References/Bibliography section.
+> Otherwise it's useless!
+>
+> — Greg, 2026-10-01
+
+Between the quick check and the answer, a press reads the cited paper through
+[`paper-evidence.ts`](../../src/paper-evidence.ts) (plan
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md),
+stages 2 and 3): the row's own DOI or arXiv link, else the page the quick check matched. Only a PDF's
+text layer counts as the paper, and code must confirm it is this work — the title at the top of page
+one, then an identifier or the first author; a registry title that disagrees with the article's is an
+identity conflict, so a DOI the article typed wrongly is never read as the work. The row then says,
+from stored columns, one of six things — *we read the paper itself: a PDF from arxiv.org, 11,200
+words; the AI was shown 4,900 of them…*, or why it could not — and the day it did so. It is a dated
+snapshot: nothing re-fetches the paper on read, so the row never claims the remote paper is
+unchanged. An answer from before this has no paper columns and is drawn exactly as before.
+
+**The paper's words reach the reader only as passages code found.** When the paper was read, one
+small JSON call (`citation-paper-passages`, the quick check's model, no tools, the chunks fenced as
+evidence with a reminder after) offers up to three `{ chunk, quote, bears }`. Code keeps one only if
+`verifyPassage` finds it in the one chunk it names, and stores that chunk's characters and page,
+never the model's spelling ([`citation-paper-passages.ts`](../../src/citation-paper-passages.ts)).
+They are shown under *the paper's own words, found by code in the text we read*, each with its page
+and its bearing labelled as the AI's reading. None surviving says *the AI found no passage it could
+point to in what it was shown*, never *the paper does not support*; a failed call does not fail the
+press and says the pick failed. The streamed answer is sent the chunks and these passages to
+paraphrase, told which state the paper is in, and still may not quote: the guard's allowed texts are
+unchanged, because a quote presented as the paper's could otherwise be the article's words (GPT
+Sol's plan review, P-1).
+
 **The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
 words and the work's title led the model to quote its own phrases, the paper's terms and result
 titles too, and four of five real calls were stopped by the guard; with none allowed, seven of
@@ -367,11 +412,14 @@ never reaches a visitor, and it is in all three exports. A failed *Investigate a
 earlier answer in place, and the row says so.
 
 **Bounded** by its own allowance bucket, `citation-investigate`: one at a time, 8 an hour and 20 a
-day per reader, and 55 a day across everyone. These numbers come from the probe: $0.12 a press on
-average and $0.15 at worst, budgeted at $0.30, plus the quick check's ~3¢ since the two were merged
-and a 3,000-token answer ceiling — 55 × about $0.345 is about $19, under a $20-a-day ceiling. Exa is pinned, with 8
-results of at most 8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)).
-It is the `citation-investigate` job on the gateway.
+day per reader, and 50 a day across everyone. The probe measured $0.12 a press on average and $0.15
+at worst, budgeted at $0.30; the quick check added ~3¢ and the 3,000-token answer ceiling ~1.5¢, and
+reading the paper adds ~5¢ at worst (the passages call and the same chunks again in the answer), so
+`INVESTIGATE_PRESS_BUDGET_USD` is $0.395 and 50 × that is about $19.75, under a $20-a-day ceiling.
+The lease covers every deadline in a press — the quick check, the registry and the paper's 25
+seconds, the passages call, the answer — plus a margin. Exa is pinned, with 8 results of at most
+8,000 characters each ([`citation-investigate.ts`](../../src/citation-investigate.ts)). It is the
+`citation-investigate` job on the gateway, with `citation-paper-passages` inside it.
 
 ## Already an article here
 
@@ -439,7 +487,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, on every row at once, or reading the paper itself; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; a bibliographic lookup such as OpenAlex (a new outside service, Greg's decision). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; the entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

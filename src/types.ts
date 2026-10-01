@@ -24,7 +24,7 @@
  * nothing at all, so it costs the browser bundle nothing and keeps this file
  * from becoming the sixth copy of the uuid regex.
  */
-import type { FailureKind } from "./messages.js";
+import type { FailureKind, PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
 
@@ -3889,7 +3889,40 @@ export interface CitedWork {
    * never on a visitor's list. docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
    */
   inSpideryarn?: CitedInSpideryarn;
+  /**
+   * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
+   * written by the `citations` step after the model's list is built
+   * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
+   * the read-time fields above. `found` only when the registry's title agrees
+   * with the article's; `conflict` when it does not — the article's identifier
+   * points at a different work. Absent: not looked up, nothing found, or a
+   * revision from before the stage.
+   */
+  registry?: CitationRegistry;
 }
+
+/** The two registries a record can come from (src/bibliographic.ts § `Registry`). */
+export type RegistrySource = "crossref" | "datacite";
+
+/**
+ * **A registry's record, as a row keeps it** — Citations' and Debate's
+ * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
+ * Never read straight off a stored row on the client: nothing revalidates
+ * stored JSON, so read it through a guard.
+ */
+export interface RegistryWork {
+  source: RegistrySource;
+  title: string;
+  /** In the registry's order, at most `REGISTRY_AUTHORS_KEPT` (src/citation-registry.ts). An organisation is a `family` alone. */
+  authors: { family: string; given?: string }[];
+  /** How many more authors the registry lists past those kept; absent when none. */
+  moreAuthors?: number;
+  year?: number;
+  venue?: string;
+}
+
+/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
+export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
 
 /**
  * How a cited work was matched to an article here, strongest first. `title` is
@@ -3939,7 +3972,72 @@ export interface CitationInvestigation {
   /** Over everything the call was sent. Attached only while it matches. */
   contextHash: string;
   promptVersion: string;
+  /**
+   * **What we did about the paper itself** (plan 261001a stage 3) — code's
+   * account, never the model's. **Absent on an answer written before that
+   * stage**, which the row draws exactly as it did then.
+   */
+  paper?: InvestigatedPaper;
 }
+
+/** How code confirmed a fetched PDF is the cited work — src/paper-evidence.ts § confirmIdentity. */
+export type PaperMatchedBy = "doi" | "arxiv" | "title-author";
+
+/** The AI's reading of how one of the paper's passages bears on what the article cites it for. */
+export type PaperPassageBears = "supports" | "partly" | "context";
+
+/**
+ * **One passage of the paper, found by code** — the chunk's own characters
+ * (`verifyPassage`, src/paper-evidence.ts), never the model's spelling. `bears`
+ * is the AI's reading.
+ */
+export interface PaperPassage {
+  /** The chunk it was found in, `c1`… */
+  chunk: string;
+  /** The page that chunk starts on, 1-based. */
+  page: number;
+  text: string;
+  bears: PaperPassageBears;
+}
+
+/**
+ * **The paper, as one *Investigate* press found it** — src/paper-evidence.ts's
+ * six outcomes, kept as a dated snapshot (`readAt`): nothing re-fetches on
+ * read, so the row never implies the remote paper is unchanged (Sol P-10).
+ * URLs and hosts are the owner's, like the rest of an investigation.
+ */
+export type InvestigatedPaper =
+  | {
+      state: "read";
+      requestedUrl: string;
+      finalUrl: string;
+      host: string;
+      /** Words in the paper's text as we read it, up to its references. */
+      words: number;
+      /** Words of it the AI was shown. */
+      sentWords: number;
+      /** The chunk ids the AI was shown, in document order. */
+      chunks: string[];
+      matchedBy: PaperMatchedBy;
+      /** sha256 of exactly what the AI was shown — the record of what was read. */
+      evidenceSha: string;
+      selectionVersion: string;
+      readAt: string;
+      /**
+       * At most three, each checked by code in the chunk it names. `[]`: the
+       * AI was shown the paper and no passage it offered was found there.
+       * `null`: the call for passages failed, so none was asked for
+       * successfully — never drawn as *found none*.
+       */
+      passages: PaperPassage[] | null;
+    }
+  | { state: "no-address"; readAt: string }
+  | { state: "unreadable"; requestedUrl: string; host: string; unreadableWhy: PaperUnreadableReason; readAt: string }
+  | { state: "not-the-full-text"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
+  | { state: "not-confirmed"; requestedUrl: string; finalUrl: string; host: string; readAt: string }
+  | { state: "identity-conflict"; requestedUrl: string; host: string; readAt: string };
+
+export type InvestigatedPaperState = InvestigatedPaper["state"];
 
 /**
  * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
@@ -3959,11 +4057,13 @@ export interface InvestigateCitationDone {
 /**
  * Which step of the one *Investigate* press is running (plan 260930d): `finding`
  * — the lookup that looks for the work's own page, only when the row has no
- * current `assessed` one — then `reading`, the streamed answer. Sent as a
- * `stage` frame (`{ stage }`); a `lookup` frame between them carries the
- * lookup's answer, the same `FindCitationResponse` `POST …/find` answers.
+ * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
+ * paper itself fetched and checked, and when read, its passages asked for),
+ * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
+ * a `lookup` frame after `finding` carries the lookup's answer, the same
+ * `FindCitationResponse` `POST …/find` answers.
  */
-export type InvestigateStage = "finding" | "reading";
+export type InvestigateStage = "finding" | "reading-paper" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {
@@ -4850,9 +4950,10 @@ interface DebateRowBase {
   /*
    * **What the work is — title, authors, year. Nothing writes these today.**
    *
-   * They are the landing place for a bibliographic lookup (DOI, arXiv,
-   * OpenAlex) that Greg has not approved — a new outside service
-   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred).
+   * They were the landing place for a bibliographic lookup
+   * (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md § Deferred);
+   * that lookup landed as `registry` below (plan 261001a stage 6), its own
+   * field so where the words came from stays readable.
    * Stage 2 first asked the search model to copy them off the page and kept
    * each only if the page's extract held it; measured, that verified on 1 row
    * of 11, because the extract is a passage from the middle of the page and the
@@ -4884,6 +4985,15 @@ interface DebateRowBase {
    * Read it through `readStoredBears`.
    */
   bears?: DebateBears;
+  /**
+   * **What Crossref or DataCite holds for the identifier this row's address
+   * carries** — written by the `debate` step after its searches
+   * (src/debate-registry.ts, plan 261001a stage 6), and only when the
+   * registry's title agrees with the engine's `title` for the page. The
+   * by-line and the *date* order prefer it to `authors` / `publishedYear`, and
+   * say where it came from. Read it through `readRegistryWork`.
+   */
+  registry?: RegistryWork;
 }
 
 /**

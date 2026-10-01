@@ -61,6 +61,8 @@ import type {
   Citation,
   CitationLinkFrom,
   CitationPlace,
+  CitationRegistry,
+  RegistryWork,
   BlockContext,
   BlockId,
   BlockKind,
@@ -531,7 +533,17 @@ export interface PublicCitedWork {
   /** The article's source rule. `web` is the owner's private Find-it result
    * and is normalised back to `search` at the public boundary. */
   linkFrom: Exclude<CitationLinkFrom, "web">;
+  /**
+   * **A found registry record only** (plan 261001a stage 5): public metadata
+   * about the public identifier the row already links, rebuilt field by field
+   * by `readRegistryWork`. A `conflict` does not cross — the visitor's row is
+   * drawn as the article gives it, without our verdict on its identifier.
+   */
+  registry?: PublicCitationRegistry;
 }
+
+/** The `found` arm of `CitationRegistry`, and only it. */
+export type PublicCitationRegistry = Extract<CitationRegistry, { kind: "found" }>;
 
 /**
  * **The Citations list, as a visitor gets it** — since 2026-09-29, the third
@@ -584,6 +596,8 @@ interface PublicDebateRowBase {
   lean: DebateLean;
   applies: string;
   limits?: string;
+  /** The registry's record for the identifier the row's address carries (plan 261001a stage 6), rebuilt by `readRegistryWork`. */
+  registry?: RegistryWork;
 }
 
 /** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */

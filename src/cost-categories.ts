@@ -203,6 +203,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "upload-source-guess": "interactive request work",
   /* Citations' *Investigate* — src/citation-investigate.ts. A reader presses it. */
   "citation-investigate": "interactive request work",
+  /* The paper's passages, inside the same *Investigate* press. */
+  "citation-paper-passages": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
   /* The word that decides how hard the reader's next question is, judged from
