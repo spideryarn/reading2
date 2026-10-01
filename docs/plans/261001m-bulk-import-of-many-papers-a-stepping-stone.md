@@ -61,7 +61,12 @@ Two subagent surveys and two spikes, 2026-10-01.
   reports `cost: 0` because the key is BYOK, so the figure is from token counts and was checked
   against `upstream_inference_cost` on a probe). That is **about $0.53 per 1,000 papers**, and
   1–6 s a paper. Not tested: scans with no text layer, which would need the model to read the
-  page image and would cost more.
+  page image and would cost more. These figures are from the raw-call version of
+  `evals/pdf/minimal-metadata/cheap-model-spike.mts` (20abc3379). Since
+  [261001o](261001o-route-the-cheap-model-metadata-spike-through-the-gateway.md) the script calls
+  through the gateway and its spend reaches the ledger. The gateway's `eval` job sends no effort,
+  though, so a re-run measures Luna at the provider's default effort, not `low`, and will probably
+  cost more.
 - **Upload is one file at a time by design** (`ONE_UPLOAD_AT_A_TIME`, `src/web/uploadEngine.ts`;
   `UploadPicker` refuses a multi-file drop with *"One at a time, please"*). The browser hashes
   every file (sha256) before sending it, and an uploaded PDF's `article_revisions.raw_sha256` is

@@ -247,6 +247,11 @@ tr.row-active .block-ref { opacity: 0.95; }
   outline-offset: 2px;
   opacity: 1;
 }
+/* **A link in a band whose paragraph is on screen** wears this wash behind it —
+   the colour only; the rule is generated, for the ids on screen, by
+   on-screen.ts § `onScreenLinkCss` (Greg, SPIDERYARN-READING2-8K). */
+:root { --block-link-on-screen: var(--highlight-wash); }
+
 /* An id this article no longer has — a span, not a link (BlockRef.tsx). Dimmer
    than an id at rest and with none of a link's hover, so it does not invite a
    click that could only go nowhere; its card says why. */

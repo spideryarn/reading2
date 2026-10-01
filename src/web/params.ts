@@ -267,7 +267,7 @@ import { isMode } from "../modes.js";
 export { isMode };
 /* Imported as well as re-exported: `export … from` creates no local binding, and
    `modeParam` below uses all three. */
-import { type BandMode, DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
+import { type BandMode, DEFAULT_MODE, MODES, type Mode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 export { type BandMode, DEFAULT_MODE, MODES, type Mode };
 
 /* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
@@ -309,7 +309,7 @@ export const modeParam = createParser<BandMode>({
   .withOptions({ history: "push" });
 
 /**
- * **Whether Annotations' column of notes is on, right of the prose** — since
+ * **Whether Marginalia's column of notes is on, right of the prose** — since
  * 2026-10-01 a switch of its own beside `?mode=`, so the notes can sit beside
  * a band. docs/plans/261001i-annotations-column-beside-a-band-mode.md.
  *
@@ -321,15 +321,17 @@ export const modeParam = createParser<BandMode>({
 export const marginParam = parseAsBit.withOptions({ history: "push" });
 
 /**
- * **Does this query string ask for the notes?** `?margin=1`, or an old
- * `?mode=annotations` link from the day Annotations was a mode (2026-10-01),
- * which `modeParam` now reads as Plain. The Reader rewrites the old spelling
- * on arrival; this is the one statement of what it means, for that rewrite
- * and for the Dock's links off the reading view.
+ * **Does this query string ask for the notes?** `?margin=1`, or a
+ * `?mode=marginalia` link, or an old `?mode=annotations` one from the day the
+ * mode was called Annotations and was a value of `?mode=` (2026-10-01) — both
+ * of which `modeParam` reads as Plain (`isMarginaliaModeWord`, src/modes.ts).
+ * The Reader rewrites either spelling on arrival; this is the one statement of
+ * what they mean, for that rewrite and for the Dock's links off the reading
+ * view.
  */
 export function marginInSearch(search: string): boolean {
   const query = new URLSearchParams(search);
-  return query.get("margin") === "1" || query.get("mode") === "annotations";
+  return query.get("margin") === "1" || isMarginaliaModeWord(query.get("mode"));
 }
 
 /**

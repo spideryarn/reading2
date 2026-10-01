@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -102,6 +102,7 @@ import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
+import { useMedia } from "./media.js";
 
 interface Props {
   threads: ChatThread[];
@@ -174,6 +175,12 @@ interface Props {
   onDiscard(id: string): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
+  /**
+   * **May Remember offer Start over now?** Only when its one conversation is
+   * stored, named by the server and has nothing of this tab's in flight — see
+   * `settled` in useChat.ts. Chat's delete ignores it.
+   */
+  canStartOver: boolean;
   /** Answer the last question again, over the top of the answer it has. */
   onRetry(messageId: string): void;
   /** Rewrite one of the reader's questions. Discards everything after it. */
@@ -342,6 +349,7 @@ export function ChatPanel({
   onDiscard,
   onRename,
   onDelete,
+  canStartOver,
   onRetry,
   onEdit,
   onStop,
@@ -479,9 +487,32 @@ export function ChatPanel({
       label={remember ? "Remember what you took from this article" : "Chat about this article"}
       head={
         <>
-          <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
+          {/* **Remember's header says Remember**, never the thread's title: there
+              is one Remember conversation per article, so the title names
+              nothing the reader could mistake it for — and it is their first
+              sixty characters, often "Um, so…". Plan 261001m § 4. */}
+          <h2>{remember ? "Remember" : open ? open.title : "Chat"}</h2>
           {subMode}
-          {open ? (
+          {remember ? (
+            /* **Start over, and nothing else.** No close, because there is no
+               list to go back to; no new, because there is one Remember
+               conversation; no rename, which only the list offered. The same
+               two-press delete chat has, relabelled for what it does here —
+               the band first finishes Live, then begins the fresh conversation
+               once the server has confirmed the delete. **Not rendered at all**
+               until the conversation is stored and settled (`canStartOver`):
+               an empty one has nothing to start over from, and one still being
+               answered or not yet named by the server would need a DELETE held
+               for a name. Plan 261001m § 4 and F1. */
+            open && canStartOver && (
+              <ArmedDelete
+                key={open.id}
+                onDelete={() => onDelete(open.id)}
+                title="Start over — delete this conversation"
+                armedTitle="Press again to delete this conversation and start over"
+              />
+            )
+          ) : open ? (
             <>
               {/* The same delete the list offers, where the reader actually is.
                   Greg, 2026-08-26: *"Also add a Delete button within a chat."*
@@ -497,7 +528,7 @@ export function ChatPanel({
             <button
               type="button"
               className="chat-icon"
-              title={remember ? "Start remembering" : "Start a new conversation"}
+              title="Start a new conversation"
               onClick={onNew}
             >
               <MessageSquarePlus size={14} />
@@ -534,17 +565,24 @@ export function ChatPanel({
           focused={focused}
           draft={draftFor(open.id)}
           onDraft={(text) => drafts.current.set(open.id, text)}
-          /* The OPEN conversation's kind, not the mode's. The list is shared,
-             so a reader in Remember mode can open a chat — and when they do, the
-             transcript in front of them is a chat and its composer must be
-             chat's. Reading the mode here instead would put a stance picker
-             under a conversation whose answers ignore it. */
+          /* The OPEN conversation's kind, not the mode's. Each mode now lists only
+             its own kind (plan 261001m), so the two agree on every path the band
+             takes; reading the thread is still the honest source, because it is
+             the thread whose answers the stance picker would govern. */
           kind={open.kind}
           stance={stance}
           onStance={onStance}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
+      ) : remember ? (
+        /* **Remember never draws a list, not even for a frame.** The band
+           derives its one conversation during render (ConversationBand), so
+           this is reached only before the first fetch lands, in the beat before
+           an empty band begins its conversation, and while Start over's DELETE
+           is out — and in none of them is there anywhere for a question to go.
+           Plan 261001m, F1 and F6. */
+        <ChatListLoading what="your Remember conversation" />
       ) : threads.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
@@ -591,7 +629,6 @@ export function ChatPanel({
             onNew={onNew}
             onRename={onRename}
             onDelete={onDelete}
-            remember={remember}
           />
           {/* The list's own composer. Typing here and pressing Enter starts a
               conversation and sends the question into it in one go, which is
@@ -636,7 +673,7 @@ export function ChatPanel({
               onDraft={(text) => {
                 listDraft.current = text;
               }}
-              placeholder={remember ? "Say what you took from this…" : "Ask something new…"}
+              placeholder="Ask something new…"
               kind={kind}
               stance={stance}
               onStance={onStance}
@@ -674,7 +711,16 @@ export function ChatPanel({
  * for a minute cannot be pressed by accident later. Mounted with `key={id}`, so
  * changing conversation gives it a fresh unarmed one.
  */
-function ArmedDelete({ onDelete }: { onDelete(): void }) {
+function ArmedDelete({
+  onDelete,
+  title = "Delete this conversation",
+  armedTitle = "Press again to delete this conversation",
+}: {
+  onDelete(): void;
+  /** What the button says at rest, and once armed. Remember calls it Start over. */
+  title?: string;
+  armedTitle?: string;
+}) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
@@ -686,12 +732,34 @@ function ArmedDelete({ onDelete }: { onDelete(): void }) {
     <button
       type="button"
       className={`chat-icon danger${armed ? " armed" : ""}`}
-      title={armed ? "Press again to delete this conversation" : "Delete this conversation"}
+      title={armed ? armedTitle : title}
       onClick={() => (armed ? onDelete() : setArmed(true))}
     >
       <Trash2 size={14} />
     </button>
   );
+}
+
+/** Where Remember's composer turns compact — see `short` in `Composer`. */
+const SHORT_VIEWPORT = "(max-height: 500px)";
+
+/**
+ * **The composer's floor and roof**: the rows it rests at, and the height in
+ * px it may grow to with what is typed or dictated.
+ *
+ * Chat is one row growing to 160px — a question is a sentence. Remember is six
+ * rows growing to 360px: a spoken Remember turn is a paragraph or three, and a
+ * box that stops at 160px turns the reader's own words into a four-line
+ * scrolling window they cannot read back before sending. On a short viewport
+ * Remember rests at two rows and grows to 30% of the viewport, so the
+ * transcript stays in view. 45% was the first figure, and at 844×390 a
+ * six-line answer left one clipped line of transcript above the box (browser
+ * check, 2026-10-01). Plan 261001m § 5.
+ */
+function boxSize(remember: boolean, short: boolean): { rows: number; roof: () => number } {
+  if (!remember) return { rows: 1, roof: () => 160 };
+  if (!short) return { rows: 6, roof: () => 360 };
+  return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
 
 /** How long an armed delete stays armed. */
@@ -709,7 +777,7 @@ const DISARM_MS = 4000;
  * Deliberately renders the empty `div` rather than `null` in the fast case, so
  * the panel does not change height when the spinner appears.
  */
-function ChatListLoading() {
+function ChatListLoading({ what = "your conversations" }: { what?: string }) {
   const slow = useSlow(true);
   /* `role="status"`, because the words arrive 600ms after the panel does and a
      line that simply appears is silent to a screen reader. Polite by
@@ -720,7 +788,7 @@ function ChatListLoading() {
       {slow && (
         <>
           <LoaderCircle className="cmt-spinner" size={13} />
-          <span>Fetching your conversations…</span>
+          <span>Fetching {what}…</span>
         </>
       )}
     </div>
@@ -754,15 +822,12 @@ function ThreadList({
   onNew,
   onRename,
   onDelete,
-  remember,
 }: {
   threads: ChatThread[];
   onOpen(id: string): void;
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
-  /** Which mode the reader pressed to get here — it only changes the wording. */
-  remember: boolean;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   /* Read once here and passed to every row, so two rows a minute apart in the
@@ -773,14 +838,12 @@ function ThreadList({
   if (sorted.length === 0) {
     return (
       <div className="chat-empty">
-        <p>{remember ? "Nothing remembered yet." : "Nothing asked yet."}</p>
+        <p>Nothing asked yet.</p>
         <p className="chat-empty-hint">
-          {remember
-            ? "Say what you took from this article and I'll point at the places it comes apart from the piece — and at the paragraphs worth another look."
-            : "Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there."}
+          Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there.
         </p>
         <button type="button" className="chat-new" onClick={onNew}>
-          <MessageSquarePlus size={14} /> {remember ? "Start remembering" : "New conversation"}
+          <MessageSquarePlus size={14} /> New conversation
         </button>
       </div>
     );
@@ -819,17 +882,9 @@ function ThreadList({
                   <span className="chat-thread-title">{t.title}</span>
                   {last && <span className="chat-thread-last">{last}</span>}
                   <span className="chat-thread-meta">
-                    {/* The list is shared between the two modes (Greg's call,
-                        2026-08-27), so the row has to say which it is — "times
-                        I explained myself" and "questions I asked" are not the
-                        same thing to go looking for, and the titles alone do
-                        not tell them apart. Only Remember threads are tagged:
-                        chat is the older and commoner kind, and tagging both
-                        would put a label on every row to distinguish a minority.
-
-                        `t.kind` is the **persisted** thread kind —
-                        src/types.ts § ThreadKind. */}
-                    {t.kind === "remember" && <span className="chat-thread-kind">remember</span>}
+                    {/* No kind tag: until 2026-10-01 the list was shared with
+                        Remember and tagged its rows; now only chat lists, and
+                        only its own kind (plan 261001m). */}
                     <span className="chat-thread-count">{turns(t)}</span>
                     {/* Recency, because the question a list of conversations
                         answers is "which was I in?". The exact time is in the
@@ -1962,6 +2017,16 @@ export function Composer({
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
   const remember = kind === "remember";
+  /**
+   * **A short band gets a short box.** On a landscape phone the band is about
+   * 338px tall, and six rows at rest took 280 of it — the transcript the reader
+   * is answering had 58px. So below 500px of viewport height (a landscape
+   * phone; no laptop window is that short) Remember's box rests at two rows and
+   * grows to 30% of the viewport, still following what is typed or dictated.
+   * Plan 261001m § 5. Chat's one-row box is unchanged.
+   */
+  const short = useMedia(SHORT_VIEWPORT);
+  const size = useMemo(() => boxSize(remember, short), [remember, short]);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -1996,13 +2061,9 @@ export function Composer({
     const el = box.current;
     if (!el) return;
     el.style.height = "auto";
-    /* Twice chat's ceiling for a Remember turn. A chat question is a sentence; a
-       spoken Remember turn is a paragraph or three, and a box that stops growing at
-       160px turns the reader's own words into a four-line scrolling window they
-       cannot read back before sending. `rows` below sets the floor; this sets
-       the roof. */
-    el.style.height = `${Math.min(el.scrollHeight, remember ? 360 : 160)}px`;
-  }, [value, remember]);
+    /* `rows` below sets the floor; this sets the roof. `boxSize` says why each. */
+    el.style.height = `${Math.min(el.scrollHeight, size.roof())}px`;
+  }, [value, size]);
 
   /**
    * **Dictation, in the box where it is worth most.**
@@ -2094,7 +2155,7 @@ export function Composer({
         /* Six rows rather than one, so the box LOOKS like somewhere to put a
            paragraph before a word is in it. The height then follows the content
            exactly as chat's does. */
-        rows={remember ? 6 : 1}
+        rows={size.rows}
         value={value}
         /* **Send, because Enter really does send here** — see the handler below.
            This is the exception among the app's textareas: everywhere else Enter

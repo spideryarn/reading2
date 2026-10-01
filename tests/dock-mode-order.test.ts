@@ -36,10 +36,10 @@ const RUNS = [
   ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
   ["referee", "citations", "debate"],
   ["search", "chat", "remember"],
-  /* Annotations' toggle, since 2026-10-01 a switch beside the band rather than
+  /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column
      (docs/plans/261001i-annotations-column-beside-a-band-mode.md). */
-  ["annotations"],
+  ["marginalia"],
 ] as const;
 
 describe("the mode bar's order", () => {

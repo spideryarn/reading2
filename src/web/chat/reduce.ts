@@ -251,6 +251,22 @@ function tombstoned(
 }
 
 /**
+ * **The tombstones once a DELETE is refused.** Unchanged for chat's delete,
+ * which leaves the conversation off screen with the error above it. Remember's
+ * Start over asks for `restoreOnFailure`, and then its own tombstone comes off
+ * and the conversation is back — see `DeleteOperation.restoreOnFailure`.
+ *
+ * Only this operation's own: `by` is its id, so a match is proof rather than a
+ * coincidence — the rule a refused cancel follows in `intent.failed`.
+ */
+function refusedDelete(state: ChatState, op: DeleteOperation): ReadonlyMap<string, Tombstone> {
+  if (!op.restoreOnFailure || state.tombstones.get(op.threadId)?.by !== op.id) return state.tombstones;
+  const next = new Map(state.tombstones);
+  next.delete(op.threadId);
+  return next;
+}
+
+/**
  * What a turn has drawn, written into `base`, and the operation retired.
  *
  * **The same function the projection uses**, given the operation's final state.
@@ -1212,11 +1228,13 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
     case "delete.failed":
       /* Not rolled back either — the tombstone stays and the conversation stays
-         off screen. Same reasoning as the rename above. */
+         off screen. Same reasoning as the rename above. **Unless the delete
+         asked to be** — see `refusedDelete`. */
       return {
         state: {
           ...state,
           operations: withoutOp(state, op.id),
+          tombstones: op.kind === "delete" ? refusedDelete(state, op) : state.tombstones,
           error: `Couldn't delete that conversation: ${event.error}`,
         },
         commands: NOTHING,

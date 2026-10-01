@@ -1072,15 +1072,6 @@
   color: var(--ink-faint);
 }
 
-/* The tag on a Remember row in the shared thread list. Quiet on purpose: it
-   distinguishes a minority of rows and must not read as a badge worth having. */
-.chat-thread-kind {
-  white-space: nowrap;
-  font-variant: small-caps;
-  letter-spacing: 0.02em;
-  color: var(--ink-faint);
-}
-
 /* **A band's (i)** (`BandAbout.tsx`), in the band's top-right corner, put
    there by `ModeSurface`'s `about` for every mode alike — what the mode is,
    its counts and caveats, and who made it and when. Greg, 2026-10-01

@@ -54,7 +54,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
-import { firstOnScreen, type ReadLevel, readLevel, type RowBox, shareVisible } from "./reading-time.js";
+import { rowCache, rowsOnScreen } from "./on-screen.js";
+import { type ReadLevel, readLevel, shareVisible } from "./reading-time.js";
 import { stickyOffset } from "./scroll.js";
 
 /** No input for this long and the reader is taken to have walked away. Fable, 2026-09-16. */
@@ -65,11 +66,6 @@ export const TICK_MS = 1_000;
 export const FLUSH_MS = 60_000;
 /** The most one tick may credit, in seconds. */
 export const MAX_TICK_S = 2;
-/** How often the cached row list is read again even when it looks intact. */
-const ROWS_STALE_MS = 10_000;
-
-/** The spelling of a block's row every other reader of this table uses — Spine.tsx, keynav.ts. */
-const ROW_SELECTOR = "tbody tr[data-block]";
 
 const ACTIVITY_EVENTS = ["scroll", "wheel", "keydown", "pointerdown", "pointermove", "touchstart"] as const;
 
@@ -135,33 +131,6 @@ export interface ReadingTime {
 
 const NO_LEVELS: ReadonlyMap<BlockId, ReadLevel> = new Map();
 
-/**
- * The rows between `viewTop` and `viewBottom`, with their boxes.
- *
- * A binary search for the first, then top-down until one starts below the view:
- * about log₂ n rect reads plus a screenful, each row read at most once, and
- * nothing written to the DOM in between.
- */
-function rowsOnScreen(rows: readonly HTMLElement[], viewTop: number, viewBottom: number): RowBox[] {
-  const boxes = new Map<number, DOMRect>();
-  const rect = (i: number): DOMRect => {
-    let r = boxes.get(i);
-    if (!r) {
-      r = (rows[i] as HTMLElement).getBoundingClientRect();
-      boxes.set(i, r);
-    }
-    return r;
-  };
-  const out: RowBox[] = [];
-  for (let i = firstOnScreen(rows.length, (j) => rect(j).bottom, viewTop); i < rows.length; i++) {
-    const r = rect(i);
-    if (r.top >= viewBottom) break;
-    const id = (rows[i] as HTMLElement).dataset.block;
-    if (id) out.push({ id, top: r.top, bottom: r.bottom });
-  }
-  return out;
-}
-
 export function readingTimePath(slug: string): string {
   return `/api/reading-time/${encodeURIComponent(slug)}`;
 }
@@ -208,8 +177,9 @@ export function useReadingTime(
 
     let lastActive = Date.now();
     let lastTick = Date.now();
-    let rows: HTMLElement[] = [];
-    let rowsReadAt = 0;
+    /* The row list and `rowsOnScreen` are on-screen.ts, shared with the band's
+       on-screen block links. */
+    const freshRows = rowCache();
     let gone = false;
     let opening = true;
     let flushAfterOpening = false;
@@ -227,16 +197,6 @@ export function useReadingTime(
         shown = next;
         setLevels(next);
       }
-    };
-
-    const freshRows = (now: number): HTMLElement[] => {
-      const first = rows[0];
-      const last = rows[rows.length - 1];
-      if (!first || !last || !first.isConnected || !last.isConnected || now - rowsReadAt > ROWS_STALE_MS) {
-        rows = Array.from(document.querySelectorAll<HTMLElement>(ROW_SELECTOR));
-        rowsReadAt = now;
-      }
-      return rows;
     };
 
     const tick = () => {

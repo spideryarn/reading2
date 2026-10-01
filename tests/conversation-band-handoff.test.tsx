@@ -109,7 +109,6 @@ function band(handoff: ChatHandoff | null) {
         blocks: new Map<string, string>(),
         onJump: () => {},
         kind: "chat" as const,
-        onMode: () => {},
         handoff,
         onHandoffTaken: () => {
           taken += 1;

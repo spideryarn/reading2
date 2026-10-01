@@ -1,5 +1,5 @@
 /**
- * **What Annotations mode puts beside which block** — the pure half.
+ * **What Marginalia mode puts beside which block** — the pure half.
  *
  * Everything here is drawn from what the article already has: the Socratic
  * question the structure call wrote on each top-level part
@@ -17,7 +17,7 @@
 import type { Arc, Block, BlockId, Idea, IdeaProvenance, Tree } from "../../types.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
 
-export type AnnotationNote =
+export type MarginaliaNote =
   /** The question a part — or, at `depth` 0, the whole article — answers. */
   | { kind: "question"; depth: number; text: string }
   /** An idea the piece assumes or introduces, occurring in this block. */
@@ -40,14 +40,14 @@ export const PARAGRAPH_MIN_WORDS = 12;
  * block it occurs in. A node or occurrence naming a block this article no
  * longer has is skipped, so a stale artefact cannot place a note nowhere.
  */
-export function annotationNotes(
+export function marginaliaNotes(
   tree: Tree | null | undefined,
   blocks: readonly Block[],
   ideas: readonly Idea[] | null | undefined,
-): Map<BlockId, AnnotationNote[]> {
+): Map<BlockId, MarginaliaNote[]> {
   const index = blockIndex(blocks);
-  const out = new Map<BlockId, AnnotationNote[]>();
-  const add = (blockId: BlockId, note: AnnotationNote) => {
+  const out = new Map<BlockId, MarginaliaNote[]>();
+  const add = (blockId: BlockId, note: MarginaliaNote) => {
     if (!index.has(blockId)) return;
     const list = out.get(blockId);
     if (list) list.push(note);

@@ -113,6 +113,7 @@ function paint(live?: LiveApi, threadId: string | null = THREAD.id, threads = [T
         onDiscard: (id: string) => { events.push(`discard:${id}`); },
         onRename: () => {},
         onDelete: () => {},
+        canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},
