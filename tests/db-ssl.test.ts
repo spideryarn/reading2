@@ -351,8 +351,10 @@ function scanPgConstructors(file: string, source: string): ConstructorScan {
     /* feedback-reporter first turns the URL into a config in
        `productionConnection`, whose unit tests assert its verified `ssl`, and
        then hands that exact config to Client. Keep this one named exception;
-       accepting arbitrary config variables would let `new Pool(config)` go
-       green without proving what `config` contains. */
+       accepting arbitrary config variables would let a Pool built from a
+       variable go green without proving what that variable contains. (Worded
+       without the call itself: tests/store-migration-registry.test.ts reads
+       this continuation line as code and would ask for a database lane.) */
     if (
       file === "scripts/feedback-reporter.ts" &&
       member?.[1] === "Client" &&
