@@ -43,7 +43,7 @@
 import { act, createElement, StrictMode, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mode } from "../src/modes.js";
+import { type BandMode, isBandMode } from "../src/modes.js";
 import type { BlockId, Job } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -403,7 +403,7 @@ const SETTLED_EMPTY_IDEAS_READ = {
  * pasted link, the Back step and the link in from the metadata page, all of
  * which reach the panel through that setter and through nothing else.
  */
-let arrive: (next: Mode) => void = () => {};
+let arrive: (next: BandMode) => void = () => {};
 
 /**
  * **Which picture is on screen**, through the app's own degrade rule rather than
@@ -413,8 +413,8 @@ let arrive: (next: Mode) => void = () => {};
  */
 const diagramKind = (): string => diagramInSearch(window.location.search);
 
-function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
-  const [mode, setMode] = useState<Mode>(start);
+function Reading({ slug, start }: { slug: string; start: BandMode }): ReactElement {
+  const [mode, setMode] = useState<BandMode>(start);
   arrive = setMode;
   return createElement(
     "div",
@@ -444,7 +444,9 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
       slug,
       view: "article" as const,
       mode,
-      onMode: setMode,
+      onMode: (next) => {
+        if (isBandMode(next)) setMode(next);
+      },
       experimental: EXPERIMENTAL_ON,
     }),
   );
@@ -462,7 +464,7 @@ async function settle(): Promise<void> {
 }
 
 /** Mount the page in the mode a reader would arrive in, and let it settle. */
-async function open(start: Mode, slug = "constitution"): Promise<void> {
+async function open(start: BandMode, slug = "constitution"): Promise<void> {
   await act(async () => {
     root.render(createElement(StrictMode, null, createElement(Reading, { slug, start })));
   });
@@ -470,7 +472,7 @@ async function open(start: Mode, slug = "constitution"): Promise<void> {
 }
 
 /** Re-render at a different slug, without unmounting. */
-async function reopen(slug: string, start: Mode): Promise<void> {
+async function reopen(slug: string, start: BandMode): Promise<void> {
   await act(async () => {
     root.render(createElement(StrictMode, null, createElement(Reading, { slug, start })));
   });

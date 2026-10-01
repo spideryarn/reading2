@@ -488,7 +488,10 @@ Words-mode searches are **not** stored, and that is not an omission: a substring
 free, and `?find=` in the URL describes it completely. Storing it would be caching a computation
 cheaper than the read.
 
-`MAX_RUNS` is 30, oldest dropped first.
+`MAX_RUNS` is 30, oldest dropped first — **except a search still running**, which is skipped and
+dropped by a later search once it has finished or been swept. Deleting it mid-call threw away a
+paid answer the reader was waiting on
+([261001i](../plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md)).
 
 ## Several searches at once, each with a colour
 
@@ -574,9 +577,12 @@ its own hits into its own row.
 
 **The one refusal kept is the same question twice while this tab is still waiting for it.** The
 draft stays in the box after Find, on purpose — it is what lets a reader edit one question into the
-next — so a second press on an unchanged box would pay for an identical search. `running` in
-`SearchPanel` holds the trimmed criteria this tab started and still has out, ticked or not; Find and
-the retry button are off (with a tooltip saying why) while one of them would send the same question.
+next — so a second press on an unchanged box would pay for an identical search. `useSearch` keeps
+the requests this tab has out, ticked or not, **under the id the server answered with** — `begin`
+can answer a retry under a new id, and a list keyed by the id the tab sent lost track of it
+([261001i](../plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md)).
+Find and the retry button are off (with a tooltip saying why) while one of them would send the same
+question.
 A `pending` row loaded from the server does not count: it may be another process's live work or a
 fresh orphan protected by the server's 90-second sweep grace, and this tab gets no later event when
 either one ends. Treating it as running would wedge that question until reload. Nothing caps how

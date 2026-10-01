@@ -1574,6 +1574,22 @@ describe("a row whose work is already an article here", () => {
     expect(line?.querySelector(".cite-here-how")?.textContent).toContain("Central, as shared");
   });
 
+  it("says an archived copy is archived, and an upload's match is by the id we found (plan 261001i)", async () => {
+    const archived = work({
+      ...CENTRAL,
+      inSpideryarn: { slug: "old-spya-k2m3n4", whose: "yours", matchedBy: "arxiv", title: "Old copy", archived: true },
+    });
+    const uploaded = work({
+      ...FAMOUS,
+      inSpideryarn: { slug: "pdf-spya-p5q6r7", whose: "yours", matchedBy: "guessed-id", title: "My PDF" },
+    });
+    await draw(owner({ citations: artefact([archived, uploaded]) }));
+    expect(row(archived.id).querySelector(".cite-here a")?.textContent).toBe("In your library · archived");
+    const a = row(uploaded.id).querySelector<HTMLAnchorElement>(".cite-here a");
+    expect(a?.textContent).toBe("In your library");
+    expect(a?.title).toContain("we found for your uploaded PDF");
+  });
+
   it("never renders an owner attachment on a visitor's row, even from a malformed payload", async () => {
     const leaked = work({
       ...CENTRAL,

@@ -476,7 +476,7 @@ export interface FitInput {
   bandShape?: BandShape;
   /**
    * True when the annotations column is wanted to the right of the prose —
-   * `fitMargin`. Ignored when `modeBand` is set: one side at a time, for now.
+   * `fitMargin` alone, `fitBoth` beside a band (since 2026-10-01).
    */
   margin?: boolean;
 }
@@ -547,6 +547,54 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
 }
 
 /**
+ * **A band on the left and the annotations column on the right** — since
+ * 2026-10-01, docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+ *
+ *  - **The column takes its room first, then band and prose share the rest
+ *    exactly as `fitMode` would share a window that much narrower** — so
+ *    Structure's columns and Tweets' share behave as they always do, and the
+ *    face Structure draws still follows the band it was given.
+ *  - **The band wins.** When the rest would not hold a band beside
+ *    `MODE_PROSE_FLOOR` of prose, there is no column and the fit is the band's
+ *    own, unchanged: below 900px with the rail. The band is what the reader
+ *    opened most specifically and it may hold their half-typed words; the
+ *    notes are ambient, and under a covering band they would annotate prose
+ *    nobody can see.
+ *  - **The prose is capped at Plain's width**, unlike a band alone, where the
+ *    cell takes all the rest and the prose centres inside it. A note sits at
+ *    the cell's right edge, so an uncapped cell would leave the notes hundreds
+ *    of pixels from their paragraph on a wide screen. The spare room goes to
+ *    the right of the column, inside `margReserve`.
+ */
+function fitBoth(
+  windowWidth: number,
+  showSpine: boolean | null,
+  bandShape: BandShape,
+  rootFontPx: number,
+): Fit {
+  const spine = modeSpine(showSpine);
+  const avail = Math.max(0, windowWidth - spineWidth(spine));
+  const margW = clamp(avail - MODE_MIN - PROSE_MIN, MARG_MIN, MARG_IDEAL);
+  const rest = avail - margW;
+  if (MODE_MIN + MODE_PROSE_FLOOR > rest) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
+  const modeW = bandWidth(rest, bandShape, rootFontPx);
+  const proseW = Math.min(proseAloneMaxPx(rootFontPx), Math.max(MODE_PROSE_FLOOR, rest - modeW));
+  const margReserve = avail - modeW - proseW;
+  return {
+    widths: [proseW],
+    tableW: proseW,
+    overflowing: false,
+    minWidth: spineWidth(spine) + modeW + proseW + margReserve,
+    spine,
+    modeW,
+    alone: false,
+    margW,
+    margReserve,
+    margLeft: spineWidth(spine) + modeW + proseW,
+  };
+}
+
+/**
  * **The layout for this window**: the prose beside a mode's band, or the prose
  * alone.
  *
@@ -573,6 +621,7 @@ export function fitView({
   bandShape = "standard",
   margin = false,
 }: FitInput): Fit {
+  if (modeBand && margin) return fitBoth(windowWidth, showSpine, bandShape, rootFontPx);
   if (modeBand) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
   if (margin) return fitMargin(windowWidth, showSpine, rootFontPx);
   const spine: SpineMode = modeSpine(showSpine);

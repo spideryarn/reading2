@@ -2473,6 +2473,20 @@ export interface ArticleMetadata {
    */
   highPowerSince: string | null;
 
+  /**
+   * **What a glossary run pressed on this page would do with the list it
+   * finds** — `glossaryRunKind` in src/glossary.ts, which is `existingFor` read
+   * for a person: `append` (a *Find more terms*), `rewrite` (a new list in
+   * place of this one), `first` (there is none), or `null` when the server
+   * cannot tell. Judged against the reader's current profile, because that is
+   * what Metadata's press sends.
+   * docs/plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md § 3.
+   *
+   * Optional for the same reason `sharing` is: a fabricated body in a test, or
+   * an older server, simply has no verdict, and the row keeps its hedge.
+   */
+  glossaryRun?: "first" | "append" | "rewrite" | null;
+
   /* ---- sharing. docs/plans/260827ai-public-read-only-access.md § Stage 1 ---- */
 
   /**
@@ -3929,7 +3943,12 @@ export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "con
  * How a cited work was matched to an article here, strongest first. `title` is
  * the weakest — the same words, not the same identity — and the row says so.
  */
-export type CitedMatchedBy = "doi" | "arxiv" | "address" | "title";
+/**
+ * `guessed-id` — the DOI or arXiv id **we found** for the reader's own upload
+ * (`upload_source_guesses`, a `canonical` row), not one the article itself
+ * carries; said as ours, plan 261001i.
+ */
+export type CitedMatchedBy = "doi" | "arxiv" | "guessed-id" | "address" | "title";
 
 export interface CitedInSpideryarn {
   slug: string;
@@ -3938,6 +3957,11 @@ export interface CitedInSpideryarn {
   matchedBy: CitedMatchedBy;
   /** The matched article's title as the reader would see it on that shelf. */
   title: string;
+  /**
+   * The reader's own article, archived: off their shelf, still theirs to open
+   * by link (plan 261001i). Absent otherwise — never on a public match.
+   */
+  archived?: true;
 }
 
 /**

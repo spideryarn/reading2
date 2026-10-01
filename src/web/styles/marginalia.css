@@ -157,7 +157,10 @@
    the article's opening lines (GPT Sol, F9 on the plan). */
 .marg-narrow {
   position: fixed;
-  left: 50%;
+  /* Centred under the prose rather than the window: beside a band (since
+     2026-10-01) the window's centre is on the seam between band and prose.
+     Both terms are 0 with no band, so this is the window's centre then. */
+  left: calc(50% + (var(--spine-w) + var(--mode-w) + var(--safe-left)) / 2);
   translate: -50% 0;
   bottom: calc(var(--dock-space) + 0.5rem);
   z-index: 30;

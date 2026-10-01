@@ -60,3 +60,12 @@ once is deferred, with the column built so that it is a layout change when wante
 Sonnet web pass found nothing that beats a ten-line collision rule. GPT Astra's design pass reshaped
 the head, the questions' anchoring and the stamps; the plan records each of its points and which were
 taken.
+
+**Follow-up, 2026-10-01: both columns at once** —
+[261001i](../plans/261001i-annotations-column-beside-a-band-mode.md). The notes are now a switch
+of their own, `?margin=1`, rather than a mode, so they stay open beside whichever band you pick:
+the Dock's Annotations button is an on/off toggle at the right-hand end, and pressing Plain closes
+the band but keeps the notes. From 900px up you get band, prose and notes; below that the band
+wins, with a line under the prose saying the notes need a wider window or the panel closed, and on
+a phone the band covers everything as before. Old `?mode=annotations` links open the notes. On
+`dev` at `eb76050d`, with GPT Sol's review fixes at `70650d76`.

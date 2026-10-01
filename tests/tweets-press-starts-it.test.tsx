@@ -42,7 +42,7 @@
 import { act, createElement, StrictMode, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mode } from "../src/modes.js";
+import { type BandMode, isBandMode } from "../src/modes.js";
 import type { Article, Job, TweetThread } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -163,10 +163,10 @@ const ARTICLE: Article = {
  * Moves the reader between modes without a press — Back, Forward, a link from
  * another page. Set by `Reading` on every render.
  */
-let arrive: (next: Mode) => void = () => {};
+let arrive: (next: BandMode) => void = () => {};
 
 /** The mode the address names, read once at mount as `Reader`'s query state is. */
-function modeInAddress(): Mode {
+function modeInAddress(): BandMode {
   return new URLSearchParams(window.location.search).get("mode") === "tweets" ? "tweets" : "plain";
 }
 
@@ -175,7 +175,7 @@ function modeInAddress(): Mode {
  * mode is `tweets`, beside the real bar whose `onMode` sets it.
  */
 function Reading(): ReactElement {
-  const [mode, setMode] = useState<Mode>(modeInAddress);
+  const [mode, setMode] = useState<BandMode>(modeInAddress);
   arrive = setMode;
   return createElement(
     "div",
@@ -187,7 +187,9 @@ function Reading(): ReactElement {
       slug: SLUG,
       view: "article" as const,
       mode,
-      onMode: setMode,
+      onMode: (next) => {
+        if (isBandMode(next)) setMode(next);
+      },
       experimental: EXPERIMENTAL_ON,
     }),
   );
@@ -221,7 +223,7 @@ async function pressTweets(): Promise<void> {
   await settle();
 }
 
-async function arriveIn(mode: Mode): Promise<void> {
+async function arriveIn(mode: BandMode): Promise<void> {
   await act(async () => {
     arrive(mode);
   });

@@ -275,7 +275,9 @@ needs a tooltip has already failed).
 - **Dashed underlines for Ideas in the prose** — a second mark competing inside the author's text,
   and quote anchoring is fragile; learn first whether the margin stamp is enough.
 - **The left band and the right column at once** — Greg's "ideally yes"; the column component is
-  mode-agnostic so this is a URL param and a width split when wanted.
+  mode-agnostic so this is a URL param and a width split when wanted. **Built 2026-10-01**:
+  `?margin=1`, a toggle rather than a mode —
+  [261001i](261001i-annotations-column-beside-a-band-mode.md).
 - **Automatic ask-for-help comments on important-but-hard blocks** — cut: it spends and writes
   reader data unasked, and needs a difficulty score we do not have.
 - **Read-first ink** (notes appear only once you have dwelt beside a block) — 260828c's strongest

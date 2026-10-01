@@ -1,0 +1,1513 @@
+diff --git a/src/modes.ts b/src/modes.ts
+index d855429e..a924dade 100644
+--- a/src/modes.ts
++++ b/src/modes.ts
+@@ -233,6 +233,27 @@ export const MODES = [
+ ] as const;
+ export type Mode = (typeof MODES)[number];
+ 
++/**
++ * **A mode that owns the left band** — every mode but Annotations, which since
++ * 2026-10-01 is a switch of its own (`?margin=1`) rather than a value of
++ * `?mode=`, so its column can sit beside a band.
++ * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++ *
++ * `annotations` stays in `MODES` because the catalog, the Dock's button, the
++ * command bar and the experimental switch are keyed on it; what it may not be
++ * is the *state* — `?mode=` parses to this type, so a press on Annotations
++ * cannot be written into it without the compiler asking which you meant.
++ */
++export type BandMode = Exclude<Mode, "annotations">;
++
++/** Whether a mode is one that owns the band — the narrowing for `BandMode`. */
++export function isBandMode(mode: Mode): mode is BandMode {
++  return mode !== "annotations";
++}
++
++/** Every value `?mode=` can hold — `MODES` less Annotations. */
++export const BAND_MODES: readonly BandMode[] = MODES.filter(isBandMode);
++
+ /**
+  * The mode a reader lands in, named once.
+  *
+@@ -250,7 +271,7 @@ export type Mode = (typeof MODES)[number];
+  * asked directly, said not to preserve them: *"we're in alpha and have no users
+  * yet"*.
+  */
+-export const DEFAULT_MODE: Mode = "plain";
++export const DEFAULT_MODE: BandMode = "plain";
+ 
+ /**
+  * **Is this string one of the modes?** — the guard the server needs and the
+@@ -280,7 +301,7 @@ export function isMode(value: string | null | undefined): value is Mode {
+  * twelve days, and a bookmark or a shared link naming it should open the mode
+  * that now holds it rather than degrading to the article.
+  */
+-export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
++export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
+   outline: "structure",
+   /* The gist columns, retired 2026-09-29; Structure draws the same tree.
+      docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
+@@ -296,8 +317,11 @@ export const RETIRED_MODES: Readonly<Record<string, Mode>> = {
+  * a shared link's tab title — so `?mode=outline` cannot open Structure while
+  * the tab says the article.
+  */
+-export function modeFromParam(value: string | null | undefined): Mode | null {
+-  if (isMode(value)) return value;
++export function modeFromParam(value: string | null | undefined): BandMode | null {
++  /* `annotations` is not a band (`BandMode`): an old `?mode=annotations` link
++     names Plain here, and the client turns the notes on for it
++     (`marginInSearch` in src/web/params.ts). */
++  if (isMode(value)) return isBandMode(value) ? value : null;
+   if (value === null || value === undefined) return null;
+   return Object.hasOwn(RETIRED_MODES, value) ? (RETIRED_MODES[value] ?? null) : null;
+ }
+diff --git a/src/read-address.ts b/src/read-address.ts
+index f97f6b1f..107eabe7 100644
+--- a/src/read-address.ts
++++ b/src/read-address.ts
+@@ -14,7 +14,7 @@
+  * (tests/client-imports.test.ts) both accept it.
+  */
+ 
+-import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
++import { type BandMode, DEFAULT_MODE, modeFromParam } from "./modes.js";
+ 
+ /**
+  * **Which middle-band mode a `/read/` address asked for**, or the default.
+@@ -44,7 +44,7 @@ import { DEFAULT_MODE, type Mode, modeFromParam } from "./modes.js";
+  * controls, and a throw here would be a 500 on an address that only wanted a
+  * tab title.
+  */
+-export function readMode(url: string): Mode {
++export function readMode(url: string): BandMode {
+   const query = url.indexOf("?");
+   if (query === -1) return DEFAULT_MODE;
+   let asked: string | null = null;
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 31046857..bbbf124b 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -229,7 +229,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
+ /* Type only, for `useActivateMode` below: the picture a Diagram press would land
+    on, already degraded by `diagramInSearch`. */
+ import type { DiagramKind } from "./diagram.js";
+-import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
++import { DEFAULT_MODE, diagramInSearch, marginInSearch, type Mode, type Panel } from "./params.js";
+ import { modeFromParam } from "../modes.js";
+ import { cn } from "@/lib/utils";
+ import { Link } from "./Link.js";
+@@ -336,6 +336,12 @@ interface Props {
+    * sub-mode by then — `useActivateSubMode` — so the receiver arms nothing for it.
+    */
+   onMode?(next: Mode, sub?: SubMode): void;
++  /**
++   * **Whether Annotations' column is on** (`?margin=1`) — the reading view
++   * passes it; off it, the carried query string says (`marginInSearch`).
++   * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++   */
++  margin?: boolean;
+   /**
+    * **Whether this reader sees the modes that are still being built** — and
+    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
+@@ -599,7 +605,7 @@ interface Props {
+  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md).
+  * The two runs that changed were renamed for what they now hold.
+  */
+-type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input";
++type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
+ 
+ interface ModeUi {
+   mode: Mode;
+@@ -714,16 +720,6 @@ const MODES_UI = [
+     group: "shape",
+     icon: Layers,
+   },
+-  /* **Annotations, 2026-10-01**, in the shape run beside Summary because what
+-     it draws is mostly the article's shape — each part's question, where the
+-     argument has got to — put beside the text instead of in a band. Behind the
+-     switch. `PanelRight`: the one mode whose column is on the right.
+-     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+-  {
+-    mode: "annotations",
+-    group: "shape",
+-    icon: PanelRight,
+-  },
+   /* **A mode since 2026-09-29**, a loose link to a page of its own before
+      (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is
+      the same move Summary makes — the article restated, shorter — and Greg did
+@@ -962,6 +958,21 @@ const MODES_UI = [
+        exactly one, so there is no second thing it could be confused with. */
+     icon: Brain,
+   },
++  /* **Annotations, 2026-10-01** — a run of its own at the right-hand end since
++     the same day, when its column became a switch beside whichever band is
++     open rather than one of the bands (`MarginToggle`). Last because its
++     column is the rightmost thing on the page, and because the toggle is drawn
++     outside the radiogroup, after it, so the bar and the command bar list it in
++     the same place. It had sat in the shape run beside Summary, for what it
++     draws: each part's question and where the argument has got to. Behind the
++     switch. `PanelRight`: the column on the right.
++     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
++     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++  {
++    mode: "annotations",
++    group: "margin",
++    icon: PanelRight,
++  },
+ ] satisfies readonly ModeUi[];
+ 
+ /**
+@@ -1023,12 +1034,20 @@ export type ModesMissingFromDock<
+  * because Diagram's picture chips now obey the same one and a shared link has to
+  * survive both of them — `visibleKinds` in DiagramPanel.tsx is the other caller.
+  */
+-export function visibleModes(on: boolean, current: Mode | undefined): readonly ModeUi[] {
++export function visibleModes(
++  on: boolean,
++  current: Mode | undefined,
++  /* Annotations' column is on (`?margin=1`). Its button is a toggle rather than
++     the current mode since 2026-10-01, and it is kept for the same reason the
++     current mode is: the one control that turns the notes off must not vanish
++     with the switch. */
++  margin = false,
++): readonly ModeUi[] {
+   return MODES_UI.filter((m) =>
+     shownBehindTheSwitch({
+       experimental: MODE_CATALOG[m.mode].experimental,
+       on,
+-      current: m.mode === current,
++      current: m.mode === current || (m.mode === "annotations" && margin),
+     }),
+   );
+ }
+@@ -1240,6 +1259,13 @@ export function fitSignature(
+   } | null,
+   variant: ExperimentalVariant | null,
+   feedback: boolean,
++  /**
++   * **Whether Annotations' toggle is pressed** (261001i). Pressed is `.on`, and
++   * § the bar's fit ladder gives an `.on` button its word back at rung 2, so
++   * turning the notes on draws one more label with nothing else here changed —
++   * the reason `active` below is in the string, for the second axis.
++   */
++  margin = false,
+ ): string {
+   const shape = mode !== undefined && onMode ? "seg" : "links";
+   const modes = visible.map((m) => m.mode).join(",");
+@@ -1284,7 +1310,7 @@ export function fitSignature(
+   const active = mode ?? "";
+   return `${modes}|${shape}|${active}|${drawer ? "drawer" : "link"}|${count}|${
+     variant ?? "none"
+-  }|${feedback ? "fb" : "no-fb"}`;
++  }|${feedback ? "fb" : "no-fb"}|${margin ? "margin" : "no-margin"}`;
+ }
+ 
+ /**
+@@ -1516,6 +1542,13 @@ function useActivateSubMode(
+  * function so the two doors cannot land in different places.
+  */
+ function modeLinkHref(slug: string, search: string, mode: Mode): string {
++  /* Annotations is not a band: its link opens the article with the notes on
++     and whatever band the reader came from still open. */
++  if (mode === "annotations") {
++    const params = new URLSearchParams(search);
++    params.set("margin", "1");
++    return readHref(slug, params.toString(), "article");
++  }
+   return readHref(slug, withMode(search, mode), "article");
+ }
+ 
+@@ -1524,6 +1557,7 @@ export function Dock({
+   view,
+   mode,
+   onMode,
++  margin: marginProp,
+   marked,
+   visitor,
+   drawer,
+@@ -1601,7 +1635,11 @@ export function Dock({
+    * make exactly that mistake silent, and silent to strangers. Fable named this
+    * as the cost of the prop being a prop; a plain read is what buys it back.
+    */
+-  const visible = visibleModes(experimental.on, mode ?? modeInSearch(search));
++  /* Whether the notes are on: the prop on the reading view, the carried query
++     string off it. Drawn by the toggle, and kept visible behind the switch
++     while on, as the current mode is (`visibleModes`). */
++  const margin = marginProp ?? marginInSearch(search);
++  const visible = visibleModes(experimental.on, mode ?? modeInSearch(search), margin);
+ 
+   /* Computed once, above the fit measurement, because the same answer decides
+      two things: whether the row is one button wider, and what that button
+@@ -1658,6 +1696,7 @@ export function Dock({
+       own ? { comments: own.comments, error: own.error, count: entries.length } : null,
+       toggle,
+       feedback,
++      margin,
+     ),
+   );
+ 
+@@ -1997,6 +2036,7 @@ export function Dock({
+                above, which is where the arming and the `?mode=` write live. */
+             onActivate={activateMode}
+             marked={marked}
++            margin={margin}
+           />
+         ) : (
+           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
+@@ -2445,6 +2485,7 @@ function DockModes({
+   mode,
+   onActivate,
+   marked,
++  margin,
+ }: {
+   /**
+    * The rows to draw, already filtered — `visibleModes` above, which is where
+@@ -2466,6 +2507,8 @@ function DockModes({
+    */
+   onActivate(next: Mode): void;
+   marked?: ReadonlyMap<Mode, string> | undefined;
++  /** Whether Annotations' column is on — `?margin=1`, the toggle's pressed state. */
++  margin: boolean;
+ }) {
+   /**
+    * **No keyboard handler, and every button its own tab stop — the arrows
+@@ -2506,10 +2549,19 @@ function DockModes({
+    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
+    */
+   const starts = groupStarts(modes);
++  /* **Annotations is a toggle, not one of the radios**, since 2026-10-01: its
++     column sits right of the prose beside whichever band is open, so it is not
++     one of the things the middle column shows and cannot be the one checked
++     radio. It is last in `MODES_UI`, and drawn after the radiogroup (which is
++     `display: contents`, so the segment's styling still sees one row of
++     buttons) — `MarginToggle`. docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++  const radios = modes.filter((m) => m.mode !== "annotations");
++  const toggle = modes.find((m) => m.mode === "annotations");
+   return (
+-    <div className="dock-modes" role="radiogroup" aria-label="What the middle column shows">
++    <div className="dock-modes">
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-        {modes.map((m) => (
++       <div className="dock-modes-radios" role="radiogroup" aria-label="What the middle column shows">
++        {radios.map((m) => (
+           <Tooltip
+             key={m.mode}
+             placement="top"
+@@ -2595,11 +2647,73 @@ function DockModes({
+             </button>
+           </Tooltip>
+         ))}
++       </div>
++        {toggle && (
++          <MarginToggle
++            m={toggle}
++            on={margin}
++            groupStart={starts.has(toggle.mode)}
++            onActivate={onActivate}
++            state={marked?.get(toggle.mode)}
++          />
++        )}
+       </TooltipGroup>
+     </div>
+   );
+ }
+ 
++/**
++ * **Annotations' button: on or off, beside the radios** — `aria-pressed` with a
++ * fixed name, the APG toggle (`PRESS` above says why never both a moving name
++ * and `aria-pressed`). A press goes through the same `onActivate` door as a
++ * mode, so the command bar and this button cannot mean different things; the
++ * Reader turns it into a `?margin=` toggle.
++ * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++ */
++function MarginToggle({
++  m,
++  on,
++  groupStart,
++  onActivate,
++  state,
++}: {
++  m: ModeUi;
++  on: boolean;
++  groupStart: boolean;
++  onActivate(next: Mode): void;
++  state: string | undefined;
++}) {
++  return (
++    <Tooltip
++      placement="top"
++      className="tip-soon"
++      content={
++        <ControlTip
++          head={MODE_LABEL[m.mode]}
++          state={state}
++          what={MODE_CATALOG[m.mode].description}
++          how={MODE_CATALOG[m.mode].how}
++        />
++      }
++    >
++      <button
++        type="button"
++        className={`dock-btn${on ? " on" : ""}${groupStart ? " dock-group-start" : ""}`}
++        aria-pressed={on}
++        aria-label={MODE_LABEL[m.mode]}
++        onClick={(e) => {
++          onActivate(m.mode);
++          /* As the radios: a real click leaves the keyboard to the article. */
++          if (e.detail > 0) e.currentTarget.blur();
++        }}
++      >
++        <m.icon size={15} />
++        <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
++      </button>
++    </Tooltip>
++  );
++}
++
+ /**
+  * **The same modes, off the reading view** — the metadata
+  * page, where there is no band to switch, so the segment degrades to loose
+diff --git a/src/web/annotations/AnnotationsColumn.tsx b/src/web/annotations/AnnotationsColumn.tsx
+index d9286bac..065e1f00 100644
+--- a/src/web/annotations/AnnotationsColumn.tsx
++++ b/src/web/annotations/AnnotationsColumn.tsx
+@@ -130,10 +130,15 @@ function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }
+  */
+ export function AnnotationsHead({
+   room,
++  beside = false,
+   path,
+   arc,
+ }: {
+   room: boolean;
++  /** A band is open on the left. With no room for both, the band wins, and
++   *  the line says the other way to get the notes back: close the panel.
++   *  docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++  beside?: boolean;
+   path: readonly string[];
+   arc: string | null;
+ }) {
+@@ -141,7 +146,11 @@ export function AnnotationsHead({
+   if (!room) {
+     return (
+       <aside className="marg-narrow" aria-label="Annotations">
+-        <p>The notes need a wider window — they sit to the right of the text.</p>
++        <p>
++          {beside
++            ? "The notes need a wider window, or the panel closed — they sit to the right of the text."
++            : "The notes need a wider window — they sit to the right of the text."}
++        </p>
+       </aside>
+     );
+   }
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index 6a9467d1..456110b6 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -67,6 +67,7 @@ export const REMEMBERED = [
+   "at", // the section you were reading
+   "spine", // the bird's-eye rail
+   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
++  "margin", // Annotations' column of notes, right of the prose — draws only what is already there
+   "deep", // how far down summary mode goes
+   "summary", // gists or one of three plain levels — only a slider gesture spends
+   "diagram", // which of the five pictures
+@@ -247,7 +248,15 @@ export function hasArticleState(search: string): boolean {
+  * what we replay unasked.
+  */
+ export function rememberableSearch(search: string): string {
+-  const kept = pairs(search).filter((p) => {
++  /* **`mode=annotations` is `margin=1` now** (2026-10-01): Annotations was a
++     mode for its first day, and a browser that remembered it then should get
++     the notes back rather than a word `modeParam` reads as Plain. Translated
++     here, on the way in and on the way out, so a restore never puts the old
++     spelling on the address — docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++  const translated = pairs(search).map((p) =>
++    pairKey(p) === "mode" && pairValue(p) === "annotations" ? "margin=1" : p,
++  );
++  const kept = [...new Set(translated)].filter((p) => {
+     const key = pairKey(p);
+     if (!REMEMBERED.includes(key as (typeof REMEMBERED)[number])) return false;
+     return !(key === "mode" && NEEDS_AN_EXPLICIT_PRESS.has(pairValue(p)));
+diff --git a/src/web/layout.ts b/src/web/layout.ts
+index b4c6413a..2ea9dda7 100644
+--- a/src/web/layout.ts
++++ b/src/web/layout.ts
+@@ -476,7 +476,7 @@ export interface FitInput {
+   bandShape?: BandShape;
+   /**
+    * True when the annotations column is wanted to the right of the prose —
+-   * `fitMargin`. Ignored when `modeBand` is set: one side at a time, for now.
++   * `fitMargin` alone, `fitBoth` beside a band (since 2026-10-01).
+    */
+   margin?: boolean;
+ }
+@@ -546,6 +546,54 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
+   };
+ }
+ 
++/**
++ * **A band on the left and the annotations column on the right** — since
++ * 2026-10-01, docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++ *
++ *  - **The column takes its room first, then band and prose share the rest
++ *    exactly as `fitMode` would share a window that much narrower** — so
++ *    Structure's columns and Tweets' share behave as they always do, and the
++ *    face Structure draws still follows the band it was given.
++ *  - **The band wins.** When the rest would not hold a band beside
++ *    `MODE_PROSE_FLOOR` of prose, there is no column and the fit is the band's
++ *    own, unchanged: below 900px with the rail. The band is what the reader
++ *    opened most specifically and it may hold their half-typed words; the
++ *    notes are ambient, and under a covering band they would annotate prose
++ *    nobody can see.
++ *  - **The prose is capped at Plain's width**, unlike a band alone, where the
++ *    cell takes all the rest and the prose centres inside it. A note sits at
++ *    the cell's right edge, so an uncapped cell would leave the notes hundreds
++ *    of pixels from their paragraph on a wide screen. The spare room goes to
++ *    the right of the column, inside `margReserve`.
++ */
++function fitBoth(
++  windowWidth: number,
++  showSpine: boolean | null,
++  bandShape: BandShape,
++  rootFontPx: number,
++): Fit {
++  const spine = modeSpine(showSpine);
++  const avail = Math.max(0, windowWidth - spineWidth(spine));
++  const margW = clamp(avail - MODE_MIN - PROSE_MIN, MARG_MIN, MARG_IDEAL);
++  const rest = avail - margW;
++  if (MODE_MIN + MODE_PROSE_FLOOR > rest) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
++  const modeW = bandWidth(rest, bandShape, rootFontPx);
++  const proseW = Math.min(proseAloneMaxPx(rootFontPx), Math.max(MODE_PROSE_FLOOR, rest - modeW));
++  const margReserve = avail - modeW - proseW;
++  return {
++    widths: [proseW],
++    tableW: proseW,
++    overflowing: false,
++    minWidth: spineWidth(spine) + modeW + proseW + margReserve,
++    spine,
++    modeW,
++    alone: false,
++    margW,
++    margReserve,
++    margLeft: spineWidth(spine) + modeW + proseW,
++  };
++}
++
+ /**
+  * **The layout for this window**: the prose beside a mode's band, or the prose
+  * alone.
+@@ -573,6 +621,7 @@ export function fitView({
+   bandShape = "standard",
+   margin = false,
+ }: FitInput): Fit {
++  if (modeBand && margin) return fitBoth(windowWidth, showSpine, bandShape, rootFontPx);
+   if (modeBand) return fitMode(windowWidth, showSpine, bandShape, rootFontPx);
+   if (margin) return fitMargin(windowWidth, showSpine, rootFontPx);
+   const spine: SpineMode = modeSpine(showSpine);
+diff --git a/src/web/modes/conversation/ConversationModes.tsx b/src/web/modes/conversation/ConversationModes.tsx
+index 4b8dd053..e2f02715 100644
+--- a/src/web/modes/conversation/ConversationModes.tsx
++++ b/src/web/modes/conversation/ConversationModes.tsx
+@@ -23,7 +23,7 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { useQueryState, useQueryStates } from "nuqs";
+ import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
+-import { currentAt, rememberParam, threadParam, type Mode } from "../../params.js";
++import { type BandMode, currentAt, rememberParam, threadParam } from "../../params.js";
+ import { useRenderCount } from "../../perf.js";
+ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
+ import { type QuizRead, useQuiz } from "../../useQuiz.js";
+@@ -103,7 +103,7 @@ export function RememberBand({
+   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
+   readSoFar?: ReadSoFar | undefined;
+   onJump(id: BlockId): void;
+-  onMode(next: Mode): void;
++  onMode(next: BandMode): void;
+   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
+   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
+ }) {
+@@ -329,7 +329,7 @@ export function ConversationBand({
+    * chat mode and vice versa. Opening one has to move `?mode=` as well as
+    * `?thread=` or the conversation would be answered with the wrong prompt.
+    */
+-  onMode(next: Mode): void;
++  onMode(next: BandMode): void;
+ }) {
+   useRenderCount("ConversationBand");
+   const {
+diff --git a/src/web/page-title.ts b/src/web/page-title.ts
+index 4e3dea9a..7c98cc18 100644
+--- a/src/web/page-title.ts
++++ b/src/web/page-title.ts
+@@ -59,7 +59,7 @@
+  */
+ import { useEffect } from "react";
+ import { APP_NAME, MODE_LABEL, SEP, TAGLINE, VIEW_LABEL, articleTitle, clamp } from "../title-text.js";
+-import { DEFAULT_MODE, type Mode } from "./params.js";
++import { type BandMode, DEFAULT_MODE } from "./params.js";
+ import { CHANGELOG_LABEL, type AdminPage, type ArticleView } from "./router.js";
+ 
+ /**
+@@ -115,7 +115,7 @@ export type TitleSpec =
+    * naming the field is what makes `{ view: "metadata", mode }` an error
+    * wherever it is built.
+    */
+-  | { kind: "read"; title: string; view: "article"; mode: Mode }
++  | { kind: "read"; title: string; view: "article"; mode: BandMode }
+   | {
+       kind: "read";
+       title: string;
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 45e9ce2f..6fe5cdca 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -267,8 +267,8 @@ import { isMode } from "../modes.js";
+ export { isMode };
+ /* Imported as well as re-exported: `export … from` creates no local binding, and
+    `modeParam` below uses all three. */
+-import { DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
+-export { DEFAULT_MODE, MODES, type Mode };
++import { type BandMode, DEFAULT_MODE, MODES, type Mode, modeFromParam } from "../modes.js";
++export { type BandMode, DEFAULT_MODE, MODES, type Mode };
+ 
+ /* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
+    for the same reason the three above are: this file is where a component looks
+@@ -291,7 +291,7 @@ import {
+   isDivergingScale,
+ } from "../referee-criteria.js";
+ 
+-export const modeParam = createParser<Mode>({
++export const modeParam = createParser<BandMode>({
+   /* `isMode` and not a second `MODES.includes` here. The serverless function
+      that composes a shared article's `<title>` asks the same question of the
+      same query string (`readMode` in src/vercel.ts), and this file used to
+@@ -308,6 +308,30 @@ export const modeParam = createParser<Mode>({
+   .withDefault(DEFAULT_MODE)
+   .withOptions({ history: "push" });
+ 
++/**
++ * **Whether Annotations' column of notes is on, right of the prose** — since
++ * 2026-10-01 a switch of its own beside `?mode=`, so the notes can sit beside
++ * a band. docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++ *
++ * `margin` and not `notes`: `?note=` is the explanation dialog, one letter away.
++ *
++ * **No default**: absent is off. `push`, as `mode` is: turning a column of the
++ * view on or off is a deliberate act, and Back should undo it.
++ */
++export const marginParam = parseAsBit.withOptions({ history: "push" });
++
++/**
++ * **Does this query string ask for the notes?** `?margin=1`, or an old
++ * `?mode=annotations` link from the day Annotations was a mode (2026-10-01),
++ * which `modeParam` now reads as Plain. The Reader rewrites the old spelling
++ * on arrival; this is the one statement of what it means, for that rewrite
++ * and for the Dock's links off the reading view.
++ */
++export function marginInSearch(search: string): boolean {
++  const query = new URLSearchParams(search);
++  return query.get("margin") === "1" || query.get("mode") === "annotations";
++}
++
+ /**
+  * Which conversation is open in chat mode, or none for the list of them.
+  *
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index f15eac42..58004efe 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -99,6 +99,7 @@ import {
+ } from "../search-hits.js";
+ import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
+ import {
++  marginParam,
+   modeParam,
+   noteParam,
+   panelParam,
+@@ -313,6 +314,26 @@ export function Reader({
+    * So this is a single value the layout reads, not a flag each feature checks.
+    */
+   const [mode, setMode] = useQueryState("mode", modeParam);
++  /**
++   * **Whether Annotations' column of notes is on**, right of the prose — a
++   * switch of its own beside `mode` since 2026-10-01, so the notes can sit
++   * beside a band. `mode` never says `annotations` (`BandMode`); the Dock's
++   * Annotations button toggles this instead.
++   * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++   */
++  const [margin, setMargin] = useQueryState("margin", marginParam);
++  /* **An old `?mode=annotations` link** (Annotations was a mode for its first
++     day) reads as Plain through `modeParam`; this turns the notes on for it
++     and drops the old word, in one replaced entry so Back does not return to
++     it. Read from `location` because `modeParam` has already discarded it. */
++  const [, setOldAnnotations] = useQueryStates({
++    mode: modeParam,
++    margin: marginParam,
++  });
++  useEffect(() => {
++    if (new URLSearchParams(location.search).get("mode") === "annotations")
++      void setOldAnnotations({ mode: null, margin: true }, { history: "replace" });
++  }, [setOldAnnotations]);
+   /* The pasted Trajectory stop belongs to this article arrival, not to each
+      mount of its band. `ModeBoundary key={mode}` remounts the band on re-entry
+      while leaving mode-specific query state in the URL; the first band mount
+@@ -339,15 +360,17 @@ export function Reader({
+    * controls applied. Both went with that mode:
+    * docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.)
+    */
+-  const bandOpen = mode !== "plain" && mode !== "annotations";
++  const bandOpen = mode !== "plain";
+   /**
+-   * **Annotations draws a column to the RIGHT of the prose instead of a band**
+-   * (layout.ts § `fitMargin`). No band opens, so everything that asks
+-   * `bandOpen` — the band covering the prose on a phone, the herald, the
+-   * reading-time "is the prose on screen" — sees Plain's page.
+-   * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
++   * **Annotations draws a column to the RIGHT of the prose**, beside whatever
++   * band is open or none (layout.ts § `fitMargin`, `fitBoth`). It opens no
++   * band, so everything that asks `bandOpen` — the band covering the prose on
++   * a phone, the herald, the reading-time "is the prose on screen" — sees the
++   * band's page or Plain's. Where there is no room for both, the band wins.
++   * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
++   * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+    */
+-  const marginOpen = mode === "annotations";
++  const marginOpen = margin === true;
+   /**
+    * **The band has stepped aside from the prose** — on a narrow window, where
+    * it lies over the whole article (`band-covers`), after the reader follows a
+@@ -1305,8 +1328,8 @@ export function Reader({
+   /**
+    * **Annotations: the notes beside each block** — AnnotationsColumn.tsx.
+    *
+-   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` in the
+-   * mode's "band", never made) or the visitor's payload. Drawn only while the
++   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` beside
++   * the column's head, never made) or the visitor's payload. Drawn only while the
+    * window has room for the column (`fit.margW`); on a narrow one the head
+    * says why there is nothing. Memoised on the notes alone, so scrolling does
+    * not re-render `TableView`.
+@@ -1892,22 +1915,6 @@ export function Reader({
+          is the way out to the article; it has nothing to put in the middle. */
+       case "plain":
+         return null;
+-      /* **No band either**: Annotations draws a column to the RIGHT of the
+-         prose instead — its notes inside the table's cells (`marginNotes`),
+-         and here only what is not anchored to a block: the head pinned at
+-         the top of the column, and the read of the owner's ideas. Here so
+-         both are inside the mode's error boundary. */
+-      case "annotations":
+-        return (
+-          <>
+-            {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
+-            <AnnotationsHead
+-              room={fit.margW > 0}
+-              path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
+-              arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+-            />
+-          </>
+-        );
+       case "chat":
+         /* **The key is inert today, and it is kept for the day it is not.**
+            It was written when one `ConversationBand` was mounted by two modes
+@@ -2352,6 +2359,43 @@ export function Reader({
+     );
+   }
+ 
++  /**
++   * **Annotations' column, apart from its notes** — the head pinned at the top
++   * of the column and the read of the owner's ideas: what is not anchored to a
++   * block (the notes are in the table's cells, `marginNotes`). Beside the band
++   * rather than in it since 2026-10-01, inside a boundary of its own so a
++   * broken head cannot take the band or the article with it; its way out
++   * turns the notes off.
++   *
++   * **No narrow-window line under a covering band**: the band is the whole
++   * window there, and a line about notes over a Glossary list is noise. Nor
++   * where that band has stepped aside: the pill that brings it back sits
++   * where the line would (the browser check, 2026-10-01), and it is the way
++   * on from there anyway.
++   */
++  function marginColumn(): ReactNode {
++    if (!marginOpen) return null;
++    const covered = bandOpen && fit.modeW === 0;
++    return (
++      <ModeBoundary
++        mode="annotations"
++        slug={slug}
++        owner={owner !== null}
++        onPlain={() => void setMargin(null)}
++      >
++        {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
++        {!covered && (
++          <AnnotationsHead
++            room={fit.margW > 0}
++            beside={bandOpen}
++            path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
++            arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
++          />
++        )}
++      </ModeBoundary>
++    );
++  }
++
+   return (
+     /* Every block link inside — panels, chips, the chat dialog through its
+        portal — reads its card and its "is this block real" answer from here.
+@@ -2871,6 +2915,7 @@ export function Reader({
+           never ran for this piece, and the ones that cost a model call —
+           `POLICY` in visitor.ts says which, so no count lives here. */}
+       {band()}
++      {marginColumn()}
+ 
+       {/* **Over the top of the band, for three seconds after a press** —
+           ModeHerald.tsx. After the band in source order so it paints above it
+@@ -2911,11 +2956,19 @@ export function Reader({
+            hook call at the top of this component. */
+         experimental={experimental}
+         mode={mode}
++        margin={marginOpen}
+         onMode={(next, sub) => {
+           /* The callback itself is proof of a press. Arm before `setMode`:
+              nuqs updates React now but may leave `location.href` on the old
+              entry for ~50ms, so inferring intent from the address races. Back
+              and Forward never call this callback and therefore never arm. */
++          /* **Annotations is a switch, not a band** (`BandMode`): its press
++             turns the column on or off and leaves the band, the herald and a
++             stepped-aside band exactly as they were. */
++          if (next === "annotations") {
++            void setMargin(marginOpen ? null : true);
++            return;
++          }
+           armTrajectoryOpening(trajectoryArrival.current, mode, next);
+           /* A sub-mode row has already armed its chip's press (Dock.tsx §
+              `useActivateSubMode`); this only moves the band, sub-mode and all. */
+diff --git a/src/web/reader/passages.ts b/src/web/reader/passages.ts
+index bdb7fac7..347c9550 100644
+--- a/src/web/reader/passages.ts
++++ b/src/web/reader/passages.ts
+@@ -43,7 +43,7 @@
+  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
+  * § Stage 4b, and docs/plans/260905e-main-app-architecture-review.md § A3.
+  */
+-import type { Mode } from "../../modes.js";
++import type { BandMode } from "../../modes.js";
+ import type { Found } from "../search-hits.js";
+ 
+ /**
+@@ -105,12 +105,16 @@ export const NO_FOUND: Found[] = [];
+ const NOTHING: PassageSlot = { found: NO_FOUND, openKey: null };
+ 
+ /**
+- * **The mode → slot mapping, total over `Mode`.**
++ * **The mode → slot mapping, total over `BandMode`.** Annotations is not in it: since 2026-10-01 its column is a
++ * switch beside the band (`?margin=1`) and marks nothing inside the prose — the
++ * dashed underlines for ideas are deferred
++ * (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
++ * docs/plans/261001i-annotations-column-beside-a-band-mode.md).
+  *
+  * Every arm returns a whole `PassageSlot` rather than picking a field out of
+  * one, so the marks and the ring can never come from different bands.
+  */
+-export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
++export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot {
+   switch (mode) {
+     case "ideas":
+       return slots.ideas;
+@@ -160,10 +164,6 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
+     /* Tweets neither: each post's passages are jumps (`BlockRef`), not a
+        selection. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+     case "tweets":
+-    /* Annotations neither: its notes sit beside their blocks in a column of
+-       their own, and mark nothing inside the prose — the dashed underlines for
+-       ideas are deferred (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md). */
+-    case "annotations":
+       return NOTHING;
+     default: {
+       /* The compiler being made to say that every mode has been given an
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index b0d64146..b34f0d0f 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -291,3 +291,10 @@
+    about the rung that hides the mode labels, which is this one. Rung 1 hides no
+    mode label, so there is nothing there for this rule to put back. */
+ .dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
++
++/* **The radios inside the segment are a box of their own only to the
++   accessibility tree** — Annotations' toggle sits beside them in the same
++   segment, outside the `role="radiogroup"` (Dock.tsx § `MarginToggle`), and
++   `display: contents` keeps every rule above seeing one row of buttons.
++   docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++.dock-modes-radios { display: contents; }
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index c8839b09..3af29452 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -157,7 +157,10 @@
+    the article's opening lines (GPT Sol, F9 on the plan). */
+ .marg-narrow {
+   position: fixed;
+-  left: 50%;
++  /* Centred under the prose rather than the window: beside a band (since
++     2026-10-01) the window's centre is on the seam between band and prose.
++     Both terms are 0 with no band, so this is the window's centre then. */
++  left: calc(50% + (var(--spine-w) + var(--mode-w) + var(--safe-left)) / 2);
+   translate: -50% 0;
+   bottom: calc(var(--dock-space) + 0.5rem);
+   z-index: 30;
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 697fa731..3b1cfdaf 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -1323,9 +1323,12 @@
+        and pull the title left of its own bar. GPT Sol, T1. */
+     max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l))),
+     calc(
+-      (100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
+-          var(--text-pad-r) - var(--reading-measure)) / 2 + var(--text-pad-l) -
+-        var(--masthead-pad-l)
++      /* `- --marg-reserve`: beside a band, Annotations' column keeps that much
++         of the bar's right clear of the reading cell, so the two boxes are no
++         longer the same width (0 in every other case). 261001i. */
++      (100% - var(--marg-reserve, 0px) + var(--masthead-pad-l) + var(--masthead-pad-r) -
++          var(--text-pad-l) - var(--text-pad-r) - var(--reading-measure)) / 2 +
++        var(--text-pad-l) - var(--masthead-pad-l)
+     )
+   );
+   margin-right: auto;
+diff --git a/tests/annotations-margin-param.test.ts b/tests/annotations-margin-param.test.ts
+new file mode 100644
+index 00000000..218e6305
+--- /dev/null
++++ b/tests/annotations-margin-param.test.ts
+@@ -0,0 +1,33 @@
++/**
++ * **The notes are a switch of their own, not a mode** — `?margin=1` beside any
++ * `?mode=`, and `?mode=annotations` reading as Plain.
++ * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
++ */
++import { describe, expect, it } from "vitest";
++import { modeFromParam } from "../src/modes.js";
++import { readMode } from "../src/read-address.js";
++import { marginInSearch, marginParam, modeParam } from "../src/web/params.js";
++
++describe("the margin switch", () => {
++  it("parses 1 and 0, and nothing else", () => {
++    expect(marginParam.parse("1")).toBe(true);
++    expect(marginParam.parse("0")).toBe(false);
++    expect(marginParam.parse("yes")).toBe(null);
++    expect(marginParam.serialize(true)).toBe("1");
++  });
++
++  it("?mode=annotations names no band: the client and the server both read Plain", () => {
++    expect(modeFromParam("annotations")).toBe(null);
++    expect(modeParam.parse("annotations")).toBe(null);
++    expect(readMode("/read/x?mode=annotations")).toBe("plain");
++    /* The positive control: a band mode still parses. */
++    expect(modeParam.parse("glossary")).toBe("glossary");
++  });
++
++  it("an old ?mode=annotations link still asks for the notes", () => {
++    expect(marginInSearch("?mode=annotations")).toBe(true);
++    expect(marginInSearch("?margin=1&mode=glossary")).toBe(true);
++    expect(marginInSearch("?mode=glossary")).toBe(false);
++    expect(marginInSearch("?margin=0")).toBe(false);
++  });
++});
+diff --git a/tests/arrows-belong-to-the-article.test.tsx b/tests/arrows-belong-to-the-article.test.tsx
+index eb74c72e..deddce23 100644
+--- a/tests/arrows-belong-to-the-article.test.tsx
++++ b/tests/arrows-belong-to-the-article.test.tsx
+@@ -151,7 +151,9 @@ describe("the bottom bar's mode segment", () => {
+      segment says the same thing about the hairline frame. */
+   it("is still a radiogroup with exactly one checked", () => {
+     paintDock();
+-    expect(host.querySelector('.dock-modes[role="radiogroup"]')).not.toBeNull();
++    /* The radios' own box since 2026-10-01, inside the segment beside
++       Annotations' toggle (261001i). */
++    expect(host.querySelector('.dock-modes [role="radiogroup"]')).not.toBeNull();
+     const checked = radios().filter((el) => el.getAttribute("aria-checked") === "true");
+     expect(checked).toHaveLength(1);
+   });
+diff --git a/tests/command-bar-sub-modes.test.tsx b/tests/command-bar-sub-modes.test.tsx
+index f68acbfd..8f74f331 100644
+--- a/tests/command-bar-sub-modes.test.tsx
++++ b/tests/command-bar-sub-modes.test.tsx
+@@ -7,6 +7,7 @@
+  * already; the helpers are the same shape as that file's.
+  */
+ // @vitest-environment jsdom
++import { isBandMode } from "../src/modes.js";
+ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { useQueryState, useQueryStates } from "nuqs";
+@@ -99,8 +100,10 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
+     mode,
+     experimental: EXPERIMENTAL_ON,
+     onMode(next, sub) {
+-      if (sub === undefined) void setMode(next);
+-      else void setSubNav(subModeParams(sub), { history: "push" });
++      /* Annotations is a switch, not a band (`BandMode`); not under test here. */
++      if (sub === undefined) {
++        if (isBandMode(next)) void setMode(next);
++      } else void setSubNav(subModeParams(sub), { history: "push" });
+     },
+   });
+ }
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index 461496c3..ab02e779 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -191,7 +191,8 @@ const listedOfKind = (kind: RowKind): string[] =>
+ 
+ /** The mode buttons the Dock itself drew, in the order it drew them. */
+ const dockLists = (): string[] =>
+-  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].map(
++  /* The radios and Annotations' toggle after them (261001i), in DOM order. */
++  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
+     (b) => b.getAttribute("aria-label") ?? "",
+   );
+ 
+diff --git a/tests/dock-experimental-modes.test.tsx b/tests/dock-experimental-modes.test.tsx
+index bd8c2147..5f35d3e6 100644
+--- a/tests/dock-experimental-modes.test.tsx
++++ b/tests/dock-experimental-modes.test.tsx
+@@ -162,9 +162,10 @@ function loose(search: string, props: Record<string, unknown> = {}): void {
+   });
+ }
+ 
+-/** The mode buttons of the segment, by the mode each one is for. */
++/** The mode buttons of the segment, by the mode each one is for — the radios
++    and, since 2026-10-01, Annotations' toggle after them (261001i). */
+ function radioModes(): string[] {
+-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].map(
++  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
+     (b) => b.getAttribute("aria-label") ?? "",
+   );
+ }
+@@ -237,12 +238,28 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+ 
+   it("every one of the four, and never more than one radio checked", () => {
+     for (const mode of BEHIND_THE_SWITCH) {
++      /* Annotations is a switch, not a band, since 2026-10-01: the next test. */
++      if (mode === "annotations") continue;
+       reading({ mode, experimental: EXPERIMENTAL_OFF });
+       expect(radioModes(), mode).toContain(MODE_LABEL[mode]);
+       expect(checked(), mode).toEqual([MODE_LABEL[mode]]);
+     }
+   });
+ 
++  /* **Annotations' toggle obeys the same rule** (261001i): with its notes on
++     it stays drawn with the switch off, pressed, so the one control that turns
++     them off cannot vanish — and it is never one of the checked radios. */
++  it("Annotations' toggle stays drawn and pressed while its notes are on", () => {
++    reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
++    const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
++    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
++    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
++    expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
++    expect(checked()).toEqual([MODE_LABEL.glossary]);
++    reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
++    expect(host.querySelector('.dock-modes [aria-pressed]')).toBeNull();
++  });
++
+   /**
+    * The loose-link arm, which the plan's first draft missed (GPT Sol, finding
+    * 9). `carriedSearch` strips only `?panel=`, so `?mode=` is still in the
+@@ -289,6 +306,15 @@ describe("the fit signature", () => {
+     expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
+   });
+ 
++  /* Annotations' toggle pressed is `.on`, which gets its label back at rung 2,
++     with the same buttons and the same mode (261001i, GPT Sol's plan review). */
++  it("changes when Annotations' notes are turned on, at the same mode", () => {
++    const off = fitSignature(visibleModes(true, "glossary"), "glossary", noop, undefined, null, null, false, false);
++    const on = fitSignature(visibleModes(true, "glossary", true), "glossary", noop, undefined, null, null, false, true);
++    expect(visibleModes(true, "glossary")).toEqual(visibleModes(true, "glossary", true));
++    expect(on).not.toBe(off);
++  });
++
+   it("changes when the switch does", () => {
+     expect(sig(false, "plain")).not.toBe(sig(true, "plain"));
+   });
+diff --git a/tests/dock-experimental-switch.test.tsx b/tests/dock-experimental-switch.test.tsx
+index b47b99ce..677afd3f 100644
+--- a/tests/dock-experimental-switch.test.tsx
++++ b/tests/dock-experimental-switch.test.tsx
+@@ -194,7 +194,10 @@ describe("who sees it at all", () => {
+     expect(theSwitch().closest(".dock-modes")).toBeNull();
+     expect(theSwitch().getAttribute("role")).toBeNull();
+     expect(theSwitch().getAttribute("aria-checked")).toBeNull();
+-    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(MODES.length);
++    /* Annotations is a toggle beside the radios since 2026-10-01 (261001i). */
++    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
++      MODES.length,
++    );
+   });
+ });
+ 
+diff --git a/tests/dock-fit.test.ts b/tests/dock-fit.test.ts
+index 56e2e681..78816583 100644
+--- a/tests/dock-fit.test.ts
++++ b/tests/dock-fit.test.ts
+@@ -498,7 +498,8 @@ describe("Dock gives the ladder something to work with", () => {
+    */
+   it("the reading view with the switch on: every mode, one segment", () => {
+     render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
+-    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(
++    /* Annotations is a toggle beside the radios since 2026-10-01 (261001i). */
++    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
+       visibleModes(true, undefined).length,
+     );
+   });
+diff --git a/tests/dock-mode-order.test.ts b/tests/dock-mode-order.test.ts
+index c8831a1e..2ff9a97a 100644
+--- a/tests/dock-mode-order.test.ts
++++ b/tests/dock-mode-order.test.ts
+@@ -32,10 +32,14 @@ const RUNS = [
+      its own (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)
+      — another shape of the whole piece, beside Summary. Greg did not place it
+      by hand. */
+-  ["structure", "summary", "annotations", "tweets", "diagram"],
++  ["structure", "summary", "tweets", "diagram"],
+   ["trajectory", "quotes", "faq", "glossary", "ideas", "timeline"],
+   ["referee", "citations", "debate"],
+   ["search", "chat", "remember"],
++  /* Annotations' toggle, since 2026-10-01 a switch beside the band rather than
++     one of the bands, at the right-hand end like its column
++     (docs/plans/261001i-annotations-column-beside-a-band-mode.md). */
++  ["annotations"],
+ ] as const;
+ 
+ describe("the mode bar's order", () => {
+diff --git a/tests/dock-mode-tooltips.test.tsx b/tests/dock-mode-tooltips.test.tsx
+index 821bdfb4..7ad14d90 100644
+--- a/tests/dock-mode-tooltips.test.tsx
++++ b/tests/dock-mode-tooltips.test.tsx
+@@ -124,7 +124,12 @@ function loose(props: Record<string, unknown> = {}): void {
+ 
+ /** Every control that is one of the modes, in either arm. */
+ function modeControls(): HTMLElement[] {
+-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], a.dock-mode')];
++  /* Annotations' toggle beside the radios since 2026-10-01 (261001i). */
++  return [
++    ...host.querySelectorAll<HTMLElement>(
++      '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',
++    ),
++  ];
+ }
+ 
+ /** The one whose accessible name is this mode's label. */
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index 5175c3dd..eb1aceb4 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -906,7 +906,13 @@ async function open(search = "", { strict = true }: { strict?: boolean } = {}):
+   await settle();
+ }
+ 
+-const modeInUrl = (): string => new URLSearchParams(location.search).get("mode") ?? "plain";
++/* **Annotations is `?margin=1`, not a mode**, since 2026-10-01 (261001i): its
++   press turns the column on and leaves `?mode=` alone, so from Plain it is
++   read here as the view it opens. Every fixture this file presses from is Plain. */
++const modeInUrl = (): string => {
++  const query = new URLSearchParams(location.search);
++  return query.get("mode") ?? (query.get("margin") === "1" ? "annotations" : "plain");
++};
+ 
+ /** `?mode=` is written behind nuqs' throttle, so a single read is a race. */
+ async function modeAfterPress(before: string): Promise<string> {
+@@ -921,7 +927,10 @@ async function modeAfterPress(before: string): Promise<string> {
+ /** The real bar button, found the way a screen reader would find it. */
+ function modeButton(mode: Mode): HTMLButtonElement {
+   const label = MODE_LABEL[mode];
+-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
++  /* The radios, and Annotations' toggle after them (261001i). */
++  const found = [
++    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
++  ].find(
+     (b) => b.getAttribute("aria-label") === label,
+   );
+   expect(found, `the bar must draw ${label}`).toBeDefined();
+@@ -1317,7 +1326,8 @@ const DRAWS: Record<Mode, Draws> = {
+     query: "?mode=plain",
+     control: { where: ".prose", says: PARAGRAPH },
+   },
+-  /* **No band: a column right of the prose.** The control is the owner's stored
++  /* **No band: a column right of the prose** — `?margin=1` since 2026-10-01, a
++     switch beside the band rather than a mode (261001i). The control is the owner's stored
+      idea, drawn as a stamp beside the block it occurs in — which proves the
+      read of the ideas happened, reached the notes and was put in a cell. jsdom
+      lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
+@@ -1325,7 +1335,7 @@ const DRAWS: Record<Mode, Draws> = {
+   annotations: {
+     kind: "none",
+     why: "its notes sit beside the prose, in the table's own cells",
+-    query: "?mode=annotations",
++    query: "?margin=1",
+     control: { where: ".marg-note", says: IDEA_NAME },
+   },
+   /* The child node's title, from the tree in the payload — the one row this
+@@ -1452,3 +1462,52 @@ describe("phase B — what each mode's real controller drew", () => {
+    now — GPT Sol's F21. Two hand-written tests cover the two modes somebody
+    thought of; a `kind: "none"` row is *required of every mode that claims to
+    draw nothing*, and carries the positive control with it. */
++
++/* ===================================================== the notes beside a band ==
++   **Annotations' column beside a band** — `?margin=1`, since 2026-10-01
++   (docs/plans/261001i-annotations-column-beside-a-band-mode.md). The width
++   arithmetic is swept in tests/layout-margin.test.ts; this is the page: the two
++   drawn together where they fit, the band winning where they do not, and an
++   old `?mode=annotations` link turning into the notes. */
++describe("the notes beside a band", () => {
++  const atWidth = async (width: number, search: string) => {
++    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
++    fixtures = "populated";
++    await open(search);
++  };
++  afterEach(() => {
++    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
++  });
++  const notes = () => host.querySelectorAll("[data-marg-note]").length;
++  const line = () => host.querySelector(".marg-narrow")?.textContent ?? null;
++
++  it("draws the band and the notes together where both fit", async () => {
++    await atWidth(1024, "?mode=glossary&margin=1");
++    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
++    expect(notes(), "no notes beside the band").toBeGreaterThan(0);
++    expect(line()).toBeNull();
++  }, PHASE_MS);
++
++  it("gives the band the room below 900px, and says how to get the notes back", async () => {
++    await atWidth(800, "?mode=glossary&margin=1");
++    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
++    expect(notes()).toBe(0);
++    expect(line()).toContain("panel closed");
++  }, PHASE_MS);
++
++  it("draws no line over a band that covers the window", async () => {
++    await atWidth(390, "?mode=glossary&margin=1");
++    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
++    expect(notes()).toBe(0);
++    expect(line()).toBeNull();
++  }, PHASE_MS);
++
++  it("opens an old ?mode=annotations link as Plain with the notes on", async () => {
++    await atWidth(1024, "?mode=annotations");
++    const query = new URLSearchParams(location.search);
++    expect(query.get("mode")).toBeNull();
++    expect(query.get("margin")).toBe("1");
++    expect(host.querySelector(".mode-band")).toBeNull();
++    expect(notes()).toBeGreaterThan(0);
++  }, PHASE_MS);
++});
+diff --git a/tests/every-mode-says-which-passages-it-marks.test.ts b/tests/every-mode-says-which-passages-it-marks.test.ts
+index d295d6f4..2b9d9707 100644
+--- a/tests/every-mode-says-which-passages-it-marks.test.ts
++++ b/tests/every-mode-says-which-passages-it-marks.test.ts
+@@ -30,7 +30,7 @@
+  */
+ import { describe, expect, it } from "vitest";
+ 
+-import { MODES, type Mode } from "../src/modes.js";
++import { BAND_MODES, type BandMode } from "../src/modes.js";
+ import { NO_FOUND, selectPassages, type PassageSlots } from "../src/web/reader/passages.js";
+ import type { Found } from "../src/web/search-hits.js";
+ import type { BlockId } from "../src/types.js";
+@@ -98,7 +98,7 @@ const PRODUCERS = {
+  * blocks in the prose would mark the whole article. Same position as `outline`
+  * and `hierarchy` took, before each retired into it.
+  */
+-const SILENT: Mode[] = [
++const SILENT: BandMode[] = [
+   "plain",
+   "chat",
+   "glossary",
+@@ -122,15 +122,14 @@ const SILENT: Mode[] = [
+      not a selection, and a Tweets band that marked every post's passages would
+      mark most of the article. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+   "tweets",
+-  /* Earned: its notes sit beside their blocks in a column of their own and
+-     mark nothing in the prose; dashed underlines for ideas are deferred —
+-     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+-  "annotations",
++  /* Annotations is not here since 2026-10-01: its column is a switch beside the
++     band, not a value of `?mode=` (`BandMode`) —
++     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+ ];
+ 
+ describe("selectPassages", () => {
+   it("gives each producer its own marks and its own ring, from one slot", () => {
+-    for (const [mode, slot] of Object.entries(PRODUCERS) as [Mode, keyof PassageSlots][]) {
++    for (const [mode, slot] of Object.entries(PRODUCERS) as [BandMode, keyof PassageSlots][]) {
+       const chosen = selectPassages(mode, SLOTS);
+       expect(chosen.found, `${mode} drew another band's marks`).toBe(SLOTS[slot].found);
+       expect(chosen.openKey, `${mode} rang another band's passage`).toBe(SLOTS[slot].openKey);
+@@ -169,6 +168,6 @@ describe("selectPassages", () => {
+     expect(
+       [...answered].sort(),
+       "a mode in MODES has no arm here — add it to PRODUCERS or to SILENT",
+-    ).toEqual([...MODES].sort());
++    ).toEqual([...BAND_MODES].sort());
+   });
+ });
+diff --git a/tests/last-view.test.ts b/tests/last-view.test.ts
+index 9f79d505..e549e094 100644
+--- a/tests/last-view.test.ts
++++ b/tests/last-view.test.ts
+@@ -87,9 +87,7 @@ describe("rememberableSearch", () => {
+   });
+ 
+   it("keeps every other mode as it stands", () => {
+-    /* `annotations` since 2026-10-01: it reads what the article already has
+-       and starts no job, so restoring it is as inert as Structure. */
+-    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline", "annotations"]) {
++    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
+       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
+     }
+     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(
+@@ -97,6 +95,24 @@ describe("rememberableSearch", () => {
+     );
+   });
+ 
++  /* Annotations' column, since 2026-10-01 a switch of its own:
++     docs/plans/261001i-annotations-column-beside-a-band-mode.md. It reads what
++     the article already has and starts no job, so restoring it is inert. */
++  it("remembers the notes beside a band, and the link always wins", () => {
++    expect(rememberableSearch("?mode=glossary&margin=1")).toBe("?mode=glossary&margin=1");
++    expect(restoredHref("/read/x", "", "?mode=glossary&margin=1")).toBe(
++      "/read/x?mode=glossary&margin=1",
++    );
++    /* A link that asks for the notes is a view of its own: no remembered band. */
++    expect(restoredHref("/read/x", "?margin=1", "?mode=glossary")).toBe(null);
++  });
++
++  it("reads a remembered mode=annotations from its first day as the notes on", () => {
++    expect(rememberableSearch("?mode=annotations")).toBe("?margin=1");
++    expect(rememberableSearch("?at=spya-a&mode=annotations&margin=1")).toBe("?at=spya-a&margin=1");
++    expect(restoredHref("/read/x", "", "?mode=annotations")).toBe("/read/x?margin=1");
++  });
++
+   it("reads a percent-encoded key as the parameter it is", () => {
+     /* `?%61t=…` is `?at=…` to every parser in this app, because they all go
+        through URLSearchParams. A filter that only matched the literal spelling
+diff --git a/tests/layout-margin.test.ts b/tests/layout-margin.test.ts
+index b276a51c..3f55a19b 100644
+--- a/tests/layout-margin.test.ts
++++ b/tests/layout-margin.test.ts
+@@ -12,6 +12,7 @@ import {
+   fitView,
+   MARG_IDEAL,
+   MARG_MIN,
++  MODE_MIN,
+   MODE_PROSE_FLOOR,
+   proseAloneMaxPx,
+   SPINE_W,
+@@ -103,9 +104,77 @@ describe("the annotations column", () => {
+     expect(fitView({ windowWidth: 390, margin: true }).margW).toBe(0);
+   });
+ 
+-  it("is ignored when a band is open: one side at a time", () => {
+-    const withBand = fitView({ windowWidth: 1600, modeBand: true, margin: true });
+-    expect(withBand.margW).toBe(0);
+-    expect(withBand.margReserve).toBe(0);
++  /* **Beside a band**, since 2026-10-01 —
++     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
++  const SHAPES = ["standard", "structure", "wide"] as const;
++  const BANDED = CASES.flatMap((c) => SHAPES.map((bandShape) => ({ ...c, bandShape })));
++
++  it("draws the column beside an open band once the window is wide enough for all three", () => {
++    const both = fitView({ windowWidth: 1600, modeBand: true, margin: true });
++    expect(both.modeW).toBeGreaterThan(0);
++    expect(both.margW).toBeGreaterThanOrEqual(MARG_MIN);
++  });
++
++  it("with a band, never runs off the window, and the column starts at the table's right edge", () => {
++    let drawn = 0;
++    for (const c of BANDED) {
++      const fit = fitView({ ...c, modeBand: true, margin: true });
++      if (fit.margW === 0) continue;
++      drawn += 1;
++      const spine = fit.spine === "on" ? SPINE_W : 0;
++      /* With a band the table is not centred: it starts right after the band. */
++      const right = spine + fit.modeW + fit.tableW;
++      expect(fit.margLeft, JSON.stringify(c)).toBeCloseTo(right, 6);
++      expect(fit.margReserve, JSON.stringify(c)).toBeGreaterThanOrEqual(fit.margW);
++      expect(right + fit.margReserve, JSON.stringify(c)).toBeCloseTo(c.windowWidth, 6);
++      expect(fit.minWidth, JSON.stringify(c)).toBeLessThanOrEqual(c.windowWidth + 1e-6);
++      expect(fit.overflowing).toBe(false);
++    }
++    expect(drawn).toBeGreaterThan(500);
++  });
++
++  it("with a band, keeps the prose between the floor and Plain's cap, and the column in range", () => {
++    for (const c of BANDED) {
++      const fit = fitView({ ...c, modeBand: true, margin: true });
++      if (fit.margW === 0) continue;
++      expect(fit.tableW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_PROSE_FLOOR);
++      expect(fit.tableW, JSON.stringify(c)).toBeLessThanOrEqual(proseAloneMaxPx(c.rootFontPx));
++      expect(fit.margW).toBeGreaterThanOrEqual(MARG_MIN);
++      expect(fit.margW).toBeLessThanOrEqual(MARG_IDEAL);
++      expect(fit.modeW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_MIN);
++    }
++  });
++
++  it("with a band, gives the band exactly what it would get in a window narrower by the column", () => {
++    for (const c of BANDED) {
++      const fit = fitView({ ...c, modeBand: true, margin: true });
++      if (fit.margW === 0) continue;
++      const narrower = fitView({
++        ...c,
++        windowWidth: c.windowWidth - fit.margW,
++        modeBand: true,
++      });
++      expect(fit.modeW, JSON.stringify(c)).toBe(narrower.modeW);
++    }
++  });
++
++  it("the band wins below the threshold: the fit is the band's own", () => {
++    let yielded = 0;
++    for (const c of BANDED) {
++      const fit = fitView({ ...c, modeBand: true, margin: true });
++      if (fit.margW !== 0) continue;
++      yielded += 1;
++      expect(fit, JSON.stringify(c)).toEqual(fitView({ ...c, modeBand: true }));
++    }
++    expect(yielded).toBeGreaterThan(0);
++  });
++
++  it("the crossover is MODE_MIN + MODE_PROSE_FLOOR + MARG_MIN beside the rail: 900px with it", () => {
++    const at = MODE_MIN + MODE_PROSE_FLOOR + MARG_MIN + SPINE_W;
++    expect(at).toBe(900);
++    expect(fitView({ windowWidth: at, modeBand: true, margin: true }).margW).toBe(MARG_MIN);
++    expect(fitView({ windowWidth: at - 1, modeBand: true, margin: true }).margW).toBe(0);
++    expect(fitView({ windowWidth: 800, modeBand: true, margin: true }).modeW).toBeGreaterThan(0);
++    expect(fitView({ windowWidth: 390, modeBand: true, margin: true }).margW).toBe(0);
+   });
+ });
+diff --git a/tests/page-head.test.ts b/tests/page-head.test.ts
+index a5cf4177..82c91041 100644
+--- a/tests/page-head.test.ts
++++ b/tests/page-head.test.ts
+@@ -53,7 +53,7 @@ import { PUBLIC_ORIGIN, articleUrl } from "../src/urls.js";
+    only definition there now is — see src/title-text.ts. `composeShell` calls
+    this same function, so comparing it against `pageTitle()` below is a
+    statement about what actually reaches the document. */
+-import { DEFAULT_MODE, MODES } from "../src/modes.js";
++import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
+ import { clamp, documentTitle } from "../src/title-text.js";
+ import type { PublicHead } from "../src/store/public-reader.js";
+ import { pageTitle } from "../src/web/page-title.js";
+@@ -556,7 +556,7 @@ describe("the one title rule, applied by both sides", () => {
+        this says it did not. A floor rather than an identity, so it survives the
+        next mode without an edit. */
+     expect(MODES.length, "MODES is empty or truncated — the loop below proves nothing").toBeGreaterThan(5);
+-    for (const mode of MODES) {
++    for (const mode of BAND_MODES) {
+       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
+       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });
+       expect(d.title, mode).toBe(client);
+diff --git a/tests/page-title.test.ts b/tests/page-title.test.ts
+index ad8ce3b6..3e4a6578 100644
+--- a/tests/page-title.test.ts
++++ b/tests/page-title.test.ts
+@@ -23,7 +23,8 @@ import { readFileSync, readdirSync } from "node:fs";
+ import path from "node:path";
+ import { JSDOM } from "jsdom";
+ import { describe, expect, it } from "vitest";
+-import { DEFAULT_MODE, MODES } from "../src/web/params.js";
++import { BAND_MODES } from "../src/modes.js";
++import { DEFAULT_MODE } from "../src/web/params.js";
+ import {
+   APP_NAME,
+   articleWaitTitle,
+@@ -108,7 +109,7 @@ describe("an article", () => {
+       tweets: "Tweets",
+       annotations: "Annotations",
+     };
+-    for (const mode of MODES) {
++    for (const mode of BAND_MODES) {
+       const t = pageTitle({ kind: "read", title, view: "article", mode });
+       if (mode === DEFAULT_MODE) {
+         expect(t).toBe(`${title}${SEP}${APP_NAME}`);
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index c08473bc..d0f25acf 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -1940,6 +1940,30 @@ describe("a signed-out browser on a shared document", () => {
+        the branch a POST would hide in. */
+     for (const mode of MODES) {
+       if (pressed.includes(mode)) continue;
++      /* **Annotations is a toggle beside the radios** since 2026-10-01, and its
++         address is `?margin=1` (261001i): kept drawn and pressed while the notes
++         are on, and pressing it — which turns them off — stays public too. */
++      if (mode === "annotations") {
++        await remount();
++        await open("?margin=1");
++        trace.length = 0;
++        const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
++        expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
++          MODE_LABEL.annotations,
++        );
++        expect(toggle?.getAttribute("aria-pressed")).toBe("true");
++        expect(
++          host.querySelector(".marg-head, .marg-narrow, [data-marg-note]"),
++          "the column is on screen",
++        ).not.toBeNull();
++        await act(async () => (toggle as HTMLButtonElement).click());
++        await settle();
++        expect(outsidePublic(), "after pressing annotations").toEqual([]);
++        expect(trace.filter((r) => r.method !== "GET"), "after pressing annotations").toEqual([]);
++        expect(new URLSearchParams(location.search).get("margin")).toBeNull();
++        pressed.push(mode);
++        continue;
++      }
+       await remount();
+       await open(`?mode=${mode}`);
+       trace.length = 0;
+@@ -2744,6 +2768,20 @@ describe("a signed-in reader who does not own it", () => {
+       expectBandFor(mode as Mode, `after pressing ${label}`);
+     }
+ 
++    /* **And Annotations' toggle after the radios** (261001i): the notes on and
++       off again, both presses inside the public namespace. */
++    const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
++    expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.annotations);
++    for (const want of ["1", null]) {
++      await act(async () => (toggle as HTMLButtonElement).click());
++      await settle();
++      const extra = outsidePublic().filter((r) => r.url !== "/api/jobs");
++      expect(extra, `after pressing Annotations to ${want}`).toEqual([]);
++      expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
++      expect(new URLSearchParams(location.search).get("margin")).toBe(want);
++    }
++    pressed.push("annotations");
++
+     expect([...pressed].sort()).toEqual([...MODES].sort());
+   }, SWEEP_MS);
+ });
+diff --git a/tests/quotes-marked-in-every-mode.test.ts b/tests/quotes-marked-in-every-mode.test.ts
+index bca8cde4..811aa3d5 100644
+--- a/tests/quotes-marked-in-every-mode.test.ts
++++ b/tests/quotes-marked-in-every-mode.test.ts
+@@ -27,7 +27,7 @@
+  */
+ import { describe, expect, it } from "vitest";
+ 
+-import { MODES } from "../src/modes.js";
++import { BAND_MODES } from "../src/modes.js";
+ import { NO_FOUND, proseFound, selectPassages, type PassageSlots } from "../src/web/reader/passages.js";
+ import { blockHues, blockMatches, blockStrength, type Found } from "../src/web/search-hits.js";
+ import type { BlockId } from "../src/types.js";
+@@ -139,7 +139,7 @@ describe("the quotes are marked wherever the reader is standing", () => {
+        tests/every-mode-says-which-passages-it-marks.test.ts established: a new
+        mode is already a compile error in `selectPassages`, and this makes it a
+        red test too. */
+-    for (const mode of MODES) {
++    for (const mode of BAND_MODES) {
+       const marked = proseFound(selectPassages(mode, slots()).found, QUOTED);
+       expect(marked.filter((f) => f.runId === "quotes"), `${mode} must mark the quotes`).toHaveLength(2);
+     }

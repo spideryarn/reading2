@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
-import { currentAt, rememberParam, threadParam, type Mode } from "../../params.js";
+import { type BandMode, currentAt, rememberParam, threadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
@@ -103,7 +103,7 @@ export function RememberBand({
   /** The reader's reading so far, for the quiz's "only what I've read". Absent when reading time is off. */
   readSoFar?: ReadSoFar | undefined;
   onJump(id: BlockId): void;
-  onMode(next: Mode): void;
+  onMode(next: BandMode): void;
   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
@@ -329,7 +329,7 @@ export function ConversationBand({
    * chat mode and vice versa. Opening one has to move `?mode=` as well as
    * `?thread=` or the conversation would be answered with the wrong prompt.
    */
-  onMode(next: Mode): void;
+  onMode(next: BandMode): void;
 }) {
   useRenderCount("ConversationBand");
   const {

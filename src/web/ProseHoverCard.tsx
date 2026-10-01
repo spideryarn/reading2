@@ -69,6 +69,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  InSpideryarn,
   readNoteOf,
   registryConflictNote,
   registryFilledMark,
@@ -164,17 +165,19 @@ function HoverCard({
   onFollowNote,
   lookUpLinks,
   canAddToShelf,
+  showInSpideryarn,
 }: {
   entries: GlossaryEntry[];
   /**
    * **The works the piece cites** — the whole list, so a citation mark in any
    * mode can find the work it belongs to.
    *
-   * Empty for a visitor, and that is the enforcement rather than a check
-   * beside it: `POLICY.citations` is `owners-only` and the public projection
-   * these rows' URLs would pass through is not built, so a shared link carries
-   * no citations, draws no marks, and reaches no branch of this card
-   * (docs/project/citations.md § Who sees it).
+   * Empty for a visitor, because Reader.tsx takes it only from the owner's
+   * read (`owner?.citations`). That is a choice in Reader, not a property of
+   * the data: a visitor's band has its own public projection since 260929c
+   * (src/web/visitor.ts), so the owner-only *parts* of a row are gated here
+   * by name too — see `showInSpideryarn` (docs/project/citations.md § Who
+   * sees it).
    *
    * A list rather than a `Map`, matching `entries`; `byWork` below does the
    * indexing once for the same reason `byId` does.
@@ -275,6 +278,14 @@ function HoverCard({
    * knowing about. src/web/reader-capability.ts is the written-up version.
    */
   canAddToShelf: boolean;
+  /**
+   * **May the citation half say a work is already an article here?** The
+   * band's *In your library* / *On the public shelf* line (plan 261001i).
+   * Owner-only, like the band's own `showInSpideryarn`: the public DTO never
+   * carries the field, and this is the second lock, so a malformed or
+   * future visitor payload still draws nothing (GPT Sol, plan review).
+   */
+  showInSpideryarn: boolean;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   /* The same indexing for the citations, for the same reason: `read` runs on
@@ -587,7 +598,7 @@ function HoverCard({
               "belong" to is not a thing the mark records, so picking one would
               be picking for the reader. */}
           {cited.map((w) => (
-            <CiteCard key={w.id} work={w} />
+            <CiteCard key={w.id} work={w} showInSpideryarn={showInSpideryarn} />
           ))}
           {/* The note in full, in place of the link half rather than under it.
               A marker IS a link into this article, so `LinkCard` would happily
@@ -1655,7 +1666,7 @@ function clip(text: string, max: number): string {
  * answer. The honest close is words — *cited in 7 paragraphs* — which is Fable's
  * call and costs nothing.
  */
-function CiteCard({ work }: { work: CitedWork }) {
+function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryarn: boolean }) {
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
@@ -1702,6 +1713,10 @@ function CiteCard({ work }: { work: CitedWork }) {
         </p>
       )}
       {line.conflict && <p className="prose-card-cite-read">{registryConflictNote(line.conflict)}</p>}
+      {/* Already an article here — the band's line, from the band's component
+          (plan 261001i). Owner-only, and gated by name as well as by the
+          data: the public DTO has no such field. */}
+      {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {/* The entry as the article gives it — journal, conference, volume
           (SPIDERYARN-READING2-6K, plan 260930i). Here in full rather than in a
           tooltip: a card is what a finger gets, and it has the room. */}

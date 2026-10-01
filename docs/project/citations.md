@@ -444,17 +444,31 @@ The design and GPT Sol's review of it are
 [260930b](../plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md).
 
 **Never another reader's private article, not even its existence.** The candidates are one query,
-[`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts), whose `where` is *mine or
-public*, readable and not archived, with the owner taken from the request rather than passed in. Of
+[`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts), whose `where` is *mine (archived
+or not), or public and not archived*, readable, with the owner taken from the request rather than passed in. Of
 a stranger's public article it matches only what its public page already publishes — the extracted
 title and byline, never the owner's rename, and the source address only as `publicSourceUrl` passes
 it, never the address it was requested from.
 
 **Matching**, strongest first ([`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts)): the
 work's DOI or arXiv id is the one the article's address *is* (a `doi.org` or `arxiv.org` path, parsed
-by host); the same request target (`sameTarget`); or the same extracted title by the identity
-normaliser `keysOf` uses — four words not contradicted by the first author, or three with the author
-agreeing. The reader's own copy wins over a public one.
+by host); the same id as the one **we found** for the reader's own uploaded PDF; the same request
+target (`sameTarget`); or the same extracted title by the identity normaliser `keysOf` uses — four
+words not contradicted by the first author, or three with the author agreeing. The reader's own copy
+wins over a public one, and their live copy over an archived one.
+
+**Since 2026-10-01** ([261001i](../plans/261001i-already-in-spideryarn-on-the-hover-card-archived-and-uploaded.md)),
+three things 260930b deferred:
+
+- **The hover card in the prose** draws the same line, from the same component.
+- **The reader's own archived articles** are matched too — archived is off the shelf, but the article
+  still opens for its owner by link — and the line says **In your library · archived**, so nobody
+  goes looking for it on the shelf. A stranger's archived article is still never a candidate.
+- **An uploaded PDF** has no address, so it could only match by title. Now the reader's own upload
+  also matches by the DOI or arXiv id we found for it (`upload_source_guesses`, a `canonical` row
+  only — one built from an identifier checked against the PDF, never a page that merely looked
+  like it). The tooltip says it is the id *we found*, not one the article gave. Only for the
+  reader's own: the guess is owner-only, and a stranger's public page does not publish it.
 
 It does not change *what we have read*: a copy here is not a reading of the work, so the row still
 says we have not read it. It is attached in the owner's `GET /api/citations` only — not in
@@ -494,7 +508,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* on the hover card, for a visitor, for an archived article, or used as the text *Look it up* reads; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Investigate* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

@@ -62,7 +62,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { MODE_CATALOG } from "../mode-catalog.js";
-import type { Mode } from "../modes.js";
+import type { BandMode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
 
@@ -76,7 +76,7 @@ export const HERALD_MS = 3000;
 
 /** One press of a mode. `nonce` differs between two presses of the same mode. */
 export interface HeraldPress {
-  mode: Mode;
+  mode: BandMode;
   nonce: number;
 }
 
@@ -141,7 +141,7 @@ function scrolls(el: Element): boolean {
   return overflowY === "auto" || overflowY === "scroll";
 }
 
-function Card({ mode, onDone }: { mode: Mode; onDone(): void }) {
+function Card({ mode, onDone }: { mode: BandMode; onDone(): void }) {
   const card = useRef<HTMLDivElement>(null);
   /* **Measured on arrival and again whenever the band changes shape**, because
      a foot can arrive after the card does: Glossary's *Find more* renders once

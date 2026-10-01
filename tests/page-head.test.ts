@@ -53,7 +53,7 @@ import { PUBLIC_ORIGIN, articleUrl } from "../src/urls.js";
    only definition there now is — see src/title-text.ts. `composeShell` calls
    this same function, so comparing it against `pageTitle()` below is a
    statement about what actually reaches the document. */
-import { DEFAULT_MODE, MODES } from "../src/modes.js";
+import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
 import { clamp, documentTitle } from "../src/title-text.js";
 import type { PublicHead } from "../src/store/public-reader.js";
 import { pageTitle } from "../src/web/page-title.js";
@@ -556,7 +556,7 @@ describe("the one title rule, applied by both sides", () => {
        this says it did not. A floor rather than an identity, so it survives the
        next mode without an edit. */
     expect(MODES.length, "MODES is empty or truncated — the loop below proves nothing").toBeGreaterThan(5);
-    for (const mode of MODES) {
+    for (const mode of BAND_MODES) {
       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });
       expect(d.title, mode).toBe(client);

@@ -1323,9 +1323,12 @@
        and pull the title left of its own bar. GPT Sol, T1. */
     max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l))),
     calc(
-      (100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
-          var(--text-pad-r) - var(--reading-measure)) / 2 + var(--text-pad-l) -
-        var(--masthead-pad-l)
+      /* `- --marg-reserve`: beside a band, Annotations' column keeps that much
+         of the bar's right clear of the reading cell, so the two boxes are no
+         longer the same width (0 in every other case). 261001i. */
+      (100% - var(--marg-reserve, 0px) + var(--masthead-pad-l) + var(--masthead-pad-r) -
+          var(--text-pad-l) - var(--text-pad-r) - var(--reading-measure)) / 2 +
+        var(--text-pad-l) - var(--masthead-pad-l)
     )
   );
   margin-right: auto;

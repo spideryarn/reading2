@@ -12,6 +12,7 @@ import {
   fitView,
   MARG_IDEAL,
   MARG_MIN,
+  MODE_MIN,
   MODE_PROSE_FLOOR,
   proseAloneMaxPx,
   SPINE_W,
@@ -103,9 +104,77 @@ describe("the annotations column", () => {
     expect(fitView({ windowWidth: 390, margin: true }).margW).toBe(0);
   });
 
-  it("is ignored when a band is open: one side at a time", () => {
-    const withBand = fitView({ windowWidth: 1600, modeBand: true, margin: true });
-    expect(withBand.margW).toBe(0);
-    expect(withBand.margReserve).toBe(0);
+  /* **Beside a band**, since 2026-10-01 —
+     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+  const SHAPES = ["standard", "structure", "wide"] as const;
+  const BANDED = CASES.flatMap((c) => SHAPES.map((bandShape) => ({ ...c, bandShape })));
+
+  it("draws the column beside an open band once the window is wide enough for all three", () => {
+    const both = fitView({ windowWidth: 1600, modeBand: true, margin: true });
+    expect(both.modeW).toBeGreaterThan(0);
+    expect(both.margW).toBeGreaterThanOrEqual(MARG_MIN);
+  });
+
+  it("with a band, never runs off the window, and the column starts at the table's right edge", () => {
+    let drawn = 0;
+    for (const c of BANDED) {
+      const fit = fitView({ ...c, modeBand: true, margin: true });
+      if (fit.margW === 0) continue;
+      drawn += 1;
+      const spine = fit.spine === "on" ? SPINE_W : 0;
+      /* With a band the table is not centred: it starts right after the band. */
+      const right = spine + fit.modeW + fit.tableW;
+      expect(fit.margLeft, JSON.stringify(c)).toBeCloseTo(right, 6);
+      expect(fit.margReserve, JSON.stringify(c)).toBeGreaterThanOrEqual(fit.margW);
+      expect(right + fit.margReserve, JSON.stringify(c)).toBeCloseTo(c.windowWidth, 6);
+      expect(fit.minWidth, JSON.stringify(c)).toBeLessThanOrEqual(c.windowWidth + 1e-6);
+      expect(fit.overflowing).toBe(false);
+    }
+    expect(drawn).toBeGreaterThan(500);
+  });
+
+  it("with a band, keeps the prose between the floor and Plain's cap, and the column in range", () => {
+    for (const c of BANDED) {
+      const fit = fitView({ ...c, modeBand: true, margin: true });
+      if (fit.margW === 0) continue;
+      expect(fit.tableW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_PROSE_FLOOR);
+      expect(fit.tableW, JSON.stringify(c)).toBeLessThanOrEqual(proseAloneMaxPx(c.rootFontPx));
+      expect(fit.margW).toBeGreaterThanOrEqual(MARG_MIN);
+      expect(fit.margW).toBeLessThanOrEqual(MARG_IDEAL);
+      expect(fit.modeW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_MIN);
+    }
+  });
+
+  it("with a band, gives the band exactly what it would get in a window narrower by the column", () => {
+    for (const c of BANDED) {
+      const fit = fitView({ ...c, modeBand: true, margin: true });
+      if (fit.margW === 0) continue;
+      const narrower = fitView({
+        ...c,
+        windowWidth: c.windowWidth - fit.margW,
+        modeBand: true,
+      });
+      expect(fit.modeW, JSON.stringify(c)).toBe(narrower.modeW);
+    }
+  });
+
+  it("the band wins below the threshold: the fit is the band's own", () => {
+    let yielded = 0;
+    for (const c of BANDED) {
+      const fit = fitView({ ...c, modeBand: true, margin: true });
+      if (fit.margW !== 0) continue;
+      yielded += 1;
+      expect(fit, JSON.stringify(c)).toEqual(fitView({ ...c, modeBand: true }));
+    }
+    expect(yielded).toBeGreaterThan(0);
+  });
+
+  it("the crossover is MODE_MIN + MODE_PROSE_FLOOR + MARG_MIN beside the rail: 900px with it", () => {
+    const at = MODE_MIN + MODE_PROSE_FLOOR + MARG_MIN + SPINE_W;
+    expect(at).toBe(900);
+    expect(fitView({ windowWidth: at, modeBand: true, margin: true }).margW).toBe(MARG_MIN);
+    expect(fitView({ windowWidth: at - 1, modeBand: true, margin: true }).margW).toBe(0);
+    expect(fitView({ windowWidth: 800, modeBand: true, margin: true }).modeW).toBeGreaterThan(0);
+    expect(fitView({ windowWidth: 390, modeBand: true, margin: true }).margW).toBe(0);
   });
 });

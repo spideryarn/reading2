@@ -59,7 +59,7 @@
  */
 import { useEffect } from "react";
 import { APP_NAME, MODE_LABEL, SEP, TAGLINE, VIEW_LABEL, articleTitle, clamp } from "../title-text.js";
-import { DEFAULT_MODE, type Mode } from "./params.js";
+import { type BandMode, DEFAULT_MODE } from "./params.js";
 import { CHANGELOG_LABEL, type AdminPage, type ArticleView } from "./router.js";
 
 /**
@@ -115,7 +115,7 @@ export type TitleSpec =
    * naming the field is what makes `{ view: "metadata", mode }` an error
    * wherever it is built.
    */
-  | { kind: "read"; title: string; view: "article"; mode: Mode }
+  | { kind: "read"; title: string; view: "article"; mode: BandMode }
   | {
       kind: "read";
       title: string;
