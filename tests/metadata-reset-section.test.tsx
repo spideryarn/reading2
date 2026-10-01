@@ -151,6 +151,22 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function answerRetry(id: string): Promise<Response> {
+  retries.push(id);
+  const answer = retryAnswer();
+  if (!holdRetry) return Promise.resolve(answer);
+  return new Promise<Response>((go) => {
+    releaseRetry = () => go(answer);
+  });
+}
+
+function answerReset(body: BodyInit | null | undefined): Promise<Response> {
+  resets.push(JSON.parse(String(body ?? "null")));
+  return Promise.resolve(
+    resetAnswer ? resetAnswer() : json({ jobId: "job-reset", regenerate: [] }, 202),
+  );
+}
+
 function stages(): StageState[] {
   return STEP_ORDER.map((step) => ({
     step,
@@ -238,18 +254,11 @@ beforeEach(() => {
       );
     }
     if (url === RESET_URL && method === "POST") {
-      resets.push(JSON.parse(String(init?.body ?? "null")));
-      if (resetAnswer) return Promise.resolve(resetAnswer());
-      return Promise.resolve(json({ jobId: "job-reset", regenerate: [] }, 202));
+      return answerReset(init?.body);
     }
     const retried = /^\/api\/jobs\/([^/]+)\/retry$/.exec(url);
     if (retried && method === "POST") {
-      retries.push(retried[1] ?? "");
-      const answer = retryAnswer();
-      if (!holdRetry) return Promise.resolve(answer);
-      return new Promise<Response>((go) => {
-        releaseRetry = () => go(answer);
-      });
+      return answerRetry(retried[1] ?? "");
     }
     const advanced = /^\/api\/jobs\/([^/]+)\/advance$/.exec(url);
     if (advanced && method === "POST") {
@@ -748,6 +757,23 @@ describe("the Start this article again section", () => {
     expect(retries).toEqual(["job-reset"]);
     expect(card()?.textContent).not.toContain("Starting");
     expect(button("Retry"), "the refused retry left no way to try again").toBeTruthy();
+
+    /* The visible button is not enough: a latch left held would let the reader
+       open this confirm and then silently ignore Yes. The second attempt also
+       makes this case fail on the old, unlatched implementation — its two
+       same-tick presses both reached the route. */
+    retryAnswer = () => json(resetJob("job-reset-2"));
+    holdRetry = true;
+    await press(button("Retry"));
+    const yes = button("Yes, try again");
+    await act(async () => {
+      yes?.click();
+      yes?.click();
+    });
+    expect(retries).toEqual(["job-reset", "job-reset"]);
+
+    await act(async () => releaseRetry?.());
+    await settle();
   });
 });
 

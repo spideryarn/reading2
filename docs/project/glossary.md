@@ -1154,14 +1154,15 @@ wrong.
 **Metadata says which, before the press.** Its Glossary row re-runs with the reader's current
 profile, so it can rewrite where the panel's *Find more* (which keeps the list's own setting) would
 append. `glossaryRunKind`, built on `existingFor`, gives the page that verdict through
-`ArticleMetadata.glossaryRun`, and the row says *Find more terms* or *writes a new list in place of
-this one* accordingly —
+`ArticleMetadata.glossaryRun`, and the row says *Find more terms* or *writes a new list* accordingly —
 [261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md) § 3.
 
 **There is no Undo for a *Find more*, deliberately.** It was designed (the same plan, § 2): restore
-the previous revision's list in a new revision, only when the current one is a pure append on it.
-It was not built. The pass only adds, the threshold hides the noise, Stop is on screen while it
-runs, and nobody has asked. The design is there if a reader does.
+the previous revision's list in a new revision, only when the provenance and pass count show the
+current one came from one compatible append pass. It was not built. The pass keeps the list and
+usually adds terms; deduplication can also refine an existing entry while keeping its id. The
+threshold hides noise, Stop is on screen while it runs, and nobody has asked. The design is there
+if a reader does.
 
 ## Staleness, and the force cascade
 

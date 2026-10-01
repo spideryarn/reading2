@@ -7,7 +7,7 @@ left behind. That work shipped (SPIDERYARN-READING2-64 and -65, notes
 [65](../user-feedback/260930_0745-start-again-is-the-rerun-sections-first-row.md)). This is the rest of
 it, briefed by the Overseer on 2026-10-01.
 
-Status: **1 and 3 built; 2 (Undo) designed and not built** — see § Outcome.
+Status: **1 and 3 built, on `dev`, not deployed; 2 (Undo) designed and not built** — see § Outcome.
 
 Prior work checked first: `git log origin/dev --since=2026-09-28`, the plans and feedback notes
 after 260930e, and `gjd-remote ls`. Nobody else has built any of the three.
@@ -62,8 +62,8 @@ reader profile.
 
   | `glossaryRun` | button | note under the name |
   |---|---|---|
-  | `append` | *Find more terms* | *Adds terms to this list and keeps every one already there* |
-  | `rewrite` | *Run it again* | *Writes a new list in place of this one: the article, the glossary's instructions or your profile has changed since it was made* |
+  | `append` | *Find more terms* | *Adds more terms to this list* |
+  | `rewrite` | *Run it again* | *Writes a new list, because the article, the glossary's instructions or your profile has changed* |
   | `first` | *Run it* | none |
   | `null`, or still loading | as today | today's hedge |
 
@@ -185,6 +185,17 @@ honest: the appended list is still there, one revision back.
   `resolveProfile` does and fails when the page's profile or fingerprint is changed (both mutations
   checked).
 
+- **Code, GPT Sol** ([261001i-glossary-undo-code-review-sol.md](261001i-glossary-undo-code-review-sol.md),
+  EXIT=0, with fixes): *keeps every one already there* was too strong, because deduplication can
+  refine an existing entry while keeping its id (taken: the note says *adds more terms*). The refusal
+  test passed without the latch (taken: it now proves the refusal releases the latch). A purpose-only
+  Postgres case was added, and the Postgres cases were isolated from each other. It also prefixed
+  both notes with *With things as they are now*, because the verdict is a prediction: **overruled
+  on wording**. The page re-reads after a run and after the purpose saves, which covers what a reader
+  changes from this page, and the prefix made both notes harder to read for a race that needs a
+  second tab. The docs say it is a prediction. Its "not ready" was only that its sandbox could not
+  reach Postgres or run the typecheck wrapper; both were run here.
+
 ## Outcome
 
 - **1 — built.** `useResetJob.retry`, with the double-press and refusal tests; the first went red
@@ -195,8 +206,24 @@ honest: the appended list is still there, one revision back.
   existed), tests/store-glossary-run-kind-pg.test.ts (green on arrival; went red when the page was
   given `blocksHash` instead of the article fingerprint, and when it was given no profile), and
   four cases in tests/metadata-rerun-section.test.tsx (red first).
-- **2 — not built**, on Sol's finding 5. A *Find more* only adds, the threshold already hides
-  low-ranked terms, Stop is on screen for the whole pass, and no reader has asked. Built properly it
-  needs an endpoint, an ancestry walk, a run-row swap, a content-hash guard and about ten Postgres
-  cases. The Overseer has the recommendation, and the design above is the starting point if Greg
-  wants it.
+- **2 — not built**, on Sol's finding 5. A *Find more* keeps the list and usually adds terms
+  (deduplication may refine an existing entry while keeping its id), the threshold already hides
+  low-ranked terms, Stop is on screen for the whole pass, and no reader has asked. Built properly
+  it needs an endpoint, an ancestry walk, a run-row swap, a content-hash guard and about ten
+  Postgres cases. The Overseer has the recommendation, and the design above is the starting point
+  if Greg wants it.
+
+## Checks
+
+- Browser, Playwright in a Sonnet subagent on its own dev server, against local articles in each
+  state:
+  - `love-spya-kwm06n` read *append*, `pow-spya-fvrt2e` read *rewrite* and `wisdom-spya-vkvttk` read
+    *first*, and each row's button and note matched its state.
+  - Saving a purpose sent a second metadata read and turned *append* into *rewrite*; clearing it
+    turned it back.
+  - At 390px the longest note wraps under the name, the button stays on the name's line, and
+    nothing overflows.
+  - The check ran on Sol's interim wording, which was longer than what shipped:
+    [append](261001i-shot-append-390.png), [rewrite](261001i-shot-rewrite-390.png),
+    [first](261001i-shot-first-390.png), and the 1280px versions beside them.
+- The focused suites (eight files, 186 tests, Postgres included) and `npm run typecheck` (exit 0).

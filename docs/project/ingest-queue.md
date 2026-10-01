@@ -823,7 +823,7 @@ a note under its name — it adds terms when `existingFor` accepts a matching ol
 new one when there is none, or when the article, the Glossary prompt or the reader profile changed.
 Since 2026-10-01 the page knows which: `ArticleMetadata.glossaryRun` is `existingFor`'s verdict for
 the profile the press sends (`glossaryRunKind`, src/glossary.ts), so the row says *Find more terms*
-when it will append and *Run it again* with *writes a new list in place of this one* when it will not,
+when it will append and *Run it again* with *writes a new list* when it will not,
 and keeps the two-sided note only when the server cannot say
 ([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
 a prediction from the state the page read, and the page reads again after a run and after the

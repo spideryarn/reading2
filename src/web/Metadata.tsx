@@ -1504,10 +1504,13 @@ const GLOSSARY_RUN: Record<
 > = {
   /* `null` label: the ordinary *Run it* / *Run it again* off `done`. */
   first: { label: null, note: null },
-  append: { label: "Find more terms", note: "Adds terms to this list and keeps every one already there" },
+  append: {
+    label: "Find more terms",
+    note: "Adds more terms to this list",
+  },
   rewrite: {
     label: null,
-    note: "Writes a new list in place of this one: the article, the glossary's instructions or your profile has changed since it was made",
+    note: "Writes a new list, because the article, the glossary's instructions or your profile has changed",
   },
 };
 

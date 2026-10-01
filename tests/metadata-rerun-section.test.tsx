@@ -457,7 +457,9 @@ describe("the Re-run AI processing section", () => {
     glossaryRun = "append";
     await open();
     expect(button("glossary", "Run it again")).toBeUndefined();
-    expect(row("glossary")?.textContent).toContain("Adds terms to this list");
+    expect(row("glossary")?.textContent).toContain(
+      "Adds more terms to this list",
+    );
     expect(row("glossary")?.textContent).not.toContain("otherwise");
     await press(button("glossary", "Find more terms"));
     expect(posts).toEqual([{ slug: SLUG, steps: ["glossary"], force: ["glossary"] }]);
@@ -468,7 +470,9 @@ describe("the Re-run AI processing section", () => {
     await open();
     expect(button("glossary", "Find more terms")).toBeUndefined();
     expect(button("glossary", "Run it again")).toBeTruthy();
-    expect(row("glossary")?.textContent).toContain("Writes a new list in place of this one");
+    expect(row("glossary")?.textContent).toContain(
+      "Writes a new list, because",
+    );
   });
 
   /**
@@ -498,7 +502,9 @@ describe("the Re-run AI processing section", () => {
       before,
     );
     expect(button("glossary", "Find more terms")).toBeUndefined();
-    expect(row("glossary")?.textContent).toContain("Writes a new list in place of this one");
+    expect(row("glossary")?.textContent).toContain(
+      "Writes a new list, because",
+    );
   });
 
   it("drops the hedge when there is no list yet", async () => {

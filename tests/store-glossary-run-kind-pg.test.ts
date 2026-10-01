@@ -15,7 +15,7 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { tryReadArticle } from "../src/article-input.js";
 import { closeDb, getDb } from "../src/db/client.js";
@@ -31,6 +31,7 @@ import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
 import { beginRevision, publishRevision, recordStepRun } from "../src/store/pg-revisions.js";
+import { pgShelfStore } from "../src/store/pg-shelf.js";
 import type { Glossary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -124,9 +125,15 @@ afterAll(async () => {
   await closeDb();
 });
 
+beforeEach(async () => {
+  await as(async () => {
+    await pgReaderStore.writeProfile(null);
+    await pgShelfStore.patch(SLUG, { purpose: null });
+  });
+});
+
 describe("ArticleMetadata.glossaryRun", () => {
   it("is append for a list stamped the way the glossary job stamps one", async () => {
-    await as(() => pgReaderStore.writeProfile(null));
     await publishGlossary(listFor({}));
     expect(await verdict()).toBe("append");
   }, 30_000);
@@ -140,13 +147,22 @@ describe("ArticleMetadata.glossaryRun", () => {
     expect(await verdict()).toBe("append");
   }, 30_000);
 
+  it("includes this article's purpose in the profile the job will use", async () => {
+    await as(() => pgShelfStore.patch(SLUG, { purpose: "To check the evidence." }));
+    const rendered = renderProfile({ profile: null, purpose: "To check the evidence." });
+    await publishGlossary(listFor({ profileHash: runProfileHash(rendered) }));
+    expect(await verdict()).toBe("append");
+  }, 30_000);
+
   it("is rewrite once the reader's profile has moved on", async () => {
+    await as(() => pgReaderStore.writeProfile("A physicist."));
+    const rendered = renderProfile({ profile: "A physicist.", purpose: null });
+    await publishGlossary(listFor({ profileHash: runProfileHash(rendered) }));
     await as(() => pgReaderStore.writeProfile("A historian."));
     expect(await verdict()).toBe("rewrite");
   }, 30_000);
 
   it("is rewrite for a list written from another version of the article", async () => {
-    await as(() => pgReaderStore.writeProfile(null));
     await publishGlossary(listFor({ sourceHash: "0000000000000000" }));
     expect(await verdict()).toBe("rewrite");
   }, 30_000);
