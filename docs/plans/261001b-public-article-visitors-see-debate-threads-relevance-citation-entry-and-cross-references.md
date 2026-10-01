@@ -1,6 +1,6 @@
 # Public-article visitors see Debate's threads and relevance, a citation's entry, and cross-references
 
-**Status as of 2026-10-01: built, awaiting GPT Sol's code review** — evidence: `tests/public-dto-owner-only-fields.test.ts`, the cross-references case in `tests/public-visibility-pg.test.ts`, and two cases in `tests/public-network-trace.test.tsx`, each seen red under a mutation of the code it covers.
+**Status as of 2026-10-01: shipped to `dev`** in `6c1b2cd2` and `7431f0fd` (GPT Sol's code-review fixes). Evidence: `tests/public-dto-owner-only-fields.test.ts`, the cross-references case in `tests/public-visibility-pg.test.ts`, and two cases in `tests/public-network-trace.test.tsx`, each seen red under a mutation of the code it covers. Not deployed; the Overseer deploys.
 
 ## The decision
 
@@ -228,3 +228,19 @@ Each finding was checked against the code before it was taken, and each held.
 Sol also confirmed three things. The leaf moves pull nothing forbidden into the public graph.
 `visitor.ts` needs no policy row, because cross-references are annotations, not a mode. The public
 namespace is `no-store`, so there are no cached payloads to migrate.
+
+## GPT Sol, code review (2026-10-01): "ready after the fixes"
+
+Sol fixed two findings in place. Each fix was read before it was kept.
+
+- **P1: a fresh crossrefs row is not a trustworthy one.** Freshness proves that the article inputs
+  are unchanged. It says nothing about the stored output. So a malformed row carrying a current
+  `sourceHash` could put arbitrary text on the wire through `phrase`. `publicCrossrefs` now keeps
+  a link only when its phrase occurs in the public source block's `text` or `html`, and both of
+  those already cross. A regression test went red first.
+- **P3:** `ShownWork.entry`'s comment still said the field never crosses. A visitor-arm
+  CitationsPanel test now covers the entry tooltip.
+
+Sol could not reach the local Postgres from its sandbox. The Postgres suite was run outside it,
+after the fixes, and passed: 10 files, 461 tests, including `public-visibility-pg`.
+

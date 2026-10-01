@@ -52,3 +52,7 @@ Left for you:
   cannot be checked against a page. Deferred in the plan.
 - The debates are small (3–6 sources on every stored one), so the box is often one theme and one
   key source. That is the searches' limit, not this step's.
+
+## Follow-up, 2026-10-01: visitors
+
+**Visitors now see the threads and key sources**, with one exception. If the public boundary held back any of the debate's sources (one with a password or a private address in its link), a visitor gets no threads at all. The threads were written with every source in view, so one could describe a source the visitor is not shown. Greg approved widening the public DTO (a listed defence), relayed by the Overseer. Shipped in `6c1b2cd2`, with GPT Sol's code-review fixes in `7431f0fd`. Plan: [261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md).
