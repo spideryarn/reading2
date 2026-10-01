@@ -285,8 +285,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
       "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
     how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` for the sub-mode (plan 260930i), which the bar opens on Gists. */
-    aliases: ["summarise", "summarize", "gist", "simple"],
+       `simple` was here for the plain-words sub-mode (plan 260930i) and opened
+       the outline instead; since 2026-10-01 the bar has a *Summary › Simple*
+       row that goes there (src/web/sub-modes.ts, plan 261001d). */
+    aliases: ["summarise", "summarize", "gist"],
     experimental: false,
   },
   diagram: {
@@ -326,11 +328,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
 
        **`quiz` is deliberately absent**, and it is the clearest example of the
        rule these aliases follow. Quiz is Remember's *other* sub-mode, and
-       opening the mode lands on Recall (`params.ts`); a command bar that opens
-       a mode exactly as its Dock button does cannot carry the reader to a
-       sub-mode, so `quiz` would name a destination and then not go there. It
-       comes back when a command can encode `{ mode: "remember", remember:
-       "quiz" }`, and not before. GPT Sol found this, 2026-09-07. */
+       opening the mode lands on Recall (`params.ts`), so `quiz` here would name
+       a destination and then not go there. GPT Sol found this, 2026-09-07.
+       Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
+       "quiz" }` — the bar's *Remember › Quiz* row (src/web/sub-modes.ts, plan
+       261001d) — and that row, not an alias here, is where `quiz` lands. */
     aliases: ["recall"],
     experimental: true,
   },

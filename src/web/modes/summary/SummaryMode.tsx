@@ -34,6 +34,7 @@ import type { Article, BlockId, SimpleLevel } from "../../../types.js";
 import { SIMPLE_LEVELS } from "../../../types.js";
 import type { PublicSimpleSummary } from "../../../public-types.js";
 import { armActivation } from "../../activation.js";
+import { SUMMARY_SUB_MODES } from "../../sub-modes.js";
 import { currentAt, deepParam, isPlainLevel, type SummaryView, summaryParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { buildSummaryTree } from "../../tree.js";
@@ -172,15 +173,15 @@ function useSummaryView() {
  */
 const PLAIN: Record<SimpleLevel, { label: string; what: string }> = {
   brief: {
-    label: "Brief",
+    label: SUMMARY_SUB_MODES.brief.label,
     what: "Short and very simple: what it is about, why it matters, and a key idea or two.",
   },
   simple: {
-    label: "Simple",
+    label: SUMMARY_SUB_MODES.simple.label,
     what: "Fairly simple: what it is about, why it matters and its key ideas, in a few short paragraphs of everyday words.",
   },
   fuller: {
-    label: "Fuller",
+    label: SUMMARY_SUB_MODES.fuller.label,
     what: "Moderately complex: a little longer, keeping more of the piece's own terms, still in plain words.",
   },
 };

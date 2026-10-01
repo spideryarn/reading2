@@ -28,6 +28,7 @@
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Mode } from "../modes.js";
+import { subModeWords, type SubMode } from "./sub-modes.js";
 
 /**
  * **What a row that is not a mode has to carry** — its own words, because
@@ -79,7 +80,8 @@ interface CommandWords {
 }
 
 /**
- * **A row the bar can offer**, and there are three kinds.
+ * **A row the bar can offer**, and there are four kinds — the fourth,
+ * `submode`, is 2026-10-01 and is argued on its arm below; it adds no verb.
  *
  * Greg, 2026-09-07: *"add the Changelog to the footer (e.g. of the Homepage,
  * and also as a command from the Command Bar."*
@@ -116,6 +118,13 @@ interface CommandWords {
  */
 export type Command =
   | { readonly kind: "mode"; readonly mode: Mode }
+  /* **A sub-mode, since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
+     Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram,
+     etc."* Like a mode row it carries only what it names, and its words come
+     from a registry (src/web/sub-modes.ts) rather than being written beside it.
+     No new verb: it opens a mode with one chip already pressed.
+     docs/plans/261001d-command-bar-lists-sub-modes.md. */
+  | { readonly kind: "submode"; readonly sub: SubMode }
   | (CommandWords & {
       readonly kind: "page";
       /** Where it goes. `CommandBar` hands this to `navigate`. */
@@ -194,6 +203,26 @@ export interface CommandText {
  * working as arms are added; one that names the majority does not.**
  */
 export function commandText(command: Command): CommandText {
+  if (command.kind === "submode") {
+    const words = subModeWords(command.sub);
+    /* The parent's name is a nickname, so typing `diagram` lists the pictures
+       under the Diagram row — the mode's own row still wins, on its label. And
+       the compound names a reader would say aloud — *Illustrated diagram*,
+       *Remember quiz*, *Quiz mode*, Greg's own two — because the ranking
+       compares the whole query against one word list at a time, so without
+       them `illustrated diagram` matched nothing. GPT Sol, plan review. */
+    const parent = MODE_LABEL[command.sub.mode];
+    return {
+      label: words.label,
+      aliases: [
+        parent,
+        `${words.label} ${parent}`,
+        `${parent} ${words.label}`,
+        `${words.label} mode`,
+      ],
+      description: words.description,
+    };
+  }
   if (command.kind !== "mode") return command;
   return {
     label: MODE_LABEL[command.mode],
@@ -235,6 +264,8 @@ export function commandId(command: Command): string {
   switch (command.kind) {
     case "mode":
       return `mode:${command.mode}`;
+    case "submode":
+      return `submode:${command.sub.mode}:${command.sub.view}`;
     case "page":
       return `page:${command.href}`;
     case "action":
@@ -254,6 +285,11 @@ export function commandId(command: Command): string {
  */
 export function modeCommand(mode: Mode): Command {
   return { kind: "mode", mode };
+}
+
+/** A sub-mode, as a command — `modeCommand`'s twin, for the same reason. */
+export function subModeCommand(sub: SubMode): Command {
+  return { kind: "submode", sub };
 }
 
 /**

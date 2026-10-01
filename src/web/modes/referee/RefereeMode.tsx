@@ -24,6 +24,7 @@ import {
 import type { Found } from "../../search-hits.js";
 import { REFEREE_VIEWS, refereeParam, type RefereeView } from "../../params.js";
 import { armActivationForRefereeView } from "../../activation.js";
+import { REFEREE_SUB_MODES } from "../../sub-modes.js";
 import { useRenderCount } from "../../perf.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 /* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
@@ -364,7 +365,7 @@ export function RefereeViews({
             className="tip-soon"
             content={
               <ControlTip
-                head={REFEREE_VIEW_LABEL[v]}
+                head={REFEREE_VIEW_LABEL(v)}
                 what={REFEREE_VIEW_TIP[v].what}
                 how={REFEREE_VIEW_TIP[v].how}
               />
@@ -398,7 +399,7 @@ export function RefereeViews({
                 onView(v);
               }}
             >
-              {REFEREE_VIEW_LABEL[v]}
+              {REFEREE_VIEW_LABEL(v)}
             </button>
           </Tooltip>
         ))}
@@ -451,21 +452,12 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
 };
 
 /**
- * What each button says.
- *
- * A total `Record` rather than a `map` over capitalised keys, so a fifth
- * sub-mode is a red compile here as well as in the switch below —
- * docs/project/typechecking.md. Not in src/web/referee-views.ts: that file is the
- * vocabulary a URL is parsed against and nothing server-side needs these words,
- * where `MODE_LABEL` had a second reader on the far side of the client/server
- * line and had to move.
+ * What each button says — the registry's words since 2026-10-01, so the chip
+ * and the command bar's row for it say the same thing (src/web/sub-modes.ts;
+ * docs/plans/261001d-command-bar-lists-sub-modes.md). Still a total `Record`
+ * there, so a fifth sub-mode is a red compile as well as in the switch below.
  */
-const REFEREE_VIEW_LABEL: Record<RefereeView, string> = {
-  criteria: "Criteria",
-  claims: "Claims",
-  mirror: "Mirror",
-  candidates: "Candidates",
-};
+const REFEREE_VIEW_LABEL = (v: RefereeView): string => REFEREE_SUB_MODES[v].label;
 
 /**
  * The selected sub-mode's panel.

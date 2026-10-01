@@ -143,6 +143,7 @@ import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
 import type { RememberView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
+import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 
@@ -571,6 +572,59 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 export function armActivationForRefereeView(slug: string, view: RefereeView): void {
   const target = REFEREE_TARGET[view];
   if (target) armActivation(slug, target);
+}
+
+/**
+ * **What a press on one sub-mode arms**, or `null` — the same answer each
+ * sub-mode's own chip gives, gathered into one function for the command bar's
+ * sub-mode rows (src/web/sub-modes.ts; Greg, SPIDERYARN-READING2-77). Each arm
+ * is the chip's rule, read from where that rule already lives:
+ *
+ *  - Remember: Quiz arms `quiz`, Recall nothing (QuizPanel.tsx §
+ *    `RememberSubModeToggle`);
+ *  - Diagram: `activationForDiagram` of the picture **the row names** — never of
+ *    whatever `?diagram=` said before the press, which is the orphaned-token bug
+ *    that function's docblock walks through;
+ *  - Referee: `REFEREE_TARGET`;
+ *  - Summary: every plain-words level arms the one `simple` step that writes them
+ *    all (SummaryMode.tsx § `SummaryControls`, and `bandTarget` below).
+ *
+ * `bandTarget` below gives the same answer for the band that mounts, which is
+ * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
+ * that the two agree for every sub-mode.
+ */
+export function subModeTarget(sub: SubMode): AutoRunTarget | null {
+  switch (sub.mode) {
+    case "remember":
+      return sub.view === "quiz" ? "quiz" : null;
+    case "diagram":
+      return activationForDiagram(sub.view);
+    case "referee":
+      return REFEREE_TARGET[sub.view] ?? null;
+    case "summary":
+      return "simple";
+    default: {
+      const unhandled: never = sub;
+      throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
+/** A press on a sub-mode row: arm what its chip would arm, or nothing. */
+export function armActivationForSubMode(slug: string, sub: SubMode): void {
+  const target = subModeTarget(sub);
+  if (target !== null) armActivation(slug, target);
+}
+
+/**
+ * **Would opening this sub-mode start work?** — `modeGenerates`, one level
+ * down, for the command bar's `generates` marker. Every Diagram picture says
+ * yes, for the reason `modeGenerates` gives the delegated row: Force, Drift and
+ * Trail arm nothing but buy an embedding on mount, and a marker that went quiet
+ * for them would be wrong in the direction that costs money.
+ */
+export function subModeGenerates(sub: SubMode): boolean {
+  return sub.mode === "diagram" || subModeTarget(sub) !== null;
 }
 
 /**
