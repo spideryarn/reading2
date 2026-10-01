@@ -72,3 +72,17 @@ the plan and of the code; the code reviewer fixed eight findings.
 ## Follow-up, 2026-10-01: visitors
 
 **Visitors now get the relevance judgement**, so *prioritised* and its bar work for them as they do for you. The authors-and-year decision (a lookup service) is still yours and stays in awaiting-approval.md. Greg approved widening the public DTO (a listed defence), relayed by the Overseer. Shipped in `6c1b2cd2`, with GPT Sol's code-review fixes in `7431f0fd`. Plan: [261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md).
+
+## Follow-up, 2026-10-01: authors and year
+
+Greg: *"If it's free, great. Tell me if you need my help. But don't abuse them."* **Shipped** on
+`dev`, not deployed. A Debate source whose address carries a DOI or arXiv id gets its authors and
+year from Crossref or DataCite. Both are free and need no key or account. We identify ourselves with
+hello@spideryarn.com. The record is kept only when its title agrees with the page's. The by-line and
+the date order prefer it, and say where it came from. Never a title search. Every answer is cached,
+so a work is asked about once, and a limiter held in the database keeps us well under both
+services' rate limits across every server instance. OpenAlex was not used: since February 2026 it
+needs an account and a key. Existing debates get it on a re-run from Metadata. The same lookup fills
+Citations rows' authors and year where the article gives none. Plan:
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md),
+stages 1 and 6.
