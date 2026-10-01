@@ -369,3 +369,28 @@
    2026-09-05. Structure's list face simply omits the rung until the sentence
    exists, so it needs no such mark; `UseArc.working` is still there for whatever wants to
    say so next. */
+
+/* **Expanded** — `?structure=expanded`, every part and section with its gist
+   (docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md). The one
+   time this band scrolls, and it is the LIST that scrolls rather than the band,
+   so the Fisheye / Expanded toggle above it stays where the reader left it.
+   `.mode-band` is already a flex column, so the list takes what is left. The
+   foot padding moves onto the list so the last row can scroll clear of the dock. */
+.mode-band.outln.outln-expanded .outln-list {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.75rem;
+}
+
+/* **The toggle's row, edge to edge.** `ModeSurface` puts `head` in a
+   `.band-head` as the band's first child, and this band is padded on three
+   sides (`--outln-pad-*` above), so without these margins the row's rule would
+   stop short of both edges. The right margin is the inset including the (i)'s
+   room when there is one, which `.band-head`'s own padding then gives back
+   (mode-band.css § `.has-about > .band-head`). The fisheye's fit measures from
+   the list's top, so this row is never counted as room
+   (OutlinePanel.tsx § `measure`). */
+.mode-band.outln > .band-head {
+  margin: -0.75rem calc(-1 * var(--outln-pad-r)) 0.5rem calc(-1 * var(--outln-pad-l));
+}

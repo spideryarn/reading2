@@ -890,7 +890,7 @@ td.text.kind-heading .blk-gutter[data-open] {
 .blk-help:hover { color: var(--highlight); }
 
 /* ------------------------------------------------------- reading time ----
-   **A hairline down the gutter's text-side edge, darker where you have spent
+   **A hairline down the gutter's text-side edge, stronger where you have spent
    longer.** docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
 
    > And then there's something in the vertical gutter in the text as well. I
@@ -903,7 +903,8 @@ td.text.kind-heading .blk-gutter[data-open] {
    `::after` on the gutter, and Greg could see it and not find out what it
    meant (SPIDERYARN-READING2-4S). `span.blk-read` is the gutter's *last* child
    — the column counts its controls with `:nth-child` from the front — and it
-   carries a `title`. Absolutely placed inside a box that is already
+   is explained by the reading view's shared rich card (BlockLinkCard.tsx,
+   since 2026-10-01; it carried a `title` before). Absolutely placed inside a box that is already
    `position: absolute`, so it is out of the grid and changes nothing about how
    many icons the row has room for (§ the column that truncates).
 
@@ -964,6 +965,18 @@ td.text.kind-heading .blk-gutter[data-open] {
   left: 0;
   width: 2px;
   pointer-events: none;
+  /* **`--ink`, so on this dark page the line gets *lighter* as you read** —
+     the foreground, near-white, and a token so it would invert with a light
+     theme if one ever came (styles/tokens.css is dark only today). Greg,
+     2026-10-01 (spya-mn3ruw): *"there's no visible line at first, and then for
+     stuff I've been reading a lot, there is a visible line"*.
+
+     Steeper than it was (0.1 a level, 0.1 → 0.4): `level × (level + 1) × 0.025`
+     is 0, .05, .15, .30, .50, so a glance barely shows and a passage read
+     through plainly does. **Zero at level 0, and it has to be**: this 2px line
+     is not clipped by its strip, which is zero wide on an unread row, so a
+     floor of even 0.02 would draw a faint line beside every paragraph (GPT
+     Sol, plan review of docs/plans/261001r-…). */
   background: var(--ink);
-  opacity: calc(var(--read, 0) * 0.1);
+  opacity: calc(var(--read, 0) * (var(--read, 0) + 1) * 0.025);
 }

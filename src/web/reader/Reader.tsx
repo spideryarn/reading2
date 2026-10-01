@@ -117,6 +117,7 @@ import {
   diagramParam,
   refereeParam,
   summaryParam,
+  structureParam,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -763,6 +764,7 @@ export function Reader({
     diagram: diagramParam,
     referee: refereeParam,
     summary: summaryParam,
+    structure: structureParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -1281,8 +1283,12 @@ export function Reader({
    * ↑ / ↓ step through one level of the tree, and *which* level is whichever
    * zone the pointer is over — the spine steps by part, the prose by paragraph;
    * see keynav.ts. It writes no state of its own: it scrolls, and the listener
-   * above notices, exactly as it would for a wheel. Off any tagged zone the
-   * stride falls back to the section, which is the unit `?at=` already stores.
+   * above notices, exactly as it would for a wheel. **Off any tagged zone the
+   * stride is one block too**, since 2026-10-01 — it was the section, so over a
+   * mode's band ↓ jumped a section while over the prose it stepped a paragraph.
+   * Greg, spya-b2wzjf: "up and down should always do the same thing, i.e. jump
+   * to the next block in the text". The section stride moved to ← / → in
+   * Structure. docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md.
    *
    * Suspended while the drawer is open. A reader looking at their questions is
    * not reading, and the article scrolling away underneath the dim — silently,
@@ -1302,9 +1308,13 @@ export function Reader({
   useArrowNav(
     nav,
     article.blocks,
-    sectionDepth(geometry),
+    geometry.leafDepth,
     !drawerOpen,
     trajectoryKeys ?? quizStepKeys,
+    /* …and the lowest-level sections while Structure is the mode — the unit
+       `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
+       keyboard.md § ← / → in Structure. */
+    mode === "structure" ? sectionDepth(geometry) : null,
   );
 
   /* **The door after the current stop's block** — TrajectoryPanel.tsx §
