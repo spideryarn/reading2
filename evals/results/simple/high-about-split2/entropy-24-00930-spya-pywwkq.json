@@ -1,0 +1,95 @@
+{
+  "arm": "high-about-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:21.574Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 17017,
+  "costUsd": 0.102462,
+  "tokens": {
+    "input": 40861,
+    "output": 2074,
+    "reasoning": 614
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 245,
+  "fullerWords": 311,
+  "paragraphs": [
+    {
+      "text": "This review asks how neural circuits actually process information, not just pass it along. It focuses on partial information decomposition (PID), a framework that splits the information two or more input neurons give about a target neuron into separate pieces: redundant (repeated across inputs), unique (only from one input), and synergistic (only visible when you look at the inputs jointly).",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The synergistic piece is the interesting one: it is information present only in the joint pattern of inputs, not reducible to any single source, and the authors treat it as a signature of actual computation rather than mere signal transfer. They argue this matters because simple measures like mutual information or transfer entropy show that information moved, but not that anything was built from it.",
+      "ids": [
+        "spya-e94ury",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "Using recordings from cortical cultures and from behaving macaques, they find synergy tracks feedforward connection strength, is far higher in densely connected \"rich club\" neurons, rises with recurrent (but not feedback) connections, and peaks when source neurons are moderately (not highly) correlated. In the monkey data, synergy also shifted with task phase, dropping in favor of redundancy during motor execution, which they read as the brain favoring reliable repeated signaling when precise action matters.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The piece also walks through the practical math (the partial information lattice), the unresolved problem of how exactly to define \"redundancy,\" available software tools, and limits of the method, including its explosive complexity as the number of inputs grows and unresolved estimation issues with finite data.",
+      "ids": [
+        "spya-k378fv",
+        "spya-rc76qn",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review of how information theory can be used to study computation in biological neural circuits, recorded as spiking activity from hundreds of neurons in cultures and in behaving animals. The central tool is partial information decomposition (PID), a framework that splits the information two or more \"source\" neurons carry about a \"target\" neuron into redundant (shared), unique, and synergistic (only visible jointly) components.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "The piece argues that standard measures like mutual information and transfer entropy only track correlation or directed flow between neurons, but don't show how a target neuron actually combines multiple inputs into something new. Synergy is the part that matters for that question: it's information about the target that no single source discloses alone, so it stands in for the idea of neurons doing actual computation on their inputs rather than just summing them.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "Applying PID to cortical cultures and to macaque motor cortex, the authors report several patterns. Synergy scales with feedforward transfer entropy (staying near a quarter of it), is 2.7x higher in triads inside \"rich club\" hubs (which hold ~88% of network-wide synergy despite being <40% of neurons), rises with recurrent connections but not feedback ones, and peaks when source neurons are only moderately correlated rather than highly correlated. In behaving monkeys, redundancy spiked specifically during movement execution, which the authors read as the brain duplicating a \"move\" command for reliable transmission.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The review also walks through practical issues: there's no single agreed way to define \"redundant information,\" available software differs in what data types and lattice sizes they support, and the full decomposition becomes computationally intractable as the number of source neurons grows. It closes by pointing to open directions: localizing PID to single moments in time, and extending it to multiple targets at once (integrated information decomposition), which has already been used to study loss of consciousness in fMRI data.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-j6s6fp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

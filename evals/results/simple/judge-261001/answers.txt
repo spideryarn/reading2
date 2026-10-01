@@ -1,0 +1,36 @@
+# The blind judge's answers (a fresh Opus subagent that read only pairs.md), 2026-10-01.
+# id | Q1 | Q2 (fidelity) — reasons are summarised in plan 261001b § Ledger.
+T1-1 | Y | BOTH
+T1-2 | Y | NONE
+T1-3 | X | NONE
+T1-4 | X | BOTH
+T1-5 | X | BOTH
+T2-6 | X
+T2-7 | Y
+T2-8 | Y
+T2-9 | X
+T2-10 | X
+T2-11 | Y
+T2-12 | Y
+T2-13 | Y
+T2-14 | Y
+T2-15 | X
+T2-16 | Y
+T2-17 | X
+T3-18 | Y | BOTH
+T3-19 | X | BOTH
+T3-20 | SAME | NONE
+T3-21 | X | NONE
+T3-22 | SAME | BOTH
+T3-23 | X | BOTH
+T4-24 | P < Q < R
+T4-25 | R < Q < P
+T4-26 | P < Q < R
+T4-27 | Q < P < R
+T4-28 | R < Q < P
+T4-29 | R < Q < P
+T4-30 | Q < P < R
+T4-31 | Q < P < R
+T4-32 | Q < P < R
+T4-33 | R < Q < P
+T4-34 | R < P < Q

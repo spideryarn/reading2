@@ -1,0 +1,88 @@
+{
+  "arm": "high-about-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:21.682Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 12343,
+  "costUsd": 0.044002,
+  "tokens": {
+    "input": 12041,
+    "output": 1992,
+    "reasoning": 775
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 185,
+  "fullerWords": 280,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about how two ideas people lump together as \"distributed representations\" actually work: composition, where independent features combine to represent things, and superposition, where a network packs more features into a layer than it has neurons. The piece argues these are two distinct, separable strategies rather than one continuum from \"local\" to \"distributed\" coding.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The note argues this distinction matters for actually reverse-engineering networks. Composition lets you describe a representation with a linear number of independent features instead of an exponential space of combinations, which is what makes mechanistic understanding tractable.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using Thorpe's classic neuron-coding examples, it shows composition buys fewer neurons and lets you generalize from one combination to another, but costs you the ability to pack in unrelated features. Superposition does the opposite: it stores far more features than there are neurons, at the cost of losing easy linear readout and blocking composition. The two trade off against the same fixed budget of representational space, though they can be partly mixed when features are sparse, since sparsity leaves unused room to tuck extra features into superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-qbuyka"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah, posted in May 2023, about what \"distributed representations\" actually means in neural networks. The term is used in both neuroscience and machine learning, and Olah argues it actually hides two different ideas that get conflated: composition and superposition.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The piece says this distinction matters because pulling a network's internal activity apart into separate, independent pieces is what lets you escape the curse of dimensionality: the problem that as you add more dimensions, the space of possible combinations explodes too fast to examine directly. That separation is treated as necessary for actually understanding what a network is doing inside, rather than just observing its outputs.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using Thorpe's classic neuron examples for coding colored shapes, Olah shows composition (separate neurons for color and shape, combined to describe an object) and superposition (packing more concepts into a layer than it has neurons, retrievable only with a nonlinearity) pull in opposite directions. Composition needs exponentially many neurons to cover all combinations but generalizes well and stays easy to interpret; superposition packs exponentially more items into few neurons but can't be read out with a simple linear probe, a method of checking what a network represents by testing if a straight-line combination of neurons predicts it, and can't represent in-between cases.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-armg2f",
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "text": "Olah also shows the two strategies can be partly mixed: when features are sparse, meaning most combinations never actually occur together, the unused \"holes\" in the compositional space can be reused to store other features in superposition. The note closes by stressing that because composition and superposition have such different properties, telling them apart is important for any real effort to reverse-engineer how networks represent things.",
+      "ids": [
+        "spya-vefv29",
+        "spya-ajbh7f",
+        "spya-st3tz8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

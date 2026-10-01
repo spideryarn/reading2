@@ -1,0 +1,97 @@
+{
+  "arm": "high-goalB-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:24.413Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 19700,
+  "costUsd": 0.145054,
+  "tokens": {
+    "input": 57677,
+    "output": 2970,
+    "reasoning": 1296
+  },
+  "ok": true,
+  "reader": "goalB",
+  "words": 258,
+  "fullerWords": 404,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's essay on GPT-3, OpenAI's 175-billion-parameter language model, as evidence for the 'scaling hypothesis': that simple architectures, given enough data, parameters, and compute, will keep gaining new abilities without any special engineering. GPT-3's most striking trait is unplanned meta-learning — it follows instructions and solves new tasks from a few examples, despite being trained only to predict the next word in internet text.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because it's a working demonstration of an old, once-fringe idea: intelligence may be 'just' scale applied to generic learning algorithms, and the loss curves show no sign of bending even at GPT-3's size, meaning much larger and more capable models remain cheap relative to institutional budgets. It frames this as a live forecasting failure: mainstream AI researchers dismissed scaling for years, offered no falsifiable predictions, and Gwern argues their reassurances about AI risk are correspondingly worthless.",
+      "ids": [
+        "spya-asr663",
+        "spya-dfjr4c",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "On who should worry, the essay contrasts OpenAI, which is betting everything on scale as an ideological wager, with DeepMind and others who doubt scaling alone gets you there and are proceeding more cautiously — meaning the pace of risk depends on which labs commit resources and belief, not just on hardware existing.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-scr8jb"
+      ]
+    },
+    {
+      "text": "An appendix extends the risk case further: because these models are trained on human-generated text full of agents pursuing goals, they learn to imitate agency itself, and Gwern argues this can't be cleanly filtered out — agency is a useful, convergent shortcut for prediction, so bigger 'tool' models may keep becoming more agent-like whether or not anyone intends it.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-denmtt",
+        "spya-hjpau9"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's 2020 essay on GPT-3, the large language model from OpenAI, and what it implies about the path to AGI (artificial general intelligence, machines with broad human-like ability). GPT-3 was trained only to predict the next word in text, yet it turned out to follow instructions and learn new tasks from a few examples, a capacity called meta-learning that its predecessor GPT-2 never showed. The essay argues this supports the scaling hypothesis: that just making neural networks and their training data much bigger, without new tricks, is enough to produce qualitatively new abilities.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The essay's case for why this matters is less about GPT-3 itself and more about who gets to be trusted on AI risk. It argues that AI researchers' public forecasts show no working model of why GPT-3's abilities appeared, so their reassurances would sound the same whether or not the scaling hypothesis is true. It likens their calm, confident tone to past expert reassurances that turned out wrong, such as a 1940 magazine telling readers not to worry about the atomic bomb.",
+      "ids": [
+        "spya-b93jbz",
+        "spya-m9r8zx",
+        "spya-zyncdd"
+      ]
+    },
+    {
+      "text": "A recurring idea is the \"blessings of scale\": problems that are hard for small neural networks get easier, not harder, as networks and data grow, with stability, generalization, and meta-learning emerging in turn. The essay explains this by treating a big model as an ensemble of many overlapping sub-models; memorized shortcuts win early on small data, but genuinely general solutions win out once data and scale are large enough. It also notes that major labs disagree on this: OpenAI is described as betting everything on scaling, while DeepMind is described as still believing the right algorithms must be found piece by piece, which is why the essay says no one else built something like GPT-3.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vr9q2p"
+      ]
+    },
+    {
+      "text": "An appendix extends the risk question directly: because GPT-3 learned by imitating huge amounts of human-written text, and that text is full of agents planning and acting, the model itself starts to behave like an agent when prompted to role-play one, including harmful roles. The essay argues this agency is not a separate add-on that can simply be filtered out of the training data, since agency is a matter of degree that can be useful for modeling many things, not just obvious agents. It concludes there is no easy way to guarantee a powerful \"tool\" system stays free of this, so the more capable such systems get, the more this risk applies.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-cw7jg4",
+        "spya-hjpau9"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "_note": "Declared 2026-10-01 before any after-run (plan 261001b § Ledger, P1-5). A synthetic reader shaped like the admin's report — not anybody's real profile. `known` is what the About says this reader already knows, so a paragraph explaining it counts against the prompt; `goals` are two different reasons for reading each article, and `bears` the part of the piece each goal should pull to the front.",
+  "about": "CTO of a small software company. Background in cognitive science and machine learning; I build products on large language models every day.",
+  "known": [
+    "large language model / LLM",
+    "neural network, neuron (artificial), layer, parameters, weights",
+    "training, gradient descent, compute",
+    "entropy and mutual information (information theory basics)",
+    "the brain has neurons that fire"
+  ],
+  "goals": {
+    "scaling-hypothesis": {
+      "A": { "goal": "Whether making models bigger is enough on its own to get more general intelligence.", "bears": "the scaling-laws evidence and the argument that scale alone yields generality" },
+      "B": { "goal": "What the essay says about the risks, and who should be worried.", "bears": "the risk and safety discussion, and who the essay says is unprepared" }
+    },
+    "olah-a4-spya-ujr7p0": {
+      "A": { "goal": "How superposition lets a network represent more features than it has neurons.", "bears": "the superposition mechanism and sparsity" },
+      "B": { "goal": "What this means for interpreting real models in practice.", "bears": "the consequences for interpretability: polysemantic neurons, the difficulty of reading features" }
+    },
+    "entropy-24-00930-spya-pywwkq": {
+      "A": { "goal": "What these methods reveal about how neurons combine information.", "bears": "synergy, redundancy and unique information as findings about neural coding" },
+      "B": { "goal": "The practical limits of using these methods on real recordings.", "bears": "the practical considerations: data requirements, estimation, choice of measure" }
+    }
+  }
+}

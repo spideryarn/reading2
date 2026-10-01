@@ -1,0 +1,60 @@
+{
+  "arm": "high-15-beforeB",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:04.983Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 9476,
+  "costUsd": 0.047984,
+  "tokens": {
+    "input": 19852,
+    "output": 828,
+    "reasoning": 197
+  },
+  "ok": true,
+  "words": 254,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how brains handle information. It explains a method called partial information decomposition, or PID, which helps researchers study how neurons combine signals from other neurons. The article walks through the math ideas behind PID and then shows examples from real experiments on brain cells.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because scientists still do not fully understand how neurons turn incoming signals into decisions, like whether to fire or not. The article says new recording tools now let researchers track hundreds of neurons at once, but they need better math tools to make sense of all that data. PID is offered as one such tool for uncovering the hidden patterns of neural \"computation.\"",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The key idea is that when two neurons send signals to a third neuron, their combined information can be split into three types: redundant (information both neurons carry, so it is repeated), unique (information only one neuron carries), and synergistic (information only visible when you look at both neurons together, like a pattern). Synergy is treated as a sign of real information processing, since it cannot be explained by either neuron alone.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using real brain recordings, the authors found that synergy was higher among strongly connected \"rich club\" neurons, increased with more feedback loops between source neurons, and was highest when input neurons were moderately similar to each other. In monkeys performing tasks, the balance of redundant versus synergistic information also shifted depending on what the brain was doing at the time, such as during movement versus memory.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

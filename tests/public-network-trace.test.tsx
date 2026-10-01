@@ -1125,10 +1125,10 @@ describe("a signed-out browser on a shared document", () => {
 
     expect(host.textContent).toContain(PUBLIC_GIST);
     expect(host.textContent).not.toContain("Nobody has built");
-    /* And the Depth control, which is the one thing the panel still offers —
-       so this cannot pass on a band that rendered its heading and nothing
-       else. */
-    expect(host.textContent).toContain("Depth");
+    /* And the Parts | Sections control, which is the one thing the outline
+       offers — so this cannot pass on a band that rendered its heading and
+       nothing else. (It was labelled "Depth" until plan 261001b.) */
+    expect(host.querySelector(".summ-seg .summ-pill")?.textContent).toBe("Parts");
     expect(outsidePublic()).toEqual([]);
   });
 
@@ -1305,10 +1305,21 @@ describe("a signed-out browser on a shared document", () => {
     served = {
       ...ARTICLE,
       simpleSummary: {
-        paragraphs: [
-          { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
-          { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
-        ],
+        levels: {
+          brief: [
+            { text: "The short one.", ids: ["spya-cccccc"] },
+            { text: "Why.", ids: ["spya-cccccc"] },
+          ],
+          simple: [
+            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
+            { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
+          ],
+          fuller: [
+            { text: "The fuller version says what the piece is about.", ids: ["spya-cccccc"] },
+            { text: "Then why it matters.", ids: ["spya-cccccc"] },
+            { text: "Then its key idea.", ids: ["spya-cccccc"] },
+          ],
+        },
       },
     };
     await open("?mode=summary&summary=simple");

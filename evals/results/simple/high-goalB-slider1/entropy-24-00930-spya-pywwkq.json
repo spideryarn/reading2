@@ -1,0 +1,20 @@
+{
+  "arm": "high-goalB-slider1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-09-30T23:52:59.865Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 8716,
+  "costUsd": 0.04793,
+  "tokens": {
+    "input": 20480,
+    "output": 697,
+    "reasoning": 286
+  },
+  "ok": false,
+  "error": "the model's \"brief\" answer is not valid JSON: a complete JSON document ends at position 564, and 590 more characters follow it — 1154 characters in all. So what surrounds the document is the problem, not the document"
+}

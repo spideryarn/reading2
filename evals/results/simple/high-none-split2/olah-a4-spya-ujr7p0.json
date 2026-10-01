@@ -1,0 +1,96 @@
+{
+  "arm": "high-none-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:20.847Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 12548,
+  "costUsd": 0.046926,
+  "tokens": {
+    "input": 11823,
+    "output": 2328,
+    "reasoning": 1052
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 224,
+  "fullerWords": 253,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about \"distributed representations,\" an idea from neuroscience and AI where information is spread across many neurons instead of one neuron standing for one thing. The note asks how this classic idea relates to \"superposition,\" a pattern where a network packs more things to represent than it has neurons for. It argues these two are often lumped together but are actually different strategies.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The author says this matters because breaking a network's representations into separate, independent pieces is necessary to avoid getting lost in an impossibly huge space of combinations, and to truly understand how neural networks work inside.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "\"Composition\" means combining separate features, like color and shape, so a small number of features can build an exponentially larger number of objects; it generalizes well and can even represent in-between cases, like a purple shape. \"Superposition\" instead squeezes many unrelated things into few neurons, fitting far more items than there are neurons, but you lose the ability to cleanly read out individual features with a simple linear check.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g8cztv",
+        "spya-v5n7sx"
+      ]
+    },
+    {
+      "text": "The piece argues composition and superposition actually compete for the same limited space, so maximizing one costs the other. Still, networks can mix both: when features are sparse, meaning combinations rarely happen together, the unused \"holes\" in the compositional space can be used to store other features in superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-vefv29",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah, published May 4, 2023, about how a neural network's \"distributed representations\" — ways of spreading information across many neurons rather than one neuron per idea — actually work. It uses a simple example: how might neurons represent shapes of different colors, like a red circle or blue square?",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-u4qtn4"
+      ]
+    },
+    {
+      "text": "The piece argues this question matters because breaking down a network's representations into separate, understandable pieces is necessary to truly understand how neural networks work, rather than getting lost in an impossibly huge space of possibilities. Telling apart two different strategies networks use is a step toward that goal.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The note claims \"distributed representations\" really mix two different strategies. In composition, separate features (like \"green\" and \"square\") combine to build objects; this needs fewer neurons, lets a network reuse what it learns about one combination for others, and can represent in-between cases like a purplish shape. In superposition, many more things are packed into neurons than there are neurons, but you can no longer easily pick out individual features with a simple linear rule, and a nonlinear step is needed to unpack them.",
+      "ids": [
+        "spya-qcd003",
+        "spya-s9fc6n",
+        "spya-v5n7sx"
+      ]
+    },
+    {
+      "text": "These two strategies compete for the same limited space of possible patterns: fully combinable features can only fill a small number of them, while superposition can store exponentially more items, but only if they don't freely combine. The note shows the two can partly mix when features are sparse, meaning most combinations never actually occur, leaving room to tuck extra features into the gaps.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-qbuyka"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

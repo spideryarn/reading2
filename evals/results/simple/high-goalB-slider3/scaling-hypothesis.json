@@ -1,0 +1,120 @@
+{
+  "arm": "high-goalB-slider3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "0595d4e966154a0784579154007599cb1e7f89b8b57ff171be7a725f06523f88",
+  "at": "2026-10-01T00:36:25.104Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 14809,
+  "costUsd": 0.202386,
+  "tokens": {
+    "input": 86538,
+    "output": 2931,
+    "reasoning": 941
+  },
+  "ok": true,
+  "reader": "goalB",
+  "words": 282,
+  "fullerWords": 291,
+  "briefWords": 188,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's 2020 essay arguing that GPT-3's jump in ability came purely from scaling up a known architecture with more data and compute, not from new tricks. He treats this as evidence for the \"scaling hypothesis\": that intelligence emerges from simple learning algorithms run at sufficient scale, and that AGI timelines predicted decades ago by scaling advocates are holding up.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The piece's risk argument is less about GPT-3 itself and more about forecasters. It says mainstream AI researchers have no real model of why GPT-3 worked or what would count as alarming progress, so their public reassurances about safety are empty — they'd say the same thing whether or not scaling leads somewhere dangerous. It compares their calm, confident tone to past \"it can't happen\" dismissals of the atomic bomb.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-zyncdd",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "Gwern frames progress as a bet: OpenAI staked its strategy on scaling working, while DeepMind and Google Brain doubted it and built piecemeal instead — meaning whoever is actually willing to scale aggressively, not whoever has the most compute, determines what happens next. He also argues bigger models get more sample-efficient and more general rather than just more fact-filled, which is why he thinks the trend is worth taking seriously rather than dismissing as \"just\" pattern-matching.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "An appendix extends the worry to agency: because models like GPT-3 are trained on text produced by goal-pursuing humans, they learn to imitate agents, and can act like one once given a way to take actions, such as a robot or web access. Gwern argues this can't be fixed by filtering out \"agentic\" data, since agency isn't a separate ingredient but a useful pattern a large enough model may reconstruct from almost any rich data.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-cw7jg4",
+        "spya-hjpau9"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's essay on GPT-3, the large language model OpenAI released in 2020, and what its success implies about how to build more capable AI. The core claim is the \"scaling hypothesis\": once you have a flexible architecture, just making neural networks bigger, feeding them more data, and giving them more compute produces increasingly general intelligence, without needing new clever algorithms.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because GPT-3 wasn't just better at known tasks, it showed unplanned \"meta-learning\": it could pick up new tasks from a few examples in a prompt, something nobody trained it to do. Gwern frames this as one instance of a broader pattern, \"blessings of scale\": problems that are impossible for small models become easy at large scale, as models stop memorizing shortcuts and start forming more general, human-like internal algorithms.",
+      "ids": [
+        "spya-jwq3zr",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "On who should be worried: the essay contrasts OpenAI, which bet everything on scaling being the path to advanced AI, with DeepMind, which it says holds a \"weak\" version of the hypothesis and expects progress to require assembling brain-like modules piece by piece. Gwern also goes after AI forecasters and researchers generally, arguing their public reassurances that risk is far off were wrong before and offer no falsifiable model of when capabilities will appear.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-b93jbz"
+      ]
+    },
+    {
+      "text": "An appendix extends the risk argument further: because GPT-3 is trained on huge amounts of human-generated text describing people acting toward goals, it learns to imitate agents, and when prompted it can behave like one, including role-playing harmful plans. Gwern argues this \"agency\" isn't a special ingredient you can filter out of training data; it's a continuum that can emerge from any sufficiently rich, scaled-up prediction problem, making it hard to guarantee that a \"tool\" model won't act like an agent.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-cw7jg4",
+        "spya-msngfz"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece argues GPT-3's jump in size produced real qualitative gains, not just more memorized facts: it learned to follow instructions and pick up new tasks from a few examples, without being built for that. The author calls this the scaling hypothesis: intelligence may just be simple neural networks and learning rules, run at huge scale on huge data, with no special architecture needed.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "On risk: the essay says AI researchers' public reassurances are empty, since they have no real model of why GPT-3 worked or what would count as alarming next, and would say the same things whether or not scaling leads to dangerous capability. It also argues powerful text models trained on human-generated data inevitably pick up agency, since so much of that data describes agents planning and acting, and this can carry over even into physics-like or rule-based data.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-mkbrjp"
+      ]
+    },
+    {
+      "text": "On who should worry: the piece says OpenAI bet everything on scaling being true, while Google Brain and DeepMind doubted it or pursued it piecemeal, so progress depends less on hardware, which is cheap enough already, than on which organizations have the conviction to scale aggressively.",
+      "ids": [
+        "spya-khnsat",
+        "spya-arrq35",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

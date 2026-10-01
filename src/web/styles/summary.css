@@ -83,6 +83,72 @@
    bottom of the panel would buy. */
 .summ-pill:disabled { opacity: 0.4; cursor: default; }
 
+/* ---- the one row: two groups, no labels (plan 261001b) ----
+   Greg, 2026-09-30: *"avoid wasting vertical space, and use the UI design to
+   give the user a clue about how they work and are related to each other"*
+   (SPIDERYARN-READING2-7A). Each group is a `<fieldset>` whose legend only a
+   screen reader hears; the gap between groups is what says "a different
+   choice". */
+/* **One row**, wrapping rather than scrolling at the band's narrowest (18rem,
+   MODE_MIN in layout.ts): the slider drops to a second line before anything
+   hides. */
+.summ-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
+}
+.summ-seg {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+/* **Parts | Sections joined into one segment**: they share a border, so they
+   read as one scale rather than two unrelated buttons. */
+.summ-seg > .summ-pill { border-radius: 0; }
+.summ-seg > .summ-pill:first-of-type { border-radius: 999px 0 0 999px; }
+.summ-seg > .summ-pill:last-of-type { border-radius: 0 999px 999px 0; }
+.summ-seg > .summ-pill + .summ-pill { margin-left: -1px; }
+/* Parts while Sections is chosen: included, not chosen — the ladder's lower
+   rung, lit more softly than the one pressed. `aria-pressed` stays false. */
+.summ-pill.included {
+  border-color: var(--highlight);
+  background: color-mix(in srgb, var(--highlight-wash) 45%, transparent);
+  color: var(--ink);
+}
+/* The chosen pill's border sits above its neighbour's where they overlap. */
+.summ-seg > .summ-pill.on { position: relative; z-index: 1; }
+
+/* **The plain-words slider** (SPIDERYARN-READING2-7J): three stops, shorter
+   and plainer to the left. Faint while the outline shows — it is resting on
+   a level, not showing one — and full strength while a level is open. */
+.summ-slider-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+.summ-slider input[type="range"] {
+  width: 4.6rem;
+  margin: 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.summ-slider-name {
+  min-width: 3.1rem;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+.summ-slider:not(.on) input[type="range"] { opacity: 0.5; }
+.summ-slider.on .summ-slider-name { color: var(--highlight-ink); }
+.summ-slider:not(.on) .summ-slider-track:hover input[type="range"] { opacity: 0.8; }
+
+/* The *written for you* badge, pushed to the row's far end. */
+.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
+
 /* ---- the outline ---- */
 /* The reader's own scroller, and also the one the panel moves itself to follow
    the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
@@ -375,15 +441,6 @@ a.summ-title:hover { color: var(--highlight-ink); }
   gap: 0.2rem 0.5rem;
   margin-top: 0.3rem;
   font-size: 0.81rem;
-}
-/* What it is, said once, quietly, under the last door. */
-.simple-foot {
-  margin: 1.1rem 0 0;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.45;
 }
 .simple-job { margin-top: 0.7rem; }
 

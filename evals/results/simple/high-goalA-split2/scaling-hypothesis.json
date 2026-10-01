@@ -1,0 +1,88 @@
+{
+  "arm": "high-goalA-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:23.527Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 40329,
+  "costUsd": 0.158858,
+  "tokens": {
+    "input": 57689,
+    "output": 4348,
+    "reasoning": 2836
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 248,
+  "fullerWords": 341,
+  "paragraphs": [
+    {
+      "text": "This piece argues that GPT-3's jump from GPT-2 wasn't just more facts learned, but a qualitative shift: it began following instructions and learning new tasks from a few examples, despite never being trained to do so. The author treats this as evidence for the \"scaling hypothesis\": that intelligence may just be simple neural networks and learning rules, applied at a scale beyond what's been tried, with no need for clever new architectures.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "Why it matters: GPT-3 is expensive by ordinary research standards but still cheap next to military or corporate budgets, meaning far larger models are affordable. The scaling curves (loss falling smoothly as compute, data, and parameters grow) have not bent yet, even after crossing 175 billion parameters, so nobody can say where the returns stop. The author also argues that most AI forecasters have no real model of why this works and would say the same things whether or not the hypothesis were true, making their risk assessments empty.",
+      "ids": [
+        "spya-asr663",
+        "spya-sctj6d",
+        "spya-rbx2kz"
+      ]
+    },
+    {
+      "text": "Two arguments back the hypothesis. First, a big network may act like a huge ensemble of smaller sub-models; easy shortcuts win early, but on large, varied enough data, only genuinely general solutions keep winning, so generalization emerges without being designed in. Second, a \"pretraining thesis\": since text prediction ultimately requires modeling causality, reasoning, and the world, squeezing out the last fraction of prediction error may require something like real understanding. The piece also compares OpenAI's bet on scaling against DeepMind's more piecemeal, module-by-module approach to building intelligence.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-nhgv5g",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This essay by Gwern uses the 2020 release of GPT-3 to argue for the \"scaling hypothesis\": that taking an existing neural network architecture and simply making it, its training data, and its compute much larger is enough to produce more general, human-like intelligence, without inventing new algorithms. GPT-3 was just an old text-prediction design trained on a bigger scale than anything before, yet its abilities jumped far beyond its predecessor GPT-2.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-m3gtj6"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 was trained only to predict the next word in text, yet it spontaneously showed meta-learning: following instructions and picking up new tasks from a few examples given in the prompt, something never built into its design. The piece argues this shows scale alone can substitute for hand-crafted methods, and that large models trained this way could become reusable components dropped into other systems.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "The proposed mechanism is what the piece calls \"blessings of scale\": unlike most engineering, in deep learning hard problems get easier as the model, data, and compute grow, rather than harder. A huge model effectively contains an enormous ensemble of smaller sub-models; on small data the ones that merely memorize surface patterns win, but on internet-scale data those sub-models get too costly, so ones that learn genuinely general rules end up winning instead. This connects to the \"pretraining thesis\": to predict text almost as well as a human, easy tricks like spelling and word order eventually run out, and only real understanding of things like causality and logic keeps shrinking the remaining error.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "The piece backs this with scaling laws: measured loss (prediction error) falls smoothly and predictably as a power law of model size, data, and compute, and GPT-3 kept following that curve well past where many expected it to flatten out, with no sign yet of hitting a wall. It contrasts this \"strong\" scaling view with rivals like DeepMind, who hold a \"weak\" version believing the right algorithms must still be found piece by piece even as compute grows, and argues most of the field wrongly dismissed scaling despite the evidence.",
+      "ids": [
+        "spya-sctj6d",
+        "spya-vn0xpd",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

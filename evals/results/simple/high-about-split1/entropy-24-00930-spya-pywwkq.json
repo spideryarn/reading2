@@ -1,0 +1,96 @@
+{
+  "arm": "high-about-split1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "4cefbf1ba90cafe46894c7c7a6131e2524be52053507a3c4a51e05b32835e2cf",
+  "at": "2026-09-30T23:45:13.362Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 9616,
+  "costUsd": 0.048806,
+  "tokens": {
+    "input": 20403,
+    "output": 800,
+    "reasoning": 0
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 295,
+  "fullerWords": 302,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how to measure \"information processing\" in brains: not just whether one neuron's activity predicts another's, but how neurons combine multiple inputs into something new. The core tool it introduces is partial information decomposition (PID), a method for splitting the information that two or more source neurons carry about a target neuron into separate pieces: redundant (carried by either source alone), unique (only one source has it), and synergistic (only visible when you look at both sources together).",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The synergistic piece is the main focus, because it represents information that genuinely requires combining inputs, a signature of computation rather than simple pass-through. The article argues this matters because classical measures like mutual information (statistical dependence between two signals) and transfer entropy (how much one signal's past predicts another's future) can track information flow but can't reveal how information from multiple sources is combined or transformed.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-qjdbvj",
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "text": "Empirically, using recordings from mouse cortical tissue and from behaving monkeys, the authors found synergy is reliably about a quarter of the feedforward transfer entropy in a triad, is 2.7 times higher in densely connected \"rich club\" neurons, rises with recurrent connections between sources, and peaks at intermediate similarity between source signals rather than growing without limit. In monkeys performing a task, synergy dominated overall but redundancy spiked during motor execution, suggesting the brain trades computation for reliable signal duplication when precision matters.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The piece also covers practical issues: there's no single agreed way to define redundancy, available software tools (DIT, IDTxl, SxPID, and a MATLAB toolbox) each have tradeoffs, and the full decomposition becomes computationally explosive beyond a few source neurons. It closes by pointing to extensions like time-resolved (\"local\") PID and multi-target versions that decompose information across time as well as across sources.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article on how to measure information processing in neural circuits, using a mathematical framework called partial information decomposition (PID). The core question: when two or more neurons feed into a target neuron, how much of what the target 'knows' is redundant (carried by either source alone), unique (carried by only one), or synergistic (only visible when you look at both sources jointly, as a pattern)? The synergistic piece is treated as the signature of actual computation, not just passive signal passing.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because plain correlation measures like mutual information, or directed measures like transfer entropy, can track that information moves between neurons but cannot show how neurons combine multiple inputs into something new. New recording technology now gives enough data to estimate these joint patterns, but interpreting the data still needs the right statistical tool, which is where PID comes in.",
+      "ids": [
+        "spya-s9kmxa",
+        "spya-s0db2g",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "Empirically, using arrays recording hundreds of neurons in mouse cortical cultures, synergy tracked feedforward transfer entropy closely (about a quarter of it), was about 2.7x higher in densely connected 'rich club' triads, rose with more recurrent connections among source neurons, and peaked at intermediate similarity between source spike trains rather than rising indefinitely. In behaving macaques, synergy dominated overall but redundancy spiked during motor execution, and different brain regions shifted their synergy levels across task phases, suggesting synergy reflects task-specific dynamics, not just fixed wiring.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The review also works through practical issues: there's no single agreed way to define redundancy, the number of distinct information components explodes combinatorially as more source neurons are added, several software toolkits exist with different tradeoffs, and PID reveals statistical structure without yet explaining the underlying biological mechanism. It closes by pointing to extensions like localizing PID to single moments in time and generalizing it to multiple targets.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-h6h922"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 6,
+    "unanchored": 0
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "arm": "high-goalB-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.903Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 23596,
+  "costUsd": 0.036388,
+  "tokens": {
+    "input": 6269,
+    "output": 2385,
+    "reasoning": 1095
+  },
+  "ok": false,
+  "error": "The model wrote 5 \"simple\" paragraphs and the limit is 4. Nothing is kept rather than a cut-down version, because a truncated orientation is a wrong one."
+}
