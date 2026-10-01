@@ -91,6 +91,7 @@ describe("the privacy page", () => {
       return !PAGE.includes(name) && !(general !== undefined && collapsed.includes(general));
     });
     expect(missing, "models missing from src/web/PrivacyPage.tsx").toEqual([]);
+    expect(PAGE).toContain("High-powered AI; <code>gpt-5.6-luna</code>");
   });
 
   it("has an approved general wording only for models that exist", () => {

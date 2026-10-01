@@ -15,12 +15,14 @@
  * Two guards, because the leak has two shapes:
  *
  * 1. **A figure written into reader copy.** Every string and every piece of JSX
- *    text under `src/web/` and in `src/messages.ts`, and every raw text asset
- *    under `src/web/` the client can import (`changelog-versions.ndjson`, which
- *    `/changelog` shows every visitor), is scanned for an amount of money:
+ *    text under `src/web/`, every runtime module that tree imports (including
+ *    shared copy in `src/billing-plan.ts` and `src/mode-catalog.ts`), the
+ *    messages and export-copy sinks, and every raw text asset under `src/web/`
+ *    the client can import (`changelog-versions.ndjson`, which `/changelog`
+ *    shows every visitor), is scanned for an amount of money:
  *    `$0.20`, `£8`, `€9`, `USD 5`, `20¢`, `20p`, `20 cents`. Comments are not
  *    scanned — they are for developers, and the measured figures in them are
- *    useful there. One file is allowed, with its reason below.
+ *    useful there. The few exact exceptions are listed with their reasons.
  * 2. **A cost on a payload.** A walker fails on any object key matching
  *    `cost|spend|nanos|usd|price`, or any string value carrying an amount of
  *    money, at any depth.
@@ -42,9 +44,9 @@
  * 403 case.
  */
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -56,7 +58,7 @@ import type { TierRow } from "../src/billing/tiers.js";
 import type { Article, ArticleMetadata, Job } from "../src/types.js";
 import type { OwnerId } from "../src/owner.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
-import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
+import { dynamicImportSpec, type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -74,6 +76,7 @@ const CURRENCY_FIGURE = new RegExp(
   [
     String.raw`[$£€¢]\s?\d`, // $0.20, £8, €9
     String.raw`\b(?:USD|GBP|EUR|US\$)\s?\d`, // USD 5, US$5
+    String.raw`\b\d+(?:[.,]\d+)?\s?(?:USD|GBP|EUR)\b`, // 5 USD
     String.raw`\d\s?¢`, // 20¢
     String.raw`\b\d+(?:\.\d+)?p\b`, // 20p
     String.raw`\b\d+(?:[.,]\d+)?\s?(?:cents?|pence|penny|pennies|dollars?|pounds?|euros?)\b`, // 20 cents
@@ -85,16 +88,25 @@ const CURRENCY_FIGURE = new RegExp(
  * interpolation after it: `` `$${amount}` ``. The regex above cannot see that,
  * because the digit is not in the source.
  */
-const CURRENCY_BEFORE_INTERPOLATION = /[$£€]$/;
+const CURRENCY_BEFORE_INTERPOLATION = /(?:[$£€]|\b(?:USD|GBP|EUR|US\$))\s*$/i;
+const CURRENCY_AFTER_INTERPOLATION =
+  /^\s*(?:USD|GBP|EUR|dollars?|pounds?|euros?|cents?|pence|penny|pennies)\b/i;
+const CURRENCY_TOKEN = /^\s*(?:[$£€]|USD|GBP|EUR|US\$)\s*$/i;
 
 /**
  * **Files allowed to carry a currency figure, and only these.** Each one either
  * shows the reader what *they* pay, or is drawn for the administrator alone.
  * A new entry needs a reason as good as these.
  */
-const ALLOWED: Record<string, string> = {
-  /* The plan cards: the subscription prices a reader pays ($10 / £8 / €9). */
-  "src/web/PlanCards.tsx": "the reader's own subscription prices",
+const ALLOWED: Record<string, readonly string[]> = {
+  /* Exact plan-card strings: the subscription prices a reader pays. An extra
+     amount in this file still fails rather than inheriting a file-wide pass. */
+  "src/web/PlanCards.tsx": ["$10", "£8 · €9", "$50", "£40 · €45"],
+  /* The formatter is used only on authenticated admin surfaces. These are
+     dynamic prefixes, not estimates embedded in the bundle. */
+  "src/admin.ts": ["$", "$"],
+  /* A regular-expression replacement group in reader-visible prose parsing. */
+  "src/referee-candidates.ts": ["$1"],
   /* **The two admin surfaces need no entry**, though the plan expected them
      to: src/web/ArticleCost.tsx (the metadata page's *What it cost*, drawn only
      when `isAdmin`, from `/api/admin/articles/:slug/cost`) and
@@ -104,7 +116,7 @@ const ALLOWED: Record<string, string> = {
      test below refuses. */
 };
 
-/** Source files: every `.ts`/`.tsx` under `src/web/`, plus `src/messages.ts`. */
+/** TypeScript source files whose runtime strings can become reader copy. */
 const SOURCE = /\.tsx?$/;
 /**
  * Raw text assets a client module can import with `?raw` or as JSON — today
@@ -128,6 +140,76 @@ function filesUnderWeb(pattern: RegExp): string[] {
   walk(join(ROOT, "src/web"));
   return out.sort();
 }
+
+/** Resolve one relative TypeScript/JavaScript import to the source Vite loads. */
+function resolveSourceImport(importer: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) return null;
+  const clean = specifier.replace(/[?#].*$/, "");
+  const base = join(ROOT, dirname(importer), clean);
+  const candidates = clean.endsWith(".js")
+    ? [`${base.slice(0, -3)}.ts`, `${base.slice(0, -3)}.tsx`]
+    : [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts"), join(base, "index.tsx")];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  return found ? relative(ROOT, found) : null;
+}
+
+/** Runtime imports and re-exports in one module; type-only edges carry no copy. */
+function sourceImports(file: string): string[] {
+  const ast = parseSource(readFileSync(join(ROOT, file), "utf8"));
+  const found = new Set<string>();
+  walkAst(ast.program, (node: AstNode) => {
+    const dynamic = dynamicImportSpec(node);
+    if (dynamic?.spec) {
+      const resolved = resolveSourceImport(file, dynamic.spec);
+      if (resolved) found.add(resolved);
+      return;
+    }
+    if (
+      node.type !== "ImportDeclaration" &&
+      node.type !== "ExportNamedDeclaration" &&
+      node.type !== "ExportAllDeclaration"
+    ) {
+      return;
+    }
+    if (node.importKind === "type" || node.exportKind === "type") return;
+    const specifiers = (node.specifiers ?? []) as AstNode[];
+    if (
+      node.type === "ImportDeclaration" &&
+      specifiers.length > 0 &&
+      specifiers.every((specifier) => specifier.importKind === "type")
+    ) {
+      return;
+    }
+    const value = (node.source as AstNode | undefined)?.value;
+    if (typeof value !== "string") return;
+    const resolved = resolveSourceImport(file, value);
+    if (resolved) found.add(resolved);
+  });
+  return [...found];
+}
+
+/** Every source module whose runtime strings can enter the browser bundle. */
+function clientSourceFiles(): string[] {
+  const seen = new Set(filesUnderWeb(SOURCE));
+  const queue = [...seen];
+  while (queue.length > 0) {
+    const file = queue.shift();
+    if (!file) continue;
+    for (const imported of sourceImports(file)) {
+      if (!SOURCE.test(imported) || seen.has(imported)) continue;
+      seen.add(imported);
+      queue.push(imported);
+    }
+  }
+  return [...seen].sort();
+}
+
+/** Reader-copy sinks outside the browser's module graph. */
+const READER_COPY_SINKS = [
+  "src/messages.ts",
+  "src/store/export-bundle.ts",
+  "src/store/article-rows.ts",
+] as const;
 
 /** Every amount of money in a raw text asset, by line. All of it is copy. */
 function currencyFiguresInText(text: string): { line: number; text: string }[] {
@@ -174,7 +256,12 @@ function currencyFiguresIn(source: string): { line: number; text: string }[] {
     }
     /* An import path or a type-level string is not copy. */
     if (parent?.type === "ImportDeclaration" || parent?.type === "ExportNamedDeclaration") return;
-    if (CURRENCY_FIGURE.test(text) || (beforeInterpolation && CURRENCY_BEFORE_INTERPOLATION.test(text))) {
+    if (
+      CURRENCY_FIGURE.test(text) ||
+      (beforeInterpolation && CURRENCY_BEFORE_INTERPOLATION.test(text)) ||
+      (node.type === "TemplateElement" && CURRENCY_AFTER_INTERPOLATION.test(text)) ||
+      (parent?.type === "BinaryExpression" && parent.operator === "+" && CURRENCY_TOKEN.test(text))
+    ) {
       found.push({ line: lineOf(node), text: text.trim().slice(0, 120) });
     }
   });
@@ -191,15 +278,19 @@ describe("no AI-cost figure in reader copy", () => {
       `const a = "Sketch costs about $0.20.";`,
       `const b = <p>Costs {/* $9 hidden */} £8 a month</p>;`,
       "const c = `Costs $${amount} a run`;",
+      `const c2 = \`Costs USD \${amount} a run\`;`,
+      `const c3 = \`Costs \${amount} dollars a run\`;`,
+      `const c4 = "$" + amount;`,
       `const d = "USD 5 a run";`,
       `const e = "about 20¢";`,
       `const f = "20p each";`,
       `const g = "about 20 cents";`,
       `const h = "roughly 3 dollars";`,
+      `const h2 = "roughly 0.20 USD";`,
       `const i = "width: 20px; 20 percent; 2026-09-30; v2.3p1";`,
     ].join("\n");
     const found = currencyFiguresIn(sample);
-    expect(found.map((f) => f.line)).toEqual([4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(found.map((f) => f.line)).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
   });
 
   it("the raw-text scanner finds a figure in a changelog-shaped line — its own control", () => {
@@ -212,20 +303,28 @@ describe("no AI-cost figure in reader copy", () => {
   });
 
   it("every allow-listed file still carries a figure, so the list is not stale", () => {
-    for (const file of Object.keys(ALLOWED)) {
-      const found = currencyFiguresIn(readFileSync(join(ROOT, file), "utf8"));
-      expect(found.length, `${file} is allowed a currency figure and has none — take it off the list`).toBeGreaterThan(0);
+    for (const [file, allowed] of Object.entries(ALLOWED)) {
+      const found = currencyFiguresIn(readFileSync(join(ROOT, file), "utf8")).map((item) => item.text);
+      expect(found, `${file}'s allowed reader prices changed`).toEqual(allowed);
     }
   });
 
-  it("no other file under src/web/, nor src/messages.ts, writes one into a string", () => {
-    const files = [...filesUnderWeb(SOURCE), "src/messages.ts"];
+  it("scans the browser's shared-module closure and the non-browser reader-copy sinks", () => {
+    const files = [...clientSourceFiles(), ...READER_COPY_SINKS];
     /* The walk found the tree, not an empty directory. */
     expect(files.length).toBeGreaterThan(100);
+    expect(files).toContain("src/billing-plan.ts");
+    expect(files).toContain("src/mode-catalog.ts");
+    expect(files).toContain("src/store/export-bundle.ts");
     const leaks: string[] = [];
     for (const file of files) {
-      if (file in ALLOWED) continue;
+      const allowed = [...(ALLOWED[file] ?? [])];
       for (const f of currencyFiguresIn(readFileSync(join(ROOT, file), "utf8"))) {
+        const allowedAt = allowed.indexOf(f.text);
+        if (allowedAt !== -1) {
+          allowed.splice(allowedAt, 1);
+          continue;
+        }
         leaks.push(`${file}:${f.line}  ${f.text}`);
       }
     }
@@ -249,7 +348,12 @@ describe("no AI-cost figure in reader copy", () => {
 
 /* --------------------------------------------- 2. cost fields on a payload -- */
 
-const COST_KEY = /cost|spend|nanos|usd|price/i;
+const COST_KEY = /cost|spend|nanos|usd|price|amount|currency|dollars?|pounds?|euros?|cents?|pence/i;
+
+function costInString(value: string, path: string, allow: (path: string) => boolean): string | undefined {
+  if (!CURRENCY_FIGURE.test(value) || allow(path)) return undefined;
+  return `${path} = ${JSON.stringify(value)}`;
+}
 
 /**
  * Every path in a JSON value where a cost shows: a key naming one, or a string
@@ -262,7 +366,8 @@ function costLeaks(value: unknown, allow: (path: string) => boolean = () => fals
   const out: string[] = [];
   const walk = (v: unknown, path: string): void => {
     if (typeof v === "string") {
-      if (CURRENCY_FIGURE.test(v) && !allow(path)) out.push(`${path} = ${JSON.stringify(v)}`);
+      const leak = costInString(v, path, allow);
+      if (leak) out.push(leak);
       return;
     }
     if (Array.isArray(v)) {
@@ -426,7 +531,7 @@ const READER = `00000000-0000-4000-8000-${randomUUID().slice(-12)}` as OwnerId;
  * month. Nothing else in it may match.
  */
 const readersOwnPrice = (path: string): boolean =>
-  path.endsWith("sharedHalfPrice") || /^purchase\.tiers\.\d+\.amounts\.[a-z]{3}$/.test(path);
+  path.endsWith("sharedHalfPrice") || /^purchase\.tiers\.\d+\.amounts(?:\.[a-z]{3})?$/.test(path);
 
 describe("the payload walker", () => {
   it("flags a cost key, and an amount of money in a string value, at any depth — its own control", () => {
@@ -434,11 +539,13 @@ describe("the payload walker", () => {
       message: "about $0.20",
       steps: [{ name: "sketch", detail: { creditsNanos: 1 } }],
       tiers: [{ note: "USD 5 a month" }],
+      estimate: { dollars: 0.2 },
     };
     expect(costLeaks(sample)).toEqual([
       'message = "about $0.20"',
       "steps.0.detail.creditsNanos",
       'tiers.0.note = "USD 5 a month"',
+      "estimate.dollars",
     ]);
   });
 
@@ -506,7 +613,14 @@ type CostWord =
   | "spend" | "Spend" | "SPEND"
   | "nanos" | "Nanos" | "NANOS"
   | "usd" | "Usd" | "USD"
-  | "price" | "Price" | "PRICE";
+  | "price" | "Price" | "PRICE"
+  | "amount" | "Amount" | "AMOUNT"
+  | "currency" | "Currency" | "CURRENCY"
+  | "dollar" | "Dollar" | "DOLLAR"
+  | "pound" | "Pound" | "POUND"
+  | "euro" | "Euro" | "EURO"
+  | "cent" | "Cent" | "CENT"
+  | "pence" | "Pence" | "PENCE";
 type CostKey = `${string}${CostWord}${string}`;
 
 /**

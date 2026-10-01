@@ -336,7 +336,9 @@ export async function chargeAndSwitchOnHighPower(
   deps: AdmissionDeps = {},
 ): Promise<{ highPowerSince: string }> {
   if (isAdmin(ownerId)) {
-    throw new Error("the administrator's High-powered AI is never charged; use the store's set");
+    throw new Error(
+      "the administrator's High-powered AI is never charged; use the store's switchOnForAdmin",
+    );
   }
   let answer: HighPowerSwitch = await switchOnHighPower(ownerId, slug);
   if (answer.kind === "stale") {

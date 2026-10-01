@@ -210,9 +210,9 @@ describe("the other plan states", () => {
    */
   it("says High-powered AI apart from the count, and prints no ratio beside it", () => {
     const free = rendered({ kind: "free", limit: 3, used: 1, sharedHalfPrice: 1, highPower: 1, atLimit: false });
-    expect(free).toContain("1 articles added, on an allowance of 3");
+    expect(free).toContain("1 article added, on an allowance of 3");
     expect(free).toContain("One of them is public");
-    expect(free).toContain("One of them uses High-powered AI, which counts as one more article each");
+    expect(free).toContain("High-powered AI is counted for one article, which counts as one more article");
     expect(free).not.toMatch(/\b1 of 3\b/);
     expect(free).not.toContain("2 of them are public");
 
@@ -229,11 +229,49 @@ describe("the other plan states", () => {
       endsAt: null,
     });
     expect(paid).toContain("2 articles this month, on an allowance of 20");
-    expect(paid).toContain("2 of them use High-powered AI");
+    expect(paid).toContain("High-powered AI is counted for 2 articles, each of which counts as one more article");
     expect(paid).not.toContain("2 of 20");
     /* The "none of them is public, so each counts in full" sentence is about
        ingests that were cheap when added; it is not what an upgrade explains. */
     expect(paid).not.toContain("None of them is public now");
+
+    const singularPaid = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Spideryarn Reader",
+      limit: 20,
+      used: 1,
+      sharedHalfPrice: 0,
+      highPower: 1,
+      atLimit: false,
+      periodEnd: "2026-10-03T11:37:00Z",
+      endsAt: null,
+    });
+    expect(singularPaid).toContain("1 article this month");
+    expect(singularPaid).not.toContain("1 articles");
+  });
+
+  it("does not claim an upgrade this period belongs to an article ingested this period", () => {
+    const paid = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Spideryarn Reader",
+      limit: 20,
+      used: 0,
+      sharedHalfPrice: 0,
+      highPower: 1,
+      atLimit: false,
+      periodEnd: "2026-10-03T11:37:00Z",
+      endsAt: null,
+    });
+    expect(paid).toContain("0 articles this month");
+    expect(paid).toContain("High-powered AI is counted for one article");
+    expect(paid).not.toContain("One of them");
+
+    const free = rendered({ kind: "free", limit: 3, used: 0, sharedHalfPrice: 0, highPower: 1, atLimit: false });
+    expect(free).toContain("0 articles added");
+    expect(free).toContain("High-powered AI is counted for one article");
+    expect(free).not.toContain("One of them");
   });
 
   it("names the tier, the month's count and the renewal date for a paid one", () => {

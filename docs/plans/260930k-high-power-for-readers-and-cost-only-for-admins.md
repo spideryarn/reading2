@@ -369,3 +369,35 @@ Greg approved this change. These are the listed defences it edits
   type-level check in `tests/no-ai-cost-for-readers.test.ts` now holds it to that.
 - **Export** (`src/store/export-bundle.ts`, `src/store/article-rows.ts`). Only wording changed: the
   README line and the ledger's exclusion rationale. Nothing new is exported.
+
+## Code review
+
+GPT Sol reviewed commit `3b515253` on 2026-10-01 (workspace-write,
+[260930k-high-power-for-readers-code-review-sol.md](260930k-high-power-for-readers-code-review-sol.md)).
+There were no P0 or P1 findings, so no second round was needed. Sol fixed seven P2s and three P3s
+itself, each checked by hand afterwards:
+
+- **The period boundary.** Entitlement was read from the JavaScript clock while the charge used
+  Postgres's `now()`. After waiting for the lock, the two could fall either side of a Stripe
+  period's start. Now one post-lock `statement_timestamp()` decides both.
+- **An uncharged switch-on was still an exported capability** (`HighPowerStore.set(slug, true)`).
+  It is split into `switchOff` and `switchOnForAdmin`, which checks for the administrator itself.
+- **The race test proved less than it claimed.** Two switch-ons on one article would pass even with
+  a broken account lock. There is now also a race between two articles for the last slot.
+- **The cost guard** now covers:
+  - the browser's whole import closure, not only `src/web`;
+  - the export prose;
+  - exact allow-listed occurrences, where it used to allow a whole file;
+  - more currency spellings.
+- **/profile** tied an upgrade to "N articles this month". An old article upgraded this month read
+  "0 articles this month. One of them…". The upgrade is now its own sentence.
+- **The admin cell for a stale period** ignored the half-unit split. Fixed.
+- **Marketing's "doubles" was false for grandfathered articles.** They have no ingest row, so the
+  upgrade is their only charge. /pricing and /features now say "one more article".
+- `no-store` is now set before the body is parsed, so a 400 carries it too.
+- A missing space on /privacy, and stale comments.
+
+**One of those fixes was broken, and the tests caught it.** Sol's sandbox could not reach Postgres,
+so it never ran the database tests. Run here, 17 went red: the raw driver returns `timestamptz` as
+text, and the fix called `toISOString` on a string. It is now parsed, and refused if it is not a
+time. 53 of 53 pass.

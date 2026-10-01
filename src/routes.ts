@@ -7759,16 +7759,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     /* A settings write, and a charge: it calls no model, so there is nothing to attribute. */
     article: "none",
     handler: async ({ request: { req, res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
       const { on } = parseHighPowerRequest(await readBody(req));
       const slug = slugPart(captures, 1);
       const owner = currentOwnerId();
-      res.setHeader("Cache-Control", "private, no-store");
       send(
         res,
         200,
         on && !isAdmin(owner)
           ? await chargeAndSwitchOnHighPower(owner, slug)
-          : await highPowerStore.set(slug, on),
+          : on
+            ? await highPowerStore.switchOnForAdmin(slug)
+            : await highPowerStore.switchOff(slug),
       );
     },
   },

@@ -94,6 +94,7 @@ interface Reply {
   status: number;
   body: Record<string, unknown>;
   text: string;
+  headers: Record<string, string>;
 }
 
 async function call(method: string, url: string, body?: unknown, verify: Verifier = acceptAny): Promise<Reply> {
@@ -106,6 +107,7 @@ async function call(method: string, url: string, body?: unknown, verify: Verifie
   ) as unknown as IncomingMessage;
   let status = 0;
   let text = "";
+  const headers: Record<string, string> = {};
   const res = {
     set statusCode(v: number) {
       status = v;
@@ -115,7 +117,9 @@ async function call(method: string, url: string, body?: unknown, verify: Verifie
     },
     writableEnded: false,
     destroyed: false,
-    setHeader() {},
+    setHeader(name: string, value: string | number | readonly string[]) {
+      headers[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : String(value);
+    },
     writeHead(code: number) {
       status = code;
     },
@@ -139,7 +143,7 @@ async function call(method: string, url: string, body?: unknown, verify: Verifie
   } catch {
     /* An SSE body is not JSON. */
   }
-  return { status, body: parsed, text };
+  return { status, body: parsed, text, headers };
 }
 
 /* ---------------------------------------------------------- the one model -- */
@@ -297,6 +301,7 @@ describe("PUT /api/article/:slug/high-power", { timeout: 60_000 }, () => {
   it("switches it on for the administrator's own article, and answers when", async () => {
     const r = await call("PUT", url, { on: true });
     expect(r.status).toBe(200);
+    expect(r.headers["cache-control"]).toBe("private, no-store");
     expect(typeof r.body.highPowerSince).toBe("string");
     expect(await columnOf(mine!.articleId)).toBeInstanceOf(Date);
     /* Twice is idempotent: the first `since` is kept. */
@@ -367,6 +372,7 @@ describe("PUT /api/article/:slug/high-power", { timeout: 60_000 }, () => {
       select ${READER}::uuid, now(), now() from generate_series(1, 3)`);
     const r = await call("PUT", readersUrl, { on: true }, acceptAReader);
     expect(r.status).toBe(402);
+    expect(r.headers["cache-control"]).toBe("private, no-store");
     expect(String(r.body.error)).toContain("[pay-high-power]");
     expect(await columnOf(readers!.articleId)).toBeNull();
     expect(await ledgerOf(READER)).toEqual({ ingest: 3, highPower: 0 });
@@ -375,6 +381,7 @@ describe("PUT /api/article/:slug/high-power", { timeout: 60_000 }, () => {
   it("is a 404 for another owner's article, even to the administrator", async () => {
     const r = await call("PUT", `/api/article/${OTHERS}/high-power`, { on: true });
     expect(r.status).toBe(404);
+    expect(r.headers["cache-control"]).toBe("private, no-store");
     expect(await columnOf(others!.articleId)).toBeNull();
   });
 
@@ -398,6 +405,7 @@ describe("PUT /api/article/:slug/high-power", { timeout: 60_000 }, () => {
     await call("PUT", url, { on: false });
     const r = await call("PUT", url, body);
     expect(r.status).toBe(400);
+    expect(r.headers["cache-control"]).toBe("private, no-store");
     expect(await columnOf(mine!.articleId)).toBeNull();
     const reader = await call("PUT", readersUrl, body, acceptAReader);
     expect(reader.status).toBe(400);

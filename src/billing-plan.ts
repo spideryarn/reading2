@@ -463,8 +463,8 @@ function isRatio(plan: {
 }
 
 /**
- * *"One of them uses High-powered AI, which counts as one more article"* — or
- * nothing, for the account that has not switched any on.
+ * An independent *"High-powered AI is counted for…"* sentence — or nothing,
+ * for the account that has not switched any on.
  *
  * A fact beside the count rather than folded into it, and with no arithmetic
  * after it: whether an upgrade is half-price depends on whether *its* article is
@@ -473,11 +473,15 @@ function isRatio(plan: {
  */
 function highPowerClause(highPower: number): string {
   if (highPower === 0) return "";
-  const which = highPower === 1 ? "One of them uses" : `${highPower} of them use`;
-  return (
-    `${which} High-powered AI, which counts as one more article each ` +
-    "(half of one while the article is public). "
-  );
+  return highPower === 1
+    ? "High-powered AI is counted for one article, which counts as one more article " +
+        "(half of one while it is public). "
+    : `High-powered AI is counted for ${highPower} articles, each of which counts as one more ` +
+        "article (half of one while it is public). ";
+}
+
+function articleCount(used: number): string {
+  return `${used} ${used === 1 ? "article" : "articles"}`;
 }
 
 /**
@@ -559,7 +563,7 @@ function freeCopy(plan: Extract<ReaderPlan, { kind: "free" }>): PlanCopy {
     };
   }
   return {
-    headline: `Free — ${plan.used} articles added, on an allowance of ${plan.limit}`,
+    headline: `Free — ${articleCount(plan.used)} added, on an allowance of ${plan.limit}`,
     detail:
       howTheyStand(plan) +
       (plan.atLimit
@@ -630,7 +634,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
       return {
         headline: isRatio(plan)
           ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`
-          : `${plan.tierName} — ${plan.used} articles this month, on an allowance of ${plan.limit}`,
+          : `${plan.tierName} — ${articleCount(plan.used)} this month, on an allowance of ${plan.limit}`,
         detail:
           shared +
           (plan.endsAt !== null

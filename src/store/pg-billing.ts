@@ -997,9 +997,6 @@ export async function switchOnHighPower(
   return await db.transaction(
     async (tx): Promise<HighPowerSwitch> => {
       const row = await lockBillingAccount(tx, ownerId);
-      const entitlement = entitlementFromRow(row, sold, new Date());
-      if ("kind" in entitlement) return entitlement; // stale
-
       const [article] = await tx
         .select({
           id: articleRows.id,
@@ -1012,6 +1009,24 @@ export async function switchOnHighPower(
         .for("update")
         .limit(1);
       if (!article) return { kind: "not-found" };
+
+      /* One post-lock database instant decides both which Stripe period is live
+         and where the charge lands. A JavaScript clock read here paired with
+         `now()` below had a boundary hole: after waiting on either lock, it
+         could admit against the new period while PostgreSQL's
+         transaction-start `now()` wrote the row just before that period. */
+      const clock = await tx.execute<{ charged_at: unknown }>(sql`
+        select statement_timestamp() as charged_at`);
+      /* The raw driver hands a timestamptz back as text, not a Date — parsed
+         here, and refused if it is not a time, rather than bound as a string
+         the columns would have to reinterpret. */
+      const raw = clock.rows[0]?.charged_at;
+      const chargedAt = raw instanceof Date ? raw : new Date(String(raw));
+      if (raw == null || Number.isNaN(chargedAt.getTime())) {
+        throw new Error(`reading the High-powered AI charge time returned ${String(raw)}`);
+      }
+      const entitlement = entitlementFromRow(row, sold, chargedAt);
+      if ("kind" in entitlement) return entitlement; // stale
 
       const [already] = await tx
         .select({ id: ingestEvents.id })
@@ -1026,14 +1041,14 @@ export async function switchOnHighPower(
         if (halfUnitsUsed(usage) + cost > budgetFor(entitlement.limit)) {
           return { kind: "no-room", publicNow, entitlement };
         }
-        /* **One `now()` for both timestamps**, the database's: the shape check
-           wants `reserved_at = succeeded_at`, and a host clock behind Postgres's
-           would break `ingest_events_settled_after_reserved` as it would for a
-           release (`releaseReservation`). */
+        /* The same database timestamp in both columns: the shape check wants
+           `reserved_at = succeeded_at`, and it must also be the timestamp that
+           selected the entitlement above. */
         await tx.execute(sql`
           insert into spideryarn.ingest_events
             (owner_id, kind, reserved_at, succeeded_at, article_id, slug)
-          values (${ownerId}::uuid, 'high_power', now(), now(), ${article.id}::uuid, ${article.slug})`);
+          values (${ownerId}::uuid, 'high_power', ${chargedAt}, ${chargedAt},
+                  ${article.id}::uuid, ${article.slug})`);
       }
 
       if (article.highPowerSince) {
@@ -1041,7 +1056,7 @@ export async function switchOnHighPower(
       }
       const [updated] = await tx
         .update(articleRows)
-        .set({ highPowerSince: sql`now()` })
+        .set({ highPowerSince: chargedAt })
         .where(eq(articleRows.id, article.id))
         .returning({ highPowerSince: articleRows.highPowerSince });
       if (!updated?.highPowerSince) {

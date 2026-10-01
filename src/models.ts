@@ -270,9 +270,8 @@ export { HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, isHighPowerModel };
 
 /**
  * **Which of the two capable models an article's calls go to.** `"high"` only
- * for an article whose `high_power_since` is set *and* whose owner is an
- * administrator (plan 260930f decision 4) — the caller decides that; this file
- * only answers what each value means.
+ * for an article whose `high_power_since` is set. The caller decides that;
+ * this file only answers what each value means.
  *
  * **A required argument everywhere it is taken, never ambient state**
  * (decision 5): a call site that has not decided does not compile, where an
@@ -1415,8 +1414,8 @@ export function modelFor(task: Task, power: ModelPower): string {
 export const DISPLAY_NAME: Record<string, string> = {
   "claude-sonnet-5": "claude-sonnet-5",
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
-  /* The high-power model, plan 260930f — sent only for an administrator's
-     article with High-powered AI switched on. */
+  /* The high-power model, plan 260930f — sent only for an article with
+     High-powered AI switched on. */
   "claude-opus-5-5": "claude-opus-5-5",
   "anthropic/claude-opus-5.5": "claude-opus-5-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",

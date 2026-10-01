@@ -200,17 +200,29 @@ function Ingests({ user }: { user: AdminUser }) {
        subscription whose stored period has run out has no window to count
        inside, so this is a lifetime count against a monthly limit — and `active`
        in the Plan column beside it is the status of dates we could not read.
-       Drawn as `61 / 20 ?` rather than as a bare fraction. GPT Sol, 2026-09-03. */
+       Drawn in half-slots with a `?`, rather than as a bare ingest fraction,
+       so public rows and High-powered upgrades remain visible without claiming
+       a lifetime numerator belongs to this month's denominator. */
+    const halfUnits =
+      (user.ingests - user.ingestsShared) * 2 +
+      user.ingestsShared +
+      (user.highPower - user.highPowerShared) * 2 +
+      user.highPowerShared;
+    const budget = user.ingestLimit * 2;
     return (
       <span
         className="tw:text-muted-foreground"
         title={
-          `${user.ingests} used over the lifetime of the account, against this tier's ` +
-          `${user.ingestLimit} a month — the two are not the same window. Stripe's stored ` +
+          `${user.ingests} added over the lifetime of the account, ${user.ingestsShared} public now` +
+          (user.highPower === 0
+            ? ""
+            : `, and ${user.highPower} switched to High-powered AI, ${user.highPowerShared} public now`) +
+          `. That is ${halfUnits} half-slots against this tier's ${budget} a month — the two are ` +
+          "not the same window. Stripe's stored " +
           "billing period does not contain now, so there is no current period to count inside."
         }
       >
-        {user.ingests} / {user.ingestLimit} ?
+        {halfUnits} / {budget} half ?
       </span>
     );
   }

@@ -221,7 +221,7 @@ async function setVisibility(name: string, to: "private" | "public"): Promise<vo
 }
 
 async function switchOff(name: string): Promise<void> {
-  await runAsOwner(OWNER, () => pgHighPowerStore.set(slug(name), false));
+  await runAsOwner(OWNER, () => pgHighPowerStore.switchOff(slug(name)));
 }
 
 /** The upgrade rows for one article, and the column. */
@@ -440,6 +440,22 @@ describe("charged once per article, for ever", () => {
     expect((await stateOf(id)).upgrades).toBe(1);
   });
 
+  it("admits only one of two articles racing for the last upgrade", async () => {
+    await givenIngest(await givenArticle("cross-race-spend-a", "private"));
+    await givenIngest(await givenArticle("cross-race-spend-b", "private"));
+    const first = await givenArticle("cross-race-a", "private");
+    const second = await givenArticle("cross-race-b", "private");
+
+    const answers = await Promise.all([
+      switchOnHighPower(OWNER, slug("cross-race-a"), NO_TIERS),
+      switchOnHighPower(OWNER, slug("cross-race-b"), NO_TIERS),
+    ]);
+    expect(answers.filter((answer) => answer.kind === "on")).toHaveLength(1);
+    expect(answers.filter((answer) => answer.kind === "no-room")).toHaveLength(1);
+    expect((await stateOf(first)).upgrades + (await stateOf(second)).upgrades).toBe(1);
+    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+  });
+
   it("is backed by the database: a second upgrade row for one article is refused", async () => {
     if (!pool) return;
     const id = await givenArticle("index", "private");
@@ -513,6 +529,35 @@ describe("a paid period counts the upgrade by when it happened", () => {
     expect(halfUnitsUsed(await usageFor(OWNER, PAID))).toBe(PRIVATE_INGEST_COST);
   });
 
+  it("uses one post-lock instant for entitlement and the charge at a period boundary", async () => {
+    if (!pool) return;
+    const id = await givenArticle("boundary", "private");
+    const start = new Date(Date.now() + 1_500);
+    const end = new Date(start.getTime() + 30 * 24 * 3600 * 1000);
+    await givenSubscription(PAID_PRICE, start, end);
+
+    const blocker = await pool.connect();
+    try {
+      await blocker.query("begin");
+      await blocker.query(
+        "select owner_id from spideryarn.billing_accounts where owner_id = $1 for update",
+        [OWNER],
+      );
+      const switching = switchOnHighPower(OWNER, slug("boundary"), PAID_TIERS);
+      await new Promise((resolve) => setTimeout(resolve, 1_700));
+      await blocker.query("commit");
+
+      expect(await switching).toMatchObject({ kind: "on", charged: true });
+      expect(await usageFor(OWNER, { ...PAID, periodStart: start, periodEnd: end })).toMatchObject({
+        highPowerFullPrice: 1,
+      });
+      expect(await stateOf(id)).toMatchObject({ upgrades: 1, since: expect.any(Date) });
+    } finally {
+      await blocker.query("rollback").catch(() => {});
+      blocker.release();
+    }
+  });
+
   it("counts the start instant and not the end instant", async () => {
     await givenUpgradeAt(await givenArticle("at-start", "private"), PERIOD_START);
     await givenUpgradeAt(await givenArticle("before-end", "public"), new Date(PERIOD_END.getTime() - 1));
@@ -560,6 +605,16 @@ describe("another owner's article", () => {
     await expect(chargeAndSwitchOnHighPower(OWNER, slug("theirs-too"))).rejects.toMatchObject({
       status: 404,
     });
+  });
+});
+
+describe("the uncharged store capability", () => {
+  it("cannot switch a reader on even when called directly", async () => {
+    const id = await givenArticle("uncharged-reader", "private");
+    await expect(
+      runAsOwner(OWNER, () => pgHighPowerStore.switchOnForAdmin(slug("uncharged-reader"))),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(await stateOf(id)).toEqual({ upgrades: 0, since: null });
   });
 });
 

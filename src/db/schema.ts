@@ -5051,9 +5051,9 @@ export const ingestEvents = spideryarn.table(
      * **An upgrade is born settled, and stays that way.** A `high_power` row
      * with no `succeeded_at` would be counted as an ingest in flight by every
      * usage reader, and one with neither a live article nor a frozen price would
-     * be charged full price for nothing anybody can name. Both timestamps come
-     * from one SQL `now()`, so the equality is exact. GPT Sol, plan review
-     * finding 6, 2026-09-30.
+     * be charged full price for nothing anybody can name. Both columns receive
+     * the same database timestamp, so the equality is exact. GPT Sol, plan
+     * review finding 6, 2026-09-30.
      */
     check(
       "ingest_events_high_power_shape",
