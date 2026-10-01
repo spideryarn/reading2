@@ -1,0 +1,5 @@
+Review the plan at docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md before it is built. Read the code it touches: src/web/PageContents.tsx, src/web/Metadata.tsx (§ Section, sectionId, every <Section usage, and where PageContents is mounted), src/web/flash.ts, src/web/styles/prose.css § the flash on arrival, src/web/styles/tokens.css (--flash-ms, --highlight-wash), tests/block-flash.test.ts, tests/metadata-page-order.test.tsx.
+
+Look for: designs that will not work as described (e.g. the CustomEvent reveal racing React's render, keepMounted vs unmounted sections, the scroll target moving, the flash class surviving re-render, duplicate pages mounted in tests), simpler options it missed, search ranking that will feel wrong, accessibility of the search box and filtered list, and anything that would make a check report success while doing nothing. Also check the conclusion: are the deferrals reasonable for what Greg asked (his words are quoted in the plan)?
+
+Do not edit files. Answer with numbered findings, each with a severity (P0/P1/P2/P3), the evidence (file:line), and a concrete fix.
