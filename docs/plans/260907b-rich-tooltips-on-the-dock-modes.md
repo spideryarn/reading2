@@ -1,6 +1,6 @@
 # Rich tooltips on the dock's mode buttons
 
-> Make sure all the modes in the bottom-bar have rich tooltips, and update mode.md.
+> Make sure all the modes in the bottom-bar have rich tooltips, and update new-mode.md.
 >
 > — Greg, 2026-09-07
 

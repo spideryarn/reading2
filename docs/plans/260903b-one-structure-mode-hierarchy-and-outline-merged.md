@@ -38,7 +38,7 @@ Verbatim, 2026-09-03:
 >   (especially for the active section) map to the bits in column 2 etc, kind of like a Sankey
 >   diagram shows the fan-out/in from one column to another.
 > - Move the Argument-Arc out into its own mode. (While you're doing that, add/update
->   docs/project/mode.md to provide a checklist for adding new modes, and/or nice reusable
+>   docs/project/new-mode.md to provide a checklist for adding new modes, and/or nice reusable
 >   machinery/templates/etc)
 > - Also, it seems as though the current data structure is fixed at 3 levels. Is that right? I think
 >   this needs to be adaptive, e.g. for a book (or really complex argument structure), say, we'd

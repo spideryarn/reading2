@@ -146,7 +146,7 @@ Then the residue, which is why this page exists:
   to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
   the top, in a foot, or under the controls:
 
-  > make a note in the mode.md (or similar) that we don't want these mode descriptions - they
+  > make a note in the new-mode.md (or similar) that we don't want these mode descriptions - they
   > waste space. Either put them as tooltips for an (i) icon, or just try and make things
   > self-explanatory.
   >
