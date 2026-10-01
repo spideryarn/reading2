@@ -30,6 +30,15 @@
  * `resolveXref` the provider is handed rather than an attribute on the mark —
  * xref.ts, and
  * docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+ *
+ * **And the gutter's reading-time line** (`.blk-gutter > span.blk-read`, since
+ * 2026-10-01), which is not a link at all. It wants exactly this card's shape —
+ * one trigger per block, hundreds of them, so one panel rather than a Floating
+ * UI instance each — and Greg asked for a rich card where it had a `title`
+ * (spya-mn3ruw). A second delegated-card file would have been a copy of the
+ * hover intent, detach and dismiss logic below; `READING_LINE` is the one
+ * branch that differs, plus where the card is placed (`referenceFor`).
+ * docs/plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md.
  */
 import {
   FloatingArrow,
@@ -46,6 +55,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
 import type { Section } from "./position.js";
+import { ControlTip } from "./Tooltip.js";
 import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
 
 /** What a card says about one block. */
@@ -131,7 +141,49 @@ const DELAY = { open: 240, close: 90 } as const;
 /* A block link, or a cross-reference mark in the prose. The second is only a
    candidate: `contentFor` asks the resolver, which checks the nonce, and a
    forged one gets no card. */
-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}`;
+/** The gutter's reading-time line (BlockGutter.tsx, gutter.css § reading time). */
+const READING_LINE = ".blk-gutter > span.blk-read";
+const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}`;
+
+/**
+ * **`ReadingCard` — what the reading-time line is.** The same words on every row: how far you
+ * got is what the line itself shows, and a level read off the row once would go
+ * stale while the card stayed open (Sol, plan review of 261001r).
+ *
+ * "Stronger", never "darker": the page is dark and the line is `--ink`, so it
+ * gets *lighter* — the `title` said darker, and Greg saw it brighten
+ * (spya-mn3ruw). The conditions are useReadingTime.ts's and Reader's.
+ */
+function ReadingCard() {
+  return (
+    <ControlTip
+      head="Reading time"
+      what="This line grows stronger the longer you spend reading the passage beside it: none at first, clearest once you have spent as long as it takes to read."
+      how="It counts while the passage is visible in the reading view, the page is visible, and you have been active in the last five minutes. Only you see it."
+    />
+  );
+}
+
+/**
+ * **Where the card points.** A link is a few words, so the element itself. The
+ * reading-time strip is the whole block's height, and a card above a long
+ * paragraph's top is nowhere near the pointer — so it is the strip at the
+ * height the pointer came in, recomputed on every read so a scroll moves it
+ * with the strip (a frozen `clientY` would not follow, `contextElement` or
+ * not). Sol, plan review of 261001r.
+ */
+function referenceFor(el: HTMLElement, clientY: number | undefined) {
+  if (clientY === undefined || !el.matches(READING_LINE)) return el;
+  const offset = clientY - el.getBoundingClientRect().top;
+  return {
+    contextElement: el,
+    getBoundingClientRect() {
+      const r = el.getBoundingClientRect();
+      const y = r.top + Math.min(Math.max(offset, 0), r.height);
+      return new DOMRect(r.left, y, r.width, 0);
+    },
+  };
+}
 
 /** What the card draws for one link, or null when it would have nothing to say. */
 function contentFor(
@@ -139,6 +191,7 @@ function contentFor(
   index: BlockLinkIndex,
   resolveXref: XrefResolver | undefined,
 ): ReactNode | null {
+  if (el.matches(READING_LINE)) return <ReadingCard />;
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off
      the mark. Since 2026-10-01 the sanitiser drops all three from an
@@ -223,7 +276,9 @@ function BlockLinkCard({
      list, so a description the link already had survives. */
   useEffect(() => {
     const el = shown?.el;
-    if (!el) return;
+    /* Not on a trigger hidden from assistive technology — the reading-time
+       line is decoration, and nothing about reading time is announced. */
+    if (!el || el.getAttribute("aria-hidden") === "true") return;
     const had = el.getAttribute("aria-describedby");
     el.setAttribute("aria-describedby", had ? `${had} ${cardId}` : cardId);
     return () => {
@@ -287,22 +342,22 @@ function BlockLinkCard({
       clearTimeout(closeTimer);
       if (currentRef.current) closeTimer = setTimeout(shut, DELAY.close);
     };
-    const show = (el: HTMLElement) => {
+    const show = (el: HTMLElement, clientY?: number) => {
       pending = null;
       if (!el.isConnected) return shut();
       const content = contentFor(el, indexRef.current, resolveRef.current);
       if (content === null) return shut();
       currentRef.current = el;
       // Before the state, so the reference exists when the panel mounts.
-      refs.setPositionReference(el);
+      refs.setPositionReference(referenceFor(el, clientY));
       setShown({ el, content });
     };
-    const arm = (el: HTMLElement, wait: number) => {
+    const arm = (el: HTMLElement, wait: number, clientY: number) => {
       clearTimeout(closeTimer);
       if (el === currentRef.current || el === pending) return;
       clearTimeout(openTimer);
       pending = el;
-      openTimer = setTimeout(() => show(el), wait);
+      openTimer = setTimeout(() => show(el, clientY), wait);
     };
 
     const hit = (target: EventTarget | null) =>
@@ -314,7 +369,7 @@ function BlockLinkCard({
          card left behind over the panel would be one more thing to dismiss. */
       if (e.pointerType === "touch") return close();
       const el = hit(e.target);
-      if (el) arm(el, currentRef.current ? 0 : DELAY.open);
+      if (el) arm(el, currentRef.current ? 0 : DELAY.open, e.clientY);
       else close();
     };
     const out = (e: PointerEvent) => {
@@ -384,7 +439,9 @@ function BlockLinkCard({
         className="tooltip-anchor"
         style={{ ...floatingStyles, visibility: isPositioned ? "visible" : "hidden" }}
       >
-        <div className="tooltip tip-cite" style={styles}>
+        {/* A control-shaped card (ControlTip) wants `.tip-soon`'s width and
+            paragraphs; a link's preview wants `.tip-cite`'s. */}
+        <div className={`tooltip ${drawn.el.matches(READING_LINE) ? "tip-soon" : "tip-cite"}`} style={styles}>
           {drawn.content}
           {/* fill and stroke are props, not CSS — Tooltip.tsx says why. */}
           <FloatingArrow

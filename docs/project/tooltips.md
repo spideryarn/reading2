@@ -26,6 +26,21 @@ meaning a reader has to work out deserves a card as much as a button does; the b
 is decorative and `aria-hidden`, and has one anyway
 ([261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 2).
 
+## Prefer the rich card to a native `title`
+
+> make a note somewhere that we always prefer to use our rich tooltip machinery because they're just
+> more attractive.
+>
+> — Greg, 2026-10-01 (spya-mn3ruw), about the reading-time line's `title`
+
+So when something needs explaining, the default is one of ours — `ControlTip` or `TipNote` on a
+control, the delegated card for many triggers — and a `title` is the exception that has to give its
+reason. The reason that has held so far is *cost per trigger*: a `Tooltip` is a Floating UI instance,
+and the gutter has a control per block on an article of several hundred. That reason is weaker than
+it looks, because a delegated card ([§ The second implementation](#the-second-implementation-and-why-there-is-one))
+costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2026-10-01 for exactly
+that. The gutter's other `title`s (the permalink, the chat button) are the next candidates.
+
 ## What we chose
 
 **[Floating UI](https://floating-ui.com) — `@floating-ui/react`**, v0.27.20, added 2026-08-25.
@@ -148,6 +163,12 @@ both off, so it is a small file of its own, drawn with `Tooltip`'s classes and d
 like every other card
 ([260928b](../plans/260928b-one-block-link-component-with-a-rich-tooltip-and-a-flash-on-arrival.md)
 § Plan review, F4).
+
+**It took a non-link on 2026-10-01**: the gutter's reading-time line, `.blk-gutter > span.blk-read`,
+one per block. Same shape — many triggers, nothing to click in the card — so a branch of
+`contentFor` and a `ControlTip` rather than a fourth file. Its one difference is where the card
+points: the strip is a whole paragraph tall, so the reference is the strip at the pointer's height
+([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
 
 ## `ControlTip`, which is what most of them are now
 

@@ -225,7 +225,9 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
     expect(line).not.toMatch(/left: -/);
     expect(line).toContain("width: 2px");
     expect(line).toContain("pointer-events: none");
-    expect(line).toContain("opacity: calc(var(--read, 0) * 0.1)");
+    /* Zero at level 0, so an unread row draws nothing — the 2px line is not
+       clipped by its zero-width strip (Sol, plan review of 261001r). */
+    expect(line).toContain("opacity: calc(var(--read, 0) * (var(--read, 0) + 1) * 0.025)");
   });
 });
 
