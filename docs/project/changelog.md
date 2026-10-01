@@ -151,7 +151,9 @@ bundle a reader is running was compiled from the commit that holds the file.
 anything it ships that a reader could see (`deploy-checks.ts` § `changelogGap`). Strict on purpose: a
 revert landing after the notes would otherwise ship notes for a feature the deployed tree no longer
 has. `--force-gate=changelog` is the hotfix escape; `promote` then stops that deploy's line at what
-was described, so the next `prepare` describes the rest rather than nobody.
+was described, so the next `prepare` describes the rest rather than nobody. The same gate also
+refuses to deploy over a build that was never promoted (`servingUnrecorded`): `promote` can only
+record what is serving, so a deploy replacing an unrecorded one would lose that deploy's line.
 
 **What counts as something a reader could see** is one definition,
 [`scripts/changelog/release-paths.ts`](../../scripts/changelog/release-paths.ts), asked by the planner,

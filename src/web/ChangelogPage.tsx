@@ -429,11 +429,11 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
             unless its click is stopped, and a control that does two things is
             worse than a row further down.
 
-            **"Built from", not "Deployed from".** A version *is* a deploy
-            (changelog.md), but "deploy" is our word for it and the reader's is
-            "release" — and `tests/changelog-page.test.tsx` holds the whole page
-            to that vocabulary, which is how the first wording of this line was
-            caught. */}
+            A pending release is linked by the build carrying it, so "Built
+            from" is exact. A promoted line normally holds that same commit,
+            but after a forced deploy it deliberately stops at the last commit
+            its notes cover. Calling that watermark the build commit would be a
+            false claim, so historical lines say exactly what their sha means. */}
         <p className="tw:mt-5 tw:mb-0 tw:border-t tw:border-rule tw:pt-3 tw:text-xs tw:text-ink-faint">
           <a
             href={commitUrl(version.sha)}
@@ -442,7 +442,8 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
           >
             <GitHubMark size={12} className="tw:opacity-70" />
-            Built from commit <span className="tw:font-mono">{version.sha.slice(0, 7)}</span>
+            {version.deployment_id === null ? "Built from commit " : "Changes through commit "}
+            <span className="tw:font-mono">{version.sha.slice(0, 7)}</span>
           </a>
         </p>
       </div>

@@ -69,6 +69,7 @@ import {
   migrationState,
   postApplyProblems,
   RELEASE_LOCK_FILE,
+  servingUnrecorded,
   missingGateFixtures,
   readLogQuery,
   rollbackAdvice,
@@ -423,6 +424,21 @@ async function preflight(): Promise<string> {
           : "release notes: nothing pending, and nothing a reader would see since the last release",
       );
     }
+
+    /* And the deploy this one replaces is recorded — `servingUnrecorded`. */
+    let servingDeploymentId: string | null = null;
+    try {
+      const stamp = await get(`${TARGET_HOST}/build.json`);
+      const body = stamp.status === 200 ? (JSON.parse(stamp.body) as { deploymentId?: unknown }) : null;
+      servingDeploymentId = typeof body?.deploymentId === "string" ? body.deploymentId : null;
+    } catch {
+      servingDeploymentId = null;
+    }
+    const unrecorded = servingUnrecorded({
+      servingDeploymentId,
+      recordedDeploymentIds: notes.recordedDeploymentIds,
+    });
+    gate("changelog", unrecorded === null, () => unrecorded ?? "");
   }
 
   /* Information, not a gate. A push ships commits, so somebody else's edits are

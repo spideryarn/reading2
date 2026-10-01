@@ -53,6 +53,7 @@ afterEach(async () => {
      run them in. Cleared here rather than in the two tests that set it, so the
      next one to set a hash cannot forget. */
   history.replaceState(null, "", window.location.pathname);
+  vi.unstubAllGlobals();
 });
 
 /** One NDJSON line, as `writeVersion` in the writer would leave it. */
@@ -97,6 +98,7 @@ const SHA_B = "b".repeat(40);
 const SHA_C = "c".repeat(40);
 const SHA_D = "d".repeat(40);
 const SHA_E = "e".repeat(40);
+const SHA_F = "f".repeat(40);
 
 /**
  * Four releases, oldest first: loud, quiet, quiet, loud.
@@ -159,6 +161,35 @@ describe("the pending release", () => {
   it("adds nothing when nothing is pending", () => {
     const history = fixtureVersions();
     expect(withPending(history, null)).toBe(history);
+  });
+
+  it("dates and links the pending release with the build carrying it", () => {
+    vi.stubGlobal("__SPIDERYARN_BUILD_TIME__", "2026-12-02T03:04:05.678Z");
+    vi.stubGlobal("__SPIDERYARN_BUILD_COMMIT__", SHA_E);
+    const history = fixtureVersions();
+    const last = history.at(-1);
+    const { pending, problems } = parsePending(
+      JSON.stringify({
+        ...JSON.parse(FIXTURE_LINES.at(-1) ?? "{}"),
+        version: "2026-12-01T00:00:00Z",
+        deployment_id: null,
+        sha: SHA_F,
+        previous_sha: last?.sha,
+      }),
+      history,
+    );
+    expect(problems).toEqual([]);
+
+    expect(withPending(history, pending).at(-1)).toMatchObject({
+      version: "2026-12-02T03:04:05Z",
+      sha: SHA_E,
+    });
+  });
+
+  it("does not claim a promoted coverage watermark was the commit the release was built from", async () => {
+    await draw(fixtureVersions());
+    expect(host.textContent).toContain("Changes through commit");
+    expect(host.textContent).not.toContain("Built from commit");
   });
 });
 
@@ -292,10 +323,11 @@ describe("commit links", () => {
     const { versions } = parseChangelog(
       versionLine({
         /* The **release's** sha is deliberately not the entry's. The release
-           links its own commit too ("Built from commit …"), which is a different
-           fact from "this entry came from that commit" — so a fixture where they
-           were the same sha counted two perfectly correct links as a duplicate.
-           It failed exactly that way when this test was written. */
+           links its own coverage watermark too ("Changes through commit …"),
+           which is a different fact from "this entry came from that commit" —
+           so a fixture where they were the same sha counted two perfectly
+           correct links as a duplicate. It failed exactly that way when this
+           test was written. */
         version: "2026-09-06T09:49:03Z",
         sha: SHA_D,
         previous_sha: null,

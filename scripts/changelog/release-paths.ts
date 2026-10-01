@@ -111,6 +111,8 @@ export interface NotesAt {
   gap: string | null;
   pending: PendingRelease | null;
   described: string;
+  /** Every deployment the commit's history records — what the serving-deploy check asks. */
+  recordedDeploymentIds: string[];
 }
 
 /**
@@ -122,15 +124,26 @@ export interface NotesAt {
 export function notesAt(sha: string, cwd: string): NotesAt {
   const history = parseChangelog(fileAt(sha, CHANGELOG_FILE, cwd, ""));
   const parsed = parsePending(fileAt(sha, PENDING_FILE, cwd, "null\n"), history.versions);
-  const described = parsed.pending?.sha ?? history.versions.at(-1)?.sha ?? sha;
+  const last = history.versions.at(-1);
+  /* An empty file parses cleanly because `parseChangelog` also serves the
+     retrospective writer, where starting from nothing is legitimate. It is
+     never legitimate in a deploy candidate: falling back to the candidate sha
+     would make both the ancestry and uncovered-range checks vacuously pass. */
+  const historyProblems = last === undefined ? ["the candidate's changelog history has no releases"] : [];
+  const described = parsed.pending?.sha ?? last?.sha ?? sha;
   const inCandidate =
     spawnSync("git", ["merge-base", "--is-ancestor", described, sha], { cwd, stdio: "ignore" }).status === 0;
   const uncovered = inCandidate && described !== sha ? releaseCommits(`${described}..${sha}`, cwd) : [];
   const gap = changelogGap({
-    problems: [...history.problems, ...parsed.problems],
+    problems: [...history.problems, ...parsed.problems, ...historyProblems],
     described,
     describedInCandidate: inCandidate,
     uncovered,
   });
-  return { gap, pending: parsed.pending, described };
+  return {
+    gap,
+    pending: parsed.pending,
+    described,
+    recordedDeploymentIds: history.versions.map((v) => v.deployment_id),
+  };
 }

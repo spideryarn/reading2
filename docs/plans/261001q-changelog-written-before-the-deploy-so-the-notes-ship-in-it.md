@@ -52,12 +52,19 @@ two homes.
   `version` = the build stamp, and clear the local pending file if it is still that same release. It
   refuses rather than guesses: a serving pending that does not chain onto the history's last line (a
   rollback, a stale fetch) is an error with both shas named.
-- **Its `sha` is the tip the notes describe, not the deployed commit.** The deployed commit is that
-  tip plus the notes commit, plus anything that landed on `dev` in between. Recording the deployed
-  commit would put those late commits inside a range whose entries never mention them and the next
-  range would start after them, so they would never be described. With the described tip, the next
-  run's range starts there and picks them up. The page's per-release link therefore says *"Changes up
-  to commit abc1234"* rather than *"Built from commit"*, which is true of every line, old and new.
+- **Its `sha` is the deployed commit** — the build stamp's `commit` — so the fleet dashboard, which
+  measures "commits since the last deploy" from it, is unchanged, and *"Built from commit"* stays
+  true. That is exact because the gate below is strict: between the tip the notes describe and the
+  deployed commit there is nothing a reader could see (the notes commit, docs, merges). **The one
+  exception is a forced deploy** that shipped release commits the notes do not cover: then the line
+  stops at the described tip, so the next `prepare`'s range starts there and describes them, rather
+  than nobody ever doing so. (Round 2 of this plan had the described tip always; Sol's round-2
+  finding 2 showed that breaks the fleet tab's distance, and the strict gate made it unnecessary.)
+- **Every production deploy gets one line** (Sol's round-2 finding 3): with notes; with none (a
+  `null` pending — nothing a reader would see — still gets a quiet line); a redeploy of a release
+  already promoted gets a line with nothing in it. Idempotence is keyed on the deployment id.
+- **Promotion, prepare and the deploy share one lock**, the deploy's own (finding 4), so notes are
+  never planned against a history a finishing deploy is about to promote onto.
 - **The fleet dashboard** reads only the history, so it never shows an unshipped release. It is
   untouched.
 
@@ -93,26 +100,29 @@ level with `origin/dev`:
    **`scripts/changelog/prepare-prompt.md`** — the scratchpad prompt with step 1 replaced by the
    above, so **no Vercel MCP**. Trawl, Sol review, copy, then `changelog.ts write --pending`, which
    validates as `write` does and writes the pending file whole instead of appending.
-4. It re-checks the result itself — the same `changelogGap` the deploy gate uses, on `origin/dev`
-   after its push — and exits non-zero if the notes do not cover the tip.
+4. It fetches; if `dev` gained a release commit meanwhile it fast-forwards and plans again (up to
+   three rounds), otherwise it commits and pushes the pending file and re-checks the result with
+   `notesAt`, the function the deploy gate uses, exiting non-zero if the notes do not cover the tip.
+   It never runs an ordinary merge: the primary holds other agents' uncommitted edits, and a refused
+   merge on a dirty tree has reset tracked files there before.
 
 ### The deploy gate, `changelog`
 
-In `deploy.ts` preflight, a pure `changelogGap()` in `deploy-checks.ts`, judged against **the
+In `deploy.ts` preflight, a pure `changelogGap()` in `deploy-checks.ts`, fed by `notesAt()` in
+`release-paths.ts` (which `prepare` also calls to check its own result), judged against **the
 candidate commit's own files** (`git show <sha>:…`, what actually ships). Let *described* be the
-pending release's `sha`, or the history's last `sha` when nothing is pending. It fails when:
+pending release's `sha`, or the history's last `sha` when nothing is pending. It fails when the
+files do not parse or do not chain, when *described* is not in the candidate, or when **any**
+release-path commit sits in `described..candidate`.
 
-- *described* is not an ancestor of the candidate (the notes are about some other history); or
-- `described..candidate` has release-path commits **and** *described* is already contained in
-  `origin/main` — the notes were not written for this deploy.
-
-A release-path commit *after* fresh notes (one that landed on `dev` during the ten-minute job)
-passes. Sol suggested failing on that too; we do not, because the job takes as long as it takes for
-another commit to land on a busy `dev`, so a strict rule is a treadmill, and the late commit is
-picked up by the next `prepare` from the described tip. That is today's one-deploy lag for that
-commit alone, which the brief allows. `--force-gate=changelog` is the existing named, printed
-override, for a hotfix that cannot wait for notes; the next `prepare` folds the forced deploy's work
-into its own release.
+**Strict, as Sol's round-2 finding 1 required.** Round 2 of this plan let a commit that landed after
+fresh notes through, to avoid a treadmill on a busy `dev`. Sol's counter-example: the notes describe
+a feature, a revert of it lands during the job, the gate passes, and the page announces a feature the
+deployed tree does not have — permanently, if no deploy follows. So the treadmill is handled in
+`prepare` instead: after the model stages it fetches, and if `dev` gained a release commit it plans
+again (up to three rounds); the window that is left is the seconds between `prepare` and the deploy's
+preflight. `--force-gate=changelog` is the hotfix escape, and `promote` keeps what it ships in front
+of the watermark.
 
 ### Cases
 
@@ -121,10 +131,11 @@ into its own release.
 | prepare, deploy, promote | release N with its notes, from the moment it is live |
 | deploy fails, retried after a new prepare | release N once, covering both attempts' work, dated when the retry built |
 | deploy abandoned, change reverted, then prepare + deploy | one release covering both commits; Sol reviews the net diff |
-| a commit lands mid-job | it is in production one release before it is described |
-| forced deploy without notes | the previous pending, dated by the forced build; next prepare covers the rest |
-| promote never run | next prepare promotes first; history is late, the page is not |
-| Vercel rollback | the older build's own files — correct for that build |
+| a release commit lands mid-job | prepare plans again; the deploy gate refuses notes that stop short |
+| forced deploy without fresh notes | the previous pending (or none), dated by the forced build; promote stops its line at what was described and the next prepare describes the rest |
+| promote never run | next prepare promotes first; the history is late, the page is not |
+| redeploy of the same release | the same page; promote records a line with nothing in it |
+| Vercel rollback | the older build's own files — correct for that build; promote refuses to chain it and says so |
 
 ## The option passed over: read the entries at runtime
 
@@ -164,7 +175,7 @@ lag is the only gap, and the first `prepare` ships the 18:39 line with it.
 exclusion) · `scripts/changelog/release-notes.ts` and `prepare-prompt.md` (new) · `package.json` ·
 `src/changelog.ts` (parse the pending file) · `src/web/changelog-pending.json` (new, `null`) ·
 `src/web/ChangelogPage.tsx` · `scripts/deploy.ts`, `scripts/deploy-checks.ts` · tests:
-`changelog-runner`, `changelog-file`, `changelog-page`, `deploy-checks` · docs: changelog.md,
+`changelog-before-deploy` (new), `changelog-file`, `changelog-page` · docs: changelog.md,
 overseer.md § Deploying and the standing-jobs line, build-stamp.ts's comment that lines are written
 after the deploy, the copy prompt's "what shipped" (still true: it describes what the deploy ships).
 
@@ -179,3 +190,26 @@ after the deploy, the copy prompt's "what shipped" (still true: it describes wha
 - `npm test`, `npm run typecheck`, `npm run check`.
 - `plan --upcoming` and `promote --dry-run` against the real file and production, read by eye.
 - GPT Sol on this plan (round 2, read-only) and on the code (workspace-write).
+
+## Results
+
+Built 2026-10-01. What was checked, and how:
+
+- **Every new check watched red.** Sixteen mutations, one per guard (the release-path exclusion, both
+  halves of `changelogGap`, `servingUnrecorded`, the empty-history gate, `parsePending`'s id and
+  chain, `plan --upcoming`'s nothing-to-describe, `promote`'s already-recorded, predates, forced,
+  compare-before-clear, both redeploy cases, the page's pending release, the committed pending
+  file), each turning its test red and restored.
+- **Against the real file and production**: `promote --dry-run` against today's `/build.json` says
+  the 18:39 deploy is already line 113 (the transition case); `plan --upcoming origin/dev` plans one
+  version of 7 commits, 3 a reader could see; `notesAt` refuses today's `dev` tip (3 undescribed
+  commits) and refuses the commit production is serving (12 — the lag Greg saw, caught by the gate).
+- **`vite build`** carries the pending file through `?raw`.
+- **GPT Sol, three times**: the plan twice (both blocked, both taken — above), and the code once, in
+  workspace-write. It fixed five findings itself (an empty history passing the gate vacuously; a
+  second redeploy refused; a redeploy matched on too little; the page calling a forced line's
+  watermark the build commit — history lines now say *"Changes through commit"*; `write --pending`
+  exiting 0 having written nothing), each with a test, and reported one for decision: a deploy over
+  one that was never promoted loses its line. Taken: `servingUnrecorded`, the gate's second question.
+- **Not exercised end to end**: `release-notes.ts prepare` itself, because it commits and pushes to
+  `dev` from the primary and runs a model job. Its first real run is the Overseer's next deploy.

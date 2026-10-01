@@ -1825,7 +1825,7 @@ export function installPending(
   }
 }
 
-function cmdWrite(
+export function cmdWrite(
   root: string,
   work: string,
   force: boolean,
@@ -1901,6 +1901,14 @@ function cmdWrite(
     die("NOT WRITING — fix the errors first");
   }
   if (report.lines.length === 0) {
+    /* Appending zero historical lines is a valid recovery run. `--pending` has
+       exactly one job, though: install the one upcoming release. Calling that
+       success without touching the pending file lets an unattended model job
+       exit 0 after producing no result; release-notes.ts catches that later,
+       but the command itself must keep the same promise. */
+    if (pendingTarget !== null) {
+      die("--pending assembled no release — the pending file is untouched");
+    }
     console.log("\nNothing to append.");
     return;
   }
@@ -1968,6 +1976,63 @@ export type Promotion =
   | { kind: "append"; line: Record<string, unknown>; clearPending: boolean; notes: string[] };
 
 /**
+ * A serving pending file can fail the current chain because it is the release
+ * represented by an earlier line: promotion changed its time, id and
+ * (normally) sha, and later redeploys may have added quiet lines above it.
+ * Match the claims as well as their provenance. Matching only the predecessor
+ * and second-resolution generation time can turn a different set of notes
+ * from the same second into a quiet redeploy.
+ */
+function promotedRelease(
+  servingPendingText: string,
+  history: ChangelogVersion[],
+  root: string,
+): ChangelogVersion | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const candidate = history[i];
+    if (candidate === undefined) continue;
+    /* Parse against the history that existed before this line was promoted.
+       Parsing against today's longer history necessarily reports a stale
+       chain, and then matching its lossy normalized value could hide a real
+       schema problem such as an invalid extra entry. */
+    const atTheTime = parsePending(servingPendingText, history.slice(0, i));
+    const pending = atTheTime.problems.length === 0 ? atTheTime.pending : null;
+    if (pending === null) continue;
+    const sameClaims =
+      pending.previous_sha === candidate.previous_sha &&
+      pending.generated_at === candidate.generated_at &&
+      pending.invisible === candidate.invisible &&
+      JSON.stringify(pending.generated_by) === JSON.stringify(candidate.generated_by) &&
+      JSON.stringify(pending.entries) === JSON.stringify(candidate.entries);
+    if (!sameClaims) continue;
+
+    /* Promotion may advance `sha` past the described tip, but only across the
+       notes commit, docs and merges. A release change there means this similar
+       line is not the release the pending file describes. */
+    if (!gitOk(["merge-base", "--is-ancestor", pending.sha, candidate.sha], root)) continue;
+    if (
+      pending.sha !== candidate.sha &&
+      releaseCommits(`${pending.sha}..${candidate.sha}`, root).length > 0
+    ) {
+      continue;
+    }
+
+    /* More than one redeploy of the same build is still a redeploy. The rows
+       after the original must be the exact quiet, zero-distance rows the first
+       redeploy produced; anything else is a rollback or stale serving file. */
+    const suffixIsRedeploys = history.slice(i + 1).every(
+      (v) =>
+        v.sha === candidate.sha &&
+        v.previous_sha === candidate.sha &&
+        v.commit_count === 0 &&
+        v.entries.length === 0,
+    );
+    if (suffixIsRedeploys) return candidate;
+  }
+  return null;
+}
+
+/**
  * **What appending the serving release to the history would mean** — decided
  * here from git and the two files, and done by `cmdPromote`.
  *
@@ -2031,14 +2096,11 @@ export function planPromotion(a: {
   if (rawPending !== null) {
     const parsed = parsePending(a.servingPendingText, history);
     const pending = parsed.pending;
-    const alreadyPromoted =
-      pending !== null &&
-      pending.previous_sha === last.previous_sha &&
-      pending.generated_at === last.generated_at;
+    const promoted = pending !== null ? promotedRelease(a.servingPendingText, history, root) : null;
     if (parsed.problems.length === 0 && isRecord(rawPending)) {
       release = rawPending;
-    } else if (alreadyPromoted) {
-      notes.push(`a redeploy of release ${last.release}, whose notes are already in the history`);
+    } else if (promoted !== null) {
+      notes.push(`a redeploy of release ${promoted.release}, whose notes are already in the history`);
     } else {
       for (const p of parsed.problems) console.error(`  ✗ ${p}`);
       die(

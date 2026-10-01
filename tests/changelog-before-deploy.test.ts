@@ -19,7 +19,7 @@
  * asked of git and a fixture repo would be testing a different history shape.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,9 +27,16 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseChangelog, parsePending, type ChangelogVersion } from "../src/changelog.js";
-import { installPending, main, planPromotion, Refused, servingFrom } from "../scripts/changelog/changelog.js";
-import { isReleasePath, releaseCommits } from "../scripts/changelog/release-paths.js";
-import { changelogGap } from "../scripts/deploy-checks.js";
+import {
+  cmdWrite,
+  installPending,
+  main,
+  planPromotion,
+  Refused,
+  servingFrom,
+} from "../scripts/changelog/changelog.js";
+import { isReleasePath, notesAt, releaseCommits } from "../scripts/changelog/release-paths.js";
+import { changelogGap, servingUnrecorded } from "../scripts/deploy-checks.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -50,7 +57,7 @@ function scratch(): string {
   return d;
 }
 afterEach(() => {
-  for (const d of dirs.splice(0)) execFileSync("rm", ["-rf", d]);
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
 
@@ -182,6 +189,23 @@ describe("plan --upcoming", () => {
   });
 });
 
+describe("write --pending", () => {
+  it("refuses success when the run assembled no pending release", () => {
+    const dir = scratch();
+    const work = path.join(dir, "work");
+    const file = path.join(dir, "versions.ndjson");
+    const pendingFile = path.join(dir, "pending.json");
+    mkdirSync(work, { recursive: true });
+    writeFileSync(path.join(work, "assigned.json"), "[]\n");
+    writeFileSync(file, `${JSON.stringify(line())}\n`);
+    writeFileSync(pendingFile, "null\n");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    expect(() => cmdWrite(REPO, work, false, file, "sonnet", pendingFile)).toThrow(/assembled no release/);
+    expect(readFileSync(pendingFile, "utf8")).toBe("null\n");
+  });
+});
+
 describe("installPending", () => {
   it("replaces the file whole with a release that fits", () => {
     const file = path.join(scratch(), "pending.json");
@@ -278,6 +302,55 @@ describe("promote", () => {
     expect(p.kind === "append" && p.line).toMatchObject({ sha: CODE, commit_count: 0, entries: [] });
   });
 
+  it("records a second redeploy of the same release after the first quiet redeploy row", () => {
+    const promoted = line({ ...pending(), deployment_id: "dpl_one", version: "2026-10-01T01:20:30Z" });
+    const first = promote({
+      history: history(line(), promoted),
+      serving: { ...SERVING, deploymentId: "dpl_two", builtAt: "2026-10-01T03:00:00Z" },
+    });
+    expect(first.kind).toBe("append");
+    if (first.kind !== "append") return;
+
+    const second = promote({
+      history: history(line(), promoted, first.line),
+      serving: { ...SERVING, deploymentId: "dpl_three", builtAt: "2026-10-01T04:00:00Z" },
+    });
+    expect(second.kind === "append" && second.line).toMatchObject({
+      deployment_id: "dpl_three",
+      sha: CODE,
+      commit_count: 0,
+      entries: [],
+    });
+  });
+
+  it("does not mistake different notes with the same timestamp for the release already promoted", () => {
+    const promoted = line({ ...pending(), deployment_id: "dpl_one", version: "2026-10-01T01:20:30Z" });
+    const different = pending({
+      entries: [{ ...entry(), title: "Different notes from the same planning second" }],
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() =>
+      promote({
+        history: history(line(), promoted),
+        serving: { ...SERVING, deploymentId: "dpl_two", builtAt: "2026-10-01T03:00:00Z" },
+        servingPendingText: JSON.stringify(different),
+      }),
+    ).toThrow(/does not chain/);
+  });
+
+  it("does not accept malformed notes because their normalized entries match a promoted release", () => {
+    const promoted = line({ ...pending(), deployment_id: "dpl_one", version: "2026-10-01T01:20:30Z" });
+    const malformed = pending({ entries: [entry(), { section: "fix" }] });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() =>
+      promote({
+        history: history(line(), promoted),
+        serving: { ...SERVING, deploymentId: "dpl_two", builtAt: "2026-10-01T03:00:00Z" },
+        servingPendingText: JSON.stringify(malformed),
+      }),
+    ).toThrow(/does not chain/);
+  });
+
   it("refuses a serving release that does not chain onto the history — a rollback", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => promote({ servingPendingText: JSON.stringify(pending({ previous_sha: DOCS })) })).toThrow(
@@ -317,5 +390,49 @@ describe("changelogGap — the deploy gate", () => {
 
   it("refuses changelog files that do not parse", () => {
     expect(changelogGap({ ...base, problems: ["pending: does not parse"] })).toMatch(/do not parse/);
+  });
+
+  it("cannot pass a candidate whose committed changelog history is empty", () => {
+    const repo = scratch();
+    mkdirSync(path.join(repo, "src/web"), { recursive: true });
+    writeFileSync(path.join(repo, "src/web/changelog-versions.ndjson"), "");
+    writeFileSync(path.join(repo, "src/web/changelog-pending.json"), "null\n");
+    execFileSync("git", ["init", "--quiet"], { cwd: repo });
+    execFileSync("git", ["add", "src/web/changelog-versions.ndjson", "src/web/changelog-pending.json"], {
+      cwd: repo,
+    });
+    execFileSync(
+      "git",
+      ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "empty history"],
+      { cwd: repo },
+    );
+    const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+
+    expect(notesAt(sha, repo).gap).toMatch(/history has no releases/);
+  });
+});
+
+/**
+ * The deploy being replaced must already be in the history — otherwise its id
+ * is lost for good, since `promote` reads only what is serving now. GPT Sol's
+ * code review of 261001q, finding 1.
+ */
+describe("servingUnrecorded — the deploy gate's second question", () => {
+  it("passes when the serving deploy has its line", () => {
+    expect(
+      servingUnrecorded({ servingDeploymentId: "dpl_one", recordedDeploymentIds: ["dpl_zero", "dpl_one"] }),
+    ).toBeNull();
+  });
+
+  it("refuses to deploy over one that was never promoted", () => {
+    expect(servingUnrecorded({ servingDeploymentId: "dpl_two", recordedDeploymentIds: ["dpl_one"] })).toMatch(
+      /changelog:promote/,
+    );
+  });
+
+  it("refuses when it cannot tell", () => {
+    expect(servingUnrecorded({ servingDeploymentId: null, recordedDeploymentIds: ["dpl_one"] })).toMatch(
+      /could not read/,
+    );
   });
 });

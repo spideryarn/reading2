@@ -257,6 +257,35 @@ export function changelogGap(opts: {
 }
 
 /**
+ * **Is the deploy this one replaces in the history the candidate carries?**
+ *
+ * `promote` records a deploy from production's own build stamp, and only while
+ * that build is serving. Deploy over an unpromoted one and its id is gone from
+ * the history for good — GPT Sol's code review of 261001q, finding 1. So the
+ * gate asks before the deploy rather than hoping a `prepare` ran: the remedy is
+ * `npm run changelog:promote`, then pull.
+ *
+ * Fails closed on an unreadable stamp, like `trunkGap`: "could not tell" and
+ * "it is recorded" must not pass alike. `--force-gate=changelog` is the escape
+ * when production is down and the fix cannot wait.
+ */
+export function servingUnrecorded(opts: {
+  /** `deploymentId` from production's `/build.json`, or null when it could not be read. */
+  servingDeploymentId: string | null;
+  recordedDeploymentIds: readonly string[];
+}): string | null {
+  const { servingDeploymentId, recordedDeploymentIds } = opts;
+  if (servingDeploymentId === null) {
+    return "could not read production's /build.json, so cannot tell whether the deploy it replaces is in the changelog's history";
+  }
+  if (recordedDeploymentIds.includes(servingDeploymentId)) return null;
+  return (
+    `production is serving ${servingDeploymentId}, which the changelog's history does not record — ` +
+    "deploying over it would lose it; run npm run changelog:promote, then pull"
+  );
+}
+
+/**
  * **Being on the trunk is not the same as being level with it**, and this is the
  * gap that accepting `dev` opened.
  *
