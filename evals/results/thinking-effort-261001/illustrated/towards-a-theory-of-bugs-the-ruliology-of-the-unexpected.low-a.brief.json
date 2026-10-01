@@ -1,0 +1,313 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map style — the article is a journey through a landscape of machines and proofs, well suited to little inked vignettes joined by trails and rivers.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Map of Bugs",
+      "prompt": "An antique hand-inked map, sepia and faded blue ink on aged parchment, borders of fine scrollwork but mostly open paper. At the very top, an open stone gate inscribed with a broken cog (THE OPEN GATE), from which three paths fan downward: a mechanical tape-reading head gliding over marked squares (THE TAPE-READING HEAD), a scribe comparing two scrolls (COMPARING TWO SCROLLS), and a row of checkered tiles doubling in width (THE DOUBLING TILES). Below the tile path, a monk traces a nested triangular pattern matching a known rule (THE NESTED PATTERN FOUND). Below the scroll path, a searcher follows a branching trail of forking paths that all dead-end at cliffs (THE TRAIL WITH NO END). All three paths, plus the proof-trails, converge into a single dark cracked well at the center of the map (THE CENTRAL WELL), cracks radiating outward like rivers. From the well, four paths fan back out: a tester with a ledger counting rows of identical small machines (COUNTING THE MACHINES), a traveler gazing over an endless starry landscape of strange glyphs (THE ENDLESS LANDSCAPE), a mathematician puzzling over an odd polynomial scroll (THE MATHEMATICIAN'S PUZZLE), and a builder laying labeled stone blocks into a wall (LAYING THE STONE BLOCKS). All four paths gather at the bottom into one final vignette: a figure reining in a wild sparking beast of gears, with a rope looping from this scene all the way back up to the gate at the top of the page (HARNESSING THE WILD GEARS). Compass rose in a corner, no other lettering anywhere except the vignette titles in small inked capitals beneath each scene.",
+      "vignettes": [
+        {
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton, with",
+          "depicts": "A monk tracing a nested triangular pattern on parchment, finding it matches a known rule.",
+          "title": "THE NESTED PATTERN FOUND",
+          "node": "n5"
+        },
+        {
+          "block": "spya-xdwm97",
+          "quote": "trying to “harness raw computation”, and it'll tend be easier to find a “lump of computation”",
+          "depicts": "A figure at the bottom of the map reining in a wild, sparking beast of gears, looping a rope back up toward the gate at the top.",
+          "title": "HARNESSING THE WILD GEARS",
+          "node": "n12"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "An open gate at the top of the map, inscribed with a single broken cog, from which many small paths fan out downward.",
+          "title": "THE OPEN GATE"
+        },
+        {
+          "where": "A small mechanical head sliding along a tape of marked squares, the first path leading from the gate.",
+          "title": "THE TAPE-READING HEAD"
+        },
+        {
+          "where": "A scribe holding up two scrolls side by side, comparing them, a second path from the gate.",
+          "title": "COMPARING TWO SCROLLS"
+        },
+        {
+          "where": "A row of small checkered tiles doubling in width, a third path from the gate.",
+          "title": "THE DOUBLING TILES"
+        },
+        {
+          "where": "A monk tracing a nested triangular pattern on parchment, finding it matches a known rule.",
+          "title": "THE NESTED PATTERN FOUND"
+        },
+        {
+          "where": "A searcher following a branching trail of forking paths that all dead-end at cliffs.",
+          "title": "THE TRAIL WITH NO END"
+        },
+        {
+          "where": "All paths converging at a single dark well at the center of the map, from which cracks radiate.",
+          "title": "THE CENTRAL WELL"
+        },
+        {
+          "where": "A tester with a ledger counting many identical small machines lined up in rows, fanning from the well.",
+          "title": "COUNTING THE MACHINES"
+        },
+        {
+          "where": "A traveler looking out over a starry, endless landscape dotted with strange glyphs.",
+          "title": "THE ENDLESS LANDSCAPE"
+        },
+        {
+          "where": "A mathematician at a table of polynomial scrolls, puzzling over one that looks odd.",
+          "title": "THE MATHEMATICIAN'S PUZZLE"
+        },
+        {
+          "where": "A builder laying carefully shaped stone blocks into a wall, each stone a labeled primitive.",
+          "title": "LAYING THE STONE BLOCKS"
+        },
+        {
+          "where": "A figure at the bottom of the map reining in a wild, sparking beast of gears, looping a rope back up toward the gate at the top.",
+          "title": "HARNESSING THE WILD GEARS"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "Where Bugs Are Caught",
+      "prompt": "An antique hand-inked map in sepia and faded blue, continuing from an overview where a mechanical tape-reading head began a path of machines. At the top, a clerk nods with satisfaction over a column of correct sums on a tape (THE CLERK'S SATISFACTION), then recoils as the tape shows a wrong scrawled number where it should read eight (THE WRONG NUMBER). A road leads onward: a surveyor walks it checking numbered milestones for cracks (THE LONG ROAD OF MILESTONES), until a hidden trapdoor marked fifteen swings open beneath his feet (THE TRAPDOOR AT FIFTEEN). The road continues to a grander, more ornate machine with a hidden crack near its base (THE ORNATE MACHINE'S CRACK), past a roadside warning post marked with rows of solid ones (THE ROW OF ONES). The road forks: one branch shows two identical twin machines suddenly pointing opposite directions (THE TWINS DIVERGE), leading to a machine chasing its own tail in an endless worn circular groove (THE ENDLESS CIRCLE), and a basket meant to hold only even stones with a stray odd stone numbered nine fallen in (THE STRAY ODD STONE). The other branch shows a pair of growing checkered tiles meant to double neatly, torn jaggedly at the fourteenth tile (THE TEAR AT FOURTEEN), and further along the road a similar tile-path tearing later, near the twenty-fourth tile (THE LATER TEAR AT 24). Fine old-map linework, cross-hatched shading, open parchment between scenes, no lettering anywhere except the small inked capital titles beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-scjxv8",
+          "quote": "we'd probably conclude that the Turing machine is computing the function",
+          "depicts": "A clerk nodding with satisfaction over a column of correct sums on a tape.",
+          "title": "THE CLERK'S SATISFACTION",
+          "node": "d1"
+        },
+        {
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "The same clerk recoiling as the tape shows a wrong number scrawled where 8 should be.",
+          "title": "THE WRONG NUMBER",
+          "node": "d2"
+        },
+        {
+          "block": "spya-qdvs0y",
+          "quote": "how far does one have to go before it shows up",
+          "depicts": "A surveyor walking a long road marked with milestones, checking each one for cracks.",
+          "title": "THE LONG ROAD OF MILESTONES",
+          "node": "d3"
+        },
+        {
+          "block": "spya-pt0hmz",
+          "quote": "The “most insidious” bugs do not occur until n = 15.",
+          "depicts": "A hidden trapdoor in the road, marked with the number fifteen, swinging open.",
+          "title": "THE TRAPDOOR AT FIFTEEN",
+          "node": "d4"
+        },
+        {
+          "block": "spya-hqukdz",
+          "quote": "there are some that have quite insidious bugs. An example is machine 118050142",
+          "depicts": "A larger, more ornate machine standing proudly, with a hidden crack near its base.",
+          "title": "THE ORNATE MACHINE'S CRACK",
+          "node": "d5"
+        },
+        {
+          "block": "spya-u3d2ws",
+          "quote": "the “highest risk” values of n for bugs are those of the form 2i – 1",
+          "depicts": "A warning post at the roadside marked with rows of solid ones, like a tally of danger.",
+          "title": "THE ROW OF ONES",
+          "node": "d6"
+        },
+        {
+          "block": "spya-txuteu",
+          "quote": "but then suddenly, at n = 27, do something different",
+          "depicts": "Two identical twin machines side by side, suddenly pointing in opposite directions.",
+          "title": "THE TWINS DIVERGE",
+          "node": "d7"
+        },
+        {
+          "block": "spya-fmdw58",
+          "quote": "something pathological happens—and the machine goes into an infinite loop",
+          "depicts": "A machine chasing its own tail in an endless circular groove worn into the ground.",
+          "title": "THE ENDLESS CIRCLE",
+          "node": "d8"
+        },
+        {
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "A basket meant to hold only even stones, with a stray odd stone marked nine fallen in.",
+          "title": "THE STRAY ODD STONE",
+          "node": "d9"
+        },
+        {
+          "block": "spya-b6uxy4",
+          "quote": "suddenly there's a “bug”—like here at n = 14",
+          "depicts": "A pair of growing checkered tiles meant to double neatly, with a jagged tear appearing at the fourteenth tile.",
+          "title": "THE TEAR AT FOURTEEN",
+          "node": "d10"
+        },
+        {
+          "block": "spya-sk8qh9",
+          "quote": "Here's an example where the first “bug” shows up at n = 24",
+          "depicts": "A similar tile-path stretching further before its own tear appears, farther down the road.",
+          "title": "THE LATER TEAR AT 24",
+          "node": "d11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A clerk nodding with satisfaction over a column of correct sums on a tape.",
+          "title": "THE CLERK'S SATISFACTION"
+        },
+        {
+          "where": "The same clerk recoiling as the tape shows a wrong number scrawled where 8 should be.",
+          "title": "THE WRONG NUMBER"
+        },
+        {
+          "where": "A surveyor walking a long road marked with milestones, checking each one for cracks.",
+          "title": "THE LONG ROAD OF MILESTONES"
+        },
+        {
+          "where": "A hidden trapdoor in the road, marked with the number fifteen, swinging open.",
+          "title": "THE TRAPDOOR AT FIFTEEN"
+        },
+        {
+          "where": "A larger, more ornate machine standing proudly, with a hidden crack near its base.",
+          "title": "THE ORNATE MACHINE'S CRACK"
+        },
+        {
+          "where": "A warning post at the roadside marked with rows of solid ones, like a tally of danger.",
+          "title": "THE ROW OF ONES"
+        },
+        {
+          "where": "Two identical twin machines side by side, suddenly pointing in opposite directions.",
+          "title": "THE TWINS DIVERGE"
+        },
+        {
+          "where": "A machine chasing its own tail in an endless circular groove worn into the ground.",
+          "title": "THE ENDLESS CIRCLE"
+        },
+        {
+          "where": "A basket meant to hold only even stones, with a stray odd stone marked nine fallen in.",
+          "title": "THE STRAY ODD STONE"
+        },
+        {
+          "where": "A pair of growing checkered tiles meant to double neatly, with a jagged tear appearing at the fourteenth tile.",
+          "title": "THE TEAR AT FOURTEEN"
+        },
+        {
+          "where": "A similar tile-path stretching further before its own tear appears, farther down the road.",
+          "title": "THE LATER TEAR AT 24"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "Where Proof Succeeds or Fails",
+      "prompt": "An antique hand-inked map in sepia and faded blue ink, opening with the overview's monk tracing a nested triangular pattern (THE NESTED PATTERN FOUND) now expanded into its own sequence. At top, a monk glances at a simple growing tile pattern and nods at once (THE OBVIOUS PATTERN), then tests a far longer stretch of a hundred thousand tiles without finding a flaw (TESTING A HUNDRED THOUSAND). Beside this, a chart of jittering waves on a scroll shows unpredictable rises the monk frowns at (THE JITTERING WAVES). The monk then unrolls the entire pattern across a long table to see it all at once (UNROLLING THE WHOLE PATTERN), revealing a thin pale border creeping only ever leftward or staying still along one edge (THE CREEPING RIND), and matching the pattern's inner markings against a reference tablet of a known nested design (MATCHING THE KNOWN RULE). This leads to the monk sealing a scroll in triumph, the proof complete (THE SEALED PROOF). Below, a second scribe at a writing desk stares at a simple machine, quill raised in question (THE SCRIBE'S QUESTION), then invents a chain of linked symbols like beads threaded on a string (THE CHAIN OF SYMBOLS), and finally stamps a finished symbolic proof with a seal, stacked scrolls of derivation beside it (THE FINISHED PROOF). Parallel to this, at the bottom, a second darker scribe follows the same chain of symbols into a maze of forking paths that never reach a seal (THE MAZE WITH NO SEAL). Fine old cartographic linework, cross-hatching, generous open parchment between scenes, no lettering anywhere on the page except the small inked capital titles beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-asw9eq",
+          "quote": "if we run this case up to n = 100000, no bugs appear",
+          "depicts": "The same monk now testing a far longer stretch of tiles, counting a hundred thousand marks without finding a flaw.",
+          "title": "TESTING A HUNDRED THOUSAND",
+          "node": "p2"
+        },
+        {
+          "block": "spya-f89kx4",
+          "quote": "These fluctuations at least seem to grow roughly like",
+          "depicts": "A chart of jittering waves on a scroll, the monk frowning at their unpredictable rise.",
+          "title": "THE JITTERING WAVES",
+          "node": "p3"
+        },
+        {
+          "block": "spya-hcdcqp",
+          "quote": "it looks at the whole process of computation—which is easy to do for a cellular automaton—things become clearer",
+          "depicts": "The monk steps back to view the entire unrolled pattern at once, as if unrolling a long scroll across a table.",
+          "title": "UNROLLING THE WHOLE PATTERN",
+          "node": "p4"
+        },
+        {
+          "block": "spya-r7ty6m",
+          "quote": "the white “rind” always either stays in the same place, or moves to the left",
+          "depicts": "A thin pale border along one edge of the pattern, shown creeping only ever leftward or staying still.",
+          "title": "THE CREEPING RIND",
+          "node": "p5"
+        },
+        {
+          "block": "spya-gagsuk",
+          "quote": "it's exactly the rule 122 elementary cellular automaton, with",
+          "depicts": "The monk matching the pattern's inner markings against a known reference tablet labeled with a nested design.",
+          "title": "MATCHING THE KNOWN RULE",
+          "node": "p6"
+        },
+        {
+          "block": "spya-n5acnw",
+          "quote": "the underlying cellular automaton must always correctly “double its input”, with no bugs",
+          "depicts": "The monk closing a scroll with a seal of certainty, the pattern finally proven whole.",
+          "title": "THE SEALED PROOF",
+          "node": "p7"
+        },
+        {
+          "block": "spya-muu0c5",
+          "quote": "we've been able to prove that for all inputs n the machine correctly computes n + 1, with no bugs",
+          "depicts": "The scribe stamping a finished symbolic proof with a seal, scrolls of derivation stacked neatly beside it.",
+          "title": "THE FINISHED PROOF",
+          "node": "p10"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A monk glancing at a simple growing tile-pattern and immediately nodding, no doubt in his face.",
+          "title": "THE OBVIOUS PATTERN"
+        },
+        {
+          "where": "The same monk now testing a far longer stretch of tiles, counting a hundred thousand marks without finding a flaw.",
+          "title": "TESTING A HUNDRED THOUSAND"
+        },
+        {
+          "where": "A chart of jittering waves on a scroll, the monk frowning at their unpredictable rise.",
+          "title": "THE JITTERING WAVES"
+        },
+        {
+          "where": "The monk steps back to view the entire unrolled pattern at once, as if unrolling a long scroll across a table.",
+          "title": "UNROLLING THE WHOLE PATTERN"
+        },
+        {
+          "where": "A thin pale border along one edge of the pattern, shown creeping only ever leftward or staying still.",
+          "title": "THE CREEPING RIND"
+        },
+        {
+          "where": "The monk matching the pattern's inner markings against a known reference tablet labeled with a nested design.",
+          "title": "MATCHING THE KNOWN RULE"
+        },
+        {
+          "where": "The monk closing a scroll with a seal of certainty, the pattern finally proven whole.",
+          "title": "THE SEALED PROOF"
+        },
+        {
+          "where": "A second scribe at a writing desk, staring at a simple machine, quill raised in question.",
+          "title": "THE SCRIBE'S QUESTION"
+        },
+        {
+          "where": "The scribe inventing a chain of linked symbols on parchment, like beads threaded on a string.",
+          "title": "THE CHAIN OF SYMBOLS"
+        },
+        {
+          "where": "The scribe stamping a finished symbolic proof with a seal, scrolls of derivation stacked neatly beside it.",
+          "title": "THE FINISHED PROOF"
+        },
+        {
+          "where": "A second, darker scribe following the same chain of symbols into a maze of forking paths, never reaching a seal.",
+          "title": "THE MAZE WITH NO SEAL"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "profileHash": null
+}

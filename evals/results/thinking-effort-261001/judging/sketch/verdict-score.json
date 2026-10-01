@@ -1,0 +1,354 @@
+{
+  "mode": "sketch",
+  "viewedPictures": true,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Clear definition, origins, evidence-converges, two-families-of-causes, response arc; recognisably this article.",
+            "c2": "Causes zoom draws each cause as a sequential arrow chain (growth -> bias -> math errors -> careers ...), implying a causal ladder the article presents as a list.",
+            "c3": "Origins, cross-field evidence, causes and response all present; Bayesian/context causes and most reforms (preregistration detail, larger samples) missing from both scenes.",
+            "c4": "Top ellipse truncated ('Published findings often fail to...'); evidence and causes bands carry no visible label; otherwise clean.",
+            "c5": "Labels accurate (36-50% psychology, ~11% cancer); c1 'Science's growth fuels publish or perish' links to an '[edit]' block (spya-x52rky)."
+          }
+        },
+        "X": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "Y": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Origins -> evidence -> two cause bundles -> three response columns matches the article's architecture.",
+            "c2": "Overview pairs psychology -> 'publishing rewards positive results' and other fields -> 'weak power' as if each field caused a specific cause family; unsupported pairing.",
+            "c3": "Causes zoom covers nine cause sections incl. Bayesian and context sensitivity; responses zoom covers result-blind review, preregistration, p<0.005, triangulation, theory revision.",
+            "c4": "Clean, labelled columns in both zooms; detail scenes have large uneven gaps but read easily.",
+            "c5": "Labels true to text (e.g. 'Public mostly unaware' matches the German survey); opening node links to the title block and a 'See also' note spends space on back matter."
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Problem -> MI/TE -> limit -> PID -> findings -> practical limits -> future is the review's real spine.",
+            "c2": "Evidence zoom routes findings into a decision diamond 'Synergy is concentrated, structured' and draws feedforward -> peak-correlation as if derived; four findings arrow into the Caveats note.",
+            "c3": "Method and findings well covered; the Summary's closing claim and the analysis-tools section are absent.",
+            "c4": "Readable, but the two bands have no visible labels and edges in the findings fan cut across 'Synergy peaks at mid correlation'.",
+            "c5": "Block links land on the right sections; the 'Synergy is concentrated' diamond links only to a section heading."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Funnel from question to PID, fan of findings, limits, and a summary looping back to the opening question fits the piece.",
+            "c2": "Overview converges the culture findings into the macaque study as if it followed from them; the macaque work is a separate later study.",
+            "c3": "Adds a future-directions zoom (local PID, PhiID) and the Summary; all major sections represented.",
+            "c4": "'Partial Informatio...' hex truncated, and the dashed loop with its 'returns to the opening question' label runs over the findings region.",
+            "c5": "Labels accurate (40% neurons / ~88% synergy, ~7% peak); 'Synergy tracks feedforward TE' links to the section intro block rather than its paragraph."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 3, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Problem, tools, their blind spot, PID, findings fan-and-converge, limits, then loop back to a sharpened answer: a reader gets the shape right.",
+            "c2": "Findings zoom is titled 'in order' and drawn as a strict ladder where each result leads to the next; the studies are parallel.",
+            "c3": "Covers motivation, both measures, PID derivation step by step, redundancy-vs-synergy timescale result, caveats, primates, summary.",
+            "c4": "Overview text is small and the second row of finding boxes overlaps the first row; loop line crosses the regions.",
+            "c5": "Paragraph-precise block links throughout; 'Rich clubs do most computing' stretches 'synergy' into 'computing'."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Spine from problem through PID into a fan of findings and out to limits, future and summary reads as this review's shape.",
+            "c2": "Devices mostly earned; the 'Underdetermined - pick one piece to define' diamond in the zoom is a mild decision device on an expository step.",
+            "c3": "Problem, measures, PID construction, findings, caveats, primates, limits, future and summary all present at a sensible grain.",
+            "c4": "Clean and readable, but the dashed PID-framework region overlaps the findings band and region labels are not shown.",
+            "c5": "Labels accurate (2.7x, ~88%); 'Lattice atoms computed by Mobius inversion' links to the ordering paragraph (m37w5y) rather than the inversion one."
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Stakes, biases, four arguments converging on 'functionalism looks shaky', two practical risks, soul ending: the essay's shape.",
+            "c2": "Zoom names the convergence 'The arguments reinforce each other' where Seth says each 'can stand up by itself'.",
+            "c3": "Arguments and ethics have zooms; the temptations section (intelligence vs consciousness, pareidolia) is reduced to two notes.",
+            "c4": "Dashed loop runs through 'Brains aren't computers' with its 'loops back' label on top; bands have no visible labels.",
+            "c5": "'Functionalism looks shaky' links to an empty block (spya-uzr60x); 'reinforce each other' drifts from the text."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Temptations converge on pareidolia, four doubts converge on 'shaky, not disproven', two worries, false-positive risk, embodied-soul close.",
+            "c2": "Labels carefully hedged ('not disproven, just unsupported'); temptations zoom chains biases -> projection -> four lures, a little more causal than the prose.",
+            "c3": "Three zooms cover temptations, the four arguments with their examples, and the ethical turn.",
+            "c4": "Subtitles overlap ellipse borders ('golem to Lemoine's'), several subs truncated, loop line crosses both regions.",
+            "c5": "Mostly paragraph-accurate links; the overview conclusion links to the empty block spya-uzr60x."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel, four-argument converge and a what-to-do fan are recognisable.",
+            "c2": "Temptations zoom wires anthropocentrism -> language -> techno-rapture as a causal cascade the essay does not claim; 'Is computation enough?' drawn as a decision diamond.",
+            "c3": "Main parts present, but the false-positive asymmetry and 'no test can settle it' are missing.",
+            "c4": "Loop line runs through the argument boxes with an overlapping label; overview bands mostly unlabelled; small text.",
+            "c5": "'Seeming-conscious AI' links to the paragraph about real conscious tech (vs0vpj); 'Illusion won't go away' links to the Suleyman quote; 'Fluent talk' sub says 'hype, techno-rapture'."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 3, "c3": 5, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Five labelled movements (why it matters, temptations, four arguments, uncertainty, soul) with an echo loop give the essay's shape.",
+            "c2": "Temptations zoom caption says the pulls 'reinforce rather than follow from each other' yet draws them as a derivation chain.",
+            "c3": "Includes the 'future isn't fixed' turn and the soul ending as well as the core sections.",
+            "c4": "Clean and labelled; zoom title truncated ('We conflate intelligence with...') and the echo label sits on a region border.",
+            "c5": "'Conscious-seeming AI is already risky' links to the real-conscious-tech paragraph (vs0vpj); 'illusion persists' links to the Suleyman quote."
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 3, "c2": 3, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Overview evidence is a seven-box vertical stack; hub and consequences fan are right but the evidence reads as a generic list.",
+            "c2": "Consequences zoom chains sampling -> prime counting -> language design as if each led to the next; the article treats them as separate lessons.",
+            "c3": "Turing machines, specs, CA, proofs, irreducibility, testing, surprises, maths, practice and the discovery reframe all appear; a 'Thanks' note wastes space.",
+            "c4": "Readable; loop line crosses the evidence region with its label overlapping a box.",
+            "c5": "Two nodes link to empty blocks (spya-ypka68, spya-q8fg9q); labels otherwise accurate."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Demonstrations and proofs converge on an irreducibility hub, then fan to implications and loop back: recognisably this piece.",
+            "c2": "'Good language design is the best defense' overstates; Wolfram says the most important thing in practice is seeing inside the computation.",
+            "c3": "Demonstration and proof zooms are detailed; the implications (testing, surprises, maths, AI) get no zoom and the AI point is missing.",
+            "c4": "Clear, labelled zooms; hub sub truncated ('computational...') and the loop line passes through the proofs region.",
+            "c5": "Several links land on empty figure blocks (#27, #72, #81, #89, #154)."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Funnel of examples into the irreducibility claim, then a fan of consequences, matches the structure.",
+            "c2": "Consequences zoom captions itself 'side by side rather than ranked' but draws arrows math -> short programs -> neural nets.",
+            "c3": "No zoom for the formal-proof section and the 'bug as discovery' close is absent from the overview.",
+            "c4": "Clean, uncrowded, no overlaps; reads at a glance.",
+            "c5": "Links land on the right paragraphs; one weak link (e8 rule-122 proof card on the rule-122 paragraph only)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Chain with a genuine provable-or-not fork, then irreducibility, then two strands meeting in the closing thought.",
+            "c2": "The yes/no fork is earned by the rule-122 proof vs the failed proof search; chains elsewhere are mild.",
+            "c3": "Zooms cover TM bugs, specs, proofs, and the full run of ruliological surprises, math counterexamples, language design and AI.",
+            "c4": "Readable and well spaced; overview bands show no label and the detail chains are long.",
+            "c5": "Labels exact (8k-1 glitches, 137,356,329 steps, x^105-1); proof nodes link to empty figure blocks."
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Chain from connectionism through mixed selectivity, oscillations, Spatial Computing hub with two explanatory branches, to consciousness: right shape.",
+            "c2": "'All anesthetics cause slow, scrambled waves' and 'Cognition = organized wave dynamics' overstate a paper that says three drugs and 'may arise'.",
+            "c3": "Spatial computing and consciousness zooms; the routing problem behind mixed selectivity is missing.",
+            "c4": "Key ellipses truncated ('Spatial Computing...', 'waves select &...'); bands unlabelled.",
+            "c5": "'Unlike Higher-Order theories' contradicts the text, which says the framework 'closely aligns' with HOTs."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Problem -> classical view -> mixed selectivity -> waves -> spatial computing -> analog -> anesthesia -> hybrid -> conclusion matches the paper's chain.",
+            "c2": "'Consciousness = organized, wave-coordinated cortex' turns a hypothesis into an identity; waves zoom routes efficiency -> anesthesia as if derived.",
+            "c3": "Spatial and waves zooms good; rival theories reduced to one box and the routing-problem motivation absent.",
+            "c4": "Overview regions overlap and 'Synapses store' straddles the region edge; bands unlabelled.",
+            "c5": "Labels accurate to the passages (gamma upper layers / alpha-beta deep, 4 species; millimetre scale)."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Problem-answer chain with a side note for rival theories is the paper's shape.",
+            "c2": "Conclusion hedged ('an organized, wave-coordinated cortex'); spatial-computing zoom drawn as a strict ladder for parallel explanations.",
+            "c3": "Strong mechanism zoom (1/3 of PFC neurons, routing problem); no zoom for the consciousness framework or rivals.",
+            "c4": "Overview regions overlap one another and only one is labelled; detail ladders are long but clear.",
+            "c5": "Links precise (e.g. ~1/3 PFC neurons -> amx5qf, which says exactly that)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Labelled stages flow left-to-right within bands then down to anesthesia, hybrid framework and conclusion.",
+            "c2": "Consciousness zoom sets the hybrid against 'Rival theories' converging on 'not broadcasting or hot zones', though the paper aligns with HOTs and shares GW themes.",
+            "c3": "Spatial and consciousness zooms; mixed-selectivity motivation and traveling-wave detail only in overview.",
+            "c4": "Labelled regions, no overlaps, clear reading order.",
+            "c5": "Labels true; HOT box ('top-down organization itself is consciousness') sits under 'rival theories', slightly misframed."
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Thesis fans into three case studies that converge on 'dignity from group loyalty', then what work gives: right shape.",
+            "c2": "Devices earned; the closing 'risks a clannish, relational future' fits the author's hedged worry.",
+            "c3": "Ladies case has no zoom, the survey/oral-history evidence on work is one box, and the author's 'I'm not certain' close is missing.",
+            "c4": "Readable; two of three case bands unlabelled and a large empty area under the overview.",
+            "c5": "Convergence hex links to the 'Friendship was invented' heading; 'Commercial society freed friendship' links to the moral-equality paragraph (hdbtc0), as does the conclusion."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Three converging cases, a 'why work matters' block, and a wary-hope ending looping to the opening thesis give the whole arc.",
+            "c2": "Hedged throughout ('wary hope'); work zoom converges four evidence sources plausibly.",
+            "c3": "Aristocrat and work zooms are good; the ladies and working-class cases get no zoom; notes box spends space on back matter.",
+            "c4": "Thesis subtitle overlaps the region border, aristocrat band unlabelled, loop label floats mid-page.",
+            "c5": "Most links accurate (85% satisfaction, Terkel); overview 'freed friendship' node links to the moral-equality paragraph."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Funnel into three cases, converge, then a chain to the hedge that loops back: recognisable.",
+            "c2": "Zooms are strict ladders that turn parallel observations into steps (e.g. Banfield -> Gans -> 'conditions improved'); 'All three: gossip defends group reputation' narrows the shared finding.",
+            "c3": "Aristocrat and working-class zooms are thorough; ladies case has none.",
+            "c4": "Clear, though two bands unlabelled and the dashed side-note connectors in zooms are fiddly.",
+            "c5": "Labels true; 'Gans studied Boston's West End' links to an empty block (spya-ftk9a7)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Three cases converge, then evidence on work, commercial friendship and the author's hope: a reader would get the argument.",
+            "c2": "Hedged ending ('hopes AI won't force a return'); devices earned.",
+            "c3": "Aristocrats and ladies zoomed; working-class case has no zoom and the Gans/Banfield material is missing.",
+            "c4": "Clean, uncluttered, clear reading order.",
+            "c5": "Convergence hex links to a ladies paragraph (j3vvp7) rather than the synthesis; other links accurate."
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Spine through properties, uses, types, spinning, synthesis, research, human uses suits an encyclopedia article; properties fan and synthesis fork are apt.",
+            "c2": "Solid arrows make each section cause the next (properties -> uses, research -> human uses), a causal chain the article does not make.",
+            "c3": "Properties and synthesis zoomed; gland anatomy and human uses (medicine, crosshairs) get one box each.",
+            "c4": "Readable, but curved edges in the properties zoom cut through the trait boxes and bands are unlabelled.",
+            "c5": "Labels accurate ('toughness beats Kevlar', 'supercontraction'); links land on the right sections."
+          }
+        },
+        "X": {
+          "scores": { "c1": 3, "c2": 4, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "No edges are drawn in any scene, so the 'chain' reads as floating boxes; ordering alone carries the shape.",
+            "c2": "With no connectors there are few devices to overclaim; 'one per gland, one per job' is slightly stronger than the text.",
+            "c3": "Most complete: gland anatomy (tail, ampulla, duct, valve), garden spider's glands, medicine and science uses, commercial efforts.",
+            "c4": "No connectors, two hex labels truncated ('through a tapering...', 'still thicker, weaker than...'), back-matter label floats as bare text.",
+            "c5": "Labels accurate and links paragraph-precise (e.g. duct -> ba6knb, valve -> s5073r)."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Spine with two hub regions (properties, synthesis) matches where the article has the most going on.",
+            "c2": "Properties zoom draws an arrow from 'a sixth the density of steel' to the glue box, implying one feeds the other.",
+            "c3": "Properties and synthesis well covered; gland anatomy and human uses thin.",
+            "c4": "In the synthesis zoom, connector lines run straight through the E. coli and goat boxes and a dashed line crosses Microfluidics; bands unlabelled.",
+            "c5": "'E. coli-made protein matches real silk' is not in the linked KAIST passage, which only says silk was made using E. coli."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Chain with a fan from structure into uses and gland types reconverging at spinning, then synthesis and human uses.",
+            "c2": "'Copying silk is still hard' and 'still thinner, weaker' are faithful; arrows mostly earned.",
+            "c3": "Properties zoom includes Termonia's model and Darwin's bark spider; human uses and gland anatomy get no zoom.",
+            "c4": "Readable; lines in the properties zoom pass through the notes and the 'Also used' note sits on crossing lines.",
+            "c5": "Labels and links accurate (supercontraction -> qdjb0x, commercial efforts -> AMSilk paragraph)."
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Pseudoscience survey -> naming -> integrity principles -> case studies -> wish is the talk's arc.",
+            "c2": "'You are easiest to fool' is a decision diamond with one exit; a principle, not a decision.",
+            "c3": "Omits the honesty-to-laymen and publish-every-result points (and government advice) entirely.",
+            "c4": "Readable horizontal rows; opening ellipse truncated ('self-deception in...') and two bands unlabelled.",
+            "c5": "Case-study zoom wires the physics comparison-run case into 'An A-Number-1 experiment', which is about Young's rats."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 3, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Chain into case studies with a loop back to the theme; overview shape right.",
+            "c2": "Pseudoscience zoom converges every investigation into 'Psychotherapy added to the suspect list' as if it were the culmination.",
+            "c3": "'You are the easiest person to fool', honesty to laymen and publishing all results are missing; no integrity zoom.",
+            "c4": "Clear; loop line crosses the integrity region and its label sits inside the region.",
+            "c5": "Labels true to the talk; case zoom puts the professor's refusal before Feynman's advice to replicate."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Four stacked movements and a loop; true to a speech's linear order, if mostly a column.",
+            "c2": "Devices earned; 'Rule one' hex marks the talk's own first principle.",
+            "c3": "Includes Millikan, 'easiest to fool', honesty to laymen, publish every outcome, all three case studies and both zooms.",
+            "c4": "Clean column, readable; two bands unlabelled and the overview is long.",
+            "c5": "Labels accurate and links paragraph-precise (e.g. sand under the floor -> npdc6n)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Funnel of failed beliefs into one diagnosis and one rule, worked out point by point, tested on cases: exactly the talk's logic.",
+            "c2": "Mostly earned; 'That slow creep shows: you fool yourself first' adds a causal link slightly beyond the text.",
+            "c3": "Integrity zoom covers advertising, Millikan, laymen honesty, publish-all; case zoom covers all cases and the wish.",
+            "c4": "Readable; zigzag arrows in the integrity grid and the dashed loop running down the right edge add clutter; empty space at top.",
+            "c5": "Labels accurate; 'Psychology and physics both skip needed repeats' links only to the psychology passage."
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "version": "ideas/3",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-x54fzk",
+      "name": "Citation counts are treated as a stand-in for scientific quality",
+      "provenance": "assumed",
+      "statement": "In academic practice, how often a paper is cited is commonly taken as a rough signal of how good or important its findings are.",
+      "whyYouNeedIt": "Without this background assumption, the finding that irreproducible papers get cited more, even after being debunked, would not register as a troubling anomaly worth reporting; the passages treat it as self-evidently a problem rather than explaining why citation counts should have tracked validity in the first place.",
+      "occurrences": [
+        {
+          "blockId": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited.[110] Nonreplicable publications are often cited more even after a replication study is published.[111]",
+          "reasoning": "Presents citation rates for discredited findings as a notable finding, which is only troubling if citations are supposed to reward validity.",
+          "start": 77
+        },
+        {
+          "blockId": "spya-x6vcuf",
+          "quote": "findings that could not be replicated tend to be cited more over time than reproducible research papers, likely because these results are surprising or interesting",
+          "reasoning": "Implicitly contrasts what citations 'should' reward (reliable findings) with what drives them in practice (surprise), a contrast that requires assuming citations are meant to track quality.",
+          "start": 99
+        }
+      ]
+    },
+    {
+      "id": "spya-xaudd3",
+      "name": "Replication failures are science working, not science failing",
+      "provenance": "introduced",
+      "statement": "When a study fails to replicate, that does not by itself mean the field is sloppy or dishonest; weeding out unsupported claims through repeated testing is how science is supposed to work, even though it often does so slowly and unevenly.",
+      "occurrences": [
+        {
+          "blockId": "spya-cxcn8h",
+          "quote": "Replication failures do not indicate that affected fields lack scientific rigor.[15][16][17] Rather, they reflect the normal operation of science—a mechanism by which unsupported hypotheses are eliminated,[18][19] but which often functions slowly and inconsistently.[20][21]",
+          "reasoning": "States directly that non-replication is a sign of normal self-correction rather than disgrace.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-dr48q7",
+      "name": "Published effect sizes are inflated and shrink on replication",
+      "provenance": "introduced",
+      "statement": "Because only sufficiently large or lucky-looking results tend to get published, the effect sizes that make it into print are systematically bigger than the true effect, so later, better-powered attempts to reproduce them tend to find a smaller effect.",
+      "occurrences": [
+        {
+          "blockId": "spya-r42sms",
+          "quote": "Even when the study replicates, the replication typically has a smaller effect size. Underpowered[clarification needed] studies have a large effect size bias.",
+          "reasoning": "States the shrinkage pattern directly as a general property of replications.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-bha57y",
+          "quote": "36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude.",
+          "reasoning": "Supplies the concrete empirical instance that only makes sense once inflation-then-shrinkage is understood as the expected pattern.",
+          "start": 476
+        }
+      ]
+    },
+    {
+      "id": "spya-ay7jm5",
+      "name": "Incentives select for publishable results, not true ones",
+      "provenance": "introduced",
+      "statement": "Career rewards in science are built around producing novel, publishable findings, and this reward structure can push the research system toward churning out attention-grabbing but unreliable results even when no individual scientist intends to deceive anyone.",
+      "occurrences": [
+        {
+          "blockId": "spya-huxt52",
+          "quote": "\"publish or perish\" culture created a situation whereby the goals and values of single scientists (e.g., publishability) are not aligned with the general goals of science (e.g., pursuing scientific truth).",
+          "reasoning": "States the mismatch between personal incentives and the collective goal of truth.",
+          "start": 77
+        },
+        {
+          "blockId": "spya-ys59mk",
+          "quote": "He recognized that the incentive structure for modern scientists could become dysfunctional, creating perverse incentives to publish any findings, however dubious.",
+          "reasoning": "Frames the problem as structural and predicted decades in advance, not a matter of individual bad actors.",
+          "start": 342
+        },
+        {
+          "blockId": "spya-ftd2ng",
+          "quote": "Under certain parameter settings, the population of labs converge to maximum productivity even at the price of very high false positive rates.",
+          "reasoning": "Shows a modeled mechanism by which selection pressure on labs drives the whole system toward high false-positive output.",
+          "start": 702
+        }
+      ]
+    },
+    {
+      "id": "spya-asf8cm",
+      "name": "Flexible analysis choices inflate false positives even without cheating",
+      "provenance": "introduced",
+      "statement": "Because a study involves many small decisions about how to collect, clean, and analyze data, a researcher who tries several reasonable approaches and reports the one that worked can produce a 'significant' result far more easily than the stated error rate suggests, even while acting in good faith.",
+      "occurrences": [
+        {
+          "blockId": "spya-j8h7w7",
+          "quote": "Researchers' degrees of freedom occur at many stages: hypothesis formulation, design of experiments, data collection and analysis, and reporting of research.",
+          "reasoning": "Names the general mechanism by which innocent choices accumulate into a problem.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-umu7gf",
+          "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\".",
+          "reasoning": "Gives the mechanism its standard name and ties it to the earlier description of multiple decision points.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-qsad7n",
+          "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%.",
+          "reasoning": "Quantifies how far ordinary, non-malicious flexibility can push the real false-positive rate above the nominal 5%.",
+          "start": 128
+        }
+      ]
+    },
+    {
+      "id": "spya-h0epcg",
+      "name": "Low power mathematically guarantees low replication rates",
+      "provenance": "introduced",
+      "statement": "The chance that a second study will reproduce a first study's significant result is tied directly to the statistical power of the tests involved: if studies in a field routinely have low power, most published positive results will fail to replicate no matter how carefully anything else is done.",
+      "occurrences": [
+        {
+          "blockId": "spya-x7d5t5",
+          "quote": "Mathematically, the probability of replicating a previous publication that rejected a null hypothesis in favor of an alternative is assuming significance is less than power. Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.",
+          "reasoning": "Makes the formal claim that replication probability is bounded by power alone.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-hdubm3",
+          "quote": "Low statistical power hinders replication for three reasons: (1) low-power replications have reduced ability to detect true effects, (2) low-power original studies produce biased effect size estimates leading to undersized replications, and (3) low-power original studies yield results unlikely to reflect true effects.",
+          "reasoning": "Spells out the causal chain from power to replication failure that the surrounding discussion assumes.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-zvfgme",
+          "quote": "implying that a positive result would replicate with probability less than 10%, regardless of whether the positive result was a true positive or a false positive.",
+          "reasoning": "Applies the power-replication link to real numbers to show why most psychology findings are expected not to replicate.",
+          "start": 443
+        }
+      ]
+    },
+    {
+      "id": "spya-v5t3r0",
+      "name": "Failed replication can mean the true effect varies, not that the first study was wrong",
+      "provenance": "introduced",
+      "statement": "When different careful attempts to measure the same effect disagree, this can reflect the fact that the effect itself genuinely differs across settings, samples, or hidden conditions, rather than meaning one of the studies made a mistake.",
+      "occurrences": [
+        {
+          "blockId": "spya-ddw4ya",
+          "quote": "a further reason studies might fail to replicate is high heterogeneity of the to-be-replicated effects.",
+          "reasoning": "Names variability of the true effect, not error, as a distinct cause of replication failure.",
+          "start": 44
+        },
+        {
+          "blockId": "spya-r23rs2",
+          "quote": "this suggested that heterogeneity could have been a genuine characteristic of the phenomena being investigated.",
+          "reasoning": "Draws the conclusion that disagreement among exact replications reflects real variation rather than flawed execution.",
+          "start": 671
+        }
+      ]
+    },
+    {
+      "id": "spya-xrzgck",
+      "name": "Rejecting 'no effect' only supports a theory when there is one obvious rival explanation",
+      "provenance": "introduced",
+      "statement": "A statistical test that rules out 'nothing is going on' is strong evidence for a specific theory only when there are few other theories that would equally well predict the same result; in fields where many competing explanations could produce the same correlation, ruling out 'nothing is going on' barely narrows things down.",
+      "occurrences": [
+        {
+          "blockId": "spya-j0ubfk",
+          "quote": "evidence against the null hypothesis \"there is no correlation\" is no evidence for one of the many alternative hypotheses that equally well predict \"there is a correlation\".",
+          "reasoning": "States the logical gap directly: ruling out no-effect does not pick out which effect-explanation is correct among many candidates.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-rzjbzy",
+          "quote": "in complex systems, such as social psychology, \"the null hypothesis is always false\", or \"everything is correlated\"",
+          "reasoning": "Explains why, in such fields, failing to reject the null tells you almost nothing, since the premise that nothing is ever truly uncorrelated undercuts the whole test's logic.",
+          "start": 46
+        }
+      ]
+    },
+    {
+      "id": "spya-vcqx9h",
+      "name": "A significant p-value says much less than it seems to",
+      "provenance": "introduced",
+      "statement": "Whether a result is 'statistically significant' depends on the test's threshold, but how likely the underlying claim is to be true also depends heavily on how plausible that claim was before the data came in; a low p-value alone does not tell you the probability that the hypothesis is correct.",
+      "occurrences": [
+        {
+          "blockId": "spya-raafdf",
+          "quote": "if the hypothesis was implausible, with a prior probability of a real effect being 0.1, even the observation of p = 0.001 would have a false positive risk of 8 percent.",
+          "reasoning": "Gives a concrete case where an extremely low p-value still leaves substantial doubt because the prior was low.",
+          "start": 273
+        }
+      ]
+    },
+    {
+      "id": "spya-rpfd8m",
+      "name": "Agreement across different methods beats repeating the same method",
+      "provenance": "introduced",
+      "statement": "Running the same kind of study again and again, even successfully, can create false confidence in a shared flaw; checking a claim with genuinely different methods, each with its own independent weaknesses, is a stronger guard against being fooled.",
+      "occurrences": [
+        {
+          "blockId": "spya-w073xf",
+          "quote": "replication alone will get us only so far (and) might actually make matters worse ... [Triangulation] is the strategic use of multiple approaches to address one question.",
+          "reasoning": "States directly that repeating one method is weaker than combining independent methods.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-w073xf",
+          "quote": "Results that agree across different methodologies are less likely to be artefacts.",
+          "reasoning": "Gives the reason agreement across unrelated methods is more trustworthy than agreement within one method.",
+          "start": 246
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-01T18:21:10.746Z",
+  "elapsedMs": 138911
+}

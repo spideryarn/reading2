@@ -1,0 +1,95 @@
+{"ideas": [
+  {
+    "name": "Failed replication is science working, not science failing",
+    "provenance": "introduced",
+    "statement": "When a published result fails to replicate, this usually shows the normal, self-correcting operation of science weeding out an unsupported claim, not that the field lacks rigor.",
+    "occurrences": [
+      {"blockId": "spya-cxcn8h", "quote": "Replication failures do not indicate that affected fields lack scientific rigor.[15][16][17] Rather, they reflect the normal operation of science", "reasoning": "States directly that non-replication is evidence of science's self-correcting mechanism rather than of its failure."}
+    ]
+  },
+  {
+    "name": "Low power makes failed replications uninformative",
+    "provenance": "introduced",
+    "statement": "If a test has low statistical power, the chance of successfully repeating a true positive finding is itself low, so a failed replication attempt does not tell you much about whether the original finding was real.",
+    "occurrences": [
+      {"blockId": "spya-x7d5t5", "quote": "Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.", "reasoning": "States the mathematical link between power and replication probability directly."},
+      {"blockId": "spya-zvfgme", "quote": "the median of studies with adequate statistical power was between 7.7% and 9.1%, implying that a positive result would replicate with probability less than 10%", "reasoning": "Applies the power-replication link to real psychology literature."},
+      {"blockId": "spya-h7qg2e", "quote": "It had been repeatedly pointed out since 1962[55] that most psychological studies have low power (true positive rate), but low power persisted for 50 years", "reasoning": "Shows the low-power problem as a long-recognized structural cause of non-replication."}
+    ]
+  },
+  {
+    "name": "Publication bias distorts the visible scientific record",
+    "provenance": "introduced",
+    "statement": "Because journals favor positive, significant results, the published literature becomes systematically unrepresentative of all the evidence actually collected, hiding a 'file drawer' of unpublished null results.",
+    "occurrences": [
+      {"blockId": "spya-y782zn", "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\", where negative results remain unpublished.", "reasoning": "States the core mechanism directly."},
+      {"blockId": "spya-f76az5", "quote": "it is plausible that a considerable proportion of research findings might be false positives", "reasoning": "Draws out the consequence of that bias for the credibility of published findings."}
+    ]
+  },
+  {
+    "name": "Flexible analysis choices manufacture false positives",
+    "provenance": "introduced",
+    "statement": "Because researchers face many unconstrained choices in how they collect, clean, and analyze data, trying several reasonable approaches and reporting only the one that 'worked' can produce an apparently significant result even when nothing real is there.",
+    "occurrences": [
+      {"blockId": "spya-umu7gf", "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\".", "reasoning": "Names the mechanism by which many small decision points combine to inflate false positives."},
+      {"blockId": "spya-qsad7n", "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%.", "reasoning": "Quantifies how ordinary flexibility, not malice, drives up error rates."},
+      {"blockId": "spya-jp3k7e", "quote": "The probability that at least 1 out of 20 is significant is, by assumption of independence,", "reasoning": "Gives the concrete multiple-testing logic underlying the forking-paths problem."}
+    ]
+  },
+  {
+    "name": "Rejecting the null is weak evidence for any one alternative",
+    "provenance": "introduced",
+    "statement": "In fields where many different theories could all predict 'these two things are correlated,' finding a significant result only rules out 'no correlation' — it does not single out which particular theory, including an unlikely one, is correct.",
+    "occurrences": [
+      {"blockId": "spya-j0ubfk", "quote": "evidence against the null hypothesis \"there is no correlation\" is no evidence for one of the many alternative hypotheses that equally well predict \"there is a correlation\"", "reasoning": "States the logical gap between rejecting the null and confirming a specific causal story."},
+      {"blockId": "spya-pknetn", "quote": "when statistical studies on extrasensory perception reject the null hypothesis at extremely low p-value...it does not imply the alternative hypothesis \"ESP exists\"", "reasoning": "Applies the idea to a concrete case where many mundane explanations compete with the exotic one."},
+      {"blockId": "spya-jxfrbv", "quote": "in a context where a high proportion of tested hypotheses are false, it is conceivable that the number of false positives would be high compared to those of true positives", "reasoning": "Shows how the base rate of true hypotheses interacts with test reliability to make single significant results weak evidence."}
+    ]
+  },
+  {
+    "name": "Underpowered significant findings overstate the true effect",
+    "provenance": "introduced",
+    "statement": "When a study barely has enough statistical power to detect an effect, the fact that it found a significant result at all means it probably caught an inflated, lucky-sized estimate, so later careful replications tend to find a smaller true effect.",
+    "occurrences": [
+      {"blockId": "spya-r42sms", "quote": "Even when the study replicates, the replication typically has a smaller effect size. Underpowered[clarification needed] studies have a large effect size bias.", "reasoning": "States the shrinkage phenomenon directly."},
+      {"blockId": "spya-hw9d4p", "quote": "when the sample size is small, noise tends to cause the regression factor to be overestimated", "reasoning": "Gives the statistical mechanism (noise plus small sample) producing inflated original estimates."}
+    ]
+  },
+  {
+    "name": "Career incentives misalign individual and collective scientific goals",
+    "provenance": "introduced",
+    "statement": "Because careers are built on publishing novel, positive results rather than on getting things right, researchers can rationally pursue publishability in ways that work against the field's actual goal of accumulating true knowledge.",
+    "occurrences": [
+      {"blockId": "spya-huxt52", "quote": "the goals and values of single scientists (e.g., publishability) are not aligned with the general goals of science (e.g., pursuing scientific truth)", "reasoning": "States the misalignment explicitly as the mechanism behind biased research behavior."},
+      {"blockId": "spya-jk4f5n", "quote": "Replications \"bring less recognition and reward, including grant money, to their authors\".", "reasoning": "Shows a concrete case where individually rational behavior (avoiding replication) harms the collective project."},
+      {"blockId": "spya-cw2g6v", "quote": "Intense pressure to publish...incentivizes researchers to prioritize publishable results over validity.", "reasoning": "Names the general incentive structure driving the pattern."}
+    ]
+  },
+  {
+    "name": "Triangulation beats single-method replication",
+    "provenance": "introduced",
+    "statement": "Confirming a claim through several independent methods, each with its own unrelated weaknesses, is stronger evidence than repeating the same method again, because agreement across unrelated approaches is less likely to be an artifact of any one method's flaws.",
+    "occurrences": [
+      {"blockId": "spya-astgqn", "quote": "replication alone will get us only so far (and) might actually make matters worse", "reasoning": "Directly contrasts replication with the stronger strategy being proposed."},
+      {"blockId": "spya-w073xf", "quote": "Results that agree across different methodologies are less likely to be artefacts.", "reasoning": "States the core logic of why triangulation is epistemically superior to repeated same-method tests."}
+    ]
+  },
+  {
+    "name": "Ambiguous results can always be blamed on the instrument instead of the theory",
+    "provenance": "introduced",
+    "statement": "Any empirical finding depends on both a substantive theory and a theory of the measuring instrument, so when results are not as expected, a researcher can choose to fault the instrument rather than revise the substantive theory — and this choice can be made inconsistently to protect favored conclusions.",
+    "occurrences": [
+      {"blockId": "spya-nbztjn", "quote": "scientific results are interpreted by both a substantive theory and a theory of instruments...A large amount of non-replicable research might accumulate if there is a bias of the following kind: faced with a null result, a scientist prefers to treat the data as saying the instrument is insufficient", "reasoning": "States the Duhem-Quine mechanism by which asymmetric blame-assignment protects theories from disconfirmation."}
+    ]
+  },
+  {
+    "name": "Citation counts are treated as a stand-in for a finding's credibility",
+    "provenance": "assumed",
+    "statement": "People, including scientists, tend to read how often a result gets cited or discussed as a signal of how trustworthy or important it is, even though citation reflects interest and surprise rather than truth.",
+    "whyYouNeedIt": "The finding that non-replicable papers get cited more, and keep being cited after failed replications, is presented as troubling only if citation is normally expected to track validity; without that unstated assumption the fact would be unremarkable.",
+    "occurrences": [
+      {"blockId": "spya-m3et6t", "quote": "papers that cannot be replicated are more likely to be cited.", "reasoning": "This is framed as a problem rather than a neutral fact, which only makes sense if citations are implicitly supposed to track reliable findings."},
+      {"blockId": "spya-qht6nk", "quote": "Concerns have been expressed within the scientific community that the general public may consider science less credible due to failed replications.", "reasoning": "Assumes that visible publication and citation shape public judgments of scientific credibility, independent of whether the underlying claims were ever solid."}
+    ]
+  }
+]}

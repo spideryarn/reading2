@@ -4,6 +4,14 @@
 findings, folded in below — [the review](../../evals/thinking-effort/reviews/plan-review-sol-r1.md)).
 Stage 1 (the harness) built and smoked on `cargocult` for $1.12.
 
+**Stages 2–3, as of 20:45:** Sketch, Ideas (with its `medium` round) and 23 of 32 Illustrated draws
+are in; Sketch is judged. Then the OpenRouter **account** ran out of credit ($309.13 of $310,
+shared by the dev and prod keys) and three Illustrated calls came back `402 ai-no-credit`. The
+harness stopped itself; those three rows and their claims are moved to
+`evals/results/thinking-effort-261001/outage-402/`, so a resume re-runs exactly them. The Overseer
+has told Greg. Illustrated waits for the top-up; the write-up so far is
+[research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+
 **Hierarchy is decided already, by the smoke run:** with thinking off, both draws answered with a
 sentence of prose before the JSON ("Looking at this structure, I'll trace the natural argument
 flow: …") and the shipping parser (`stripFence` + `parseJsonFrom`) refused both. That is the known
@@ -202,6 +210,29 @@ fails this gate rather than disappearing from the median.
   `medium`.)
 - **Hierarchy**: already stopped at its JSON hard gate, so `low` stays. Had the smoke passed, `off`
   would have required *no visible loss* from both judges **and** every structural gate.
+
+### Written mid-run (19:47, 44 of 96 draws in, before any judging): the validity gate
+
+Today's `high` also produces invalid answers — malformed JSON in mid-answer, the shipping parser's
+refusal, e.g. `{"blockId": "spya-p4pyuy": "", "quote": "", …}`. At this point Ideas base had failed
+1 of 12 draws and Sketch base 1 of 8. So "every low draw validated", read literally, would also fail
+`high` itself, and would fail any candidate whose failure rate merely equals production's. That is
+a flaw in the gate as written, found by the data rather than chosen after it, and it is recorded
+here before the counts are complete.
+
+What I will do with it, so it is fixed before the final counts: **report the literal gate, and
+decide on the comparison** — a candidate fails the validity gate if its invalid draws exceed the
+base arms' invalid draws on the same articles (16 against 16 per mode). On the counts so far Ideas
+`low` (5 of 12) already fails that, so the Ideas `medium` round has been started early (it costs
+about $2 and changes nothing about the rule). The base failures themselves are a production
+reliability finding, written up separately.
+
+**Ideas is decided by that gate (20:08, its 48 draws complete):** invalid JSON in **1 of 16** draws
+at `high`, **10 of 16** at `medium`, **10 of 16** at `low`. Both cheaper levels fail the
+comparison, so Ideas stays at `high`, and its quality panel is not run (most lineups would not have
+four valid candidates to rank). Nothing retries a malformed answer in production — the reader gets
+a failed card and a Retry, and the failed call is billed — so a 60% failure rate is not shippable at
+any quality.
 
 ### Cache groups — what a change would move
 

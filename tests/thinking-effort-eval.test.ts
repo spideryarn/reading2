@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { ARM_NAMES, DEFAULT_ARMS, levelOf, seededShuffle } from "../evals/thinking-effort/arms.js";
 import { renderForJudging } from "../evals/hierarchy-structure/blind.js";
 import { ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
+import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-effort/tally.js";
 import {
   accountingFaults,
   armEffort,
@@ -192,5 +193,24 @@ describe("the lineup", () => {
       ),
     ) as Tree;
     expect(renderForJudging(blocks, tree, "W")).toBe(renderForJudging(blocks, tree, "W"));
+  });
+});
+
+describe("tally: U and the plan's verdict bands", () => {
+  it("counts candidate wins over base, ties as a half", () => {
+    // low-a best, then a tie of base-a and low-b, then base-b last.
+    const q = qualityFromRanking([["W"], ["X", "Y"], ["Z"]]);
+    const byArm = { "low-a": q.W as number, "base-a": q.X as number, "low-b": q.Y as number, "base-b": q.Z as number };
+    // low-a beats both (2); low-b ties base-a (0.5) and beats base-b (1).
+    expect(uStatistic(byArm)).toBe(3.5);
+    expect(uStatistic({ "base-a": 5, "base-b": 4, "low-a": 1, "low-b": 2 })).toBe(0);
+    expect(uStatistic({ "base-a": 3, "base-b": 3, "low-a": 3, "low-b": 3 })).toBe(2);
+    expect(verdictOf(1.1)).toBe("clear loss");
+    expect(verdictOf(1.5)).toBe("possible loss");
+    expect(verdictOf(1.51)).toBe("no visible loss");
+  });
+
+  it("refuses a lineup that is not two against two", () => {
+    expect(() => uStatistic({ "base-a": 1, "low-a": 2, "low-b": 3 })).toThrow();
   });
 });

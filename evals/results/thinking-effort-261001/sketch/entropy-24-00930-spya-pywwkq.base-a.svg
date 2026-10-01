@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2948.8" width="760" height="2948.8">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2948.8" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Spine with a fan</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A spine running from the problem (how do neurons combine signals?) through a method built to answer it (PID), into</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">a fan of empirical findings about where synergy lives, and out to the method's limits and what comes next.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">From the problem to the payoff</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Down the page is the article's own order: motivation, tools, the gap those tools leave, the PID framework built to fill</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">it, a fan of empirical discoveries about synergy, then the method's limits, its future, and a closing summary.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="320" width="680" height="230" rx="8" fill="none" stroke="rgba(47,191,149,0.62)" stroke-width="1.8" stroke-dasharray="5 4"/>
+<rect x="24" y="540" width="712" height="335" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<path d="M380 110 L380 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,140 376.5,130 383.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 210 L380 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,240 376.5,230 383.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 310 L380 345" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,345 376.5,335 383.5,335" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 430 L380 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,460 376.5,450 383.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 530 L380 565" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,565 376.5,555 383.5,555" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 645 C380 665 110 665 110 685" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="110,685 106.5,675 113.5,675" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 645 C380 699 290 711 290 765" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,765 286.5,755 293.5,755" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 645 C380 699 480 711 480 765" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="480,765 476.5,755 483.5,755" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 645 C380 665 650 665 650 685" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="650,685 646.5,675 653.5,675" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M110 770 C110 821.75 380 833.25 380 885" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,885 376.5,875 383.5,875" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M290 850 C290 870 380 865 380 885" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,885 376.5,875 383.5,875" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M480 850 C480 870 380 865 380 885" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,885 376.5,875 383.5,875" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M650 770 C650 821.75 380 833.25 380 885" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,885 376.5,875 383.5,875" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 955 L380 985" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,985 376.5,975 383.5,975" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 1055 L380 1085" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1085 376.5,1075 383.5,1075" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Brains process information — but how? — New recording tech and new analysis tools now make this question tractable. — → spya-yb735k</title>
+<ellipse cx="380" cy="75" rx="150" ry="35" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="70.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Brains process information — but</text>
+<text x="380" y="89.25" font-size="15" text-anchor="middle" fill="#f7f7f7">how?</text>
+</g>
+<g>
+<title>Mutual information vs. transfer entropy — shared pattern vs. directed flow — Mutual information shows undirected similarity between neurons; transfer entropy shows directed information flow from one to another. — → spya-mx45r0</title>
+<rect x="230" y="140" width="300" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="172.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Mutual information vs. transfer entropy</text>
+<text x="380" y="189.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">shared pattern vs. directed flow</text>
+</g>
+<g>
+<title>But flow alone can't show how inputs combine — Transfer entropy tracks propagation, not how a neuron integrates multiple sources into a new signal. — → spya-dhy39x</title>
+<path d="M230 240 L516 240 L530 254 L530 310 L230 310 Z" fill="rgba(232,112,58,0.09)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 240 L516 254 L530 254" fill="none" stroke="rgba(232,112,58,0.5)" stroke-width="1"/>
+<text x="380" y="278.9" font-size="12" text-anchor="middle" fill="#f7f7f7">But flow alone can't show how inputs combine</text>
+</g>
+<g>
+<title>PID: split joint information into redundant, unique, synergistic parts — Partial information decomposition formally separates overlapping, individual, and combination-only information. — → spya-u0wm5e</title>
+<polygon points="272.5,345 487.5,345 530,387.5 487.5,430 272.5,430 230,387.5" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="373.625" font-size="15" text-anchor="middle" fill="#f7f7f7">PID: split joint information into</text>
+<text x="380" y="392.375" font-size="15" text-anchor="middle" fill="#f7f7f7">redundant, unique, synergistic</text>
+<text x="380" y="411.125" font-size="15" text-anchor="middle" fill="#f7f7f7">parts</text>
+</g>
+<g>
+<title>Needs a choice of redundancy measure — none is universal — The decomposition is underdetermined until one defines redundancy; a dozen competing definitions exist. — → spya-d2quz5</title>
+<rect x="230" y="460" width="300" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="491.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Needs a choice of redundancy measure — none</text>
+<text x="380" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">is universal</text>
+</g>
+<g>
+<title>Applying PID to real recordings — Hundreds of cultured cortical neurons, decomposed triad by triad, reveal where synergy concentrates. — → spya-cc282b</title>
+<ellipse cx="380" cy="605" rx="150" ry="40" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="609.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Applying PID to real recordings</text>
+</g>
+<g>
+<title>Rich-club neurons hold most of the network's synergy — A minority of best-connected neurons account for about 88% of all synergy. — → spya-e3ghxj</title>
+<rect x="30" y="685" width="160" height="85" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="110" y="724.5" font-size="10" text-anchor="middle" fill="#f7f7f7">Rich-club neurons hold most</text>
+<text x="110" y="737" font-size="10" text-anchor="middle" fill="#f7f7f7">of the network's synergy</text>
+</g>
+<g>
+<title>Recurrent connections raise synergy; feedback doesn't — Loops between source neurons add to synergy; feedback to the sources mostly doesn't. — → spya-p8by2y</title>
+<rect x="210" y="765" width="160" height="85" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="290" y="804.5" font-size="10" text-anchor="middle" fill="#f7f7f7">Recurrent connections raise</text>
+<text x="290" y="817" font-size="10" text-anchor="middle" fill="#f7f7f7">synergy; feedback doesn't</text>
+</g>
+<g>
+<title>Synergy peaks, then falls, as inputs grow more alike — Mildly correlated sources produce the most synergy; highly correlated ones become redundant instead. — → spya-zfs2z7</title>
+<rect x="400" y="765" width="160" height="85" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="480" y="804.5" font-size="10" text-anchor="middle" fill="#f7f7f7">Synergy peaks, then falls,</text>
+<text x="480" y="817" font-size="10" text-anchor="middle" fill="#f7f7f7">as inputs grow more alike</text>
+</g>
+<g>
+<title>In monkeys, redundancy rises during movement — Behaving-animal recordings show the balance of synergy and redundancy shifts with the task at hand. — → spya-aqcngt</title>
+<rect x="570" y="685" width="160" height="85" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="650" y="724.5" font-size="10" text-anchor="middle" fill="#f7f7f7">In monkeys, redundancy rises</text>
+<text x="650" y="737" font-size="10" text-anchor="middle" fill="#f7f7f7">during movement</text>
+</g>
+<g>
+<title>Practical limits: data type, sample size, software tools — Choosing a redundancy function and gathering enough data are both real constraints in practice. — → spya-kmgwhs</title>
+<rect x="230" y="885" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="916.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Practical limits: data type, sample size,</text>
+<text x="380" y="931.4" font-size="12" text-anchor="middle" fill="#f7f7f7">software tools</text>
+</g>
+<g>
+<title>Future: moment-by-moment and multi-target PID — Local PID resolves synergy over time; integrated information decomposition extends it to multiple targets. — → spya-zz5xxs</title>
+<rect x="230" y="985" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="1023.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Future: moment-by-moment and multi-target PID</text>
+</g>
+<g>
+<title>Synergy: neurons compute on patterns, not just totals — The closing summary ties the empirical findings back to what synergy means for neural computation. — → spya-rc5z33</title>
+<ellipse cx="380" cy="1125" rx="150" ry="40" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="1120.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Synergy: neurons compute on</text>
+<text x="380" y="1139.25" font-size="15" text-anchor="middle" fill="#f7f7f7">patterns, not just totals</text>
+</g></g>
+</g>
+<g transform="translate(0 1391.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: building partial information decomposition</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain of logical steps: the discovery that information doesn't simply add up, the algebra that first split it into</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">parts for two sources, and the lattice machinery needed once there are more than two — all resting on one</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">still-unsettled choice, the definition of redundancy.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">PID-FRAMEWORK</text>
+<g transform="translate(0 80.85)"><path d="M380 110 L380 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,140 376.5,130 383.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L380 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,250 376.5,240 383.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 L380 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,350 376.5,340 383.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 430 L380 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,460 376.5,450 383.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 535 L380 565" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,565 376.5,555 383.5,555" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 640 L380 665" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,665 376.5,655 383.5,655" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Joint information isn't just the sum of each source's part — Summing each parent neuron's individual information about the target doesn't equal the information from all of them together. — → spya-h5dz45</title>
+<rect x="230" y="40" width="300" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="71.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Joint information isn't just the sum of each</text>
+<text x="380" y="86.4" font-size="12" text-anchor="middle" fill="#f7f7f7">source's part</text>
+</g>
+<g>
+<title>Whole &gt; parts means synergy; whole &lt; parts means redundancy — Extra information beyond the sum signals genuine integration (synergy); a shortfall signals double-counted overlap (redundancy). — → spya-e94ury</title>
+<rect x="230" y="140" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="176.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Whole &gt; parts means synergy; whole &lt; parts</text>
+<text x="380" y="191.4" font-size="12" text-anchor="middle" fill="#f7f7f7">means redundancy</text>
+</g>
+<g>
+<title>Williams &amp; Beer found how to split it algebraically — Their partial information decomposition framework made this split exact, not just descriptive. — → spya-t02v4p</title>
+<path d="M230 250 L516 250 L530 264 L530 320 L230 320 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 250 L516 264 L530 264" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="380" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Williams &amp; Beer found how to split it</text>
+<text x="380" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">algebraically</text>
+</g>
+<g>
+<title>Two parents: redundant + unique(1) + unique(2) + synergistic — With two source neurons, the joint information splits into four distinct, non-overlapping pieces. — → spya-q2b0e5</title>
+<rect x="230" y="350" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="386.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Two parents: redundant + unique(1) +</text>
+<text x="380" y="401.4" font-size="12" text-anchor="middle" fill="#f7f7f7">unique(2) + synergistic</text>
+</g>
+<g>
+<title>Underdetermined — pick one piece to define — Three known mutual-information values but four unknown pieces: defining any one term yields the rest. — → spya-bgsd4n</title>
+<polygon points="380,460 505,497.5 380,535 255,497.5" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="500.75" font-size="10" text-anchor="middle" fill="#f7f7f7">Underdetermined — pick one piece to define</text>
+</g>
+<g>
+<title>More than two parents: need the partial information lattice — With three or more sources the simple algebra isn't enough; a structured lattice of all possible source combinations is required. — → spya-k378fv</title>
+<polygon points="267.5,565 492.5,565 530,602.5 492.5,640 267.5,640 230,602.5" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="598.9" font-size="12" text-anchor="middle" fill="#f7f7f7">More than two parents: need the partial</text>
+<text x="380" y="613.9" font-size="12" text-anchor="middle" fill="#f7f7f7">information lattice</text>
+</g>
+<g>
+<title>Lattice atoms computed by Möbius inversion — A recursive formula extracts each unique information atom once a redundancy measure is chosen. — → spya-m37w5y</title>
+<rect x="230" y="665" width="300" height="55" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="695.75" font-size="10" text-anchor="middle" fill="#f7f7f7">Lattice atoms computed by Möbius inversion</text>
+</g></g>
+</g>
+<g transform="translate(0 2219.9500000000003)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: what PID found in real circuits</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain into a fan and back: recordings feed one overall finding (synergy tracks feedforward flow), which splits into</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">three parallel discoveries about where and why synergy concentrates, which converge on caveats and then on a result</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">from behaving animals.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">EMPIRICAL-FINDINGS</text>
+<g transform="translate(0 80.85)"><path d="M380 110 L380 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,140 376.5,130 383.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 210 C380 232.5 140 237.5 140 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="140,260 136.5,250 143.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 210 L370 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="370,260 368.52912898646366,249.50778677010717 375.39319371630006,250.88059971607444" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 210 C380 232.5 600 237.5 600 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="600,260 596.5,250 603.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 350 C140 372.5 380 377.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 350 L380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 374.60680628369994,390.88059971607447 381.47087101353634,389.50778677010715" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M600 350 C600 372.5 380 377.5 380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 470 L380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 376.5,490 383.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>512-channel recordings from cultured mouse cortex — Hundreds of neurons recorded at once, with thousands of source-source-target triads analyzed by PID. — → spya-sw5ukx</title>
+<ellipse cx="380" cy="75" rx="150" ry="35" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="71.4" font-size="12" text-anchor="middle" fill="#f7f7f7">512-channel recordings from cultured mouse</text>
+<text x="380" y="86.4" font-size="12" text-anchor="middle" fill="#f7f7f7">cortex</text>
+</g>
+<g>
+<title>Synergy tracks the strength of feedforward information flow — Across 25 recordings, synergy was reliably about a quarter of the feedforward transfer entropy. — → spya-kqkb58</title>
+<rect x="230" y="140" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy tracks the strength of feedforward</text>
+<text x="380" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">information flow</text>
+</g>
+<g>
+<title>Rich-club triads: 2.7x more synergy, ~88% of total — Densely interconnected 'rich club' neurons are small in number but dominant in synergy. — → spya-fud8q3</title>
+<rect x="40" y="260" width="200" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="140" y="302" font-size="10" text-anchor="middle" fill="#f7f7f7">Rich-club triads: 2.7x more</text>
+<text x="140" y="314.5" font-size="10" text-anchor="middle" fill="#f7f7f7">synergy, ~88% of total</text>
+</g>
+<g>
+<title>Recurrent links help synergy; feedback links don't — Connections between source neurons raised synergy; connections back from target to sources mostly didn't. — → spya-sd9fzd</title>
+<rect x="270" y="260" width="200" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="370" y="302" font-size="10" text-anchor="middle" fill="#f7f7f7">Recurrent links help synergy;</text>
+<text x="370" y="314.5" font-size="10" text-anchor="middle" fill="#f7f7f7">feedback links don't</text>
+</g>
+<g>
+<title>Synergy peaks then falls as sources grow more alike — Mild similarity between source neurons boosts synergy; too much similarity turns it into redundancy instead. — → spya-ybmve2</title>
+<rect x="500" y="260" width="200" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="600" y="302" font-size="10" text-anchor="middle" fill="#f7f7f7">Synergy peaks then falls as sources</text>
+<text x="600" y="314.5" font-size="10" text-anchor="middle" fill="#f7f7f7">grow more alike</text>
+</g>
+<g>
+<title>Caveats: bias from simple pairwise flow estimates; culture, not living brain — Results depend on bivariate transfer-entropy networks and on in-vitro cortical cultures, not behaving animals. — → spya-j4cy9j</title>
+<path d="M230 400 L516 400 L530 414 L530 470 L230 470 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 400 L516 414 L530 414" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="380" y="432" font-size="10" text-anchor="middle" fill="#f7f7f7">Caveats: bias from simple pairwise flow estimates;</text>
+<text x="380" y="444.5" font-size="10" text-anchor="middle" fill="#f7f7f7">culture, not living brain</text>
+</g>
+<g>
+<title>In behaving monkeys, redundancy rises during movement execution — Task demands shift the balance: redundancy increases when reliable transmission to distant muscles matters most. — → spya-t8fayf</title>
+<rect x="230" y="500" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="531.4" font-size="12" text-anchor="middle" fill="#f7f7f7">In behaving monkeys, redundancy rises during</text>
+<text x="380" y="546.4" font-size="12" text-anchor="middle" fill="#f7f7f7">movement execution</text>
+</g></g>
+</g>
+</svg>

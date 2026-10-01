@@ -1,0 +1,85 @@
+{
+  "caption": "A chain: each stage's gap forces the next idea, running from the problem (synapses too slow for flexible control) through oscillation-based mechanisms to a final claim that wave computation is consciousness's engine — not a set of independent arguments but one argument building step by step.",
+  "title": "Chain to a Theory",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From Synapses to Waves",
+      "caption": "A straight chain down the page: a problem with synapse-only models leads to oscillations, then to a specific theory (Spatial Computing), then to wave-based analog computation, then to consciousness and its rivals.",
+      "height": 1180,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":220,"y":30,"w":320,"h":80,"text":"Flexible top-down control needs rapid coordination of millions of neurons","size":"md","block":"spya-f6m6jv","detail":"Synapse-only models seem too slow and cumbersome for this."},
+        {"kind":"node","id":"classical","shape":"box","x":220,"y":150,"w":320,"h":80,"text":"Classical view: fixed, specialized neurons feeding forward","sub":"fails to explain mixed activity","size":"sm","block":"spya-k046f6"},
+        {"kind":"node","id":"mixed","shape":"box","x":220,"y":270,"w":320,"h":80,"text":"Many neurons are multifunctional (mixed selectivity)","sub":"requires dynamic routing","size":"sm","block":"spya-v0gbwq","tone":1},
+        {"kind":"node","id":"osc","shape":"hex","x":220,"y":390,"w":320,"h":90,"text":"Brain waves route signals via ephaptic coupling","sub":"faster than synapses alone","size":"md","block":"spya-mapqhv","tone":1},
+        {"kind":"node","id":"spatial","shape":"hex","x":220,"y":520,"w":320,"h":90,"text":"Spatial Computing: alpha/beta 'stencils' gate gamma/spiking","sub":"explains mixed selectivity & subspaces","size":"md","block":"spya-qck2sw","tone":1,"opens":"inside-spatial"},
+        {"kind":"node","id":"travel","shape":"box","x":220,"y":650,"w":320,"h":80,"text":"Traveling waves shift which neurons are active","sub":"moves activity between coding states","size":"sm","block":"spya-y09vju","tone":2},
+        {"kind":"node","id":"analog","shape":"hex","x":220,"y":770,"w":320,"h":90,"text":"Wave interference performs analog computation","sub":"parallel, energy-efficient","size":"md","block":"spya-h5qjz4","tone":2,"opens":"inside-waves-conscious"},
+        {"kind":"node","id":"anesthesia","shape":"box","x":220,"y":900,"w":320,"h":80,"text":"Anesthesia disrupts large-scale waves, not specific receptors","size":"sm","block":"spya-uvev07","tone":2},
+        {"kind":"node","id":"hybrid","shape":"box","x":220,"y":1000,"w":320,"h":70,"text":"Synapses store; waves decide what's active now","size":"sm","block":"spya-dnv2tp","tone":2},
+        {"kind":"node","id":"conclusion","shape":"ellipse","x":220,"y":1090,"w":320,"h":70,"text":"Consciousness = organized, wave-coordinated cortex","size":"md","block":"spya-smkrcs"},
+
+        {"kind":"edge","from":"intro","to":"classical","arrow":"end"},
+        {"kind":"edge","from":"classical","to":"mixed","arrow":"end"},
+        {"kind":"edge","from":"mixed","to":"osc","arrow":"end"},
+        {"kind":"edge","from":"osc","to":"spatial","arrow":"end"},
+        {"kind":"edge","from":"spatial","to":"travel","arrow":"end"},
+        {"kind":"edge","from":"travel","to":"analog","arrow":"end"},
+        {"kind":"edge","from":"analog","to":"anesthesia","arrow":"end"},
+        {"kind":"edge","from":"anesthesia","to":"hybrid","arrow":"end"},
+        {"kind":"edge","from":"hybrid","to":"conclusion","arrow":"end"},
+
+        {"kind":"region","x":40,"y":500,"w":680,"h":130,"label":"SPATIAL COMPUTING THEORY","style":"band","tone":1,"opens":"inside-spatial"},
+        {"kind":"region","x":40,"y":630,"w":680,"h":390,"label":"WAVES, COMPUTATION, CONSCIOUSNESS","style":"band","tone":2,"opens":"inside-waves-conscious"}
+      ]
+    },
+    {
+      "id": "inside-spatial",
+      "title": "Spatial Computing Theory",
+      "caption": "A hub: the central idea (alpha/beta stencils gating gamma/spiking) radiates out to explain several separate findings — it is one mechanism with multiple consequences, not a sequence.",
+      "height": 680,
+      "items": [
+        {"kind":"node","id":"core","shape":"ellipse","x":280,"y":40,"w":220,"h":90,"text":"Alpha/beta rhythms act as inhibitory 'stencils' on gamma/spiking","size":"md","block":"spya-qck2sw"},
+        {"kind":"node","id":"laminar","shape":"box","x":40,"y":200,"w":200,"h":90,"text":"Gamma strongest in upper layers, alpha/beta in deep layers, across 4 species","size":"sm","block":"spya-thnz7b"},
+        {"kind":"node","id":"primate","shape":"box","x":280,"y":200,"w":200,"h":90,"text":"Primate prefrontal data confirm stencils encode context, predict errors","size":"sm","block":"spya-azz3c8"},
+        {"kind":"node","id":"scale","shape":"box","x":520,"y":200,"w":200,"h":90,"text":"Alpha/beta's millimeter scale suits top-down control","size":"sm","block":"spya-q606tk"},
+        {"kind":"node","id":"mixedsel","shape":"box","x":40,"y":380,"w":320,"h":90,"text":"Same neuron falls inside/outside stencil by context, producing mixed selectivity","size":"sm","block":"spya-zmknun","tone":1},
+        {"kind":"node","id":"subspace","shape":"box","x":400,"y":380,"w":320,"h":90,"text":"Stencils segregate population activity into orthogonal subspaces","size":"sm","block":"spya-m63zb9","tone":1},
+        {"kind":"node","id":"dynamics","shape":"box","x":220,"y":540,"w":320,"h":90,"text":"Smooth population trajectories may be waves 'pulling' activity along","size":"sm","block":"spya-ah94dx"},
+
+        {"kind":"edge","from":"core","to":"laminar","via":"curve"},
+        {"kind":"edge","from":"core","to":"primate","via":"curve"},
+        {"kind":"edge","from":"core","to":"scale","via":"curve"},
+        {"kind":"edge","from":"primate","to":"mixedsel","via":"curve"},
+        {"kind":"edge","from":"primate","to":"subspace","via":"curve"},
+        {"kind":"edge","from":"mixedsel","to":"dynamics","via":"curve"},
+        {"kind":"edge","from":"subspace","to":"dynamics","via":"curve"}
+      ]
+    },
+    {
+      "id": "inside-waves-conscious",
+      "title": "Waves, Computation, and Consciousness",
+      "caption": "A chain that funnels to the final claim: traveling waves and analog computation, backed by anesthesia evidence, converge on one conclusion about consciousness, which is then set against rival theories side by side.",
+      "height": 820,
+      "items": [
+        {"kind":"node","id":"tw","shape":"box","x":40,"y":40,"w":300,"h":90,"text":"Traveling alpha/beta waves accompany shifts in motor/prefrontal coding","size":"sm","block":"spya-y09vju"},
+        {"kind":"node","id":"theta","shape":"box","x":400,"y":40,"w":300,"h":90,"text":"Slower theta waves organize activity at larger scale","size":"sm","block":"spya-jcpyd5"},
+        {"kind":"node","id":"analogdef","shape":"hex","x":220,"y":180,"w":300,"h":90,"text":"Analog computing: wave interference solves equations directly, in parallel","size":"md","block":"spya-h5qjz4"},
+        {"kind":"node","id":"efficiency","shape":"box","x":220,"y":320,"w":300,"h":80,"text":"Far more energy-efficient than digital computing","size":"sm","block":"spya-szhg6f"},
+        {"kind":"node","id":"anes","shape":"box","x":40,"y":440,"w":300,"h":90,"text":"Different anesthetics converge on slow desynchronized waves","size":"sm","block":"spya-wnqgmn"},
+        {"kind":"node","id":"framework","shape":"box","x":400,"y":440,"w":300,"h":90,"text":"Synapses store; waves select what's active now","size":"sm","block":"spya-dnv2tp"},
+        {"kind":"node","id":"rivals","shape":"box","x":40,"y":580,"w":300,"h":100,"text":"Compared with Global Workspace, Integrated Information, Higher-Order theories","sub":"shares themes, differs on mechanism","size":"sm","block":"spya-xn7mdj"},
+        {"kind":"node","id":"concl","shape":"ellipse","x":400,"y":580,"w":300,"h":100,"text":"Consciousness = brain-wide, wave-organized integration","size":"md","block":"spya-smkrcs"},
+
+        {"kind":"edge","from":"tw","to":"analogdef","arrow":"end"},
+        {"kind":"edge","from":"theta","to":"analogdef","arrow":"end"},
+        {"kind":"edge","from":"analogdef","to":"efficiency","arrow":"end"},
+        {"kind":"edge","from":"efficiency","to":"anes","arrow":"end"},
+        {"kind":"edge","from":"efficiency","to":"framework","arrow":"end"},
+        {"kind":"edge","from":"anes","to":"rivals","arrow":"end"},
+        {"kind":"edge","from":"framework","to":"concl","arrow":"end"},
+        {"kind":"edge","from":"rivals","to":"concl","line":"dotted"}
+      ]
+    }
+  ]
+}

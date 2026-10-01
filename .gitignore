@@ -38,6 +38,9 @@ evals/results/thinking-effort-*/illustrated/**/*.jpg
 evals/results/thinking-effort-*/illustrated/**/*.jpeg
 evals/results/thinking-effort-*/illustrated/**/*.png
 evals/results/thinking-effort-*/illustrated/**/*.webp
+# Sketch pictures are rasterised from the committed SVG (and copied again under
+# blind names for the judges): 14 MB that the SVG and scene JSON regenerate.
+evals/results/thinking-effort-*/**/*.png
 
 # scripts/run-codex.ts writes its activity log beside the answer it was asked
 # for. Each is roughly a megabyte of whatever codex read along the way — file

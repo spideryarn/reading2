@@ -1,0 +1,89 @@
+{
+  "caption": "The piece runs as one long chain from an old, fixed-wiring model of the brain down to a theory of consciousness, with a single hub in the middle — Spatial Computing theory — that branches sideways into two explanatory asides before the chain resumes.",
+  "title": "Chain Through a Hub",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From fixed neurons to wave-based consciousness",
+      "caption": "A top-to-bottom chain of argument, with the central mechanism (alpha/beta 'stencils') branching into two explanatory asides before the chain continues on to consciousness and its rivals.",
+      "height": 1410,
+      "items": [
+        {"kind":"node","id":"ov1","shape":"ellipse","x":270,"y":40,"w":220,"h":80,"size":"md","text":"One neuron, one fixed job","sub":"old connectionist view","block":"spya-k046f6","detail":"The classical model: hierarchical feedforward circuits where each neuron has a stable, specialized meaning."},
+        {"kind":"node","id":"ov2","shape":"box","x":270,"y":160,"w":220,"h":80,"text":"Most neurons do many jobs at once","sub":"mixed selectivity","tone":1,"block":"spya-v0gbwq","detail":"Cortical neurons blend sensory, motor, and contextual signals rather than having one fixed function."},
+        {"kind":"node","id":"ov3","shape":"hex","x":270,"y":270,"w":220,"h":70,"text":"Waves route neuron firing","sub":"oscillations organize info","tone":1,"block":"spya-jnp59d","detail":"Brain waves segregate spiking by phase and open timing windows for communication between regions."},
+        {"kind":"node","id":"ov4","shape":"hex","x":270,"y":360,"w":220,"h":70,"text":"Waves nudge neurons directly","sub":"ephaptic coupling, no synapse","tone":1,"block":"spya-mapqhv","detail":"Electric fields from spiking activity directly shift nearby neurons' voltage, bypassing synapses entirely."},
+        {"kind":"node","id":"ov5","shape":"ellipse","x":270,"y":460,"w":220,"h":90,"size":"lg","text":"Alpha/beta gates where gamma fires","sub":"Spatial Computing theory","tone":2,"block":"spya-qck2sw","detail":"Spatially patterned alpha/beta rhythms act as inhibitory 'stencils' that suppress gamma and spiking in targeted locations."},
+        {"kind":"node","id":"ov6","shape":"box","x":50,"y":580,"w":220,"h":80,"text":"Explains mixed selectivity","sub":"same neuron, different context","tone":2,"block":"spya-zmknun","detail":"A neuron can fall inside the suppressive stencil in one context and outside it in another."},
+        {"kind":"node","id":"ov7","shape":"box","x":490,"y":580,"w":220,"h":80,"text":"Explains subspace coding","sub":"population stays low-dimensional","tone":2,"block":"spya-m63zb9","detail":"Alpha/beta control sorts spiking into structured, overlapping active subsets — orthogonal subspaces."},
+        {"kind":"node","id":"ov8","shape":"box","x":270,"y":700,"w":220,"h":80,"text":"Traveling waves shift the active code","sub":"moving stencils change what fires","tone":3,"block":"spya-y09vju","detail":"Alpha/beta traveling waves may move population activity from one coding subspace to another."},
+        {"kind":"node","id":"ov9","shape":"hex","x":270,"y":820,"w":220,"h":80,"text":"Wave interference computes directly","sub":"analog computing, efficient","tone":3,"block":"spya-h5qjz4","detail":"Overlapping waves add and cancel according to physics, performing computation in parallel at low energy cost."},
+        {"kind":"node","id":"ov10","shape":"box","x":270,"y":940,"w":220,"h":80,"text":"All anesthetics cause slow, scrambled waves","sub":"loss of consciousness","tone":4,"block":"spya-uvev07","detail":"Despite different molecular targets, anesthetics converge on the same disorganized wave pattern."},
+        {"kind":"node","id":"ov11","shape":"ellipse","x":270,"y":1060,"w":220,"h":90,"size":"lg","text":"Synapses store; waves select & bind","sub":"hybrid framework","tone":4,"block":"spya-dnv2tp","detail":"Synapses hold long-term knowledge; brain waves determine which parts of it are active moment to moment."},
+        {"kind":"node","id":"ov12","shape":"box","x":260,"y":1190,"w":240,"h":90,"text":"Compared to Global Workspace, IIT, Higher-Order theories","sub":"waves, not broadcast or hot-zone","tone":4,"block":"spya-xn7mdj","detail":"The framework shares themes with rival theories of consciousness but locates the mechanism in wave dynamics."},
+        {"kind":"node","id":"ov13","shape":"ellipse","x":280,"y":1310,"w":200,"h":70,"text":"Cognition = organized wave dynamics","sub":"conclusion","block":"spya-smkrcs","detail":"Brain-wide wave organization, not discrete circuit exchange, is proposed as the basis of cognition and consciousness."},
+
+        {"kind":"region","x":20,"y":430,"w":720,"h":250,"label":"SPATIAL COMPUTING THEORY","style":"band","tone":2,"opens":"inside-spatial-computing"},
+        {"kind":"region","x":20,"y":905,"w":720,"h":395,"label":"CONSCIOUSNESS & RIVAL THEORIES","style":"band","tone":4,"opens":"inside-consciousness"},
+
+        {"kind":"edge","from":"ov1","to":"ov2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov2","to":"ov3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov3","to":"ov4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov4","to":"ov5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov5","to":"ov6","via":"curve","arrow":"end","label":"explains"},
+        {"kind":"edge","from":"ov5","to":"ov7","via":"curve","arrow":"end","label":"explains"},
+        {"kind":"edge","from":"ov5","to":"ov8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov8","to":"ov9","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov9","to":"ov10","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov10","to":"ov11","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov11","to":"ov12","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ov12","to":"ov13","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-spatial-computing",
+      "title": "Inside Spatial Computing theory",
+      "caption": "A hub-and-aside diagram: the single mechanism of alpha/beta 'stencils' is backed by three pieces of evidence and, separately, solves two distinct puzzles about neural coding.",
+      "height": 540,
+      "items": [
+        {"kind":"node","id":"sc_a","shape":"hex","x":270,"y":40,"w":220,"h":80,"size":"md","text":"Alpha/beta forms inhibitory 'stencils'","sub":"suppresses gamma in some spots","block":"spya-hcav4k","detail":"Spatially patterned alpha/beta rhythms act as temporary inhibitory templates across the cortical surface."},
+        {"kind":"node","id":"sc_b","shape":"box","x":20,"y":160,"w":230,"h":80,"text":"Less beta = more spiking, more movement","block":"spya-thnz7b","detail":"In motor cortex, beta acts as a brake; when it drops locally, gamma and spiking rise and movement follows."},
+        {"kind":"node","id":"sc_c","shape":"box","x":265,"y":160,"w":230,"h":80,"text":"Confirmed in primate prefrontal recordings","sub":"context patterns predict errors","block":"spya-azz3c8","detail":"Alpha/beta spatial patterns tracked learned context and mismatches predicted behavioral mistakes."},
+        {"kind":"node","id":"sc_d","shape":"box","x":510,"y":160,"w":230,"h":80,"text":"Alpha/beta's reach fits top-down control","sub":"finer than theta, coarser than gamma","block":"spya-q606tk","detail":"Wave spatial scale grows with lower frequency; alpha/beta sits at a few millimeters, apt for control."},
+        {"kind":"node","id":"sc_e","shape":"box","x":90,"y":300,"w":260,"h":80,"text":"Same neuron differs by context","sub":"nonlinear mixed selectivity","tone":2,"block":"spya-zmknun","detail":"A neuron can lie inside the suppressive stencil in one context and outside it in another."},
+        {"kind":"node","id":"sc_g","shape":"box","x":410,"y":300,"w":260,"h":80,"text":"Population activity stays low-dimensional","sub":"orthogonal subspace coding","tone":2,"block":"spya-m63zb9","detail":"Alpha/beta control sorts spiking into structured, partially overlapping subsets with distinct correlations."},
+        {"kind":"node","id":"sc_f","shape":"note","x":90,"y":420,"w":260,"h":70,"text":"No fixed 'context neurons' needed","block":"spya-ee45vr","detail":"Mixed selectivity arises from interaction, not from specialized neurons with fixed tuning."},
+        {"kind":"node","id":"sc_h","shape":"note","x":410,"y":420,"w":260,"h":70,"text":"Reconciles noisy cells, ordered populations","block":"spya-qsz9ur","detail":"Single neurons look noisy and context-dependent, yet populations move together in structured, low-dimensional trajectories."},
+
+        {"kind":"edge","from":"sc_a","to":"sc_b","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"sc_a","to":"sc_c","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"sc_a","to":"sc_d","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"sc_a","to":"sc_e","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"sc_a","to":"sc_g","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"sc_e","to":"sc_f","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"sc_g","to":"sc_h","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-consciousness",
+      "title": "Inside the consciousness framework",
+      "caption": "A chain of evidence (anesthesia, then the hybrid framework) that ends by fanning out into three separate comparisons with rival theories of consciousness.",
+      "height": 660,
+      "items": [
+        {"kind":"node","id":"cz_a","shape":"box","x":260,"y":40,"w":240,"h":80,"text":"Different drugs, same cortical effect","sub":"propofol, ketamine, dexmedetomidine","block":"spya-wnqgmn","detail":"Despite acting on different molecular targets, these anesthetics converge on the same large-scale electrical effect."},
+        {"kind":"node","id":"cz_b","shape":"box","x":260,"y":160,"w":240,"h":80,"text":"All produce slow, scrambled waves","sub":"needs organized waves, not a specific drug","block":"spya-k02vdw","detail":"Consciousness seems to depend less on specific receptors and more on the integrity of large-scale wave organization."},
+        {"kind":"node","id":"cz_c","shape":"hex","x":260,"y":280,"w":240,"h":90,"size":"md","text":"Synapses store; waves pick what's active","block":"spya-f0dqyd","detail":"Synaptic connections store long-term information; brain waves determine which representations are active now."},
+        {"kind":"node","id":"cz_d","shape":"box","x":260,"y":410,"w":240,"h":80,"text":"Waves bind scattered activity into one state","block":"spya-tdqde5","detail":"Brain waves dynamically link distributed neural representations into a unified conscious experience."},
+        {"kind":"node","id":"cz_e","shape":"box","x":20,"y":530,"w":235,"h":90,"text":"Unlike Global Workspace/IIT: fields, not broadcast or hot-zone","block":"spya-m3dn2u","detail":"Integration happens through dynamic field interactions, not broadcasting of information or a fixed 'hot zone'."},
+        {"kind":"node","id":"cz_f","shape":"box","x":262,"y":530,"w":235,"h":90,"text":"Unlike Higher-Order theories: organizing is the consciousness","block":"spya-nkg5v2","detail":"Rather than a separate system making a state conscious, the act of top-down wave organization is itself the conscious integration."},
+        {"kind":"node","id":"cz_g","shape":"box","x":505,"y":530,"w":235,"h":90,"text":"Unlike executive-control models: waves, not synaptic gating","block":"spya-j6qfz4","detail":"Top-down control is grounded in wave dynamics rather than excitatory synaptic gating of winner-take-all circuits."},
+
+        {"kind":"edge","from":"cz_a","to":"cz_b","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cz_b","to":"cz_c","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cz_c","to":"cz_d","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cz_d","to":"cz_e","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"cz_d","to":"cz_f","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cz_d","to":"cz_g","via":"curve","arrow":"end"}
+      ]
+    }
+  ]
+}
