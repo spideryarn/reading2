@@ -2,7 +2,7 @@
 
 Two of Greg's suggestions from the Feedback dialog, batched because both are about adding an
 article. Overseer queue item `qi-vjrbdnsg`. Reports `spya-a5gzb9` (SPIDERYARN-READING2-8A) and
-`spya-hbqezu` (8C). The note is `docs/user-feedback/261001_1830-imports-detail-and-why-you-are-reading.md`.
+`spya-hbqezu` (8C). The note is [261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md](../user-feedback/261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md).
 
 ## What Greg asked for
 

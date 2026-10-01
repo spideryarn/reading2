@@ -694,7 +694,11 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      exactly when the box has to stay. While running it also stays over a failed
      job, whose card has a Retry that may yet finish it (F3). */
   const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
-  const purposeStatus = purposeStatusOf(phase, draft);
+  /* A failed or stopped job is not on its way to finishing: its card's Retry
+     may yet finish it, but "until the import finishes" would be a promise. The
+     261001s browser check found that line under a failed import. */
+  const jobStopped = job?.status === "error" || job?.status === "cancelled";
+  const purposeStatus = purposeStatusOf(phase, draft, jobStopped);
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -1104,6 +1108,7 @@ function PurposeBox({
 type PurposeStatus =
   | { kind: "none" }
   | { kind: "waiting" }
+  | { kind: "stopped" }
   | { kind: "ready" }
   | { kind: "saving" }
   | { kind: "error"; message: string };
@@ -1113,12 +1118,12 @@ type PurposeStatus =
  * nothing: the hint already says *Optional*, and a blank one is never sent, so
  * "Save and open stores it" would be untrue of it.
  */
-function purposeStatusOf(phase: Phase, draft: string): PurposeStatus {
+function purposeStatusOf(phase: Phase, draft: string, jobStopped: boolean): PurposeStatus {
   if (phase.kind === "saving") return { kind: "saving" };
   if (phase.kind === "ready" && phase.error !== null) return { kind: "error", message: phase.error };
   if (draft.trim() === "") return { kind: "none" };
   if (phase.kind === "ready") return { kind: "ready" };
-  if (phase.kind === "running") return { kind: "waiting" };
+  if (phase.kind === "running") return jobStopped ? { kind: "stopped" } : { kind: "waiting" };
   return { kind: "none" };
 }
 
@@ -1128,6 +1133,8 @@ function purposeStatusWords(status: PurposeStatus) {
       return null;
     case "waiting":
       return "Not saved yet — kept here until the import finishes.";
+    case "stopped":
+      return "Not saved — the import didn't finish, so there is nothing to save it to yet.";
     case "ready":
       return "Not saved yet — Save and open stores it.";
     case "saving":

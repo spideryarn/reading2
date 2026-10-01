@@ -532,6 +532,18 @@ describe("Retry after a failed import (F3)", () => {
     expect(mark(), "Retry forgot that the reader had already seen the box").toBeNull();
   });
 
+  it("does not promise the import will finish once it has failed (261001s browser check)", async () => {
+    await failThenRetry();
+    type("the evidence");
+    expect(statusLine()).toBe("Not saved yet — kept here until the import finishes.");
+    jobs = [makeJob("job-1", "error")];
+    render();
+    await settle();
+    expect(statusLine()).toBe(
+      "Not saved — the import didn't finish, so there is nothing to save it to yet.",
+    );
+  });
+
   it("keeps a typed purpose across the retry", async () => {
     await failThenRetry();
     type("the evidence");

@@ -11,7 +11,8 @@
  * The add page writes it (`markAskPurpose`) only when it opens an article by
  * itself with the box empty and never touched — the "didn't notice it" case.
  * The reading view, for the owner only, peeks at it (src/web/PurposePrompt.tsx)
- * and clears it once it knows the answer. docs/plans/261001s-….md § Stage 3.
+ * and clears it once it knows the answer. docs/plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md
+ * § Stage 3.
  *
  * **Peek, then clear — never take on mount.** A read of the purpose that fails
  * must leave the mark for the next load, or the question is lost to a network

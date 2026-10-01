@@ -112,7 +112,7 @@ describe("the source line", () => {
   });
 
   it("shows an upload's filename, unlinked", () => {
-    render({ ...BASE, upload: { id: "00000000-0000-4000-8000-0000000000aa", filename: "draft.pdf" } });
+    render({ ...BASE, upload: { id: "00000000-0000-4000-8000-00000000c1a5", filename: "draft.pdf" } });
     expect(host.textContent).toContain("draft.pdf");
     expect(host.querySelector("a")).toBeNull();
   });
