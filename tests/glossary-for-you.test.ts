@@ -169,6 +169,25 @@ describe("the prompt", () => {
       generateGlossaryForYou({ slug: "a-slug", glossary: GLOSSARY, profile: PROFILE }),
     ).rejects.toThrow();
   });
+
+  it("does not turn a non-empty but wholly unusable answer into a successful empty result", async () => {
+    answer.content = JSON.stringify({
+      marks: [{ id: "spya-invent", note: "The model made this term up." }],
+    });
+    await expect(
+      generateGlossaryForYou({ slug: "a-slug", glossary: GLOSSARY, profile: PROFILE }),
+    ).rejects.toThrow(/no usable marks/);
+  });
+
+  it("keeps an explicit empty marks list as a successful answer", async () => {
+    answer.content = JSON.stringify({ marks: [] });
+    const run = await generateGlossaryForYou({
+      slug: "a-slug",
+      glossary: GLOSSARY,
+      profile: PROFILE,
+    });
+    expect(run.forYou.marks).toEqual([]);
+  });
 });
 
 describe("what the owner's glossary GET shows", () => {

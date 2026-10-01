@@ -356,6 +356,20 @@ describe("the head row", () => {
     expect(document.querySelector(".prof-panel-note")?.textContent).toMatch(/Nobody else sees them/);
   });
 
+  it("describes a successful empty result without referring to nonexistent marked terms", async () => {
+    await mount(
+      owner(glossary("a-profile", SCORED), {
+        forYou: { ...MARKED, marks: [] },
+      }),
+    );
+    const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
+    expect(badge?.textContent).toBe("Nothing marked for you");
+    await act(async () => badge?.click());
+    const note = document.querySelector(".prof-panel-note")?.textContent ?? "";
+    expect(note).toMatch(/No term needed/);
+    expect(note).not.toMatch(/The marked terms/);
+  });
+
   it("says when the marks are for an older profile, and Mark again asks for them alone", async () => {
     const markAgain = vi.fn(async () => {});
     await mount(
