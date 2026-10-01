@@ -211,6 +211,7 @@ async function waveOne(): Promise<Tree> {
   return buildTree(WAVE_1, {}, BLOCKS, SLUG, {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
@@ -226,6 +227,7 @@ async function rebuild(root: import("../src/hierarchy.js").ModelNode): Promise<T
   return buildTree(root, {}, BLOCKS, SLUG, {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
@@ -1957,6 +1959,7 @@ describe("the question on a part the cascade built", () => {
     const report: import("../src/hierarchy.js").BuildReport = {
       repairs: [],
       droppedChildren: [],
+      rangelessChildren: [],
       droppedHeadings: [],
       collapsedRungs: [],
       droppedQuestions: [],

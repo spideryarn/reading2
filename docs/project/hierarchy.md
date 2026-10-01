@@ -218,8 +218,9 @@ up: **an endpoint that is not a block id**. One unresolvable child leaves its wh
 underived, so the precise error survives instead of being buried by a tree built as though that child
 had never been proposed.
 
-**A child with no range at all is not that** (since 2026-10-01). Absent, not a pair, or not two
-strings: the model named nothing, which is a start that carries no information, so it is derived by
+**A child with no range at all is not that** (since 2026-10-01). Only an absent `range` or `null`
+counts — a half-stated one (`[start]`, `[start, 3]`) still carries a start and is refused as
+malformed. The model named nothing, which is a start that carries no information, so it is derived by
 the rule above — pinned if first, the previous child's end + 1 otherwise, dropped if neither — and
 lends no end to the child after it. Counted in `rangelessChildren`. One of these cost a 1,041-block
 book its whole tree.

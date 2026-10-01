@@ -1367,6 +1367,12 @@ function planChildRanges(
     const lo = index.get(a);
     const hi = index.get(b);
     if (lo === undefined || hi === undefined) {
+      if (mn.children?.length) {
+        throw new Error(
+          `The node at ${at} has a range not in blocks.json: ` +
+            `start ${nameValue(a)}; end ${nameValue(b)}`,
+        );
+      }
       const bad = [
         ...(lo === undefined ? [`start ${nameValue(a)}`] : []),
         ...(hi === undefined ? [`end ${nameValue(b)}`] : []),
@@ -1492,6 +1498,20 @@ function planChildRanges(
  * `size` is how far apart they were, which is the same number as how many blocks
  * changed hands (`PartitionRepair.size` has the arithmetic).
  */
+function interiorBoundaryKind(
+  settled: number,
+  afterPrevious: number | undefined,
+  nextStart: number | undefined,
+): "gap" | "overlap" {
+  if (nextStart !== undefined) {
+    if (afterPrevious !== undefined && nextStart !== afterPrevious) {
+      return nextStart > afterPrevious ? "gap" : "overlap";
+    }
+    return nextStart > settled ? "gap" : "overlap";
+  }
+  return afterPrevious !== undefined && settled > afterPrevious ? "gap" : "overlap";
+}
+
 function recordBoundaryFaults(
   kept: KeptChild[],
   /** `undefined` for a child that stated no range — it made no claim to measure. */
@@ -1545,12 +1565,7 @@ function recordBoundaryFaults(
     /* Which way the answer was wrong: by its own two claims where they
        disagree, and otherwise by how far we had to move the boundary from the
        one place it did name. */
-    const only = claimed ?? after;
-    const late =
-      claimed !== undefined && after !== undefined && claimed !== after
-        ? claimed > after
-        : only !== undefined && child.start > only;
-    fault(child, late ? "gap" : "overlap", child.start, size);
+    fault(child, interiorBoundaryKind(child.start, after, claimed), child.start, size);
   }
 
   /* The closing boundary, at one *past* the parent's last block so it can never

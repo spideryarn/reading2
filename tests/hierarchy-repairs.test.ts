@@ -675,6 +675,35 @@ describe("a child that states no range is derived, not refused", () => {
     expect(r.repairs).toEqual([]);
   });
 
+  it("calls a lone next-start claim beyond its parent a gap", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "First half",
+          gist: "It opens.",
+          range: ["spya-aaaaaa", "spya-dddddd"],
+          children: [
+            { title: "Rangeless", gist: "It begins." } as ModelNode,
+            {
+              title: "Late start",
+              gist: "It follows.",
+              range: ["spya-eeeeee", "spya-eeeeee"],
+            },
+          ],
+        },
+        { title: "Second half", gist: "It closes.", range: ["spya-eeeeee", "spya-ffffff"] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(r.repairs).toEqual([
+      { where: "root > child 1 > child 2", kind: "gap", at: 3, size: 1 },
+      { where: "root > child 1 > child 2", kind: "over", at: 4, size: 1 },
+    ]);
+  });
+
   it("snaps a rangeless child onto the heading it names, like any other", () => {
     // First claims through the heading; Middle names it and has no range.
     const answer = three({ sourceHeading: "The Second Part" });
@@ -737,6 +766,26 @@ describe("a child that states no range is derived, not refused", () => {
     before.children![0] = { title: "First", gist: "It opens." } as ModelNode;
     expect(() => buildTree(before, {}, BLOCKS, "test", report())).toThrow(
       /not in blocks\.json — at root > child 2/,
+    );
+  });
+
+  it("keeps the established invented-range message for an internal child", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "Invented parent",
+          gist: "Its end does not exist.",
+          range: ["spya-aaaaaa", "spya-zzzzzz"],
+          children: [
+            { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-cccccc"] },
+            { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-ffffff"] },
+          ],
+        },
+      ],
+    };
+    expect(() => buildTree(answer, {}, BLOCKS, "test", report())).toThrow(
+      'The node at root > child 1 has a range not in blocks.json: start "spya-aaaaaa"; end "spya-zzzzzz"',
     );
   });
 });
