@@ -1,7 +1,7 @@
 # Simple on Opus, with and without the fidelity guard
 
-**Status, 2026-10-01:** measured; decided **(b) Opus with the checker kept**; built, see § What
-ships.
+**Status, 2026-10-01:** measured; decided **(b) Opus with the checker kept**; built and on `dev` in
+ef04cfd5 (merged as 2a573770), see § What ships. Not deployed: the Overseer deploys.
 
 Simple (Summary's plain-words levels: Brief · Simple · Fuller) is written on Sonnet unless the
 article has High-powered AI on. On the PID paper (`entropy-24-00930-spya-pywwkq`) Sonnet borrows the

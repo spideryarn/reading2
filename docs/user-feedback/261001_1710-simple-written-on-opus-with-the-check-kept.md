@@ -9,7 +9,7 @@ Not from a reader. The Overseer dispatched it after Greg answered [Q-simple-opus
 whether a bigger model, with or without Simple's fidelity check, would beat Sonnet with the check.
 There is no Sentry id. The time in the file name is when this session received the brief.
 
-**Ending: Shipped.** The implementation and evidence are in
+**Ending: Shipped.** On `dev` in ef04cfd5, merged as 2a573770. The implementation and evidence are in
 [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md). Not deployed: the
 Overseer deploys. There is no Sentry issue to resolve.
 
