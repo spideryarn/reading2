@@ -489,14 +489,10 @@ describe("the comment follow-up box", () => {
 describe("the sign-in form", () => {
   function mount(): { email: HTMLInputElement; password: HTMLInputElement } {
     act(() => {
-      root.render(createElement(SignInControls));
+      root.render(createElement(SignInControls, { returnTo: "/" }));
     });
-    /* The email form is behind a link — signing in with a password is the second
-       offer on this screen, not the first. */
-    const opener = [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
-      b.textContent?.includes("email address"),
-    );
-    act(() => opener?.click());
+    /* The email form is on screen from the start since docs/plans/261001m; it
+       was behind an "or use an email address" link. */
     const email = host.querySelector<HTMLInputElement>("#signin-email");
     const password = host.querySelector<HTMLInputElement>("#signin-password");
     if (!email || !password) throw new Error("no sign-in form");

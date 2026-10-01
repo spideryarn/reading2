@@ -40,8 +40,14 @@ import type { BlockId } from "../types.js";
 import { blockRow, passageMarks } from "./rows.js";
 import { reducedMotion } from "./scroll.js";
 
-/** "A second or so" — Greg, 2026-09-28. The CSS animation runs the same length. */
+/** "A second or so" — Greg, 2026-09-28. The CSS animation runs the same length (tokens.css § --flash-ms). */
 export const FLASH_MS = 1200;
+/**
+ * **A cited work's words wash for twice as long, and stronger** — on a few
+ * words the paragraph's second was "a little bit too subtle and quick"
+ * (Greg, SPIDERYARN-READING2-7X, plan 261001m). tokens.css § --cite-flash-ms.
+ */
+export const CITE_FLASH_MS = 2400;
 
 /** The animated wash, and the still one reduced motion gets instead — on a cell. */
 const MOVING = "block-flash";
@@ -100,7 +106,8 @@ export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
   for (const el of els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
   void cell.offsetWidth;
   for (const el of els) el.classList.add(cls);
-  live = { els, timer: setTimeout(stop, FLASH_MS) };
+  const cited = marks.length > 0 && marks.every((m) => m.matches("mark.cite"));
+  live = { els, timer: setTimeout(stop, cited ? CITE_FLASH_MS : FLASH_MS) };
 }
 
 /** The prose is exposed again: fire whatever was held for it. */

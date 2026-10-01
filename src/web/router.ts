@@ -180,8 +180,9 @@ export type Route =
    * does not belong in the URL (url-state.md). This route is the exception,
    * and the reason is that it is a page somebody was *sent*: a password-reset
    * email has to land somewhere, and "send me the login page" is a reasonable
-   * thing to be able to do. It gets the compact screen rather than the pitch —
-   * SignInPage.tsx. Nothing in the app links to it.
+   * thing to be able to do. Since 2026-10-01 it is *the* sign-in page: the
+   * landing page, `/pricing` and the top bar all link to it with `loginHref`
+   * below (docs/plans/261001m). SignInPage.tsx.
    */
   | { kind: "login" }
   /**
@@ -634,6 +635,21 @@ export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
+/**
+ * The sign-in page, told where to go afterwards and which tab to open on.
+ *
+ * `next` is only a candidate: auth-return.ts § `loginNext` validates it and the
+ * page writes it through the one-shot store when the reader actually signs in,
+ * so an old `/login?next=…` cannot steer a later sign-in. `/` is left off
+ * because the shelf is where a sign-in goes anyway. `new` opens Create account.
+ * docs/plans/261001m-a-sign-in-page-of-its-own-signposted-from-the-signed-out-pages.md.
+ */
+export function loginHref({ next, create = false }: { next?: string; create?: boolean } = {}): string {
+  const parts: string[] = [];
+  if (create) parts.push("new");
+  if (next !== undefined && next !== "/") parts.push(`next=${encodeURIComponent(next)}`);
+  return parts.length === 0 ? LOGIN_HREF : `${LOGIN_HREF}?${parts.join("&")}`;
+}
 /**
  * The reader's own page — the profile box, the plan, the settings.
  *
