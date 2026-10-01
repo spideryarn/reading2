@@ -2352,6 +2352,24 @@ describe("the admin gate", () => {
     expect(r.status).toBe(400);
   });
 
+  /* **Readers only** (SPIDERYARN-READING2-87, docs/plans/261001l-…): the same
+     route under the same gate, one parameter more. An unknown value is a 400
+     rather than a quiet *everyone*, which would show the administrator's own
+     reports under a filter that says it hides them. */
+  it("takes ?from=readers, refuses an unknown ?from=, and keeps the gate", async () => {
+    const ok = await call("GET", "/api/admin/feedback?from=readers");
+    expect(ok.status).toBe(200);
+    expect(ok.body).toHaveProperty("reports");
+    expect((await call("GET", "/api/admin/feedback?from=everyone")).status).toBe(200);
+    for (const bad of ["", "admins", "Readers", "readers,everyone"]) {
+      const r = await call("GET", `/api/admin/feedback?from=${encodeURIComponent(bad)}`);
+      expect(r.status, bad).toBe(400);
+    }
+    const refused = await call("GET", "/api/admin/feedback?from=readers", undefined, asSomebodyElse);
+    expect(refused.status).toBe(403);
+    expect(refused.body).not.toHaveProperty("reports");
+  });
+
   it("does not match a report path with anything extra on the end", async () => {
     /* Exact, anchored, two segments. `/…/screenshot/anything` is a 404 rather
        than a quiet match — the same rule `/api/admin/users/anything` follows,

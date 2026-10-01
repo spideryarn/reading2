@@ -6240,6 +6240,33 @@ export function decodeFeedbackCursor(
 }
 
 /**
+ * **Whose reports the inbox shows** — everyone's, or only the readers', which
+ * is everyone who is not an administrator (src/admin.ts § `ADMIN_USER_IDS`, the
+ * list `isAdmin` reads). Greg, 2026-10-01 (SPIDERYARN-READING2-87): *"provide a
+ * filter to show only non-admin suggestions (i.e. suggestions from people other
+ * than me)."* docs/plans/261001l-….
+ *
+ * Applied by the store, not the browser: the inbox is paged, and a page of
+ * Greg's own reports filtered away in the browser would read *no reports,
+ * there are older ones*.
+ */
+export const FEEDBACK_FROM = ["everyone", "readers"] as const;
+export type FeedbackFrom = (typeof FEEDBACK_FROM)[number];
+
+/**
+ * `?from=` read back: absent is `"everyone"`, and anything else that is not one of
+ * the two is `"malformed"`, which the route turns into a 400 — never a quiet
+ * *everyone*, which would show Greg his own reports under a filter that says it
+ * hides them. The same three-answer shape as `decodeFeedbackCursor`.
+ */
+export function parseFeedbackFrom(raw: string | null | undefined): FeedbackFrom | "malformed" {
+  /* Only an *absent* parameter is everyone. `?from=` with nothing after it is
+     a caller that meant something and lost it — malformed. GPT Sol. */
+  if (raw === null || raw === undefined) return "everyone";
+  return (FEEDBACK_FROM as readonly string[]).includes(raw) ? (raw as FeedbackFrom) : "malformed";
+}
+
+/**
  * One page of the inbox.
  *
  * `hasMore` is **seen, not inferred**: the store asks for one row more than it

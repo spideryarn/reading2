@@ -912,9 +912,10 @@ td.text.kind-heading .blk-gutter[data-open] {
    the gap between the column and the prose (`--blk-gutter-x`), never back
    over the column. Every control owns the column's full width, and a strip
    that reached 5px into it took the right edge of every icon's click (GPT Sol,
-   plan review, 2026-09-29). The line is drawn back at the column's own edge,
-   where it has always been, with `pointer-events: none` so it cannot take a
-   click either. The width is `--read` times the gap, clamped, so on a row with
+   plan review, 2026-09-29). The line is drawn at the strip's own left edge,
+   inside it, so pointing at the line finds the title (it was drawn 2px outside
+   until 2026-10-01, and could not be hovered); `pointer-events: none` so the
+   pseudo-element is never the target itself. The width is `--read` times the gap, clamped, so on a row with
    no reading time it is zero wide and there is nothing to hover.
 
    **It has to win every `.blk-gutter > *` rule**, which are written for
@@ -953,7 +954,14 @@ td.text.kind-heading .blk-gutter[data-open] {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -2px;
+  /* **Inside the strip, at its left edge** — 2px right of where it was. It
+     used to be drawn at `left: -2px`, outside the box, so pointing at the line
+     found the table cell and the title never showed: Greg, 2026-10-01
+     (SPIDERYARN-READING2-84), *"What are they for? They should ideally have
+     tooltips"*, two days after the tooltip shipped. Measured in the browser,
+     docs/plans/261001l-…. The line moves rather than the strip growing back
+     over the column, for the reason above. */
+  left: 0;
   width: 2px;
   pointer-events: none;
   background: var(--ink);

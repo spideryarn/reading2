@@ -75,6 +75,18 @@ class NoteBoundary extends Component<{ children: ReactNode }, { broken: boolean 
   }
 }
 
+/**
+ * **What a question note is, on hover** — its rule is a bare line beside some
+ * blocks and nothing else said so. Greg, 2026-10-01 (SPIDERYARN-READING2-84):
+ * *"What are they for? They should ideally have tooltips to explain
+ * themselves."* A native `title`, as the gutter's controls use; nothing on a
+ * tap yet. Depth 0 is the article's own question (notes.ts).
+ */
+const QUESTION_TIP = (depth: number): string =>
+  depth === 0
+    ? "The question the whole article answers."
+    : "The question this part of the article answers. Read on to find the answer.";
+
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
 function MarginNotes({ notes }: { notes: readonly AnnotationNote[] }) {
@@ -83,7 +95,12 @@ function MarginNotes({ notes }: { notes: readonly AnnotationNote[] }) {
     <div className="marg-note" data-marg-note="">
       {notes.map((note) =>
         note.kind === "question" ? (
-          <p key={`q${note.depth}`} className="marg-question" data-depth={note.depth}>
+          <p
+            key={`q${note.depth}`}
+            className="marg-question"
+            data-depth={note.depth}
+            title={QUESTION_TIP(note.depth)}
+          >
             {note.text}
           </p>
         ) : (
