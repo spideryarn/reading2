@@ -45,6 +45,18 @@ Object.defineProperty(window, "localStorage", {
     clear: () => stored.clear(),
   },
 });
+/* And `sessionStorage`, where the ask-purpose mark lives (plan 261001s § Stage 3). */
+const session = new Map<string, string>();
+Object.defineProperty(window, "sessionStorage", {
+  configurable: true,
+  value: {
+    getItem: (key: string) => session.get(key) ?? null,
+    setItem: (key: string, value: string) => void session.set(key, value),
+    removeItem: (key: string) => void session.delete(key),
+    clear: () => session.clear(),
+  },
+});
+const mark = () => session.get("spideryarn.ask-purpose") ?? null;
 
 /** Everything that left the page, in order: `patch:<body>` and `run:<steps>`. */
 const events: string[] = [];
@@ -226,6 +238,7 @@ const PRODUCERS: Producer[] = [
 
 beforeEach(() => {
   window.localStorage.clear();
+  session.clear();
   events.length = 0;
   navigations.length = 0;
   jobs = [];
@@ -517,5 +530,98 @@ describe("Retry after a failed import (F3)", () => {
     await settle();
     expect(patches()).toHaveLength(1);
     expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Plan 261001s (Greg, 2026-10-01, spya-hbqezu): *"it doesn't have a UI
+ * indication of when/whether it has saved it or not"* — Stage 2's status line —
+ * and *"if they don't fill this in … pop up an input box asking why they're
+ * reading it when the article loads for the first time"* — Stage 3's mark.
+ * ------------------------------------------------------------------------- */
+
+const statusLine = (): string => host.querySelector(".prof-save")?.textContent?.trim() ?? "";
+
+describe("the purpose box's status line (261001s § Stage 2)", () => {
+  it("says nothing over an empty box, and says where typed words are in each phase", async () => {
+    let answer: (r: Response) => void = () => {};
+    patchAnswer = () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      });
+    const producer = PRODUCERS[0] as Producer;
+    await producer.start();
+    expect(statusLine(), "an empty box claimed a save state").toBe("");
+    type("the evidence");
+    expect(statusLine()).toBe("Not saved yet — kept here until the import finishes.");
+    await producer.finish();
+    expect(statusLine()).toBe("Not saved yet — Save and open stores it.");
+    press("Save and open");
+    await settle();
+    expect(statusLine()).toBe("Saving…");
+    answer(new Response(JSON.stringify({ purpose: "the evidence" }), { status: 200 }));
+    await settle();
+  });
+
+  it("shows a refusal in the line, and an edit clears it (Sol's item 10)", async () => {
+    patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
+    const producer = PRODUCERS[0] as Producer;
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    press("Save and open");
+    await settle();
+    expect(statusLine()).toBe("Not saved — The shelf is unavailable.");
+    expect(host.querySelector(".prof-save [role=alert]"), "the refusal is no longer an alert").toBeTruthy();
+    type("the evidence, again");
+    expect(statusLine()).toBe("Not saved yet — Save and open stores it.");
+    expect(host.textContent).not.toContain("The shelf is unavailable.");
+  });
+});
+
+describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name", (producer) => {
+  it("is written when the page opens the article by itself, untouched", async () => {
+    await producer.start();
+    await producer.finish();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(mark()).toBe(SLUG);
+  });
+
+  it("is not written after a focus and a blur over an empty box", async () => {
+    await producer.start();
+    focus();
+    blur();
+    await producer.finish();
+    expect(navigations, "the auto-open rule changed").toEqual([`/read/${SLUG}`]);
+    expect(mark(), "a reader who looked at the box is asked again").toBeNull();
+  });
+
+  it("is not written for a box typed in and emptied", async () => {
+    await producer.start();
+    type("x");
+    type("");
+    await producer.finish();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(mark()).toBeNull();
+  });
+
+  it("is not written on Open without it", async () => {
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    press("Open without it");
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(mark()).toBeNull();
+  });
+
+  it("is not written on Save and open", async () => {
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    press("Save and open");
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(mark()).toBeNull();
   });
 });

@@ -48,6 +48,7 @@
  * See docs/project/ingest-queue.md and docs/project/library.md.
  */
 import { useEffect, useRef, useState } from "react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
@@ -71,6 +72,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { savePurpose } from "./purpose.js";
+import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -342,6 +344,15 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const focusedRef = useRef(false);
+  /**
+   * **Whether the reader has ever been in the box** — focus or a keystroke —
+   * for this source. Monotonic: a blur does not undo it, and only a new
+   * address does. `focusedRef` is "in the box right now", which is the right
+   * question for *waiting* and the wrong one for *asking again later*: a reader
+   * who clicked in, thought, and clicked out has seen the question and passed
+   * on it. Plan 261001s § Stage 3, GPT Sol's plan review item 2.
+   */
+  const purposeTouchedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   /**
    * **The once-guard on the terminal decision**, holding the completion's key.
@@ -369,6 +380,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     draftSource.current = wanted;
     draftRef.current = "";
     focusedRef.current = false;
+    purposeTouchedRef.current = false;
     setDraft("");
     setPhase({ kind: "running" });
     claimed.current = null;
@@ -578,6 +590,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     /* **Nothing said, nothing to wait for** — exactly the page before 260930e. */
     if (draftRef.current.trim() === "" && !focusedRef.current) {
       claimed.current = completionKey;
+      /* **And ask once, when it opens**, if the reader never so much as
+         clicked into the box — the "didn't notice it" case. Greg, 2026-10-01,
+         spya-hbqezu; plan 261001s § Stage 3. Only here: *Open without it* is a
+         reader who saw the box and declined, and *Save and open* has its
+         answer. A re-add of an article already on the shelf is marked too, on
+         purpose (Sol's item 1) — the reading view asks only if it has no
+         purpose. */
+      if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
       setPhase({ kind: "opened" });
       openArticle(finished, autoModesRef.current, runRef.current);
       return;
@@ -674,6 +694,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      exactly when the box has to stay. While running it also stays over a failed
      job, whose card has a Retry that may yet finish it (F3). */
   const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
+  const purposeStatus = purposeStatusOf(phase, draft);
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -941,14 +962,21 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {showPurpose && (
         <PurposeBox
           value={draft}
+          status={purposeStatus}
           onChange={(value) => {
             /* In the gesture as well as at render, for the reason the tick box
                writes its ref: a completion can land before the re-render. */
             draftRef.current = value;
+            purposeTouchedRef.current = true;
             setDraft(value);
+            /* A refusal describes the words that were sent. Once they are
+               edited it is about text no longer in the box, and "Not saved —"
+               over the new words would be a claim about them. Sol's item 10. */
+            setPhase((p) => (p.kind === "ready" && p.error !== null ? { ...p, error: null } : p));
           }}
           onFocusChange={(focused) => {
             focusedRef.current = focused;
+            if (focused) purposeTouchedRef.current = true;
           }}
           onShortcut={saveAndOpen}
         />
@@ -973,11 +1001,6 @@ export function AddPage({ source: origin }: { source: AddSource }) {
               Open without it
             </Button>
           </div>
-          {phase.kind === "ready" && phase.error !== null && (
-            <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-destructive" role="alert">
-              Not saved — {phase.error}
-            </p>
-          )}
         </div>
       )}
 
@@ -1003,14 +1026,23 @@ export function AddPage({ source: origin }: { source: AddSource }) {
  * Capped rather than counted past: the server refuses more than
  * `MAX_PURPOSE_CHARS`, and a refusal after the import is a worse place to learn
  * that than the box.
+ *
+ * **It says whether the words have been saved**, in `ProfileBox`'s status line
+ * and its `prof-save` clothes. Greg, 2026-10-01, spya-hbqezu: *"it doesn't have
+ * a UI indication of when/whether it has saved it or not."* There is no
+ * *Saved* state, because a successful save navigates straight to the article:
+ * the line says *Not saved yet* until the moment the sentence can be stored,
+ * which is the honest shape. Plan 261001s § Stage 2.
  */
 function PurposeBox({
   value,
+  status,
   onChange,
   onFocusChange,
   onShortcut,
 }: {
   value: string;
+  status: PurposeStatus;
   onChange: (value: string) => void;
   onFocusChange: (focused: boolean) => void;
   onShortcut: () => void;
@@ -1051,8 +1083,63 @@ function PurposeBox({
           {value.length} / {MAX_PURPOSE_CHARS}
         </span>
       </div>
+      {/* Mounted for the life of the box and `aria-live`, as ProfileBox's is,
+          so what is announced is the change. The refusal inside it is
+          `role="alert"` as it was when it sat under the buttons. */}
+      <p className={`prof-save is-${status.kind}`} aria-live="polite">
+        {purposeStatusWords(status)}
+      </p>
     </div>
   );
+}
+
+/** Where the add page's purpose stands. `PurposeBox`'s status line draws it. */
+type PurposeStatus =
+  | { kind: "none" }
+  | { kind: "waiting" }
+  | { kind: "ready" }
+  | { kind: "saving" }
+  | { kind: "error"; message: string };
+
+/**
+ * The status, from the phase and the draft. An empty (or blank) draft says
+ * nothing: the hint already says *Optional*, and a blank one is never sent, so
+ * "Save and open stores it" would be untrue of it.
+ */
+function purposeStatusOf(phase: Phase, draft: string): PurposeStatus {
+  if (phase.kind === "saving") return { kind: "saving" };
+  if (phase.kind === "ready" && phase.error !== null) return { kind: "error", message: phase.error };
+  if (draft.trim() === "") return { kind: "none" };
+  if (phase.kind === "ready") return { kind: "ready" };
+  if (phase.kind === "running") return { kind: "waiting" };
+  return { kind: "none" };
+}
+
+function purposeStatusWords(status: PurposeStatus) {
+  switch (status.kind) {
+    case "none":
+      return null;
+    case "waiting":
+      return "Not saved yet — kept here until the import finishes.";
+    case "ready":
+      return "Not saved yet — Save and open stores it.";
+    case "saving":
+      return (
+        <>
+          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
+        </>
+      );
+    case "error":
+      return (
+        <span role="alert" className="tw:inline-flex tw:items-center tw:gap-[0.3rem]">
+          <TriangleAlert size={12} aria-hidden="true" /> Not saved — {status.message}
+        </span>
+      );
+    default: {
+      const never: never = status;
+      return never;
+    }
+  }
 }
 
 /**

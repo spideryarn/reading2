@@ -38,7 +38,12 @@ import {
   KEEP_A_TAB_OPEN,
 } from "../job-state.js";
 import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
+import { mintId } from "../ids.js";
+import { isWebUrl } from "../urls.js";
+import { useFeedbackOpen } from "./FeedbackButton.js";
+import { importProblemReport } from "./import-report.js";
 import { QuotaNotice } from "./QuotaNotice.js";
+import { exactly, relativeAgo } from "./relative-time.js";
 import { addHref, navigate } from "./router.js";
 import { isMinimalJob } from "./read-this.js";
 import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
@@ -538,17 +543,22 @@ export function JobCard({
    * began and sit there for six minutes, which is a worse lie than showing
    * nothing.
    *
-   * A second while something is running, and **off** otherwise: a finished card
-   * has no running step, so nothing on it changes with time and a minute would
-   * be a re-render an hour to paint the same pixels. `useNow` stops dead while
-   * the tab is hidden and catches up on return, which is exactly right here —
-   * nobody is watching a timer they cannot see.
+   * A second while something is running, and **a minute** otherwise. It was
+   * off for finished cards until 2026-10-01, when nothing on one changed with
+   * time; the source line below now says "3 hours ago", and the same
+   * `sameJobs` suppression would freeze that for as long as the tab sat open.
+   * Greg, 2026-10-01, spya-a5gzb9; plan 261001s, GPT Sol's review item 9.
+   * `useNow` stops dead while the tab is hidden and catches up on return, which
+   * is exactly right here — nobody is watching a timer they cannot see.
    *
    * This said `86_400_000` and called it "one timer that never fires" until
    * 2026-09-01. It fired — once a day, per card, for the life of the tab.
-   * Harmless and untrue, which is the worse half; `useNow` takes `null` now.
+   * Harmless and untrue, which is the worse half.
    */
-  const now = useNow(busy ? 1000 : null);
+  const now = useNow(busy ? 1000 : 60_000);
+  /* `null` where no Feedback host is mounted above, and then there is no
+     *Report this* — a button that opens nothing is worse than none. */
+  const openFeedback = useFeedbackOpen();
   const shown = displayJob(job, now);
   /* Only while it is going. A count that outlived its job would be a warning
      about something that has already stopped — and the engine drops the count
@@ -632,6 +642,27 @@ export function JobCard({
                 <RotateCw size={13} /> Retry
               </Button>
             )}
+            {/* **Report this, on a failed job only** — a cancelled one is the
+                reader's own doing. It opens the Feedback dialog as a Problem
+                with the job's ids and times in the box, and nothing else: no
+                address, filename or error sentence, which src/web/import-report.ts
+                says why. A fresh request id per press, so pressing it again
+                after sending is a new request and a re-render is not
+                (FeedbackDialog.tsx § `FeedbackPrefill`). Greg, 2026-10-01,
+                spya-a5gzb9; plan 261001s § Stage 1. */}
+            {job.status === "error" && openFeedback !== null && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                title="Tell us about this failure — the job's id and times go in the report"
+                onClick={() =>
+                  openFeedback({ id: mintId(), kind: "problem", body: importProblemReport(job) })
+                }
+              >
+                Report this
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -647,6 +678,8 @@ export function JobCard({
           </>
         )}
       </div>
+
+      <SourceLine job={job} now={now} />
 
       <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0">
         {job.steps.map((step) => (
@@ -687,6 +720,67 @@ export function JobCard({
           See `refusal` above. */}
       <QuotaNotice message={refusal} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive" />
     </div>
+  );
+}
+
+/**
+ * **Where it came from, and when** — one muted line under the title.
+ *
+ * Greg, 2026-10-01 (spya-a5gzb9): past imports on the signed-in home page
+ * carried too little — a title, and nothing to say which address it was or how
+ * long ago. Plan 261001s § Stage 1.
+ *
+ * - **An address is a link only when `isWebUrl` says `http(s)`.** It is the
+ *   reader's own input drawn back at them, and an `href` built from it must
+ *   never be `javascript:` — anything else is drawn as text.
+ *   docs/project/security-map.md.
+ * - **An upload is its filename, as text.** A re-run with neither origin says
+ *   nothing here and keeps only the time.
+ * - **Both times, because Greg asked for both**: the exact one from `exactly`,
+ *   and how long ago. `relativeAgo` rather than `timeAgo` for the second, since
+ *   past thirty days `timeAgo` falls back to the date, which the first already
+ *   shows — review item 9.
+ *
+ * Long addresses truncate rather than widen the card: at 390px an arXiv PDF
+ * address is wider than the phone.
+ */
+function SourceLine({ job, now }: { job: Job; now: number }) {
+  const when = exactly(job.createdAt);
+  const ago = relativeAgo(job.createdAt, now);
+  const source = job.url ?? job.upload?.filename;
+  return (
+    <p className="tw:-mt-1 tw:mb-2 tw:flex tw:min-w-0 tw:flex-wrap tw:items-baseline tw:gap-x-1.5 tw:text-xs tw:text-muted-foreground">
+      {source !== undefined && (
+        <>
+          {job.url !== undefined && isWebUrl(job.url) ? (
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="tw:min-w-0 tw:max-w-full tw:truncate tw:text-muted-foreground tw:underline tw:decoration-dotted tw:underline-offset-2"
+            >
+              {job.url}
+            </a>
+          ) : (
+            <span className="tw:min-w-0 tw:max-w-full tw:truncate">{source}</span>
+          )}
+          {when !== undefined && <span aria-hidden="true">·</span>}
+        </>
+      )}
+      {when !== undefined && (
+        <time dateTime={job.createdAt} className="tw:whitespace-nowrap">
+          {when}
+        </time>
+      )}
+      {ago !== undefined && (
+        <>
+          <span aria-hidden="true">·</span>
+          <time dateTime={job.createdAt} title={when} className="tw:whitespace-nowrap">
+            {ago}
+          </time>
+        </>
+      )}
+    </p>
   );
 }
 
