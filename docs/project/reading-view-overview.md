@@ -59,10 +59,13 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The article itself
 
-- **[granularity-zoom.md](granularity-zoom.md)** — **the core feature.** The tree, the node shape,
-  the tabular view, the spine, the arc, columns that will not fit, and what would make the idea fail.
-- **[column-context.md](column-context.md)** — why a coarse column is 80% blank mid-article, and the
-  centred fisheye that fixed it.
+- **[granularity-zoom.md](granularity-zoom.md)** — one of the features this app is for. Open it
+  before touching the tree, the node shape, how the tree is generated, the spine or the arc, and for
+  what would make the idea fail; much of the rest is the gist columns, which went with Hierarchy
+  mode on 2026-09-29.
+- **[column-context.md](column-context.md)** — history: the fisheye the gist columns had, gone on
+  2026-09-29. Open it only to learn why `useColumnContext` is called that — its focus sampling is
+  what Structure still uses.
 - **[reading-time.md](reading-time.md)** — the spine thicker where you have spent longer, and a
   hairline beside each passage: how a second is shared out, what counts, and why a batch is never
   sent twice. Owner only, behind the experimental switch.
@@ -85,21 +88,9 @@ mostly unfinished work, but **Referee is behind it for its audience rather than 
 four of its sub-modes are built, and it is for somebody asked to peer-review the piece, which most
 readers never are.
 
-- **Structure** — the article's tree with two faces, chosen by the band's width. Where the band is
-  wide enough (609px border-box, a 1165px window — [narrow-windows.md](narrow-windows.md)) it is two linked columns: every part on the left, the sections of
-  the one you are in on the right. Where it is not, it is a nested list, deep where you are reading
-  and shallow everywhere else. It shares the tree with [granularity-zoom.md](granularity-zoom.md)
-  rather than having a structure of its own, and there is no `structure.md` yet; the plans are the
-  reference. [260910g](../plans/260910g-structure-mode-subsumes-outline.md) is the two faces;
-  [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md) is the
-  two columns, built behind the switch on 2026-09-06 so the three structural modes could be compared;
-  and [260828aw](../plans/260828aw-outline-mode.md) is the nested list, which was **Outline mode**
-  until 2026-09-10. That comparison ended with Outline retired, its list kept as Structure's narrow
-  face, Structure out from behind the switch in Outline's place in the bar, and Hierarchy unchanged
-  — until Hierarchy was removed on 2026-09-29 in Structure's favour. `?mode=outline` and
-  `?mode=hierarchy` both still open Structure. Where Structure draws its own numbers, section titles
-  drop the article's own leading number ("3.2 Methods" becomes "Methods"), so the two never
-  disagree; the Spine and the prose keep it ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)).
+- **[structure.md](structure.md)** — the article's tree with two faces, two linked columns or a
+  nested list, chosen by the band's width. Open it for which plan decided what, how Outline and
+  Hierarchy folded into it, and where the code is.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
@@ -119,26 +110,16 @@ readers never are.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
   them a verdict: four sub-modes, an evidence base with two numbers in it, and a confidentiality
   notice written in the past tense on purpose. Open it for how much of it is actually built.
-- **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
-  cannot promise, the five that were cut, and why nothing was installed to draw them.
-- **Debate** — what the rest of the web says about this piece: replies to it, and the argument
-  around the claims it makes. **The only mode whose content is not in the article at all**, which is
-  why nearly everything the panel draws that is not a row is a disclosure. There is no `debate.md`
-  yet; the plan is the reference:
-  [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
-  is laid out, the four orders and the relevance bar,
-  [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
-  re-judged at the boundary and a refused row withheld and counted — only running a search is the
-  owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
-  Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
-  as filters above the list ([260930j](../plans/260930j-debate-themes-and-key-sources.md)); since
-  2026-10-01 a visitor sees those and each row's relevance too, unless the boundary withheld a row
-  ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
-  Since 2026-10-01 a source whose address carries a DOI or arXiv id (`doi.org`, `arxiv.org`, or a
-  publisher's `/doi/10.…` path) gets Crossref's or DataCite's authors and year, kept only when the
-  record's title agrees with the page's; the by-line and the date order prefer them and say where
-  they came from, and a visitor sees them too
-  ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md) stage 6).
+- **[diagram.md](diagram.md)** — the article's shape as a picture: the mode, its chips, the three
+  computed pictures, the five that were cut, and what a visitor sees. Open it for any picture but
+  the two below, or for why nothing was installed to draw them.
+  - **[sketch.md](sketch.md)** — the picture a model draws of the argument, and the default one.
+    Open it for the scene format, what it costs, and what each shape claims.
+  - **[illustrated.md](illustrated.md)** — the Sketch painted by an image model. Open it for the
+    lettering, the paper's own figures, and why it is the one picture that cannot be checked.
+- **[debate.md](debate.md)** — what the rest of the web says about this piece. **The only mode
+  whose content is not in the article at all.** Open it for Greg's ask, which plan holds which
+  change, and the `src/debate*.ts` modules.
 - **[citations.md](citations.md)** — every work the piece cites, each with a link out, ordered and
   thresholded the way the glossary is. Open it for the one safety property: every address a row
   shows was in the article, and a search says it is one. Behind the switch; a visitor to a public
@@ -150,16 +131,9 @@ readers never are.
 - **[trajectory.md](trajectory.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
   it for Greg's dictated brief, verbatim, and the questions still waiting for him.
-- **Tweets** — the article as a numbered thread, in a wide band beside the prose, each post linked to
-  the passages it came from. A page of its own at `/read/<slug>/tweets` until 2026-09-29; that
-  address now redirects to `?mode=tweets`. **The one mode that writes on arrival** rather than on a
-  press, on Greg's 2026-09-12 word, with a last-view restore excluded. No `tweets.md` yet; the plans
-  are the reference: [260825g](../plans/260825g-tweet-thread-page.md) (why it exists, and what it
-  refuses to look like) and
-  [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) (the mode, the
-  wide band, the links) and
-  [260930h](../plans/260930h-tweets-band-fits-ipad-and-copy-buttons-become-icons.md) (the band as a
-  share of the room, and icon-only copy buttons).
+- **[tweets.md](tweets.md)** — the article as a numbered thread, in a wide band beside the prose,
+  each post linked to the passages it came from. **The one mode that writes on arrival** rather
+  than on a press. Open it for why, and for the plans and the code.
 
 - **Annotations** — the one mode drawn to the *right* of the prose rather than in the band: a
   column of notes, each level with the block it is about and scrolling with the text — each
@@ -201,7 +175,9 @@ right instead.
   Open it for why a forged mark cannot work, and the two defence edits still waiting on Greg.
 - **[tooltips.md](tooltips.md)** — the library choice, and why there are two implementations: the
   glossary card's triggers are injected HTML with no React element to wrap.
-- **[keyboard.md](keyboard.md)** — ↑ / ↓ take the step; ← / → step Trajectory stops.
+- **[keyboard.md](keyboard.md)** — every key the reading view answers to. Open it before binding a
+  key or adding a focusable surface: the arrows, ⌘-K and the other chords, Tab, and the rules a
+  handler has to keep.
 - **[touch.md](touch.md)** — reading on an iPad: the prose keeps momentum scrolling (a swipe over a
   gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why

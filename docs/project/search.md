@@ -26,6 +26,28 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
 [`src/web/useSearch.ts`](../../src/web/useSearch.ts), and `§ search mode` in
 [`src/web/styles/search.css`](../../src/web/styles/search.css).
 
+**When a search returns nothing, or less than it should**, these are the sections that say what can
+empty one:
+
+- **Which search it was.** There are three — the words box and the meaning search in an article,
+  and the shelf's box over every article — and they match differently:
+  [§ The third search](#the-third-search-the-whole-library-at-once), and the table under the
+  diagram below. A link may set `?match=` either way:
+  [§ `match` defaults to `meaning`](#match-defaults-to-meaning-and-used-to-default-to-words).
+- **A bar hiding the results.** *Prioritised* is the default order, and it hides everything under
+  `?conf=` — including a `?conf=` that arrived in somebody's link:
+  [§ Prioritised](#prioritised-place-order-with-a-bar-under-it) and
+  [§ The four ways a filter lies](#the-four-ways-a-filter-lies-and-what-stops-each).
+- **Hits the model returned and we dropped** — an unknown block id, a quote not found in its
+  block. From outside that looks exactly like *no match*; the log line counts each:
+  [§ The counts in the log line](#the-counts-in-the-log-line).
+- **The text in the box was replaced** by a saved run's criterion arriving late:
+  [§ And the fetch](#and-the-fetch-which-can-still-take-the-text-away).
+- **On the shelf**, only gistable blocks are indexed for passages (`searchLibrary` in
+  [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts)), so a heading or a figure is never a hit;
+  [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one).
+- **Known gaps** are in [§ What is still open](#what-is-still-open).
+
 ```
  ┌──────────────┬──────────────────────────┬───────────────────────────────────┐
  │              │  Mode: search            │                                   │

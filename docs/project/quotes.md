@@ -28,6 +28,9 @@ a line was written are in [260831j-quotes-mode.md](../plans/260831j-quotes-mode.
 anything here** — the two exclusions in `authorVoice` and the "store the slice, not the model's
 string" rule look like fussiness until you know what they are answers to.
 
+**What is not built** — a copy button, keyboard traversal of the list, measurements several
+defaults rest on — is listed at the end, in [§ What is still open](#what-is-still-open).
+
 ```
   QUOTES MODE — same spine, same article, the band is the piece's own sentences
 
@@ -761,7 +764,8 @@ wrong — but worth knowing.
   is smaller — but it is the same harm. A separate landing, noted here because this is where the
   shape of the fix is written down.
 - **No copy button.** Worth having; it needs a decision about whether it copies the quote, the quote
-  and a citation, or a deep link.
+  and a citation, or a deep link. One already exists to lift rather than write again: `CopyButton`
+  in [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx), with its card and its touch behaviour.
 - **No keyboard traversal of the list**, the same gap the glossary and ideas panels have, for the
   same reason ([keyboard.md](keyboard.md) — ↑ / ↓ belong to the article). The rows and the ⓘ are
   ordinary tab stops, so everything is *reachable*; what is missing is a fast way through.

@@ -35,6 +35,28 @@ The check is one line in the console, at whatever width you are worried about:
 document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
 ```
 
+### A row that pushes a phone page sideways
+
+The same check works on the reading view, at 390px with the mode open — a mode band covers the
+article on a phone (§ below), so its header and sort rows are rows like the shelf's. Driving a
+browser is [browser-control.md](browser-control.md). Three things learned the hard way on
+2026-10-01, in [261001e](../plans/261001e-masthead-facts-line-overflows-a-phone.md):
+
+- **Find the culprit by injection, not by reading the CSS.** List the elements whose right edge
+  is past the viewport, then inject one rule at a time (`display: none` on a suspect, a candidate
+  fix) and watch `scrollWidth` come back to 390. The first guess there — the figures — was wrong.
+- **Inline items made `white-space: nowrap` one by one, with no whitespace between them, leave no
+  wrap opportunity anywhere in the run**, so the whole tail of the line becomes one unbreakable
+  piece. `display: inline-block` on the items keeps each whole and lets the line break between
+  them.
+- **Pin it in real Chrome, with a control.** jsdom cannot see a line break.
+  [`tests/masthead-facts-wrap-in-chrome.test.tsx`](../../tests/masthead-facts-wrap-in-chrome.test.tsx),
+  after [`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts), is the
+  pattern: the real component rendered to markup, the token and reader sheets inlined, a 390px
+  viewport, skipped where there is no Chrome. Its control forces the old rule back and asserts the
+  page *does* overflow, because the test has no webfont and a narrower fallback font could
+  otherwise make the run fit and the test pass for nothing.
+
 ## The reading view's narrow window, which is a different problem
 
 Everything above is the shelf, where a narrow window breaks *rows*. On the reading view it breaks

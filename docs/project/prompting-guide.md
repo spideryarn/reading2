@@ -109,6 +109,35 @@ other prompt here, so people and tools can find it.
 **Changing the shared text changes every prompt that uses it.** So bump the version stamp of every
 stamped prompt it reaches, and measure first.
 
+## What the model writes back
+
+The prompt is half the contract; the other half is the code that reads the answer. These four traps
+have each cost a paid call or shown a reader something wrong, and each is written up where it
+happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts) §
+`parseJsonAnswer`.
+
+- **The JSON is somewhere in the answer, not the whole of it.** Models wrap their JSON in prose or a
+  fence despite being told not to. The shared parser now *extracts but refuses to choose*: exactly
+  one candidate document, or it throws. Taking "the first JSON in the response" would accept
+  `{"events":[]}` from a preamble as a real empty answer — making a parser more permissive moves the
+  failure from rejecting a good answer to accepting the wrong one, quietly.
+  [260903f](../postmortems/260903f-the-model-wrapped-its-json-and-eleven-stages-assumed-it-was-the-whole-answer.md).
+- **"Omit this field when…" produces the comma anyway.** The model writes the separator, then obeys
+  the instruction not to write the field, and the JSON is invalid (5 of 20 calls in one
+  measurement). `dropTrailingCommas` now mends that one shape after a strict parse fails; the other
+  way out is a field that is always present and nullable.
+  [260906b](../postmortems/260906b-asking-a-model-to-omit-a-field-makes-it-emit-the-comma-anyway.md).
+- **A model's claim used as a join key gives a confident wrong join.** Figures were paired to
+  captions on the page number the transcriber *said*, and two swapped silently. The fix makes the
+  measured side corroborate the claim (`captionPrintedOn` in
+  [`src/pdf-figures.ts`](../../src/pdf-figures.ts)) before the join is trusted.
+  [260924a](../postmortems/260924a-a-figure-paired-on-the-transcripts-page-claim.md).
+- **One bad item should not fail the whole list.** The labels step threw on one malformed pair and
+  lost the batch with no retry, though the caller already had a graded answer — re-ask for what is
+  missing, forgive a bounded gap. The fix classes each fault as either "this item is missing" or
+  "this draw is broken", and names the terminal error with a `code` so Sentry can tell them apart.
+  [260924a](../postmortems/260924a-a-malformed-label-pair-kills-the-step-without-a-retry.md).
+
 ## Measuring a prompt change
 
 Reading a few outputs and finding them better is not evidence: the same prompt, run twice, reads
@@ -123,7 +152,10 @@ differently. This is the method that worked, in `evals/plain-words/`:
    `after` on the commit with it. Never overwrite an arm.
 4. **Pair like with like** (the same node, term, question or case), **shuffle the sides** with a
    tested coin, and keep the key in its own file. **Check the key is balanced before judging.** A
-   broken coin once put the new arm on the same side 94 times in 95.
+   broken coin once put the new arm on the same side 94 times in 95: a float LCG, in
+   [260926a](../plans/260926a-plainer-summaries-and-glossary.md). The tested one is `blindCoin` in
+   [`evals/plain-words/run.ts`](../../evals/plain-words/run.ts); count which side each arm landed on
+   in the key, because a judge with a side preference will look like a prompt effect.
 5. **A blind judge, in a fresh subagent that reads only the pairs file**, answers two questions per
    pair: which one would a reader from outside the field understand more easily, and did either one
    lose, bend or blur a claim? Plainness without the fidelity question rewards vagueness.

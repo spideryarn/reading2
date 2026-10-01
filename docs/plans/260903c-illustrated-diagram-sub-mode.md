@@ -17,7 +17,7 @@ way to look at what it produces today is `evals/results/illustrated-2026-09-03b/
 >
 > — Greg, 2026-09-03
 
-[Sketch](../project/diagram.md#sketch) is the fourth diagram sub-mode: a model reads the article and
+[Sketch](../project/sketch.md) is the fourth diagram sub-mode: a model reads the article and
 writes a **scene** — five primitives with numbers in them — which is checked against the article and
 then painted to SVG by our own painter. **Illustrated** is a fifth chip beside it. It takes the
 Sketch that already exists, has a model turn it into an illustration brief, and has an image model
@@ -391,7 +391,7 @@ empty state exists precisely to name that price before the press.
 > [260903j § Part two](260903j-illustrated-415-and-one-click-paint.md). The chain landed; the
 > objection above was to the *hiding*, not to the chain, so the refusal branches now carry a "Draw
 > the Sketch, then paint" button with both prices and both waits in front of it. Current behaviour
-> is [diagram.md § Illustrated](../project/diagram.md#illustrated).
+> is [illustrated.md](../project/illustrated.md).
 
 ### Its fingerprint is the Sketch, not the article
 

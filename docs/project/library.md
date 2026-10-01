@@ -16,7 +16,19 @@ from the reading view.
 
 Two things follow from that, and they are the whole design. **The slug moves from a query parameter
 into the path**, so an article has an address rather than a setting. And **the storage stays JSON on
-disk but is shaped like rows**, so the day it becomes Postgres is a change to one file.
+disk but is shaped like rows**, so the day it becomes Postgres is a change to one file. (It became
+Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becomes Postgres](#when-this-becomes-postgres).)
+
+**Where to look**, since this page is long:
+
+- **Every file and what it does** — [§ Where the code is](#where-the-code-is).
+- **Dates and times** — "added 3 days ago", then a real date past a month, and the exact time on
+  hover — are formatted in one place, [`src/web/relative-time.ts`](../../src/web/relative-time.ts)
+  (`timeAgo`, `relativeAgo`, `exactly`), against one clock, [`useNow`](../../src/web/useNow.ts).
+  What the shelf shows is in [§ Sorting the shelf](#sorting-the-shelf) and
+  [§ The tooltip](#the-tooltip).
+- **What a card says, and the numbers on it** — [§ What a card says](#what-a-card-says-and-why).
+- **Searching the shelf** — [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one).
 
 ## The routes
 

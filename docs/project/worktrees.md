@@ -101,6 +101,16 @@ flag could stand. It bears directly on
 [engineering-manager.md § Delegate](../reusable/engineering-manager.md#delegate): a brief that
 assumes a working shell is not one the agent can necessarily carry out.
 
+The same check has three less obvious edges, all measured on the box between 2026-09-05 and
+2026-09-09. It reads the command **text**, including data it will never run, so a heredoc whose
+prose merely mentions git — a review prompt quoting `git diff`, a script editing a file whose
+comments say "git" — is refused as *"names git in a form too complex to verify"*; the Edit and Write
+tools are not subject to it, and a script saved to a file and run as `python3 <file>` is not
+inspected. An agent **already running** when its parent calls `EnterWorktree` loses Bash mid-task,
+even `pwd`. And a subagent that calls `EnterWorktree` itself loses Bash for the rest of its life,
+with `cd` and `ExitWorktree` both refused; a sibling tree is reachable by running commands at its
+absolute path, so the trap is the tool call, not the directory.
+
 ### The dev server used to be blind in here — fixed 2026-09-02
 
 Worth knowing even though it is fixed, because for four days a worktree's `npm run dev` **could not
@@ -236,7 +246,13 @@ landed, not against the file.
    the Dropbox questions do not apply here at all. The Mac keeps sharing one tree for now —
    see [Runbook B](#runbook-b-the-mac-done-2026-09-01).
 2. **A worktree pushes straight to `dev`.** Not a `worktree-*` branch on the remote; the local branch
-   is a scratch label you delete afterwards. See [The workflow](#the-workflow).
+   is a scratch label you delete afterwards. See [The workflow](#the-workflow). In his words
+   ([260828r-worktrees.md](../plans/260828r-worktrees.md)):
+
+   > I want each worktree to push directly to dev, and then we'll tidy up the local worktree branch
+   > afterwards.
+   >
+   > — Greg, 2026-09-01
 3. **One shared local Supabase, with a lease**, for v1 — and a stack per worktree later if it earns
    it. [Why](#the-database-one-stack-and-a-lease).
 4. **Design for more than ten.** Twenty or thirty is a thing we might want, and the box would need

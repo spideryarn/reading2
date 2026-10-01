@@ -87,8 +87,12 @@ model. So:
 
 ## Schema
 
-Canonical definition lives in [`src/types.ts`](../../src/types.ts); this is a copy for reading.
-`data/<slug>/tree.json`:
+Canonical definition: `Tree` and `TreeNode` in [`src/types.ts`](../../src/types.ts). What follows
+is an abridged copy for reading, and it lags: fields arrive there first (`question` and `treatment`,
+for instance, are not below), so read the type before relying on what a node can carry. The tree is
+stored as the `tree` column of the article's revision ([database.md](database.md)); it was
+`data/<slug>/tree.json` until the filesystem store went on 2026-09-05, which is why "`tree.json`"
+still names it in this doc and in code comments.
 
 ```ts
 interface Tree {

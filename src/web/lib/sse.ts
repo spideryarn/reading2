@@ -9,6 +9,10 @@
  *
  * The server half is `sse` in src/routes.ts; the OpenRouter half, which parses
  * a different SSE dialect, is `sseChunks` in src/openrouter-stream.ts.
+ *
+ * The one place the client reads a stream. `readAnswerStream` below is the
+ * answer-shaped loop to start from; hooks that loop over `readEvents` by hand
+ * predate it — comments.md#streaming.
  */
 import { ENDED_UNFINISHED } from "../../messages.js";
 import { markUnreachable } from "./reader-facing.js";

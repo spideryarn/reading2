@@ -156,6 +156,15 @@ paragraphs against each other and against the label rather than checking that th
 **It catches copying and not paraphrase**, which is written down there rather than left to be
 discovered.
 
+**A card keyed by mode is read on at least four surfaces, and they behave differently**: the Dock's
+segment on the reading view (a press there can start a run), the loose mode links on the metadata
+page (they only navigate), either of those seen by a visitor (who gets `VisitorBand`, not a
+generator), and either of them where the artefact already exists (nothing runs). So *"opening it
+runs a model pass"* is false on three of the four; describe the artefact rather than the gesture.
+On 2026-09-07 four of the fourteen mode cards opened that way in first draft, and only a
+cross-family review caught them —
+[new-mode.md § The card on the button](new-mode.md#the-card-on-the-button).
+
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
 [Referee mode](referee-mode.md) on 2026-09-02, which is now the largest customer: about thirty

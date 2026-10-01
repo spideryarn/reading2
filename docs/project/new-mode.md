@@ -24,10 +24,52 @@ forgot it. The rule behind the total tables is
 [260830c § What would have caught the class](../postmortems/260830c-the-dialog-said-nothing-was-personalised.md#what-would-have-caught-the-class):
 a hand-kept list falling behind a growing set.
 
+## Where else to look
+
+For things this checklist does not hold:
+
+- **What the band shows while it waits** — the house spinner-and-sentence, `useSlow`'s delay,
+  `role="status"` — is [web-client.md § The waiting state](web-client.md#the-waiting-state); the
+  empty and failed states beside it are the rest of
+  [§ Empty is not the same as not asked yet](web-client.md#empty-is-not-the-same-as-not-asked-yet).
+- **What a signed-out visitor sees of the mode** on a public article is decided in two places: the
+  client's `POLICY` in [`src/web/visitor.ts`](../../src/web/visitor.ts) (which band they get) and
+  the server's `REVISION_READ_POLICY` in [`src/store/pg.ts`](../../src/store/pg.ts) (which stored
+  columns a public read may select). The rule — a visitor sees whatever is already stored, and never
+  starts a paid call — is Greg's, quoted in
+  [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md); the threat
+  model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
+  below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
+- **A mode can start without being opened.** Besides the first press
+  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), the add page queues every
+  main mode once an import finishes — derived from `MODE_CATALOG`'s `experimental` flag, so a new
+  non-experimental mode joins it with no edit, and is paid for on every import that keeps the box
+  ticked. [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and
+  [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
+- **Checking it in a browser**: [browser-control.md](browser-control.md), then
+  [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.
+
+## Not a mode?
+
+Two shapes borrow half this page:
+
+- **A pipeline step with no band** (a line on the Metadata page, a preprocessing pass like
+  `crossrefs`) takes [§ The artefact](#the-artefact-if-the-mode-shows-one) and
+  [§ Its cost](#its-cost) and skips the client tables; adding the step itself is
+  [architecture.md § Stage ownership](architecture.md#stage-ownership) (an entry in `STEPS`), and
+  whether it runs on every import is `DEFAULT_INGEST_STEPS` in
+  [`src/pipeline.ts`](../../src/pipeline.ts) —
+  [ingest-queue.md § `STEP_ORDER` is not the default list](ingest-queue.md#step_order-is-not-the-default-list).
+- **A per-reader setting** follows the experimental switch, a column on the reader's profile row:
+  [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (A view
+  choice that should travel in a shared link is a URL param instead — [url-state.md](url-state.md).
+  A preference for this browser only, like the add page's tick box, is `localStorage` —
+  [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) § `readAutoModes`, which says why.)
+
 ## The client
 
 **The vocabulary is `MODES` in [`src/modes.ts`](../../src/modes.ts), and the compiler asks for the
-rest.** A fifteenth word there is red until it has a row in each of these totals:
+rest.** A new word there is red until it has a row in each of these totals:
 
 | Table | Where |
 |---|---|
@@ -39,16 +81,16 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
 | `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
 | `SPENDS` and `DRAWS` | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) — what an **owner's** press buys, and what the band actually draws. Both independently written, never derived from the tables above. `DRAWS` is total over `Mode` with no exclusions — a mode that draws no band says so as a `kind: "none"` row **carrying the positive control**, what is on screen instead. It was keyed `Exclude<Mode, NO_BAND_MODES>` until GPT Sol's F21 on 2026-09-06, and that one list both excused a mode from the table and skipped it at run time, so a mode added to it was checked by nothing |
-| `modeBand()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says `return null` in its own case, as `plain` and `hierarchy` do. (It was `band()` until 2026-09-11; `band()` is now the one line that puts its answer inside the boundary below) |
+| `modeBand()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says so in its own case — `plain` returns `null`, and `annotations` draws only what sits outside its right-hand column. (It was `band()` until 2026-09-11; `band()` is now the wrapper that puts its answer, or a visitor's `VisitorBand`, inside the boundary below) |
 | `MODE_CONTAINMENT` | [`src/web/reader/ModeBoundary.tsx`](../../src/web/reader/ModeBoundary.tsx) — **whether the band may break on its own**, without taking the article. `contained` is the answer for any mode with a band; the boundary is already at the call site. `exempt` needs a reason and a matching change to `EXEMPT` in [`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx). Give `WITNESS` an entry for each composition path the mode can draw: the owner's band, a distinct available visitor band, and `VisitorBand` when `visitorGap` can put it in the slot. Each names a `useRenderCount` label whose injected throw proves the component is really inside. If a press or a chip inside your band arms a token, add it to `bandTarget` in `activation.ts` so a band that throws before claiming it retires it ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)) |
-| `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the ring, the paragraph bar and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly; nine do. The **prose marks** are one step further on: `proseFound`, in the same file, adds the quotes, which are marked in every mode ([quotes.md](quotes.md)) — so a new mode gets those whether it asks or not, and must not add them to the other three |
+| `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the ring, the paragraph bar and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly — the switch is the list of which do. The **prose marks** are one step further on: `proseFound`, in the same file, adds the quotes, which are marked in every mode ([quotes.md](quotes.md)) — so a new mode gets those whether it asks or not, and must not add them to the other three |
 
 Then the residue, which is why this page exists:
 
 - ~~**The band branch**~~ — **it left this list on 2026-09-06.** It was seventeen sibling
   `{mode === "…" && <Band/>}` expressions that nothing checked, so a mode with no branch opened an
   empty band and errored nowhere; it is now the `modeBand()` switch in the table above, and so is the
-  passage selection beside it. Both are compiler-checked, and what a fifteenth mode makes red is
+  passage selection beside it. Both are compiler-checked, and what a new mode makes red is
   written out below.
 - **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
   *Nothing.*
@@ -123,6 +165,41 @@ Then the residue, which is why this page exists:
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
+## What Greg has asked of modes, across the board
+
+Nothing checks these; each was asked of one mode in words that reach for the others. Each names the
+mode doc that holds its machinery.
+
+- **Once generated, the mode's items are marked in the main text, in every mode.** Asked first of
+  the Glossary (Greg, 2026-08-26: *"Glossary entries should always be underlined in the verbatim
+  text column, even outside Glossary mode"*), then of Quotes, then of Citations:
+
+  > And (just as we do with quotes and glossary), once generated, we should always visually
+  > indicate Citations somehow in the main text (with tooltip/clickable, that pops up a panel for
+  > the citation with various useful information & actions.
+  >
+  > — Greg, 2026-09-12 (SPIDERYARN-READING2-3M,
+  > [260916b](../plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md))
+
+  How it was done without making every reader fetch every list:
+  [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), and
+  [citations.md § Marked in the prose, in every mode](citations.md#marked-in-the-prose-in-every-mode).
+- **A list of rated items opens in a prioritised order, with a threshold the reader can move.**
+
+  > perhaps we could even consider using the same approach we use for the glossary and other
+  > places, where we give each question a rating for something like how difficult and how
+  > central, as well as the ordering. And that way then we could have a prioritized ordering by
+  > default with a threshold
+  >
+  > — Greg, 2026-09-29, of FAQ (SPIDERYARN-READING2-5D,
+  > [260929g](../plans/260929g-faq-difficulty-centrality-and-a-threshold.md))
+
+  The machinery is [`src/web/threshold.ts`](../../src/web/threshold.ts) § `applyThreshold` and
+  [`ThresholdSlider`](../../src/web/ThresholdSlider.tsx); the reasoning is
+  [glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is) and
+  [faq.md § A few big questions first](faq.md#a-few-big-questions-first-and-a-threshold).
+- **No description line in the band** — the residue item above, with Greg's words.
+
 ## The card on the button
 
 Both halves of the card are `MODE_CATALOG` fields, so the compiler asks for them; what it cannot ask
@@ -135,7 +212,7 @@ for is that the second one is worth reading. The rule is
 
 So `description` is the mode in one fragment — it is also what the command bar draws inline beside
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
-the current sixteen that is almost always one of three things: **it reads something already built**
+the current modes that is almost always one of three things: **it reads something already built**
 (Structure, Summary), **its content is a model pass over the article, written once and
 stored** (Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
@@ -149,7 +226,7 @@ Five things to get right, and the first is the one that cost this field a whole 
   at least — the segment on the reading view, the loose links on the metadata page
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
-  Four of the fourteen opened that way in first draft and every one was caught by a cross-family
+  Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
   review rather than by anything in the diff. *"One model pass over the article, written once and
   then stored"* says the same thing and is true wherever the card is read — and it is what makes
   `how` an intrinsic fact about the mode rather than a Dock string parked in a shared module, which
@@ -167,7 +244,7 @@ Five things to get right, and the first is the one that cost this field a whole 
   visitor's sentence is `markedModes`' — neither belongs here as a second copy.
 - **Read it out of the source before you write it.** The known failure of this job is a *plausible
   invention* in the second paragraph: four of the nine cards on the shelf's action row were false in
-  first draft, and two of the fourteen here were thrown away for the same reason
+  first draft, and two of the mode cards were thrown away for the same reason
   ([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md) has both, and the table of where
   each claim was checked). The restatement check can see a card arguing with itself and cannot see
   one arguing with the code.
@@ -331,8 +408,8 @@ on 2026-09-10, when its nested list became Structure's narrow face
    always-shares list, the rewrite targets in `address-settling` and `public-read-rewrite`,
    `SILENT` in `every-mode-says-which-passages-it-marks`, and the band shapes in
    `mode-surface-changes-no-markup`.
-5. **Any rewrite that produced the retired mode** now produces its successor (`liftStrandedText`, in
-   [url-state.md](url-state.md)), and the mode's line in
+5. **Any rewrite that produced the retired mode** now produces its successor (the `lift…` rewrites
+   in `settleAddress`, [`src/web/router.ts`](../../src/web/router.ts) — [url-state.md](url-state.md)), and the mode's line in
    [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
    says where it went.
 
@@ -342,7 +419,7 @@ The dock, the visitor's view, the exported bundle and the offline copy each have
 walks `MODES` or `STEP_ORDER`; if yours went green without a new row somewhere, one of the residue
 items above is the reason — [silent-success.md](../reusable/silent-success.md).
 
-**What a fifteenth mode makes red, measured rather than remembered.** Adding one word to `MODES` and
+**What a new mode makes red, measured rather than remembered.** Adding one word to `MODES` and
 running `npm run typecheck` gives exactly six source errors and one test error — no more, and the
 list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 [260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
@@ -354,7 +431,7 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 | [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
 | [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
-| [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `band()` | the band, or an explicit `null` |
+| [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `modeBand()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
 | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § `BAND_SAYS` | what a visitor's band says, asserted against the network |
 
@@ -368,7 +445,7 @@ written since have the same shape and the same purpose:
 | [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
 
 That is the mechanism working rather than drifting: each new table is an independently written
-`Record<Mode, …>`, so every one of them adds a place a fifteenth mode has to be decided rather than
+`Record<Mode, …>`, so every one of them adds a place a new mode has to be decided rather than
 defaulted. **The count is the thing to re-measure, never the thing to trust** — it is a fact about
 today's tables, not a rule, which is why it is written with its date each time.
 

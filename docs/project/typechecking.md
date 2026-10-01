@@ -305,6 +305,17 @@ file name beneath it. A count is not a diagnosis, and "2 errors, and I know whic
 that gets shorter as you say it. Read the whole output, or grep for `error TS` **as well** as the
 summary lines.
 
+Two more ways the text misleads, both from `scripts/typecheck.ts` writing `✓` with `console.log`
+and `✗` with `console.error`. **Failures go to stderr**, so anything that keeps stdout alone — a
+`2>/dev/null`, a `subprocess.run(...).stdout` — sees only ✓ lines: a mutation probe on 2026-09-08
+reported "went red: False" over an exit code of 1 and four errors. And **the last lines are ✓
+whenever the last project and the coverage check pass**, so `| tail -2` reads clean over a red
+project (2026-09-07, a broken `Dock.tsx` found only when 115 tests went red). A pipe also replaces
+the exit code with the last command's: `npm run typecheck | tail; echo $?` printed `EXIT=0` over two
+`error TS6133` lines, and a `vitest … | tail -3 && git commit` committed over a red gate on
+2026-09-08. The exit code is the one signal none of this reaches, as long as nothing sits to its
+right in a pipe; `set -o pipefail` or `${PIPESTATUS[0]}` keep it when a pipe is unavoidable.
+
 **Editing after the last run.** On 2026-08-29 a report said typecheck was clean except for one file
 owned by another session. It had been true when the command was run; a one-line edit afterwards — made
 to satisfy a *different* gate, `tests/fixture-ids.test.ts` — replaced an object literal and dropped a

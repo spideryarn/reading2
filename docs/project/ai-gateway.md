@@ -108,8 +108,8 @@ like**. Only the first collapsed.
 
 | | speaks | used by | code |
 |---|---|---|---|
-| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, faq, trajectory, crossrefs, **`simple`** (Summary's plain-words sub-mode, [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md)), sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* (`citations-find`) and *Investigate* (`citation-investigate`, with `citation-paper-passages` inside it when the cited paper itself was read, [citations.md](citations.md)), quiz marking, **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else) — one word, judged from the finished mark, shown to nobody), the three referee runs, PDF reading, **`shelf-topics`** — GPT-6 Luna scoring the shelf's candidate topics, awaited after the terms route has already answered so the spend still lands in the request's collector rather than as a late finish ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) — and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — every `Task` whose `TASK_WIRE` entry is `"messages"`, which `PIPELINE_TASKS` reads off ([`src/models.ts`](../../src/models.ts)) | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Investigate* ([citations.md](citations.md)), quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
@@ -127,8 +127,11 @@ the tally, and the tests above are where it lives.
 
 [`src/models.ts`](../../src/models.ts) holds the wire assignment as `AI_JOB_WIRE: Record<AiJob,
 Wire>` — a record rather than lists, so a job nobody assigned fails to compile rather than quietly
-getting a default. `Provider` is still a type there, now with exactly one member. One member is not
-an oversight; it is the decision, written where somebody will trip over it.
+getting a default. `Provider` is still a type there: `"openrouter"`, plus `"openai"` for live conversation's
+realtime session alone, which OpenRouter cannot route — the one declared exception
+([§ The exception that arrived](#the-exception-that-arrived-and-what-it-costs-the-rule)). It had
+exactly one member until 2026-09-02, and that was the decision, written where somebody would trip
+over it.
 
 `AiJob` rather than `Task`, and rather than `Job`. A `Task` is a judgment about how much *reasoning*
 a job needs, which is why transcribing a PDF, embedding a paragraph and transcribing a voice are
@@ -692,8 +695,12 @@ after the move: every call from `npm run ingest`, `npm run hierarchy` and the re
 
 `withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via
 [`src/cli-ledger.ts`](../../src/cli-ledger.ts), and there is one: `npm run eval:pdf-read`.
-`evals/` is not in the ledger: it calls models outside both gateways, and the report says so on
-every run rather than being quietly partial.
+An eval that wraps its run in `withLedger("eval", …)` or opens its own `collectSpend` writes
+ordinary rows with `scope_kind = 'eval'`, and `npm run cost` splits those out as non-product spend
+(`src/cost-report.ts`); [`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts) is the
+shortest example. An eval that opens no scope records nothing, and is counted only by
+`unscopedCalls()`. (This paragraph said "`evals/` is not in the ledger" until 2026-10-01, which had
+stopped being true; [cost-tracking.md](cost-tracking.md) had it right.)
 
 **That sentence was false for two of the eight until 2026-08-28.** `npm run labels` and
 `npm run pdf` had never had the line: both called `main()` straight from the guard, so every batch

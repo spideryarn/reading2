@@ -16,6 +16,13 @@ view of anybody's private reading anywhere in it. The decision that the owner's 
 **badge and not a filter** is unchanged and still stands —
 [library.md § The Shared badge](library.md#the-shared-badge) reconciles the two.
 
+**It is also not how a visitor reads a public article.** This page is the *listing*. What a
+signed-out visitor sees once they open one — which modes, which stored columns, and the guarantee
+that nothing they do spends money — is the `/api/public/` read path:
+[security-map.md § The unauthenticated namespace](security-map.md#the-unauthenticated-namespace-and-the-tripwire-under-it)
+for the defences, [new-mode.md](new-mode.md) for where a mode's visitor policy is decided, and
+[public-readable-sharing.md](public-readable-sharing.md) for what the article's author is told.
+
 ## What it changed about sharing
 
 Sharing used to promise *reachable by anyone with the link*. Listing every public article makes it

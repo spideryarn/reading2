@@ -669,6 +669,9 @@ The measurements, both reviews and the two bugs the tests found after the review
 
 ## Where the pieces are
 
+Adding another per-reader setting beside the profile: the recipe is
+[experimental-features.md § Where it lives](experimental-features.md#where-it-lives).
+
 | | |
 |---|---|
 | [`src/profile.ts`](../../src/profile.ts) | render, normalise, hash, the staleness rule, `PROFILE_RULES`, `profileSection` — the filesystem store was deleted 2026-09-05 |

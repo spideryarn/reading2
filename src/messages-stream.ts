@@ -9,6 +9,9 @@
  * `POST https://openrouter.ai/api/v1/messages`, which its docs call the
  * "Anthropic Skin".
  *
+ * The one way a pipeline stage calls a model: `streamMessage`, then
+ * `finalMessage()` — ai-gateway.md#one-gateway-five-wires.
+ *
  * ## Why the SDK is still here
  *
  * Because it works unchanged. The seven stages keep `client.messages.stream(…)`,

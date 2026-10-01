@@ -130,7 +130,7 @@ account today and mostly it is not.
   "Find the terms" and then "Choose the quotes" makes two jobs, minutes apart, and misses the
   5-minute TTL anyway. **True when this was written; no longer universally true.** Later that day
   Illustrated's *"Draw the Sketch, then paint"* gained `precededBy`, so one press can post
-  `["sketch", "illustrated"]` in a single job — [diagram.md § Illustrated](../project/diagram.md#illustrated).
+  `["sketch", "illustrated"]` in a single job — [illustrated.md](../project/illustrated.md).
   Whether that pair shares a cache group has not been measured.
 - **An ordinary ingest carries no article stage at all** since `arc` left `DEFAULT_INGEST_STEPS` on
   2026-08-29.

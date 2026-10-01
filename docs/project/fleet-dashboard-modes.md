@@ -341,6 +341,13 @@ the missing edge inside itself stays green when production stops making it, whic
 mount out, and the test still passed — the needle survives inside the `//`. Commenting-out is how
 such a line actually dies. Assert against comment-stripped source, and check it red.
 
+**A row's `textContent` contains its tooltips.** Each tooltip in a row also renders its sentence
+into a `<span className="tw:sr-only"> — …</span>` for screen readers (`QueuePanel.tsx` has several
+per row), so `toContain("—")` or `toContain(word)` on the row is answered by a neighbour's tooltip.
+On 2026-09-09 a test for "an unstated priority is visibly marked" passed with the marker deleted,
+and the visible wait text has an em dash too. The element itself, with the `[class~="tw:sr-only"]`
+spans removed, is what holds only the thing under test.
+
 Two suites notice you without being asked. `tests/fleet-imports.test.ts` is the one above
 — [§ may the fleet touch what your tab is about?](#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about).
 `tests/fleet-compile-guards.test.ts` holds the guards only the compiler can enforce — but only over

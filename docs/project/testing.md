@@ -403,7 +403,6 @@ internet, and the `unit` lane reaches nothing at all.
 | [`tests/labels-step-registration.test.ts`](../../tests/labels-step-registration.test.ts) | the three registrations nothing else checks: `labels` out of `DEFAULT_INGEST_STEPS`, out of `FORCE_ONLY_WHEN_NAMED`, and **every step that produces `tree` also produces `labels`** |
 | [`tests/labels-file-union.test.ts`](../../tests/labels-file-union.test.ts) | that a pending labels manifest cannot claim a prompt version and a completed one cannot omit it. **`npm run typecheck` reddens this, not `npm test`** — vitest strips `@ts-expect-error` without looking |
 | [`tests/hierarchy-leaves-the-labels.test.ts`](../../tests/hierarchy-leaves-the-labels.test.ts) | that a structure-only tree carries **no** navigation labels — not even the author's headings, which is the guess everybody makes — and that `checkCoverage` runs in the `labels` step and not in `generateHierarchy` |
-| `tests/api.test.ts` | which directory answers a slug — and that `example/` answers for **its own slug only** — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
 | [`tests/keynav.test.ts`](../../tests/keynav.test.ts) | where ← / → land, and that → then ← is reversible — [keyboard.md](keyboard.md) |
@@ -717,6 +716,14 @@ The typecheck guard ([typechecking.md](typechecking.md)) is what noticed it belo
 
 ### An eval run in a worktree measures the fixture cut, not the corpus
 
+The committed cuts exist because of what Greg asked for when `data/` was both scratch and corpus
+([260901b-committed-fixture-corpus.md](../plans/260901b-committed-fixture-corpus.md)):
+
+> I'm really hoping that we can either make `data/` completely superfluous (i.e. not needed, no big
+> deal if it's missing), or if it really is important (e.g. for evals) then commit it to the repo.
+>
+> — Greg, 2026-08-31
+
 `npm run worktree:setup` fills `data/` from `tests/fixtures/data-root/`, and those are **fixture
 cuts**: `data/constitution` is 84 blocks in a worktree and 360 in the primary. So an eval run there
 silently measures short articles while the write-up names long ones — which cost a session's
@@ -778,6 +785,14 @@ a second full pass, and the expensive half was not the re-run — it was that th
 were indistinguishable until it finished.
 [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
 
+**A process timeout is not a bound on how long you wait.** Node's `timeout` on `execFileSync` and
+`spawnSync` sends a signal and then waits for the child to exit, however long: a child that ignores
+SIGTERM held a 1-second timeout for 20 seconds, with the same `ETIMEDOUT` error either way —
+[260910a](../postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md). And a
+wrapper that settles on `'close'` waits for every holder of the child's stdio, so a detached helper
+kept a 5-minute timeout open for fifteen —
+[260906e](../postmortems/260906e-a-timeout-that-bounded-the-child-and-not-the-wrapper.md).
+
 ## A green run here proves less than it looks like
 
 `npm test` is green on Greg's laptop, and partly because of state that is not in git. Measured
@@ -819,6 +834,17 @@ npx tsx scripts/tmux-job.ts npm test -- --reporter=dot
 It prints the log; `tail -f` it, and the last line is `EXIT=<n>`. Same for anything else that takes
 minutes — `npm run typecheck`, an eval, a codex review.
 
+**`--name` is its only flag, and there is no `--` separator.** A bare `--` or an invented `--log`
+in front of the command becomes the command: `sh: 1: --: not found`, `EXIT=127` in under a second,
+behind the same `✓` and log path a healthy launch prints — hit twice on 2026-09-09. A log with
+`EXIT=` in its first minute never ran.
+
+**A log with no `Test Files` line is void, not passing.** The box has a resource-triage agent that
+kills every running vitest when load spikes (2026-09-08: load 391, swap full, 18 suites at once).
+The kill lands as `EXIT=143` under a screen of green ticks, which reads like a suite that was passing
+when it stopped. Several agents retrying together is what caused it, so a re-run straight away
+tends to meet the same fate.
+
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
 
@@ -830,6 +856,18 @@ instead. A bare session never exits. On 2026-09-05 eight of those husks were sit
 under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of them fifteen hours old.
 `gjd-remote ls` now tells `shell busy` from `shell idle` so a husk is visible as one, and
 `gjd-remote kill <name>` will end any of them; the script above is so there is nothing to kill.
+
+### A scoped run answers a smaller question than it looks like
+
+- **A path that does not exist is skipped without a word.** `npx vitest run a b c` with `b` renamed
+  or deleted runs the other two and exits 0 — found 2026-09-07 when a brief named
+  `streaming-route-request-lifetime.test.ts` after it had become `referee-stream-lifetime.test.ts`.
+  The `Test Files N passed` count is the only place the missing file shows.
+- **A list built from your diff misses the route's other callers.** On 2026-09-10 a change to a
+  box-action request body passed eight scoped suites and typecheck, while
+  `tests/fleet-quarantine.test.ts`, which posts to the same route and was in nobody's diff, lost
+  three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
+  drive a route.
 
 ### `.env.local` is loaded into tests
 
@@ -875,7 +913,7 @@ laptop that had never run the setup.
 
 **Put the owner in scope rather than assuming it.** `runAsOwner(OWNER, body)` beats the environment
 — that is what [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) pins — and
-`tests/claim-session-files.test.ts` has advanced that way since it was written. Where a claim has to
+[`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) works that way throughout. Where a claim has to
 be the fixture's *own*, ask `currentOwnerId()` instead of writing the constant. Pinning the variable
 for the whole suite is the fix that looks obvious and is wrong: the corpus in the local database
 belongs to the machine's owner, so it makes `store-parity`, `store-roundtrip` and
@@ -1040,6 +1078,55 @@ The fixture rules that generalise, each of which passed a test against the bug i
 Also: asserting a column constant or a projection object passes while the real query says
 `.select()`. Assert the generated SQL — Drizzle's `QueryBuilder` from `drizzle-orm/pg-core` builds it
 with no database and no connection.
+
+The same class kept arriving after 2026-08-27 — fifteen postmortems by 2026-09-30. The shapes since,
+one line each; the postmortem has the case and the test that now pins it:
+
+- **A fixture that jumps to the state.** When the route to a state is the behaviour, arranging the
+  end state directly tests nothing and passes —
+  [260907b](../postmortems/260907b-a-test-blurred-away-the-condition-it-existed-to-test.md).
+- **A harness that omits what production wraps everything in.** `src/web/main.tsx` mounts the app
+  in `<StrictMode>`, which runs every effect twice; a focus fix passed bare and failed in the app —
+  [260907d](../postmortems/260907d-a-focus-fix-that-only-misbehaved-under-strictmode.md).
+- **A hook that stays mounted.** Whatever happens after the reader closes the panel is invisible
+  until the test goes mount, act, **unmount**, then lets the world answer —
+  [260828b](../postmortems/260828b-cancel-before-begin.md).
+- **One delivery per `act`.** React batches two transport deliveries in one turn and the first is
+  never seen; a test that delivers them one at a time cannot find that —
+  [260910b](../postmortems/260910b-react-batching-erased-transport-evidence.md).
+- **A request that resolves before anything changes.** Editing or remounting while a request is
+  still open is where submitted text gets lost —
+  [260910c](../postmortems/260910c-a-mutable-text-hook-erased-the-submission-it-produced.md).
+- **A fixture that means "now", written as a date.** It decays into the stale state it asserts
+  against; a fixture whose meaning is *fresh* is computed from the clock the component reads —
+  [260908e](../postmortems/260908e-a-fixture-that-means-now-decays-into-the-state-it-asserts-against.md).
+- **A clock advanced instead of an artefact aged.** `now() + N * HOUR` is blind to activity stamped
+  at the real now — [260907c](../postmortems/260907c-a-sweep-that-stamped-the-timestamp-it-read-as-activity.md).
+- **A fixed window standing in for a condition.** A sleep that is long enough on a quiet machine
+  fails under load; pinning the file to one busy core (`taskset -c 3`, beside five
+  `node -e 'while(1){}'` loops) reproduced it in seconds —
+  [260930a](../postmortems/260930a-a-fixed-window-stands-in-for-a-condition.md).
+- **A corpus whose membership is typed by hand.** A named slug survives after the property it was
+  kept for has gone; derive membership from the bytes —
+  [260908c](../postmortems/260908c-a-fixture-recruited-as-evidence-for-a-property-it-never-established.md).
+- **jsdom rewrites a literal `new URL("<string>", import.meta.url)`** into a dev-server URL, so
+  the module behaves differently under a component test than anywhere else —
+  [260910d](../postmortems/260910d-a-literal-new-url-import-meta-url-is-rewritten-when-a-jsdom-test-loads-the-module.md).
+- **Tests that vanish.** Eleven tests stopped being collected and the pass/fail line could not show
+  it; the count of collected files and tests could —
+  [260830d](../postmortems/260830d-a-constant-that-dragged-in-the-shelf.md).
+
+### Test the join: mutate the composition root
+
+Unit tests that inject their own fakes cannot see whether the real objects are wired together. On
+2026-09-09, turning `shared ??= make()` into `shared = make()` in `tools/fleet/routes-actions.ts` — two callers,
+two instances — reddened **one** test, the only one that built the real thing twice; two other guards
+on that branch turned out to have imaginary coverage, and both sat at a composition boundary.
+Sixteen fleet features shipped tested and doing nothing for the same reason: the join is never in the
+diff, so a checklist built from the parts cannot contain it —
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md),
+[260831e](../postmortems/260831e-a-write-path-with-no-reader.md). The mutation that finds it is in
+the wiring — a singleton made fresh, a mount line dropped, the wrong gate passed — not in a unit.
 
 ### A source-scanning guard reads the comments too
 

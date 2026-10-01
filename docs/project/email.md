@@ -140,6 +140,20 @@ failed lookup says so in the mail rather than stopping it. The address is the re
 it goes through `oneLine` in `src/email.ts` and never into a subject —
 [261001b](../plans/261001b-admin-sign-up-email-carries-the-address.md).
 
+**Where a reader's address comes from, if you need it for a mail of your own.** There is no
+address on our own tables; Supabase Auth holds it. Two ways in, both already written:
+
+- **Inside a signed-in request**: the verified user the auth wrapper hands the route
+  ([`src/routes.ts`](../../src/routes.ts) passes `user.email` to `noteArrival` in
+  [`src/arrivals.ts`](../../src/arrivals.ts)).
+- **Anywhere else** (a webhook, a job): `accountEmail(ownerId)` in
+  [`src/store/admin-accounts.ts`](../../src/store/admin-accounts.ts), which asks the Auth Admin API
+  and never throws — it answers `found` or `unavailable` with a reason.
+
+Sending is `sendEmail` or `notifyAdmin` in `src/email.ts`, whose `SendResult` (`sent`, `skipped`,
+`failed`) is what a caller retries on; the sign-up notice's give-the-row-back retry above is the one
+worked example.
+
 ## See also
 
 - [auth.md](auth.md): what the confirmation email is for, and the sign-in flow around it

@@ -93,6 +93,11 @@ computation, this being the first mode a failure was contained in — every band
 [`tests/ideas.test.ts`](../../tests/ideas.test.ts) (the stage) and
 [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts) (the client, in jsdom).
 
+**A visitor to a public article sees a stored list** (`VisitorIdeasBand`, from the page's payload)
+and can never start one. Where that is decided for this mode and every other — `POLICY` in the
+client, `REVISION_READ_POLICY` on the server — is
+[new-mode.md § Where else to look](new-mode.md#where-else-to-look).
+
 ## The unit is what is new, not the provenance
 
 The glossary already splits by provenance: `senseHere` is what the author means, `background` is

@@ -32,5 +32,5 @@ Escape, the backdrop click and the article's arrow keys are all unchanged; the n
 focusable so a keyboard reader can reach the bottom of it.
 
 [The plan](../plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md) § 1P;
-[diagram.md § At full screen the brief is a column](../project/diagram.md#at-full-screen-the-brief-is-a-column-not-a-details)
+[illustrated.md § At full screen the brief is a column](../project/illustrated.md#at-full-screen-the-brief-is-a-column-not-a-details)
 is the doc.

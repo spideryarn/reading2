@@ -61,6 +61,11 @@ SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/browser-sign-in.ts
 `SPIDERYARN_BASE_URL` is the one knob, and it is read from the environment only — nothing loads
 `.env.local` for it.
 
+**A 200 from the port does not say the server is yours.** On 2026-09-08 a second fleet dashboard
+died on `EADDRINUSE` because a peer already held its port, the launcher's readiness curl got `200`
+from the peer's server, and sixteen screenshots came from another worktree's build. The server's own
+bind line in its log says which process took the port; a curl cannot.
+
 ## Signing in
 
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the
@@ -206,6 +211,21 @@ these is a section of `browser-testing.md` that does not apply here.
   `addInitScript` with a **`content` string**, not a function, or the helper's own body goes through
   the same compiler and needs what it is defining.
 
+- **A same-URL `goto` after a rebuild can serve the old bundle.** It is not a reload, so the browser
+  may answer from its in-memory document; on 2026-09-08 a fleet change looked as if it had not worked
+  until `?v=2` was added to the URL. Something the change *added* is the assertion that tells the two
+  builds apart.
+- **The Playwright MCP's screenshots land in the checkout, not the scratchpad.** It refuses paths
+  outside its allowed roots, and the scratchpad is not one, so a briefed absolute path fails or is
+  quietly replaced. With no `filename` it writes `.playwright-mcp/page-<timestamp>.png` under the cwd
+  and returns the image inline; stray PNGs beside `package.json` (2026-09-03) are one careless add
+  away from a commit. `file://` is refused too, so a local page needs serving over loopback.
+- **There is no microphone.** `getUserMedia({audio: true})` fails with `NotFoundError` in headless
+  Chrome here, and the `--use-fake-device-for-media-capture` flags (with or without a wav file) do not
+  create one — measured 2026-09-07. A `MediaStream` from a Web Audio graph feeds a real
+  `MediaRecorder`; [`scripts/spike-dictation-browser.ts`](../../scripts/spike-dictation-browser.ts)
+  does it.
+
 ### Two that make a check pass for nothing
 
 Both found on 2026-09-10 while checking the fleet dashboard against fixtures served by `page.route`
@@ -244,6 +264,12 @@ All three cost a browser pass an hour on 2026-09-03, checking the glossary card 
 
   Whether a reader who scrolls and immediately taps hits the same thing is **an open question nobody
   has chased**; it reproduced 5s after page settle, which is longer than it should need.
+
+And one that makes a feature look broken: **a real `.click()` anywhere earlier in the run leaves the
+mouse parked**. Chromium re-hit-tests it on every layout change and fires `mouseenter` on whatever is
+now under it, overwriting tap-driven hover state with the same wrong element whatever you tap —
+measured 2026-09-08, where a tap did set `tr.row-active` once the whole flow used `.tap()`. A real
+touch device has no second pointer.
 
 ## The insets are zero here, and a phone's are not
 

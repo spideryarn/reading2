@@ -47,6 +47,15 @@ still asks Greg about anything that outlives the branch.
 > and writes nothing until `--apply`, and then only against the queue version *and* the file bytes
 > that were reviewed.
 
+**Two things the CLI says that mislead.** `export` prints every item's whole authorisation history
+inline — about 280 KB for 54 items on 2026-09-17, more as the queue ages — so a harness spills it out
+of context; `list` is the ordered view. In `export --json` the feedback-report id is
+`metadata.source`, and there is no top-level `source`, so a filter on `it.source` matched none of 55
+items on 2026-09-20 and read as "nothing queued". And `edit` by anyone but Greg prints *"this LAPSES
+Greg's authorisation"* whenever it changes content, whether or not the item was authorised
+(`scripts/overseer-queue.ts` § `lapses`); on a proposal nothing lapses, and `show <id>`'s
+`authority:` line before the edit is what says which case it was.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is
