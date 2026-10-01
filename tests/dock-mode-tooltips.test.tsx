@@ -3,7 +3,7 @@
  * **Every mode in the bottom bar explains itself, in both arms of the bar.**
  *
  * Greg, 2026-09-07: *"Make sure all the modes in the bottom-bar have rich
- * tooltips, and update new-mode.md."*
+ * tooltips, and update mode.md."*
  *
  * The buttons already opened a card; what the card said was one sentence, and
  * that sentence was the mode's `description` — the same words the command bar
@@ -49,7 +49,7 @@
  * these hover mechanics is not worth a tidier filename.
  *
  * **The name stayed narrow deliberately.** Five places point at this file and
- * several of them — src/mode-catalog.ts, docs/project/new-mode.md — are telling
+ * several of them — src/mode-catalog.ts, docs/project/mode.md — are telling
  * the author of a *fifteenth mode* where their test is. `dock-mode-tooltips` is
  * the right name for them, and renaming it would make those pointers vaguer to
  * make this paragraph unnecessary.
@@ -124,7 +124,7 @@ function loose(props: Record<string, unknown> = {}): void {
 
 /** Every control that is one of the modes, in either arm. */
 function modeControls(): HTMLElement[] {
-  /* Annotations' toggle beside the radios since 2026-10-01 (261001i). */
+  /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
       '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',

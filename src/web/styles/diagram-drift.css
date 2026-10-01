@@ -31,49 +31,6 @@
   border-bottom: 1px solid var(--rule);
 }
 .diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
-/* **The scatter's caveat, at the end of the heading row.** It replaced four
-   lines of 10.5px prose above the picture, and the sentence itself is still in
-   the DOM as an `.sr-only` live region — this is a change to where it is
-   *shown*, not to whether it is said. DiagramPanel.tsx § ScatterNote.
-
-   **It lives in `.band-head` because `.band-head` cannot wrap.** It was on
-   `.diag-opts` first, which does, and the "costs no vertical space" claim was
-   false there in a way that took two checks and a browser sweep to see. Auto
-   margins right-align an item on the line it lands on; they do not stop it
-   starting a new one — and nesting the chips in an inner wrapping box only moved
-   which item wrapped, because the binding constraint is **total intrinsic
-   width**, not alignment. At the ideal band width Drift's two chip groups plus
-   this icon do not fit on one line, so something wraps whichever way the
-   alignment is written. `.band-head` has no `flex-wrap`, so it shrinks its
-   heading instead of gaining a flex line.
-
-   **That is still not the whole argument, and the missing half is a text
-   line.** A row with no `flex-wrap` cannot gain a line, but the flexible item
-   inside it can wrap its own text once it has been shrunk far enough, and the
-   row is then just as tall. Nothing about `.band-head` prevented that; only
-   the heading being the single unbreakable word "Diagram" did, which is a fact
-   about today's copy rather than about the row. `.band-head h2` declares the
-   one-line-cut four (§ mode band), so the claim is a property of the markup —
-   and since 2026-09-02 it is true of every band's head, not only this one.
-
-   `flex: none` so it is the icon that keeps its size when that shrinking
-   happens, rather than collapsing and taking the caveat with it;
-   `h2 { flex: 1 }` above is what pushes it right.
-
-   `cursor: help` rather than `pointer`, because pressing it does nothing — the
-   card is the whole of it. Sized to the row rather than to a thumb: what this
-   panel offers a finger is the step bar. */
-.diag-about {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.15rem;
-  border: 0;
-  background: none;
-  color: var(--ink-faintest, var(--ink-faint));
-  cursor: help;
-}
-.diag-about:hover, .diag-about:focus-visible { color: var(--ink-soft); }
 .diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
 .diag-opt-label {
   margin-right: 0.15rem;

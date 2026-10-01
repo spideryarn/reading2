@@ -6,7 +6,7 @@
 - `docs/project/tooltips.md` - very helpful: Tooltip/ControlTip/TipNote, `keepSide`, `aria-disabled`, and the rule "A shortcut is named on its card".
 - `docs/project/quotes.md` (grep) - key finding: "No copy button" is listed under what is not built, and points at the private `CopyButton` in `src/web/Tweets.tsx`.
 - `docs/project/keyboard.md` (head, grep) - points back to tooltips.md for the shortcut rule; says up/down belong to the article.
-- `docs/project/new-mode.md` (grep) - card-on-the-button rules; mostly not applicable.
+- `docs/project/mode.md` (grep) - card-on-the-button rules; mostly not applicable.
 
 ## 2. Code files you would edit
 - `src/web/QuotesPanel.tsx` (add the button per row or a panel-level one, wrapped in Tooltip)
@@ -30,7 +30,7 @@
 - Failing test first; `npm test`, `npm run typecheck`, lint on touched files (CLAUDE.md).
 - Plan doc under `docs/plans/` and a GPT Sol review before committing (CLAUDE.md).
 - Work in a worktree; commit own files by name; push to `dev`.
-- Copy rules: "no price in a card" (new-mode.md) is not relevant here.
+- Copy rules: "no price in a card" (mode.md) is not relevant here.
 
 ## 5. Where you got lost
 - The task premise is false: Quotes mode has no copy button today (quotes.md "What is not built"; grep of QuotesPanel.tsx found nothing). "The copy button" does not exist, and nor does any copy shortcut.

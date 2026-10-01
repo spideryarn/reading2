@@ -64,7 +64,7 @@ would then show no links with no hint why.)
 
 ### B. Tweets is a mode with a wide band
 
-Per [new-mode.md](../project/new-mode.md), both halves:
+Per [mode.md](../project/mode.md), both halves:
 
 - `tweets` joins `MODES` and every total table: `MODE_LABEL` ("Tweets"), `OWNER_MODE_NOTE`,
   `MODE_CATALOG` (the `NOT_A_MODE.tweets` card moves here; aliases `thread`, `twitter`, `x`,
@@ -101,7 +101,7 @@ Per [new-mode.md](../project/new-mode.md), both halves:
 
 ### C. Small interface improvements (Greg's licence, kept small)
 
-- The band has no title row repeating the mode name (new-mode.md rule); the head row is the counts
+- The band has no title row repeating the mode name (mode.md rule); the head row is the counts
   line and *Copy the thread* — kept, as it is not the mode's name.
 - Posts get a little more air in the wider band and drop the heavy card border for a hairline
   separator, so fifteen posts read as a list rather than fifteen boxes (the page's own "what this

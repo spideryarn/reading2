@@ -59,7 +59,7 @@ reusable set of highlights"*.
   characters and **names what the passage does, never what it found**: *"The headline result"*,
   *"How they measured it"*, *"What earlier work missed"*. No numbers, no findings, no verdicts. It
   may be a question the passage answers (*"Does it hold outside the lab?"*). It follows the prompt
-  rule in [new-mode.md § The words the mode puts in front of the reader](../project/new-mode.md#the-words-the-mode-puts-in-front-of-the-reader)
+  rule in [mode.md § The words the mode puts in front of the reader](../project/mode.md#the-words-the-mode-puts-in-front-of-the-reader)
   and the shared plain-words guide, if that has landed on `dev` by stage 1
   (`docs/project/prompting-guide.md`, from the fb44 session).
 - **What is stored**:
@@ -181,7 +181,7 @@ reusable set of highlights"*.
   there are no Quotes. The job's progress shows which of the two is running.
 - **Behind the experimental switch** (Greg, 2026-09-28). **Owner-only**: a visitor gets the
   explanatory band, as with FAQ.
-- The card's two sentences, per [new-mode.md § The card on the button](../project/new-mode.md#the-card-on-the-button).
+- The card's two sentences, per [mode.md § The card on the button](../project/mode.md#the-card-on-the-button).
   The `how` half: it reads the article's Quotes, and a small model pass puts them in order. When
   there are no Quotes yet, it makes them first.
 
@@ -210,7 +210,7 @@ reusable set of highlights"*.
    for a step that reads another step's artefact and refuses without it, and Ideas/Quotes for the
    profile. The work:
    - types, `ArtifactKind` and `StepName`, and every total
-     ([new-mode.md § The artefact](../project/new-mode.md#the-artefact-if-the-mode-shows-one));
+     ([mode.md § The artefact](../project/mode.md#the-artefact-if-the-mode-shows-one));
    - the migration: the column, plus the step-name CHECK and `tests/db-step-constraint.test.ts`;
    - `src/trajectory.ts`: the prompt, the parse, the validation, the targets and `PROMPT_VERSION`;
    - the GET route with its outdated sentence, `CACHEABLE`, export, and the cost category.
@@ -555,7 +555,7 @@ Each stop row gets a **thin track with a dot**: the dot at the stop's position i
 ### 5c. The mode bar order
 
 Quotes, then Trajectory, straight after Summary, in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)),
-which is where new-mode.md says the order lives. Update any test or doc that lists the order, and the
+which is where mode.md says the order lives. Update any test or doc that lists the order, and the
 comments on the Quotes and Trajectory rows that explain their old places.
 
 ### 5d. Quotes first — verify, then fix only what fails
@@ -589,7 +589,7 @@ Nothing changes for it except its place in the bar.
 **Trajectory comes out**: `experimental: false` in `MODE_CATALOG`, its row removed from
 experimental-features.md's table with a paragraph saying when and why (Greg's words above), and
 `tests/dock-experimental-modes.test.tsx` § `BEHIND_THE_SWITCH` updated
-([new-mode.md § Moving a mode in or out](../project/new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+([mode.md § Moving a mode in or out](../project/mode.md#moving-a-mode-in-or-out-of-the-switch)).
 
 **What the switch gated, and what it did not.** The switch only decides whether the button is drawn.
 Owner-only is a separate rule — `POLICY.trajectory` is `owners-only` in

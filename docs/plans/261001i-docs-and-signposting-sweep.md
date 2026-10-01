@@ -184,7 +184,7 @@ No P0; three P1s.
   `architecture.md` and `web-client.md`, header comments in eight canonical modules; drift cut back to
   citations; ~40 traps moved from memory and postmortems into their docs; Greg's words restored.
   Two `database.md` sentences W4 generalised were reverted to the original rule wording by the
-  orchestrator and became a proposal; one `new-mode.md` sentence was cut to its non-instruction form.
+  orchestrator and became a proposal; one `mode.md` sentence was cut to its non-instruction form.
   The rule-wording proposals are in [proposals.md](261001i-probes/proposals.md).
   **Found on the way:** `feedback-reports.md`'s hash pin in `tools/overseer/standing-jobs.ts` has not
   matched the file since `9ee632ce`, so the feedback-sweep standing job may be refusing to dispatch
@@ -213,7 +213,7 @@ No P0; three P1s.
   sentence. The stable misses are the useful output: no "already built" status line in feature
   docs, facts at the bottom of long files, ambiguous tasks with no doc listing the candidates, and
   short signposts that end a search before the MUST doc. Two signposts the diagnosis showed were
-  wrong or weak were fixed (`library.md`'s hover claim, `new-mode.md`'s visitor line now names
+  wrong or weak were fixed (`library.md`'s hover claim, `mode.md`'s visitor line now names
   `PUBLIC_PROJECTIONS`). `documentation-policy.md` now also says to repeat runs.
 
 ## Code-duplication candidates, for the Overseer

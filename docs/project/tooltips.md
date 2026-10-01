@@ -97,6 +97,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | the shelf table's **row card**, on each title — the second card defined by subtraction, after Structure's, and the first whose subtraction responds to columns the reader has chosen to hide ([library.md § The table's row card](library.md#the-tables-row-card-whole-titles-and-columns-you-can-hide)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
+| [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
 | [`src/web/BackLink.tsx`](../../src/web/BackLink.tsx) | the icon-only way back (an arrow) or home (a house) at the top of a page, since 2026-09-29 — the card says the destination and opens to the *right*, because a card below covered the heading. Name in `aria-label`, words in a `TipNote` |
 | [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
@@ -176,7 +177,7 @@ runs a model pass"* is false on three of the four; the catalogue describes the a
 the gesture.
 On 2026-09-07 four of the fourteen mode cards opened that way in first draft, and only a
 cross-family review caught them —
-[new-mode.md § The card on the button](new-mode.md#the-card-on-the-button).
+[mode.md § The card on the button](mode.md#the-card-on-the-button).
 
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
@@ -265,8 +266,8 @@ Three things about it are not true of any other set here.
 - **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
   ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
   too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
-  else in this file the words sit beside the JSX. [new-mode.md § The card on the
-  button](new-mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
+  else in this file the words sit beside the JSX. [mode.md § The card on the
+  button](mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
   the rule that **no card in this bar names a price** — the command bar says `generates` and no
   figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
 - **The same fourteen modes are drawn by two different components**, and only one of them had a

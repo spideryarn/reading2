@@ -323,7 +323,7 @@ Four decisions a new mode makes. Where each one stands today:
 | Presentation | `BAND_SAYS` (`tests/public-network-trace.test.tsx`) — **visitor only** | yes, but it never renders an owner's controller |
 
 **Presentation is not "nothing", and saying so was wrong** (Sol F7). `BAND_SAYS` is total and
-already on `new-mode.md`'s compiler-checked list, so a fifteenth mode is red there today. What is
+already on `mode.md`'s compiler-checked list, so a fifteenth mode is red there today. What is
 missing is that nothing renders the **owner's** real controller and checks what it drew. The
 deliverable is coverage of the real owner surface, not a new compile tripwire — and the plan must
 not claim otherwise.
@@ -400,7 +400,7 @@ not claim otherwise.
    **The values are literals**, not computed from `MODES_UI`, `POLICY`, `DRAWS`' own keys or
    anything in `App.tsx`. That is the whole point of the row in the brief.
 
-3. **`new-mode.md` updated**: activation moves out of *the residue nothing checks* into the
+3. **`mode.md` updated**: activation moves out of *the residue nothing checks* into the
    compiler-checked table; the presentation row gains the owner sweep beside `BAND_SAYS`. The
    residue list shrinking is the deliverable.
 
@@ -565,7 +565,7 @@ Four stale facts corrected, three of them made stale by this change and one mere
 - **`design-css-overview.md`'s own line count**, which the sweep set to 15,812 and the merge then
   made 15,951 within the same day — a good illustration of why these carry a command and a date.
 
-`new-mode.md`'s compiler-checked table gained `MODE_TARGET`, `SPENDS` and `DRAWS`, and its residue
+`mode.md`'s compiler-checked table gained `MODE_TARGET`, `SPENDS` and `DRAWS`, and its residue
 list lost the activation entry. **The residue list shrinking was the deliverable**, and it shrank.
 
 #### `/design` — the shared band, in its real states (`61fdf6a5`)
@@ -617,7 +617,7 @@ correcting on the facts rather than on the judgement.
 | F4 | P1 | `tailwindcss.compile()` is not the production pipeline — the app builds through `@tailwindcss/vite`, which resolves, inlines and **rebases URLs** differently, and the plan omitted `npm run build` | **Fixed.** Two immutable pre-cut baselines, SHA-labelled; only the Vite artefact is called what the browser receives |
 | F5 | P1 | `target \| null` lets an artefact-backed mode typecheck while half-wired, and misrepresents Diagram, which arms via `armActivationForDiagram` | **Fixed.** Tagged union: `fixed` / `delegated` / `none` with a reason |
 | F6 | P1 | `{ band: string \| null; says: string \| null }` permits both an empty band and a missing controller; and a raw `textContent` read passes over `aria-hidden` measuring copies | **Fixed.** `NO_BAND_MODES` + a non-nullable table over the remainder; accessible-content reads only; a mutation that deletes the visible body must go red |
-| F7 | P2 | Presentation is not "nothing" — `BAND_SAYS` is already total and already on `new-mode.md`'s list. The gap is *owner-side* coverage | **Fixed.** The claim was overstated and is withdrawn |
+| F7 | P2 | Presentation is not "nothing" — `BAND_SAYS` is already total and already on `mode.md`'s list. The gap is *owner-side* coverage | **Fixed.** The claim was overstated and is withdrawn |
 | F8 | P2 | `no-raw-nul-bytes.test.ts` is git-derived, not a hard-coded list; `styles.css` in it is a coverage *witness*, and the stated completion condition would have deleted it | **Fixed**, verified in the source. It is excluded from the migration and keeps its witness |
 
 Sol's two "resolved" notes match my own spikes: `layer(app)` survives four levels of nested

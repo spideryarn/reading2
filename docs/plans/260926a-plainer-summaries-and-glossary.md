@@ -17,7 +17,7 @@ From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qp
 ## Why this is the second time, and what the first one left open
 
 On 2026-09-03 thirteen prompts were given the same plain-words rule (commit `89f15dfb`,
-[new-mode.md § The words the mode puts in front of the reader](../project/new-mode.md)):
+[mode.md § The words the mode puts in front of the reader](../project/mode.md)):
 
 > **the article's own words for the things the article names** — those are the reader's handholds —
 > and **ordinary words for everything else** … plainer than the article, never further from it.
@@ -102,7 +102,7 @@ links survive.
 
 ### Docs
 
-- `new-mode.md` § The words the mode puts in front of the reader — Greg's new sentence under the old
+- `mode.md` § The words the mode puts in front of the reader — Greg's new sentence under the old
   one, and the handhold rule restated as *handhold, not explanation*. Only summaries and glossary
   change prompts now; the other eleven prompts that carry the old rule are named as the deferred rest.
 - `summaries.md`, `glossary.md` — a paragraph each, and `hierarchy.md` § prompt-versions gets `toc/8`
@@ -623,7 +623,7 @@ Explain, with a bullet alone, did not move reliably. About 350 tokens, inside ca
 
 The wording to build from (reviewed by Opus: *"lead with what it means here"* rather than *"the
 everyday sense"*, which reads as the word's ordinary meaning and is the glossary's open bug; hedges
-added to what plainer must keep; the anchor phrase kept, because three tests and `new-mode.md`'s
+added to what plainer must keep; the anchor phrase kept, because three tests and `mode.md`'s
 grep use it, and defined rather than left as a slogan):
 
 ```
@@ -729,7 +729,7 @@ as before.
 | 3.0 | this section; Opus's view; GPT Sol plan review | review answered |
 | 3a | `artefacts.ts`, and its `before` arm on the current prompts | the arm written, before any prompt changes |
 | 3b | `src/plain-words.ts`, wired into every prompt, old bullets out, the coverage test (seen red), version bumps, banner copy; the three `after` arms and blind reads | plainer by kind, fidelity even, or the plan says why not |
-| 3c | `prompting-guide.md`, `new-mode.md`, the AGENTS.md pointer (after the Overseer's yes), the report-44 note | docs link-checked |
+| 3c | `prompting-guide.md`, `mode.md`, the AGENTS.md pointer (after the Overseer's yes), the report-44 note | docs link-checked |
 | 3d | GPT Sol code review, gates, push, worktree removed | on `dev`, green |
 
 ### GPT Sol on the stage-3 plan, and what changed (2026-09-28)
@@ -816,7 +816,7 @@ design and the version and banner claims above**, which are kept as what was pro
 - **Docs**: [prompting-guide.md](../project/prompting-guide.md) (the substance), and one-sentence
   pointers in AGENTS.md (Greg: *"pull most of that out into its own .md file, and signpost from
   AGENTS.md (and other relevant docs) with a single sentence to it. Then consider this approved."*),
-  `architecture.md`, `ai-gateway.md` and `new-mode.md`, whose rule section is now that sentence.
+  `architecture.md`, `ai-gateway.md` and `mode.md`, whose rule section is now that sentence.
 
 **The `after` arms waited on credit.** The OpenRouter key hit its $100 cap mid-way through the
 artefacts `before-2` arm (a 402 *no credit*); Greg raised it the same morning, and the arms below

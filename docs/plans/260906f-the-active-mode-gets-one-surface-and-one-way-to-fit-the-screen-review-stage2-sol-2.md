@@ -58,7 +58,7 @@ It is not a full-DOM oracle. It cannot see:
 - branches not represented by a mounted fixture;
 - portals or geometry.
 
-That is an appropriate boundary, but [“pins every band’s markup”](/home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/docs/project/new-mode.md:83) overstates it; “pins each band’s surface shape” would be accurate.
+That is an appropriate boundary, but [“pins every band’s markup”](/home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/docs/project/mode.md:83) overstates it; “pins each band’s surface shape” would be accurate.
 
 ## Stage 3
 

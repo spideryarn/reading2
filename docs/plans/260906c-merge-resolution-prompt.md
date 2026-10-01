@@ -93,7 +93,7 @@ stage**, no artefact and no route: everything on screen arrives inside the artic
 ```
 
 
-#### `docs/project/new-mode.md`
+#### `docs/project/mode.md`
 
 **Proposed:** **Union of rows.** This is the table of compiler-checked totals over `Mode`. Mine adds `band()`'s switch and `selectPassages`; dev adds `MODE_TARGET` and `SPENDS`/`DRAWS`, and improves the `BAND_SAYS` row's description. All four rows should stand. This is the one doc conflict where I think there is a *semantic* question underneath — see Q2 below.
 

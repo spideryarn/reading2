@@ -679,7 +679,7 @@ is said in the slider's card, not in a line under the paragraphs (below).
   streaming question for Greg.
 - **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
-  the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a
+  the Summary button itself arms nothing ([mode.md](mode.md), `useAutoRun`). A visitor on a
   public article gets the stored paragraphs off the payload, or a line saying none has been made.
 - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in

@@ -25,7 +25,7 @@ No files were changed.
 Everything else in the ten textual conflicts looks right:
 
 - `diagram.md`, `quotes.md`, and `summaries.md`: union the controller and stylesheet changes.
-- `new-mode.md`: union all totals and keep dev’s improved `BAND_SAYS` explanation.
+- `mode.md`: union all totals and keep dev’s improved `BAND_SAYS` explanation.
 - `aimed-column`, `referee-band-fits`, and `text-alone-centring`: stylesheet helper from dev, moved source owner from your branch.
 - `site-footer`: keep the AST tooling and drop `CONTACT_EMAIL`.
 - `App.tsx`: per-declaration integration plus the manual Outline port is the right shape.

@@ -26,7 +26,7 @@
  *    independently written list whose whole job is to be a second opinion. A
  *    copy of it here — or worse, a derivation from this table — would assert
  *    that the catalog says what the catalog says, and would take the canary
- *    with it. docs/project/new-mode.md § Moving a mode in or out of the switch.
+ *    with it. docs/project/mode.md § Moving a mode in or out of the switch.
  *
  * So this file checks the shape of the data and never its membership.
  *

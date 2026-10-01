@@ -227,8 +227,9 @@ export interface SignedIn {
  * Starts at `/login` rather than `/`: both render the same `SignInControls`, but
  * the landing page is a pitch with the form some way down it, and `/login` is
  * the short screen that exists precisely so somebody can be *sent* to it
- * (src/web/SignInPage.tsx). The form itself starts collapsed behind the Google
- * button, so there is a click before there is a field.
+ * (src/web/SignInPage.tsx). The email form is open on arrival — since the
+ * sign-in page of its own (plan 261001m), there is no "or use an email address"
+ * button to click first, and waiting on one timed out after 30s.
  */
 export async function signIn(page: Page, base: string = baseUrl()): Promise<SignedIn> {
   const { email, password, id, alsoTry } = devCredentials();
@@ -264,7 +265,6 @@ async function attemptSignIn(
   const started = Date.now();
 
   await page.goto(new URL("/login", base).href, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "or use an email address" }).click();
   await page.locator("#signin-email").fill(email);
   await page.locator("#signin-password").fill(password);
 
@@ -299,10 +299,11 @@ async function attemptSignIn(
        Playwright's timeout — which says nothing about a sign-in. Sol's finding 6. */
     .catch(() => ({ kind: "never" as const, status: 0, body: "" }));
 
-  /* `exact`, because Playwright matches an accessible name by substring and
-     "Sign in with Google" contains "Sign in". Clicking that one navigates to
-     Google and this function never returns. */
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  /* The form's submit button, not a name match. By name, "Sign in with Google"
+     contains "Sign in" (and navigates to Google, so this never returns), and
+     since 261001m the Sign in / Create account switch above the form has a
+     "Sign in" button of its own, so even an exact match finds two. */
+  await page.locator('form:has(#signin-password) button[type="submit"]').click();
 
   /* The form's own error, raced against the success. Without this a wrong
      password is a 30-second wait whose message is about a response that never

@@ -49,7 +49,7 @@ distinguishes them.
 3. **The loose mode links** off the reading view (the metadata and tweets pages) get the same card
    instead of the `title` attribute they carry today.
 4. **A test**, `tests/dock-mode-tooltips.test.tsx`, holding the structure and not the copy.
-5. **[new-mode.md](../project/new-mode.md)** and **[tooltips.md](../project/tooltips.md)**.
+5. **[mode.md](../project/mode.md)** and **[tooltips.md](../project/tooltips.md)**.
 
 ### `how` lives in the catalog, not on a `MODES_UI` row
 

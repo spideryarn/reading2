@@ -131,6 +131,35 @@ function taken(threads: ChatThread[]): Set<string> {
   return ids;
 }
 
+/**
+ * **The thread a new turn lands in: the one it names, or — for Remember — the
+ * article's one Remember thread.**
+ *
+ * An article has at most one Remember thread (`chat_threads_one_remember`,
+ * src/db/schema.ts). The client mints thread ids, so a stale tab, a second tab
+ * or a bookmark can still ask to begin a second one; without this the unique
+ * index would answer that with a 500. Instead the turn is pointed at the thread
+ * that already exists, and each caller decides what that means: `withTurn`
+ * appends to it (the reader's words land in the one conversation, and the
+ * `begin` frame tells the client which), while `withSpokenTurn` lets its tail
+ * guard refuse, because a spoken exchange must never be appended under turns
+ * the live session did not see.
+ *
+ * **Only when no thread has this id.** A Remember turn naming a chat thread
+ * still meets the kind check and its 409; this is a fallback for a fresh id,
+ * not a redirect. docs/plans/261001m-remember-is-its-own-single-thread.md
+ * § Design 3.
+ */
+function targetOf(
+  threads: ChatThread[],
+  threadId: string,
+  kind: ThreadKind | undefined,
+): ChatThread | undefined {
+  const named = threads.find((t) => t.id === threadId);
+  if (named || kind !== "remember") return named;
+  return threads.find((t) => t.kind === "remember");
+}
+
 /* There is deliberately no `createThread` here.
 
    There was one — exported, and called by nothing — and it wrote an empty
@@ -239,7 +268,11 @@ export function withTurn(
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
-  const existing = threads.find((t) => t.id === threadId);
+  /* A fresh id for a Remember turn on an article that already has a Remember
+     thread is appended to that thread — `targetOf` says why. The returned
+     `thread.id` is then the existing one, which is what the route's `begin`
+     frame reports and the client follows. */
+  const existing = targetOf(threads, threadId, kind);
   /* **A thread is one kind for life.** Refused rather than ignored, and refused
      here rather than only in the route, because the route's `inTurnOrder` is a
      per-process convenience and this runs inside the Postgres transaction. See
@@ -435,7 +468,13 @@ export function withSpokenTurn(
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const { threadId, expectedTailId, kind } = spoken;
-  const existing = threads.find((t) => t.id === threadId);
+  /* A fresh id for a Remember exchange on an article that already has a
+     Remember thread targets that thread (`targetOf`), so the tail guard below
+     refuses it with `ChatConflict` — the session believed the conversation was
+     empty, and it is not. **Not** silently appended, as a typed turn is: the
+     tail is the only thing that keeps a spoken exchange from landing under
+     turns it never heard. */
+  const existing = targetOf(threads, threadId, kind);
 
   /* **A thread is one kind for life**, checked before the tail so that a
      contradiction says what is actually wrong. An identical kind passes, so a

@@ -327,7 +327,7 @@ import { costCategoryOf } from "./cost-categories.js";
 import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
-import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
+import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor, parseFeedbackFrom } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
@@ -7257,12 +7257,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          is about. */
       const cursor = decodeFeedbackCursor(query.get("before"));
       if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
+      /* **An unknown `?from=` is a 400 too**, for the same reason: read as
+         *everyone*, it would show the administrator's own reports under a filter
+         that says it hides them. src/types.ts § `parseFeedbackFrom`. */
+      const from = parseFeedbackFrom(query.get("from"));
+      if (from === "malformed") throw httpError(400, "from must be everyone or readers.");
       send(
         res,
         200,
         await adminStore.listFeedbackAcrossOwners(
           Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
           cursor,
+          from,
         ),
       );
     },

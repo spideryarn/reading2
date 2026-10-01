@@ -89,9 +89,10 @@ vi.mock("../src/web/lib/supabase.js", () => ({
       },
     },
   },
-  /* The sign-in panel imports this and calls it only when Google is pressed —
-     which is the thing worth watching: a version that asked on mount whether
-     Google was configured would put a request on every signed-out view. */
+  /* The auth module exports this. Pricing no longer renders the sign-in form,
+     so it must never be called here — which is the thing worth watching: a
+     version that asked on mount whether Google was configured would put a
+     request on every signed-out view. */
   googleSignInAvailable: async () => {
     supabaseCalls.push("googleSignInAvailable");
     return true;

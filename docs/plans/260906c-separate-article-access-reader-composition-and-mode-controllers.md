@@ -498,7 +498,7 @@ What the stage was specified as:
   name Timeline's missing marks. Sol F1.
 - `tests/glossary-band-wiring.test.ts` asserts the ternary chain by regex; its *intent* — the ring and
   the washes in one effect, and `Reader` holding the key — is re-expressed against the new shape.
-- **Docs**: `new-mode.md`'s residue list currently says of the band branch *"**Nothing; this list**"*;
+- **Docs**: `mode.md`'s residue list currently says of the band branch *"**Nothing; this list**"*;
   after this stage the band branch and the passage selection are both compiler-checked, and that line
   changes to say so. `url-state.md` records that the mode → passage-slot mapping is now total.
 - The acceptance: a fifteenth mode in `MODES` goes red in every place a policy decision is required,
@@ -513,7 +513,7 @@ typecheck errors and one test one — `MODE_LABEL`, `OWNER_MODE_NOTE`, `ModesMis
 goes red without a typecheck at all, the `MODES` coverage arm of
 `every-mode-says-which-passages-it-marks`, which is the guard against quietly adding the new mode to
 the `NO_FOUND` list to silence the compiler. The table is in
-[new-mode.md § Before you call it finished](../project/new-mode.md#before-you-call-it-finished), and
+[mode.md § Before you call it finished](../project/mode.md#before-you-call-it-finished), and
 the band branch has left that page's residue list for its table of compiler-checked totals.
 `url-state.md` records that the mode → passage-slot mapping is now total.
 
@@ -567,7 +567,7 @@ same statement** and the resolution is to keep both halves:
 | `docs/project/diagram.md` | my `DiagramMode.tsx` citation **+** dev's `styles/diagram.css`, `styles/diagram-drift.css` |
 | `docs/project/quotes.md` | my `QuotesMode.tsx` citation **+** dev's `styles/quotes.css`. Dev's half asserts `QuotesBand` is in `App.tsx`, which this branch made false, so mine wins there outright |
 | `docs/project/summaries.md` | my `SummaryMode.tsx` citation **+** dev's `styles/summary.css` |
-| `docs/project/new-mode.md` | union of rows: mine (`band()`'s switch, `selectPassages`) **+** dev's (`MODE_TARGET`, `SPENDS`/`DRAWS`) **+** dev's better `BAND_SAYS` wording |
+| `docs/project/mode.md` | union of rows: mine (`band()`'s switch, `selectPassages`) **+** dev's (`MODE_TARGET`, `SPENDS`/`DRAWS`) **+** dev's better `BAND_SAYS` wording |
 | `docs/project/url-state.md` | dev's section whole — it documents a jump-history feature that postdates mine — **then correct its closing citation**. It says the push override is in `App.tsx`; **it is `src/web/reader/useReadingPosition.ts` § the jump write, not `Reader.tsx`**. My first draft said `Reader` and Sol caught that it was wrong |
 | `tests/aimed-column.test.ts` | dev's `readerCssNoComments()` **+** my `reader/Reader.tsx` read; drop dev's `app` |
 | `tests/referee-band-fits.test.ts` | **`readerCssNoComments()`**, not dev's `readerCss()` — its `bodyOf()` is a regex source scan, and retained comments give a deleted rule a second place to match (Sol) — **+** my `RefereeMode.tsx` read |
@@ -733,7 +733,7 @@ Refused as written; no P0, five established P1s. All eight findings accepted, on
 | F2 | `RememberBand` renders `ConversationBand`, so `modes/chat` + `modes/remember` is one feature importing another | **Fixed.** One `modes/conversation/ConversationModes.tsx`. Verified at `App.tsx` § `RememberBand` |
 | F3 | The sixth slot contradicts *five slots stay five*; a layout unmount cleanup is smaller. Reproduced in a React 19.2.8 probe | **Fixed, and extended.** Sol scoped it to Claims as *"the exceptional unkeyed shape"*; both Referee producers publish in a layout effect and clear passively, so **criteria → claims loses Claims' marks by the same mechanism**. The discriminant is slot-sharing, not keyedness, and it is a separate input field for that reason |
 | F4 | `referee-copy-is-about-the-model`'s second rule is a non-recursive `readdirSync`, so a nested `RefereeMode.tsx` silently leaves the scanned set | **Fixed.** Verified at that file's `IMPORTS_THE_DOMAIN` |
-| F5 | Only `new-mode.md` was named; the checklist requires `web-client`, `url-state` and feature signposts | **Fixed**, distributed across the stages that cause each change |
+| F5 | Only `mode.md` was named; the checklist requires `web-client`, `url-state` and feature signposts | **Fixed**, distributed across the stages that cause each change |
 | F6 | The checklist is an inventory, not an ordering constraint; stage 1 was eight controllers in one commit and stage 3 was two moves in one | **Fixed.** The "deviation" framing is gone; stage 1 is two batches and stage 3 is two commits |
 | F7 | Five importers, not four; ten source-text checks, not twelve; `page-title.test.ts` omitted; `no-raw-nul-bytes` and `eager-client-graph` discover rather than name | **Fixed.** Verified `page-title.test.ts` reads `App.tsx` for `articleWaitTitle(` |
 | F8 | Nine non-producer modes, not ten — Search owns the tenth | **Fixed** in both places the number appeared |

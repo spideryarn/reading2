@@ -331,8 +331,8 @@ describe("readSlug, and what a malformed capture is answered with", () => {
  */
 describe("readMode, and the mode a shared address asked for", () => {
   it("takes it off the restored URL, for every mode there is", () => {
-    /* Every value `?mode=` can hold: Annotations is `?margin=1` since 2026-10-01,
-       and `?mode=annotations` reads as Plain (tests/annotations-margin-param.test.ts). */
+    /* Every value `?mode=` can hold: Marginalia is `?margin=1` since 2026-10-01,
+       and `?mode=marginalia` reads as Plain (tests/marginalia-margin-param.test.ts). */
     for (const mode of BAND_MODES) {
       expect(readMode(`/read/some-article?mode=${mode}`), mode).toBe(mode);
     }

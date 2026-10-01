@@ -82,7 +82,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, List, MessageCircleQuestionMark, RotateCcw, TriangleAlert } from "lucide-react";
-import type { BlockId, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
+import type { BlockId, Quiz, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import { showPremise } from "./quiz-ladder.js";
 import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
@@ -94,6 +94,7 @@ import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
+import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { IconButton } from "./IconButton.js";
@@ -132,6 +133,51 @@ export interface QuizSections {
 /** "3 questions", "1 question". */
 function questionCount(n: number): string {
   return `${n} question${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * **What the band's (i) adds after the mode's own words**: how many questions
+ * there are, how many the model wrote that checking left out, and who wrote
+ * them — Greg, 2026-10-01 (spya-ucu35y, plan 261001m). *Question n of m* stays
+ * in the band: it is where you are, not a fact about the batch.
+ *
+ * **Left out** counts whole questions only — malformed, a repeat, or with no
+ * evidence the article holds (src/quiz.ts § `drop`). Not `overCap`, which
+ * src/quiz.ts calls a hint rather than a finding, and not evidence trimmed
+ * from a question that was kept.
+ *
+ * **It opens with Quiz's own sentence, not Remember's catalog words**: the
+ * band is Remember's, but `MODE_CATALOG.remember.how` is about Recall ("waits
+ * on you … four stances"), which is wrong on this half. So this band does not
+ * pass `mode` to `ModeSurface`, and the card leads with the sub-mode's words
+ * from `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every
+ * state, as `mode` would have made it.
+ */
+function QuizAbout({ quiz }: { quiz: Quiz | null }) {
+  const what = <p>{REMEMBER_SUB_MODES.quiz.description}.</p>;
+  if (!quiz) return what;
+  const n = quiz.questions.length;
+  const { malformed, duplicate, unanchored } = quiz.dropped;
+  const left = malformed + duplicate + unanchored;
+  return (
+    <>
+      {what}
+      <p>{questionCount(n)}.</p>
+      {left > 0 && (
+        <p>
+          {left === 1
+            ? "One more the model wrote was left out in checking."
+            : `${left} more the model wrote were left out in checking.`}
+        </p>
+      )}
+      <AboutMade
+        generator={quiz.generator}
+        version={quiz.version}
+        generatedAt={quiz.generatedAt}
+        elapsedMs={quiz.elapsedMs}
+      />
+    </>
+  );
 }
 
 /**
@@ -766,6 +812,9 @@ export function QuizPanel({
     <ModeSurface
       label="Quiz"
       feature="gloss quiz"
+      /* Quiz is Remember's other half, so its (i) opens with Remember's
+          catalog words (mode-catalog.ts has no `quiz`, on purpose). */
+      about={<QuizAbout quiz={quiz && owner.status === "ready" ? quiz : null} />}
       /* **A fragment, because `subMode` is an optional prop.** `RememberBand`
           passes one on every render, so an empty row is not a state a reader
           can reach — but `head={subMode}` would hand the surface `undefined`

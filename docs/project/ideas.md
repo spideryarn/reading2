@@ -96,7 +96,7 @@ computation, this being the first mode a failure was contained in — every band
 **A visitor to a public article sees a stored list** (`VisitorIdeasBand`, from the page's payload)
 and can never start one. Where that is decided for this mode and every other — `POLICY` in the
 client, `REVISION_READ_POLICY` on the server — is
-[new-mode.md § Where else to look](new-mode.md#where-else-to-look).
+[mode.md § Where else to look](mode.md#where-else-to-look).
 
 ## The unit is what is new, not the provenance
 

@@ -59,7 +59,6 @@ import {
   ChartScatter,
   ChevronDown,
   ChevronUp,
-  Info,
   LoaderCircle,
   Network,
   PenLine,
@@ -1500,71 +1499,48 @@ export function DiagramPanel({
     }
   };
 
+  /* **What the band's (i) adds after the mode's own words** — Greg,
+     2026-10-01 (spya-ucu35y, plan 261001m): the projected picture's caveat,
+     which was its own (i) in a head row of its own (`ScatterNote`), and the
+     ready-state count of dotted links, which was a status line over the
+     picture. Loading and failure stay over the picture: they are work in
+     progress and something to do about it. */
+  const caveat = drawingPoints && projection.status === "ready" ? kept(projection) : null;
+  const dotted =
+    kind === "force" && similar.status === "ready"
+      ? drawnSemantic > 0
+        ? `${drawnSemantic} dotted ${drawnSemantic === 1 ? "link" : "links"} from ${similar.blocks} passages, placed by ${similar.model}.`
+        : `${similar.blocks} passages embedded, and nothing came back that the picture does not already say.`
+      : null;
+  const about =
+    caveat || dotted ? (
+      <>
+        {caveat && <p>{caveat.what}</p>}
+        {caveat && <p>{caveat.how}</p>}
+        {dotted && <p>{dotted}</p>}
+      </>
+    ) : null;
+
   return (
     <ModeSurface
       label="Diagram"
       feature="diag"
-      /* **Only when there is a caveat to carry**, since 2026-10-01. The row's
-          only child is the scatter's caveat, which draws on the two projected
-          pictures — and Sketch is the default and the only picture an
-          unexperimental owner is offered, so the ordinary state of this header
-          was an empty row: 19px of nothing above the picker on a landscape
-          phone, found by the screenshot pass for Greg's *"take screenshots to
-          try and find ways to make things vertically more compact"*
-          (`spya-gcdwps`, plan 261001l).
-
-          It was a fragment until then for a reason that has since expired: the
-          stage that introduced `ModeSurface` had the job of preserving the DOM
-          the band already had (GPT Sol F28, 2026-09-07). **Whenever the caveat
-          exists the conditional still builds the `.band-head` around it**, so
-          the caveat keeps its non-wrapping row — what goes is the empty row in
-          Sketch and the other no-caveat states. */
-      head={
-        drawingPoints && projection.status === "ready" ? (
-          <>
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays, and here that matters more than elsewhere: the caveat below
-            was moved *into* this row on 2026-08-30 precisely because the row
-            cannot wrap. Removing the row would send it back to being four lines
-            of prose above the picture, which is what Greg asked to be rid of. */}
-        {/* **The scatter's caveat lives in this row, and the reason is that this
-            row cannot wrap.** It was four lines of prose above the picture until
-            2026-08-30 — Greg: *"It uses up valuable vertical real estate. Hide it
-            behind a tooltip or warning icon or something."*
-
-            It went onto the controls strip first, and that was wrong twice over
-            in a way worth writing down, because two of us checked it and both
-            checked the wrong thing. `.diag-opts` wraps, and **an auto margin
-            right-aligns an item on the line it lands on without stopping it
-            starting a new one** — so the first version's "costs no height" was
-            false. Nesting the chips in an inner box fixed *which* item wrapped
-            and not *whether* a line was spent, because the binding constraint is
-            **total intrinsic width**, not alignment: at the ideal band width
-            Drift's two chip groups and this icon do not fit on one line, so one
-            of them wraps whatever the alignment rules say.
-
-            This row is `display: flex` with no `flex-wrap`, so it cannot wrap at
-            all — items shrink instead. The claim is a property of the markup
-            rather than a measurement that happened to hold at the two widths
-            somebody looked at.
-
-            (It used to add "and `h2 { flex: 1 }` already pushes a third child to
-            the right". That was true until 2026-09-05, when the mode's name went
-            from every band head; this row has no `h2` now, and the caveat is its
-            only child. GPT Sol F33, 2026-09-07.)
-
-            **And that is the part to keep.** Both checks that missed it
-            confirmed the *absence of the old wording* rather than the truth of
-            the new: one measured Drift at its narrowest (where the chips already
-            wrap, so the icon rides free) and Trail at its widest (one chip group,
-            so it fits), and never the combination that costs a line. Found by a
-            browser sweep, 2026-08-31. */}
-          <ScatterNote projection={projection} />
-          </>
-        ) : null
-      }
+      mode="diagram"
+      about={about}
+      /* **No head row**, since 2026-10-01. Its only child was the projected
+          picture's caveat, an (i) of its own, kept in this row because the row
+          cannot wrap; the caveat is in the band's (i) now (spya-ucu35y, plan
+          261001m). The row had already gone from every state without the
+          caveat (`spya-gcdwps`, plan 261001l). */
+      head={null}
     >
+      {/* **The caveat, still spoken when the projection lands** — the job the
+          visible strip once did, and the one thing the (i) cannot do: a
+          tooltip is reached by pointing or by Tab, so it announces nothing,
+          and this is how a reader who cannot see the picture learns that some
+          of the article is not in it. Invisible, which is what `.sr-only` is
+          for. */}
+      {caveat && <p className="sr-only" role="status">{`${caveat.what} ${caveat.how}`}</p>}
 
       {/* One tab stop, arrows inside — the radio pattern, and the same shape
           Dock.tsx's mode switcher already has. Three tab stops was the version
@@ -1871,8 +1847,12 @@ export function DiagramPanel({
           The error branch is not decoration either: without it a failed request
           would leave a picture that quietly draws four kinds where five were
           promised, and nothing on screen would be wrong. */}
+      {/* **Ready, it is spoken but not shown** — its count is in the band's
+          (i) since 2026-10-01 (spya-ucu35y, plan 261001m), and `.sr-only`
+          keeps the announcement a reader who cannot see the picture relies
+          on, as the scatter's caveat does. Loading and failure stay visible. */}
       {kind === "force" && similar.status !== "idle" && (
-        <p className="diag-note" role="status">
+        <p className={similar.status === "ready" ? "sr-only" : "diag-note"} role="status">
           {/* **The spinner, in the strip rather than over the picture.** Greg,
               2026-08-30: *"Make sure the diagrams in Diagram mode show loading
               spinners if they're generating."* Force is four fifths drawn while
@@ -1893,10 +1873,7 @@ export function DiagramPanel({
               reading-order chain already joins. Reporting the pairs would say
               "28 passages embedded" over a picture with no dotted lines on it —
               true about the request, and wrong about the page. */}
-          {similar.status === "ready" &&
-            (drawnSemantic > 0
-              ? `${drawnSemantic} dotted ${drawnSemantic === 1 ? "link" : "links"} from ${similar.blocks} passages · ${similar.model}`
-              : `${similar.blocks} passages embedded, and nothing came back that the picture does not already say`)}
+          {similar.status === "ready" && dotted}
           {/* **The server's own words, for the reason the projection strip
               above gives.** This said "Could not reach the embedding model" for
               every failure, including the one that was actually happening for
@@ -2464,62 +2441,6 @@ function kept(p: UseProjection): { what: string; how: string } {
     what: `${p.blocks} paragraphs${missing}${capped}.`,
     how: `This is a flattened view — it keeps about ${held}% of the differences the model saw. Far-apart dots really do differ. Close-together dots may not: their differences may be in what the flattening dropped.${by}`,
   };
-}
-
-/**
- * **The picture's own caveat, as an icon on the heading row.**
- *
- * It was four lines of prose above the picture until 2026-08-30. Greg:
- *
- * > It uses up valuable vertical real estate. Hide it behind a tooltip or
- * > warning icon or something.
- *
- * It is rendered in `.band-head` rather than on the controls strip, and **why**
- * is at the call site: that row cannot wrap, and the strip can.
- *
- * Two things it keeps, because a hover card on its own would drop both.
- *
- * **A `role="status"`, still.** The strip announced itself when the projection
- * landed, and that announcement is the only way a reader who cannot see the
- * picture learns that a fifth of the article is not in it. A tooltip is reached
- * by pointing or by Tab, so it announces nothing. The sentence is therefore
- * still in the DOM and still live — it is only invisible, which is what
- * `.sr-only` is for.
- *
- * **And the counts are in the button's name**, not just in the card. "Info" or
- * "About this picture" would make the one hard number — how many paragraphs are
- * missing — reachable only by opening something, and a control whose label is a
- * noun is a control a screen reader cannot skim.
- *
- * `Info` rather than a warning triangle: paragraphs going unplaced is the
- * ordinary case (headings and one-line list items are not embedded — see
- * src/article-vectors.ts), and an alarm on the ordinary case is an alarm nobody
- * reads by the second article.
- */
-function ScatterNote({ projection }: { projection: UseProjection }) {
-  const { what, how } = kept(projection);
-  return (
-    <>
-      <Tooltip
-        placement="bottom"
-        /* Same finding as the chips beside it: the card is far wider than this
-           icon and the icon sits at the right-hand end of a 400px band, so
-           without this the card is thrown sideways onto the controls the reader
-           just came from. Tooltip.tsx § keepSide. */
-        keepSide
-        className="tip-soon"
-        content={<ControlTip head="What is drawn" what={what} how={how} />}
-      >
-        <button type="button" className="diag-about" aria-label={`About this picture: ${what}`}>
-          <Info size={13} aria-hidden="true" />
-        </button>
-      </Tooltip>
-      {/* The whole sentence, spoken once when the projection lands — the job the
-          visible strip used to do. Not `aria-label` on the button above: that is
-          heard on focus, and this has to be heard on arrival. */}
-      <p className="sr-only" role="status">{`${what} ${how}`}</p>
-    </>
-  );
 }
 
 /**

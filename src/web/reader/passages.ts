@@ -38,7 +38,7 @@
  * The `never` default is the idiom in visitor.ts § `visitorGap`: a fifteenth
  * mode is a compile error here rather than a mode that quietly shows the last
  * band's marks. That, and the exhaustive `modeBand()` switch in Reader.tsx, are what
- * docs/project/new-mode.md now sends a maintainer to.
+ * docs/project/mode.md now sends a maintainer to.
  *
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
  * § Stage 4b, and docs/plans/260905e-main-app-architecture-review.md § A3.
@@ -105,7 +105,7 @@ export const NO_FOUND: Found[] = [];
 const NOTHING: PassageSlot = { found: NO_FOUND, openKey: null };
 
 /**
- * **The mode → slot mapping, total over `BandMode`.** Annotations is not in it: since 2026-10-01 its column is a
+ * **The mode → slot mapping, total over `BandMode`.** Marginalia is not in it: since 2026-10-01 its column is a
  * switch beside the band (`?margin=1`) and marks nothing inside the prose — the
  * dashed underlines for ideas are deferred
  * (docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,

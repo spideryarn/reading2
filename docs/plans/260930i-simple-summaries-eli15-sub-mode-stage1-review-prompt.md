@@ -1,7 +1,7 @@
 You are GPT Sol, doing the CODE review of stage 1 (server side) of plan
 docs/plans/260930i-simple-summaries-eli15-sub-mode.md in the Spideryarn repo (this worktree). Read CLAUDE.md,
 the plan (including its ledger and your own plan review, 260930i-simple-summaries-eli15-sub-mode-review-sol.md),
-docs/project/new-mode.md § "The artefact, if the mode shows one".
+docs/project/mode.md § "The artefact, if the mode shows one".
 
 The stage is two commits: 63b2976a and b99cfef3 (view with `show`; ignore the merge 1efe483d, which is
 other people's work from dev, except that the migration was regenerated in it as

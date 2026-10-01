@@ -12,7 +12,7 @@ Commit `64595ca9`. Use `git show 64595ca9 --stat` for the full list. Start with:
 
 This list does not limit your scope. Earlier commits (`868ae017`, `669deefe`) are stage 1, already reviewed; `docs/plans/260928a-trajectory-mode-code-review-1-sol.md` has the ledger.
 
-The spec is `docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md` § What v1 is › The mode (client), and Stages item 2. The checklist is `docs/project/new-mode.md`. The precedent is FAQ's stage 2, `0e947eb4`.
+The spec is `docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md` § What v1 is › The mode (client), and Stages item 2. The checklist is `docs/project/mode.md`. The precedent is FAQ's stage 2, `0e947eb4`.
 
 ## Evidence already gathered by me
 

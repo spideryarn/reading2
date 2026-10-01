@@ -34,6 +34,12 @@
   padding: 0.3rem 0.6rem;
   font-family: var(--font-ui); font-size: 0.81rem;
 }
+/* A visitor has no kind picker, so this is the picture's top row and must make
+   the room `.diag-kinds` makes for an owner. Keep fullscreen out: its `.sk` is
+   no longer a direct child of the mode band. */
+.mode-band.diag.has-about:not(:has(> .diag-kinds)) > .sk > .sk-bar {
+  padding-right: calc(0.6rem + var(--band-about-room));
+}
 .sk-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The scene switcher: the overview and each zoom, as a row. Scrolls rather than
    wraps — a second row would push the picture down by a line on exactly the

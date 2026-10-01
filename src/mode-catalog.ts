@@ -70,7 +70,7 @@
  * hand-maintained, and `ModesMissingFromDock` keeps it exhaustive.
  *
  * See docs/plans/260906h-mode-catalog-and-a-command-bar.md § The catalog, and
- * docs/project/new-mode.md for the checklist a fifteenth mode has to satisfy.
+ * docs/project/mode.md for the checklist a fifteenth mode has to satisfy.
  */
 import type { Mode } from "./modes.js";
 
@@ -200,7 +200,7 @@ export interface ModeCatalogEntry {
    *
    * **Required on every row, and not an optional flag on five.** The
    * `Record<Mode, …>` proves each mode has an entry; only a required field
-   * proves each entry *made the decision*, and docs/project/new-mode.md says
+   * proves each entry *made the decision*, and docs/project/mode.md says
    * the author must make it. An optional flag would quietly enrol mode fifteen
    * among the polished ones. (GPT Sol, finding 8, written when this field lived
    * on a `MODES_UI` row; the argument is about the field and moved with it.)
@@ -255,7 +255,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   search: {
     description: "Find a passage by the words it uses, or by what it says",
-    how: "Two matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words.",
+    how: "Two matchers behind one box, and they cost differently: words matches against the text already in front of you, while meaning sends the query to a model and finds passages that say what you asked for without using your words. Meaning searches are saved, so you can switch several on together and come back to them.",
     /* `highlight` because highlighting is what search *does to the page* rather
        than a separate thing to press — the two dimmed placeholders this mode
        was built out of are one mode now, and the word should still land.
@@ -322,7 +322,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   remember: {
     description:
       "Say what you took from this and find out where it holds up — not saved notes or flashcards",
-    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. Four stances change how hard it pushes back, from plain corrections to questions that hand the finding back to you.",
+    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. Four stances change how hard it pushes back, from plain corrections to questions that hand the finding back to you. Its replies point back to the passages they use.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 
@@ -375,7 +375,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   citations: {
     description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass … written once and then stored": the `citations` step,
          one messages-wire call over `articleWithIds`, written to the
@@ -413,7 +413,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          written from search extracts (plan 260930a).
        The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No
-       price — new-mode.md § The card on the button.
+       price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
     how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Investigate any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then it writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
@@ -429,7 +429,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        would have contradicted. */
     description: "The document's shape — every part, and the sections of the one you are in",
     /* Checked against the code rather than written from the plan, which is the
-       failure this field has already had twice (docs/project/new-mode.md § The
+       failure this field has already had twice (docs/project/mode.md § The
        card on the button). "Nothing to generate" is true: the tree arrives in
        the page's own payload and this mode reaches no artefact and makes no
        request. The rest is the one thing a press does not tell you — that what
@@ -457,7 +457,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   faq: {
     description: "The questions a careful reader would ask this piece, and where it responds",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass over the article, written once and stored": the `faq`
          step, one messages-wire call over `articleWithIds`, written to the `faq`
@@ -486,7 +486,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   trajectory: {
     description: "A route through the piece's quotes, a little deeper each time round",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "a short model pass over its quotes": the `trajectory` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
@@ -514,7 +514,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* `NOT_A_MODE.tweets` in src/web/Dock.tsx until 2026-09-29, when the thread
        page became this mode (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md). */
     description: "The article as a numbered thread of short posts",
-    /* **Checked against the source, claim by claim** (docs/project/new-mode.md §
+    /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
        - "one model pass over the whole article": the `tweets` step, one
          messages-wire call over `articleWithIds` (src/tweets.ts § generateTweets).
@@ -535,18 +535,19 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* The page it replaces was on everybody's bar. */
     experimental: false,
   },
-  annotations: {
+  marginalia: {
     description: "Notes in a column right of the text, each level with the passage it is about",
-    /* **Checked against the source** (docs/project/new-mode.md § The card on
+    /* **Checked against the source** (docs/project/mode.md § The card on
        the button): the questions are `TreeNode.question` on the root and the
        top-level parts (src/hierarchy.ts § `questionFor`), the sentence at the
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
-       and never generated (src/web/annotations/AnnotationsColumn.tsx). So
+       and never generated (src/web/marginalia/MarginaliaColumn.tsx). So
        nothing is generated by opening it. The width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
     how: "Nothing is generated for it: the questions come with the article's parts, the sentence at the top is where the argument has got to, and the ideas appear once they have been made in Ideas. It needs a wide window; on a narrow one the notes are hidden.",
-    aliases: ["marginalia", "margin notes", "margin", "sidenotes"],
+    /* `annotations` was the mode's own word until 2026-10-01 (261001n). */
+    aliases: ["annotations", "margin notes", "margin", "sidenotes"],
     /* **Behind the switch**: a first experiment with a column on the right,
        which Greg asked to "play with" (SPIDERYARN-READING2-7K). Nothing in it
        is finished enough to put on every reader's bar.

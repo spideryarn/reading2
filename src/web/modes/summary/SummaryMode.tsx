@@ -38,6 +38,7 @@ import { SUMMARY_SUB_MODES } from "../../sub-modes.js";
 import { currentAt, deepParam, isPlainLevel, type SummaryView, summaryParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { buildSummaryTree } from "../../tree.js";
+import { AboutMade } from "../../BandAbout.js";
 import { SimplePanel } from "../../SimplePanel.js";
 import { SummaryPanel } from "../../SummaryPanel.js";
 import { ControlTip, Tooltip } from "../../Tooltip.js";
@@ -66,13 +67,14 @@ export function SummaryBand({
   useRenderCount("SummaryBand");
   const { view, setView, onDeep } = useSummaryView();
   const mode = useSummaryMode(article);
-  const panel = (plain: ReactNode, badge: ReactNode) => (
+  const panel = (plain: ReactNode, badge: ReactNode, about: ReactNode = null) => (
     <SummaryPanel
       {...mode}
       onDeep={onDeep}
       onJump={onJump}
       subMode={<SummaryControls slug={slug} value={view} onChange={setView} badge={badge} />}
       simple={plain}
+      about={about}
     />
   );
   return isPlainLevel(view) ? (
@@ -97,7 +99,7 @@ function OwnerSimple({
   slug: string;
   level: SimpleLevel;
   onJump(id: BlockId): void;
-  render(plain: ReactNode, badge: ReactNode): ReactNode;
+  render(plain: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
 }) {
   useRenderCount("OwnerSimple");
   const owner = useSimple(slug);
@@ -107,7 +109,19 @@ function OwnerSimple({
     owner.simple && owner.profiled ? (
       <WrittenForYou written changed={owner.profileChanged} slug={slug} compact />
     ) : null;
-  return <>{render(<SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} />, badge)}</>;
+  /* Who wrote the paragraphs, for the band's (i) — owner only, since a
+     visitor's artefact carries no provenance (src/public-types.ts). Only once
+     they are showing, so the card never dates a list still loading. */
+  const made = owner.status === "ready" ? owner.simple : null;
+  const about = made ? (
+    <AboutMade
+      generator={made.generator}
+      version={made.version}
+      generatedAt={made.generatedAt}
+      elapsedMs={made.elapsedMs}
+    />
+  ) : null;
+  return <>{render(<SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} />, badge, about)}</>;
 }
 
 /**
@@ -188,7 +202,7 @@ const PLAIN: Record<SimpleLevel, { label: string; what: string }> = {
 
 /**
  * What the foot under the paragraphs used to say, now said where it is asked
- * for (Greg, SPIDERYARN-READING2-7B; docs/project/new-mode.md).
+ * for (Greg, SPIDERYARN-READING2-7B; docs/project/mode.md).
  */
 const PLAIN_HOW =
   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";

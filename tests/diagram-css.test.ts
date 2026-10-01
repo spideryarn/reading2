@@ -336,13 +336,7 @@ describe("the heading row that carries the caveat cannot grow a second line", ()
       expect(head, `\`.band-head h2\` is missing ${decl.source}`).toMatch(decl);
     }
   });
-
-  it("still leaves the icon unshrinkable, or the row cuts the wrong thing", () => {
-    /* If the caveat button could shrink, the h2 would win the space and the
-       icon would collapse to nothing at exactly the widths this is all about —
-       the caveat would be gone rather than the heading being shortened. */
-    const about = /\.diag-about\s*\{([\s\S]*?)\}/.exec(bare)?.[1];
-    expect(about, "`.diag-about` has no rule at all").toBeTruthy();
-    expect(about).toMatch(/flex:\s*none\b/);
-  });
+  /* A second case held `.diag-about` unshrinkable in this row. The caveat
+     left the row for the band's (i) on 2026-10-01 (spya-ucu35y, plan
+     261001m), and the rule with it. */
 });

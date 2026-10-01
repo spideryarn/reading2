@@ -144,7 +144,7 @@ runs where `.env.local` has them.
   if the article is in the path, the table's `article` field does the rest, and if it is in the body,
   wrap), the three places the figures show up (`npm run cost`, `/admin/users`, the metadata
   section), and `npm run test:paid`. `ai-gateway.md` stays the deep dive; this one points into it.
-- **`new-mode.md`**: a short section — a mode's spend reaches the metadata cost section on its own
+- **`mode.md`**: a short section — a mode's spend reaches the metadata cost section on its own
   through its step name; what to check.
 - **`admin.md`**: the new route and the section.
 

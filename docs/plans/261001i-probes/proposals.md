@@ -222,7 +222,7 @@ session that came up without auto mode stops at its first approval." (W3 P4).
 - **K6** `database.md` — the two "refusal, never a fallback" rules name files, which are gone. W4
   generalised them to "fall back to something else" / "answer from anywhere else"; the orchestrator
   restored the original wording pending this (W4).
-- **K7** `new-mode.md` — turn the two quoted conventions (mark a mode's items in the prose; a rated
+- **K7** `mode.md` — turn the two quoted conventions (mark a mode's items in the prose; a rated
   list ordered by priority with a threshold) into a checklist line (W5 #3).
 - **K8** `overseer.md` — "20–35 coding agents" (the measured peak was 18 on 2026-09-08), and the
   session-kill judgement from the `tmux-outlives-closed-tabs` memory (`idle` is not abandoned; look

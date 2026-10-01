@@ -114,6 +114,12 @@ three inches to the left of it, and so are the four Diagram pictures.
 the only button in the bar that is about the app rather than about the article, which is why it is
 last.
 
+**Quiet when on.** The drawn track and knob are the whole on/off signal: filled in the button's own
+ink with the knob right for on, an outline with the knob left for off. It never wears the bar's
+orange *selected* look, which means *you are here* — Greg, 2026-10-01: *"when it's toggled on, it's
+too visible/emphasised somehow … Please de-emphasise."*
+[261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md).
+
 **The failure states are drawn, not swallowed.** A dead or lying switch is worse than no switch, so
 `toggleVariant` ([`Dock.tsx`](../../src/web/Dock.tsx)) turns the store's fields into exactly one of
 six appearances — working, waiting, saving, showing an offline copy, a load that failed, a save that
@@ -183,7 +189,7 @@ cannot be added without somebody deciding which side of the line it is on.
 **The table is the list, and nothing counts the modes.** Both halves used to be restated — a count
 in five source comments and two other docs, and the complement written out by name — so promoting
 one mode meant editing arithmetic in eight places, one of which had already drifted wrong and gone
-on passing ([new-mode.md § Moving a mode in or out](new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+on passing ([mode.md § Moving a mode in or out](mode.md#moving-a-mode-in-or-out-of-the-switch)).
 Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src/modes.ts)).
 
 | Mode | Why it is behind the switch |
@@ -194,7 +200,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
-| [Annotations](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) | A first experiment with a column to the *right* of the prose, which Greg asked to "play with" (SPIDERYARN-READING2-7K, 2026-10-01). It generates nothing — the parts' questions, the arc and any ideas already made — but whether notes beside the text help reading or become a second article down the margin is exactly what has not been tried. |
+| [Marginalia](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (called Annotations until 2026-10-01) | A first experiment with a column to the *right* of the prose, which Greg asked to "play with" (SPIDERYARN-READING2-7K, 2026-10-01). It generates nothing — the parts' questions, the arc and any ideas already made — but whether notes beside the text help reading or become a second article down the margin is exactly what has not been tried. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
 **One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since

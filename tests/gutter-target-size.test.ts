@@ -216,7 +216,13 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
     expect(rule(".blk-gutter[data-open] > span.blk-read")).toContain("pointer-events: none");
 
     const line = rule(".blk-gutter > span.blk-read::after");
-    expect(line).toContain("left: -2px");
+    /* **Inside the strip**, never left of it. It was `left: -2px` — outside the
+       box, so pointing at the line found the table cell and its title never
+       showed (SPIDERYARN-READING2-84, measured in the browser). The strip does
+       not grow back over the column instead: the controls own it.
+       docs/plans/261001l-…. */
+    expect(line).toContain("left: 0");
+    expect(line).not.toMatch(/left: -/);
     expect(line).toContain("width: 2px");
     expect(line).toContain("pointer-events: none");
     expect(line).toContain("opacity: calc(var(--read, 0) * 0.1)");

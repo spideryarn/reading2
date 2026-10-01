@@ -12,11 +12,11 @@ draw. And `src/mode-catalog.ts` records that `question` is Chat's alias, which i
 or Remember, before adding a fifteenth word to `MODES`.
 
 ## 1. Docs it must read
-- MUST `docs/project/new-mode.md` - the whole checklist: § The client (the total tables), the residue, § The card on the button, § The artefact, if the mode shows one, § Its cost, § Before you call it finished (what goes red, including four tests the typecheck cannot see).
+- MUST `docs/project/mode.md` - the whole checklist: § The client (the total tables), the residue, § The card on the button, § The artefact, if the mode shows one, § Its cost, § Before you call it finished (what goes red, including four tests the typecheck cannot see).
 - MUST `docs/project/experimental-features.md` § "The four rules", § "Putting a feature behind it" (gate the control, not the URL; the reader stays where they are), § "What is behind it today" (add a row, say why).
 - MUST `docs/project/reading-view-overview.md` § "The modes in the band" (add the line) and § The command bar.
 - MUST `docs/project/faq.md`, `docs/project/quiz.md` - to not build a duplicate.
-- MUST `docs/project/new-mode.md` § the residue "No description line in the band" (Greg, 2026-09-30, 7B).
+- MUST `docs/project/mode.md` § the residue "No description line in the band" (Greg, 2026-09-30, 7B).
 - USEFUL `docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md` § Rejected (no mode registry, no generic artefact route).
 - USEFUL if it generates: `docs/project/prompting-guide.md`, `docs/project/ai-gateway.md`, `docs/project/cost-tracking.md`, `docs/project/architecture.md` § Conventions (content-hash cache).
 
@@ -36,12 +36,12 @@ The tables above; a new `src/web/QuestionsPanel.tsx` (+ hook); its stylesheet in
 - Ask Greg when the requirement is unclear; explain options plainly (`CLAUDE.md`).
 - Plan doc first, GPT Sol plan review, code review (`docs/reusable/engineering-manager.md`, `docs/reusable/codex-cli-as-subagent.md`).
 - Every paid call through the gateway, tracked for free via a pipeline step (`docs/project/ai-gateway.md`, `docs/project/cost-tracking.md`); stream if the reader waits (`CLAUDE.md`).
-- Run the full suite, not only typecheck: four tables are keyed on `string` (`new-mode.md` § Before you call it finished).
+- Run the full suite, not only typecheck: four tables are keyed on `string` (`mode.md` § Before you call it finished).
 - New doc needs exactly one parent (`tests/doc-links.test.ts`). Browser check in a Sonnet subagent (`docs/project/browser-control.md`).
 
 ## 5. Traps (from the landed plans)
 - Aliases may not repeat the label, and `question` ties with Chat in the bar (`src/mode-catalog.ts` FAQ comment; `tests/mode-catalog.test.ts`).
 - With the switch off and the mode open, it stays open and its button stays (`Dock.tsx` § `visibleModes`); the bar's sub-rows follow the same gating (261001d command bar § P1-3).
 - `MODE_CONTAINMENT` needs a `WITNESS` per composition path, or the boundary guards an empty slot (261001d annotations, Sol F3).
-- No description line, no `.band-head` carrying the mode's name (`new-mode.md`; 261001d annotations § Astra 5).
+- No description line, no `.band-head` carrying the mode's name (`mode.md`; 261001d annotations § Astra 5).
 - A `generates` marker must match what the press arms; test `subModeTarget`/`bandTarget` equality, not a mocked `onMode` (261001d command bar § review).

@@ -5,7 +5,7 @@
 - `docs/project/narrow-windows.md` - helped a lot: "a row of things whose widths you do not control must wrap", the scrollWidth console check, "scroll, never clip".
 - `docs/project/citations.md` (head only + grep) - helped: names `citations.css` and `CitationsPanel.tsx`; says nothing about narrow widths.
 - `docs/project/browser-testing.md` (grep) - helped: "A phone-width window does not exist, so use an iframe" (resize_page lies).
-- `docs/project/new-mode.md` (lines 88-102) - helped: `.band-head` is optional, what may live in it.
+- `docs/project/mode.md` (lines 88-102) - helped: `.band-head` is optional, what may live in it.
 - Not opened but would: `docs/project/design-css-overview.md`, `docs/project/controls.md`, `docs/project/browser-testing-playwright.md`.
 
 ## 2. Code files I would edit
@@ -24,7 +24,7 @@
 - Reproduce first: measure in a 375px iframe, check `documentElement.scrollWidth - clientWidth` is 0 after (`browser-testing.md`); browser work goes to a Sonnet subagent (CLAUDE.md).
 - Failing test before the fix (CLAUDE.md); likely a CSS-reading test in the style of `tests/spine-width.test.ts` / `tests/touch-controls.test.ts`.
 - Work in a worktree, `npm test` + `npm run typecheck`, GPT Sol review, commit by name, push to `dev`.
-- Do not add a mode-name title to the band head (`new-mode.md`).
+- Do not add a mode-name title to the band head (`mode.md`).
 
 ## 5. Where you got lost
 - Could not tell which element is "the header row": `.band-head` (only a count), the `.gloss-sort` order row, or the threshold `.gloss-gate-row`. No doc maps Citations' row structure; I read the TSX.

@@ -29,11 +29,6 @@
    family or a padding is changing arithmetic that lives in TypeScript, and the
    two will disagree silently. `CHAR_W` there is the number to move. */
 
-/* The title row is `.band-head`, § mode band — where this panel's
-   one-line-cut four now live, for every band. The row holds the caveat icon so
-   that the caveat costs no vertical space, and § `.diag-about` below is the
-   whole argument for why that claim needs those four to be true. */
-
 /* The three pictures, as one control. Same shape as `.gloss-sort`, because it
    is the same kind of thing — a small quiet row of exclusive choices under the
    heading — and a second visual idiom for it would be a third thing to learn. */
@@ -47,6 +42,9 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
+/* The band's top row since its head went, so it clears the band's (i) —
+   mode-band.css § `.mode-band > .band-about`. */
+.mode-band.has-about .diag-kinds { padding-right: calc(0.7rem + var(--band-about-room)); }
 .diag-kind {
   display: inline-flex;
   align-items: center;

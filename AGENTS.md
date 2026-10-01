@@ -45,7 +45,8 @@ listed here; the names under each are files in `docs/project/`.
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
-  <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
+  <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
+  `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
   `column-context.md` (history: the gist columns' fisheye) ·
   `structure.md` (the tree in the band: two columns or a nested list) ·
@@ -133,7 +134,7 @@ Three are worth reading before you touch the area they cover, because a mistake 
 everything else depends on, see below; **[security-map.md](docs/project/security-map.md)** before
 anything that renders a stranger's article, takes a path from the URL, or acts on a model's output
 — the untrusted parties are not the ones you would guess; and
-**[new-mode.md](docs/project/new-mode.md)** before adding or changing a mode — the shapes a mode can
+**[mode.md](docs/project/mode.md)** before adding or changing a mode — the shapes a mode can
 take, and the other places that have to hear about it.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.

@@ -91,7 +91,7 @@ Checked against the tree at `4b0163c9` and the corpus in `data/`, 2026-09-03.
   refused. **The checklist Greg asked for already exists, in two halves:**
   [web-client.md § Adding a mode](../project/web-client.md#adding-a-mode) (the client) and
   [architecture.md § Adding an artefact-backed mode](../project/architecture.md#adding-an-artefact-backed-mode)
-  (the pipeline and store). A `docs/project/new-mode.md` would be a third copy of the same list
+  (the pipeline and store). A `docs/project/mode.md` would be a third copy of the same list
   unless it is only a signpost to those two — see [decision 8](#decisions).
 - **A mode band is capped at 400px** — `MODE_IDEAL` in [`layout.ts`](../../src/web/layout.ts),
   shrinking to `MODE_MIN` 288 before the prose gives up a pixel. Two useful columns do not fit in
@@ -163,7 +163,7 @@ one; it is not model output.
 ### P5. The arc becomes its own mode
 
 "Argument": the arc sentences in the band, one per part, the current part's set large — and it
-leaves the structure mode entirely (no L0 column, no rung 4). The `docs/project/new-mode.md`
+leaves the structure mode entirely (no L0 column, no rung 4). The `docs/project/mode.md`
 checklist Greg asked for is written alongside it, from what
 [260902o](260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md) measured.
 
@@ -277,7 +277,7 @@ left as it was proposed so the reasoning survives.
 7. **Argument v1 is the existing arc and nothing more** — every sentence in order, the current
    one large, doors into the prose, an established / here / ahead division — and the arc leaves
    Structure entirely. The claims/support/omissions view is a separate plan if it ever comes.
-8. **`docs/project/new-mode.md` is the one consolidated checklist**, extracted from
+8. **`docs/project/mode.md` is the one consolidated checklist**, extracted from
    [web-client.md § Adding a mode](../project/web-client.md#adding-a-mode) and
    [architecture.md § Adding an artefact-backed mode](../project/architecture.md#adding-an-artefact-backed-mode),
    with pointers left behind. Greg: "consider this approved" — done in the same piece of work as
@@ -299,7 +299,7 @@ left as it was proposed so the reasoning survives.
    `TableView` stays as the prose renderer until it is a one-column article, then becomes a block
    list. Decide `?text=0`.
 4. **Argument mode**, the arc out of Structure, and the Outline naming sweep from 260828aw.
-   (`new-mode.md` is already done — decision 8.)
+   (`mode.md` is already done — decision 8.)
 5. **Structure goes focus-path-generic** — no absolute depth anywhere in the client.
 6. **Adaptive, uneven depth** in stage 4, with a four-deep and an uneven fixture so the tests can
    exercise the arm ([silent-success.md](../reusable/silent-success.md)).

@@ -50,7 +50,7 @@ What we did:
   Simple spent fewer words on what the reader knew in 5 of 5 pairs, and picked out which of two goals
   a text was written for in 11 of 12.
 - **The description line is gone**, its sense moved into the slider's hover card, and
-  [new-mode.md](../project/new-mode.md) has the rule in your words.
+  [mode.md](../project/mode.md) has the rule in your words.
 - **One press writes all three levels**, one model call each, side by side, in about 8–28 seconds.
   After that, moving the slider is instant.
 

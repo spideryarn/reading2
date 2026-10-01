@@ -147,7 +147,7 @@ house pattern in database.md (app role only; no anon/authenticated access).
 
 - 2026-10-01: plan written; prior-work check found nothing (no voucher code, plan or note; the live
   session `fb-gift-vouchers` is this one).
-- 2026-10-01: GPT Sol plan review ([answer](261001m-plan-review-sol.md)): *build with these changes*.
+- 2026-10-01: GPT Sol plan review ([answer](261001m-gift-vouchers-plan-review-sol.md)): *build with these changes*.
   All taken:
   - **F1 (P0)** `sum()` arrives from Postgres as a **string**; `3 + "20"` is `"320"`. Cast in SQL
     (`::int`) **and** `.mapWith(Number)`, assert a non-negative safe integer before `articles()`, and

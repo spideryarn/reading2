@@ -913,7 +913,7 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. And the public
      read, in src/store/public-reader.ts: generated output is readable by a
-     visitor by default (docs/project/new-mode.md § The artefact).
+     visitor by default (docs/project/mode.md § The artefact).
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: { metadata: "value", simpleSummary: "value" },
 
@@ -3641,7 +3641,7 @@ const rawPgArticleReader: ArticleReader = {
    * The cited head and the tree (for the fallback title) its exact-request
    * fingerprint needs. **A 404 is the ordinary case**: the step is off
    * `DEFAULT_INGEST_STEPS` and runs on a press. `stale` (the article moved) is
-   * shown; `outdated` (an older prompt) is not announced — new-mode.md.
+   * shown; `outdated` (an older prompt) is not announced — mode.md.
    * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
    */
   async loadSimpleSummary(slug: string): Promise<SimpleSummaryFound> {

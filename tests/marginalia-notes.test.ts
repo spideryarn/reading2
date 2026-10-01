@@ -1,12 +1,12 @@
 /**
- * Annotations mode's pure half — which note goes beside which block, how notes
+ * Marginalia's pure half — which note goes beside which block, how notes
  * are kept from overlapping, and what the head says.
  * docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
  */
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
 import type { Arc, Block, Idea, Tree, TreeNode } from "../src/types.js";
-import { annotationNotes, arcAt, headPath, layoutNotes } from "../src/web/annotations/notes.js";
+import { marginaliaNotes, arcAt, headPath, layoutNotes } from "../src/web/marginalia/notes.js";
 
 const ids = ["spya-aaaaa1", "spya-aaaaa2", "spya-aaaaa3", "spya-aaaaa4", "spya-aaaaa5", "spya-aaaaa6"];
 /* The first block is a heading, as a part's first block usually is. */
@@ -71,9 +71,9 @@ function idea(over: Partial<Idea> & Pick<Idea, "id" | "name">): Idea {
   return { provenance: "assumed", statement: `${over.name}, stated.`, occurrences: [], ...over } as Idea;
 }
 
-describe("annotationNotes", () => {
+describe("marginaliaNotes", () => {
   it("puts each part's question beside its first paragraph, not its heading", () => {
-    const notes = annotationNotes(tree, blocks, null);
+    const notes = marginaliaNotes(tree, blocks, null);
     expect(notes.has("spya-aaaaa1")).toBe(false);
     expect(notes.get("spya-aaaaa2")).toEqual([
       { kind: "question", depth: 1, text: "Why does A matter?" },
@@ -86,7 +86,7 @@ describe("annotationNotes", () => {
     /* A bolded one-word line or "January 2006" is `kind: "text"` and
        gistable; only its length gives it away. */
     const shortSecond = blocks.map((b, i) => (i === 1 ? { ...b, words: 2 } : b));
-    const notes = annotationNotes(tree, shortSecond, null);
+    const notes = marginaliaNotes(tree, shortSecond, null);
     expect(notes.has("spya-aaaaa2")).toBe(false);
     expect(notes.get("spya-aaaaa3")).toEqual([
       { kind: "question", depth: 1, text: "Why does A matter?" },
@@ -95,11 +95,11 @@ describe("annotationNotes", () => {
 
   it("falls back to the part's first block when nothing in it is a paragraph", () => {
     const allShort = blocks.map((b) => ({ ...b, words: 3 }));
-    expect([...annotationNotes(tree, allShort, null).keys()]).toEqual(["spya-aaaaa1"]);
+    expect([...marginaliaNotes(tree, allShort, null).keys()]).toEqual(["spya-aaaaa1"]);
   });
 
   it("draws neither the article's own question nor any below the parts", () => {
-    const all = [...annotationNotes(tree, blocks, null).values()].flat();
+    const all = [...marginaliaNotes(tree, blocks, null).values()].flat();
     expect(all).toEqual([{ kind: "question", depth: 1, text: "Why does A matter?" }]);
   });
 
@@ -113,7 +113,7 @@ describe("annotationNotes", () => {
         { blockId: "spya-aaaaa3", quote: "q2", reasoning: "r" },
       ],
     } as Partial<Idea> & Pick<Idea, "id" | "name">);
-    const notes = annotationNotes(null, blocks, [later]);
+    const notes = marginaliaNotes(null, blocks, [later]);
     expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
     expect(notes.get("spya-aaaaa3")).toEqual([
       {
@@ -136,7 +136,7 @@ describe("annotationNotes", () => {
       ...tree,
       nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-zzzzzz", "spya-aaaaa3"] } },
     };
-    const notes = annotationNotes(moved, blocks, [gone]);
+    const notes = marginaliaNotes(moved, blocks, [gone]);
     expect([...notes.values()].flat()).toEqual([]);
   });
 
@@ -146,7 +146,7 @@ describe("annotationNotes", () => {
       name: "Here",
       occurrences: [{ blockId: "spya-aaaaa2", quote: "q", reasoning: "r" }],
     } as Partial<Idea> & Pick<Idea, "id" | "name">);
-    const kinds = (annotationNotes(tree, blocks, [here]).get("spya-aaaaa2") ?? []).map((n) => n.kind);
+    const kinds = (marginaliaNotes(tree, blocks, [here]).get("spya-aaaaa2") ?? []).map((n) => n.kind);
     expect(kinds).toEqual(["question", "idea"]);
   });
 });

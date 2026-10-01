@@ -105,7 +105,7 @@ occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching r
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
 
 What every band shares rather than the Glossary alone — the waiting and empty states, what a visitor
-sees, the checklist for changing a band — is in [new-mode.md](new-mode.md) and
+sees, the checklist for changing a band — is in [mode.md](mode.md) and
 [web-client.md § The waiting state](web-client.md#the-waiting-state).
 
 ## Where it lives, and why that cost nothing
@@ -224,8 +224,9 @@ reading view's controls that held the tree's version
 ([`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx)). Those were the only three. Two survivors, both
 deliberate: [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) § `StageRow`, which is where an
 owner is *meant* to look, and the thread's *"Written by …"*
-([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sits at the foot of the Tweets band (a page of its own until 2026-09-29), carries when and
-how long as well, and reads as a byline rather than as a build stamp. ⟨Fable⟩
+([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sat at the foot of the Tweets band (a page of its own until 2026-09-29) and since
+2026-10-01 is in the band's (i) with every other mode's ([mode.md](mode.md) § Every band has an (i)); it carries
+when and how long as well, and reads as a byline rather than as a build stamp. ⟨Fable⟩
 
 The second pass is given their FORBIDDEN checklist almost verbatim, because a plain "don't repeat
 these" is not enough: the model's idea of a repeat is looser than ours, and it will happily return

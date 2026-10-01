@@ -111,6 +111,13 @@ interface Props {
    * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
    */
   simple?: ReactNode;
+  /**
+   * What the band's (i) adds after the mode's own words (ModeSurface.tsx §
+   * `about`): for the owner's plain-words level, who wrote it and when. The
+   * outline needs nothing more — the catalog's *how* already says where its
+   * sentences come from. Built by the band, like `simple`.
+   */
+  about?: ReactNode;
 }
 
 /**
@@ -132,7 +139,7 @@ const DEPTH_PILLS: readonly { depth: number; label: string; what: string }[] = [
   { depth: 2, label: "Sections", what: "The parts, and the sections inside each, one sentence each." },
 ];
 
-export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple }: Props) {
+export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple, about }: Props) {
   useRenderCount("SummaryPanel");
   /**
    * Which sections the reader has closed.
@@ -211,7 +218,7 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simpl
   useFollow(scroll, current, [deep, closed, opened, root]);
 
   return (
-    <ModeSurface label="Summary" feature="summ">
+    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
       {/* **No `head`, so there is no title row at all.** It said the mode's own
           name, which the Dock at the foot of the page is already saying — Greg,
           2026-09-05: *"I think we can rely on the bottom bar to tell us what

@@ -442,7 +442,8 @@ describe("the panel, rendered", () => {
        browser pass is what found it. The button is the thing being withheld, so
        the button is what to assert about. */
     expect(el.querySelector(".tl-again")).toBeNull();
-    expect(el.querySelectorAll("button")).toHaveLength(0);
+    /* Bar the band's (i), which every band has and which spends nothing (plan 261001m). */
+    expect(el.querySelectorAll("button:not(.band-about)")).toHaveLength(0);
 
     /* The control, so "no button" cannot start meaning "no panel": events
        still draw the scroller, but an idle current timeline has no footer. */

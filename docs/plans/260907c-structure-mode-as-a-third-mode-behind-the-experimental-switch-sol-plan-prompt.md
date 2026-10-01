@@ -24,7 +24,7 @@ else is open.
   § Decisions. The new plan deviates from two of those answers (decision 2 and half of decision 3)
   and says so — check whether the reasons it gives are good enough, and whether it missed a
   deviation it did not declare.
-- `docs/project/new-mode.md` is the house checklist for adding a mode. The plan claims to walk it
+- `docs/project/mode.md` is the house checklist for adding a mode. The plan claims to walk it
   item by item, at § The checklist, walked. **Check that claim against the file**: is every
   compiler-forced table listed, is every residue item answered, and is any item silently missing?
 - `docs/project/experimental-features.md` owns the switch and its four rules.

@@ -4,7 +4,7 @@
 1. `CLAUDE.md` (AGENTS.md) — signpost; pointed to reading-view-overview and ideas.md. Helped.
 2. `docs/project/ideas.md` — very helpful: states "A visitor to a public article sees a stored list (`VisitorIdeasBand`, from the page's payload) and can never start one", and names `POLICY` / `REVISION_READ_POLICY`.
 3. `docs/project/public-shelf.md` — mostly the listing; its pointer to the `/api/public/` read path was useful, otherwise not needed.
-4. `docs/project/new-mode.md` § Where else to look — gave the two decision points (client `POLICY`, server `REVISION_READ_POLICY`) and the rule's source plan (`260929c`, which I did not open per the brief).
+4. `docs/project/mode.md` § Where else to look — gave the two decision points (client `POLICY`, server `REVISION_READ_POLICY`) and the rule's source plan (`260929c`, which I did not open per the brief).
 
 ## 2. Code files you would edit
 Likely none: the code shows this is already built. I would verify, and edit only what a gap test shows missing:
@@ -21,7 +21,7 @@ Likely none: the code shows this is already built. I would verify, and edit only
 No new helper needed.
 
 ## 4. Rules/policies
-- Visitor sees what is already stored and never starts a paid call (`new-mode.md`, security-map).
+- Visitor sees what is already stored and never starts a paid call (`mode.md`, security-map).
 - Public DTOs are rebuilt field by field, no widened owner types (`public-shelf.md`, security-map).
 - Test first, repro red; run `npm test` and `npm run typecheck`; lint touched files (CLAUDE.md).
 - Existing tests to extend: `tests/public-dto.test.ts`, `tests/public-reads.test.ts`, `tests/visitor-gaps.test.ts`, `tests/public-network-trace.test.tsx`.
