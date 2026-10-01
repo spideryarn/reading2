@@ -171,6 +171,7 @@ describe("the pages either side of an article", () => {
     expect(pageTitle({ kind: "design" })).toBe(`Design reference${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "login" })).toBe(`Sign in${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "callback" })).toBe(`Signing you in${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "new-password" })).toBe(`Choose a new password${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "loading" })).toBe(`Loading…${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "error" })).toBe(`Couldn’t open${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "not-found" })).toBe(`Not found${SEP}${APP_NAME}`);
@@ -205,6 +206,7 @@ describe("every title, whatever the page", () => {
     { kind: "not-found" },
     { kind: "login" },
     { kind: "callback" },
+    { kind: "new-password" },
     { kind: "loading" },
     { kind: "error" },
   ] as const;

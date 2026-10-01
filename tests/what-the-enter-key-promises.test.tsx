@@ -80,6 +80,11 @@ const PROMISES: Record<string, string> = {
      `next` really moves — SignInControls.tsx says why it has to. */
   "SignInControls.tsx › signin-email": "next",
   "SignInControls.tsx › signin-password": "go",
+  /* Forgot your password: one field, and the form's button sends the link. */
+  "SignInControls.tsx › forgot-email": "go",
+  /* Choosing a new password after a recovery link: the same shape as signing in. */
+  "SetNewPassword.tsx › new-password": "next",
+  "SetNewPassword.tsx › new-password-again": "go",
   /* And the boxes where Enter is a newline and must stay one. The Feedback
      dialog is the one Greg reported from: what he needed there was the Send
      button out from under the keyboard, which is a sizing fix

@@ -535,6 +535,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "auth-denied": "retry",
   "auth-oauth": "retry",
   "auth-exchange": "retry",
+  /* Caught before any request: the two new-password boxes disagree. */
+  "auth-password-mismatch": "retry",
+  "auth-password-set": "retry",
+  /* Signed in, but the SDK never said whether the link was a recovery. */
+  "auth-kind": "retry",
   /* Both `blocked` rather than `retry`, changed 2026-08-27 when the acquisition
      step made the button real. `kind` answers "will another go at *this job*
      help", and for these two it will not: the step would read the same damaged
@@ -2721,6 +2726,58 @@ export function authConfirmationSent(email: string): string {
     "[auth-confirm]"
   );
 }
+
+/**
+ * A password-reset link has been asked for. Not an error.
+ *
+ * **It does not say whether the address has an account.** GoTrue answers the
+ * same for an address it has never seen, so we could not say if we wanted to,
+ * and a sentence that did would tell a stranger who reads here.
+ *
+ * **"In this browser"** because the link is PKCE: the verifier that finishes it
+ * was written to this browser's storage when the reader pressed the button, and
+ * the link opened anywhere else ends at `[auth-nosession]`: without the stored
+ * verifier the SDK does not recognise the URL as a PKCE callback, so it never
+ * attempts an exchange. The installed SDK's `_isPKCECallback` decides this.
+ * docs/plans/261001i-password-reset.md.
+ */
+export function authResetSent(email: string): string {
+  return (
+    `If there is a Spideryarn account for ${email}, a link to choose a new password is on its way. ` +
+    "Open it in this browser. [auth-reset-sent]"
+  );
+}
+
+/**
+ * A link exchanged into a session, but the SDK never said whether it was a
+ * password recovery. It promises to, so this is our invariant failing, not the
+ * reader's doing — and guessing "sign-in" would quietly break the email's
+ * promise of a new password. The reader *is* signed in, so the sentence says so
+ * first. GPT Sol, plan review of 261001i, finding 2.
+ */
+export const AUTH_KIND_UNKNOWN: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "You are signed in, but this page could not tell whether your link was a password reset. To " +
+    "choose a new password, sign out from your profile and ask for a link again. [auth-kind]",
+};
+
+/**
+ * Setting the new password threw rather than answering: the connection, or
+ * storage the SDK could not write. GoTrue's own refusals (too short, the same as
+ * the old one) are shown in its words instead, as the sign-in form does.
+ */
+export const AUTH_PASSWORD_SET_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Your new password could not be saved. Check your connection and try again. [auth-password-set]",
+};
+
+/** The two new-password boxes disagree. Caught before anything is sent. */
+export const AUTH_PASSWORD_MISMATCH: ReaderFacingFailure = {
+  kind: "retry",
+  message: "Those two passwords are not the same. Type the new one in both boxes again. [auth-password-mismatch]",
+};
 
 /* ── A shared document ─────────────────────────────────────────────────────────
  *
