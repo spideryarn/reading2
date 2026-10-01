@@ -706,8 +706,14 @@ td.text.kind-callout .prose::before {
 .prose pre code { font-size: inherit; }
 /* Long URLs and unbroken identifiers are the one thing that can still push the
    column wider than its measure, and unlike a table they have nowhere to
-   scroll. Break them mid-word rather than let one link widen the article. */
-.prose a { overflow-wrap: break-word; }
+   scroll. Break them mid-word rather than let one widen the article — on
+   `.prose`, not `.prose a`: a URL from a scan or a PDF is often plain text, and
+   the `a`-only rule let one push a 390px page 25px sideways (2026-10-01,
+   docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md).
+   `break-word`, not `anywhere`: emergency breaks do not count towards
+   min-content width, so a long token can keep a data table wide enough to use
+   its own horizontal scroller rather than making the table shrink to fit. */
+.prose { overflow-wrap: break-word; }
 
 /* Media, captions and rules — present, but never competing with the argument. */
 td.text.opaque { background: var(--muted); }

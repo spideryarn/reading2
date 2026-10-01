@@ -160,21 +160,25 @@
   color: var(--highlight-ink);
 }
 
-/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — so it is
-   positioned against the panel and sits just above the composer. */
+/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — and **in
+   flow**, a centred row of its own between the transcript and the composer, so
+   it covers nothing. It was `position: absolute; bottom: 3.6rem`, a guess at the
+   composer's height, which grows with the textarea, wraps, and starts six rows
+   tall in Remember: it straddled the two and hid a line of the transcript —
+   the last one, on a phone. While it shows, the scroller is a row shorter;
+   `scrollTop` is untouched, so nothing moves, and it cannot flicker, because
+   showing it only takes the reader further from the bottom. 2026-10-01,
+   docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md. */
 .chat-to-bottom {
-  position: absolute;
-  bottom: 3.6rem;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: none;
+  align-self: center;
+  margin: 0.3rem auto;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
-  /* Opaque, not translucent: it sits over prose, and text behind text at this
-     size is unreadable rather than subtle. */
   background: var(--surface-raised);
   color: var(--ink-soft);
   font-family: var(--font-ui);
