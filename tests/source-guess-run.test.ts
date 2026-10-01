@@ -503,10 +503,10 @@ describe("High-powered AI — the upload source guess follows the article (Sol F
     expect(h.powers).toEqual(["high"]);
   });
 
-  it("searches at standard power when the owner is not an administrator", async () => {
+  it("searches at high power for a reader's article too — the column is the charge paid (plan 260930k)", async () => {
     const h = harness({ article: high(), read: readPage({ meta: { title: TITLE, authors: ["Müller, Ana"], doi: DOI } }) });
     await runAsOwner(DEV_OWNER_ID, () => h.guess("an-upload"));
-    expect(h.powers).toEqual(["standard"]);
+    expect(h.powers).toEqual(["high"]);
   });
 
   it("the default search sends the power's model", async () => {

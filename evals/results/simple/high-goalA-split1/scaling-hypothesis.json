@@ -1,0 +1,97 @@
+{
+  "arm": "high-goalA-split1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "4cefbf1ba90cafe46894c7c7a6131e2524be52053507a3c4a51e05b32835e2cf",
+  "at": "2026-09-30T23:45:14.189Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 38995,
+  "costUsd": 0.066324,
+  "tokens": {
+    "input": 28817,
+    "output": 869,
+    "reasoning": 138
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 277,
+  "fullerWords": 418,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's 2020 essay on GPT-3 and the scaling hypothesis: the claim that simply making neural networks bigger, and training them on more data with more compute, is enough by itself to produce increasingly general intelligence, without new architectures or algorithms. GPT-3 is offered as the test case: same basic Transformer design as GPT-2, just scaled up, yet it displayed meta-learning it was never designed for, picking up new tasks from a few examples in the prompt rather than needing fine-tuning.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because it settles, for the author, a long-standing dispute in AI: whether intelligence needs complicated hand-built machinery, or whether it just falls out of scale once you have a flexible-enough architecture and enough data to force a model past shortcuts. The essay frames this as a forecasting failure: most AI researchers and labs did not predict GPT-3's jump and still lack a working theory of why scaling produces new abilities, which the author says makes their risk assessments of AI largely worthless.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-scr8jb",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "Key ideas: the \"blessings of scale,\" where problems that are impossible for small networks become easy for large ones, and models seem to shift from memorizing surface patterns to something closer to genuine algorithms as data and size grow. The \"pretraining thesis\" argument is that squeezing out the last fractions of a bit of prediction error on text requires real reasoning, not just better pattern-matching. Kaplan et al.'s scaling laws show loss falling smoothly as a power law with compute, data, and parameters, with GPT-3 still far from any ceiling, and the essay contrasts OpenAI's bet on pure scaling against DeepMind's more piecemeal, module-by-module approach to building AGI.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-rjwfkb",
+        "spya-sctj6d"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an essay by Gwern reflecting on GPT-3, a language model OpenAI released in 2020. GPT-3 was, at the time, the largest neural network ever trained, over ten times bigger than its predecessor GPT-2. The piece treats GPT-3 as a test of the scaling hypothesis: the idea that simply making neural networks bigger, and training them on more data with more compute, is enough to produce broader, more general intelligence, with no new architectures or clever algorithms needed.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "GPT-3 did not just know more facts than GPT-2. It showed a new ability called meta-learning: learning to follow instructions and pick up new tasks from just a few examples, despite never being specifically trained to do it. The piece argues this shows unsupervised learning, training on raw, unlabeled text, can produce broadly useful understanding, which could feed into other struggling areas like reinforcement learning or robotics. GPT-3's cost, while large by machine-learning standards, is trivial next to research or military budgets, meaning far larger models are affordable if any organization chooses to build them.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-uz2hd5",
+        "spya-dfjr4c"
+      ]
+    },
+    {
+      "text": "The piece offers a mechanism: large networks act like huge ensembles of many overlapping sub-models, biased toward simple solutions, a kind of built-in Occam's razor. At small scale, the easiest sub-models to learn are shortcuts, memorizing surface patterns in the data. At large scale, with enough varied data, memorizing becomes too costly, so more general, rule-like sub-models, such as real arithmetic or meta-learning, win out instead. This is the piece's explanation for why bigger models keep getting more general, called the blessings of scale, rather than leveling off.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-wq498y",
+        "spya-jwq3zr"
+      ]
+    },
+    {
+      "text": "The piece also makes a pretraining-thesis argument: predicting the next character of text as well as a human would require real understanding. The hardest, rarest errors left to fix depend on reasoning, causality, and knowledge of the world, not spelling or vocabulary. GPT-3 still trails human-level prediction accuracy on this measure, but its jump from GPT-2 came from no change in method at all, only more scale, and the improvement curves it traces show no sign of leveling off.",
+      "ids": [
+        "spya-n4zu5k",
+        "spya-nhgv5g",
+        "spya-kmyg3w"
+      ]
+    },
+    {
+      "text": "The piece contrasts two research labs' beliefs. OpenAI is described as fully betting on the strong scaling hypothesis, that scale alone gets you there. DeepMind is described as holding a weaker version, believing intelligence must be built piece by piece even though each piece can itself scale up. The piece closes by criticizing AI researchers who confidently dismissed scaling for years, arguing they made no falsifiable predictions and have not revised their views despite being proven wrong.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  }
+}

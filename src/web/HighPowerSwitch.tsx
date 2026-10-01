@@ -4,12 +4,18 @@
  * docs/project/high-powered-ai.md; the build is
  * docs/plans/260930f-high-powered-ai-per-article.md, decision 8 and stage 3.
  *
- * **Drawn for the administrator only, and that is cosmetic.** The gate is the
- * server's: `PUT /api/admin/article/:slug/high-power` sits in the `/api/admin`
- * namespace, so a reader is refused before the handler runs (src/admin.ts
- * explains why `isAdmin` in the browser decides a link and never a permission).
- * Hiding it from a reader is only so the page does not offer a control that can
- * only fail.
+ * **Drawn for every owner, on their own article** — `/metadata` is owner-only
+ * (a visitor gets `PublicMetadataPage`). The gate and the charge are the
+ * server's: `PUT /api/article/:slug/high-power` is owner-scoped, and switching on
+ * charges one more article's worth against the reader's allowance (half while
+ * the article is public), once, never refunded — src/billing/admission.ts. The
+ * administrator is exempt as with ingests; `isAdmin` here only adds a line
+ * saying so, and decides nothing (src/admin.ts).
+ *
+ * **The text states the price in articles and never in money.** Greg,
+ * 2026-09-30: *"i don't want any regular users to know how much AI processing of
+ * their articles costs"*. The v1 line said Opus ran "at about twice Sonnet's token
+ * prices", which is exactly that. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * **The box shows the server's last answer, never the click.** It is controlled
  * by `since`, which changes only when the `PUT` answers or the page's metadata
@@ -65,14 +71,14 @@ export function HighPowerSwitch({
     }
   }
 
-  if (!isAdmin(user?.id)) return null;
+  const exempt = isAdmin(user?.id);
 
   const loaded = since !== undefined;
 
   function set(on: boolean): void {
     setSaving(true);
     setError(null);
-    apiFetch(`/api/admin/article/${encodeURIComponent(slug)}/high-power`, {
+    apiFetch(`/api/article/${encodeURIComponent(slug)}/high-power`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ on }),
@@ -115,9 +121,12 @@ export function HighPowerSwitch({
         <span>High-powered AI</span>
       </label>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-        Uses Claude Opus for this article&apos;s Sonnet calls — better on hard pieces, at about twice
-        Sonnet&apos;s token prices. Only later runs use it; nothing re-runs by itself. Use a mode&apos;s{" "}
-        <em>Run it again</em> button below to redo that mode with Opus.
+        Uses a stronger AI model (Claude Opus) for this article — better on difficult pieces.{" "}
+        {exempt
+          ? "Administrator: no charge."
+          : "Switching it on counts as one more article against your allowance (half of one while the article is shared publicly). Switching off doesn't give it back, and switching on again is free."}{" "}
+        Only later runs use it — nothing re-runs by itself. Use a mode&apos;s <em>Run it again</em>{" "}
+        below to redo it.
       </p>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
         {error ? (

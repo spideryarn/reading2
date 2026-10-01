@@ -1,0 +1,121 @@
+{
+  "arm": "high-about-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:38.216Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 9709,
+  "costUsd": 0.060728,
+  "tokens": {
+    "input": 18084,
+    "output": 2456,
+    "reasoning": 638
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 209,
+  "fullerWords": 275,
+  "briefWords": 144,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah examining how superposition relates to the classic connectionist idea of distributed representations. It argues that \"distributed representation\" actually bundles together two distinct strategies: composition (combining independent features like color and shape) and superposition (cramming more features than neurons by exploiting sparsity). The piece works through Thorpe's classic local, semi-local, and highly-distributed neuron-code examples to tease the two apart.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The distinction matters because decomposing representations into independent components is what lets you escape the curse of dimensionality and actually interpret what a network is doing. Composition and superposition have very different implications for generalization, for what a linear probe can recover, and for mechanistic interpretability work.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition gives you exponentially many combinations from few features, supports non-local generalization, and stays linearly interpretable. Superposition instead packs exponentially more items into the same neurons by relying on sparsity and nonlinear retrieval, but sacrifices generic linear readout. The note shows these two strategies compete for the same representational \"volume\" and can only be partly mixed when features are sparse, leaving \"holes\" that superposition can exploit.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-ajbh7f"
+      ]
+    },
+    {
+      "text": "The conclusion is that treating all distributed representations as one phenomenon obscures this fundamental tension, and keeping composition and superposition conceptually separate is important for understanding and reverse-engineering neural networks.",
+      "ids": [
+        "spya-st3tz8",
+        "spya-v47ca7"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah examining how superposition relates to the classic idea of distributed representations in neuroscience and connectionist AI. It argues that \"distributed representations\" actually bundles together two distinct strategies, which the piece labels composition and superposition, and that conflating them has caused confusion.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The distinction matters because decomposing a network's representations into independent, interpretable components is necessary to escape the curse of dimensionality and actually understand what a model is doing. The two strategies have very different implications for generalization, for what a linear probe can detect, and for whether interpretability is even tractable.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using Thorpe's classic examples of neurons encoding colored shapes, the note walks through a \"local\" code (one neuron per color-shape pair, no superposition), a \"semi-local\" compositional code (independent color and shape features combining, as in word-embedding directions for gender or plural), and a \"dense\" code packing far more combinations into few neurons via superposition but at the cost of linear readability. Composition lets n features generate exp(n) combinations and supports generalization across combinations, while superposition lets exp(m) items be stored in m neurons but requires a nonlinearity to retrieve them, and the two are shown to compete for the same exponential volume of representational space.",
+      "ids": [
+        "spya-kcjqdw",
+        "spya-qcd003",
+        "spya-c2eewa"
+      ]
+    },
+    {
+      "text": "The two strategies can be mixed when features are sparse, since rare combinations leave \"holes\" that can hold other features in superposition, as in Thorpe's \"semi-distributed\" code where composable features are themselves represented by neuron combinations placed in superposition. The conclusion is that composition and superposition are fundamentally in tension, and that only the composition side keeps representations understandable in terms of a linear, rather than exponential, number of features.",
+      "ids": [
+        "spya-vefv29",
+        "spya-ajbh7f",
+        "spya-fknpfa"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note by Chris Olah examining how superposition relates to the classic idea of distributed representations in neuroscience and connectionist AI. It argues that \"distributed representation\" actually bundles together two distinct strategies: composition and superposition.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The distinction matters because decomposing a network's representations into independent components is necessary to escape the curse of dimensionality and actually understand what a model is doing. Composition and superposition have very different implications for generalization and for what a linear probe can recover.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "Composition lets independent features combine to represent exponentially many combinations, giving cheap generalization and clean interpretability. Superposition instead packs more features than neurons into the same space, trading away generalization and linear readability for raw capacity. The note shows these two strategies are in direct tension, since each claims the same exponential volume differently, though sparse features let a representation mix both.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

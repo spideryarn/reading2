@@ -1,0 +1,103 @@
+{
+  "arm": "high-goalA-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.408Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 27026,
+  "costUsd": 0.042408,
+  "tokens": {
+    "input": 6274,
+    "output": 2986,
+    "reasoning": 1509
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 185,
+  "fullerWords": 345,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about how a classic idea called \"distributed representations\" actually hides two different strategies. He calls them composition and superposition, and argues people often mix them up.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The distinction matters because breaking a network's representations into separate, independent pieces is what lets you escape the exponential blow-up of possibilities and actually understand what the network is doing.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition builds objects out of independent features, like color and shape neurons combining to represent a red circle. It uses more neurons but lets new combinations be read out easily and generalizes to combinations never seen before. Superposition instead squeezes far more unrelated combinations into fewer neurons than the number of features, but you lose the ability to cleanly read out individual features, and there is no way to represent something \"in between\" two stored items.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g8cztv",
+        "spya-s9fc6n"
+      ]
+    },
+    {
+      "text": "The two strategies actually compete for the same limited space, so more of one means less of the other. But real representations can mix both: when feature combinations are rare, the unused space left over can be used to pack in extra features via superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-vefv29",
+        "spya-qbuyka"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This informal note by Chris Olah, published in 2023, asks how the classic idea of \"distributed representations\" from neuroscience and connectionist AI relates to superposition, the phenomenon where a network packs more features than it has neurons. Olah argues \"distributed representations\" actually bundles two distinct strategies, which he names composition and superposition.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "Separating the two matters because decomposing a network's representation into independent components is necessary to escape the exponential blow-up of possibilities and actually understand what a network is doing. It also matters because people often credit \"distributed representations\" with two benefits at once: generalizing to new combinations, and storing more features than there are neurons. Olah argues these benefits actually trade off, since one comes from composition and the other from superposition.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-sq6424",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using Thorpe's classic shape-and-color examples, Olah contrasts three codes. A \"local\" code gives one neuron to each color-shape pair: wasteful, but any combination can be read out with a simple linear function. A \"compositional\" code gives separate neurons to color and to shape, so n features can combine into as many as exp(n) objects, using far fewer neurons and generalizing to unseen combinations. A \"dense\" superposition code instead squeezes exp(m) unrelated items into just m neurons, but a linear function can no longer cleanly pick out most features, and there is no way to represent something in between two stored items.",
+      "ids": [
+        "spya-kcjqdw",
+        "spya-qcd003",
+        "spya-g8cztv"
+      ]
+    },
+    {
+      "text": "The underlying trade-off: m neurons can encode exp(m) worth of volume, and features that can compose freely need exp(n) of that volume, so fully composable features are capped by the number of neurons. Without composition, the same neurons can instead store exp(m) unrelated items via superposition, at the cost of needing a nonlinearity to retrieve them.",
+      "ids": [
+        "spya-xcrca8"
+      ]
+    },
+    {
+      "text": "Still, the two strategies can mix. When feature combinations are sparse, meaning most combinations rarely occur together, the unused regions of the compositional space become \"holes\" that can hold extra features in superposition. Thorpe's \"semi-distributed\" code illustrates this: color and shape still compose to form objects, but the color features themselves are stored in superposition with each other, and so are the shape features.",
+      "ids": [
+        "spya-vefv29",
+        "spya-qbuyka",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 7,
+    "unanchored": 0
+  }
+}

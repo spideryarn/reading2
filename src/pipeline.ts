@@ -99,6 +99,7 @@ import {
 import {
   generateSimpleSummary,
   inputFingerprint as simpleFingerprint,
+  SIMPLE_LEVELS,
   SIMPLE_VERSION,
 } from "./simple-summary.js";
 import {
@@ -3873,7 +3874,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     /**
      * The exact body-only article rendering the request sends, with the
      * **real, nullable** metadata, which is what `generateSimpleSummary`
-     * hashes too. No `profileHash`.
+     * hashes too. **The profile is not in it**: the request reads
+     * `ctx.profile` and the artefact records its `profileHash`, but a changed
+     * profile makes nothing stale — the quiz's rule; `profileChanged` on the
+     * owner's GET is how the reader hears of it. So `inputFingerprint` hashes
+     * the profile-free user message, which is all this can compute.
+     * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
@@ -3891,8 +3897,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         power: ctx.power,
         cacheArticle: ctx.cacheArticle,
+        profile: ctx.profile ?? null,
       });
-      const paragraphs = run.simpleSummary.paragraphs;
+      /* Paragraphs per level, in the slider's order: "2/4/5". */
+      const counts = SIMPLE_LEVELS.map((level) => run.simpleSummary.levels[level].length).join("/");
+      const words = SIMPLE_LEVELS.map((level) => run.words[level]).join("/");
       plog.info(
         {
           slug: ctx.slug,
@@ -3905,17 +3914,23 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           maxTokens: run.maxTokens,
           ms: run.elapsedMs,
           blocks: run.blocks,
-          paragraphs: paragraphs.length,
-          words: run.words,
+          paragraphs: counts,
+          words,
+          /* Three, or more when a level was asked twice (`LEVEL_ATTEMPTS`). A rise
+             here is a prompt that has started missing its own limits. */
+          calls: run.calls,
+          /* The profile's LENGTH, never the profile — it is the reader's own
+             words about themselves. */
+          profileChars: ctx.profile?.length ?? 0,
           /* Counts only — never the prose. `unanchored` and `unknownIds` are
              the ones to watch: a paragraph the piece does not back. */
           ...run.dropped,
         },
-        `simple ${ctx.slug}: ${paragraphs.length} paragraphs, ${run.words} words`,
+        `simple ${ctx.slug}: ${counts} paragraphs, ${words} words`,
       );
       return {
         parts: { simple: run.simpleSummary },
-        detail: `${paragraphs.length} paragraphs`,
+        detail: `${counts} paragraphs`,
       };
     },
   },

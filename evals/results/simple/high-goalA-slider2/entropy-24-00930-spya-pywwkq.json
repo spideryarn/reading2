@@ -1,0 +1,123 @@
+{
+  "arm": "high-goalA-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:37.930Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 12963,
+  "costUsd": 0.14766,
+  "tokens": {
+    "input": 61395,
+    "output": 2487,
+    "reasoning": 540
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 230,
+  "fullerWords": 258,
+  "briefWords": 168,
+  "paragraphs": [
+    {
+      "text": "This review asks how to actually see neurons \"process\" information, beyond just tracking whether activity in one neuron predicts another. It introduces partial information decomposition (PID), a framework that splits the information two source neurons give about a target's future firing into redundant (either source alone would do), unique (only one source gives it), and synergistic (only the joint pattern of both sources reveals it) parts.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-u5ra3d",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Synergy is the focus, since it's the signature of real computation: a neuron reacting to the joint pattern of its inputs rather than summing them. The authors argue this matters because it shows neurons are not simple threshold-summing units but are sensitive to how inputs combine.",
+      "ids": [
+        "spya-e94ury",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "In mouse cortical cultures recorded on multielectrode arrays, synergy tracked feedforward information flow (transfer entropy), was 2.7x higher in densely-connected \"rich club\" triads (which accounted for ~88% of network-wide synergy despite being under 40% of neurons), rose with recurrent connections between sources, and was highest when source neurons were moderately (not highly) correlated. In behaving macaques, synergy dominated overall but redundancy spiked during movement execution, and different brain regions showed synergy peaks tied to specific task phases.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "text": "The piece closes with practical caveats: choosing a redundancy measure remains unsettled, PID doesn't explain the biology behind synergy, and the number of possible information \"atoms\" explodes as more neurons are added, limiting analyses mostly to groups of two or three.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-spdx0y",
+        "spya-aby2dp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review on applying partial information decomposition (PID) to neural recordings. PID splits the mutual information that two or more source neurons carry about a target neuron into redundant (shared), unique, and synergistic (jointly-carried, not reducible to either source alone) parts. The focus is on synergy, since it is the signature of real integration or computation rather than independent signaling by single inputs.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because synergy shows neurons aren't just summing inputs past a threshold; they're sensitive to the specific joint pattern of incoming spikes. That reframes basic questions about circuit connectivity, correlation structure, and task demands in terms of measurable information dynamics rather than just correlation or transfer entropy (directed information flow).",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "Empirically, in cultured mouse cortex, synergy tracked feedforward transfer entropy closely, and triads sitting inside \"rich clubs\" (densely interconnected hub neurons) showed 2.7x more synergy, accounting for ~88% of network-wide synergy despite being under 40% of neurons. More recurrent connections among source neurons raised synergy, feedback connections didn't help, and synergy peaked when source neurons' activity was only moderately correlated, dropping off once correlation (and redundancy) got too high. In behaving macaques, synergy dominated overall but redundancy spiked during motor execution, read as the brain duplicating a \"move\" signal for reliability.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "text": "The review also covers practical issues: no single agreed-on way to define redundancy, data-hungry probability estimation, software tools, and the combinatorial explosion of possible decompositions as the number of sources grows. It closes by pointing to extensions like time-resolved local PID and multi-target versions (ΦID) as open directions.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-z39m3x"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece asks how groups of neurons actually combine their inputs into a decision, using partial information decomposition (PID) to split the joint information two or more sources give about a target into redundant, unique, and synergistic parts. Synergy is information only visible in the joint pattern of inputs, not in any input alone, and the authors treat it as a signature of genuine computation rather than simple summation.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Applied to recordings of hundreds of real cortical neurons, synergy tracked feedforward transfer entropy closely, was about 2.7 times higher in triads inside densely connected \"rich club\" hubs, and rose with recurrent connections among source neurons but not with feedback connections.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "Synergy also depended on how correlated the source neurons' spiking was: it rose with correlation at short, synapse-like timescales but peaked and then fell at longer timescales, as redundancy took over instead. In behaving monkeys, the mix of synergy versus redundancy shifted by brain region and task phase, suggesting these dynamics reflect real-time computation, not just fixed wiring.",
+      "ids": [
+        "spya-ybmve2",
+        "spya-t8fayf",
+        "spya-b32ecw"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  }
+}

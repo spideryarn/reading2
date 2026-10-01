@@ -734,9 +734,9 @@ describe("the empty state, which has three refusals to tell apart", () => {
    * and a three-minute wait that nothing warned about"*.
    *
    * **The objection was to the hiding.** So the assertion that matters here is
-   * not that a button exists — it is that all four numbers are on screen
-   * *beside* it, in front of the press. A button with only the painting's price
-   * under it would pass a laxer version of this test and would be the exact
+   * not that a button exists — it is that all four facts (each step, each
+   * wait) are on screen *beside* it, in front of the press. A button with only
+   * the painting's under it would pass a laxer version of this test and would be the exact
    * thing the old refusal was protecting against.
    *
    * Written red first against the three dead ends: `.ill-run` was null, so the
@@ -744,7 +744,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
    * did not exist.
    */
   for (const c of cases) {
-    it(`offers one press that draws and then paints, with both prices in front of it (${c.name})`, async () => {
+    it(`offers one press that draws and then paints, with both steps and both waits in front of it (${c.name})`, async () => {
       serving({ noArtefact: true, sketch: c.sketch });
       await mount();
 
@@ -755,10 +755,19 @@ describe("the empty state, which has three refusals to tell apart", () => {
       const cost = host.querySelector("[data-ill-both-cost]")?.textContent ?? "";
       /* Every one of the four, because a sentence that names three of them is a
          sentence that hides one — and which one it hides is not a detail: the
-         Sketch's are the two the reader did not ask for. */
-      for (const said of ["about $0.20", "about two minutes", "$0.40–$0.65", "four to seven minutes"]) {
+         Sketch's are the two the reader did not ask for. They were two prices
+         and two waits until 2026-09-30; what AI processing costs us is the
+         administrator's alone since then (plan 260930k § 3), so the prices
+         became what each step is. */
+      for (const said of [
+        "one model call",
+        "about two minutes",
+        "a brief plus one image call per plate",
+        "four to seven minutes",
+      ]) {
         expect(cost, `"${said}" is not said before the press`).toContain(said);
       }
+      expect(cost, "a dollar figure in front of a reader").not.toMatch(/[$£€]\s?\d/);
       /* And nothing was bought by reading the sentence. */
       expect(posted, "arriving at a refusal posted a job").toEqual([]);
     });
@@ -867,14 +876,16 @@ describe("the empty state, which has three refusals to tell apart", () => {
     expect(host.textContent).toContain("Stop");
   });
 
-  it("names the price before the press when there IS a Sketch to paint from", async () => {
+  it("names the wait, and no price, before the press when there IS a Sketch to paint from", async () => {
     serving({ noArtefact: true, sketch: { stale: false, profileChanged: false } });
     await mount();
 
     const why = host.querySelector(".ill-empty-why");
-    expect(why?.textContent, "the dearest button in the app does not say what it costs").toContain(
-      "$0.40–$0.65",
+    expect(why?.textContent, "the slowest button in the app does not say how long it takes").toContain(
+      "four to seven minutes",
     );
+    /* It named `$0.40–$0.65` until 2026-09-30 (plan 260930k § 3). */
+    expect(why?.textContent).not.toMatch(/[$£€]\s?\d/);
     expect(host.querySelector(".ill-run"), "no way to ask for one").not.toBeNull();
   });
 

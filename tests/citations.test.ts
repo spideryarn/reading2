@@ -46,6 +46,7 @@ import {
   buildCitations,
   type Draft,
   emptyDrops,
+  ENTRY_CAP,
   markerNumbers,
   generateCitations,
   idsByKey,
@@ -58,7 +59,7 @@ import {
   systemPrompt,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
-import type { NumberedReferenceList } from "../src/citation-reference-list.js";
+import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
@@ -870,6 +871,266 @@ describe("an entry in a PDF's reference list", () => {
       [...BODY, ref],
     );
     expect(shared.rows.every((r) => r.entry === undefined)).toBe(true);
+  });
+});
+
+/* ------------------------------------ a PDF entry's DOI or arXiv id --
+   Plan 261001a stage 4: the entry code split from the PDF's text layer is the
+   article's own text, so a unique DOI or arXiv id in it is the row's link, by
+   the same rule as a bibliography block's. */
+describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
+  const CHEN =
+    "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
+  const BODY = [block("spya-b00001", "People recall TV episodes [8] and narratives [7,9] in detail.")];
+  const chen = {
+    title: "Shared memories reveal shared structure in neural activity across individuals",
+    authors: "Chen et al.",
+    year: "2017",
+    why: "Evidence that recall of a TV episode is shared across people.",
+    ...scored,
+    mentions: [{ block: "spya-b00001", quote: "TV episodes [8]" }],
+    entry: 8,
+  };
+  function run(
+    entry8: string,
+    inherit: Map<string, string> | null = null,
+    referenceList: NumberedReferenceList = { entries: new Map([[8, entry8]]) },
+  ) {
+    return buildCitations(
+      { capped: false, works: [chen] },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: BODY,
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit,
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+        referenceList,
+      },
+    );
+  }
+  const linkOf = (entry8: string) => {
+    const row = run(entry8).citations[0]!;
+    return { url: row.url, linkFrom: row.linkFrom };
+  };
+  /* Through the real splitter, so the line join and the dehyphenation are its own. */
+  const listFromLines = (...tail: string[]) =>
+    referenceListFrom([
+      "References",
+      ...[1, 2, 3, 4, 5, 6, 7].map((n) => `${n}. Filler, A. (2000) Filler work number ${n}. J. Filler 1, 1–2`),
+      "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals.",
+      ...tail,
+    ])!;
+  const entryFromLines = (...tail: string[]) => listFromLines(...tail).entries.get(8)!;
+
+  it("one DOI in the entry becomes doi.org, its trailing period left off", () => {
+    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450.`)).toEqual({
+      url: "https://doi.org/10.1038/nn.4450",
+      linkFrom: "doi",
+    });
+    expect(linkOf(`${CHEN}. https://doi.org/10.1038/nn.4450`).url).toBe("https://doi.org/10.1038/nn.4450");
+  });
+
+  it("one arXiv id, either shape, becomes arxiv.org/abs", () => {
+    expect(linkOf(`${CHEN}. arXiv:1706.03762v5.`)).toEqual({
+      url: "https://arxiv.org/abs/1706.03762",
+      linkFrom: "arxiv",
+    });
+    expect(linkOf(`${CHEN}. arXiv:hep-th/9711200`).url).toBe("https://arxiv.org/abs/hep-th/9711200");
+  });
+
+  it("an entry with no identifier keeps its Scholar search", () => {
+    expect(linkOf(CHEN)).toEqual({ url: expect.stringContaining("scholar.google.com"), linkFrom: "search" });
+  });
+
+  it("two different DOIs in one entry are ambiguous, and keep the search", () => {
+    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450; erratum doi:10.1038/nn.9999.`).linkFrom).toBe("search");
+  });
+
+  it("keeps search when a DOI's own hyphen may have fallen at a dehyphenated line end", () => {
+    /* A digit after the hyphen: `dehyphenate` leaves the ambiguous space, so
+       this layer cannot know whether the hyphen ended the DOI. */
+    const digit = entryFromLines("Psychol. Sci. 18, 1–9. doi:10.1111/j.1467-", "9280.2007.01934.x.");
+    expect(digit).toContain("j.1467- 9280");
+    expect(linkOf(digit).linkFrom).toBe("search");
+    const indentedList = listFromLines(
+      "Psychol. Sci. 18, 1–9. doi:10.1111/j.1467-",
+      "   9280.2007.01934.x.",
+    );
+    expect(run(indentedList.entries.get(8)!, null, indentedList).citations[0]!.linkFrom).toBe(
+      "search",
+    );
+    /* A lowercase letter after it: the reader's entry is still dehyphenated,
+       but identifier parsing must see the original line end and decline it. */
+    const letterList = listFromLines("Neuron 95, 1–9. doi:10.1016/j.neu-", "ron.2017.06.041.");
+    const letter = letterList.entries.get(8)!;
+    expect(letter).toContain("doi:10.1016/j.neuron.2017.06.041");
+    expect(run(letter, null, letterList).citations[0]!.linkFrom).toBe("search");
+    const arxivList = listFromLines(
+      "Preprint arXiv:hep-",
+      "th/9711200; alternate doi:10.1038/nn.4450.",
+    );
+    expect(run(arxivList.entries.get(8)!, null, arxivList).citations[0]!.linkFrom).toBe("search");
+    expect(linkOf(`${CHEN}. doi:10.1038/ s41586-020-2649-2.`).linkFrom).toBe("search");
+    expect(linkOf(`${CHEN}. doi:10.1234/article- PMID`).linkFrom).toBe("search");
+    expect(linkOf(`${CHEN}. doi:10.1234/article_ SUPPLEMENT`).linkFrom).toBe("search");
+  });
+
+  it("a DOI or arXiv id whose end the line break hides keeps the search, rather than a cut-short link", () => {
+    expect(linkOf(`${CHEN}. doi:10.1016/j.cell. 2020.01.001`).linkFrom).toBe("search");
+    expect(linkOf(`${CHEN}. doi:10.1234/ABC DEF`).linkFrom).toBe("search");
+    expect(linkOf(`${CHEN}. arXiv:2001.0836 1`).linkFrom).toBe("search");
+    /* …but a full stop followed by a capital is treated as the next sentence. */
+    expect(linkOf(`${CHEN}. doi:10.1038/nn.4450. Accessed 2020`).linkFrom).toBe("doi");
+  });
+
+  it("reads a DOI past the stored entry's cap, and still stores the entry capped", () => {
+    const long = `${CHEN}. ${"Extra matter. ".repeat(30)}doi:10.1038/nn.4450`;
+    expect(long.length).toBeGreaterThan(ENTRY_CAP);
+    const row = run(long).citations[0]!;
+    expect(row.url).toBe("https://doi.org/10.1038/nn.4450");
+    expect(row.entry).toHaveLength(ENTRY_CAP);
+  });
+
+  it("a row whose search becomes a DOI on a re-run keeps its id", () => {
+    const before = run(CHEN);
+    expect(before.citations[0]!.linkFrom).toBe("search");
+    const after = run(`${CHEN}. doi:10.1038/nn.4450`, idsByKey(before)).citations[0]!;
+    expect(after.key).toBe("doi:10.1038/nn.4450");
+    expect(after.id).toBe(before.citations[0]!.id);
+  });
+
+  it("…but not when two rows this run share that work's title, author and year", () => {
+    const before = run(CHEN);
+    const inherit = idsByKey(before);
+    const out = buildCitations(
+      {
+        capped: false,
+        works: [
+          chen,
+          { ...chen, entry: 9, mentions: [{ block: "spya-b00001", quote: "narratives [7,9]" }] },
+        ],
+      },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: BODY,
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit,
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+        referenceList: {
+          entries: new Map([
+            [8, `${CHEN}. doi:10.1038/nn.4450`],
+            [9, `${CHEN.replace("8.", "9.")}. doi:10.1038/nn.9999`],
+          ]),
+        },
+      },
+    );
+    /* Two DOI rows, one old search id: neither can say it is the one. */
+    expect(out.citations.map((c) => c.linkFrom)).toEqual(["doi", "doi"]);
+    const ids = out.citations.map((c) => c.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).not.toContain(before.citations[0]!.id);
+  });
+
+  it("…and neither a search nor DOI row inherits when both share the old work key", () => {
+    const before = run(CHEN);
+    const out = buildCitations(
+      {
+        capped: false,
+        works: [
+          chen,
+          { ...chen, entry: 9, mentions: [{ block: "spya-b00001", quote: "narratives [7,9]" }] },
+        ],
+      },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: BODY,
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit: idsByKey(before),
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+        referenceList: {
+          entries: new Map([
+            [8, `${CHEN}. doi:10.1038/nn.4450`],
+            [9, CHEN.replace("8.", "9.")],
+          ]),
+        },
+      },
+    );
+    expect(out.citations.map((c) => c.linkFrom)).toEqual(["doi", "search"]);
+    expect(out.citations.map((c) => c.id)).not.toContain(before.citations[0]!.id);
+  });
+
+  it("…and not when an identifier-keyed old row made the old work key ambiguous", () => {
+    const oldSearch = run(CHEN);
+    const oldDoi = run(`${CHEN}. doi:10.1038/nn.9999`);
+    const previous = {
+      ...oldSearch,
+      citations: [...oldSearch.citations, ...oldDoi.citations],
+    };
+    const after = run(`${CHEN}. doi:10.1038/nn.4450`, idsByKey(previous)).citations[0]!;
+    expect(after.id).not.toBe(oldSearch.citations[0]!.id);
+    expect(after.id).not.toBe(oldDoi.citations[0]!.id);
+  });
+
+  it("…and two works whose DOI keys swap do not swap their stored ids", () => {
+    const doiA = "10.1038/nn.4450";
+    const doiB = "10.1038/nn.9999";
+    const oldA = run(`${CHEN}. doi:${doiA}`);
+    const oldBSource = run(`${CHEN}. doi:${doiB}`);
+    const oldB = {
+      ...oldBSource.citations[0]!,
+      title: "Another work",
+      authors: "Jones",
+      year: "2020",
+    };
+    const previous = {
+      ...oldA,
+      citations: [...oldA.citations, oldB],
+    };
+    const out = buildCitations(
+      {
+        capped: false,
+        works: [
+          chen,
+          {
+            title: "Another work",
+            authors: "Jones",
+            year: "2020",
+            why: "A second, distinct work.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "narratives [7,9]" }],
+            entry: 9,
+          },
+        ],
+      },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: BODY,
+        sourceHash: "h.h",
+        elapsedMs: 1,
+        inherit: idsByKey(previous),
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+        referenceList: {
+          entries: new Map([
+            [8, `${CHEN}. doi:${doiB}`],
+            [9, `9. Jones (2020) Another work. doi:${doiA}`],
+          ]),
+        },
+      },
+    );
+    expect(new Set(out.citations.map((c) => c.id)).size).toBe(2);
+    expect(out.citations.map((c) => c.id)).not.toContain(oldA.citations[0]!.id);
+    expect(out.citations.map((c) => c.id)).not.toContain(oldB.id);
   });
 });
 

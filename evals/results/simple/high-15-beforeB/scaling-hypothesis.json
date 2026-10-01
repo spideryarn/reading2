@@ -1,0 +1,60 @@
+{
+  "arm": "high-15-beforeB",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:04.896Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 10605,
+  "costUsd": 0.064804,
+  "tokens": {
+    "input": 28232,
+    "output": 834,
+    "reasoning": 144
+  },
+  "ok": true,
+  "words": 273,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program released in 2020 that was trained to predict text, and what it tells us about building smarter artificial intelligence (AI). The author asks whether simply making these programs much bigger, and feeding them much more data, is enough to make them genuinely more intelligent. This idea is called the scaling hypothesis.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because GPT-3 surprised almost everyone. It was not just better at old tasks like summarizing text; it learned, on its own, how to follow instructions and pick up brand-new tasks from just a few examples, something called meta-learning, or \"learning to learn.\" The author argues this suggests that unsupervised learning, training on raw, unlabeled text, could become a key building block for future AI systems, including robots.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The article calls this pattern the blessings of scale: hard problems, oddly, get easier to solve as a program grows bigger, instead of harder, which is the opposite of what usually happens in research. The explanation offered is that a big program is like a huge collection of smaller sub-programs; the simple ones that just memorize data work at first, but as the data grows too vast to memorize, sub-programs that actually learn general rules, like arithmetic or reasoning, start winning out.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-vkkfzh",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The author also argues that most AI experts did not predict this and still lack a clear explanation for why GPT-3 worked, comparing their confident dismissals to being flatly wrong in the past. The piece ends asking whether the 2020s will bring a research \"arms race\" toward even bigger models, since only one company, OpenAI, seemed willing to bet heavily on scaling.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-cty5hx",
+        "spya-arrq35"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

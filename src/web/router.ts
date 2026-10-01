@@ -78,6 +78,7 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
+import { ADMIN_USERS_PATH } from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
   canStamp,
@@ -628,7 +629,8 @@ export const LIBRARY_HREF = "/";
  * is what stops there being one.
  */
 export const ADMIN_HREF = "/admin";
-export const ADMIN_USERS_HREF = "/admin/users";
+/* src/urls.ts's, so the admin's sign-up mail links the same path. */
+export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";

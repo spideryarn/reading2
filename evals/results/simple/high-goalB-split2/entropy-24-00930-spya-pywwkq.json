@@ -1,0 +1,96 @@
+{
+  "arm": "high-goalB-split2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "e28d98982e6a5b41e15783e058054551171c330a0688f5b89180e522a5606f91",
+  "at": "2026-09-30T23:47:24.479Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 16060,
+  "costUsd": 0.11003,
+  "tokens": {
+    "input": 40915,
+    "output": 2820,
+    "reasoning": 1132
+  },
+  "ok": true,
+  "reader": "goalB",
+  "words": 274,
+  "fullerWords": 382,
+  "paragraphs": [
+    {
+      "text": "This is a review of how information theory can be used to figure out what neurons are actually computing, not just which ones are connected. The key tool is partial information decomposition (PID): given two source neurons feeding a target, it splits the information they carry about the target's future into redundant (either source alone would tell you), unique (only one source tells you), and synergistic (only visible when you look at both sources together) parts.",
+      "ids": [
+        "spya-gzwbsr",
+        "spya-wer4cd",
+        "spya-q2b0e5"
+      ]
+    },
+    {
+      "text": "The synergistic part matters most to the authors: it's evidence that a neuron isn't just summing up inputs, but is sensitive to the joint pattern across its inputs, i.e., doing real computation rather than passive integration.",
+      "ids": [
+        "spya-e94ury",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "Applying PID to recordings from cultured cortical networks and from behaving monkeys, the authors found synergy tracks feedforward connection strength, is much higher in densely connected \"rich club\" neurons, rises with recurrent (but not feedback) connections, and grows with how correlated two inputs are up to a point before redundancy takes over at longer timescales. In monkeys, the balance of synergy versus redundancy also shifted with task phase, e.g. rising during movement execution.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "On the practical side, the piece is candid about limits: there is no single agreed way to define \"redundancy,\" so results depend on which measure you pick; the number of distinct information pieces explodes combinatorially as you add more source neurons, making anything beyond triads nearly intractable; and naive probability estimates from finite recordings systematically overestimate shared information, so careful null models and enough data are essential. It also surveys the available toolkits (DIT, IDTxl, SxPID, a MATLAB toolbox) and their trade-offs for discrete versus continuous, or time-resolved, data.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-qa7gt2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about using information theory to study how neurons process information. Its main tool is partial information decomposition, or PID: a way of splitting the information that two or more input neurons carry about a target neuron into separate pieces — information both inputs share (redundant), information only one input has (unique), and information that only shows up when you look at both inputs together (synergistic).",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because figuring out how brains transform incoming signals into behavior is a basic open problem in neuroscience, and ordinary tools like correlation or information flow between two neurons cannot show how a neuron combines multiple inputs into something new. Synergy, the joint-only information, is presented as a marker of that combining step, i.e., of actual computation happening in a circuit rather than simple signal-passing.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Applying PID to real recordings from cultured mouse cortex and from behaving monkeys, the authors report several patterns: synergy tracks closely with how strongly information flows feedforward into a neuron; it is about 2.7 times higher in \"rich club\" triads (the densest, best-connected neurons) than elsewhere; it rises with more recurrent connections between the two input neurons but not with feedback connections; and it rises then falls as the two inputs become more correlated, peaking when their shared information is only about 7% of its maximum. In monkey motor cortex, the balance between synergy and redundancy also shifted with the task, with redundancy spiking during movement execution.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "On practical limits, the article is direct: no single agreed-upon way exists to define \"redundant information,\" so results can depend on which of roughly a dozen competing measures you pick, and some only work for discrete data, only for two inputs, or only for small systems. The number of distinct information pieces to track explodes combinatorially with more input neurons (over 7.8 million for just six), making a full breakdown intractable beyond small groups. Estimating these quantities from finite data is also biased, tending to overstate information and correlation when sample sizes are small relative to the number of possible neuron-activity patterns, and the reviewed empirical work relied on simpler bivariate connectivity estimates that are known to overstate the significance of individual connections, plus it was done in cultured tissue rather than a fully behaving brain.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-qa7gt2"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 6,
+    "unanchored": 0
+  }
+}

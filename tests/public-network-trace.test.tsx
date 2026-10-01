@@ -1125,10 +1125,10 @@ describe("a signed-out browser on a shared document", () => {
 
     expect(host.textContent).toContain(PUBLIC_GIST);
     expect(host.textContent).not.toContain("Nobody has built");
-    /* And the Depth control, which is the one thing the panel still offers —
-       so this cannot pass on a band that rendered its heading and nothing
-       else. */
-    expect(host.textContent).toContain("Depth");
+    /* And the Parts | Sections control, which is the one thing the outline
+       offers — so this cannot pass on a band that rendered its heading and
+       nothing else. (It was labelled "Depth" until plan 261001b.) */
+    expect(host.querySelector(".summ-seg .summ-pill")?.textContent).toBe("Parts");
     expect(outsidePublic()).toEqual([]);
   });
 
@@ -1305,10 +1305,21 @@ describe("a signed-out browser on a shared document", () => {
     served = {
       ...ARTICLE,
       simpleSummary: {
-        paragraphs: [
-          { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
-          { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
-        ],
+        levels: {
+          brief: [
+            { text: "The short one.", ids: ["spya-cccccc"] },
+            { text: "Why.", ids: ["spya-cccccc"] },
+          ],
+          simple: [
+            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
+            { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
+          ],
+          fuller: [
+            { text: "The fuller version says what the piece is about.", ids: ["spya-cccccc"] },
+            { text: "Then why it matters.", ids: ["spya-cccccc"] },
+            { text: "Then its key idea.", ids: ["spya-cccccc"] },
+          ],
+        },
       },
     };
     await open("?mode=summary&summary=simple");
@@ -2074,9 +2085,10 @@ describe("a signed-out browser on a shared document", () => {
 
     /* The honest sentence, and the whole of it. */
     expect(host.textContent).toContain("Nobody has drawn this one yet");
-    /* And none of the owner's invitation. `$0.20` and the wait are the two
-       halves of the price, and "Draw the argument" is the button. */
-    expect(host.textContent, "the price").not.toContain("costs one model call");
+    /* And none of the owner's invitation: its sentence about the call and the
+       wait (it named a price until 2026-09-30), and "Draw the argument", the
+       button. */
+    expect(host.textContent, "the invitation").not.toContain("never drawn until you ask");
     expect(
       [...host.querySelectorAll("button")].some(
         (b) => (b.textContent ?? "").includes("Draw the argument"),

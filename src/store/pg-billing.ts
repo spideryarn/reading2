@@ -85,7 +85,7 @@
  * all, so there is nothing for it to hold in the wrong order.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
@@ -106,8 +106,10 @@ import {
 } from "../billing/tiers.js";
 import type { Entitlement, TierRow } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
-import { billingAccounts, ingestEvents } from "../db/schema.js";
+import { articles as articleRows, billingAccounts, ingestEvents } from "../db/schema.js";
 import { log } from "../log.js";
+import type { OwnerId } from "../owner.js";
+import { ownedSlug } from "./owned-slug.js";
 import { allTiers } from "./pg-tiers.js";
 
 const logger = log("store");
@@ -257,6 +259,19 @@ export interface Usage {
   readonly chargedHalfPrice: number;
   /** Reservations taken and not yet settled — jobs in flight, at full price. */
   readonly inFlight: number;
+  /**
+   * **High-powered AI upgrades** inside the current period whose article is not
+   * currently public — one more article's worth each, {@link PRIVATE_INGEST_COST}.
+   *
+   * Counted apart from the ingests above because every sentence that says
+   * *added* is about ingests: folded into `chargedFullPrice`, one high-powered
+   * article would read as two articles added on /profile. The wall adds all
+   * four counts (`halfUnitsUsed`). GPT Sol, plan review finding 1, 2026-09-30;
+   * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+   */
+  readonly highPowerFullPrice: number;
+  /** The same, for an article that is public right now — {@link PUBLIC_INGEST_COST}. */
+  readonly highPowerHalfPrice: number;
 }
 
 /**
@@ -269,11 +284,17 @@ export function halfUnitsUsed(usage: Usage): HalfUnits {
   return halfUnits(
     usage.chargedFullPrice * PRIVATE_INGEST_COST +
       usage.chargedHalfPrice * PUBLIC_INGEST_COST +
-      usage.inFlight * PRIVATE_INGEST_COST,
+      usage.inFlight * PRIVATE_INGEST_COST +
+      usage.highPowerFullPrice * PRIVATE_INGEST_COST +
+      usage.highPowerHalfPrice * PUBLIC_INGEST_COST,
   );
 }
 
-/** The same usage as a count of **ingests**, which is what a sentence can say. */
+/**
+ * The same usage as a count of **ingests**, which is what a sentence can say.
+ * High-powered AI upgrades are not in it — they are not articles added; the
+ * wall still counts them, through `halfUnitsUsed`.
+ */
 export function ingestsUsed(usage: Usage): number {
   return usage.chargedFullPrice + usage.chargedHalfPrice + usage.inFlight;
 }
@@ -395,9 +416,11 @@ export function entitlementFromRow(
 export function usageSql(ownerId: string, entitlement: Entitlement) {
   return sql`
     select
-      count(*) filter (where ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as full_price,
-      count(*) filter (where ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as half_price,
-      count(*) filter (where e.succeeded_at is null and e.released_at is null)::int as in_flight
+      count(*) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as full_price,
+      count(*) filter (where e.kind = 'ingest' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as half_price,
+      count(*) filter (where e.succeeded_at is null and e.released_at is null)::int as in_flight,
+      count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC} is false)::int as high_power_full_price,
+      count(*) filter (where e.kind = 'high_power' and ${chargedIn(entitlement)} and ${IS_PUBLIC})::int as high_power_half_price
     from spideryarn.ingest_events e
     ${VISIBILITY_JOIN}
     where e.owner_id = ${ownerId}::uuid`;
@@ -483,6 +506,8 @@ function usageOf(result: unknown): Usage {
     chargedFullPrice: cell("full_price"),
     chargedHalfPrice: cell("half_price"),
     inFlight: cell("in_flight"),
+    highPowerFullPrice: cell("high_power_full_price"),
+    highPowerHalfPrice: cell("high_power_half_price"),
   };
 }
 
@@ -889,6 +914,157 @@ export async function reserveIngest(
        raises 40001 at the insert, and nothing in src/ retries that
        (docs/postmortems/260901f-…). Every other transaction in the store is
        pinned for the same reason. */
+    { isolationLevel: "read committed" },
+  );
+}
+
+/**
+ * What switching an article to High-powered AI came to. See `switchOnHighPower`.
+ */
+export type HighPowerSwitch =
+  /** On. `charged` says whether this call wrote the upgrade row. */
+  | { readonly kind: "on"; readonly highPowerSince: Date; readonly charged: boolean }
+  /** Not this owner's article, or no such article. The route's 404. */
+  | { readonly kind: "not-found" }
+  /**
+   * Too little allowance left for the upgrade to fit whole. Nothing written.
+   * `publicNow` is the price's reason, for the sentence (`highPowerNoRoom`).
+   */
+  | {
+      readonly kind: "no-room";
+      readonly publicNow: boolean;
+      readonly entitlement: Entitlement;
+    }
+  | Stale;
+
+/**
+ * **Switch one article to High-powered AI, charging for it once** —
+ * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+ *
+ * Greg, 2026-09-30: *"it should double the processing cost per-article"*. So the
+ * switch writes one more charged `ingest_events` row for the article, of `kind`
+ * `'high_power'`, priced exactly like an ingest of it — 2 half-units while the
+ * article is private, 1 while it is public, recomputed live and frozen on delete
+ * by the same rules and the same trigger. With the ingest, a private article
+ * costs two articles and a public one costs one.
+ *
+ * **Once per article, for ever.** Switching off refunds nothing — the Opus calls
+ * were spent — and switching on again charges nothing: the row is looked for
+ * under the lock, and `ingest_events_high_power_once` refuses a second one. That
+ * is what closes *switch on, run everything on Opus, switch off*.
+ *
+ * **Charged in the period it happens in**, by its own `succeeded_at`, whatever
+ * the age of the article. Multiplying the ingest's row would have charged a
+ * three-month-old article's upgrade to three months ago (GPT Sol, 260930f F3).
+ *
+ * **It must fit whole: `used + cost <= budget`.** Not the ingest wall's
+ * `used < budget`, whose one half-unit of overdraft exists so a free account can
+ * make six public articles; an upgrade is a second charge for something already
+ * had, and gets no overdraft.
+ *
+ * ## One transaction, in the house lock order
+ *
+ * `billing_accounts` first (`lockBillingAccount`), then the article `for update`
+ * — the order `pg-visibility.ts` and admission take, so an unshare cannot land
+ * between the price read and the charge, and two switch-ons serialise here: the
+ * second finds the first's row and charges nothing. Admitting, charging and
+ * setting `high_power_since` commit together or not at all. Nothing that opens
+ * its own transaction or touches the network runs inside it; a `stale` answer
+ * goes back to the caller, which resyncs from Stripe after this has committed.
+ *
+ * The administrator never comes here — `chargeAndSwitchOnHighPower` in
+ * src/billing/admission.ts sends them to the uncharged store method, as ingests
+ * do.
+ */
+export async function switchOnHighPower(
+  ownerId: OwnerId,
+  slug: string,
+  tiers?: readonly TierRow[],
+): Promise<HighPowerSwitch> {
+  const sold = tiers ?? (await allTiers());
+  const db = getDb();
+  /* **Is there anything here to change?** Unlocked and before any write, as in
+     `pg-visibility.ts`: the next step creates the caller's billing anchor, and
+     a stranger's slug should be a 404 without minting one. The locked read
+     below is the real ownership check. */
+  const [present] = await db
+    .select({ id: articleRows.id })
+    .from(articleRows)
+    .where(ownedSlug(slug, ownerId))
+    .limit(1);
+  if (!present) return { kind: "not-found" };
+
+  return await db.transaction(
+    async (tx): Promise<HighPowerSwitch> => {
+      const row = await lockBillingAccount(tx, ownerId);
+      const [article] = await tx
+        .select({
+          id: articleRows.id,
+          slug: articleRows.slug,
+          visibility: articleRows.visibility,
+          highPowerSince: articleRows.highPowerSince,
+        })
+        .from(articleRows)
+        .where(ownedSlug(slug, ownerId))
+        .for("update")
+        .limit(1);
+      if (!article) return { kind: "not-found" };
+
+      /* One post-lock database instant decides both which Stripe period is live
+         and where the charge lands. A JavaScript clock read here paired with
+         `now()` below had a boundary hole: after waiting on either lock, it
+         could admit against the new period while PostgreSQL's
+         transaction-start `now()` wrote the row just before that period. */
+      const clock = await tx.execute<{ charged_at: unknown }>(sql`
+        select statement_timestamp() as charged_at`);
+      /* The raw driver hands a timestamptz back as text, not a Date — parsed
+         here, and refused if it is not a time, rather than bound as a string
+         the columns would have to reinterpret. */
+      const raw = clock.rows[0]?.charged_at;
+      const chargedAt = raw instanceof Date ? raw : new Date(String(raw));
+      if (raw == null || Number.isNaN(chargedAt.getTime())) {
+        throw new Error(`reading the High-powered AI charge time returned ${String(raw)}`);
+      }
+      const entitlement = entitlementFromRow(row, sold, chargedAt);
+      if ("kind" in entitlement) return entitlement; // stale
+
+      const [already] = await tx
+        .select({ id: ingestEvents.id })
+        .from(ingestEvents)
+        .where(and(eq(ingestEvents.kind, "high_power"), eq(ingestEvents.articleId, article.id)))
+        .limit(1);
+
+      if (!already) {
+        const publicNow = article.visibility === "public";
+        const cost = publicNow ? PUBLIC_INGEST_COST : PRIVATE_INGEST_COST;
+        const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
+        if (halfUnitsUsed(usage) + cost > budgetFor(entitlement.limit)) {
+          return { kind: "no-room", publicNow, entitlement };
+        }
+        /* The same database timestamp in both columns: the shape check wants
+           `reserved_at = succeeded_at`, and it must also be the timestamp that
+           selected the entitlement above. */
+        await tx.execute(sql`
+          insert into spideryarn.ingest_events
+            (owner_id, kind, reserved_at, succeeded_at, article_id, slug)
+          values (${ownerId}::uuid, 'high_power', ${chargedAt}, ${chargedAt},
+                  ${article.id}::uuid, ${article.slug})`);
+      }
+
+      if (article.highPowerSince) {
+        return { kind: "on", highPowerSince: article.highPowerSince, charged: !already };
+      }
+      const [updated] = await tx
+        .update(articleRows)
+        .set({ highPowerSince: chargedAt })
+        .where(eq(articleRows.id, article.id))
+        .returning({ highPowerSince: articleRows.highPowerSince });
+      if (!updated?.highPowerSince) {
+        throw new Error(`switching ${slug} to High-powered AI wrote no row under its own lock`);
+      }
+      return { kind: "on", highPowerSince: updated.highPowerSince, charged: !already };
+    },
+    /* Pinned, for the reason `reserveIngest` gives. */
     { isolationLevel: "read committed" },
   );
 }

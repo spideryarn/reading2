@@ -95,7 +95,7 @@ import type {
 import {
   anchorFields,
   identifiesOf,
-  isSimpleParagraphs,
+  isUsableSimpleSummary,
   readStoredBears,
   readStoredLean,
 } from "../types.js";
@@ -516,15 +516,20 @@ function publicFaq(faq: Faq): PublicFaq {
 }
 
 /**
- * **Simple, rebuilt paragraph by paragraph** — each `{ text, ids }` and
- * nothing else; the stamp is pipeline provenance.
- * src/public-types.ts § `PublicSimpleSummary` is the argument.
+ * **Simple, rebuilt level by level and paragraph by paragraph** — each
+ * `{ text, ids }` and nothing else; the stamp is pipeline provenance, and
+ * `profileHash` is the owner's. src/public-types.ts § `PublicSimpleSummary` is
+ * the argument.
  */
 function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
+  const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
+    paragraphs.map((p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }));
   return {
-    paragraphs: simple.paragraphs.map(
-      (p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }),
-    ),
+    levels: {
+      brief: level(simple.levels.brief),
+      simple: level(simple.levels.simple),
+      fuller: level(simple.levels.fuller),
+    },
   };
 }
 
@@ -1206,7 +1211,7 @@ export function publicArticle(row: {
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
     ...(row.trajectory !== null ? { trajectory: publicTrajectory(row.trajectory) } : {}),
     ...(row.faq !== null ? { faq: publicFaq(row.faq) } : {}),
-    ...(row.simpleSummary !== null && isSimpleParagraphs(row.simpleSummary.paragraphs)
+    ...(isUsableSimpleSummary(row.simpleSummary)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
       : {}),
     ...(row.citations !== null ? { citations: publicCitationList(row.citations, blockText) } : {}),

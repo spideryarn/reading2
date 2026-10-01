@@ -1,0 +1,102 @@
+{
+  "arm": "high-none-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:52.805Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 75855,
+  "costUsd": 0.13174,
+  "tokens": {
+    "input": 20545,
+    "output": 9065,
+    "reasoning": 7750
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 201,
+  "fullerWords": 282,
+  "paragraphs": [
+    {
+      "text": "This article is a review about how brains process information — how neurons turn incoming signals into new information. It explains a method called partial information decomposition, or PID, borrowed from information theory.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Knowing how neurons combine several inputs helps explain how brains actually compute things, not just how signals travel. This question was hard to study until recently, since it needs huge amounts of recorded data and careful tools.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the information that two neurons send to a target neuron into parts. There is redundant information, repeated by both; unique information, from only one; and synergistic information, visible only when both are considered together. Synergistic information shows a neuron is not just adding up its inputs, but computing something from their pattern.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Studies on mouse brain cells found synergy was much higher in \"rich clubs,\" the most connected neurons. These rich-club neurons held about 88% of all synergy in the network. Synergy also rose when source neurons had more connections looping back to each other. It peaked when two source signals were moderately similar, not too similar. In monkeys doing a task, synergy dominated overall, but duplicated, redundant information rose sharply during movement, perhaps to keep muscle commands reliable.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This review explains how researchers use information theory to study how brains process information — how neurons turn incoming signals into new information. It focuses on a framework called partial information decomposition, or PID, which breaks down how several inputs combine to affect one neuron.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Older tools like mutual information (how correlated two signals are) and transfer entropy (how much one signal's past predicts another's future) show information moving through circuits. But neither tool can show how neurons combine multiple sources into something new, which the authors treat as real computation.",
+      "ids": [
+        "spya-f6sbgx",
+        "spya-p4pyuy",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID divides the information that two source neurons carry about a target into several parts. There is information redundant to both, information unique to each one, and information that is synergistic — visible only in their combined pattern. Synergy marks genuine integration, since it cannot be found in either input alone. Extending this idea to many inputs needs a mathematical structure called the partial information lattice, plus a chosen \"redundancy measure,\" since researchers have not agreed on one single definition.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury",
+        "spya-rc76qn"
+      ]
+    },
+    {
+      "text": "Recordings from mouse brain-slice cultures showed synergy concentrated in \"rich clubs,\" the densest, best-connected neurons. These rich-club neurons held about 88% of all network-wide synergy, despite making up under 40% of cells. Synergy also rose with more recurrent connections — links looping back between the two source neurons. It peaked when their signals were moderately, not highly, correlated.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "In behaving monkeys, synergy dominated overall brain activity across a multi-step task. But redundancy — duplicated information — spiked during movement execution, possibly to send reliable commands to muscles. The authors also discuss practical challenges, like choosing the right analysis tools, and point toward future work such as time-resolved analyses and multi-target PID.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-b32ecw",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

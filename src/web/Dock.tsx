@@ -737,7 +737,8 @@ const MODES_UI = [
      reader: ~$0.20 and about two minutes. It is still that press for a reader
      with the switch on. Only the Sketch; Illustrated is still its own
      chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
-     empty state still says the price for anyone who arrives without pressing.
+     empty state still says the wait for anyone who arrives without pressing
+     (the dollar figure went on 2026-09-30: AI cost is the administrator's alone).
 
      Its description (src/mode-catalog.ts) names the picture a default reader
      will actually meet. It used to list the three geometries, which are now the

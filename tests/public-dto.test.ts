@@ -1045,19 +1045,32 @@ describe("the artefacts a shared link carries", () => {
    * paragraphs cross, the pipeline's provenance does not. Plan 260930i.
    */
   const SIMPLE: SimpleSummary = {
-    version: "simple/1",
+    version: "simple/2",
     generator: "some-model",
     slug: "noema",
     sourceHash: "abc123",
     generatedAt: "2026-09-30T10:00:00.000Z",
     elapsedMs: 7_000,
-    paragraphs: [
-      { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
-      {
-        text: "It matters because a copy would not do.",
-        ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
-      },
-    ],
+    /* The owner's — it must not cross (plan 261001b). */
+    profileHash: "0f1e2d3c4b5a6978",
+    levels: {
+      brief: [
+        { text: "It asks what a measurement carries.", ids: ["spya-bbbbbb" as BlockId] },
+        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
+      ],
+      simple: [
+        { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
+        {
+          text: "It matters because a copy would not do.",
+          ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
+        },
+      ],
+      fuller: [
+        { text: "This essay asks what a measurement has to carry, and why.", ids: ["spya-bbbbbb" as BlockId] },
+        { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
+        { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
+      ],
+    },
   };
 
   /**
@@ -1668,24 +1681,41 @@ describe("the artefacts a shared link carries", () => {
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 
-  /** The paragraphs and their passages' ids, and not the stamp. Plan 260930i. */
-  it("carries Simple's paragraphs and their ids, and not the stamp", () => {
+  /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
+  it("carries Simple's paragraphs and their ids at every level, and not the stamp", () => {
     expect(pathsUnder("simpleSummary")).toEqual(
-      ["paragraphs", "paragraphs[].ids", "paragraphs[].text"].sort(),
+      [
+        "levels",
+        "levels.brief",
+        "levels.brief[].ids",
+        "levels.brief[].text",
+        "levels.fuller",
+        "levels.fuller[].ids",
+        "levels.fuller[].text",
+        "levels.simple",
+        "levels.simple[].ids",
+        "levels.simple[].text",
+      ].sort(),
     );
-    expect(built.simpleSummary).toEqual({ paragraphs: SIMPLE.paragraphs });
+    expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
     const json = JSON.stringify(built.simpleSummary);
-    for (const provenance of ["simple/1", "some-model", "abc123", "generatedAt", "elapsedMs"]) {
+    for (const provenance of ["simple/2", "some-model", "abc123", "generatedAt", "elapsedMs", "profileHash", "0f1e2d3c4b5a6978"]) {
       expect(json, provenance).not.toContain(provenance);
     }
   });
 
-  it("does not publish a stored Simple artefact outside its 2–4 paragraph contract", () => {
+  it("does not publish a stored Simple artefact outside either level's contract", () => {
     const invalid = publicArticle({
       ...ARTICLE_BASE,
       ...NO_ARTEFACTS,
-      simpleSummary: { ...SIMPLE, paragraphs: [] },
+      simpleSummary: { ...SIMPLE, levels: { ...SIMPLE.levels, fuller: [] } },
     });
+    expect("simpleSummary" in invalid).toBe(false);
+  });
+
+  it("does not publish a simple/1 row even when it has valid-looking levels", () => {
+    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
+    const invalid = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: v1 });
     expect("simpleSummary" in invalid).toBe(false);
   });
 

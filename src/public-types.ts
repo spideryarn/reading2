@@ -71,6 +71,7 @@ import type {
   DebateRelation,
   DebateSynthesis,
   FaqQuestion,
+  SimpleLevel,
   SimpleParagraph,
   GlossaryKind,
   Idea,
@@ -510,13 +511,16 @@ export interface PublicFaq {
  *
  * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain
  * words about the piece and the block ids of passages the payload already
- * carries whole. No profile is in this stage.
+ * carries whole, at every level.
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
- * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs`.
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `profileHash`, the owner's. Since 2026-10-01 the paragraphs are pitched
+ * at the owner's profile and goal, as a profiled glossary's are, and the owner's
+ * *make public* dialog says so (plan 261001b).
  */
 export interface PublicSimpleSummary {
-  paragraphs: SimpleParagraph[];
+  levels: Record<SimpleLevel, SimpleParagraph[]>;
 }
 
 /**

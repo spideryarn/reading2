@@ -98,6 +98,12 @@ function looksLikeContents(list: NumberedReferenceList): boolean {
 export interface NumberedReferenceList {
   /** Number → the entry's text, whitespace collapsed, number included. */
   entries: Map<number, string>;
+  /**
+   * The same entries before dehyphenation, when this list came from the PDF
+   * splitter. Identifier parsing needs the line ends: `neu-\nron` may contain
+   * a DOI's own hyphen, even though the reader should see `neuron`.
+   */
+  identifierEntries?: Map<number, string>;
 }
 
 /**
@@ -134,13 +140,19 @@ export function referenceListFrom(lines: readonly string[]): NumberedReferenceLi
  */
 export function numberedEntries(lines: readonly string[]): NumberedReferenceList | null {
   const entries = new Map<number, string>();
+  const identifierEntries = new Map<number, string>();
   let current: { n: number; parts: string[] } | null = null;
   let total = 0;
   const close = (): boolean => {
     if (current === null) return true;
-    const text = dehyphenate(current.parts.join("\n")).replace(/\s+/g, " ").trim();
+    /* Outer line whitespace is layout noise; the newline itself is evidence.
+       Keeping exactly that distinction also makes continuation checks
+       independent of PDF indentation. */
+    const identifierText = current.parts.map((part) => part.trim()).join("\n").trim();
+    const text = dehyphenate(identifierText).replace(/\s+/g, " ").trim();
     if (text.length > ENTRY_MAX || total + text.length > REFERENCE_LIST_MAX) return false;
     entries.set(current.n, text);
+    identifierEntries.set(current.n, identifierText);
     total += text.length;
     return true;
   };
@@ -168,7 +180,7 @@ export function numberedEntries(lines: readonly string[]): NumberedReferenceList
     current.parts.push(line);
   }
   close();
-  return entries.size >= MIN_ENTRIES ? { entries } : null;
+  return entries.size >= MIN_ENTRIES ? { entries, identifierEntries } : null;
 }
 
 /**

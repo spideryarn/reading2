@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { DebateBears, IdentificationLevel, TrajectoryDepth } from "../types.js";
+import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type TrajectoryDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -999,7 +999,7 @@ export const confParam = createParser<number>({
  * button *starts*, because this parser is what decides which picture that press
  * lands on (src/web/activation.ts § MODE_TARGET). An owner who arrives without
  * pressing — a pasted link, a Back step — still meets the invitation carrying
- * the price and the wait (SketchView.tsx § the empty state), and spends nothing
+ * what it does and the wait (SketchView.tsx § the empty state), and spends nothing
  * until they press. The old default, `force`, was chosen for the
  * opposite property — it was the only one that drew something real *before* its
  * model call landed — which was the right rule while it was the picture
@@ -1130,31 +1130,53 @@ export const diagramHueParam = createParser<ScatterHue>({
  */
 export const MAX_SUMMARY_DEPTH = 2;
 
+/**
+ * The shallowest depth a reader can choose: the parts. `0`, the article's own
+ * gist alone, was a pill until 2026-10-01 — Greg: *"Remove the "Article"
+ * pill"* (SPIDERYARN-READING2-78) — so an old link's `?deep=0` now reads as
+ * the default. The root's gist still heads the outline at every depth.
+ */
+export const MIN_SUMMARY_DEPTH = 1;
+
 export const deepParam = createParser<number>({
   parse: (v) => {
     const n = Number.parseInt(v, 10);
-    return Number.isInteger(n) && n >= 0 && n <= MAX_SUMMARY_DEPTH ? n : null;
+    return Number.isInteger(n) && n >= MIN_SUMMARY_DEPTH && n <= MAX_SUMMARY_DEPTH ? n : null;
   },
   serialize: (v) => String(v),
 })
   .withDefault(1)
   .withOptions({ history: "push" });
 
-/** Summary's two sub-modes: the tree's gists, or a plain-words orientation. */
-export const SUMMARY_VIEWS = ["gists", "simple"] as const;
+/**
+ * Summary's three views: the tree's gists (the outline, at `?deep=`), or one of
+ * the three plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
+ * are these URL values.
+ */
+export const SUMMARY_VIEWS = ["gists", ...SIMPLE_LEVELS] as const;
 export type SummaryView = (typeof SUMMARY_VIEWS)[number];
 
+/** Is this view one of the plain-words levels? */
+export function isPlainLevel(view: SummaryView): view is SimpleLevel {
+  return view !== "gists";
+}
+
 /**
- * Which half of Summary is open — `gists` (the default, omitted) or `simple`,
- * a few short paragraphs in everyday words
- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md). *Which thing, within
- * this mode*, so the shape of `?remember=` and `?referee=`: in the URL, because
- * it changes the whole band, and pushed, because switching is a deliberate act
- * Back should undo. `?deep=` keeps its value and is simply unused under Simple.
+ * Which part of Summary is open — `gists` (the outline; the default, omitted),
+ * `brief`, `simple` or `fuller`, a few short paragraphs in everyday words at three levels
+ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+ * *Which thing, within this mode*, so the shape of `?remember=` and
+ * `?referee=`: in the URL, because it changes the whole band, and pushed,
+ * because switching is a deliberate act Back should undo. `?deep=` keeps its
+ * value and is simply unused under a plain-words level.
  *
- * **Writing it never spends.** Only a press on the Simple chip arms the run
- * (SummaryMode.tsx § `SummarySubModeToggle`); Back, a pasted link and a
- * last-view restore arrive here and buy nothing.
+ * `gists` has no pill of its own since 2026-10-01: pressing Parts or Sections
+ * is what chooses it (Greg, SPIDERYARN-READING2-7A).
+ *
+ * **Writing it never spends.** Only a press on a plain-words pill arms the run
+ * (SummaryMode.tsx § `SummaryControls`); Back, a pasted link and a last-view
+ * restore arrive here and buy nothing.
  */
 export const summaryParam = createParser<SummaryView>({
   parse: (v) => (SUMMARY_VIEWS.includes(v as SummaryView) ? (v as SummaryView) : null),

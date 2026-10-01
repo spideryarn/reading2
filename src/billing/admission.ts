@@ -80,7 +80,7 @@
  */
 
 import { isAdmin } from "../admin.js";
-import { BILLING_NOT_AVAILABLE, ingestQuotaReached } from "../messages.js";
+import { BILLING_NOT_AVAILABLE, highPowerNoRoom, ingestQuotaReached } from "../messages.js";
 import { errorFields, log } from "../log.js";
 import type { OwnerId } from "../owner.js";
 import {
@@ -88,8 +88,9 @@ import {
   noteRefusal,
   releaseReservation,
   reserveIngest,
+  switchOnHighPower,
 } from "../store/pg-billing.js";
-import type { Admission, Refused } from "../store/pg-billing.js";
+import type { HighPowerSwitch, Refused } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
@@ -169,12 +170,12 @@ function quotaRefusal(ownerId: string, refused: Refused): Error {
  * A second `stale` is not retried again: the caller answers 503, Stripe having
  * already been asked and the row still not containing now.
  */
-async function resyncAndRetry(
+async function resyncAndRetry<T>(
   ownerId: string,
-  slug: string | undefined,
   customerId: string | null,
   sync: Resync,
-): Promise<Admission | null> {
+  retry: () => Promise<T>,
+): Promise<T | null> {
   /* Nothing to ask about. The schema requires a customer beside a subscription
      (`billing_accounts_subscription_needs_customer`), so this is the shape of a
      row nothing has ever synced. */
@@ -191,7 +192,9 @@ async function resyncAndRetry(
     );
     return null;
   }
-  return await reserveIngest(ownerId, slug);
+  /* The whole question again, after the resync has committed — never inside
+     the locked transaction, which may not touch the network. */
+  return await retry();
 }
 
 /**
@@ -211,9 +214,9 @@ async function admitIngest(
     admission =
       (await resyncAndRetry(
         ownerId,
-        slug,
         admission.customerId,
         deps.sync ?? syncSubscriptionFromStripe,
+        () => reserveIngest(ownerId, slug),
       )) ?? admission;
   }
 
@@ -311,4 +314,70 @@ export async function refuseUploadWithoutQuota(ownerId: OwnerId): Promise<void> 
   if (isAdmin(ownerId)) return;
   const answer = await ingestEligibility(ownerId);
   if (answer.kind === "refused") throw quotaRefusal(ownerId, answer);
+}
+
+/**
+ * **Switch a reader's article to High-powered AI, charging for it once**, or
+ * throw what the reader should see — docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+ *
+ * `switchOnHighPower` (src/store/pg-billing.ts) is the transaction; this is the
+ * policy around it, shaped like `admitIngest`: a stale entitlement resyncs from
+ * Stripe once, *after* the transaction has committed, and asks again; still
+ * stale is a 503 rather than a guess. A refusal is a 402 of its own
+ * (`highPowerNoRoom`), with no sharing offer — see that function.
+ *
+ * **Not for the administrator**, who is exempt as with ingests: the route sends
+ * them, and every switch-off, to the uncharged store method. That split is
+ * asserted here too, so a caller that forgot cannot bill Greg.
+ */
+export async function chargeAndSwitchOnHighPower(
+  ownerId: OwnerId,
+  slug: string,
+  deps: AdmissionDeps = {},
+): Promise<{ highPowerSince: string }> {
+  if (isAdmin(ownerId)) {
+    throw new Error(
+      "the administrator's High-powered AI is never charged; use the store's switchOnForAdmin",
+    );
+  }
+  let answer: HighPowerSwitch = await switchOnHighPower(ownerId, slug);
+  if (answer.kind === "stale") {
+    answer =
+      (await resyncAndRetry(
+        ownerId,
+        answer.customerId,
+        deps.sync ?? syncSubscriptionFromStripe,
+        () => switchOnHighPower(ownerId, slug),
+      )) ?? answer;
+  }
+  switch (answer.kind) {
+    case "on":
+      if (answer.charged) {
+        logger.info({ ownerId, slug }, "High-powered AI switched on, and charged once");
+      }
+      return { highPowerSince: answer.highPowerSince.toISOString() };
+    case "not-found":
+      throw httpError(404, `No article artefacts for "${slug}".`);
+    case "no-room":
+      logger.info(
+        { ownerId, slug, publicNow: answer.publicNow },
+        "High-powered AI refused: not enough allowance left",
+      );
+      throw httpError(
+        402,
+        highPowerNoRoom(
+          answer.entitlement.tier === "paid" ? { resetAt: answer.entitlement.periodEnd } : {},
+        ).message,
+      );
+    case "stale":
+      logger.error(
+        { ownerId, subscriptionId: answer.subscriptionId },
+        "refusing High-powered AI: the stored subscription period does not contain now, after a resync",
+      );
+      throw httpError(503, BILLING_NOT_AVAILABLE.message);
+    default: {
+      const never: never = answer;
+      throw new Error(`unhandled High-powered AI answer ${JSON.stringify(never)}`);
+    }
+  }
 }

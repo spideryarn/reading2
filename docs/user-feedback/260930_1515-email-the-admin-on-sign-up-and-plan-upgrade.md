@@ -45,3 +45,28 @@ To check it once deployed: sign up with a new address and confirm it, and see th
 
 Plan, both GPT Sol reviews and the deferred list:
 [260930i-email-admin-on-sign-up-and-plan-upgrade.md](../plans/260930i-email-admin-on-sign-up-and-plan-upgrade.md).
+
+## Follow-up, 2026-10-01: the address is in, and the link goes to every user
+
+> Yes, please include the newly-signed-up user's email address in the email to me, and include a
+> link to the /admin page that lists all the users
+>
+> — Greg, 2026-10-01 (relayed by the Overseer)
+
+**Shipped** to `dev` in `1f6ae0d7` and `de0521c3`, **not yet live**: it needs a deploy, with no
+migration.
+
+- **Both mails** now say `Email: <address>` above the account id, and link
+  `https://www.spideryarn.com/admin/users` (the page listing every account) instead of `/admin`.
+- **Sign-up** takes the address from the reader's verified sign-in token. **Upgrade** has no
+  signed-in reader (it comes from Stripe), so it asks Supabase's Auth Admin API for that one
+  account; if that fails, the mail still goes and says the address could not be looked up.
+- The address is the reader's own text, so it is flattened to one line (it cannot forge a second
+  link underneath) and never goes in the subject.
+- **`/privacy`'s Resend entry** now says we email ourselves a note with the reader's address and
+  account id (and the plans), the first time they use Spideryarn after signing up and on each
+  upgrade, through Resend and then Namecheap's forwarding to our inbox.
+
+To check once deployed: the next sign-up mail to `hello@` shows the address and the `/admin/users`
+link. Plan and both GPT Sol reviews:
+[261001b-admin-sign-up-email-carries-the-address.md](../plans/261001b-admin-sign-up-email-carries-the-address.md).

@@ -30,7 +30,6 @@
  */
 
 import { articlePower } from "./models.js";
-import { currentOwnerId } from "./owner.js";
 import {
   type ExplainEnding,
   explainStream as explainStreamDefault,
@@ -318,7 +317,7 @@ export function makeLookUpTerm(
         blocks: article.blocks,
         /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so
            the ambient owner is this article's. */
-        power: articlePower(article.highPowerSince, currentOwnerId()),
+        power: articlePower(article.highPowerSince),
         blockId,
         quote,
         ...(signal ? { signal } : {}),
@@ -644,7 +643,7 @@ export function makeAskAboutTerm(
         blocks: article.blocks,
         /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so
            the ambient owner is this article's. */
-        power: articlePower(article.highPowerSince, currentOwnerId()),
+        power: articlePower(article.highPowerSince),
         blockId: found.blockId,
         /* **The article's words, not the reader's.** `found.quote` is
            `anchor.matched`, the run of characters actually in that block, so

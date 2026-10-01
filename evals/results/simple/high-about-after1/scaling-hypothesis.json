@@ -1,0 +1,106 @@
+{
+  "arm": "high-about-after1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "dd6bd4bf72029ef7b4c46d50fec0768af5e033ec90417dafcf6b8dd29c3cde5d",
+  "at": "2026-09-30T23:38:53.496Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 134452,
+  "costUsd": 0.228628,
+  "tokens": {
+    "input": 29034,
+    "output": 17056,
+    "reasoning": 15450
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 246,
+  "fullerWords": 340,
+  "paragraphs": [
+    {
+      "text": "This piece looks at GPT-3, a huge text-prediction model OpenAI released in 2020, and what it tells us about scaling up AI. The scaling hypothesis says that making neural networks bigger, with more data and computing power, is enough to make them smarter. No clever new design is needed. The author argues GPT-3 is strong evidence this idea is right.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "GPT-3 surprised everyone: it learned to follow instructions and pick up new tasks from a few examples, using a plain, outdated design scaled hugely. It was never specifically trained to do this. Its performance kept improving with size, with no sign of leveling off. This suggests today's models are still far from any ceiling, and most experts who doubted scaling have no real explanation for why it worked.",
+      "ids": [
+        "spya-fvqe70",
+        "spya-asr663",
+        "spya-uett4g"
+      ]
+    },
+    {
+      "text": "The essay's explanation: a huge model contains countless smaller sub-models trying different strategies, and the simplest one that fits the data usually wins. At small scale, that means shortcuts and memorized answers win. At huge scale, with huge amounts of varied data, only deeper strategies, like real arithmetic or general rules, stay simple enough to win. So bigger models start acting smarter and more human-like, without anyone designing them to.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "The author contrasts OpenAI's bet on scaling with rivals like DeepMind, who expect to assemble intelligence piece by piece instead. He also argues that models trained to predict human-written text end up imitating agents, planning and pursuing goals. This raises safety concerns that are hard to design away.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This essay is Gwern's analysis of GPT-3, OpenAI's 175-billion-parameter language model released in 2020, as evidence for the scaling hypothesis. That hypothesis says new architectures are not needed for much more capable AI. Instead, take a workable design like the Transformer and simply scale up its parameters, training data, and compute. GPT-3, built on an architecture the author calls already outdated, backs this up by displaying abilities nobody explicitly trained into it.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The key surprise is meta-learning: GPT-3 follows instructions and picks up new tasks from a handful of examples, purely from being prompted. It never received task-specific training for this. Its scaling curves, loss falling smoothly and predictably as it grows, had not bent even at 175 billion parameters, well past where many expected diminishing returns. That implies pushing to trillions of parameters, at a cost still small next to other major scientific or government projects, would keep paying off.",
+      "ids": [
+        "spya-asr663",
+        "spya-dfjr4c",
+        "spya-sctj6d"
+      ]
+    },
+    {
+      "text": "Gwern explains why plain next-word prediction on internet text can produce this. Early gains come from learning letter frequencies and spelling, cheap wins that vanish fast. As those run out, further progress requires learning grammar, then facts, then reasoning, causality, and consistency across a passage. The hardest, rarest errors, he argues, are the ones that require genuine understanding to fix, so the last, smallest gains in accuracy are the deepest.",
+      "ids": [
+        "spya-rjwfkb",
+        "spya-kmyg3w",
+        "spya-g3b5y7"
+      ]
+    },
+    {
+      "text": "His account of why bigger models generalize, not just memorize, is that a network contains many competing sub-models, and training favors whichever is simplest for the data seen. At small scale, memorizing or shortcutting is simplest. At the huge scale and data volume of GPT-3, general rules become the simplest way to fit everything, so capabilities like meta-learning emerge unbidden.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "Gwern contrasts OpenAI's bet on pure scaling with DeepMind's strategy of assembling intelligence from separately engineered pieces. He argues most AI researchers, having long dismissed scaling, offer no real predictive account of AI progress. An appendix adds a safety worry: models trained on human-written text, full of agents pursuing goals, may develop real agency, without being designed for it.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}
