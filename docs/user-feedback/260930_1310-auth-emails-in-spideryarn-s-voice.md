@@ -35,5 +35,15 @@ What changed:
 Before it counts as live: apply the templates, check Resend's click tracking is off, and send one of
 each. The steps are in the plan's § Applying it to production.
 
+**Follow-up, 2026-10-01: the deferred password reset is built**, on `dev` in `c5cbb630`
+([261001i-password-reset.md](../plans/261001i-password-reset.md)). The sign-in form has "forgot your
+password?", and the recovery link lands on a "Choose a new password" screen. So the recovery email
+now says "Reset your Spideryarn password", with a "Choose a new password" button. **Production gets
+the new email words only when the Overseer runs `npx tsx scripts/supabase-auth-config.ts templates`,
+after the deploy**, not before: until the code is live, the button would promise a screen that does
+not exist yet. This was tested end to end in a real browser against local Supabase and its mail
+catcher. A link sent from the Supabase dashboard still lands signed out, as before. The ending stays
+Shipped.
+
 Plan, both GPT Sol reviews, the spike and the screenshots:
 [260930h-auth-emails-in-spideryarn-s-voice.md](../plans/260930h-auth-emails-in-spideryarn-s-voice.md).

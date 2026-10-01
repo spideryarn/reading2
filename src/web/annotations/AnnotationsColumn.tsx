@@ -130,10 +130,15 @@ function IdeaStamp({ note }: { note: Extract<AnnotationNote, { kind: "idea" }> }
  */
 export function AnnotationsHead({
   room,
+  beside = false,
   path,
   arc,
 }: {
   room: boolean;
+  /** A band is open on the left. With no room for both, the band wins, and
+   *  the line says the other way to get the notes back: close the panel.
+   *  docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+  beside?: boolean;
   path: readonly string[];
   arc: string | null;
 }) {
@@ -141,7 +146,11 @@ export function AnnotationsHead({
   if (!room) {
     return (
       <aside className="marg-narrow" aria-label="Annotations">
-        <p>The notes need a wider window — they sit to the right of the text.</p>
+        <p>
+          {beside
+            ? "The notes need a wider window, or the panel closed — they sit to the right of the text."
+            : "The notes need a wider window — they sit to the right of the text."}
+        </p>
       </aside>
     );
   }

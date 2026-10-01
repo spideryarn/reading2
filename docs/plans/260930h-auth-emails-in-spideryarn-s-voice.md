@@ -189,7 +189,8 @@ or PATCH the four fields back to empty strings.
 
 ## Deferred
 
-- **A real password reset**: a "Forgot password?" link in `SignInControls.tsx` that calls
+- **Built 2026-10-01 in [261001i-password-reset.md](261001i-password-reset.md)**, which also
+  changed the recovery email's words. What was deferred: **A real password reset**: a "Forgot password?" link in `SignInControls.tsx` that calls
   `resetPasswordForEmail(email, { redirectTo: callbackUrl() })`, and a set-a-new-password step after
   `AuthCallback` sees a recovery session, calling `updateUser({ password })`. The spike shows the
   auth half already works. What is missing is two small screens, and a decision on how `AuthCallback`

@@ -30,13 +30,22 @@
  */
 import { useRef, useState } from "react";
 
-import { AUTH_EXCHANGE_FAILED, AUTH_PROVIDER_OFF, authConfirmationSent } from "../messages.js";
+import {
+  AUTH_EXCHANGE_FAILED,
+  AUTH_PROVIDER_OFF,
+  authConfirmationSent,
+  authResetSent,
+} from "../messages.js";
 import { Button } from "./components/ui/button.js";
 import { GoogleMark } from "./GoogleMark.js";
 import { rememberReturn } from "./auth-return.js";
 import { callbackUrl, googleSignInAvailable, supabase } from "./lib/supabase.js";
 
-type Mode = "choose" | "email";
+/**
+ * `forgot` is the email box alone, asking for a password-reset link.
+ * docs/plans/261001i-password-reset.md.
+ */
+type Mode = "choose" | "email" | "forgot";
 
 export function SignInControls() {
   const [mode, setMode] = useState<Mode>("choose");
@@ -45,6 +54,7 @@ export function SignInControls() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   /**
    * The password box, so the email box's Enter can move to it.
@@ -134,6 +144,37 @@ export function SignInControls() {
     if (!data.session) setSent(true);
   };
 
+  /**
+   * Ask for a password-reset link.
+   *
+   * `redirectTo` is the bare callback, as every other sign-in here: never the
+   * current page (the comment on `withGoogle`). No `remember()` — after a new
+   * password the reader goes to their shelf, and AuthCallback consumes any stored
+   * destination on that path anyway.
+   */
+  const forgot = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: callbackUrl(),
+      });
+      setBusy(false);
+      if (err) setError(err.message);
+      else setResetSent(true);
+    } catch (thrown) {
+      /* Storage blocked: the SDK writes the PKCE verifier before it asks, and
+         throws rather than answering. Same reason as `withGoogle`'s `try`. */
+      setBusy(false);
+      setError(thrown instanceof Error ? thrown.message : AUTH_EXCHANGE_FAILED.message);
+    }
+  };
+
+  if (resetSent) {
+    return <p className="tw:text-sm tw:text-muted-foreground">{authResetSent(email)}</p>;
+  }
+
   if (sent) {
     return (
       <p className="tw:text-sm tw:text-muted-foreground">{authConfirmationSent(email)}</p>
@@ -165,7 +206,40 @@ export function SignInControls() {
         Sign in with Google
       </button>
 
-      {mode === "choose" ? (
+      {mode === "forgot" ? (
+        <form onSubmit={(e) => void forgot(e)} className="tw:mt-6 tw:flex tw:flex-col tw:gap-3">
+          <label className="tw:text-xs tw:text-muted-foreground" htmlFor="forgot-email">
+            Email
+          </label>
+          <input
+            id="forgot-email"
+            type="email"
+            autoComplete="email"
+            /* The only field of a form whose button sends the link. */
+            enterKeyHint="go"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight"
+          />
+          <div className="tw:mt-1 tw:flex tw:items-center tw:gap-3">
+            <Button type="submit" disabled={busy}>
+              Send reset link
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setMode("email");
+              }}
+              disabled={busy}
+              className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
+            >
+              back to sign in
+            </button>
+          </div>
+        </form>
+      ) : mode === "choose" ? (
         <button
           type="button"
           onClick={() => setMode("email")}
@@ -238,6 +312,17 @@ export function SignInControls() {
               className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
             >
               create an account
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setMode("forgot");
+              }}
+              disabled={busy}
+              className="tw:ml-auto tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
+            >
+              forgot your password?
             </button>
           </div>
         </form>

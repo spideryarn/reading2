@@ -18,7 +18,10 @@
  *   read the SQL.
  * - **Openable**: a current revision with a tree and at least one block — the
  *   bar `loadArticle` and the shelf both apply, so a link we draw never opens a
- *   404 — and not archived, because archived is off every shelf.
+ *   404. **Archived**: the reader's own archived article is a candidate — it
+ *   still opens for them by direct link, and the match says it is archived —
+ *   but a stranger's is not, because archiving took it off the public shelf
+ *   (plan 261001i).
  *
  * **What of a stranger's article may be matched against** is the second rule,
  * and it is what the public page itself already publishes:
@@ -33,6 +36,12 @@
  *   belongs to without ever printing it (GPT Sol, plan review). The raw value is
  *   read into this process and filtered here, below, before the matcher sees
  *   it; `requested_url` is nulled in SQL.
+ * - **an upload's guessed source** (`upload_source_guesses`), never: that guess
+ *   is owner-only — the public projection does not carry it — so it is nulled
+ *   in SQL for anything not the reader's own. And for theirs only a `canonical`
+ *   guess, the address built from a DOI or arXiv id verified against the PDF;
+ *   a `matching` one is a page that looked like it, not an identifier
+ *   (plan 261001i).
  *
  * `owner_id` itself is never selected — only whether it is this reader's.
  *
@@ -45,7 +54,7 @@ import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import type { CitedCandidate } from "../cited-in-spideryarn.js";
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
+import { articleRevisions, articles, revisionBlocks, uploadSourceGuesses } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import { publicSourceUrl } from "../urls.js";
 import { guardDbStore } from "./db-errors.js";
@@ -71,13 +80,18 @@ export function citedCandidatesQuery(db: Pick<ReturnType<typeof getDb>, "select"
           then coalesce(${articles.titleOverride}, ${articleRevisions.title})
           else ${articleRevisions.title} end, ${cap(TEXT_CHARS)})`.as("display_title"),
       byline: sql<string | null>`left(${articleRevisions.byline}, ${cap(TEXT_CHARS)})`.as("byline"),
+      /* Only ever true for the reader's own: the `where` admits no stranger's archived article. */
+      archived: sql<boolean>`(${articles.archivedAt} is not null)`.as("archived"),
+      guessedUrl: sql<string | null>`case when ${mine}
+          and ${uploadSourceGuesses.status} = 'found' and ${uploadSourceGuesses.kind} = 'canonical'
+          then left(${uploadSourceGuesses.url}, ${cap(URL_CHARS)}) end`.as("guessed_url"),
     })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .leftJoin(uploadSourceGuesses, eq(uploadSourceGuesses.articleId, articles.id))
     .where(
       and(
-        or(eq(articles.ownerId, ownerId), eq(articles.visibility, "public")),
-        isNull(articles.archivedAt),
+        or(eq(articles.ownerId, ownerId), and(eq(articles.visibility, "public"), isNull(articles.archivedAt))),
         isNotNull(articleRevisions.tree),
         sql`exists (
           select 1 from ${revisionBlocks}
@@ -102,6 +116,8 @@ async function citedCandidates(exceptSlug: string): Promise<CitedCandidate[]> {
         matchTitle: row.matchTitle,
         displayTitle: row.displayTitle,
         byline: row.byline,
+        archived: row.archived,
+        guessedUrl: row.mine ? row.guessedUrl : null,
       };
     });
 }

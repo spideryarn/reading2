@@ -23,7 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MODE_CATALOG } from "../src/mode-catalog.js";
-import type { Mode } from "../src/modes.js";
+import type { BandMode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { HERALD_MS, type HeraldPress, ModeHerald } from "../src/web/ModeHerald.js";
 
@@ -32,7 +32,7 @@ let root: Root;
 /** A stand-in band, so a press can land inside one. */
 let band: HTMLElement;
 /** Set by the stand-in, so a case can press a mode from outside React. */
-let pressMode: (mode: Mode) => void = () => {};
+let pressMode: (mode: BandMode) => void = () => {};
 let done = 0;
 
 /** A controllable ResizeObserver: jsdom has no layout observer of its own. */
@@ -108,7 +108,7 @@ const announced = (): string => {
   expect(found, "the live region is always mounted").not.toBeNull();
   return found?.textContent ?? "";
 };
-const press = (mode: Mode) => act(() => pressMode(mode));
+const press = (mode: BandMode) => act(() => pressMode(mode));
 const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 const pointerDownOn = (el: Element) =>
   act(() => {

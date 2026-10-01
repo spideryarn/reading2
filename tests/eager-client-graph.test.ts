@@ -541,6 +541,12 @@ const SHARED_WITH_READER = [
   /* With `describe-failure.ts`, above. */
   "src/web/lib/sse.ts",
   "src/web/lib/supabase.ts",
+  /* Arrived 2026-10-01 with password reset (docs/plans/261001i-password-reset.md):
+     the listener that tells a recovery link from a sign-in. It must be eager — it
+     has to be registered beside `createClient`, before the URL exchange can
+     finish — and it is shared only because `supabase.ts` already is. A leaf of
+     about sixty lines with no imports. */
+  "src/web/lib/url-session-kind.ts",
   "src/web/lib/table-sort.ts",
   "src/web/lib/utils.ts",
   "src/web/library-columns.tsx",

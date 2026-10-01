@@ -25,6 +25,7 @@ inventing a process.
 | [git-resolve-merge-conflicts.md](git-resolve-merge-conflicts.md) | a merge, rebase or pull left conflict markers — read both sides' history, propose before editing |
 | [generate-mermaid-diagram.md](generate-mermaid-diagram.md) | authoring `.mermaid` files and rendering them to SVG, plus the house style |
 | [write-planning-doc.md](write-planning-doc.md) | starting a piece of work — the doc that holds the decisions and the stages, and what to call it |
+| [ask-me-questions.md](ask-me-questions.md) | putting a decision to Greg — only what is gated on him, at most three at a time, clustered, each explained with options, risks and a recommendation |
 | [debrief-progress.md](debrief-progress.md) | reporting where a piece of work stands: what's done, what's left, whether it's still worth it |
 | [debrief-overseer.md](debrief-overseer.md) | sitting back down with a long-running orchestrator — the eight questions, in order, and what reached the user rather than what was committed |
 | [improve-the-codebase.md](improve-the-codebase.md) | the periodic sweep — find the rework worth doing across the whole tree, cluster and prioritise it, and land the clusters that fit |

@@ -68,10 +68,13 @@ Three rules the HTML keeps; the production writer refuses the first two when the
 The other four GoTrue emails (magic link, email change, invite, reauthentication) are still
 Supabase's, because the app sends none of them.
 
-**A password reset cannot complete in the app yet.** There is no "Forgot password?" link and no
-set-a-new-password screen. A reset sent from the dashboard lands as an implicit-flow link that our
-PKCE client refuses. That is why the recovery email says only "Continue to Spideryarn", rather than
-promising a reset or a completed login. The plan above has the measurement and the deferred build.
+**A password reset completes in the app since 2026-10-01.** "forgot your password?" on the sign-in
+form asks for the email, and the link lands on a screen that sets a new one
+([261001i-password-reset.md](../plans/261001i-password-reset.md)). So the recovery email is now
+"Reset your Spideryarn password", with a "Choose a new password" button. **Production has the new
+words only after `npx tsx scripts/supabase-auth-config.ts templates` is run**, after the code is
+deployed. A reset sent from the Supabase dashboard is still an implicit-flow link that our PKCE client
+refuses, so it lands signed out; readers' own requests are the ones the words are for.
 
 ## Mail the server sends itself
 

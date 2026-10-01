@@ -148,7 +148,9 @@ describe("the Postgres searches store", () => {
     const ids: string[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
       const at = () => new Date(start + i * 60_000).toISOString();
-      const { run } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+      // Finished, because a `pending` run is never trimmed — see below.
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
       ids.push(run.id);
     }
     const kept = (await pgSearchStore.load(SLUG)).map((r) => r.id);
@@ -164,14 +166,53 @@ describe("the Postgres searches store", () => {
     const ids: string[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
       const at = clockFrom(Date.parse("2026-08-01T00:00:00.000Z") + (MAX_RUNS + 3 - i) * 60_000);
-      const { run } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
       ids.push(run.id);
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
       // The run just written is always still there, whatever its timestamp.
       const after = await pgSearchStore.load(SLUG);
       expect(after.map((r) => r.id), `run ${i} trimmed itself`).toContain(run.id);
       expect(after.length).toBeLessThanOrEqual(MAX_RUNS);
     }
     expect((await pgSearchStore.load(SLUG)).length).toBe(MAX_RUNS);
+  });
+
+  it("never trims a search that is still running, however many newer ones begin", async () => {
+    /* The deferred finding from docs/plans/260930f-parallel-searches.md § Deferred
+       (GPT Sol's plan review, finding 4): the trim spared only the row it had
+       just written, so thirty newer searches begun while an old one was still
+       out deleted it. Its fenced `finish` then updated nothing and the reader's
+       paid answer was gone. docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
+    const start = Date.parse("2026-08-01T00:00:00.000Z");
+    const slow = await pgSearchStore.begin(SLUG, "the slow one", undefined, () =>
+      new Date(start).toISOString(),
+    );
+    for (let i = 1; i <= MAX_RUNS + 3; i++) {
+      const at = () => new Date(start + i * 60_000).toISOString();
+      const { run, attempt } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
+    }
+    const kept = await pgSearchStore.load(SLUG);
+    expect(kept.find((r) => r.id === slow.run.id)?.status).toBe("pending");
+    // Everything else is still held to the cap: thirty, plus the one running.
+    expect(kept).toHaveLength(MAX_RUNS + 1);
+    // And the slow search can still land its answer.
+    const landed = await pgSearchStore.finish(
+      SLUG,
+      slow.run.id,
+      { status: "done", hits: [] },
+      slow.attempt,
+    );
+    expect(landed?.status).toBe("done");
+
+    // Once it has finished, the next search trims it like any other.
+    const next = await pgSearchStore.begin(SLUG, "one more", undefined, () =>
+      new Date(start + (MAX_RUNS + 4) * 60_000).toISOString(),
+    );
+    await pgSearchStore.finish(SLUG, next.run.id, { status: "done", hits: [] }, next.attempt);
+    const after = await pgSearchStore.load(SLUG);
+    expect(after.map((r) => r.id)).not.toContain(slow.run.id);
+    expect(after).toHaveLength(MAX_RUNS);
   });
 
   it("sweeps nothing, loudly, when the article has no runs at all", async () => {

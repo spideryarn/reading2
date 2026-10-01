@@ -50,6 +50,13 @@ describe.each(EMAIL_TEMPLATES)("the %s email", (name) => {
       /* Dashboard-sent recovery links are implicit-flow links, which this
          app's PKCE client refuses. The email must not promise they sign in. */
       expect(html).not.toMatch(/sign(?:-| )?in link|signs you in|sign me in/i);
+      /* Since 261001i the app can set a new password after an app-requested
+         link, so the email says what the button is for. */
+      expect(html).toContain("<title>Reset your Spideryarn password</title>");
+      expect(html).toMatch(/padding:0 0 16px 0;">Reset your Spideryarn password<\/td>/);
+      /* The button is the one link to the ConfirmationURL; its words, not
+         another occurrence elsewhere. */
+      expect(html).toMatch(/href="\{\{ \.ConfirmationURL \}\}"[^>]*>Choose a new password<\/a>/);
     }
   });
 });
@@ -64,7 +71,7 @@ describe("templatesBody", () => {
       "mailer_templates_recovery_content",
     ]);
     expect(body.mailer_subjects_confirmation).toBe("Confirm your email for Spideryarn");
-    expect(body.mailer_subjects_recovery).toBe("Continue to Spideryarn");
+    expect(body.mailer_subjects_recovery).toBe("Reset your Spideryarn password");
     expect(body.mailer_templates_confirmation_content).toBe(
       readFileSync(path.join(ROOT, "supabase", "templates", "confirmation.html"), "utf8"),
     );
@@ -78,14 +85,14 @@ describe("templatesBody", () => {
   it("refuses a missing section, subject or file, and a template with no link", () => {
     const without = (needle: string) => CONFIG.replace(needle, "");
     const recoverySection = `[auth.email.template.recovery]
-subject = "Continue to Spideryarn"
+subject = "Reset your Spideryarn password"
 content_path = "./supabase/templates/recovery.html"
 `;
     expect(() => templatesBody(without(recoverySection), ROOT)).toThrow(
       /no subject for \[auth\.email\.template\.recovery\]/,
     );
     expect(() =>
-      templatesBody(without('subject = "Continue to Spideryarn"'), ROOT),
+      templatesBody(without('subject = "Reset your Spideryarn password"'), ROOT),
     ).toThrow(/no subject for \[auth\.email\.template\.recovery\]/);
     /* Not merely the variable somewhere in the file: a comment mentioning it
        would satisfy that with the button deleted. GPT Sol, plan review. */
