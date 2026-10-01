@@ -85,6 +85,9 @@ import { slugWithShortId, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { isAdmin } from "./admin.js";
+import { isMinimalJob, isReadThisFor, processingOf } from "./minimal-paper.js";
+import { NotProcessed } from "./not-processed.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
@@ -104,6 +107,8 @@ import {
 } from "./pipeline.js";
 import {
   INTERRUPTED,
+  NOT_READ_YET,
+  NOT_READ_YET_RESET,
   type FailureKind,
   type ReaderFacingFailure,
   STEP_STOPPED,
@@ -530,6 +535,11 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      It read *"GUESS, generous. Network only, no model call. Never measured"*
      until then, and 10 s was under a single one of its own three timeouts. */
   fetch: 150_000,
+  /* **GUESS, generous.** One cheap call over at most 6,000 characters, capped at
+     `TIMEOUT_MS` = 60 s in src/paper-metadata.ts, plus pdf.js opening the file
+     (1.5–1.8 s cold, measured for `fetch` above) or Readability over an HTML
+     upload (5.2 s at worst, measured for `extract` below). Rounded up. */
+  metadata: 90_000,
   /* **A CEILING, and the two branches of this step are two different steps.**
      ⟨measured 2026-09-04⟩
 
@@ -2057,6 +2067,11 @@ export async function claimSession(job: Job, attempt: string): Promise<StoreSess
   return await openPgStoreSession({
     slug: job.slug,
     job: { id: job.id, attemptId: attempt },
+    /* **The exact two-step metadata job births a minimal paper.** The verified
+       administrator may also run metadata alone against an article that already
+       exists (`refuseOnAMinimalArticle` below); that job does not match this
+       predicate and cannot create an article. Plan 261001m § The thin article. */
+    ...(isMinimalJob(job.steps.map((s) => s.name)) ? { processing: "minimal" as const } : {}),
   });
 }
 
@@ -3093,6 +3108,13 @@ export interface EnqueueRequest {
    * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
    */
   pump?: boolean;
+  /**
+   * ***Read this* on a minimal paper** — set by `POST /api/jobs {slug, process:
+   * true}` and nothing else. It is not what lets the job through: a reader's
+   * job passes `refuseOnAMinimalArticle` on its reservation, which the ledger
+   * vouches for. It is the administrator's way through, who reserves nothing.
+   */
+  readThis?: true;
 }
 
 /** What `POST /api/article/:slug/reset` asks for, once the route has resolved the profile. */
@@ -3136,6 +3158,11 @@ export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> 
   if (!(await articleExists(request.slug))) {
     throw Object.assign(new Error("No such article."), { status: 404 });
   }
+  /* Its own sentence ahead of `enqueue`'s general one: *Start again* on a paper
+     that has not been read through has nothing to start again from. */
+  if ((await processingOf(request.slug, currentOwnerId()))?.processing === "minimal") {
+    throw new NotProcessed(NOT_READ_YET_RESET.message);
+  }
   const regenerate = request.regenerate ? await extrasPresent(request.slug) : [];
   const reset: JobReset = {
     regenerate,
@@ -3164,6 +3191,53 @@ export async function enqueueReset(request: ResetRequest): Promise<ResetQueued> 
     );
   }
   return { job, regenerate: job.reset.regenerate };
+}
+
+/**
+ * **No free way into a minimal paper** — plan 261001m, Opus's review: *refuse
+ * every free path into a minimal article*. Without this, a thousand papers
+ * added at a hundredth each and then `{slug, steps}` from `extract` on each is
+ * the whole pipeline at a hundredth of the price.
+ *
+ * - **`metadata` is only ever the minimal job's**: `["fetch", "metadata"]` over
+ *   an upload — the first attempt or its retry — **except for the verified
+ *   administrator running that one stage against a slug**. That exception keeps
+ *   the pipeline convention (every stage is runnable on its own) without giving
+ *   a reader a free paid path into a minimal paper.
+ * - **A job naming a minimal article** (no URL, no upload) is refused with
+ *   `NOT_READ_YET` unless it is the admitted *Read this*: its reservation is an
+ *   unsettled ingest bound to this article (`isReadThisFor`), or the owner is
+ *   the administrator, who reserves nothing, asking through *Read this* or
+ *   retrying it.
+ *
+ * The publication refuses a tree nobody paid for as well
+ * (`requirePaidUpgrade`, src/store/pg-revisions.ts); this is the cheap door, so
+ * a reader is told before a job is queued rather than after it ran.
+ */
+async function refuseOnAMinimalArticle(
+  request: EnqueueRequest,
+  names: readonly StepName[],
+  owner: OwnerId,
+): Promise<void> {
+  const standaloneAdminMetadata =
+    isAdmin(owner) &&
+    names.length === 1 &&
+    names[0] === "metadata" &&
+    request.url === undefined &&
+    request.upload === undefined;
+  if (names.includes("metadata") && !(isMinimalJob(names) && request.upload) && !standaloneAdminMetadata) {
+    throw Object.assign(
+      new Error("The metadata step runs only when a file is added without AI processing."),
+      { status: 400 },
+    );
+  }
+  if (request.url || request.upload) return;
+  const article = await processingOf(request.slug, owner);
+  if (article?.processing !== "minimal") return;
+  if (standaloneAdminMetadata) return;
+  if (request.ingestEventId && (await isReadThisFor(request.ingestEventId, article.id))) return;
+  if (isAdmin(owner) && (request.readThis === true || request.retryOf !== undefined)) return;
+  throw new NotProcessed(NOT_READ_YET.message);
 }
 
 /**
@@ -3270,6 +3344,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       throw Object.assign(new Error("No such article."), { status: 404 });
     }
   }
+  await refuseOnAMinimalArticle(request, names, owner);
 
   /**
    * **The name, and whether asking for it claims it.**

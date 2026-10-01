@@ -138,8 +138,17 @@ export interface IngestTally {
   lifetime: number;
   /** Successful ingests inside the row's stored billing period, if it has one. */
   inPeriod: number;
-  /** Reservations taken and not settled. Counted as used, as the wall does. */
+  /** Ingest reservations taken and not settled. Counted as used, as the wall does. */
   inFlight: number;
+  /**
+   * **Minimal papers** — added with only their metadata read, at a hundredth of
+   * an article each — charged and not superseded, over the same two windows,
+   * and those still in flight. Never priced by visibility, so there is no
+   * shared split. docs/project/billing.md § *A minimal paper costs a hundredth*.
+   */
+  minimalLifetime: number;
+  minimalInPeriod: number;
+  minimalInFlight: number;
   /** How many of `lifetime` are currently public, and so cost half a slot. */
   lifetimeShared: number;
   /** How many of `inPeriod` are. Never includes `inFlight` — see `planFacts`. */
@@ -204,7 +213,14 @@ function tally(rows: CountRow[]): Map<string, number> {
  */
 type PlanFacts = Pick<
   AdminUser,
-  "plan" | "ingests" | "ingestsShared" | "highPower" | "highPowerShared" | "ingestLimit" | "ingestWindow"
+  | "plan"
+  | "ingests"
+  | "ingestsShared"
+  | "highPower"
+  | "highPowerShared"
+  | "minimal"
+  | "ingestLimit"
+  | "ingestWindow"
 > &
   Partial<Pick<AdminUser, "planStatus">>;
 
@@ -262,7 +278,7 @@ function planFacts(
   const inPeriod = (counts?.inPeriod ?? 0) + inFlight;
   /* **Not `+ inFlight`**, unlike the two above: an unsettled reservation is
      charged full price, because nobody yet knows whether the article will be
-     shared. src/billing/half-units.ts. */
+     shared. src/billing/points.ts. */
   const lifetimeShared = counts?.lifetimeShared ?? 0;
   const inPeriodShared = counts?.inPeriodShared ?? 0;
   /* Upgrades are born settled, so there is no in-flight term to add. */
@@ -274,6 +290,11 @@ function planFacts(
     highPower: counts?.highPowerInPeriod ?? 0,
     highPowerShared: counts?.highPowerInPeriodShared ?? 0,
   };
+  /* Minimal papers in flight cost 2 like charged ones, so they join both
+     windows, as ingests in flight do. */
+  const minimalInFlight = counts?.minimalInFlight ?? 0;
+  const lifetimeMinimal = (counts?.minimalLifetime ?? 0) + minimalInFlight;
+  const inPeriodMinimal = (counts?.minimalInPeriod ?? 0) + minimalInFlight;
 
   const entitlement = entitlementFromRow(account, tiers, now);
 
@@ -288,6 +309,7 @@ function planFacts(
       ingests: lifetime,
       ingestsShared: lifetimeShared,
       ...lifetimeUpgrades,
+      minimal: lifetimeMinimal,
       ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
       /* **Its own window, not `lifetime`.** The count and the limit are measured
          over different spans here and only the cell can say so — see
@@ -303,6 +325,7 @@ function planFacts(
         ingests: inPeriod,
         ingestsShared: inPeriodShared,
         ...inPeriodUpgrades,
+        minimal: inPeriodMinimal,
         ingestLimit: entitlement.limit,
         ingestWindow: "period",
       }
@@ -312,6 +335,7 @@ function planFacts(
         ingests: lifetime,
         ingestsShared: lifetimeShared,
         ...lifetimeUpgrades,
+        minimal: lifetimeMinimal,
         ingestLimit: entitlement.limit,
         ingestWindow: "lifetime",
       };
@@ -533,16 +557,34 @@ export function adminQueries(db: Db) {
               and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(
           Number,
         ),
+        /* In flight split by kind, as `usageSql` splits it: anything unsettled
+           that is not a minimal paper is an ingest at full price. */
         inFlight: sql<number>`count(*) filter (
-            where ${ingestEvents.succeededAt} is null
+            where ${ingestEvents.kind} <> 'minimal'
+              and ${ingestEvents.succeededAt} is null
               and ${ingestEvents.releasedAt} is null)`.mapWith(Number),
+        minimalInFlight: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'minimal'
+              and ${ingestEvents.succeededAt} is null
+              and ${ingestEvents.releasedAt} is null)`.mapWith(Number),
+        /* Charged and **not superseded**, the same filter `usageSql` counts by:
+           a superseded paper was paid for in full by an ingest counted above. */
+        minimalLifetime: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'minimal' and ${ingestEvents.succeededAt} is not null
+              and ${ingestEvents.supersededBy} is null)`.mapWith(Number),
+        minimalInPeriod: sql<number>`count(*) filter (
+            where ${ingestEvents.kind} = 'minimal' and ${ingestEvents.supersededBy} is null
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(Number),
         /* **How many of the counted rows are cheap right now**, over each of the
            two windows above — because a currently-public article costs half a
-           slot (src/billing/half-units.ts) and `12 / 3` on this page would
+           slot (src/billing/points.ts) and `12 / 3` on this page would
            otherwise read as the wall having failed. The *count* goes on the wire
            and the arithmetic happens in the browser, which is the same rule
            ../billing-plan.ts states: integer counts that add up, and no
-           half-unit divided for display.
+           points total divided for display.
 
            The join is `left` and the predicate is `isPublicPrice`, **imported
            from pg-billing.ts rather than spelled again here** — this is the same

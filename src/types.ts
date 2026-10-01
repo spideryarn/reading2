@@ -1484,6 +1484,15 @@ export interface Meta {
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
+  /**
+   * **A minimal paper's abstract and DOI**, as the `metadata` step read them off
+   * its first pages (src/paper-metadata.ts) — the paper's own claims through a
+   * cheap model, checked for shape and nothing else. Absent on everything
+   * `extract` made; *Read this* keeps them. Owner-facing only, like `filename`:
+   * not in `PublicMeta`. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md.
+   */
+  abstract?: string;
+  doi?: string;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1951,6 +1960,44 @@ export interface LibraryEntry {
    * A count would mean reading the artefact for every card on every load.
    */
   has: { arc: boolean; tweets: boolean; glossary: boolean };
+  /**
+   * **`'minimal'` for a paper on the shelf with only its title, authors and
+   * abstract read** — no blocks and no tree, so its `words`, `blocks`, `parts`
+   * and `sections` are 0 and opening it shows the not-yet-read page with *Read
+   * this* (plan 261001m). `'full'` for everything else.
+   *
+   * The server always sends it. **Optional only for shelf rows cached in the
+   * browser before this field existed**, as `revisionId` is — and every one of
+   * those is a full article, because no minimal paper existed then, so a
+   * missing value reads as `'full'`.
+   */
+  processing?: "minimal" | "full";
+  /** A minimal paper's abstract and DOI, as the `metadata` step read them. Absent otherwise. */
+  abstract?: string;
+  doi?: string;
+}
+
+/**
+ * **What a reader is told about a paper that has not been read through yet** —
+ * the body of the `409 not-processed` that `loadArticle` answers for a minimal
+ * article (`NotProcessed`, src/not-processed.ts), and enough to draw the page:
+ * `{ error, code: "not-processed", paper: UnreadPaper }`.
+ *
+ * Owner-facing only: it is only ever thrown from the owner's own reads.
+ */
+export interface UnreadPaper {
+  slug: string;
+  title: string;
+  /** In the paper's order; empty when nobody was named. */
+  authors: string[];
+  abstract?: string;
+  doi?: string;
+  /** The reader's own name for the file, when it came off their disk. */
+  filename?: string;
+  /** What the file is, for the download link's wording. Null when nothing recorded it. */
+  kind: "pdf" | "html" | null;
+  /** When it was added, ISO — the shelf's `addedAt`. */
+  addedAt: string;
 }
 
 /**
@@ -2842,7 +2889,13 @@ interface CommentFields {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy"
+  | "fetch"
+  /* A minimal paper's whole AI work: title, authors, abstract and DOI off the
+     first pages, one cheap call (src/paper-metadata.ts). Only ever in the
+     two-step job a minimal upload queues, `["fetch", "metadata"]` — `enqueue`
+     refuses it anywhere else. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
+  | "metadata"
+  | "extract" | "blocks" | "hierarchy"
   /* The per-paragraph navigation labels, which left the `hierarchy` step on
      2026-09-06 because they were 79.5–92% of its wall clock and one measured
      call took 602s of a 682s pass — past what the job lease allows.

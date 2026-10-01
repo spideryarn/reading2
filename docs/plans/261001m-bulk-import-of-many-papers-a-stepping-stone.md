@@ -261,16 +261,21 @@ that supersession is faithful and better than a 198-point row, and found the fol
   to stay open.
 - **When it applies.** A drop or pick of **two or more files** goes to the batch; one file is
   today's full import, unchanged.
-- **PDFs only, for now.** An HTML file in a batch is listed as *Not started: a batch takes PDFs
-  only for now*, because the metadata step reads PDF text.
+- **A mix of kinds, whatever a single upload takes.** That means PDF and HTML today, sniffed off
+  the bytes by `uploadedDocumentKind`, as for one file. It was PDFs only until Greg, 2026-10-01
+  ~19:55: *"eym66s - for the avoidance of doubt, it should be possible to bulk-upload (a mix of)
+  both PDFs and HTML etc"*. The metadata step branches on the kind (§ The metadata step).
 - **Up to 1,000 files in one drop.** That cap is for the panel's sake; the allowance is the defence.
 
 ### The metadata step
 
 `src/paper-metadata.ts`:
 
-- **What it reads.** The pdf.js text of pages 1–2, capped at 6,000 characters. That text is
-  untrusted document text, and the prompt fences it as data.
+- **What it reads.** For a PDF, the pdf.js text of pages 1–2. For an HTML file, the main text
+  from the repo's existing non-AI HTML path, with the page's own title and `citation_*` /
+  description meta tags first as labelled lines. Either is capped at 6,000 characters and goes
+  through one shared `extractMetadataFromText`, so the call, the fence and the validation are one
+  code path. That text is untrusted document text, and the prompt fences it as data.
 - **The call.** A new gateway job, `paper-metadata`, on `PAPER_METADATA_MODEL`. The JSON it returns
   is checked against a schema.
 - **The DOI** must match `^10\.\d{4,9}/\S+$`, or it is dropped.
@@ -367,7 +372,7 @@ Each stage gets Sol's code review, and the gates are run, before it is committed
 
 - A per-reader share of the global job queue (above).
 - A batch that survives closing the tab.
-- HTML files and zips in a batch.
+- Zip files in a batch.
 - Real metadata for scans with no text layer (it needs the page image, and more money).
 - Confirming a DOI through Crossref or DataCite.
 - Searching minimal papers by their abstracts, and embeddings of them (`spya-eym66s`'s

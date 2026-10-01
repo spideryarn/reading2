@@ -364,10 +364,10 @@ export interface AdminUser {
   ingests: number;
   /**
    * How many of `ingests` are cheap right now — their article is public, so they
-   * cost half a slot each (src/billing/half-units.ts).
+   * cost half a slot each (src/billing/points.ts).
    *
    * **A count, not a total**, and the cell does its own arithmetic with it. The
-   * enforcement figure is in half-units and there is no rounding rule that makes
+   * enforcement figure is in points and there is no rounding rule that makes
    * one out of it look right beside an article limit — the whole argument is in
    * src/billing-plan.ts § *Every number here is a whole article*. It is a fifth
    * field for the same reason `ingestWindow` is a third: `12` beside `3` is not
@@ -385,6 +385,13 @@ export interface AdminUser {
   highPower: number;
   /** How many of `highPower` are public now, and so count half. */
   highPowerShared: number;
+  /**
+   * **Minimal papers** over `ingestWindow` — added with only their metadata
+   * read, at a hundredth of an article each, charged and not yet superseded by
+   * *Read this*, plus those in flight. A count, never a fraction: the cell adds
+   * it to the enforcement figure in points itself.
+   */
+  minimal: number;
   /** What that count is measured against — the tier's row, or the free three. */
   ingestLimit: number;
   /**

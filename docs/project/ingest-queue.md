@@ -441,6 +441,84 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
   [`src/pdf-read.ts`](../../src/pdf-read.ts) to make it sayable: that module pulls in pdf.js, and
   the browser cannot import it.
 
+### A minimal upload, and Read this
+
+**Built 2026-10-01, the server half** ([261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md),
+Stage 3; the browser is Stage 4). A *minimal paper* is a file added with only its title, authors,
+abstract and DOI read — no blocks, no tree — at a hundredth of an article
+([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)). It
+is an ordinary shelf entry whose `articles.processing` is `'minimal'`. Any file a single upload
+takes may be one: a PDF or a web page.
+
+> for the avoidance of doubt, it should be possible to bulk-upload (a mix of) both PDFs and HTML etc
+>
+> — Greg, 2026-10-01
+
+```
+  POST /api/uploads {filename, bytes, sha256, level: "minimal"}
+     402 [pay-minimal] if 2 points do not fit · 409 code "duplicate" if these bytes are yours already
+  PUT  <signed url>                                       as for any upload
+  POST /api/jobs {uploadId, level: "minimal"}
+     withMinimalSlot, and in its locked transaction: the duplicate check again, then the claim
+     → job ["fetch", "metadata"], carrying the reservation; its claim creates the article 'minimal'
+  publication: no blocks, no tree — allowed only because the article is minimal and metadata ran
+  POST /api/jobs {slug, process: true}                    Read this
+     withUpgradeSlot → the default steps, force ["extract"], over the stored file
+  the publication that lands the tree: processing → 'full', the ingest charged, the minimal row superseded
+```
+
+**The `metadata` step** ([`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`, its `metadata` entry) reads stage
+1's stored bytes as `extract` does and branches on what stage 1 decided they are: a PDF's first two
+pages through pdf.js, a web page through the same Readability and `citation_*` reader the app
+already has (`htmlDocumentText`, [`src/paper-text.ts`](../../src/paper-text.ts)), then one call to
+the `paper-metadata` job either way ([`src/paper-metadata.ts`](../../src/paper-metadata.ts)). It
+writes `meta` — title, authors, byline, and the two columns only a minimal paper has,
+`article_revisions.abstract` and `.doi`. A document with no text gets no call and is named after its
+file. A model failure fails the job, which releases the reservation like any failed ingest. `enqueue`
+refuses the step name in any product request but `["fetch", "metadata"]` over an upload. The verified
+administrator may run `metadata` alone against a slug, as every pipeline stage must remain runnable
+on its own; that exception is unavailable to an ordinary reader and reserves no allowance.
+
+**One paper per file** ([`src/minimal-paper.ts`](../../src/minimal-paper.ts) § the duplicate rule):
+these bytes are already this reader's if an article of theirs, archived ones included, has a
+revision with that `raw_sha256`, or another of their uploads with that `claimed_sha256` is live — its
+job not ended, or no job ever (its record names no article) inside its two-hour grant. Asked unlocked
+at the grant, so a duplicate is refused before it is sent, and again under the billing lock at the
+job, in the same transaction as the claim, which is what makes two tabs dropping one folder one
+paper. The hash is the browser's claim; that is safe only because the check is the owner's own.
+
+**Everything that would read the article free refuses a minimal one**, with a 409 whose body is
+`{ error, code: "not-processed" }` (`NotProcessed`, [`src/not-processed.ts`](../../src/not-processed.ts)):
+
+- `loadArticle` throws it, carrying `paper` — the title, authors, abstract, DOI, filename and kind
+  the not-yet-read page draws — so chat, live, comments, citations, term lookup, similar, link
+  previews and the article read all refuse before they spend. Search and a referee criterion ask
+  first (`refuseAPaperNotReadYet`), because they write a row before they read the article.
+- `enqueue` refuses any job naming a minimal article except the admitted *Read this*: its
+  reservation is an unsettled ingest bound to that article (`isReadThisFor`), or the owner is the
+  administrator asking through *Read this* or retrying it. A mode, Rebuild and a step re-run are
+  refused.
+- Sharing, High-powered AI and *Start again* refuse with a sentence of their own (`[np-share]`,
+  `[np-power]`, `[np-reset]`). Export writes what there is and says, first in `omitted`, that the
+  paper has not been read through.
+- **And the publication is the backstop**: a tree landing on a minimal article is refused
+  (`requirePaidUpgrade`, [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) unless its
+  job carries that article's *Read this* reservation or the owner is the administrator. So a path
+  round `enqueue`, if one is ever found, still cannot read a paper for nothing.
+
+**Read this is Rebuild over the stored file, admitted like an ingest.** Its draft is copied from
+the minimal revision, so the raw source pointer and the done `fetch` carry over and `extract`
+onwards runs. Two things had to learn that a published revision can have no blocks: the baseline
+check in stage 3 (`articleHasPublishedBlocks`, [`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts)),
+which would otherwise refuse the first cut of blocks as a lost baseline, and `extract`, which keeps
+the paper's abstract and DOI when it finds none of its own (`keptPaperMetadata`). The publication
+that lands the tree flips `processing` to `'full'` in the same transaction, and `settleIn`
+([`src/store/pg-session.ts`](../../src/store/pg-session.ts)) charges the reservation and then
+supersedes the minimal row — a zero there, while the paper has a minimal row, rolls the publication
+back. A failed *Read this* releases its reservation and the paper stays minimal; its Retry goes back
+through `withUpgradeSlot`, bound to the same paper. `tests/minimal-paper.test.ts` holds all of it
+against a real database, through the real routes.
+
 ## The add page
 
 > Add a url that I can use to add something directly, e.g. `/add/[my-full-url-here]` or

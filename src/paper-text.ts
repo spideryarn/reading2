@@ -491,6 +491,49 @@ export async function readPaperText(url: string, opts: ReadPaperOptions = {}): P
   );
 }
 
+/**
+ * **An HTML document already in hand — its scholarly meta tags, its own
+ * `<title>` and description, and Readability's text** — with no fetch and no
+ * model. For the bulk import's metadata step (src/paper-metadata.ts §
+ * `extractHtmlMetadata`), which reads an uploaded web page the way
+ * `readPaperText` reads a fetched one: the same `metaFrom` and the same
+ * Readability, so there is one HTML reader here rather than two.
+ *
+ * No base address: an upload has none. A relative `citation_pdf_url` therefore
+ * does not resolve and is left out, which is right — nothing here follows it.
+ * `text` is empty, not absent, when Readability found nothing.
+ */
+export function htmlDocumentText(html: string): {
+  meta: PaperMeta;
+  title?: string;
+  description?: string;
+  text: string;
+} {
+  const { JSDOM } = jsdom();
+  const dom = new JSDOM(html);
+  const document = dom.window.document;
+  /* `about:blank` cannot be a base for anything relative, so only an absolute
+     `citation_pdf_url` survives — and it is not read here either way. */
+  const meta = metaFrom(document, "about:blank");
+  const ownTitle = normaliseWhitespace(document.title ?? "") || undefined;
+  const description = Array.from(document.querySelectorAll("meta"))
+    .filter((el) => {
+      const name = (el.getAttribute("name") ?? el.getAttribute("property") ?? "").trim().toLowerCase();
+      return name === "description" || name === "og:description" || name === "citation_abstract";
+    })
+    .map((el) => normaliseWhitespace(el.getAttribute("content") ?? ""))
+    .find((content) => content !== "");
+  /* After the meta reads: Readability rewrites the document it is given. */
+  const page = pageText(document, meta);
+  const title = meta.title ?? ownTitle ?? page?.title;
+  return {
+    meta,
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    text: page?.text ?? "",
+  };
+}
+
 /** Readability's text and title, the same parser stage 2 and `readWebPage` use. `null` when the page has no text. */
 function pageText(document: Document, meta: PaperMeta): { text: string; words: number; title?: string } | null {
   const parsed = new Readability(document).parse();

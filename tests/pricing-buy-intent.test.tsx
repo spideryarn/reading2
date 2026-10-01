@@ -94,7 +94,7 @@ const RESEARCHER_OFFER = {
 
 /** A free account that may check out, with Reader on sale. */
 const FREE: BillingSummary = {
-  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, atLimit: false, remaining: 2 },
+  plan: { kind: "free", limit: 3, used: 1, sharedHalfPrice: 0, highPower: 0, minimal: 0, atLimit: false, remaining: 2 },
   manageable: false,
   purchase: { kind: "checkout", tiers: [READER_OFFER] },
 };

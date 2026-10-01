@@ -134,34 +134,7 @@ const rawPgUploadStore: UploadStore = {
     id: string,
     options: { owner?: string; now?: Date; arrived?: boolean } = {},
   ): Promise<ClaimResult> {
-    if (!isUploadId(id)) return { ok: false, why: "unknown" };
-    const now = options.now ?? new Date();
-    const db = getDb();
-
-    const conditions = [eq(uploads.id, id), eq(uploads.status, "pending")];
-    /* **Dropped from the `WHERE`, not evaluated afterwards.** `arrived` means
-       the caller has seen the object in Storage, which is the question the
-       expiry was standing in for — see `UploadStore.claim`. Leaving the clause
-       in and forgiving the refusal later would reintroduce the gap this whole
-       conditional `UPDATE` exists to close: two requests, one row, one winner. */
-    if (!options.arrived) {
-      // Strictly greater: the grant's own clock, and a grant that ends exactly
-      // now has ended. `grantIsOver` uses `>=` and these have to agree.
-      conditions.push(lt(sql`${now}::timestamptz`, uploads.grantExpiresAt));
-    }
-    if (options.owner !== undefined) conditions.push(eq(uploads.ownerId, options.owner));
-
-    const won = await db
-      .update(uploads)
-      .set({ status: "claimed" })
-      .where(and(...conditions))
-      .returning();
-    if (won[0]) return { ok: true, record: toRecord(won[0]) };
-
-    const existing = await this.read(id, options.owner);
-    if (!existing) return { ok: false, why: "unknown" };
-    if (existing.status !== "pending") return { ok: false, why: "taken" };
-    return { ok: false, why: "expired" };
+    return await claimUploadIn(getDb(), id, options);
   },
 
   async settle(
@@ -244,4 +217,61 @@ const rawPgUploadStore: UploadStore = {
  * import-cycle reason that file states; guarding at the export is what makes
  * the two facts compatible.
  */
+/** The executor a claim runs on: the pool, or a caller's transaction. */
+type ClaimExec = Pick<ReturnType<typeof getDb>, "update" | "select">;
+
+/**
+ * **`UploadStore.claim`, on the executor the caller holds** — the same
+ * conditional `UPDATE`, so two requests over one row still have one winner.
+ *
+ * Exported for the minimal upload (src/minimal-paper.ts), which claims inside
+ * the owner's billing-lock transaction so the duplicate check and the claim
+ * commit together with the reservation or not at all. The pool form below is
+ * this with `getDb()`.
+ *
+ * Not guarded by `guardDbStore`: the caller's transaction is, and a scrubbed
+ * error thrown out of the middle of somebody else's transaction would lose the
+ * rollback's reason.
+ */
+export async function claimUploadIn(
+  db: ClaimExec,
+  id: string,
+  options: { owner?: string; now?: Date; arrived?: boolean } = {},
+): Promise<ClaimResult> {
+  if (!isUploadId(id)) return { ok: false, why: "unknown" };
+  const now = options.now ?? new Date();
+
+  const conditions = [eq(uploads.id, id), eq(uploads.status, "pending")];
+  /* **Dropped from the `WHERE`, not evaluated afterwards.** `arrived` means
+     the caller has seen the object in Storage, which is the question the
+     expiry was standing in for — see `UploadStore.claim`. Leaving the clause
+     in and forgiving the refusal later would reintroduce the gap this whole
+     conditional `UPDATE` exists to close: two requests, one row, one winner. */
+  if (!options.arrived) {
+    // Strictly greater: the grant's own clock, and a grant that ends exactly
+    // now has ended. `grantIsOver` uses `>=` and these have to agree.
+    conditions.push(lt(sql`${now}::timestamptz`, uploads.grantExpiresAt));
+  }
+  if (options.owner !== undefined) conditions.push(eq(uploads.ownerId, options.owner));
+
+  const won = await db
+    .update(uploads)
+    .set({ status: "claimed" })
+    .where(and(...conditions))
+    .returning();
+  if (won[0]) return { ok: true, record: toRecord(won[0]) };
+
+  /* On the caller's executor, never the pool: inside a transaction this is the
+     same connection, so the answer and the refusal agree. */
+  const [row] = await db
+    .select({ status: uploads.status })
+    .from(uploads)
+    .where(options.owner === undefined ? eq(uploads.id, id) : and(eq(uploads.id, id), eq(uploads.ownerId, options.owner)))
+    .limit(1);
+  const existing = row ?? null;
+  if (!existing) return { ok: false, why: "unknown" };
+  if (existing.status !== "pending") return { ok: false, why: "taken" };
+  return { ok: false, why: "expired" };
+}
+
 export const pgUploadStore: UploadStore = guardDbStore("uploads", rawPgUploadStore);

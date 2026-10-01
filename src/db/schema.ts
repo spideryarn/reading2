@@ -296,7 +296,27 @@ export const articles = spideryarn.table("articles", {
    * switch, and it says *when* for free.
    */
   highPowerSince: timestamp("high_power_since", { withTimezone: true }),
+  /**
+   * **How much of the pipeline this article has had: `'minimal'` or `'full'`.**
+   *
+   * A *minimal* paper is a file added in a batch with only its title, authors,
+   * abstract and DOI read (the `metadata` step), and no blocks and no tree —
+   * docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md § The thin
+   * article. It is on the shelf, it costs a hundredth of an article, and every
+   * free path into AI work refuses it (`NotProcessed`, src/not-processed.ts), so
+   * adding a thousand at 0.01 and re-running each one free is not a way round the
+   * allowance.
+   *
+   * On `articles` for the reason `visibility` is: it is a property of the work.
+   * A minimal job creates the row as `'minimal'` (`lockOrCreateArticle`), and the
+   * one publication that lands a tree on it sets `'full'` in the same
+   * transaction that charges *Read this* (src/store/pg-session.ts). Nothing ever
+   * sets it back.
+   */
+  processing: text("processing").notNull().default("full"),
 }, (t) => [
+  /** The two states, and a third would be a row every guard reads as full. */
+  check("articles_processing", sql`${t.processing} in ('minimal','full')`),
   /**
    * Two spellings, and a third is a row every public read silently ignores.
    *
@@ -594,6 +614,15 @@ export const articleRevisions = spideryarn.table(
     publishedAt: text("published_at"),
     /** `Meta.note`. Real articles carry one — the noema article's meta.json does. */
     note: text("note"),
+    /**
+     * **`Meta.abstract` and `Meta.doi`: what the `metadata` step read off a
+     * minimal paper's first pages** — the paper's own claims, through a cheap
+     * model, never checked against anything (plan 261001m § The metadata step).
+     * Null on everything else. Carried forward with the rest of `meta`, and kept
+     * by `extract` when it re-reads the paper for *Read this* and finds none.
+     */
+    abstract: text("abstract"),
+    doi: text("doi"),
 
     /**
      * Stage 1's real output. `requestedUrl` and `finalUrl` differ whenever a
@@ -1150,6 +1179,15 @@ export const articleRevisions = spideryarn.table(
       columns: [t.rawSourceSha256, t.rawSourceKind],
       foreignColumns: [rawSources.sha256, rawSources.kind],
     }),
+    /**
+     * **"Is this file already on your shelf?"** — the duplicate check a minimal
+     * upload asks under the owner's billing lock (src/minimal-paper.ts). It
+     * joins from the hash to the article and filters on the owner, so the hash
+     * leads. Partial, because most rows before 2026-08-27 carry no hash.
+     */
+    index("article_revisions_raw_sha256")
+      .on(t.rawSha256, t.articleId)
+      .where(sql`${t.rawSha256} is not null`),
   ],
 );
 
@@ -2025,6 +2063,8 @@ export const uploads = spideryarn.table(
     ),
     check("uploads_rejected_has_reason", sql`${t.status} <> 'rejected' or ${t.reason} is not null`),
     index("uploads_owner_minted").on(t.ownerId, t.mintedAt.desc()),
+    /** The second half of the duplicate check: this owner's other uploads of these bytes. */
+    index("uploads_owner_claimed_sha256").on(t.ownerId, t.claimedSha256),
   ],
 );
 
@@ -2572,7 +2612,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','trajectory','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4917,7 +4957,7 @@ export const billingVouchers = spideryarn.table(
     id: uuid("id").primaryKey().defaultRandom(),
     /** Stored normalised — trimmed and lower-cased — and compared the same way. */
     email: text("email").notNull(),
-    /** Whole articles, never half-units: it is added to an `Articles` limit. */
+    /** Whole articles, never points: it is added to an `Articles` limit. */
     articles: integer("articles").notNull(),
     /** The administrator's private note. Never sent to the reader. */
     note: text("note"),
@@ -5048,10 +5088,13 @@ export const ingestEvents = spideryarn.table(
     /**
      * **What this charge is for**: `'ingest'` — a URL or file added, reserved
      * before it runs and settled when it ends, which is every row before
-     * 2026-09-30 — or `'high_power'`, one article switched to High-powered AI.
+     * 2026-09-30 — or `'high_power'`, one article switched to High-powered AI,
+     * or (since 2026-10-01) `'minimal'`, one paper added with only its title,
+     * authors and abstract read, at a hundredth of an ingest whatever its
+     * visibility (`supersededBy` below).
      *
      * An upgrade is one more article's worth, priced exactly like an ingest of
-     * the same article (2 half-units private, 1 public, live; frozen on delete),
+     * the same article (200 points private, 100 public, live; frozen on delete),
      * so the article costs double — Greg, 2026-09-30: *"it should double the
      * processing cost per-article"*. It is inserted already settled, in the
      * transaction that switches the article on, and never refunded
@@ -5160,6 +5203,28 @@ export const ingestEvents = spideryarn.table(
      */
     articleVisibilityAtDelete: text("article_visibility_at_delete"),
     /**
+     * **The ingest that paid for this minimal paper in full** — set on a
+     * charged `'minimal'` row, and null on every other row.
+     *
+     * Greg, 2026-10-01: a minimal paper costs *"0.01x an AI-processed paper"*,
+     * and pressing *Read this* on it costs the rest. So *Read this* reserves an
+     * ordinary `'ingest'` row, and the publication that charges it stamps this
+     * column on the article's minimal row: a superseded row costs nothing, and
+     * the paper totals exactly one ingest (docs/project/billing.md § *A minimal
+     * paper costs a hundredth*).
+     *
+     * **A reference rather than a timestamp**, so the row proves an ingest paid
+     * for it, and it survives the delete trigger unlinking `article_id` — the
+     * correlation "an ingest exists for this article" would not. Ingest rows are
+     * never deleted, so the reference never dangles. Two guards: the check
+     * `ingest_events_superseded_shape` below holds the row it is on to a charged
+     * minimal one, and the trigger `ingest_events_superseded_by_ingest`
+     * (drizzle/20261001182129_ingest_events_minimal.sql) holds the row it points
+     * at to a charged ingest of the same owner and the same article. Written by
+     * `supersedeMinimal` in src/store/pg-billing.ts and nothing else.
+     */
+    supersededBy: uuid("superseded_by").references((): AnyPgColumn => ingestEvents.id),
+    /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a
      * support conversation about "which article was that" has an answer.
@@ -5210,7 +5275,32 @@ export const ingestEvents = spideryarn.table(
       "ingest_events_frozen_only_after_unlink",
       sql`${t.articleId} is null or ${t.articleVisibilityAtDelete} is null`,
     ),
-    check("ingest_events_kind", sql`${t.kind} in ('ingest','high_power')`),
+    check("ingest_events_kind", sql`${t.kind} in ('ingest','high_power','minimal')`),
+    /**
+     * **Only a charged minimal paper can be superseded.** An unsettled one has
+     * not been paid for, so there is nothing for an ingest to replace; and an
+     * ingest or an upgrade that read as superseded would vanish from usage —
+     * a free article. Plan 261001m, Opus's review.
+     */
+    check(
+      "ingest_events_superseded_shape",
+      sql`${t.supersededBy} is null
+          or (${t.kind} = 'minimal' and ${t.succeededAt} is not null)`,
+    ),
+    /**
+     * **One *Read this* at a time, per article.** A *Read this* reservation is
+     * the only unsettled `'ingest'` row born with an `article_id` (an ordinary
+     * ingest gets one only as it settles), so this allows at most one in flight
+     * per article. Without it two presses could both take the minimal paper's
+     * credit. `reserveUpgrade` refuses under the billing lock first; this is the
+     * backstop. Sol's plan review, P1.
+     */
+    uniqueIndex("ingest_events_one_upgrade_in_flight")
+      .on(t.articleId)
+      .where(
+        sql`${t.kind} = 'ingest' and ${t.articleId} is not null
+            and ${t.succeededAt} is null and ${t.releasedAt} is null`,
+      ),
     /**
      * **An upgrade is born settled, and stays that way.** A `high_power` row
      * with no `succeeded_at` would be counted as an ingest in flight by every

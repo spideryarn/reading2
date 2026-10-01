@@ -221,6 +221,8 @@ export function describeArticle(input: {
    * path state their ordinary reusable fixture explicitly.
    */
   sourceReusable: boolean;
+  /** `articles.processing`. Absent is `'full'`, which every caller but the shelf's own read is. */
+  processing?: "minimal" | "full";
 }): LibraryEntry {
   const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
@@ -262,6 +264,11 @@ export function describeArticle(input: {
     ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
     sourceReusable: input.sourceReusable,
     ...(input.fixture ? { fixture: true as const } : {}),
+    /* Always sent, so a card never has to guess; the two only a minimal paper
+       has ride with it. Plan 261001m. */
+    processing: input.processing ?? "full",
+    ...(meta.abstract ? { abstract: meta.abstract } : {}),
+    ...(meta.doi ? { doi: meta.doi } : {}),
   };
 }
 

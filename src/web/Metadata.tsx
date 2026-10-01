@@ -216,6 +216,7 @@ import {
   ExternalLink,
   FileArchive,
   FileText,
+  IdCard,
   FileQuestion,
   FileType,
   Fingerprint,
@@ -331,6 +332,8 @@ const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
  */
 const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   fetch: Download,
+  /* The title and abstract off a minimal paper's first pages: a card, not a page. */
+  metadata: IdCard,
   extract: FileText,
   blocks: Blocks,
   hierarchy: ListTree,

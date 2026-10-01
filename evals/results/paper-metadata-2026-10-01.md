@@ -224,3 +224,20 @@ decide whether to retry.
 - **nasa-tm-interplanetary-streams**: title “EVOLUTION AND INTERACTION OF LARGE INTERPLANETARY STREAMS” · authors ["Y. C. Whang","L. F. Burlaga"] · doi null · abstract null
 - **unal-biotec-bilingual-title**: title “Efecto inhibidor de los extractos oleaginosos de Coffea arabica y Ananas comosus sobre Enterococcus faecalis” · authors ["Nelson Alfonso Vega Contreras","María Angélica Farfan Casadiego","Angie Lisandra García Pabón"] · doi 10.15446/rev.colomb.biote.v27n1.119003 · abstract “La resistencia de los microorganismos a los agentes antimicrobianos representa un desafío …” (1685 chars)
 - **wellcome-fowler-scan-title**: title “Utility of phrenology : a lecture” · authors ["L. N. Fowler"] · doi null · abstract null
+
+## Re-run on the kind-neutral prompt (Stage 3), 2026-10-01 21:15
+
+Stage 3 made the prompt kind-neutral (PDF or HTML) and renamed the fence `<document_text>`, so the
+DeepSeek arm was run again: `score.mts --runs=2 --arms=deepseek`, on the production route.
+
+| | DeepSeek v4.1 Flash, new prompt |
+|---|---|
+| title exact | 26 of 26, the Wellcome scan included (`Utility of phrenology : a lecture`, with no byline) |
+| authors | all right |
+| abstract present/absent right | 26 of 26 |
+| DOI right | 26 of 26 |
+| 429s seen by the caller | 0 |
+| cost a paper | $0.00055 (1,575 tokens in and 209 out, on average) |
+
+The one regression from the matched comparison did not recur in two runs. That is too few runs to
+call it fixed, but it is no longer evidence that DeepSeek is worse.

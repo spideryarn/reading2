@@ -1,6 +1,7 @@
 /**
  * **A public article costs half a slot** — the arithmetic, and the four ways it
- * could quietly stop being true.
+ * could quietly stop being true. (A minimal paper's hundredth is
+ * tests/billing-minimal.test.ts.)
  *
  * Greg, 2026-09-04:
  *
@@ -12,22 +13,25 @@
  *
  * The mechanism is **live recomputation** rather than a credit: usage is derived
  * from `articles.visibility` every time it is asked, so unsharing simply puts
- * the cost back and there is nothing to game. The arithmetic is in half-units —
- * a private ingest costs 2, a public one 1, a tier's budget is its allowance
- * doubled — so that no fraction goes anywhere near money and `usageOf`'s integer
- * assertion keeps working. src/billing/half-units.ts, docs/project/billing.md.
+ * the cost back and there is nothing to game. The arithmetic is in points —
+ * a private ingest costs 200, a public one 100, a tier's budget is its
+ * allowance times 200 — so that no fraction goes anywhere near money and
+ * `usageOf`'s integer assertion keeps working. Until 2026-10-01 it was
+ * half-units, 2 to an article, and every case here is that case ×100.
+ * src/billing/points.ts, docs/project/billing.md.
  *
  * What this file exists to catch, and in the order the money matters:
  *
  * 1. **The unit trap.** `billing_accounts.quota_limit_delta` is a signed count
- *    of *whole ingests*, so doubling a tier before `limitForPeriod` turns a
- *    stored −117 into ninety-one articles for somebody entitled to thirty-three.
+ *    of *whole ingests*, so converting a tier into points before
+ *    `limitForPeriod` turns a stored −117 into nearly a hundred and fifty
+ *    articles for somebody entitled to thirty-three.
  *    Two branded types make that a compile error; the case below makes it a red
  *    test as well, because a cast would get past the compiler.
- * 2. **The overdraft.** `used < budget` was never the old rule doubled — at a
- *    cost of two, five-of-six admits an ingest that settles at seven. One half
- *    unit, knowingly, because Greg said six public articles. Both halves are
- *    pinned: it is at most one, and no add-then-unshare cycle earns a second.
+ * 2. **The overdraft.** `admitsIngest` is `used + 200 <= budget + 100` — 500
+ *    of 600 admits an ingest that settles at 700. Half an article, knowingly,
+ *    because Greg said six public articles. Both halves are pinned: it is at
+ *    most half an article, and no add-then-unshare cycle earns a second.
  * 3. **The direction an unresolvable row fails in.** There is no backfill, so a
  *    charged row with no article must cost full price.
  * 4. **The offer counts articles, not ledger rows**, because a re-added URL owns
@@ -43,11 +47,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   PRIVATE_INGEST_COST,
   PUBLIC_INGEST_COST,
+  admitsIngest,
   articles as inArticles,
   budgetFor,
-  halfUnits,
-  privateHeadroom,
-} from "../src/billing/half-units.js";
+  ingestHeadroom,
+  points,
+} from "../src/billing/points.js";
 import { limitForPeriod } from "../src/billing/quota-adjustment.js";
 import type { QuotaAdjustment } from "../src/billing/quota-adjustment.js";
 import { FREE, FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
@@ -63,13 +68,13 @@ import {
 import { runAsOwner } from "../src/owner.js";
 import type { OwnerId } from "../src/owner.js";
 import {
-  halfUnitsUsed,
   ingestEligibility,
   ingestsUsed,
   reserveIngest,
   settleReservation,
   sharingWouldMakeRoom,
   usageFor,
+  wallUsed,
 } from "../src/store/pg-billing.js";
 import { getDb } from "../src/db/client.js";
 import { pgVisibilityStore } from "../src/store/pg-visibility.js";
@@ -81,7 +86,7 @@ import { seedAuthUser } from "./helpers/seed-auth-user.js";
 loadEnvLocal();
 
 const { pool } = await pgReady({
-  suite: "tests/billing-half-units.test.ts",
+  suite: "tests/billing-points.test.ts",
   tables: ["spideryarn.billing_accounts", "spideryarn.ingest_events", "spideryarn.articles"],
   keepPool: true,
   max: 6,
@@ -90,7 +95,7 @@ const { pool } = await pgReady({
 /** Fixed and distinctive, so a killed run's rows are cleared rather than added to. */
 const OWNER = "0b110a1f-0000-4000-8000-0000000000a1" as OwnerId;
 
-/** The free budget, in half-units — three articles, so six. */
+/** The free budget, in points — three articles, so 600. */
 const FREE_BUDGET = budgetFor(inArticles(FREE_LIFETIME_INGESTS));
 
 /**
@@ -142,7 +147,7 @@ async function givenUpgradedMidPeriod(): Promise<void> {
 }
 
 /**
- * **A two-article paid tier**, so the wall is four half-units away and can be
+ * **A two-article paid tier**, so the wall is 400 points away and can be
  * reached with four public rows rather than with forty.
  */
 const BOUNDARY_PRICE = "price_boundary_for_half_units";
@@ -259,17 +264,17 @@ afterAll(async () => {
 /* ------------------------------------------------------------ the price -- */
 
 describe("what an ingest costs", () => {
-  it("charges a private article two half-units and a public one one", async () => {
+  it("charges a private article 200 points and a public one 100", async () => {
     await givenCharged(await givenArticle("private-one", "private"));
     await givenCharged(await givenArticle("public-one", "public"));
 
     const usage = await usageFor(OWNER, FREE);
-    expect(usage).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 1, inFlight: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(usage).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
     /* **The literal, not the constants.** Writing this as
        `PRIVATE_INGEST_COST + PUBLIC_INGEST_COST` follows whatever those become,
        so it stays green with the discount switched off — watched doing exactly
        that, 2026-09-05. The two costs are pinned once, below. */
-    expect(halfUnitsUsed(usage)).toBe(3);
+    expect(wallUsed(usage)).toBe(300);
     /* And the count a sentence may say is still two whole articles. */
     expect(ingestsUsed(usage)).toBe(2);
   });
@@ -279,17 +284,17 @@ describe("what an ingest costs", () => {
    * that the cases above can be written as arithmetic rather than as a
    * restatement of the constants they are meant to be checking.
    */
-  it("is two half-units for private and one for public, and a budget is doubled", () => {
-    expect(PRIVATE_INGEST_COST).toBe(2);
-    expect(PUBLIC_INGEST_COST).toBe(1);
-    expect(budgetFor(inArticles(FREE_LIFETIME_INGESTS))).toBe(FREE_LIFETIME_INGESTS * 2);
+  it("is 200 points for private and 100 for public, and a budget is 200 an article", () => {
+    expect(PRIVATE_INGEST_COST).toBe(200);
+    expect(PUBLIC_INGEST_COST).toBe(100);
+    expect(budgetFor(inArticles(FREE_LIFETIME_INGESTS))).toBe(FREE_LIFETIME_INGESTS * 200);
   });
 
   it("charges a reservation full price, because nobody knows yet", async () => {
     expect((await reserveIngest(OWNER)).kind).toBe("admitted");
     const usage = await usageFor(OWNER, FREE);
-    expect(usage).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 0, inFlight: 1, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
-    expect(halfUnitsUsed(usage)).toBe(2);
+    expect(usage).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 0, inFlightIngest: 1, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(wallUsed(usage)).toBe(200);
   });
 
   /**
@@ -304,7 +309,7 @@ describe("what an ingest costs", () => {
     expect(await usageFor(OWNER, FREE)).toEqual({
       chargedFullPrice: 1,
       chargedHalfPrice: 0,
-      inFlight: 0,
+      inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
     });
@@ -342,14 +347,14 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
     const article = await givenArticle("deleted-while-public", "public");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
-    expect(before).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 1, inFlight: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(before).toEqual({ chargedFullPrice: 0, chargedHalfPrice: 1, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
 
     /* `on delete set null`, so the ledger row survives — the ledger may not lose
        an ingest — and it keeps the price the article had when it went. */
     expect(await usageFor(OWNER, FREE)).toEqual(before);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
   });
 
   it("keeps a deleted private article's rows at full price", async () => {
@@ -357,7 +362,7 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
     const article = await givenArticle("deleted-while-private", "private");
     await givenCharged(article);
     const before = await usageFor(OWNER, FREE);
-    expect(before).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 0, inFlight: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
+    expect(before).toEqual({ chargedFullPrice: 1, chargedHalfPrice: 0, inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0, highPowerFullPrice: 0, highPowerHalfPrice: 0 });
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
 
@@ -372,30 +377,30 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
     if (!pool) return;
     const article = await givenArticle("shared-then-deleted", "private");
     await givenCharged(article);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
 
     /* Live while it exists: sharing it three weeks after the charge still halves
        it. Stamp at charge time and this line is the one that goes red. */
     await setVisibility("half-units-shared-then-deleted", "public");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
   });
 
   it("freezes the price at deletion, not at charge: unshared after charging, then deleted", async () => {
     if (!pool) return;
     const article = await givenArticle("unshared-then-deleted", "public");
     await givenCharged(article);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
 
     /* And the other way: taking it down puts the cost back, which is what the
        unshare warning says out loud before it happens. */
     await setVisibility("half-units-unshared-then-deleted", "private");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
 
     await pool.query("delete from spideryarn.articles where id = $1", [article]);
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PRIVATE_INGEST_COST);
   });
 
   it("does not stamp anything while the article is still there", async () => {
@@ -423,16 +428,16 @@ describe("deleting an article freezes what it cost, rather than repricing it", (
 describe("sharing and unsharing move the count in both directions", () => {
   it("halves an article's charged rows when it is shared, and puts them back", async () => {
     await givenCharged(await givenArticle("toggled", "private"));
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(2);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(200);
 
     await setVisibility("half-units-toggled", "public");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(1);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(100);
 
     /* **And back.** This is the whole argument for live recomputation over a
        credit: a credit granted once would make share-then-unshare free slots for
        ever unless it were clawed back. */
     await setVisibility("half-units-toggled", "private");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(2);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(200);
   });
 
   /**
@@ -447,16 +452,16 @@ describe("sharing and unsharing move the count in both directions", () => {
     for (const n of [1, 2, 3, 4, 5]) {
       await givenCharged(await givenArticle(`shared-${n}`, "public"));
     }
-    /* Five public articles, five half-units, one below a budget of six. */
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(5);
+    /* Five public articles, 500 points, one public article below a budget of 600. */
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(500);
     expect((await ingestEligibility(OWNER)).kind).toBe("eligible");
 
     await setVisibility("half-units-shared-5", "private");
 
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(6);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(600);
     const refused = await ingestEligibility(OWNER);
     expect(refused.kind).toBe("refused");
-    /* And the number it states is a count of **articles**, not of half-units. */
+    /* And the number it states is a count of **articles**, not of points. */
     expect(refused).toMatchObject({ used: 5, limit: FREE_LIFETIME_INGESTS });
   });
 });
@@ -499,7 +504,7 @@ describe("a paid period counts public rows by its own bounds", () => {
     expect(await usageFor(OWNER, BOUNDARY_PAID)).toEqual({
       chargedFullPrice: 0,
       chargedHalfPrice: 2,
-      inFlight: 0,
+      inFlightIngest: 0, inFlightMinimal: 0, minimalCharged: 0,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
     });
@@ -508,8 +513,8 @@ describe("a paid period counts public rows by its own bounds", () => {
   it("refuses at the wall on public rows inside the period", async () => {
     await givenPaidPeriod();
     const shared = await givenArticle("paid-wall", "public");
-    /* Four public successes inside the window — four half-units against a
-       two-article tier, whose budget is four. The wall is `<`, so this is
+    /* Four public successes inside the window — 400 points against a
+       two-article tier, whose budget is 400. 400 + 200 > 400 + 100, so this is
        refused; drop these rows out of the count and it admits, for ever. */
     for (const offset of [1, 2, 3, 4]) {
       await givenCharged(shared, new Date(PERIOD_START.getTime() + offset));
@@ -524,24 +529,26 @@ describe("a paid period counts public rows by its own bounds", () => {
       limit: 2,
       resetAt: PERIOD_END,
     });
-    expect(halfUnitsUsed(await usageFor(OWNER, BOUNDARY_PAID))).toBe(4);
+    expect(wallUsed(await usageFor(OWNER, BOUNDARY_PAID))).toBe(400);
   });
 });
 
 /* ---------------------------------------------------------- the overdraft -- */
 
-describe("the half-unit overdraft, which is accepted rather than absent", () => {
+describe("the half-article overdraft, which is accepted rather than absent", () => {
   /**
-   * **`used < budget` is not the old rule doubled**, and the plan said it was.
-   * At a reservation cost of two, five-of-six admits an ingest that settles at
-   * seven. Taken knowingly, because the money-safe `used + 2 <= budget` would
-   * make Greg's own sentence — six public articles on the free tier — false.
+   * **`used < budget` in half-units was not the old rule doubled**, and the
+   * plan said it was. At a reservation cost of two, five-of-six admits an ingest
+   * that settles at seven. Taken knowingly, because the money-safe rule would
+   * make Greg's own sentence — six public articles on the free tier — false. In
+   * points it is `admitsIngest`, `used + 200 <= budget + 100`: 500 of 600 admits
+   * an ingest that settles at 700.
    */
-  it("admits one ingest from five half-units, and it settles at seven", async () => {
+  it("admits one ingest from 500 points, and it settles at 700", async () => {
     for (const n of [1, 2, 3, 4, 5]) {
       await givenCharged(await givenArticle(`over-${n}`, "public"));
     }
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET - 1);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET - 100);
 
     const admitted = await reserveIngest(OWNER);
     expect(admitted.kind).toBe("admitted");
@@ -553,17 +560,17 @@ describe("the half-unit overdraft, which is accepted rather than absent", () => 
       articleId: sixth,
     });
 
-    const over = halfUnitsUsed(await usageFor(OWNER, FREE));
-    expect(over).toBe(FREE_BUDGET + 1);
-    /* **At most one half-unit**, which is the claim rather than the arithmetic:
-       a private add costs two out of a budget that was one short. */
-    expect(over - FREE_BUDGET).toBe(1);
+    const over = wallUsed(await usageFor(OWNER, FREE));
+    expect(over).toBe(FREE_BUDGET + 100);
+    /* **At most half an article**, which is the claim rather than the arithmetic:
+       a private add costs 200 out of a budget that was 100 short. */
+    expect(over - FREE_BUDGET).toBe(100);
   });
 
   /**
-   * **And it cannot repeat.** At seven the next request is refused; sharing the
-   * new article returns them to six, which is still refused. So there is no
-   * add-then-unshare cycle that earns a second half-unit.
+   * **And it cannot repeat.** At 700 the next request is refused; sharing the
+   * new article returns them to 600, which is still refused. So there is no
+   * add-then-unshare cycle that earns a second overdraft.
    */
   it("earns no second overdraft from an add-then-share cycle", async () => {
     for (const n of [1, 2, 3, 4, 5]) {
@@ -581,11 +588,11 @@ describe("the half-unit overdraft, which is accepted rather than absent", () => 
     /* Seven of six: refused. */
     expect((await reserveIngest(OWNER)).kind).toBe("refused");
 
-    /* Six of six: still refused, because the wall is `<`. This is the assertion
-       that would go red if somebody "fixed" the overdraft by loosening the
-       comparison to `<=`. */
+    /* 600 of 600: still refused, because 600 + 200 > 600 + 100. This is the
+       assertion that would go red if somebody "fixed" the overdraft by loosening
+       the comparison. */
     await setVisibility("half-units-cycle-6", "public");
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(FREE_BUDGET);
     expect((await reserveIngest(OWNER)).kind).toBe("refused");
   });
 });
@@ -599,11 +606,11 @@ describe("the offer counts articles rather than ledger rows", () => {
    * which means *"share three articles"* would be false for somebody who needs
    * to share one.
    */
-  it("says one article when the three half-units come from one article", async () => {
+  it("says one article when three rows' worth of points come from one article", async () => {
     /* One article added three times — the same URL pasted back after being
        archived, which adopts the shelf's article and charges again — plus one
-       ordinary article. Eight half-units against a budget of six, so **three**
-       have to be freed to get back under.
+       ordinary article. 800 points against a budget of 600, so 300 have to be
+       freed — three rows' worth — to get back under the wall.
 
        Sharing the busy one frees all three at once, so the honest answer is
        *one article*. Two spellings get this wrong and both are red on this case:
@@ -649,7 +656,7 @@ describe("the offer counts articles rather than ledger rows", () => {
     );
 
     const refused = await ingestEligibility(OWNER);
-    /* One is enough — six half-units minus one is five, which is under six —
+    /* One is enough — 600 points minus 100 is 500, which the wall admits —
        and the grandfathered article is not it. */
     expect(refused).toMatchObject({ shareToMakeRoom: [{ title: "What the Dormouse Said" }] });
 
@@ -670,7 +677,7 @@ describe("the offer counts articles rather than ledger rows", () => {
     }
     const refused = await ingestEligibility(OWNER);
     expect(refused.kind).toBe("refused");
-    /* Six public articles, six half-units, at the wall — and nothing left to
+    /* Six public articles, 600 points, at the wall — and nothing left to
        share, so the sentence must not appear. Conditionality is what stops a
        false offer; copy cannot. */
     expect(refused).not.toHaveProperty("shareToMakeRoom");
@@ -697,11 +704,12 @@ describe("tiers, deltas and clamps stay in articles", () => {
   /**
    * **The one that would have cost real money.** A Reader who moved to
    * Researcher on day 27 carries a stored delta of −117 against a tier that
-   * sells 150, so they are entitled to 33 articles and a budget of 66
-   * half-units. Doubling the tier *before* the delta gives `300 − 117 = 183` —
-   * ninety-one articles. GPT Sol, 2026-09-04.
+   * sells 150, so they are entitled to 33 articles and a budget of 6,600
+   * points. Converting the tier *before* the delta gives `30000 − 117` — nearly
+   * a hundred and fifty articles. GPT Sol found the half-unit version,
+   * 2026-09-04.
    */
-  it("applies a stored delta to the tier's articles and doubles only afterwards", () => {
+  it("applies a stored delta to the tier's articles and converts only afterwards", () => {
     const periodStart = new Date(0);
     const limit = limitForPeriod(
       inArticles(150),
@@ -710,10 +718,10 @@ describe("tiers, deltas and clamps stay in articles", () => {
       inArticles(150),
     );
     expect(limit).toBe(33);
-    expect(budgetFor(limit)).toBe(66);
+    expect(budgetFor(limit)).toBe(6600);
     /* The wrong order, spelled out so the number is in the file rather than in
        a comment about it. */
-    expect(150 * 2 - 117).toBe(183);
+    expect(150 * 200 - 117).toBe(29883);
   });
 
   /**
@@ -721,14 +729,14 @@ describe("tiers, deltas and clamps stay in articles", () => {
    * above holds `limitForPeriod`; this one holds every line between the stored
    * row and the refusal, which is where a doubling could be inserted instead.
    *
-   * Thirty-three articles is sixty-six half-units. At sixty-four the account has
-   * room; at sixty-six it does not. Under the wrong order it would be entitled
-   * to a hundred and eighty-three and neither of these would refuse.
+   * Thirty-three articles is 6,600 points. At 6,400 the account has room; at
+   * 6,600 it does not. Under the wrong order it would be entitled to 29,883 and
+   * neither of these would refuse.
    */
   it("meters an upgraded account on 33 articles, not on 91", async () => {
     if (!pool) return;
     await givenUpgradedMidPeriod();
-    /* Thirty-two private articles: sixty-four half-units, two below the budget. */
+    /* Thirty-two private articles: 6,400 points, one article below the budget. */
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
        select $1, now(), now() from generate_series(1, 32)`,
@@ -736,24 +744,55 @@ describe("tiers, deltas and clamps stay in articles", () => {
     );
     expect((await reserveIngest(OWNER, undefined, TIERS)).kind).toBe("admitted");
 
-    /* One more charged row and it is sixty-six — plus the reservation just
+    /* One more charged row and it is 6,600 — plus the reservation just
        taken, which is charged full price too. */
     const refused = await reserveIngest(OWNER, undefined, TIERS);
     expect(refused).toMatchObject({ kind: "refused", limit: 33 });
   });
 
   /**
-   * **Headroom is the wall's answer, not a rounded ratio.** `ceil` here is
-   * exact: the admitted private adds from `u` are the `k` with `u + 2k < budget`.
+   * **Headroom is the wall's answer, not a rounded ratio.** The floor is
+   * exact: the admitted private adds from `u` are the `k` with
+   * `u + 200(k + 1) <= budget + 100`.
    */
   it("counts further private articles exactly, including from an odd number", () => {
-    const budget = halfUnits(6);
-    expect(privateHeadroom(halfUnits(0), budget)).toBe(3);
-    expect(privateHeadroom(halfUnits(4), budget)).toBe(1);
-    /* Five is the overdraft case: one more is admitted, and lands at seven. */
-    expect(privateHeadroom(halfUnits(5), budget)).toBe(1);
-    expect(privateHeadroom(halfUnits(6), budget)).toBe(0);
-    expect(privateHeadroom(halfUnits(7), budget)).toBe(0);
+    const budget = points(600);
+    expect(ingestHeadroom(points(0), budget)).toBe(3);
+    expect(ingestHeadroom(points(400), budget)).toBe(1);
+    /* 500 is the overdraft case: one more is admitted, and lands at 700. */
+    expect(ingestHeadroom(points(500), budget)).toBe(1);
+    expect(ingestHeadroom(points(600), budget)).toBe(0);
+    expect(ingestHeadroom(points(700), budget)).toBe(0);
+    /* And off the hundreds, where only minimal papers can put `used`: 498 is
+       102 short of the budget, and 498 + 200 > 700, so nothing more fits. */
+    expect(ingestHeadroom(points(498), budget)).toBe(1);
+    expect(ingestHeadroom(points(502), budget)).toBe(0);
+    /* The wall itself off the hundreds, where the old `used < budget` would say
+       yes to 502 and let a private add settle at 702 — past the one overdraft. */
+    expect(admitsIngest(points(498), budget)).toBe(true);
+    expect(admitsIngest(points(502), budget)).toBe(false);
+  });
+
+  /**
+   * **`admitsIngest` is today's rule, multiplied out** — wherever `used` is a
+   * multiple of 100, which is every account before minimal papers existed, it
+   * says exactly what `used < budget` in half-units said. Checked over every
+   * such `used` and every budget a small tier could have, against the old rule
+   * spelled out here rather than imported, because the old one is gone.
+   */
+  it("agrees with the half-unit wall wherever usage is a multiple of 100", () => {
+    for (let limit = 0; limit <= 12; limit++) {
+      const budget = budgetFor(inArticles(limit));
+      const oldBudget = limit * 2;
+      for (let oldUsed = 0; oldUsed <= oldBudget + 4; oldUsed++) {
+        const old = oldUsed < oldBudget;
+        expect(admitsIngest(points(oldUsed * 100), budget), `limit ${limit}, ${oldUsed} half-units`).toBe(old);
+        /* And headroom says how many of those admissions there are in a row. */
+        let k = 0;
+        while (admitsIngest(points(oldUsed * 100 + k * 200), budget)) k++;
+        expect(ingestHeadroom(points(oldUsed * 100), budget)).toBe(k);
+      }
+    }
   });
 });
 
@@ -771,8 +810,8 @@ describe("what a refusal offers, and where money may not appear", () => {
    * the plan's first answer, on the reasoning that a lapsed reader's lifetime
    * count includes their paid months and could never be shared back under the
    * wall. That is an example rather than a rule — a Reader who added three
-   * private articles and then lapsed is at six half-units against a budget of
-   * six, and sharing one makes room. Conditionality does the work, which is what
+   * private articles and then lapsed is at 600 points against a budget of
+   * 600, and sharing one makes room. Conditionality does the work, which is what
    * it was for. GPT Sol, 2026-09-04.
    */
   it.each(codes)("names the articles the server chose, in the %s refusal", (code, extra) => {
@@ -926,7 +965,7 @@ describe("the lock order: billing_accounts before articles", () => {
 
       await holder.query("commit");
       await share;
-      expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(0);
+      expect(wallUsed(await usageFor(OWNER, FREE))).toBe(0);
     } finally {
       holder.release();
     }
@@ -956,7 +995,7 @@ describe("a successful settlement carries the article it produced", () => {
     expect(rows[0]?.article_id).toBe(article);
     /* And the article being public is what makes it cost one rather than two —
        the link is not decoration. */
-    expect(halfUnitsUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
+    expect(wallUsed(await usageFor(OWNER, FREE))).toBe(PUBLIC_INGEST_COST);
   });
 
   /**
@@ -983,19 +1022,19 @@ describe("a successful settlement carries the article it produced", () => {
    * only at `budgetFor`.
    *
    * `QuotaAdjustment.delta`, `QuotaRules.maxAllowance` and `allowanceFor` were
-   * plain `number` until 2026-09-05, so a `HalfUnits` could reach the stored
-   * delta or the clamp with no cast while the comment in
-   * src/billing/half-units.ts said otherwise — a guard claiming more than the
+   * plain `number` until 2026-09-05, so a count in the enforcement unit could
+   * reach the stored delta or the clamp with no cast while the comment in
+   * src/billing/points.ts (then half-units.ts) said otherwise — a guard claiming more than the
    * types delivered. GPT Sol, 2026-09-05. Red at `npm run typecheck`, never
    * here; vitest does not type-check.
    */
-  it("cannot pass half-units where a count of articles belongs", () => {
+  it("cannot pass points where a count of articles belongs", () => {
     // @ts-expect-error — a stored delta is a signed count of whole ingests.
-    const delta: QuotaAdjustment = { delta: halfUnits(-117), periodStart: new Date(0) };
+    const delta: QuotaAdjustment = { delta: points(-117), periodStart: new Date(0) };
     // @ts-expect-error — and so is the ceiling nothing may exceed.
-    const ceiling: Parameters<typeof limitForPeriod>[3] = halfUnits(300);
+    const ceiling: Parameters<typeof limitForPeriod>[3] = points(300);
     // @ts-expect-error — the one that was always caught, kept beside the two that were not.
-    const budget = budgetFor(halfUnits(3));
+    const budget = budgetFor(points(3));
     expect([delta, ceiling, budget]).toHaveLength(3);
   });
 });

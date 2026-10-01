@@ -24,7 +24,7 @@ export type ClaimantUsage =
       readonly used: number;
       /** The whole Free allowance, gifts included. */
       readonly limit: number;
-      /** Further private articles the wall would admit — `privateHeadroom`. */
+      /** Further private articles the wall would admit — `ingestHeadroom`. */
       readonly remaining: number;
       /** Back on Free after a subscription ended. */
       readonly lapsed: boolean;

@@ -359,6 +359,8 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   store.plant(SLUG, "extract", "extractedHtml", SOURCE_HTML);
   store.plant(SLUG, "blocks", "stampedHtml", STAMPED_HTML);
   store.plant(SLUG, "extract", "meta", META);
+  /* A minimal paper's step writes the same site; planted so "every step" below means every one. */
+  store.plant(SLUG, "metadata", "meta", META);
   store.plant(SLUG, "blocks", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "tree", TREE);

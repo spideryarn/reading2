@@ -849,6 +849,15 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
+**A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
+the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks
+and no tree, so `listArticles` keeps it by its `processing` rather than dropping it as it drops any
+other row with no tree: `LibraryEntry.processing` is `"minimal"`, its words, blocks, parts and
+sections are 0, and it carries `abstract` and `doi` where a full card has a blurb. Every other row
+says `"full"`; the field is optional only for rows a browser cached before it existed, all of them
+full. How the server makes one is
+[ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
+
 ### The Shared badge
 
 An article anyone can read without signing in wears a small globe and the word **Shared**, on the

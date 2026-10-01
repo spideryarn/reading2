@@ -48,7 +48,7 @@ const FREE: Extract<ReaderPlan, { kind: "free" }> = {
   used: 1,
   sharedHalfPrice: 0,
   atLimit: false,
-  highPower: 0,
+  highPower: 0, minimal: 0,
   remaining: 2,
 };
 
@@ -104,7 +104,7 @@ describe("who sees it", () => {
       used: 2,
       sharedHalfPrice: 0,
       atLimit: false,
-      highPower: 0,
+      highPower: 0, minimal: 0,
       periodEnd: "2026-11-01T00:00:00Z",
       endsAt: null,
     },
