@@ -52,32 +52,20 @@ first — the reader cannot tell which of the dated sentences still holds.
 
 ### Shared code is part of the signposting
 
-The most expensive thing a missing signpost causes is not a lost reader; it is a second copy of
-something that already exists, written by an agent who looked and did not find it. So:
-
-- **The module that is the one place for something says so in its header**, and names the doc that
-  owns it. That is where a grep lands.
-- **The doc that owns an area keeps a short list of its shared code** — `file` § `symbol` and "reach
-  for it when …" — limited to what is reused across areas or has already been reimplemented once.
-  Not an inventory of everything: a list that long is a second copy of the file tree, and goes stale
-  like one.
-- **When you find a second copy, name the canonical one in the doc** even if nobody consolidates
-  them yet, and say the other is older — otherwise the next agent copies whichever it saw first.
+The most expensive thing a missing signpost causes is a second copy of code that already exists.
+The canonical module says so in its header; the owning doc keeps a short list of its shared code —
+[signposting-and-single-source-of-truth.md § Signposting to it](signposting-and-single-source-of-truth.md#signposting-to-it).
 
 ## One home per fact
 
-**Cite, don't restate.** Give every fact exactly one home, and link to it from everywhere else. Two
-copies of a fact is one fact and one liability, because they diverge silently and nothing goes red.
+**Cite, don't restate.** Give every fact exactly one home, and link to it from everywhere else; two
+copies diverge silently and nothing goes red. How to choose the home, how to point at it, what to do
+with a duplicate, and the exceptions (dated quotes, counts with their source) are in
+[signposting-and-single-source-of-truth.md](signposting-and-single-source-of-truth.md).
 
-- **For a fact held in code, cite the defining file and a stable name** — `` `src/models.ts` §
-  `STAGE_EFFORT` `` — rather than copying the value, or citing a line number. A line number is a fact
-  about one commit. **A count is the commonest copied value and the surest to rot**: "fourteen
-  modes", "eleven of the fifteen steps". Name the list instead, and let the reader count it.
-- **For a number, record the command, the scope and the date**, and treat the output as a dated
-  example rather than a fact.
-- **Otherwise record the source, the date, and your confidence.** A doc that asserts something
-  nobody checked is worse than no doc: prose cannot fail, so nobody checks it —
-  [written-down-is-not-checked.md](written-down-is-not-checked.md).
+**Record the source, the date and your confidence** for anything that is not cited from code. A doc
+that asserts something nobody checked is worse than no doc: prose cannot fail, so nobody checks it —
+[written-down-is-not-checked.md](written-down-is-not-checked.md).
 
 ## Quote the human
 
@@ -106,14 +94,15 @@ will read is not doing its job, however true it is.
   four dating states" lets a reader decide; "↑ / ↓ take the step" makes them open it to find out.
 - **An area with code gets a doc that owns it**, even a short one. Without one, its intent ends up
   as dated paragraphs in a parent index, and its code is signposted from nowhere.
-- **Enforce it with a test rather than a habit.** A relative link that no longer resolves, and above
-  all a stale `#anchor` — which silently lands you at the top of the right page and never looks
-  broken — is the kind of rot a grep can catch and a reader cannot.
+- **Enforce it with a test rather than a habit** — which checks are worth having is in
+  [signposting-and-single-source-of-truth.md § Enforce it mechanically](signposting-and-single-source-of-truth.md#enforce-it-mechanically).
 - **File names are lower-case kebab-case**, everywhere, even when copied in from somewhere that
   shouted. Rename on sight and fix the links.
 
 ## Keeping it true
 
+- **Fix a doc you find out of date, even one your change did not touch** — the standing permission
+  and how to land it are in [engineering-manager.md § Along the way](engineering-manager.md#along-the-way).
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part
   of the change, not a follow-up. **Removing a feature most of all**: grep the docs for its names and
   fix every hit in the same change. A removal done as "a line here and there" leaves the reference

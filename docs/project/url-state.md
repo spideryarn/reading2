@@ -4,12 +4,26 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
-([§ The library's own five](#the-librarys-own-five)). Nothing the reader
-can change lives in `useState`, and nothing lives in `localStorage` — with one exception since
-2026-09-05, which is about *which address you arrive at* rather than about where state lives while
-you are here: [§ Reopening an article where you left it](#reopening-an-article-where-you-left-it).
-Which article you are looking at is the **path** — see
-[§ Which article is the path](#which-article-is-the-path).
+([§ The library's own five](#the-librarys-own-five)). Which article you are looking at is the
+**path** — see [§ Which article is the path](#which-article-is-the-path).
+
+**Nothing about *how you are looking at an article* lives in `useState` or `localStorage`**: if a
+link should carry it, it is in the URL. Browser storage holds only what belongs to this browser
+rather than to the view, and only sparingly and for a stated reason:
+
+> I do still have reservations about caching and browser-storage, so we should use this sparingly
+> and for good reason.
+>
+> — Greg, 2026-10-01
+
+What it holds today: the address you last left an article at
+([§ Reopening an article where you left it](#reopening-an-article-where-you-left-it)), and
+per-browser preferences and dismissals — the referee card (`src/web/referee-card.ts`), hidden shelf
+columns (`src/web/shelf-hidden-columns.ts`), the add page's tick box (`src/web/auto-modes.ts`), the
+install and small-screen hints, the chosen microphone and its placement, the offline cache's
+partition, the `spya-perf` flag and the auth SDK's session (by `grep -rln localStorage src/web`,
+2026-10-01). Each wraps its access, because a private window throws. A new key says in its file's
+header why it is not in the URL and not a column.
 
 > Ideally, I would like to be able to remember the state. So if I, for example, scroll down to a
 > particular place in the doc for example (or changed something else, etc etc), that should update

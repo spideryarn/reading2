@@ -60,6 +60,13 @@ for — because it shares an assumption with the code. Read
 [silent-success.md](../reusable/silent-success.md); it has a dozen worked examples and the habit that
 catches them. This repo's own typecheck once exited 0 having checked 0 files.
 
+Its twin is the comment, deferral or "known issue" written *instead of* changing the default that
+causes the harm. Prose cannot fail, so nobody notices the defect is still live. It is the class
+behind at least nine postmortems here ([trawl C](../plans/261001i-probes/trawl-C-buried-rules.md) § Q2 row 2,
+2026-10-01). Read
+[written-down-is-not-checked.md § A sentence is not a fix](../reusable/written-down-is-not-checked.md#a-sentence-is-not-a-fix)
+before you leave a TODO or accept a review finding without a fix.
+
 [browser-testing.md](browser-testing.md) and [performance.md](performance.md) are both largely about
 the same theme in its measuring form — instruments that came back confident and wrong. That is why
 you read those two *before* you measure something, not after.

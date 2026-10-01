@@ -46,7 +46,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
-  `granularity-zoom.md` ·
+  `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
   `column-context.md` (history: the gist columns' fisheye) ·
   `structure.md` (the tree in the band: two columns or a nested list) ·
   `reading-time.md` (where you have spent time, down the spine) ·
@@ -128,9 +128,13 @@ listed here; the names under each are files in `docs/project/`.
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
-Two of those are worth reading before you touch anything they bear on:
-**[granularity-zoom.md](docs/project/granularity-zoom.md)**, one of the features this app is for, and
-**[block-ids.md](docs/project/block-ids.md)**, the contract everything else depends on — see below.
+Three are worth reading before you touch the area they cover, because a mistake there is silent:
+**[block-ids.md](docs/project/block-ids.md)** before anything that resolves an id — the contract
+everything else depends on, see below; **[security-map.md](docs/project/security-map.md)** before
+anything that renders a stranger's article, takes a path from the URL, or acts on a model's output
+— the untrusted parties are not the ones you would guess; and
+**[new-mode.md](docs/project/new-mode.md)** before adding or changing a mode — the shapes a mode can
+take, and the other places that have to hear about it.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.
 That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enforces it.
@@ -182,7 +186,9 @@ The format, the reasoning, and the one way to get range checks silently wrong ar
 **The policy is [documentation-policy.md](docs/reusable/documentation-policy.md)** — who each kind of
 doc is written for, one home per fact, cite don't restate, less is more, signpost heavily, writing
 down what a future reader would otherwise have to reverse-engineer, and why an agent-facing doc holds
-intent rather than descriptions of code. Read it once.
+intent rather than descriptions of code. Read it once. **About to copy a fact, a count or a helper
+into a second place, or found two copies?**
+[signposting-and-single-source-of-truth.md](docs/reusable/signposting-and-single-source-of-truth.md).
 
 Four things are ours:
 
@@ -333,6 +339,10 @@ nothing else has a copy of.
 - **A check you have never seen fail is not evidence.** Most of a day's bugs here have been
   something reporting success while doing nothing, with the obvious check agreeing because it shares
   an assumption with the code — [silent-success.md](docs/reusable/silent-success.md).
+- **A sentence is not a fix.** About to leave a TODO, a deferral or an accepted review finding with
+  the harmful default unchanged? Read
+  [written-down-is-not-checked.md § A sentence is not a fix](docs/reusable/written-down-is-not-checked.md#a-sentence-is-not-a-fix)
+  first: a known defect with its default unchanged looks handled, so the next reader stops looking.
 - **Get a cross-family review before you commit.** Every plan under `docs/plans/` goes to GPT Sol
   before it is built, and the code built from it goes back for a second review — weight that second
   one higher, because a plan-stage review can't find a `PATCH` that writes one field and then
@@ -404,7 +414,10 @@ nothing else has a copy of.
   [vision.md § Principles](docs/project/vision.md#principles) before adding a third.
 - **Prefer simple over easy.** Simple means un-braided — each piece does one thing and can be read on
   its own; easy just means quick to write. Reuse the machinery that's already here rather than adding
-  a second way to do the same thing, and when two designs work, take the one with fewer parts
+  a second way to do the same thing — before writing a helper, check
+  [architecture.md § Shared code (server)](docs/project/architecture.md#shared-code-server) and
+  [web-client.md § Shared code (client)](docs/project/web-client.md#shared-code-client), which also
+  name the older copies not to imitate — and when two designs work, take the one with fewer parts
   touching each other.
 - **Simplest version first.** Take the simpler product decision, get a v1 working end to end, and
   add the complexity or the optimisation later, once something shows it is needed. When a choice
@@ -421,9 +434,10 @@ nothing else has a copy of.
   `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
   ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
-  others. Cache anything expensive on a content hash — twelve of the fifteen steps in `STEP_ORDER`
-  do, and the exceptions are `fetch`, `extract` and `blocks`; copy *their* choice of hash input
-  rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
+  others. Cache anything expensive on a content hash, and copy an existing step's choice of hash input
+  rather than only the idea. Which steps do, which decide freshness another way, and how:
+  [architecture.md § Conventions](docs/project/architecture.md#conventions) — read it before you
+  trust a skipped step or add one.
 - **Hierarchy — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
   together. They must not diverge into two trees.
@@ -433,9 +447,11 @@ nothing else has a copy of.
   [logging.md](docs/project/logging.md).
 - **Stream any model call a person is waiting on.** A spinner for fifteen seconds and the first
   sentence after two are the same call; only one lets the reader start reading. The plumbing is
-  already shared, so a new streaming endpoint is a generator and a route, not a project — and a
-  stream can end by simply stopping, which looks exactly like finishing.
-  [comments.md § streaming](docs/project/comments.md#streaming). A batch call in the pipeline, which
+  already shared (`src/stream-run.ts` § `runStream` on the server, `src/web/lib/sse.ts` §
+  `readAnswerStream` in the browser), so a new streaming endpoint is a generator and a route, not a
+  project — and a stream can end by simply stopping, which looks exactly like finishing. Start from
+  [comments.md § streaming](docs/project/comments.md#streaming), which also says which older routes
+  are hand-rolled copies not to imitate. A batch call in the pipeline, which
   nobody is watching, doesn't need this.
 - **Writing or changing a prompt?** Read [prompting-guide.md](docs/project/prompting-guide.md) first.
 - **Before writing any Anthropic SDK code**, load the `claude-api` skill for current model ids and

@@ -35,8 +35,9 @@
  * **Collapsed is not dismissed, and the difference is what makes this allowed.**
  * `choice` is a `useState` that dies with the mount: a referee who opens the
  * panel keeps it open, and the next visit starts from the computed default
- * again. Nothing is persisted, so the objection App.tsx § `RefereeBand` makes to
- * a dismissible notice — localStorage is banned, and a column is a migration for
+ * again. Nothing is persisted, so the objection src/web/modes/referee/RefereeMode.tsx
+ * makes to a dismissible notice — browser storage is for per-browser bits and
+ * used sparingly (docs/project/url-state.md), and a column is a migration for
  * a checkbox — never arises.
  *
  * ## The four rules this component is under, and where each is enforced
