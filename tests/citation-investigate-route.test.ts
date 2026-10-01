@@ -25,7 +25,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, citationInvestigations, rateLimitEvents } from "../src/db/schema.js";
+import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { loadEnvLocal } from "../src/env.js";
+import { modelFor } from "../src/models.js";
 import { EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type {
   BlockId,
@@ -101,9 +103,38 @@ const FOUND_LOOKUP = {
   usage: { server_tool_use: { web_search_requests: 1 } },
 };
 
+/** A page only *Dig deeper*'s forced search returns, so the stored row can show it arrived. */
+const REVIEW = "https://example.org/kaplan-review";
+const REVIEW_EXTRACT = "Kaplan and colleagues fit a power law to loss against parameters, data and compute.";
+/**
+ * **The forced search's answer** (plan 261001p stage 2): one search, one page,
+ * and a library query on its line — `searchFirst` reads the count from
+ * `usage` and refuses a press without one.
+ */
+const SEARCH_STEP = {
+  choices: [
+    {
+      finish_reason: "stop",
+      message: {
+        content: '"scaling laws" OR Kaplan',
+        annotations: [
+          {
+            type: "url_citation",
+            url_citation: { url: REVIEW, title: "A review of the scaling laws", content: REVIEW_EXTRACT },
+          },
+        ],
+      },
+    },
+  ],
+  usage: { server_tool_use: { web_search_requests: 1 } },
+};
+
 function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
   let calls = 0;
   let lookups = 0;
+  let searches = 0;
+  /** The `model` of every call to the gateway, in order. */
+  const models: string[] = [];
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const outside: string[] = [];
   globalThis.fetch = ((_url: string | URL, init?: { body?: string }) => {
@@ -118,8 +149,20 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
       const registry = /^https:\/\/api\.(crossref|datacite)\.org\//.test(url);
       return Promise.resolve(new Response("", { status: registry ? 500 : 404 }));
     }
-    /* The lookup is the one call that does not stream. */
-    if (!(init?.body ?? "").includes('"stream":true')) {
+    const body = init?.body ?? "";
+    models.push((JSON.parse(body) as { model: string }).model);
+    /* Dig deeper's forced search: the one call that forces its tool. */
+    if (body.includes('"tool_choice":"required"')) {
+      searches += 1;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () => JSON.stringify(SEARCH_STEP),
+      } as unknown as Response);
+    }
+    /* The lookup is the other call that does not stream. */
+    if (!body.includes('"stream":true')) {
       lookups += 1;
       return Promise.resolve({
         ok: true,
@@ -144,6 +187,8 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
   return {
     calls: () => calls,
     lookups: () => lookups,
+    searches: () => searches,
+    models: () => models,
     /** The hosts asked that are not the model gateway — the paper and the registry. */
     outside: () => outside,
     finish(rest: string) {
@@ -331,16 +376,25 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
     const ends = terminals(call.body());
     expect(ends.map((f) => f.name)).toEqual(["done"]);
     const done = ends[0]?.data as InvestigateCitationDone;
+    /* Plan 261001p stage 2: the forced search's page is stored beside the
+       answer's own, and its search is counted with the answer's. */
     expect(done.investigation).toMatchObject({
       answer: "Does it back the claim?\nThe abstract on arxiv.org says it does.",
-      extractsRead: 1,
-      longestExtractWords: 13,
+      extractsRead: 2,
+      longestExtractWords: 14,
       matchedHost: null,
-      searches: 1,
+      searches: 2,
       searchesFrom: "server_tool_use_details",
-      sources: [{ url: "https://arxiv.org/abs/2001.08361", title: TITLE }],
+      sources: [
+        { url: REVIEW, title: "A review of the scaling laws" },
+        { url: "https://arxiv.org/abs/2001.08361", title: TITLE },
+      ],
     });
     expect(stub.calls()).toBe(1);
+    expect(stub.searches()).toBe(1);
+    /* Every call but the search step went to Dig deeper's model. */
+    expect(stub.models()[0]).toBe(modelFor("dig-deeper-search", "standard"));
+    expect(stub.models().slice(1).every((m) => m === DIG_DEEPER_MODEL)).toBe(true);
     expect(await storedAnswer()).toBe(done.investigation.answer);
     expect((await listed())?.investigation).toEqual(done.investigation);
     /* Plan 261001a stage 3, through the real composition root: the row's
@@ -349,6 +403,23 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
        paper's state was stored through the CHECKs and read back. */
     expect(stub.outside()).toContain("arxiv.org");
     expect(done.investigation.paper).toMatchObject({ state: "unreadable", host: "arxiv.org", unreadableWhy: "not-found" });
+  });
+
+  /* Plan 261001p stage 2, Sol F2: the press writes its fingerprint with
+     `DIG_DEEPER_MODEL`, so the read must hash the same constant. Were it to
+     ask `modelFor`, an environment override would win there and every kept
+     answer would vanish from the row on reload. */
+  it("still attaches a kept answer on reload with the investigate model's override set", async () => {
+    expect((await listed())?.investigation).toBeDefined();
+    const previous = process.env.SPIDERYARN_CITATION_INVESTIGATE_MODEL;
+    process.env.SPIDERYARN_CITATION_INVESTIGATE_MODEL = "test/another-model";
+    try {
+      expect(modelFor("citation-investigate", "standard")).toBe("test/another-model");
+      expect((await listed())?.investigation).toBeDefined();
+    } finally {
+      if (previous === undefined) delete process.env.SPIDERYARN_CITATION_INVESTIGATE_MODEL;
+      else process.env.SPIDERYARN_CITATION_INVESTIGATE_MODEL = previous;
+    }
   });
 
   it("hides the answer when the list is made again with a different why, and shows it when put back", async () => {
@@ -407,37 +478,55 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
   /* Plan 260930d. Last, because it stores a find: the rows after it would
      skip the first step. */
   it("looks the work up first, streams stage and lookup frames, and reads with the page it stored", async () => {
-    const stub = provider("Does it back the claim?\n", FOUND_LOOKUP);
-    const call = serve("POST", investigateUrl());
-    const handled = handleApi(call.req, call.res, acceptAny);
-    await until(() => call.body().includes("event: delta"));
-    stub.finish("The abstract on arxiv.org says it does.");
-    await handled;
+    /* Standalone Find keeps this override; Dig deeper ignores it. The lookup
+       Dig deeper writes must still reattach on the shared read side. */
+    const previous = process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
+    process.env.SPIDERYARN_CITATIONS_FIND_MODEL = "test/standalone-find-override";
+    try {
+      const stub = provider("Does it back the claim?\n", FOUND_LOOKUP);
+      const call = serve("POST", investigateUrl());
+      const handled = handleApi(call.req, call.res, acceptAny);
+      await until(() => call.body().includes("event: delta"));
+      stub.finish("The abstract on arxiv.org says it does.");
+      await handled;
 
-    const names = frames(call.body()).map((f) => (f.name === "stage" ? `stage:${(f.data as { stage: string }).stage}` : f.name));
-    expect(names.filter((n) => n !== "delta")).toEqual(["stage:finding", "lookup", "stage:reading-paper", "stage:reading", "done"]);
-    const lookup = frames(call.body()).find((f) => f.name === "lookup")?.data as FindCitationResponse;
-    expect(lookup.outcome).toBe("found");
-    expect(lookup.outcome === "found" ? lookup.lookup.state : null).toBe("assessed");
-    expect(stub.lookups()).toBe(1);
-    expect(stub.calls()).toBe(1);
+      const names = frames(call.body()).map((f) =>
+        f.name === "stage" ? `stage:${(f.data as { stage: string }).stage}` : f.name,
+      );
+      expect(names.filter((n) => n !== "delta")).toEqual([
+        "stage:searching",
+        "stage:finding",
+        "lookup",
+        "stage:reading-paper",
+        "stage:reading",
+        "done",
+      ]);
+      const lookup = frames(call.body()).find((f) => f.name === "lookup")?.data as FindCitationResponse;
+      expect(lookup.outcome).toBe("found");
+      expect(lookup.outcome === "found" ? lookup.lookup.state : null).toBe("assessed");
+      expect(stub.lookups()).toBe(1);
+      expect(stub.calls()).toBe(1);
 
-    const done = terminals(call.body())[0]?.data as InvestigateCitationDone;
-    /* The re-read found the stored page, so this answer's own extracts credit it. */
-    expect(done.investigation.matchedHost).toBe("arxiv.org");
-    const row = await listed();
-    expect(row?.lookup).toEqual(lookup.outcome === "found" ? lookup.lookup : undefined);
-    expect(row?.investigation).toEqual(done.investigation);
+      const done = terminals(call.body())[0]?.data as InvestigateCitationDone;
+      /* The re-read found the stored page, so the extracts shown to this answer credit it. */
+      expect(done.investigation.matchedHost).toBe("arxiv.org");
+      const row = await listed();
+      expect(row?.lookup).toEqual(lookup.outcome === "found" ? lookup.lookup : undefined);
+      expect(row?.investigation).toEqual(done.investigation);
 
-    /* A second press skips the first step: the row now has a current assessed lookup. */
-    const again = provider("It does.\n", FOUND_LOOKUP);
-    const second = serve("POST", investigateUrl());
-    const secondHandled = handleApi(second.req, second.res, acceptAny);
-    await until(() => second.body().includes("event: delta"));
-    again.finish("Still.");
-    await secondHandled;
-    expect(again.lookups()).toBe(0);
-    expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
+      /* A second press skips the first step: the row now has a current assessed lookup. */
+      const again = provider("It does.\n", FOUND_LOOKUP);
+      const second = serve("POST", investigateUrl());
+      const secondHandled = handleApi(second.req, second.res, acceptAny);
+      await until(() => second.body().includes("event: delta"));
+      again.finish("Still.");
+      await secondHandled;
+      expect(again.lookups()).toBe(0);
+      expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
+      else process.env.SPIDERYARN_CITATIONS_FIND_MODEL = previous;
+    }
   });
 });
 

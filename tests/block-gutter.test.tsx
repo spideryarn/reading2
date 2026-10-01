@@ -446,7 +446,7 @@ describe('the "?"', () => {
     expect(classes).toEqual(["blk-cmt", "blk-permalink", "block-chat", "blk-help", "blk-more"]);
   });
 
-  it("puts the reading-time strip last, with its explanation, outside the tab order", () => {
+  it("puts the reading-time strip last, outside the tab order, with no native title", () => {
     /* SPIDERYARN-READING2-4S: Greg saw the hairline and could not find out what
        it meant. The column counts its controls with `:nth-child` from the
        front, so the strip has to be the last child or it would push a control
@@ -454,7 +454,10 @@ describe('the "?"', () => {
     paint([comment("c1", 5)]);
     const last = host.querySelector(".blk-gutter")?.lastElementChild;
     expect(last?.className).toBe("blk-read");
-    expect(last?.getAttribute("title")).toMatch(/^Reading time: /);
+    /* Its explanation is the reading view's shared rich card since 2026-10-01
+       (spya-mn3ruw), not a `title` the browser would draw over it:
+       tests/reading-time-card.test.tsx. */
+    expect(last?.hasAttribute("title")).toBe(false);
     expect(last?.getAttribute("aria-hidden")).toBe("true");
     expect(last?.hasAttribute("tabindex")).toBe(false);
   });

@@ -109,7 +109,7 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — every `Task` whose `TASK_WIRE` entry is `"messages"`, which `PIPELINE_TASKS` reads off ([`src/models.ts`](../../src/models.ts)) | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Investigate* ([citations.md](citations.md)), quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Dig deeper* ([citations.md](citations.md)), *Dig deeper*'s forced search on all three (`dig-deeper-search`) and the glossary's and a comment's answer (`dig-deeper`, [glossary.md](glossary.md#digging-deeper-into-a-term)) — Citations' answer is `citation-investigate`, with `citations-find` and `citation-paper-passages` when needed — quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
@@ -976,7 +976,12 @@ money — the glossary lookup and "ask the web" pair, and the explain path:
 > for now.
 
 So the answer is **no per-reader cap**, deliberately, and this section exists so the next person to
-notice the gap finds the decision instead of re-proposing the work. It was proposed on 2026-09-06
+notice the gap finds the decision instead of re-proposing the work. One exception has since arrived
+with a feature rather than as a cap: since 2026-10-01 a *Dig deeper* press, from the glossary or a
+comment, takes a stored per-reader allowance with a global fuse (`DIG_DEEPER_RATE_POLICY`,
+[glossary.md](glossary.md#the-allowance-dig-deeper-has-and-look-up-does-not)), because it moved
+those two buttons onto Opus with a forced search. The typed *Look up* box and a comment's first
+answer are still uncapped. It was proposed on 2026-09-06
 ([260906i](../plans/260906i-sweep-for-missed-work-across-feedback-reports-worktrees-and-sessions.md)),
 a session was dispatched to plan it, and it was stood down on this answer.
 

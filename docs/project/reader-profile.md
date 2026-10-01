@@ -620,17 +620,20 @@ produced that zero.**
 That is the same failure the meter itself was built to end, one layer further down. An observation
 without the thing observed is half an instrument. So:
 
-- **The strip names the device**, at the moment it is diagnostic — on the quiet line, not all the
-  time. *"No sound detected yet · Microsoft Teams Audio Device (Virtual) · Change"*: two facts side
-  by side rather than one sentence joining them, because *"no sound **from** X"* turns a
-  ten-second threshold into a verdict about a device, which is exactly the accusation the section
-  above exists to refuse.
+- **The strip names the device**, on a line of its own for as long as the microphone is open —
+  *"Microphone: Default - Logitech BRIO · Change"*. It used to wait for the quiet line, on the
+  theory that moving bars had already answered the question; Greg's webcam report (spya-g8byyd)
+  is the case where sound arrives from the wrong device and the bars say nothing about it. Still
+  two facts side by side rather than one sentence joining them, because *"no sound **from** X"*
+  turns a ten-second threshold into a verdict about a device, which is exactly the accusation the
+  section above exists to refuse.
 - **The reader can pick a different one.** [`mic-devices.ts`](../../src/web/mic-devices.ts), stored
   in `localStorage`, sent as `{ deviceId: { exact } }` — `exact` rather than `ideal`, because
   `ideal` silently substitutes another device when the named one is gone, which is this whole bug
-  wearing a constraint. We deliberately do **not** guess: no preferring `'default'`, no skipping
-  labels matching `/virtual|teams|zoom/`. Both would override a decision the reader made in their
-  own browser settings.
+  wearing a constraint. No skipping labels matching `/virtual|teams|zoom/`, which would be wrong
+  for anybody who dictates through one. **With no pick, the system default** — by name on
+  Chromium, whose plain `{ audio: true }` opens Chrome's own choice instead
+  ([dictation.md](dictation.md), failure 9).
 
 ### The button says what pressing it does, and for how long
 

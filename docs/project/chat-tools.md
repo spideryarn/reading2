@@ -561,6 +561,39 @@ The other half of that afternoon: `max_tokens` went from 2,000 to 4,000, because
 reasoning tokens come out of the same budget and a tool result to digest can consume all of it before
 a word is written.
 
+## What chat is told is on screen
+
+**Built 2026-10-01**, for report spya-ybnas5:
+
+> I think we might have added something to the chat functionality that it knows which block or
+> blocks are visible on the screen. Is that the case? If we haven't, that might be a nice thing to
+> add. But let's not overemphasize it.
+>
+> — Greg, 2026-10-01
+
+Before this, chat knew one block: `?at=`, as *"The reader is currently at block …"*. Now a question
+typed in **Chat mode** carries the blocks on screen at the moment Send (or Save, on an edit) is
+pressed — `blocksOnScreenNow` in [`src/web/on-screen.ts`](../../src/web/on-screen.ts), the same
+window and 24px rule as the band's lit links — and the prompt gets one hedged line in place of the
+position line: `visibleBlocksLine` in [`src/article-prompt.ts`](../../src/article-prompt.ts),
+*"For context only … If their message refers to what is on screen, these may help; otherwise
+ignore them."* Below the cache breakpoint, like the position line it replaces.
+
+Where it is deliberately not sent, so nobody files these as gaps:
+
+- **Remember.** Its prompt says not to guess how far the reader has got, and a screenful is that
+  guess. The route refuses `visible` on any thread that is not a chat.
+- **A band lying over the prose** (a phone). Reader's `proseOnScreen` is false, nothing is sent,
+  and the old `at` line goes as before.
+- **A retry.** It re-asks a stored question, and the screen is not stored — the same limit `at`
+  has always had. Persisting it would be a column on the question row.
+- **The passage Chat dialog and Live (voice).** The dialog has its passage; Live's context is
+  minted once per session and would need per-turn context of its own. Neither was asked for.
+
+Ids the article does not have are dropped (a stale tab); anything that is not an id is a 400. The
+client trims to `MAX_VISIBLE_BLOCKS` (100, `src/types.ts`) so a tall screen cannot get Send
+refused. [261001q](../plans/261001q-chat-knows-the-blocks-on-screen.md).
+
 ## Not built, and worth building
 
 Greg's list, with a recommendation each so nobody is blocked. All three are **writes**, which is the

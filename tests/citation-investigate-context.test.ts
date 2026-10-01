@@ -19,7 +19,8 @@ import {
   investigateContextHash,
   type MatchedPage,
 } from "../src/citation-investigate-context.js";
-import { generationKey } from "../src/models.js";
+import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
+import { CAPABLE_MODEL_OPENROUTER, generationKey } from "../src/models.js";
 import { PAPER_SELECTION_VERSION } from "../src/paper-evidence.js";
 import type { BlockId, CitationInvestigation, Citations, CitedWork, Meta } from "../src/types.js";
 
@@ -224,6 +225,50 @@ describe("attaching a stored investigation", () => {
     expect(attach(base, BLOCKS, null, "m", META, null)).toBeUndefined();
     expect(attach(base, BLOCKS, null, "m", META, { ...MATCHED, title: "A revised title" })).toBeUndefined();
     expect(attach(base, BLOCKS, null, "m", META, { ...MATCHED, quotes: ["A different verified quote."] })).toBeUndefined();
+  });
+
+  /* Plan 261001p stage 2, Sol F6: *Investigate* became *Dig deeper* — a
+     forced search in the prompt, Opus throughout — so an answer from before
+     must not be drawn under the new name. The version is what detaches it:
+     Sonnet and Opus are one generation (`generationKey`), so the model alone
+     would not. The old fingerprint is rebuilt by hand, from the recipe the
+     test above pins, rather than by calling the function with the old
+     constant, which no longer exists to call. */
+  it("hides an answer written before Dig deeper — version 6, on Sonnet — and attaches one written now", () => {
+    const context = investigateContext(base, textOf(BLOCKS));
+    const articleKey = investigateArticleKey(META, BLOCKS);
+    const recipe = (version: string, model: string) =>
+      createHash("sha256")
+        .update(
+          JSON.stringify([
+            version,
+            PAPER_SELECTION_VERSION,
+            generationKey(model),
+            articleKey,
+            context.title,
+            context.authors,
+            context.year,
+            context.reference,
+            context.url,
+            context.linkFrom,
+            context.why,
+            context.passages,
+            null,
+            [MATCHED.url, MATCHED.title, MATCHED.quotes],
+          ]),
+          "utf8",
+        )
+        .digest("hex")
+        .slice(0, 16);
+    const now = (row: CitedWork) => hashFor(row, BLOCKS, null, DIG_DEEPER_MODEL);
+    /* The recipe is the function's, so the old row below is a real old row. */
+    expect(recipe(CITATION_INVESTIGATE_VERSION, DIG_DEEPER_MODEL)).toBe(now(base));
+
+    const old = new Map([[base.id, { ...STORED(recipe("citation-investigate/6", CAPABLE_MODEL_OPENROUTER)), promptVersion: "citation-investigate/6" }]]);
+    expect(attachInvestigations(list(base), old, now).citations[0]?.investigation).toBeUndefined();
+
+    const dug = new Map([[base.id, STORED(now(base))]]);
+    expect(attachInvestigations(list(base), dug, now).citations[0]?.investigation?.answer).toBe("An answer.");
   });
 
   it("leaves every row without a stored answer untouched", () => {

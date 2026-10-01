@@ -6,7 +6,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ON_SCREEN_MIN_PX, onScreenIds, onScreenLinkCss, rowCache } from "../src/web/on-screen.js";
+import { MAX_VISIBLE_BLOCKS } from "../src/types.js";
+import {
+  blocksOnScreenNow,
+  ON_SCREEN_MIN_PX,
+  onScreenIds,
+  onScreenLinkCss,
+  rowCache,
+} from "../src/web/on-screen.js";
 
 const A = "spya-aaaaaa";
 const B = "spya-bbbbbb";
@@ -111,5 +118,43 @@ describe("onScreenLinkCss", () => {
   it("is empty for no ids", () => {
     expect(onScreenLinkCss([])).toBe("");
     expect(onScreenLinkCss(["not-ours"])).toBe("");
+  });
+});
+
+describe("blocksOnScreenNow — what a chat question says was on screen", () => {
+  /** The article table, each row's box `top`..`bottom` in the viewport. */
+  function table(rows: [string, number, number][]): void {
+    const t = document.createElement("table");
+    const body = document.createElement("tbody");
+    for (const [id, top, bottom] of rows) {
+      const tr = document.createElement("tr");
+      tr.dataset.block = id;
+      tr.getBoundingClientRect = () => ({ top, bottom, height: bottom - top }) as DOMRect;
+      body.append(tr);
+    }
+    t.append(body);
+    document.body.append(t);
+  }
+
+  it("names the rows between the top of the window and the bottom, by the lit links' rule", () => {
+    const h = window.innerHeight;
+    table([
+      ["spya-above1", -200, -10],
+      [A, -10, 100],
+      [B, h - 60, h + 200],
+      ["spya-below1", h + 5, h + 100],
+    ]);
+    expect(blocksOnScreenNow()).toEqual([A, B]);
+  });
+
+  it("trims to the server's cap rather than having Send refused", () => {
+    /* `onScreenIds` counts any short row wholly on screen, so a dense article on
+       a tall display can name more than the route accepts. */
+    const rows: [string, number, number][] = [];
+    for (let i = 0; i < MAX_VISIBLE_BLOCKS + 20; i++) {
+      rows.push([`spya-${String(i).padStart(6, "0")}`, i * 2, i * 2 + 1]);
+    }
+    table(rows);
+    expect(blocksOnScreenNow()).toHaveLength(MAX_VISIBLE_BLOCKS);
   });
 });

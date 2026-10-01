@@ -45,9 +45,9 @@ until you know what they are for.
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
  │             │ ┌───────────────────┐│                         │
- │             │ │CHECKED         🌐 ││   ← or, before anybody  │
+ │             │ │FROM A WEB SEARCH🌐 ││   ← or, before anybody  │
  │             │ │Seth uses it in the││     pressed it:         │
- │             │ │sense Chalmers…    ││   [🌐 Check the web]    │
+ │             │ │sense Chalmers…    ││   [🌐 Dig deeper]       │
  │             │ │ ↗ plato.stanford  ││                         │
  │             │ └───────────────────┘│                         │
  │             │ ▸ also: nonredu…     │                         │
@@ -79,7 +79,7 @@ until you know what they are for.
  row shows whichever of the two exists — for a person quoted once there is
  no "in this piece" worth writing, and saying so is the entry's whole job.
 
- CHECKED is the only part of an entry that has been near a source. The batch
+ The web-search answer is the only part of an entry that has been near a source. The batch
  call does not search — background is memory, and the ↗ under it is a guess
  at a canonical page — so until somebody presses the button there is a button
  rather than a badge claiming a check nobody ran. The globe has an off state,
@@ -333,9 +333,12 @@ opened. Four things follow, and three of them are the interesting part:
 - **The line got quieter.** A wash behind one pressed term is a highlight; the same wash behind every
   term in the piece is a mottled paragraph the reader cannot turn off. The standing mark is the
   dotted rule alone (`mark.term` in [`styles/annotations.css`](../../src/web/styles/annotations.css)); the wash moved to the
-  pressed one.
+  pressed one. **And then a little louder again** on 2026-10-01 — 2px at 70% rather than 1px at
+  45% — because [cross-references](cross-references.md) had arrived as a heavier dotted line and
+  Greg could not tell the two apart, and wanted the glossary the more prominent (spya-sxvq2j,
+  [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
-  *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed
+  *different* mark — `mark.term[data-term-open]`, which is exactly what the open comment and the pressed
   search hit already do. `open` on `TermSelection` carries it.
 - **The principle moved rather than lost.** What the section below objects to is the *article
   acquiring explanation* on the model's initiative. The underline is now a standing property of the
@@ -556,16 +559,75 @@ the article**, and those two entries only found their blocks because `JFK` and `
 aliases. The prompt now names both as examples of what not to do, and the re-run gave
 *John F. Kennedy* and *Martin Luther King Jr.*
 
-### Checking a term on the web
+<a id="checking-a-term-on-the-web"></a>
+
+### Digging deeper into a term
 
 `background` is the model's memory. **Nothing in the batch call is checked against anything**, and
 the `url` it sometimes offers is a guess at a canonical page rather than a page it visited. So the
-open entry carries a **"Check the web"** button, and pressing it is what turns a remembered answer
-into a checked one:
+open entry carries a **Dig deeper** button (*Check the web* until 2026-10-01), and pressing it adds
+a separate answer, from a forced web search, beside the remembered one:
 
 ```
-POST /api/glossary/:slug/:id/lookup   →  SSE: delta…, then done { entry } | error   (~10s, one model call)
+POST /api/glossary/:slug/:id/lookup   →  SSE: delta…, then done { entry } | error
+                                         (~20–30 s: a forced search, then the answer)
 ```
+
+**One action in three modes, since 2026-10-01.** The button used to say *Check the web* and leave the
+searching to the model, which on anything it thought it knew chose not to. Asked about that:
+
+> - Well, if it says "Check the Web", then it always should.
+> - That said, there's an argument for saying something like renaming it to investigate further that
+>   would use a bigger model and might not check the web. But I'm inclined to say that, yeah,
+>   actually, let's rename it to investigate further or go deeper or something like that and say that
+>   it always checks the web and always use a bigger model and maybe even uses the tool that we
+>   (should) have, I hope, for searching other documents in the library, and perhaps drawing
+>   on/referencing them.
+> - And let's consider if there are any other places in other modes that have an equivalent to
+>   investigate further or go deeper. And in all of those cases, so if somebody's found something and
+>   they're like, yeah, I want to know more about this particular thing, that it should use a bigger
+>   model.
+>
+> — Greg, 2026-10-01
+
+There were three such places, and they are now one action, **Dig deeper**: this button, a comment's
+re-ask (*Search the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and
+Citations' *Investigate* ([citations.md § Dig deeper](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+Glossary and Citations say *Digging deeper…* while it runs and *Dig deeper again* over a kept
+answer; a comment hides the button while it runs and keeps calling the re-ask *Dig deeper*. The
+shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts) — steps 1 and 2 below and the model;
+step 3 is the glossary's and a comment's, and Citations' is
+[its own](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand). A press:
+
+1. **Runs a web search, forced by code rather than left to the model.** `searchFirst` makes one
+   quick-tier call (the `dig-deeper-search` job) with `tool_choice: "required"` and the Exa engine,
+   and keeps the pages it returns. It is a separate call because the answer's model cannot be forced
+   to search — the probes are in the plan's § How the search is forced. A search step that reports
+   no search, or no count at all, stops the press with `[dig-no-search]` before the answer is asked
+   for, because an answer from memory under a *from a web search* label is what this exists to end.
+2. **Looks in the reader's other articles.** The same call writes a keyword query, run through
+   `librarySearch.searchLibrary` — owner-scoped, free, and literal. Best-effort: nothing found is an
+   answer, and a failure there does not fail the press. The answer names such an article by its
+   title; it cannot link to the passage yet.
+3. **Answers on the high-power model** (glossary and comments; Citations hands the findings to
+   `investigatePart` and streams `citation-investigate`), `DIG_DEEPER_MODEL`, whatever the article's
+   [High-powered AI](high-powered-ai.md) switch says and whatever `SPIDERYARN_EXPLAIN_MODEL` is set
+   to (the `dig-deeper` job). The findings go in the last user part, after the cache breakpoint,
+   fenced as untrusted text; the cached prefix is byte-identical to a plain explain's, and the model
+   keeps its own search tool and may search again.
+
+The searches the answer reports are the search step's plus its own, and its sources are both sets,
+deduped. That is why the tooltip says the sources are what it **found**, not what it cited: a
+plain-text answer cannot say which ones it leaned on. A glossary or comment press measured at about 2.4× a first explain
+on a cold article and 4× on a warm one; the figures are the plan's § The cost line, and it has an
+allowance, [below](#the-allowance-dig-deeper-has-and-look-up-does-not). The probes, the design and
+GPT Sol's two reviews are
+[261001p](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md).
+
+**Look up** — the typed box, [below](#looking-a-term-up) — is not Dig deeper and did not change: it is
+a first question about a phrase rather than a second look at an answer, so the model still decides
+whether to search, on the article's own model. The link hover card stays search-free on purpose
+([links.md](links.md)).
 
 **The answer streams, and `done` means stored** — since 2026-09-10
 ([plan](../plans/260910g-stream-glossary-answers-as-they-arrive.md)), on the same helper and reader as
@@ -603,15 +665,17 @@ nothing saying so. `loadGlossary` attaches lookups at read time, so the panel st
 `entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
-([`src/explain.ts`](../../src/explain.ts)), with the form of the term the article really uses as the
-quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
+([`src/explain.ts`](../../src/explain.ts)), handed the dig's findings, with the matching glossary form — the name or an alias — as
+the quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
 scanning rather than read out of `entry.blocks`. It was `entry.blocks[0]` and nothing else, which
 made a term used in five places uncheckable the moment the first of them changed — see
 [The two ways it refuses](#the-two-ways-it-refuses-and-why-they-used-to-be-one) below.
 That is not opportunism: our review of the previous version argued a
 glossary should be *the same mechanism as comments with a different prompt* rather than a second
 system, and this is the first half of that. It also means the article prefix is **cached and shared**,
-so a lookup on a piece somebody has already asked a question about is a cache hit.
+so a lookup on a piece somebody has already asked a question about is a cache hit — on the same
+model: a dig's prefix is Opus's, so on an article whose switch is off the first dig writes Opus's
+copy and later digs read it.
 
 Three decisions inside it:
 
@@ -624,9 +688,12 @@ Three decisions inside it:
   that prompted all this.
 - **The answer sits beside `background`, never merged into it.** A reader who cannot tell the checked
   answer from the recalled one has lost the thing the labels above exist to give them.
-- **`searches: 0` is drawn, not hidden.** The model decides per call, so "it judged it already knew"
-  is a real outcome and the globe has an off state saying so. Without that, an answer that was never
-  checked looks identical to one that was. The label says it in plain words — *from a web search*, or
+- **`searches: 0` is drawn, not hidden.** It was a real outcome while the model decided per call —
+  "it judged it already knew" — so the globe has an off state saying so. Without that, an answer that
+  was never checked looks identical to one that was. A dig cannot produce it any more (`searchFirst`
+  refuses a press it cannot show a search behind), but it is still drawn on an entry checked before
+  2026-10-01, where *Dig deeper again* sits under it, and on a *Look up* answer, where the model
+  still decides. The label says it in plain words — *from a web search*, or
   *no web search — from the model's own knowledge* — since 2026-10-01; it said *checked* and *asked,
   not checked*, and Greg could not tell what the second meant (`spya-puyb6d`,
   [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 4).
@@ -692,9 +759,9 @@ explanatory line on rows that have no occurrences; what it buys is that they are
 words in front of them are absent. The button is not drawn for a visitor at all, so nothing else
 changes. Reversing this is one boolean if Greg would rather have the sentence.
 
-**What is still open:** those entries are arguably the ones a web check would help most — the
+**What is still open:** those entries are arguably the ones a dig would help most — the
 remembered answer is all there is — and we refuse them, because `explain` wants a selected passage
-and inventing one is a false premise handed to a model asked to reason from it. A web check written
+and inventing one is a false premise handed to a model asked to reason from it. A dig written
 for an unquoted term — its own prompt, saying honestly that the glossary named something the article
 alludes to — is a real option and nobody has decided it.
 [The postmortem](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) has the rest.
@@ -712,8 +779,8 @@ A reader asked for one, the day after the bug above:
 Built the same day, and **cut down**: it finds the term in the piece and explains that passage.
 `AskATerm` in [`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx) →
 `POST /api/glossary/:slug/ask` → `makeAskAboutTerm` in
-[`term-lookup.ts`](../../src/term-lookup.ts), which is *"Check the web" with a phrase where the entry
-was*: the same `anchorIn` walk, the same `explain` call, the same `safeUrl` filter, drawn by the same
+[`term-lookup.ts`](../../src/term-lookup.ts), which is *Dig deeper without the dig, with a phrase where the
+entry was*: the same `anchorIn` walk, the same `explain` call, the same `safeUrl` filter, drawn by the same
 `LookupAnswer` component. One anchor rule, which is the whole argument for that file existing.
 
 **"A tiny bit robust" is [the matching rule](#the-matching-rule-and-why-it-is-its-own-module) and
@@ -834,21 +901,28 @@ disappearance reads as the design rather than as a failure. It was a line of its
 until 2026-09-29, when Greg asked for it to go to save a phone two lines
 ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)).
 
-**No rate limit, no quota and no single-flight guard — and there is none to reuse.** The sibling
-`lookup` POST has none either; the only limiter in [`routes.ts`](../../src/routes.ts) is the feedback
-form's hourly cap. So **an owner with one article of their own can drive paid `explain` calls as fast
-as they can post**, each of which may run up to eight web searches. Ownership decides *which* article,
-not *how many* requests; `withSpendAttribution` records the spend rather than authorising it; and this
-request never enters the job queue, so the queue's concurrency cap is not a limit on it. Written
-down rather than fixed, because it is the shape of every paid request in this file and a scheme
-invented for one endpoint would be the wrong place to start. **A decision for Greg**, raised by GPT
-Sol's review of the built code, 2026-09-04, and in
-[`260904_1301`](../user-feedback/260904_1301-glossary-search-box-for-a-term.md).
+<a id="the-allowance-dig-deeper-has-and-look-up-does-not"></a>
 
-The cheapest thing that already exists is `inTurnOrder` ([`routes.ts`](../../src/routes.ts)), the
-per-key serialiser chat writes go through — one ask at a time per article. **It is per *process***,
-so it would slow a script on one box and bound nothing on a fleet; a real cap is a stored counter,
-which is [billing.md](billing.md)'s territory rather than this feature's.
+**Dig deeper has an allowance; Look up still has none.** Since 2026-10-01 every Dig deeper press —
+this panel's and a comment's, which share one — takes the `dig-deeper` allowance
+(`DIG_DEEPER_RATE_POLICY` in [`src/dig-deeper.ts`](../../src/dig-deeper.ts): so many an hour and a
+day per reader, two at once, and a global fuse across every reader a day). It is taken after every
+refusal that costs nothing and before anything that does, so a refused press is an ordinary JSON 429,
+or a 503 carrying `[dig-resting]`, and changes nothing. Citations' Dig deeper keeps its own allowance
+([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)); a comment's first
+answer, the tick-box, spends none.
+
+**This box has no rate limit, no quota and no single-flight guard.** So **an owner with one article
+of their own can drive paid `explain` calls as fast as they can post**, each of which may run up to
+`MAX_SEARCHES` web searches (`src/explain.ts`). Ownership decides *which* article, not *how many* requests;
+`withSpendAttribution` records the spend rather than authorising it; and this request never enters
+the job queue, so the queue's concurrency cap is not a limit on it. Raised by GPT Sol's review of the
+built code, 2026-09-04, and in
+[`260904_1301`](../user-feedback/260904_1301-glossary-search-box-for-a-term.md); Greg's answer, two
+days later, was that the account-level monthly cap is enough for now
+([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
+The stored counter that would bound it now exists — the allowance Dig deeper takes — so giving this
+box one is a policy and a bucket, not a new mechanism.
 
 The endpoint takes **a term and nothing else**: no block id, no offset, no definition, no aliases, no
 owner. That does not mean the caller has no say in the passage — a long enough term picks out one
