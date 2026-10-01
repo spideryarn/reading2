@@ -1,0 +1,20 @@
+{
+  "arm": "high-about-slider3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "0595d4e966154a0784579154007599cb1e7f89b8b57ff171be7a725f06523f88",
+  "at": "2026-10-01T00:36:22.638Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 18334,
+  "costUsd": 0.157348,
+  "tokens": {
+    "input": 61314,
+    "output": 3472,
+    "reasoning": 1513
+  },
+  "ok": false,
+  "error": "Only 0 of the model's 5 \"fuller\" paragraphs could be tied to the article, and at least 3 are needed, so there is nothing to write. Dropped: 5 with no usable passage, 0 empty, 0 malformed; 15 ids not in this article's body."
+}

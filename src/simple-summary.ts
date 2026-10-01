@@ -125,6 +125,9 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
 /** Passages per paragraph. Extra ids are dropped and counted. */
 export const MAX_IDS = SIMPLE_MAX_IDS;
 
+/** Asks per level: the first, and one more if its answer fails validation (`writeLevel`). */
+export const LEVEL_ATTEMPTS = 2;
+
 /**
  * One call's answer budget in tokens, sized for the larger level: Fuller's
  * word ceiling (480 words, ~640 tokens at 0.75 words a token, nearly doubled for
@@ -526,6 +529,8 @@ export interface SimpleSummaryRun {
   cacheWriteTokens: number;
   maxTokens: number;
   elapsedMs: number;
+  /** Requests made, across every level and retry — three when nothing was asked twice. */
+  calls: number;
 }
 
 export async function generateSimpleSummary(opts: {
@@ -579,7 +584,8 @@ export async function generateSimpleSummary(opts: {
     opts.onProgress(`${chars.toLocaleString("en-GB")} characters so far`);
   };
 
-  const writeLevel = async (level: SimpleLevel) => {
+  /** One request for one level: its answer text, or a throw for the call itself failing. */
+  const askLevel = async (level: SimpleLevel): Promise<{ raw: string; usage: Anthropic.Usage }> => {
     let message: Anthropic.Message;
     try {
       const call = streamMessage(
@@ -628,8 +634,36 @@ export async function generateSimpleSummary(opts: {
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("");
-    const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, dropped);
-    return { paragraphs, usage: message.usage };
+    return { raw, usage: message.usage };
+  };
+
+  /**
+   * **One level, with one second chance when its answer fails validation.**
+   * All-or-none over three calls turns each level's small failure rate into a
+   * press that fails about one time in twelve (plan 261001b § Ledger: 22 of 24
+   * stored all three; the losses were a level one word over its ceiling, a
+   * level whose ids matched no passage, and a stray character after the JSON).
+   * Each is a fresh sample's problem, so that level alone is asked again —
+   * once. A failed *call* (network, refusal, truncation, an abort) is not
+   * retried here: those have their own handling, and the job can be re-run.
+   *
+   * A rejected attempt's tally is discarded, so `dropped` counts what the kept
+   * answer lost; every attempt's tokens are returned, because they were spent.
+   */
+  const writeLevel = async (level: SimpleLevel) => {
+    const usages: Anthropic.Usage[] = [];
+    for (let attempt = 1; ; attempt += 1) {
+      const { raw, usage } = await askLevel(level);
+      usages.push(usage);
+      const tally = emptyDropped();
+      try {
+        const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
+        for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
+        return { paragraphs, usages, attempts: attempt };
+      } catch (err) {
+        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) throw err;
+      }
+    }
   };
 
   /* `Promise.all` alone returns on the first rejection. That would let the
@@ -662,7 +696,7 @@ export async function generateSimpleSummary(opts: {
     SimpleParagraph[]
   >;
   const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
-    written.reduce((n, w) => n + (pick(w.usage) ?? 0), 0);
+    written.reduce((n, w) => n + w.usages.reduce((m, u) => m + (pick(u) ?? 0), 0), 0);
 
   const simpleSummary = stamped(levels, {
     power: opts.power,
@@ -685,6 +719,7 @@ export async function generateSimpleSummary(opts: {
     cacheReadTokens: sum((u) => u.cache_read_input_tokens),
     cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
     maxTokens,
+    calls: written.reduce((n, w) => n + w.usages.length, 0),
     elapsedMs: Date.now() - started,
   };
 }

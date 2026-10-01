@@ -324,8 +324,22 @@ real profile). `npx tsx evals/simple/tally.ts <arm>` prints any arm's table; the
    431 words against a 420 ceiling, Brief at 210 against 200, and one answer with a stray character
    after its JSON (the shared strict parser, left alone). The ceilings were moved above the longest
    seen (240 / 360 / 480) — a ceiling is the orientation-versus-digest line, and the asks set the
-   length. `*-slider2`: **12 of 12**. With the new ceilings, **23 of 24** across both repeats store
-   all three levels — the gate holds.
+   length. `*-slider2`: **12 of 12**.
+4. **The gate, honestly counted** (GPT Sol's code review, P1-4: the first draft of this line said
+   23 of 24 by re-scoring `slider1`'s failures against ceilings they never ran under; recorded, the
+   two repeats are 21 of 24). A clean third repeat on the shipped prompt and ceilings,
+   `*-slider3`: 10 of 12 — Brief at 241 words against 240, and a Fuller whose five paragraphs named
+   no passage of the article. **On the shipped settings, `slider2` + `slider3`: 22 of 24 (92%)** —
+   over the 90% gate, but all-or-none means about one press in twelve fails and the reader presses
+   again. → **A level whose answer fails validation is asked once more, on its own**
+   (`LEVEL_ATTEMPTS = 2` in `src/simple-summary.ts`); a failed *call* is not retried. Every loss
+   seen — a word over, ids that match nothing, a stray character after the JSON — is a sample's
+   problem, so a second sample nearly always clears it, and the cost is one extra call on the
+   presses that need it. Not re-measured with paid runs: the tests drive both the second chance and
+   the failure after it.
+
+`split1` was 10 of 12 once its last run landed (the first draft said 2 of 11 failures, counted
+while one was still running).
 
 **The shipped design, across both slider repeats** (24 runs):
 

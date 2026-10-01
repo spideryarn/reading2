@@ -33,7 +33,7 @@ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 /* ------------------------------------------------------- the stubbed model -- */
 
 /** One answer for every call, or one per level — told apart by the level's system prompt. */
-let answer: string | Partial<Record<SimpleLevel, string>> = "";
+let answer: string | Partial<Record<SimpleLevel, string | string[]>> = "";
 let stop: string = "end_turn";
 let waitForAbort: SimpleLevel | null = null;
 const abortSettled = new Set<SimpleLevel>();
@@ -45,8 +45,13 @@ const levelOf = (body: unknown): SimpleLevel => {
 };
 
 /** A level the case does not name gets a good answer, so each case is about the level it names. */
-const answerFor = (level: SimpleLevel): string =>
-  typeof answer === "string" ? answer : (answer[level] ?? JSON.stringify({ paragraphs: GOOD[level] }));
+/** A list is handed out one answer per call, in order — a level asked twice gets the second. */
+const answerFor = (level: SimpleLevel): string => {
+  if (typeof answer === "string") return answer;
+  const given = answer[level];
+  if (Array.isArray(given)) return (given.length > 1 ? given.shift() : given[0]) ?? "";
+  return given ?? JSON.stringify({ paragraphs: GOOD[level] });
+};
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
@@ -390,6 +395,30 @@ describe("the request", () => {
        finalMessage (and therefore its spend record) was still pending. */
     expect(sent.every((c) => c.aborted())).toBe(true);
     expect(abortSettled).toEqual(new Set(["brief"]));
+  });
+
+  it("asks a level again, once, when its answer fails validation, and keeps the second", async () => {
+    const overCeiling = answerOf([para(words(SIMPLE_LIMITS.brief.maxWords + 1), INTRO.id), para("Two.", WHY.id)]);
+    answer = { brief: [JSON.stringify(overCeiling), JSON.stringify(answerOf(BRIEF))] };
+    const out = await run();
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+    expect(out.calls).toBe(4);
+    expect(sent.filter((c) => levelOf(c.body) === "brief")).toHaveLength(2);
+    /* The rejected attempt's tokens were spent, so they are counted. */
+    expect(out.outputTokens).toBe(4);
+  });
+
+  it("does not ask a third time: a level that fails twice fails the run", async () => {
+    answer = { fuller: ["{ not json", JSON.stringify(answerOf([para("One.", INTRO.id)]))] };
+    await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
+    expect(sent.filter((c) => levelOf(c.body) === "fuller")).toHaveLength(2);
+  });
+
+  it("does not retry a refusal", async () => {
+    stop = "refusal";
+    answer = "";
+    await expect(run()).rejects.toThrow();
+    expect(sent).toHaveLength(3);
   });
 
   it("reports what it dropped on the run, and does not store it", async () => {

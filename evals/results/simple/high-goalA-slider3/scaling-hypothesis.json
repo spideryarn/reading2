@@ -1,0 +1,123 @@
+{
+  "arm": "high-goalA-slider3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "0595d4e966154a0784579154007599cb1e7f89b8b57ff171be7a725f06523f88",
+  "at": "2026-10-01T00:36:23.699Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 15804,
+  "costUsd": 0.198752,
+  "tokens": {
+    "input": 86556,
+    "output": 2564,
+    "reasoning": 603
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 228,
+  "fullerWords": 304,
+  "briefWords": 190,
+  "paragraphs": [
+    {
+      "text": "This piece, written just after GPT-3's 2020 release, argues for the scaling hypothesis: that making neural networks bigger, fed more data and compute, is enough on its own to produce qualitatively new abilities, without new architectures or algorithms. GPT-3 is 117x larger than GPT-2 and uses an old, admittedly flawed Transformer design, yet instead of hitting diminishing returns it gained meta-learning: the ability to pick up new tasks from a few examples in a prompt, something it was never trained to do.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "The author's explanation: a big model acts like an ensemble of many smaller sub-models. Small or memorizing sub-models win early in training, but on a large enough and varied enough dataset, only sub-models that learn genuine abstractions (like arithmetic, or general algorithms) keep lowering loss, and these eventually win out. This is offered as why scale alone, not clever engineering, kept unlocking new behavior.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-vkkfzh",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The piece treats this as vindicating older, dismissed predictions (Moravec's compute forecasts) and faults most AI labs and researchers for not taking scaling seriously despite the evidence, framing OpenAI's bet on scale as a rare case of real conviction.",
+      "ids": [
+        "spya-cty5hx",
+        "spya-arrq35",
+        "spya-scr8jb"
+      ]
+    },
+    {
+      "text": "An appendix raises a separate worry: since these models learn by imitating human-generated text full of goal-directed behavior, they may pick up genuine agency, planning and acting toward goals, as an emergent side effect of scale, even without being explicitly trained as agents.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-cw7jg4",
+        "spya-denmtt"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece, written just after GPT-3's 2020 release, argues for the scaling hypothesis: that making neural networks much bigger, with more data and compute, is enough on its own to produce qualitatively new abilities, including general intelligence. GPT-3, at 175 billion parameters, was over 10x larger than anything before it. Its main surprise was not more facts than GPT-2, but meta-learning: following instructions and solving new tasks from a few examples, despite never being trained to do so.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 used an old, deliberately simple architecture, trained in the dumbest possible way on a single modality, and its scaling curves still had not bent. That implies far more capability is available just by continuing to scale, at costs still trivial next to large government or corporate budgets. It also argues AI forecasters have no real model of why this happened, so their risk predictions are not trustworthy either way.",
+      "ids": [
+        "spya-fvqe70",
+        "spya-dfjr4c",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "Its core explanation is the \"blessings of scale\": problems that are impossible at small scale become easy at large scale, because a big model acts like an ensemble of many sub-models, biased toward simple solutions until enough data and size force genuinely general ones to win out. The pretraining thesis extends this to language itself: squeezing out the last bits of prediction error forces a model toward real reasoning, since nothing short of understanding predicts well on the hardest cases.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-rjwfkb"
+      ]
+    },
+    {
+      "text": "The piece also frames this as an organizational bet, not just a technical claim: OpenAI acted on the scaling hypothesis while DeepMind held a \"weak\" version, expecting intelligence to require assembling many brain-like modules rather than just scaling one architecture. It closes with an appendix arguing that models trained on human-generated data may pick up agency itself, as an emergent, hard-to-filter-out capability, not something confined to explicitly \"agentic\" training data.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-mkbrjp"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece argues for the scaling hypothesis: that making neural networks much bigger, fed much more data and compute, is enough by itself to produce more general and more capable intelligence, without new architectures or algorithms. GPT-3 is the central case study, since its jump in scale over GPT-2 produced not just better text but unplanned meta-learning, the ability to pick up new tasks from a few examples given at runtime.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3's scaling curves still had not bent, meaning further gains from scale alone looked available and cheap relative to other large budgets, yet most labs and researchers still did not believe scale was the key ingredient and so were not pursuing it aggressively.",
+      "ids": [
+        "spya-asr663",
+        "spya-dfjr4c",
+        "spya-scr8jb"
+      ]
+    },
+    {
+      "text": "Its explanation for why scale works: large models hold huge numbers of overlapping sub-models, and training on enough hard, varied data pushes the network away from sub-models that merely memorize and toward sub-models that generalize, because generalizing is eventually the simplest way to keep lowering loss. The piece contrasts this \"strong\" scaling view with DeepMind's \"weak\" one, which expects AGI to need separately engineered modules built up piece by piece.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

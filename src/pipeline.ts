@@ -3916,6 +3916,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           blocks: run.blocks,
           paragraphs: counts,
           words,
+          /* Three, or more when a level was asked twice (`LEVEL_ATTEMPTS`). A rise
+             here is a prompt that has started missing its own limits. */
+          calls: run.calls,
           /* The profile's LENGTH, never the profile — it is the reader's own
              words about themselves. */
           profileChars: ctx.profile?.length ?? 0,

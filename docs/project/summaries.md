@@ -666,7 +666,8 @@ is said in the slider's card, not in a line under the paragraphs (below).
   profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
   for the owner's profile.
-- **One press writes all three**: one model call per level, run side by side, all or none stored. A
+- **One press writes all three**: one model call per level, run side by side, all or none stored; a
+  level whose answer fails validation is asked once more on its own. A
   `simple/1` row reads as absent and the next press replaces it.
 - **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
