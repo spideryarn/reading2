@@ -354,7 +354,16 @@ function BlockLinkCard({
     };
     const arm = (el: HTMLElement, wait: number, clientY: number) => {
       clearTimeout(closeTimer);
-      if (el === currentRef.current || el === pending) return;
+      if (el === currentRef.current) {
+        /* The reading strip is a paragraph tall. Leaving it for the table cell
+           schedules a close, and re-entering before that delay expires keeps
+           the same card open; move its virtual reference to this new entry
+           height instead of leaving the arrow at the old one. A link's real
+           element reference is unchanged, as before. */
+        if (el.matches(READING_LINE)) refs.setPositionReference(referenceFor(el, clientY));
+        return;
+      }
+      if (el === pending) return;
       clearTimeout(openTimer);
       pending = el;
       openTimer = setTimeout(() => show(el, clientY), wait);

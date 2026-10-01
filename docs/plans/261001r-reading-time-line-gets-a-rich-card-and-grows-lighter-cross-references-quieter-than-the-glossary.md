@@ -131,3 +131,18 @@ All seven findings checked and taken (`…-plan-review-sol.md`):
    have been active in the last five minutes".
 7. **P3** Citation vs cross-reference differ by shape and intensity, not by hue — corrected above in
    spirit; both are thin grey.
+
+## Code review (GPT Sol, 2026-10-01) and the browser check
+
+No P0–P2 (`…-code-review-sol.md`). Sol fixed three P3s in place: re-entering the strip before the
+close delay now moves the card to the new pointer height; the tests were tightened (the touch case
+had passed before the change; now it dismisses an open card, and `pointerout` to the cell, `tip-soon`
+and re-entry are pinned); tooltips.md lists all five remaining gutter `title`s. Its fourth, a stale
+`mark.term[data-open]` in glossary.md, was fixed too.
+
+Browser, on the box (Playwright, Sonnet subagent): `::after` opacity measured 0, .05, .15, .30, .50
+for levels 0–4, with the level-0 strip 0px wide; the card opens 9px above the pointer two-thirds down
+a tall paragraph, with no `title`; the permalink beside the strip still gets its own hover; the term
+is `2px dotted` orange at .7 and the cross-reference `1px` solid grey at .55, which turns orange on
+hover. No local article has real cross-references, so that mark was injected by hand to compare its
+look.

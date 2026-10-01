@@ -39,7 +39,8 @@ reason. The reason that has held so far is *cost per trigger*: a `Tooltip` is a 
 and the gutter has a control per block on an article of several hundred. That reason is weaker than
 it looks, because a delegated card ([§ The second implementation](#the-second-implementation-and-why-there-is-one))
 costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2026-10-01 for exactly
-that. The gutter's other `title`s (the permalink, the chat button) are the next candidates.
+that. The gutter's remaining `title`s — permalink, chat, bookmark, help and overflow — are the next
+candidates.
 
 ## What we chose
 

@@ -66,14 +66,30 @@ function paint(level: number | null): HTMLElement {
   return host.querySelector<HTMLElement>("span.blk-read")!;
 }
 
-async function hover(el: HTMLElement): Promise<void> {
-  el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", clientY: 10 }));
+async function hover(el: HTMLElement, clientY = 10): Promise<void> {
+  el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", clientY }));
   await act(async () => {
     vi.advanceTimersByTime(AFTER_THE_DELAY);
   });
 }
 
 const card = () => document.querySelector<HTMLElement>(".tooltip-anchor");
+
+async function leave(el: HTMLElement): Promise<void> {
+  el.dispatchEvent(
+    new PointerEvent("pointerout", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: el.closest("td"),
+    }),
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(AFTER_THE_DELAY);
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(AFTER_THE_DELAY);
+  });
+}
 
 describe("the reading-time line", () => {
   it("opens the shared rich card on hover, saying it gets more visible and never darker", async () => {
@@ -84,20 +100,60 @@ describe("the reading-time line", () => {
     expect(text).toMatch(/stronger|more visible/);
     expect(text).not.toMatch(/darker/i);
     expect(text).toMatch(/Only you see it/);
+    expect(card()?.querySelector(".tip-soon")).not.toBeNull();
+    expect(card()?.querySelector(".tip-cite")).toBeNull();
     // Decoration, announced nowhere: the open card is not hung on it as a description.
     expect(line.hasAttribute("aria-describedby")).toBe(false);
   });
 
-  it("is not a block link, whatever the index holds", async () => {
+  it("closes when the pointer leaves its narrow strip for the table cell", async () => {
     const line = paint(4);
     await hover(line);
     expect(card()).not.toBeNull();
-    expect(card()?.querySelector(".tip-cite-text")).toBeNull();
+    await leave(line);
+    expect(card()).toBeNull();
   });
 
-  it("opens no card for a finger — nothing yet on touch", async () => {
+  it("moves the virtual reference when the pointer re-enters before the card closes", async () => {
     const line = paint(4);
+    const rect = vi
+      .spyOn(line, "getBoundingClientRect")
+      .mockReturnValue(new DOMRect(20, 100, 8, 200));
+    await hover(line, 140);
+    expect(card()).not.toBeNull();
+    rect.mockClear();
+
+    act(() => {
+      line.dispatchEvent(
+        new PointerEvent("pointerout", {
+          bubbles: true,
+          pointerType: "mouse",
+          relatedTarget: line.closest("td"),
+        }),
+      );
+      line.dispatchEvent(
+        new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", clientY: 260 }),
+      );
+    });
+
+    /* Re-entering cancels the delayed close, but the pointer may now be at a
+       different height in a long paragraph. Reading the strip's rect again is
+       what creates the new virtual reference at that height. */
+    expect(rect).toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).not.toBeNull();
+  });
+
+  it("dismisses the open card when a finger takes over — nothing yet on touch", async () => {
+    const line = paint(4);
+    await hover(line);
+    expect(card()).not.toBeNull();
     line.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "touch" }));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
     await act(async () => {
       vi.advanceTimersByTime(AFTER_THE_DELAY);
     });

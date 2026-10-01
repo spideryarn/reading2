@@ -338,7 +338,7 @@ opened. Four things follow, and three of them are the interesting part:
   Greg could not tell the two apart, and wanted the glossary the more prominent (spya-sxvq2j,
   [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
-  *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed
+  *different* mark — `mark.term[data-term-open]`, which is exactly what the open comment and the pressed
   search hit already do. `open` on `TermSelection` carries it.
 - **The principle moved rather than lost.** What the section below objects to is the *article
   acquiring explanation* on the model's initiative. The underline is now a standing property of the
