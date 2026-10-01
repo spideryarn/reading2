@@ -41,6 +41,7 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
+import { CONTACT_EMAIL } from "./site-text.js";
 import { canonicalKey } from "./source.js";
 import { uploadContentType } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
@@ -2547,6 +2548,118 @@ async function readAsset(
  */
 export async function fetchAsset(url: string, options: AssetFetchOptions): Promise<FetchedAsset> {
   return await fetchBytes(url, options, { headers: assetHeaders, read: readAsset });
+}
+
+/* ------------------------------------------------------------------ *
+ * Bibliographic registries — one JSON answer about one identifier
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The only two hosts this caller will dial**, checked before any DNS lookup.
+ *
+ * `fetchBibliographicJson` exists so that src/bibliographic.ts can ask Crossref
+ * and DataCite about a DOI without a third, general "fetch me some JSON" door
+ * into `fetchBytes` — which is what the comment on `fetchBytes` asks for. A
+ * fixed list rather than a parameter, so a caller cannot widen it.
+ * docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md
+ * § Stage 1, and GPT Sol's P-8.
+ */
+export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org"];
+
+/**
+ * **An honest User-Agent, unlike `USER_AGENT` above**, and on purpose.
+ *
+ * The browser string exists because a publisher serving an article to a reader
+ * treats an honest bot worse. A registry is the opposite: Crossref's polite pool
+ * and DataCite's rate limit both *ask* to be told who is calling and how to
+ * reach them, and the address is the site's one contact address
+ * (`CONTACT_EMAIL`, docs/project/website-text.md).
+ */
+export const BIBLIOGRAPHIC_USER_AGENT = `Spideryarn/1.0 (https://spideryarn.com; mailto:${CONTACT_EMAIL})`;
+
+/**
+ * The bounds, fixed. One attempt — a retry is the caller's decision, made
+ * against the shared cooldown in the database rather than inside one process —
+ * a megabyte, eight seconds, and no redirects: neither API redirects a
+ * `/works/{doi}` or `/dois/{doi}` request, and a redirect would be a hop to a
+ * host this caller has not checked.
+ */
+export const BIBLIOGRAPHIC_LIMITS = {
+  timeoutMs: 8_000,
+  maxBytes: 1024 * 1024,
+  attempts: 1,
+  maxRedirects: 0,
+} as const;
+
+/**
+ * What a caller of `fetchBibliographicJson` may pass: the cancellation and the
+ * test seams. **Not the bounds or the User-Agent**, which are fixed above.
+ */
+export type BibliographicFetchOptions = Pick<
+  FetchOptions,
+  "signal" | "fetchImpl" | "resolve" | "now"
+>;
+
+function bibliographicHeaders(): Record<string, string> {
+  return {
+    "User-Agent": BIBLIOGRAPHIC_USER_AGENT,
+    Accept: "application/json, application/vnd.api+json",
+  };
+}
+
+async function readJson(res: Response, finalUrl: string, _chain: string[], opts: Resolved): Promise<unknown> {
+  /* `readBody` throws a `FetchFailure` for any status that is not ok, carrying
+     `status` and `retryAfterMs` — which is how a 404, a 429 and a 503 reach the
+     caller as three different facts rather than one "it failed". */
+  const bytes = await readBody(res, finalUrl, opts);
+  const mediaType = res.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  if (mediaType !== "application/json" && mediaType !== "application/vnd.api+json") {
+    throw new FetchFailure("unsupported-type", finalUrl, "That service did not answer with a JSON media type.", {
+      status: res.status,
+    });
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+  } catch {
+    throw new FetchFailure("unsupported-type", finalUrl, "That service did not answer with JSON.", {
+      status: res.status,
+    });
+  }
+}
+
+/**
+ * **One GET to Crossref or DataCite, parsed as JSON.**
+ *
+ * The same guarded path as `fetchDocument` — the address guard and its pin, one
+ * deadline, the byte cap on the bytes that arrive — with the host checked
+ * against `BIBLIOGRAPHIC_HOSTS` first, so any other address is refused before a
+ * DNS lookup or a socket. Fails with a `FetchFailure` whose `status` is the HTTP
+ * status (404 / 429 / 503 …) and whose `retryAfterMs` is `Retry-After`.
+ */
+export async function fetchBibliographicJson(
+  input: string,
+  options: BibliographicFetchOptions = {},
+): Promise<unknown> {
+  const target = parseTarget(input);
+  const host = target.hostname.toLowerCase();
+  if (
+    target.protocol !== "https:" ||
+    target.port !== "" ||
+    target.username !== "" ||
+    target.password !== "" ||
+    !BIBLIOGRAPHIC_HOSTS.includes(host)
+  ) {
+    throw new FetchFailure(
+      "blocked-address",
+      input.trim(),
+      "Only the Crossref and DataCite APIs are asked for bibliographic records.",
+    );
+  }
+  return await fetchBytes(
+    target.toString(),
+    { ...options, ...BIBLIOGRAPHIC_LIMITS },
+    { headers: bibliographicHeaders, read: readJson },
+  );
 }
 
 /**

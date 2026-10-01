@@ -49,7 +49,16 @@ import { FetchFailure, type FetchedDocument, type FetchFailureCode, type FetchOp
 import { jsdom } from "./jsdom-lazy.js";
 import { log, since } from "./log.js";
 import type { PaperUnreadableReason } from "./messages.js";
-import { baselineFor, pass0, pdfUnreadableReason, SCAN_WORDS_PER_PAGE, TooManyPages } from "./pdf.js";
+import {
+  baselineFor,
+  pageLines,
+  pass0,
+  pdfUnreadableReason,
+  SCAN_WORDS_PER_PAGE,
+  TooManyCharacters,
+  TooManyPages,
+  TooManyTextItems,
+} from "./pdf.js";
 import { hostOf } from "./urls.js";
 
 export type { PaperUnreadableReason } from "./messages.js";
@@ -66,6 +75,20 @@ export interface PaperMeta {
   pdfUrl?: string;
 }
 
+/**
+ * One page of a PDF's text layer, **as printed**: its lines in order, running
+ * headers and footers removed, and nothing else changed — a word broken at a
+ * line end is still broken here. src/paper-evidence.ts builds its canonical
+ * text from these, because a heading is only recognisable as a line of its own
+ * and a word broken across a page is only mendable with both pages in hand
+ * (plan 261001a, GPT Sol's P-9).
+ */
+export interface PaperPage {
+  /** 1-based, the PDF's own page index. */
+  page: number;
+  lines: string[];
+}
+
 export type PaperText =
   | {
       kind: "read";
@@ -79,6 +102,8 @@ export type PaperText =
       title?: string;
       /** From the HTML page, when there was one — kept when its `citation_pdf_url` supplied the text. */
       meta?: PaperMeta;
+      /** The PDF's pages and lines (`PaperPage`), whenever `format` is `pdf`. */
+      pages?: PaperPage[];
     }
   | {
       kind: "unreadable";
@@ -90,6 +115,19 @@ export type PaperText =
       detail?: string;
     };
 
+/**
+ * **An HTML page and no PDF behind it**, returned only to a caller that asked
+ * for `pdfOnly`. The page may be the full text, an abstract, a landing page or
+ * a paywall notice, and nothing here can tell which (plan 261001a, Sol P-3) —
+ * so it is said, rather than read.
+ */
+export interface PaperNotPdf {
+  kind: "not-pdf";
+  url: string;
+  host: string;
+  meta?: PaperMeta;
+}
+
 export interface ReadPaperOptions {
   /** The caller's cancellation. A cancelled read comes back `unreadable: "timeout"`. */
   signal?: AbortSignal;
@@ -97,6 +135,13 @@ export interface ReadPaperOptions {
   timeoutMs?: number;
   /** Test seams, handed straight to `fetchDocument` — so a test needs no network and no DNS. */
   fetch?: Pick<FetchOptions, "fetchImpl" | "resolve" | "now">;
+  /**
+   * **Only a PDF's text layer counts.** An HTML page whose `citation_pdf_url`
+   * is absent comes back `not-pdf` instead of as Readability's text, and one
+   * whose PDF link failed comes back as that failure. The overloads on
+   * `readPaperText` make `not-pdf` reachable only from here.
+   */
+  pdfOnly?: boolean;
 }
 
 /** A paper's PDF, not a book's. 15 MB covers a figure-heavy paper; the fetcher's own default is 32 MB. */
@@ -104,6 +149,14 @@ export const PAPER_MAX_BYTES = 15 * 1024 * 1024;
 /** Over this many pages it is a thesis or a book, and reading it costs `pass0` seconds a reader is waiting through. */
 export const PAPER_MAX_PAGES = 150;
 export const PAPER_TIMEOUT_MS = 25_000;
+/**
+ * Characters of text layer read before giving up — the bound on what `pass0`
+ * holds in memory, beside the bytes and pages ones. About 60,000 words: past
+ * that it is a book, not a paper. Plan 261001a stage 2, Sol P-5.
+ */
+export const PAPER_MAX_CHARS = 400_000;
+/** Empty positioned runs consume memory without advancing the character cap. */
+export const PAPER_MAX_TEXT_ITEMS = 200_000;
 
 /**
  * arXiv's abstract page → its PDF. `null` for anything else.
@@ -163,7 +216,9 @@ function reasonFor(code: FetchFailureCode): PaperUnreadableReason {
 }
 
 /** Why a PDF gave us no text, as an `unreadable` without its url and host. */
-type PdfOutcome = { ok: true; text: string; words: number } | { ok: false; why: PaperUnreadableReason; detail?: string };
+type PdfOutcome =
+  | { ok: true; text: string; words: number; pages: PaperPage[] }
+  | { ok: false; why: PaperUnreadableReason; detail?: string };
 
 function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
@@ -193,12 +248,22 @@ export function normaliseWhitespace(text: string): string {
  * exactly the cleaning wanted here and already argued for in src/pdf.ts. Lines
  * are joined with a space — a PDF's line breaks are layout, not the author's.
  */
-async function pdfText(bytes: Uint8Array): Promise<PdfOutcome> {
+async function pdfText(bytes: Uint8Array, signal: AbortSignal): Promise<PdfOutcome> {
   let pass: Awaited<ReturnType<typeof pass0>>;
   try {
-    pass = await pass0(bytes, { maxPages: PAPER_MAX_PAGES });
+    pass = await pass0(bytes, {
+      maxPages: PAPER_MAX_PAGES,
+      maxChars: PAPER_MAX_CHARS,
+      maxItems: PAPER_MAX_TEXT_ITEMS,
+      retainItems: false,
+      signal,
+    });
   } catch (err) {
+    /* The deadline, reaching pdf.js since plan 261001a: the parse is ended, not waited out. */
+    if (signal.aborted) return { ok: false, why: "timeout", detail: "timeout" };
     if (err instanceof TooManyPages) return { ok: false, why: "too-large", detail: `${err.pages} pages` };
+    if (err instanceof TooManyCharacters) return { ok: false, why: "too-large", detail: `over ${err.limit} characters` };
+    if (err instanceof TooManyTextItems) return { ok: false, why: "too-large", detail: `over ${err.limit} text items` };
     if (pdfUnreadableReason(err) !== null) return { ok: false, why: "damaged", detail: pdfUnreadableReason(err) ?? "" };
     throw err;
   }
@@ -208,7 +273,7 @@ async function pdfText(bytes: Uint8Array): Promise<PdfOutcome> {
   /* `isScan` judges the content pages and needs more than one of them; a
      one-page scan (or a file of blank pages) is caught by the total. */
   if (pass.isScan || words < SCAN_WORDS_PER_PAGE) return { ok: false, why: "scan", detail: `${words} words` };
-  return { ok: true, text, words };
+  return { ok: true, text, words, pages: pass.pages.map((p) => ({ page: p.page, lines: pageLines(pass, p.page) })) };
 }
 
 /** The first DOI-shaped string in a meta value — `doi:10…`, `https://doi.org/10…` and a bare `10…` all qualify. */
@@ -260,20 +325,24 @@ function metaFrom(document: Document, baseUrl: string): PaperMeta {
 }
 
 /** One log line per read, then the result. Host, kind, words, ms, code — never the URL, title or text. */
-function logged(result: PaperText, started: number, code?: string): PaperText {
+function logged<R extends PaperText | PaperNotPdf>(result: R, started: number, code?: string): R {
   const line = {
     host: result.host,
     kind: result.kind,
-    ...(result.kind === "read" ? { format: result.format, words: result.words } : { why: result.why }),
+    ...(result.kind === "read"
+      ? { format: result.format, words: result.words }
+      : result.kind === "unreadable"
+        ? { why: result.why }
+        : {}),
     ...(code ? { code } : {}),
     ms: since(started),
   };
-  log("model").info(line, result.kind === "read" ? "paper text: read" : "paper text: unreadable");
+  log("model").info(line, `paper text: ${result.kind}`);
   return result;
 }
 
 type Hop =
-  | { ok: true; url: string; text: string; words: number }
+  | { ok: true; url: string; text: string; words: number; pages: PaperPage[] }
   | { ok: false; why: PaperUnreadableReason; detail?: string };
 
 /**
@@ -292,9 +361,9 @@ async function followPdfLink(pdfUrl: string, fetchOpts: FetchOptions, signal: Ab
   }
   /* An HTML "PDF" is a publisher's interstitial or login page. */
   if (pdfDoc.kind !== "pdf") return { ok: false, why: "paywall-or-empty", detail: "pdf link served html" };
-  const pdf = await pdfText(pdfDoc.bytes);
+  const pdf = await pdfText(pdfDoc.bytes, signal);
   if (signal.aborted) return { ok: false, why: "timeout", detail: "timeout" };
-  return pdf.ok ? { ok: true, url: pdfDoc.url, text: pdf.text, words: pdf.words } : pdf;
+  return pdf.ok ? { ok: true, url: pdfDoc.url, text: pdf.text, words: pdf.words, pages: pdf.pages } : pdf;
 }
 
 /**
@@ -305,19 +374,26 @@ async function followPdfLink(pdfUrl: string, fetchOpts: FetchOptions, signal: Ab
  * sentence (`paperUnreadableSentence`). It throws only for a fault of ours: an
  * error from pdf.js that is not about the file, or a bug.
  *
- * **The deadline is checked, not enforced, around the PDF parse**: `pass0`
- * takes no signal, so a parse that starts inside the budget runs to its end
- * (seconds, for a paper under `PAPER_MAX_PAGES`) and is then reported as a
- * timeout if the budget ran out while it did.
+ * **The deadline reaches the PDF parse** since plan 261001a: `pass0` takes the
+ * signal, checks it between pages and destroys pdf.js's loading task when it
+ * fires, so a parse still running at the deadline is ended rather than waited
+ * out. `PAPER_MAX_CHARS` bounds what it holds.
+ *
+ * With `pdfOnly`, an HTML page is never read as the paper (`PaperNotPdf`).
  */
-export async function readPaperText(url: string, opts: ReadPaperOptions = {}): Promise<PaperText> {
+export function readPaperText(
+  url: string,
+  opts: ReadPaperOptions & { pdfOnly: true },
+): Promise<PaperText | PaperNotPdf>;
+export function readPaperText(url: string, opts?: ReadPaperOptions & { pdfOnly?: false }): Promise<PaperText>;
+export async function readPaperText(url: string, opts: ReadPaperOptions = {}): Promise<PaperText | PaperNotPdf> {
   const started = Date.now();
   const timeoutMs = opts.timeoutMs ?? PAPER_TIMEOUT_MS;
   const deadline = AbortSignal.timeout(timeoutMs);
   const signal = opts.signal ? AbortSignal.any([deadline, opts.signal]) : deadline;
   const fetchOpts: FetchOptions = { ...opts.fetch, timeoutMs, maxBytes: PAPER_MAX_BYTES, attempts: 1, signal };
 
-  const unreadable = (at: string, why: PaperUnreadableReason, detail?: string): PaperText =>
+  const unreadable = (at: string, why: PaperUnreadableReason, detail?: string): PaperText | PaperNotPdf =>
     logged({ kind: "unreadable", url: at, host: hostOf(at), why, ...(detail ? { detail } : {}) }, started, detail);
 
   const target = arxivPdfUrl(url) ?? url.trim();
@@ -330,12 +406,20 @@ export async function readPaperText(url: string, opts: ReadPaperOptions = {}): P
   }
 
   if (doc.kind === "pdf") {
-    const pdf = await pdfText(doc.bytes);
+    const pdf = await pdfText(doc.bytes, signal);
     if (signal.aborted) return unreadable(doc.url, "timeout", "timeout");
     if (!pdf.ok) return unreadable(doc.url, pdf.why, pdf.detail);
     const host = hostOf(doc.url);
     return logged(
-      { kind: "read", url: doc.url, host, format: "pdf", text: normaliseWhitespace(pdf.text), words: pdf.words },
+      {
+        kind: "read",
+        url: doc.url,
+        host,
+        format: "pdf",
+        text: normaliseWhitespace(pdf.text),
+        words: pdf.words,
+        pages: pdf.pages,
+      },
       started,
     );
   }
@@ -356,11 +440,21 @@ export async function readPaperText(url: string, opts: ReadPaperOptions = {}): P
         words: hop.words,
         ...(meta.title ? { title: meta.title } : {}),
         meta,
+        pages: hop.pages,
       },
       started,
     );
   }
   if (signal.aborted) return unreadable(doc.url, "timeout", "timeout");
+  if (opts.pdfOnly) {
+    /* The PDF link's own failure says more than "no PDF" does; with no link at
+       all, the page is all there is, and it does not count. */
+    if (hop) return unreadable(doc.url, hop.why, hop.detail);
+    return logged(
+      { kind: "not-pdf", url: doc.url, host: hostOf(doc.url), ...(Object.keys(meta).length > 0 ? { meta } : {}) },
+      started,
+    );
+  }
 
   const page = pageText(dom.window.document, meta);
   if (!page) {

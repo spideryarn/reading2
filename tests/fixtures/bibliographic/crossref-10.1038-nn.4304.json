@@ -1,0 +1,76 @@
+{
+  "status": "ok",
+  "message-type": "work",
+  "message": {
+    "DOI": "10.1038/nn.4304",
+    "title": [
+      "Hippocampo-cortical coupling mediates memory consolidation during sleep"
+    ],
+    "author": [
+      {
+        "given": "Nicolas",
+        "family": "Maingret",
+        "sequence": "first"
+      },
+      {
+        "given": "Gabrielle",
+        "family": "Girardeau",
+        "sequence": "additional"
+      },
+      {
+        "given": "Ralitsa",
+        "family": "Todorova",
+        "sequence": "additional"
+      },
+      {
+        "given": "Marie",
+        "family": "Goutierre",
+        "sequence": "additional"
+      },
+      {
+        "given": "Michaël",
+        "family": "Zugaro",
+        "sequence": "additional"
+      }
+    ],
+    "issued": {
+      "date-parts": [
+        [
+          2016,
+          5,
+          16
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2016,
+          7
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2016,
+          5,
+          16
+        ]
+      ]
+    },
+    "published": {
+      "date-parts": [
+        [
+          2016,
+          5,
+          16
+        ]
+      ]
+    },
+    "container-title": [
+      "Nature Neuroscience"
+    ],
+    "type": "journal-article"
+  }
+}

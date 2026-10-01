@@ -1,0 +1,539 @@
+/**
+ * **One bibliographic lookup, polite across every instance.** Given a DOI or an
+ * arXiv id, what Crossref or DataCite says the work is: its title, authors, year
+ * and venue. Stage 1 of
+ * docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md,
+ * which has the diagram this file follows:
+ *
+ * ```
+ * cache → claim → a service slot and a start → arXiv id: DataCite (10.48550/arxiv.<id>)
+ *                                              DOI: Crossref, and on a 404 DataCite
+ * ```
+ *
+ * **Identifiers only, never a title search** (Greg's "don't abuse them"). Where
+ * an identifier came from, and whether the record agrees with what the caller
+ * already knows, is the caller's business — a DOI an article typed wrongly
+ * resolves perfectly to the wrong paper, so every caller checks the title.
+ *
+ * **The politeness lives in the database**, not in this process: the cache
+ * (`bibliographic_records`), a per-identifier claim so two callers make one
+ * request, globally spaced starts and leased slots per service, and a shared
+ * cooldown after a 429 or 503 (src/store/pg-bibliographic.ts). Many server
+ * instances each holding their own limiter would multiply it (GPT Sol, P-4).
+ *
+ * **An error stores nothing.** Only a found record (fresh 180 days) and a
+ * not-found (7 days) are remembered; anything else is `unavailable`, and the
+ * next caller may ask again — unless the service told us to wait, which every
+ * caller then honours.
+ *
+ * Nothing calls this from a route or a step yet: stages 3, 5 and 6 of the plan
+ * are the callers.
+ */
+
+import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js";
+import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
+import { errorFields, log, type Log } from "./log.js";
+import { CONTACT_EMAIL } from "./site-text.js";
+
+/* ------------------------------------------------------------ the types -- */
+
+/**
+ * `doi:<lower-cased doi>` or `arxiv:<lower-cased id, no version>` — the same
+ * spelling `keysOf` in src/citations.ts gives a work's `idKey`, so a Citations
+ * row's key is already a `WorkId` once it has been through `parseWorkId`.
+ *
+ * Branded, so a string that has not been parsed cannot reach `lookupWork` — a
+ * malformed identifier is refused by the compiler before it can be refused at
+ * run time (which `lookupWork` also does).
+ */
+export type WorkId = string & { readonly __workId: true };
+
+export type Registry = "crossref" | "datacite";
+
+export interface WorkAuthor {
+  family: string;
+  given?: string;
+}
+
+/** What a registry says a work is. */
+export interface WorkRecord {
+  id: WorkId;
+  source: Registry;
+  title: string;
+  authors: WorkAuthor[];
+  year?: number;
+  venue?: string;
+  /** The DOI the registry holds the record under — for an arXiv id, `10.48550/arxiv.<id>`. */
+  doi: string;
+}
+
+/**
+ * Why there is no answer this time — none of which is remembered.
+ *
+ * - `cooling-down` — a service told us (by a 429 or 503) to stop for a while.
+ * - `busy` — no slot, or no start, within 3 s: our own limiter said not now.
+ * - `in-flight` — another caller is asking about this identifier and had not
+ *   answered within 2 s.
+ * - `error` — the request failed some other way (timeout, 5xx, bad JSON).
+ * - `store` — the database failed; logged as an error.
+ */
+export type UnavailableWhy = "cooling-down" | "busy" | "in-flight" | "error" | "store";
+
+export type LookupResult =
+  | { kind: "found"; record: WorkRecord }
+  | { kind: "not-found" }
+  | { kind: "unavailable"; why: UnavailableWhy };
+
+/** What is remembered: an answer, never an error. */
+export type CachedAnswer = { kind: "found"; record: WorkRecord } | { kind: "not-found" };
+
+/* ------------------------------------------------------------ the policy -- */
+
+/** How long an answer is an answer. A found record changes rarely; a miss may be a DOI registered next week. */
+export const FRESH_FOUND_MS = 180 * 24 * 60 * 60 * 1000;
+export const FRESH_NOT_FOUND_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface Freshness {
+  foundMs: number;
+  notFoundMs: number;
+}
+
+export const FRESHNESS: Freshness = { foundMs: FRESH_FOUND_MS, notFoundMs: FRESH_NOT_FOUND_MS };
+
+/**
+ * **How long a claim on an identifier lasts: 45 s, not the plan's 20.** The
+ * worst honest path is a DOI that Crossref does not hold: up to 3 s for a slot,
+ * 3 s for a start and 8 s for the request, twice — 28 s. A claim that lapsed
+ * mid-lookup would let a second caller ask too. The extra margin covers
+ * database and event-loop delay around those network deadlines; a dead process
+ * costs the identifier 45 s of `in-flight`, nothing more.
+ */
+export const CLAIM_LEASE_MS = 45_000;
+/** How long a caller waits on somebody else's claim before saying `in-flight`. */
+export const CLAIM_WAIT_MS = 2_000;
+/** A slot's lease: the 3 s start wait plus the 8 s request and a margin for a busy event loop. */
+export const SLOT_LEASE_MS = 20_000;
+/** How long to wait for a slot, and how far ahead a start may be, before giving up as `busy`. */
+export const MAX_WAIT_MS = 3_000;
+const POLL_MS = 100;
+
+/**
+ * Starts spaced globally: **Crossref 250 ms (4/s, under its 10), DataCite
+ * 500 ms (2/s, under its 1,000 per 5 minutes)**. Slots: 2 and 1, seeded by the
+ * migration — they are rows, not numbers here.
+ */
+export const SPACING_MS: Record<Registry, number> = { crossref: 250, datacite: 500 };
+
+/** A 429 or 503 without `Retry-After` cools the service this long; one with it, at most an hour. */
+export const DEFAULT_COOLDOWN_MS = 60_000;
+export const MAX_COOLDOWN_MS = 60 * 60 * 1000;
+
+/* ------------------------------------------------------------ the store -- */
+
+/** A claim on an identifier, fenced by the exact moment it runs out. */
+export interface IdentifierClaim {
+  id: WorkId;
+  until: Date;
+}
+
+export interface SlotLease {
+  service: Registry;
+  slot: number;
+  until: Date;
+}
+
+export type StartTaken = { kind: "start"; waitMs: number } | { kind: "cooling-down" } | { kind: "busy" };
+
+/**
+ * What `lookupWork` needs from the database. src/store/pg-bibliographic.ts is
+ * the real one; tests may hand in their own.
+ */
+export interface BibliographicStore {
+  /** A fresh answer if there is one, and whether somebody holds a live claim. */
+  read(id: WorkId, fresh: Freshness): Promise<{ answer: CachedAnswer | null; claimed: boolean }>;
+  /** Claim the identifier, unless somebody holds a live claim or a fresh answer has arrived. */
+  claim(id: WorkId, fresh: Freshness, leaseMs: number): Promise<IdentifierClaim | null>;
+  /** Give a claim back with nothing learned. Only this claim: a later one is left alone. */
+  release(claim: IdentifierClaim): Promise<void>;
+  /** Remember an answer and clear the claim, only while this exact claim still owns the row. */
+  write(claim: IdentifierClaim, answer: CachedAnswer): Promise<boolean>;
+  /** Whether the service is cooling down right now. */
+  coolingDown(service: Registry): Promise<boolean>;
+  takeSlot(service: Registry, leaseMs: number): Promise<SlotLease | null>;
+  freeSlot(lease: SlotLease): Promise<void>;
+  /** Take the next start, unless the service is cooling down or the start is more than `maxWaitMs` away. */
+  takeStart(service: Registry, spacingMs: number, maxWaitMs: number): Promise<StartTaken>;
+  /** Nobody asks `service` again for `forMs`. Never shortens a cooldown already set. */
+  coolDown(service: Registry, forMs: number): Promise<void>;
+}
+
+export interface LookupDeps {
+  store?: BibliographicStore;
+  fetchJson?: (url: string) => Promise<unknown>;
+  sleep?: (ms: number) => Promise<void>;
+  log?: Log;
+}
+
+/* ------------------------------------------------------- the identifier -- */
+
+/** DOIs are case-insensitive and in practice ASCII; anything else is refused rather than guessed. */
+const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
+const MAX_ID_LENGTH = 300;
+
+function doiId(doi: string): WorkId | null {
+  const m = DOI_SHAPE.exec(doi);
+  if (!m?.[1] || !PRINTABLE_ASCII.test(m[1])) return null;
+  const id = `doi:${m[1].toLowerCase()}`;
+  return id.length <= MAX_ID_LENGTH ? (id as WorkId) : null;
+}
+
+function arxivId(arxiv: string): WorkId | null {
+  const m = ARXIV_ID_SHAPE.exec(arxiv);
+  return m?.[1] ? (`arxiv:${m[1].toLowerCase()}` as WorkId) : null;
+}
+
+/**
+ * A DOI or arXiv id in any of the spellings a caller holds, as a `WorkId` — or
+ * null. Accepts `doi:10.…`, a bare `10.…`, a `doi.org` address, `arxiv:…`, a
+ * bare arXiv id (either shape, any version) and an `arxiv.org` abs/pdf address.
+ * The address forms go through `identityOf` (src/cited-in-spideryarn.ts), the
+ * one parser of an identifier out of an address.
+ */
+export function parseWorkId(input: string): WorkId | null {
+  const s = input.trim();
+  if (/^https?:\/\//i.test(s)) {
+    const found = identityOf(s);
+    if (found.doi !== undefined) return doiId(found.doi);
+    if (found.arxiv !== undefined) return arxivId(found.arxiv);
+    return null;
+  }
+  const prefixed = /^(doi|arxiv):\s*(.+)$/i.exec(s);
+  if (prefixed?.[1] && prefixed[2]) {
+    return prefixed[1].toLowerCase() === "doi" ? doiId(prefixed[2]) : arxivId(prefixed[2]);
+  }
+  return doiId(s) ?? arxivId(s);
+}
+
+/** The DOI a lookup asks a registry about: the DOI itself, or arXiv's own at DataCite. */
+export function doiFor(id: WorkId): string {
+  if (id.startsWith("doi:")) return id.slice("doi:".length);
+  return `10.48550/arxiv.${id.slice("arxiv:".length)}`;
+}
+
+/** Each path segment encoded, the slashes kept: both APIs take `/works/10.1038/nn.4304` as written. */
+function doiPath(doi: string): string {
+  return doi.split("/").map(encodeURIComponent).join("/");
+}
+
+export function crossrefUrl(doi: string): string {
+  return `https://api.crossref.org/works/${doiPath(doi)}?mailto=${encodeURIComponent(CONTACT_EMAIL)}`;
+}
+
+export function dataciteUrl(doi: string): string {
+  return `https://api.datacite.org/dois/${doiPath(doi)}`;
+}
+
+/* ------------------------------------------------------------ parsing -- */
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+/**
+ * A registry string as plain text: markup stripped (Crossref titles carry
+ * `<i>`, `<sub>` and sometimes MathML), the common entities decoded, whitespace
+ * collapsed. Null when nothing is left.
+ */
+export function plainRegistryText(value: unknown, maxLength = 1000): string | null {
+  if (typeof value !== "string") return null;
+  const text = value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
+      if (name[0] === "#") {
+        const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+        return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+      }
+      return ENTITIES[name.toLowerCase()] ?? whole;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text === "") return null;
+  return text.length > maxLength ? text.slice(0, maxLength).trimEnd() : text;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function list(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function plausibleYear(value: unknown): number | undefined {
+  const n = typeof value === "string" && /^\d{4}$/.test(value.trim()) ? Number(value) : value;
+  return typeof n === "number" && Number.isInteger(n) && n >= 1500 && n <= 2100 ? n : undefined;
+}
+
+/** Crossref's `{ "date-parts": [[2016, 5, 16]] }`, as a year. `[[null]]` happens. */
+function crossrefYear(date: unknown): number | undefined {
+  return plausibleYear(list(list(record(date)?.["date-parts"])[0])[0]);
+}
+
+const MAX_AUTHORS = 100;
+const MAX_NAME = 200;
+
+function author(family: unknown, given: unknown): WorkAuthor | null {
+  const f = plainRegistryText(family, MAX_NAME);
+  if (f === null) return null;
+  const g = plainRegistryText(given, MAX_NAME);
+  return g === null ? { family: f } : { family: f, given: g };
+}
+
+function normaliseDoi(value: unknown, fallback: string): string {
+  return typeof value === "string" && DOI_SHAPE.test(value.trim()) ? value.trim().toLowerCase() : fallback;
+}
+
+/**
+ * Crossref's `/works/{doi}` answer as a record — or null when it has no title,
+ * which no caller could check a citation against.
+ */
+export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecord | null {
+  const msg = record(record(json)?.message);
+  if (msg === null) return null;
+  const title = plainRegistryText(list(msg.title)[0]);
+  if (title === null) return null;
+  const authors: WorkAuthor[] = [];
+  for (const raw of list(msg.author)) {
+    const a = record(raw);
+    if (a === null) continue;
+    /* An organisation comes as `name` with no family: it is its own family. */
+    const one = a.family !== undefined ? author(a.family, a.given) : author(a.name, undefined);
+    if (one !== null) authors.push(one);
+    if (authors.length === MAX_AUTHORS) break;
+  }
+  const year =
+    crossrefYear(msg.issued) ??
+    crossrefYear(msg["published-print"]) ??
+    crossrefYear(msg["published-online"]) ??
+    crossrefYear(msg.published);
+  const venue = plainRegistryText(list(msg["container-title"])[0]);
+  return {
+    id,
+    source: "crossref",
+    title,
+    authors,
+    ...(year !== undefined ? { year } : {}),
+    ...(venue !== null ? { venue } : {}),
+    doi: normaliseDoi(msg.DOI, doi),
+  };
+}
+
+/**
+ * DataCite's `/dois/{doi}` answer as a record — or null without a title.
+ *
+ * The main title is the one with no `titleType` (the others are subtitles and
+ * translations), falling back to the first. A creator is `familyName` /
+ * `givenName` where DataCite split it; otherwise its `name`, split at the comma
+ * only for a `Personal` name written `Family, Given`, and whole for an
+ * organisation.
+ */
+export function parseDatacite(id: WorkId, doi: string, json: unknown): WorkRecord | null {
+  const attrs = record(record(record(json)?.data)?.attributes);
+  if (attrs === null) return null;
+  const titles = list(attrs.titles).map(record).filter((t) => t !== null);
+  const main = titles.find((t) => t.titleType === undefined || t.titleType === null) ?? titles[0];
+  const title = plainRegistryText(main?.title);
+  if (title === null) return null;
+  const authors: WorkAuthor[] = [];
+  for (const raw of list(attrs.creators)) {
+    const c = record(raw);
+    if (c === null) continue;
+    let one: WorkAuthor | null;
+    if (typeof c.familyName === "string" && c.familyName.trim() !== "") {
+      one = author(c.familyName, c.givenName);
+    } else if (c.nameType === "Personal" && typeof c.name === "string" && c.name.includes(",")) {
+      const [family, ...given] = c.name.split(",");
+      one = author(family, given.join(","));
+    } else {
+      one = author(c.name, undefined);
+    }
+    if (one !== null) authors.push(one);
+    if (authors.length === MAX_AUTHORS) break;
+  }
+  const year = plausibleYear(attrs.publicationYear);
+  const publisher = attrs.publisher;
+  const venue =
+    plainRegistryText(record(attrs.container)?.title) ??
+    plainRegistryText(typeof publisher === "string" ? publisher : record(publisher)?.name);
+  return {
+    id,
+    source: "datacite",
+    title,
+    authors,
+    ...(year !== undefined ? { year } : {}),
+    ...(venue !== null ? { venue } : {}),
+    doi: normaliseDoi(attrs.doi, doi),
+  };
+}
+
+/* ------------------------------------------------------------ the lookup -- */
+
+type Asked = CachedAnswer | { kind: "unavailable"; why: UnavailableWhy };
+
+interface Resolved {
+  store: BibliographicStore;
+  fetchJson: (url: string) => Promise<unknown>;
+  sleep: (ms: number) => Promise<void>;
+  log: Log;
+}
+
+async function resolveDeps(deps: LookupDeps): Promise<Resolved> {
+  /* The Postgres store is loaded only when nobody handed one in, so a test of
+     the parsing or the orchestration never opens a database connection. */
+  const store = deps.store ?? (await import("./store/pg-bibliographic.js")).pgBibliographicStore;
+  return {
+    store,
+    fetchJson: deps.fetchJson ?? ((url) => fetchBibliographicJson(url)),
+    sleep: deps.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
+    log: deps.log ?? log("pipeline").child({ lookup: "bibliographic" }),
+  };
+}
+
+/** A service slot, polled for up to `MAX_WAIT_MS`. */
+async function slotFor(service: Registry, d: Resolved): Promise<SlotLease | null> {
+  for (let waited = 0; ; waited += POLL_MS) {
+    const lease = await d.store.takeSlot(service, SLOT_LEASE_MS);
+    if (lease !== null || waited >= MAX_WAIT_MS) return lease;
+    await d.sleep(POLL_MS);
+  }
+}
+
+/** One request to one registry, inside its slot, its start and its cooldown. */
+async function askService(id: WorkId, service: Registry, doi: string, d: Resolved): Promise<Asked> {
+  if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+  const lease = await slotFor(service, d);
+  if (lease === null) {
+    d.log.info({ id, service, outcome: "busy", reason: "no-slot" }, "bibliographic lookup");
+    return { kind: "unavailable", why: "busy" };
+  }
+  try {
+    const start = await d.store.takeStart(service, SPACING_MS[service], MAX_WAIT_MS);
+    if (start.kind !== "start") {
+      d.log.info({ id, service, outcome: start.kind }, "bibliographic lookup");
+      return { kind: "unavailable", why: start.kind };
+    }
+    if (start.waitMs > 0) {
+      await d.sleep(start.waitMs);
+      /* A request already in flight may have set a provider-wide cooldown while
+         this start was waiting. Do not turn a valid reservation into one more
+         request after the provider has told the fleet to stop. */
+      if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+    }
+    const started = Date.now();
+    const url = service === "crossref" ? crossrefUrl(doi) : dataciteUrl(doi);
+    try {
+      const json = await d.fetchJson(url);
+      const parsed = service === "crossref" ? parseCrossref(id, doi, json) : parseDatacite(id, doi, json);
+      d.log.info(
+        { id, service, status: 200, outcome: parsed ? "found" : "no-title", ms: Date.now() - started, waitMs: start.waitMs },
+        "bibliographic lookup",
+      );
+      /* A record with no title is, to every caller, no record: each of them
+         checks a citation's title against it. Remembered as a miss for 7 days
+         rather than asked about again on every call. */
+      return parsed ? { kind: "found", record: parsed } : { kind: "not-found" };
+    } catch (err) {
+      const ms = Date.now() - started;
+      if (!(err instanceof FetchFailure)) throw err;
+      const status = err.status;
+      if (status === 404 || status === 410) {
+        d.log.info({ id, service, status, outcome: "not-found", ms, waitMs: start.waitMs }, "bibliographic lookup");
+        return { kind: "not-found" };
+      }
+      if (status === 429 || status === 503) {
+        const forMs = Math.min(err.retryAfterMs ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
+        await d.store.coolDown(service, Math.max(forMs, 1_000));
+        d.log.warn(
+          { id, service, status, outcome: "cooling-down", cooldownMs: forMs, ms, waitMs: start.waitMs },
+          "bibliographic lookup",
+        );
+        return { kind: "unavailable", why: "cooling-down" };
+      }
+      d.log.warn(
+        { id, service, status, code: err.code, outcome: "error", ms, waitMs: start.waitMs },
+        "bibliographic lookup",
+      );
+      return { kind: "unavailable", why: "error" };
+    }
+  } finally {
+    await d.store.freeSlot(lease);
+  }
+}
+
+/** arXiv: DataCite. A DOI: Crossref, and only on its 404 DataCite. */
+async function ask(id: WorkId, d: Resolved): Promise<Asked> {
+  const doi = doiFor(id);
+  if (id.startsWith("arxiv:")) return await askService(id, "datacite", doi, d);
+  const crossref = await askService(id, "crossref", doi, d);
+  if (crossref.kind !== "not-found") return crossref;
+  return await askService(id, "datacite", doi, d);
+}
+
+/** Somebody else is asking: wait up to `CLAIM_WAIT_MS` for their answer. */
+async function awaitOther(id: WorkId, d: Resolved): Promise<LookupResult> {
+  for (let waited = 0; waited < CLAIM_WAIT_MS; ) {
+    await d.sleep(POLL_MS * 2);
+    waited += POLL_MS * 2;
+    const seen = await d.store.read(id, FRESHNESS);
+    if (seen.answer !== null) return seen.answer;
+    if (!seen.claimed) break;
+  }
+  return { kind: "unavailable", why: "in-flight" };
+}
+
+/**
+ * **What a registry says this work is** — `found`, `not-found`, or
+ * `unavailable` with the reason. Never throws for anything a registry or the
+ * database does; throws a `TypeError` for an identifier that is not a `WorkId`,
+ * before any request.
+ */
+export async function lookupWork(id: WorkId, deps: LookupDeps = {}): Promise<LookupResult> {
+  if (parseWorkId(id) !== id) throw new TypeError("lookupWork takes a WorkId from parseWorkId");
+  const d = await resolveDeps(deps);
+  const started = Date.now();
+  let claim: IdentifierClaim | null = null;
+  try {
+    const cached = await d.store.read(id, FRESHNESS);
+    if (cached.answer !== null) {
+      d.log.debug({ id, outcome: cached.answer.kind, cacheHit: true, ms: Date.now() - started }, "bibliographic lookup");
+      return cached.answer;
+    }
+    if (!cached.claimed) claim = await d.store.claim(id, FRESHNESS, CLAIM_LEASE_MS);
+    if (claim === null) {
+      /* Somebody else holds it — or answered between our read and our claim,
+         which the claim refuses just the same. */
+      const result = await awaitOther(id, d);
+      d.log.debug({ id, outcome: result.kind, cacheHit: result.kind !== "unavailable", waited: true, ms: Date.now() - started }, "bibliographic lookup");
+      return result;
+    }
+    const asked = await ask(id, d);
+    if (asked.kind === "unavailable") {
+      await d.store.release(claim);
+    } else {
+      const written = await d.store.write(claim, asked);
+      claim = null;
+      if (!written) {
+        /* This process paused past its lease and a successor owns the row. Its
+           answer may be perfectly plausible, but it is no longer authorised to
+           publish it or to clear the successor's claim. */
+        return await awaitOther(id, d);
+      }
+    }
+    claim = null;
+    return asked;
+  } catch (err) {
+    d.log.error({ id, outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "bibliographic lookup failed");
+    if (claim !== null) await d.store.release(claim).catch(() => {});
+    return { kind: "unavailable", why: "store" };
+  }
+}
