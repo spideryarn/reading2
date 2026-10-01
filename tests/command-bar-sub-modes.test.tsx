@@ -334,6 +334,16 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     expect(pendingActivation("a-piece", "sketch")).toBeNull();
   });
 
+  it("opens Summary at the level named and arms its one plain-words job", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("fuller");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("summary", { mode: "summary", view: "fuller" });
+    expect(pendingActivation("a-piece", "simple")).not.toBeNull();
+  });
+
   it("arms nothing for Recall", () => {
     const onMode = vi.fn();
     reading({ onMode });

@@ -282,8 +282,8 @@
 }
 .quiz-list-q { flex: 1; }
 
-/* The citation chips inside a mark. Sized as the summary panel's rather than
-   chat's, for the same reason: a mark is two paragraphs about one answer and
+/* The citation chips inside a mark. Smaller than chat's: a mark is two
+   paragraphs about one answer and
    the chips are punctuation in it. `white-space: normal` undoes `.quiz-reply`'s
    `pre-wrap` for the chip alone — inside a `pre-wrap` box the space between two
    ids in one bracket is preserved twice and the flex gap adds a third. */

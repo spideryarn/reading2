@@ -1135,9 +1135,9 @@ export const diagramHueParam = createParser<ScatterHue>({
  * no longer a value, so an old `?summary=gists` reads as `simple` — the same
  * degrade-to-the-default rule as every other parser in this file.
  *
- * **Writing it never spends.** Only a press on the slider arms the run
- * (SummaryMode.tsx § `SummaryControls`); Back, a pasted link and a last-view
- * restore arrive here and buy nothing.
+ * **Writing it never spends.** Only a press on a plain-words control (the
+ * slider, an end button or a command-bar row) arms the run; Back, a pasted link
+ * and a last-view restore arrive here and buy nothing.
  */
 export const summaryParam = createParser<SimpleLevel>({
   parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),

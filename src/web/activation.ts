@@ -1,17 +1,16 @@
 /**
- * **The reader just pressed this.** One fact, recorded by the two controls that
- * are in a position to know it, and read by the panel that is about to decide
+ * **The reader just pressed this.** One fact, recorded by the control that is
+ * in a position to know it, and read by the panel that is about to decide
  * whether to spend a model call.
  *
- * **Fourteen controls start a paid run on their own**, between them arming
- * **thirteen** targets — the two numbers differ because Diagram's bar button and
- * its Sketch chip are two gestures that arm the same picture. The controls: the
- * Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Trajectory and Diagram buttons in
- * the bar; the Sketch and Illustrated chips inside Diagram; the Quiz half of
- * Remember; and the Claims and Candidates chips inside Referee. The bar's Tweets
- * link was one of them from 2026-09-06 to 2026-09-15, when the thread page began
- * writing on arrival instead — it is a path rather than query state, so the
- * reason below does not reach it (useAutoRun.ts § `useAutoRunOnArrival`).
+ * The controls include artefact-backed mode buttons in the bar and the
+ * sub-mode controls for Diagram, Remember, Referee and Summary (including
+ * their command-bar rows). Several gestures may arm the same target: Summary's
+ * slider, its end buttons and its three command rows all arm `simple`.
+ * The bar's Tweets link armed a token from 2026-09-06 to 2026-09-15, when the
+ * thread page began writing on arrival instead — it is a path rather than
+ * query state, so the reason below does not reach it
+ * (useAutoRun.ts § `useAutoRunOnArrival`).
  * Greg's rule is *"if the user **clicks** a mode that
  * hasn't been run yet, automatically run it"*, and the word that carries the
  * money is **clicks**.
@@ -157,11 +156,10 @@ import { jobEngine } from "./jobEngine.js";
 export type { AutoRunTarget };
 
 /**
- * **What a press on this mode's bar button arms**, for every one of the
- * fourteen. Total since 2026-09-06, so a fifteenth word in `MODES` is a
- * typecheck error here until somebody has answered the money question — which
- * is the point of it. This table was `Partial`, and under a `Partial` an
- * omitted row and a considered "nothing" are the same thing, so a new
+ * **What a press on each mode's bar button arms.** Total over `MODES`, so a new
+ * word there is a typecheck error here until somebody has answered the money
+ * question — which is the point of it. This table was `Partial`, and under a
+ * `Partial` an omitted row and a considered "nothing" are the same thing, so a new
  * artefact-backed mode could be wired end to end with nobody ever asked whether
  * pressing it should start generating.
  * docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md
@@ -268,13 +266,14 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      opened on the tree's gists, which were free; that outline went
      (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
      what is left is an artefact. The press still arms nothing: an article with
-     no plain-words version shows the empty state's "Write it", and the slider
-     and the command bar's three rows arm `simple` for themselves one level
-     down, as Remember's Quiz chip does. Whether opening Summary should start
-     the run is a product question still open (Overseer queue fb7t-7v). */
+     no plain-words version shows the empty state's "Write it", and the band's
+     plain-words controls and the command bar's three rows arm `simple` for
+     themselves one level down, as Remember's Quiz chip does. Whether opening
+     Summary should start the run is a product question still open (Overseer
+     queue fb7t-7v). */
   summary: {
     kind: "none",
-    reason: "opens on a plain-words level and shows \"Write it\" if there is none; the slider and the command bar's rows arm themselves",
+    reason: "opens on a plain-words level and shows \"Write it\" if there is none; its controls and the command bar's rows arm themselves",
   },
 
   /* Nothing exists to fill until the reader has typed. */
@@ -647,8 +646,9 @@ export function subModeGenerates(sub: SubMode): boolean {
  * to spend it. So each arm below reads the table the press itself read — the
  * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
  * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
- * `RememberSubModeToggle`), and `"simple"` the Summary toggle arms. A Diagram chip arms `activationForDiagram` of the
- * picture it lands on, which is the delegated row's answer too.
+ * `RememberSubModeToggle`), and `"simple"` the Summary controls arm. A Diagram
+ * chip arms `activationForDiagram` of the picture it lands on, which is the
+ * delegated row's answer too.
  *
  * `sub` is the sub-mode each band is showing, **already parsed** the way the
  * band parses it — this module knows nothing about URLs, for the reason

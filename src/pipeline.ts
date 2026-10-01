@@ -3865,7 +3865,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
   /* Stage 5r — Simple: a plain-words orientation, a sub-mode of Summary. Off
      DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; run by a press on the
-     Simple chip, or on Metadata. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+     plain-words controls, or on Metadata.
+     docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
 
      **No baseline read**, like `faq`: nothing addresses a paragraph, so a
      re-run replaces them. */

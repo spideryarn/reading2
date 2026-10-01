@@ -38,9 +38,9 @@
  * ## And the press it retires is the press it would have claimed
  *
  * `bandTarget` (activation.ts) answers from the same tables the presses arm
- * from. It needs the sub-mode for the bands whose chips arm something —
- * Diagram, Referee, Remember and Summary — so this component reads those
- * parameters itself. That keeps them off
+ * from. It needs the sub-mode for Diagram, Referee and Remember; Summary's one
+ * job is unconditional, but its level still belongs in the boundary reset key.
+ * This component therefore reads those parameters itself. That keeps them off
  * `Reader`'s own render, which the bands that own them each avoided for the
  * same reason (RememberBand, DiagramBand).
  */
@@ -118,7 +118,7 @@ export function ModeBoundary({
     remember: rememberParam,
     summary: summaryParam,
   });
-  /* Only an owner's band is selected by the first three. A Diagram visitor
+  /* Only an owner's band is selected by the first three modes. A Diagram visitor
      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
      address change there is not a new band and must not retry a broken one.
      **Summary's is the exception**: a visitor gets the plain-words levels

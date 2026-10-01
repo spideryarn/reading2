@@ -423,12 +423,14 @@ describe("choosing a plain-words level", () => {
     await open("simple");
     const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider .summ-slider-end")];
     expect(ends, "an icon at each end").toHaveLength(2);
-    /* Out of the tab order and out of the accessibility tree: the slider is
-       the control a keyboard or a screen reader uses. */
-    for (const end of ends) {
-      expect(end.tabIndex).toBe(-1);
-      expect(end.getAttribute("aria-hidden")).toBe("true");
-    }
+    /* They are real shortcuts, not decoration: a keyboard and a screen reader
+       get the same Brief/Fuller jumps as a pointer. */
+    expect(ends.map((end) => end.getAttribute("aria-label"))).toEqual([
+      "Show Brief summary",
+      "Show Fuller summary",
+    ]);
+    expect(ends.map((end) => end.tabIndex)).toEqual([0, 0]);
+    expect(ends.some((end) => end.hasAttribute("aria-hidden"))).toBe(false);
     await act(async () => ends[1]?.click());
     await settle();
     expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");

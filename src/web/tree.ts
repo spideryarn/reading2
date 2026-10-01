@@ -419,9 +419,9 @@ export interface SummaryNode {
   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
   gist?: string;
   /**
-   * The Socratic question under it, on the root and depth-1 nodes only, and
-   * only on trees built after 2026-09-05 — types.ts § `TreeNode.question`.
-   * Absent everywhere else.
+   * The Socratic question carried by the root and depth-1 nodes only, and only
+   * on trees built after 2026-09-05 — types.ts § `TreeNode.question`. Marginalia
+   * draws it; structural views may ignore it. Absent everywhere else.
    */
   question?: string;
   children: SummaryNode[];

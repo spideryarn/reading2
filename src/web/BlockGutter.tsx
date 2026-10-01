@@ -612,8 +612,8 @@ export function BlockGutter({
           What changes is the plain left click: the id used to jump, and jumping
           to the paragraph you are already hovering was close to a no-op. This
           slot is for quoting and linking, which is what the id was for too.
-          `BlockRef` still jumps everywhere else — gist ranges, summary entries,
-          chat citations — and is untouched. */}
+          `BlockRef` still jumps everywhere else — gist ranges and model
+          citations — and is untouched. */}
       <a
         className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}

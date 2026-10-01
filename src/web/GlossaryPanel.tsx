@@ -2034,7 +2034,7 @@ function Foot({
 
 /**
  * The glossary's run button. Everything but the three constants below is in
- * `JobProgress`, which the summary panel and the thread page share.
+ * `JobProgress`, which Summary's plain-words panel and the thread page share.
  */
 function Progress(props: {
   job: Job | null;

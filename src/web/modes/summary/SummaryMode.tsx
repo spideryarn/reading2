@@ -46,7 +46,7 @@ import { useRenderCount } from "../../perf.js";
 import { AboutMade } from "../../BandAbout.js";
 import { ModeSurface } from "../../ModeSurface.js";
 import { SimplePanel } from "../../SimplePanel.js";
-import { ControlTip, Tooltip } from "../../Tooltip.js";
+import { ControlTip, TipNote, Tooltip } from "../../Tooltip.js";
 import { useSimple } from "../../useSimple.js";
 import { WrittenForYou } from "../../WrittenForYou.js";
 
@@ -229,11 +229,11 @@ const PLAIN_HOW =
  * **No level name beside it** — Greg, 2026-10-01: *"get rid of the "Simple"
  * text - perhaps replace with an icon or similar"* (SPIDERYARN-READING2-7R).
  * A small icon sits at each end instead: short lines at the Brief end, a full
- * block of text at the Fuller end. Each is a pointer shortcut to that end's
+ * block of text at the Fuller end. Each is a shortcut to that end's
  * level, through the same `choose` as the slider, so it arms exactly as the
- * slider does; it is out of the tab order and hidden from a screen reader,
- * which already has the slider itself. The card names all three levels and
- * which one is showing.
+ * slider does. They are real buttons, with names and cards of their own, so a
+ * keyboard or screen reader gets the same shortcuts as a pointer. The slider's
+ * card names all three levels and which one is showing.
  *
  * @param slug the article, **only so a press can be recorded** — null for a
  *   visitor, whose press must arm nothing (there is no `useAutoRun` to claim
@@ -278,15 +278,16 @@ export function SummaryControls({
     <>
       <fieldset className="summ-seg summ-slider">
         <legend className="sr-only">In plain words</legend>
-        <button
-          type="button"
-          className="summ-slider-end"
-          tabIndex={-1}
-          aria-hidden="true"
-          onClick={() => choose(shortest)}
-        >
-          <TextAlignStart size={14} />
-        </button>
+        <Tooltip content={<TipNote>Show Brief summary</TipNote>} placement="bottom" keepSide>
+          <button
+            type="button"
+            className="summ-slider-end"
+            aria-label="Show Brief summary"
+            onClick={() => choose(shortest)}
+          >
+            <TextAlignStart size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
         {/* `keepSide` for the reason RefereeViews gives: the band sits at the
             right of the window and a card flung to the cross axis would land on
             the controls being read. */}
@@ -358,15 +359,16 @@ export function SummaryControls({
             />
           </label>
         </Tooltip>
-        <button
-          type="button"
-          className="summ-slider-end"
-          tabIndex={-1}
-          aria-hidden="true"
-          onClick={() => choose(longest)}
-        >
-          <TextAlignJustify size={14} />
-        </button>
+        <Tooltip content={<TipNote>Show Fuller summary</TipNote>} placement="bottom" keepSide>
+          <button
+            type="button"
+            className="summ-slider-end"
+            aria-label="Show Fuller summary"
+            onClick={() => choose(longest)}
+          >
+            <TextAlignJustify size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </fieldset>
       {badge ? <span className="summ-badge">{badge}</span> : null}
     </>

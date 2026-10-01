@@ -902,9 +902,9 @@ export function paragraphStops(
 /**
  * The deepest node the reader is standing in, or null above the first one.
  *
- * **Deepest, and deepest among the ones actually drawn** — the same rule the
- * summary panel's follow mark uses (docs/project/summaries.md), and for the
- * same reason: marking a part when its section is on screen tells the reader
+ * **Deepest, and deepest among the ones actually drawn** — the rule Summary's
+ * former outline used too, and for the same reason: marking a part when its
+ * section is on screen tells the reader
  * something they already knew. A collapsed node is not drawn, so its children
  * are not candidates, and the mark lands on the collapsed node itself.
  */

@@ -439,18 +439,23 @@ export function Reader({
   );
   /* The bar's Comments drawer needs it for the same one reason the bands do. */
 
+  /* One answer for both the live fit and the Marginalia press's hypothetical
+     fit. Keeping the value shared stops the press swapping columns at a
+     threshold different from the layout it is about to draw. */
+  const bandShape = bandShapeFor(mode);
+
   const fit = useMemo(
     () =>
       fitView({
         windowWidth,
         modeBand: bandOpen,
         /* Which band each mode gets, and why: layout.ts § `bandShapeFor`. */
-        bandShape: bandShapeFor(mode),
+        bandShape,
         margin: marginOpen,
         rootFontPx,
         showSpine,
       }),
-    [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, marginOpen, showSpine, bandShape],
   );
   /* **Where the notes would fit**, for the Marginalia press: beside the band
      that is open, and with no band. A press reads both to decide whether it
@@ -460,13 +465,13 @@ export function Reader({
       notesFit(
         {
           windowWidth,
-          bandShape: bandShapeFor(mode),
+          bandShape,
           rootFontPx,
           showSpine,
         },
         bandOpen,
       ),
-    [windowWidth, rootFontPx, bandOpen, showSpine, mode],
+    [windowWidth, rootFontPx, bandOpen, showSpine, bandShape],
   );
 
   /**

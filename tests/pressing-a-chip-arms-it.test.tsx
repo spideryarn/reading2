@@ -299,6 +299,12 @@ describe("Summary's plain-words slider", () => {
     const changes = mountSummaryControls("simple");
     const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider-end")];
     expect(ends).toHaveLength(2);
+    expect(ends.map((end) => end.getAttribute("aria-label"))).toEqual([
+      "Show Brief summary",
+      "Show Fuller summary",
+    ]);
+    expect(ends.map((end) => end.tabIndex)).toEqual([0, 0]);
+    expect(ends.some((end) => end.hasAttribute("aria-hidden"))).toBe(false);
     act(() => ends[0]?.click());
     expect(armed("simple")).toBe(true);
     expect(changes).toEqual(["brief"]);
@@ -343,6 +349,16 @@ describe("Summary's plain-words slider", () => {
   it("arms nothing for a visitor, who still gets to move it", () => {
     const changes = mountSummaryControls("brief", null);
     slideTo(2);
+    expect(armed("simple")).toBe(false);
+    expect(changes).toEqual(["fuller"]);
+  });
+
+  it("arms nothing when a visitor uses an end button", () => {
+    const changes = mountSummaryControls("simple", null);
+    const fuller = host.querySelector<HTMLButtonElement>(
+      '.summ-slider-end[aria-label="Show Fuller summary"]',
+    );
+    act(() => fuller?.click());
     expect(armed("simple")).toBe(false);
     expect(changes).toEqual(["fuller"]);
   });

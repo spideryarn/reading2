@@ -232,16 +232,16 @@ export interface ModelNode {
  * Why this is a **second field** rather than a change to the gist is the whole
  * design decision, and it is in
  * docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md.
- * The short version: the gist is not only shown in Summary mode, it is shown in
- * ten places — the zoom columns, the shelf card, the spine tooltip — **and it is
+ * The short version: the gist is shown in many places — the structure views,
+ * the shelf card, the spine tooltip — **and it is
  * fed back in as context to the later structure waves**
  * (src/hierarchy-expand.ts § `chainRung`). Making it Socratic would change a
  * shelf blurb into a question and degrade the input the cascade builds on.
  *
  * **Depth is enforced here rather than trusted from the prompt.** The prompt
  * asks for the root and depth 1; a model that writes fifty of them anyway would
- * otherwise fill a long article's Summary panel with a question per section,
- * which is the noise this feature is scoped to avoid. Enforcing it in code
+ * otherwise fill a long article's margin with a question per section, which is
+ * the noise this feature is scoped to avoid. Enforcing it in code
  * means the scope is a fact rather than a request.
  *
  * **Punctuation is normalised, never read for meaning.** The first real run of
@@ -2108,8 +2108,8 @@ export interface HierarchyRun {
    * deep, or not a question. src/hierarchy.ts § `questionFor`.
    *
    * Reported at 0 like the others, and it is the only figure that would show a
-   * drifting prompt quietly turning the Summary panel's second line off:
-   * absent questions and unwritten ones look identical on screen.
+   * drifting prompt quietly removing Marginalia's questions: absent questions
+   * and unwritten ones look identical on screen.
    */
   droppedQuestions: number;
   /**

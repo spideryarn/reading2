@@ -1,0 +1,4051 @@
+commit 9e5cb2ccac385a0615fecbaea22f28b8472d6cdf
+Author: Greg Detre <greg@gregdetre.com>
+Date:   Thu Oct 1 19:36:58 2026 +0100
+
+    261001p: Summary loses Parts & Sections; the slider alone, a touch wider
+    
+    Greg (spya-b3ggv4): Parts & Sections overlapped Structure, so Summary is
+    now just the Brief / Simple / Fuller slider and its paragraphs.
+    
+    - SummaryPanel.tsx and its outline go; the bands draw ModeSurface
+      themselves. ?deep= and the `gists` view go; ?summary= defaults to
+      `simple`, and an old ?summary=gists&deep=2 link lands there. `deep`
+      moves to last-view's NEVER_REMEMBERED so an old link still beats a
+      restore.
+    - The slider is always live, with no level name beside it (7R): an
+      icon at each end, each a press on that end's level.
+    - Summary's band is "roomy": the standard band capped at 28rem rather
+      than 25rem (7Q). bandShapeFor(mode) replaces Reader's two ternaries.
+    - Kept: the gists, the Hierarchy stage, buildSummaryTree and
+      TreeNode.question, which Structure, Marginalia and others read.
+    - The bar's Summary press still arms nothing; generating on open is
+      fb7t-7v's item.
+    
+    Plan and GPT Sol's plan review in docs/plans/261001p-*.
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/src/hierarchy-expand.ts b/src/hierarchy-expand.ts
+index cdbb49ce0..e2d133dae 100644
+--- a/src/hierarchy-expand.ts
++++ b/src/hierarchy-expand.ts
+@@ -236,7 +236,7 @@ const ENVELOPE_TOKENS = 200;
+  *
+  * 7. **A question, on the children of the whole work and on nothing else.**
+  *    `EXPAND_SYSTEM` had no such field, so a part built by the cascade drew a
+- *    bare gist beside a neighbour's question once `SummaryPanel` began drawing
++ *    bare gist beside a neighbour's question once Summary's outline began drawing
+  *    `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05 and fixed here.
+  *    The content rules are **V4's shape plus `toc/8`'s plain-words rule**,
+  *    copied from the QUESTIONS block in src/hierarchy.ts § `SYSTEM` and put
+diff --git a/src/hierarchy.ts b/src/hierarchy.ts
+index 343fe5bdd..02d6392b6 100644
+--- a/src/hierarchy.ts
++++ b/src/hierarchy.ts
+@@ -274,7 +274,8 @@ export interface ModelNode {
+  * not to write one (docs/reusable/silent-success.md).
+  *
+  * Absence is ordinary and always was: every tree built before this field
+- * existed has none, and `SummaryPanel` draws the row exactly as it did. That is
++ * existed has none, and Summary's outline drew the row exactly as it did (until
++ * that outline was removed, 2026-10-01). That is
+  * why this is not in `tree-invariants.ts` § the gist rule, which is stated in
+  * both directions precisely because a *missing gist* must never pass as
+  * deliberate.
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index bdebe226b..a09bd4497 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -281,14 +281,18 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+     experimental: true,
+   },
+   summary: {
+-    description:
+-      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
+-    how: "The sentences are the tree's own, written when the article was ingested — a shorter summary of the same thing is a different level of the tree, not a second request. Its Simple view is the one part a model writes: a few plain-words paragraphs, written once and kept.",
++    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
++    /* Checked against src/simple-summary.ts: one job writes every level (a
++       call each, side by side) and stores them together, and every paragraph
++       keeps one to three passage ids. Until 2026-10-01 this mode was the
++       tree's gists at Parts or Sections, written at ingest; that outline went
++       (plan 261001p), and Structure is where the gists are drawn now. */
++    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
+     /* Both spellings, because the reader's keyboard is not ours to choose.
+-       `simple` was here for the plain-words sub-mode (plan 260930i) and opened
+-       the outline instead; since 2026-10-01 the bar has a *Summary › Simple*
+-       row that goes there (src/web/sub-modes.ts, plan 261001d). */
+-    aliases: ["summarise", "summarize", "gist"],
++       `simple` is not here: the bar has a *Summary › Simple* row that goes
++       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
++       on 2026-10-01 — nothing in Summary is a gist any more. */
++    aliases: ["summarise", "summarize"],
+     experimental: false,
+   },
+   diagram: {
+diff --git a/src/profile.ts b/src/profile.ts
+index c2f837259..b8e3fafd9 100644
+--- a/src/profile.ts
++++ b/src/profile.ts
+@@ -56,8 +56,7 @@ export { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "./types.js";
+  * — including a diff of the hash's input, which is the one place it would
+  * matter. Returns `null` rather than `""` so that "the reader emptied the box"
+  * and "the reader never touched it" cannot be told apart *here*; whoever cares
+- * about that distinction holds it above this line, as `SummaryPanel` does with
+- * its `steer: string | null`.
++ * about that distinction holds it above this line.
+  */
+ export function normaliseProfileText(text: string | null | undefined): string | null {
+   if (!text) return null;
+diff --git a/src/web/FeaturesPage.tsx b/src/web/FeaturesPage.tsx
+index da0324da4..e1e9f3f21 100644
+--- a/src/web/FeaturesPage.tsx
++++ b/src/web/FeaturesPage.tsx
+@@ -124,11 +124,12 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
+           </Portrait>
+         </div>
+         <div className="site-bento site-reveal tw:mt-4">
+-          {/* Greg, 2026-08-26, the summary request, and 2026-08-31 ("just
+-              keeping 'Gist' only is sufficient"). Summary mode, src/modes.ts. */}
++          {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
++              levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
++              Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
+           <Tile name="Summary." span="wide">
+-            One sentence on every part of the piece, and every section of every part, as deep as you
+-            ask — beside the prose, never instead of it.
++            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
++            passages it rests on, beside the prose, never instead of it.
+           </Tile>
+           {/* Plain mode: the article alone, with the band closed. */}
+           <Tile name="Or just the article." span="wide">
+diff --git a/src/web/LandingPage.tsx b/src/web/LandingPage.tsx
+index 07e11d2c7..dcf850632 100644
+--- a/src/web/LandingPage.tsx
++++ b/src/web/LandingPage.tsx
+@@ -218,10 +218,11 @@ export function LandingPage() {
+             Say what you took from the piece and hear, plainly and concisely, where it diverges from
+             the text. Or take a dozen short questions, easy first, central first.
+           </Tile>
+-          {/* Greg, 2026-08-26, the summary request, and 2026-08-31. */}
++          {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
++              levels; 2026-10-01, the outline removed (plan 261001p). */}
+           <Tile name="Summary.">
+-            One sentence on every part of the piece, and every section of every part, as deep as you
+-            ask — beside the prose, never instead of it.
++            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
++            passages it rests on, beside the prose, never instead of it.
+           </Tile>
+           {/* Greg, 2026-08-31, the timeline request; docs/project/timeline.md. */}
+           <Tile name="Timeline.">
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 2f5722e51..22ab2893b 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -551,8 +551,7 @@ export function Metadata({
+    * free, which is the same argument its `comments` count already makes.
+    *
+    * `saved === null` means "not seeded yet", so an empty box the reader has
+-   * cleared is tellable from one that has not loaded. Same distinction
+-   * `SummaryPanel` holds for its steer.
++   * cleared is tellable from one that has not loaded.
+    *
+    * The save is [`useAutosavedText`](./useAutosavedText.ts), shared with
+    * `/profile` since 2026-10-01, when the box began saving itself after a pause
+diff --git a/src/web/SearchPanel.tsx b/src/web/SearchPanel.tsx
+index 557a6e81f..d2e503fc2 100644
+--- a/src/web/SearchPanel.tsx
++++ b/src/web/SearchPanel.tsx
+@@ -297,7 +297,7 @@ export function SearchPanel({
+   return (
+     <ModeSurface label="Search this article" feature="srch" mode="search">
+       {/* **No head slot, and therefore no title row**, for the reason
+-          SummaryPanel.tsx gives at length: it said the mode's own name and the
++          SummaryMode.tsx § `SummarySurface` gives at length: it said the mode's own name and the
+           Dock is already saying it (Greg, 2026-09-05). The search box below is
+           the mode, and it explains itself better than a word above it did. The
+           `label` above — `aria-label` on the `<aside>` — names the region. */}
+diff --git a/src/web/SummaryPanel.tsx b/src/web/SummaryPanel.tsx
+deleted file mode 100644
+index 8ebbb96d1..000000000
+--- a/src/web/SummaryPanel.tsx
++++ /dev/null
+@@ -1,722 +0,0 @@
+-/**
+- * The summary panel — a **mode**, in the band between the spine and the prose.
+- *
+- * Greg, 2026-08-26:
+- *
+- * > Add functionality for hierarchical Summary, taking inspiration from
+- * > docs/project/original-version/ … When active, it should replace the middle
+- * > sections of the UI (i.e. right of the spine, left of the doc).
+- *
+- * and, when asked which of the two things the previous version left behind was
+- * meant — a nested outline of what we already have, or their length ladder:
+- *
+- * > Follow the approach the old-version took.
+- *
+- * Their approach was a **named length ladder**, and it was built here and then
+- * taken out again on 2026-08-31. Greg: *"I think we can get rid of the Length
+- * functionality. I think for now just keeping 'Gist' only is sufficient."*
+- * What is left is the half that was never paid for — the **tree**, with the
+- * one-sentence gist stage 4 already writes onto every internal node — and one
+- * control, Depth, which is how many of those rows you want. See
+- * docs/plans/260831s-gist-only-summaries.md for what went and why.
+- *
+- * ```
+- *  ┌── spine ──┬────── SUMMARY (this panel) ──────┬──── the article ────┐
+- *  │           │  SUMMARY                         │                     │
+- *  │  ▇▇▇▇▇▇▇  │  [Parts|Sections] ○─●─○ Simple  │  Being You opens    │
+- *  │  ▇▇▇▇     │ ──────────────────────────────── │  with a story about │
+- *  │  ▇▇▇      │  Consciousness is what it is     │  waking from        │
+- *  │  ▇▇▇▇▇▇   │  like to be a living body.       │  anaesthesia…       │
+- *  │  ▇▇       │                                  │                     │
+- *  │  ▇▇▇▇     │  ▾ 1  What feeling is for   18¶  │  Every paragraph    │
+- *  │  ▇▇▇      │      Perception is a controlled  │  stays exactly      │
+- *  │  ▇▇▇▇▇    │      hallucination, not a…      │  where it was.      │
+- *  │  ▇▇       │    ▸ 1.1 The body as a model  6¶ │                     │
+- *  │           │  ▸ 2  The hard problem      +4  │  Clicking a title   │
+- *  │           │                                  │  scrolls it here.   │
+- *  └───────────┴──────────────────────────────────┴─────────────────────┘
+- * ```
+- *
+- * ## Three ways to be hidden, and they are not the same variable
+- *
+- * The one design note worth copying verbatim from their structure panel:
+- * *"too deep to show" and "I closed this" are different states and should not
+- * share a variable.* So `deep` is a cut-off that removes a whole level, `closed`
+- * is a set the reader put nodes into, and they compose. A node hidden by the
+- * cut-off does not un-close itself when the cut-off moves.
+- *
+- * There is a third, added 2026-08-27, and it is the same note applied once
+- * more. Greg:
+- *
+- * > when it has collapsed more granular levels, the only way to see the more
+- * > granular levels is to switch articles -> parts -> sections. Could we make
+- * > it easier to see them for this part of the doc (e.g. click `+N sections`
+- * > to expand those, and click the parent again to collapse)?
+- *
+- * So `opened` is the set the reader opened *past* the cut-off, by pressing the
+- * `+N sections` badge on a node the cut-off was hiding. It is a per-node
+- * override and it leaves the Depth buttons exactly where they are — which was
+- * the objection to letting that badge be pressed at all, and the objection is
+- * answered by making the override its own variable rather than by moving the
+- * cut-off. The one rule all three feed is `showsChildren` in tree.ts, which is
+- * where they are written down once for both the panel and the follow.
+- *
+- * The root was the one row where that badge stayed a dead fact, because it
+- * draws no title row and so has no twist to undo an override with. Greg,
+- * 2026-08-31: *"in Article sub-mode, I can't click on `+N parts` to expand"*.
+- * So the root's badge is a control too, and it is its own twist — it flips to
+- * `−N parts` once the parts are open. That collapse clears the override and
+- * never writes the root into `closed`, which would otherwise outlive the Depth
+- * buttons and leave `parts` drawing an empty outline; see `clearOverride`.
+- *
+- * ## Nothing in the Gists view is generated on demand
+- *
+- * Every line of prose in the Gists view is a **gist**, written by stage 4 as
+- * part of building the tree (src/hierarchy.ts). So that view costs nothing, is
+- * never empty on an article that has a tree, and has no run button, job,
+- * staleness or reader-profile provenance. Simple is supplied as the `simple`
+- * body below and owns those states in `SimplePanel`.
+- */
+-import { type MouseEvent, type ReactNode, useRef, useState } from "react";
+-import { ChevronRight } from "lucide-react";
+-import type { BlockId } from "../types.js";
+-import { BlockRange, BlockRef } from "./BlockRef.js";
+-import { ModeSurface } from "./ModeSurface.js";
+-import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+-import { MAX_SUMMARY_DEPTH, MIN_SUMMARY_DEPTH } from "./params.js";
+-import { FOLLOW_ATTR, useFollow } from "./follow.js";
+-import { currentEntryId, showsChildren, type SummaryNode } from "./tree.js";
+-import { useRenderCount } from "./perf.js";
+-
+-interface Props {
+-  /** The tree, nested and numbered. Null if the tree is unusable. */
+-  root: SummaryNode | null;
+-  deep: number;
+-  onDeep(deep: number): void;
+-  /** Where the reader is, as a row index into `blocks`. Null above the first section. */
+-  atRow: number | null;
+-  /** Jump the article to a block, exactly as a gist cell does. */
+-  onJump(id: BlockId): void;
+-  /**
+-   * The rest of the one row of controls — the plain-words pair and the
+-   * *written for you* badge — built by the band (SummaryMode.tsx), which owns
+-   * `?summary=` and the press. Absent in a test about the outline alone.
+-   */
+-  subMode?: ReactNode;
+-  /**
+-   * **A plain-words level's view, when one is open** — drawn in place of the
+-   * outline. Null or absent means the outline. Built by the band so the
+-   * owner/visitor seam stays a component boundary there, and this panel stays
+-   * a pure function of what it is handed.
+-   * docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+-   */
+-  simple?: ReactNode;
+-  /**
+-   * What the band's (i) adds after the mode's own words (ModeSurface.tsx §
+-   * `about`): for the owner's plain-words level, who wrote it and when. The
+-   * outline needs nothing more — the catalog's *how* already says where its
+-   * sentences come from. Built by the band, like `simple`.
+-   */
+-  about?: ReactNode;
+-}
+-
+-/**
+- * **Parts | Sections — a ladder, not a switch.** Sections *adds* the sections
+- * under each part, so while it is chosen Parts is drawn *included* (a softer
+- * wash) as well: Greg asked for the design to *"give the user a clue about how
+- * they work and are related to each other"* (SPIDERYARN-READING2-7A).
+- * `aria-pressed` stays on the one depth chosen, so a screen reader hears one
+- * choice, not two (Sol's plan review of 261001b, P2-9).
+- *
+- * `article`, depth 0, is gone (78): the root's gist heads the outline at every
+- * depth. `deep` can still be 0 when a caller passes it; nothing is lit then.
+- */
+-/** Each depth's word, lower case, for the sentences the badges say — `article` still names depth 0. */
+-const DEPTH_LABELS = ["article", "parts", "sections"];
+-
+-const DEPTH_PILLS: readonly { depth: number; label: string; what: string }[] = [
+-  { depth: 1, label: "Parts", what: "The article's parts, one sentence each." },
+-  { depth: 2, label: "Sections", what: "The parts, and the sections inside each, one sentence each." },
+-];
+-
+-export function SummaryPanel({ root, deep, onDeep, atRow, onJump, subMode, simple, about }: Props) {
+-  useRenderCount("SummaryPanel");
+-  /**
+-   * Which sections the reader has closed.
+-   *
+-   * In memory rather than in the URL, and params.ts § summary mode carries the
+-   * argument: the only way to write this down is a list of node ids, node ids
+-   * are positional, and a re-run of `npm run hierarchy` renumbers them — so a shared
+-   * link would open a set of sections that are no longer the ones you opened.
+-   * The depth is the stable half, and the depth is what the URL carries.
+-   */
+-  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
+-  /**
+-   * And which the reader has opened past the depth cut-off — see the header.
+-   *
+-   * Kept apart from `closed` rather than folded into one tri-state map because
+-   * they answer different questions and the cut-off moves underneath both: a
+-   * node can be shut at `sections` and, at `parts`, be shut *and* below the
+-   * cut-off, and only two sets can say which of those the reader chose.
+-   */
+-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+-
+-  /**
+-   * Flip one node's children, from what is on screen rather than from which
+-   * variable is holding them there.
+-   *
+-   * `showing` is what `Entry` has drawn and `beyond` is whether the cut-off
+-   * alone would hide these children. Deriving the new state from the first
+-   * rather than from the sets is what keeps the twist and the `+N` badge
+-   * honest when both a close and an override are set: a reader who opens a
+-   * part past the cut-off, raises Depth, closes it there and drops Depth back
+-   * would otherwise find the badge doing nothing at all.
+-   *
+-   * Collapsing always clears the override, so the two sets never both hold the
+-   * same id and `closed` never has to be checked against `opened` — the
+-   * precedence in `showsChildren` is a belt on top of that.
+-   */
+-  const toggle = (id: string, showing: boolean, beyond: boolean) => {
+-    setClosed((prev) => (showing ? withId(prev, id) : withoutId(prev, id)));
+-    setOpened((prev) => (showing ? withoutId(prev, id) : beyond ? withId(prev, id) : prev));
+-  };
+-
+-  /**
+-   * Take an override off again, and **do not write the node into `closed`** —
+-   * the root's collapse, and the reason it is not simply `toggle`.
+-   *
+-   * Everywhere else a collapse means "shut this, and keep it shut when the
+-   * cut-off moves", which is what `closed` is for. On the root that sentence is
+-   * a trap: `closed` beats the cut-off, so a shut root would still be shut at
+-   * `parts`, and the Depth button that says `parts` would draw an empty
+-   * outline. The root is offered a collapse only while the override is the one
+-   * thing holding its children open, so clearing the override is the whole of
+-   * it.
+-   */
+-  const clearOverride = (id: string) => setOpened((prev) => withoutId(prev, id));
+-
+-  /**
+-   * The one row the reader is actually on, and the row the panel follows.
+-   *
+-   * Computed here rather than decided by each `Entry`, because two things need
+-   * the same answer — the class that marks it and the scroll that finds it —
+-   * and a rule written twice is a rule that will disagree with itself. It lives
+-   * in tree.ts beside the shape it walks; see the note there on why "deepest"
+-   * means *deepest drawn* and not simply deepest.
+-   */
+-  const current = root ? currentEntryId(root, atRow, deep, closed, opened) : null;
+-
+-  /* Follow the reader, without taking the scroll off them: the panel moves when
+-     `current` changes and the row is not already comfortably visible, and never
+-     otherwise. The four extras are re-run triggers rather than reasons to move —
+-     each reflows the list without necessarily changing which row is current, and
+-     a re-run with the row in view moves nothing. `root` is the one that is easy
+-     to leave out and was: it changes when the article's tree is rebuilt, which
+-     reflows every row below and can push the current one off the bottom without
+-     any id changing. follow.ts has the argument. */
+-  const scroll = useRef<HTMLDivElement>(null);
+-  useFollow(scroll, current, [deep, closed, opened, root]);
+-
+-  return (
+-    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
+-      {/* **No `head`, so there is no title row at all.** It said the mode's own
+-          name, which the Dock at the foot of the page is already saying — Greg,
+-          2026-09-05: *"I think we can rely on the bottom bar to tell us what
+-          mode we're in, so for example 'Summary' mode doesn't need to say
+-          `Summary` at the top, nor o any other modes."* Nothing else was in the
+-          row, so the row went with it and the band starts at its content. The
+-          surface's `label` above is what names the region, and always was — the
+-          `<h2>` was never carrying that.
+-          docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
+-
+-      {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
+-          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The outline
+-          pair here, then the band's plain-words pair and badge. No labels: the
+-          groups are named for a screen reader by their hidden legends, and
+-          the pills' cards say what each one is. */}
+-      <div className="summ-controls">
+-        {/* Their structure panel's one control, and the one thing it proved:
+-            a single depth cut-off over a whole document is usable. Drawn
+-            under a plain-words level too, unlit, because pressing one is how
+-            the reader comes back to the outline; `?deep=` waits meanwhile. */}
+-        <fieldset className="summ-seg">
+-          <legend className="sr-only">Outline</legend>
+-          <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-            {DEPTH_PILLS.map(({ depth, label, what }) => {
+-              const outline = simple == null;
+-              const chosen = outline && depth === deep;
+-              const included = outline && depth < deep;
+-              return (
+-                <Tooltip
+-                  key={label}
+-                  placement="bottom"
+-                  keepSide
+-                  className="tip-soon"
+-                  content={
+-                    <ControlTip
+-                      head={label}
+-                      what={what}
+-                      how="Read from the outline built when the article was added; nothing is written for it."
+-                    />
+-                  }
+-                >
+-                  <button
+-                    type="button"
+-                    className={`summ-pill${chosen ? " on" : ""}${included ? " included" : ""}`}
+-                    aria-pressed={chosen}
+-                    disabled={depth > MAX_SUMMARY_DEPTH}
+-                    /* Sections, pressed while chosen, steps back to Parts: the
+-                       ladder's top rung switched off. */
+-                    onClick={() => onDeep(chosen && depth > MIN_SUMMARY_DEPTH ? depth - 1 : depth)}
+-                  >
+-                    {label}
+-                  </button>
+-                </Tooltip>
+-              );
+-            })}
+-          </TooltipGroup>
+-        </fieldset>
+-        {subMode}
+-      </div>
+-
+-      {simple != null ? simple : (
+-      <div className="summ-scroll" ref={scroll}>
+-        {/* **Nothing to outline, which is not the same as nothing to read.**
+-            `tree-invariants.ts` permits a root that is a leaf — one block, and
+-            no gist, because a summary must never stand where the real prose
+-            could — so a one-passage article arrives here with a perfectly good
+-            tree and nothing this panel can draw from it. The same holds for a
+-            provisional heading tree whose gists were never written.
+-
+-            Without this the reader got the heading, the Depth pills and a blank
+-            band: no title row on the root, no range, no missing-summary line
+-            and no `+N` badge, because there are no children to have one. GPT
+-            Sol's review of the built code, 2026-08-31. It matters more since
+-            the mode stopped being gated — a visitor used to be told nobody had
+-            built a summary, and now opens the band unconditionally
+-            (src/web/visitor.ts).
+-
+-            A separate sentence from the one below, and deliberately: *no usable
+-            tree* reports a fault, and this tree is fine. */}
+-        {root && !root.gist && root.children.length === 0 ? (
+-          <p className="summ-quiet">This article has no parts, so there is nothing to outline.</p>
+-        ) : root ? (
+-          /* One group for the whole outline, so running the pointer down a
+-             column of block ids shows each card immediately rather than
+-             waiting out the open delay again at every one. Chat's answers do
+-             the same — Tooltip.tsx. */
+-          <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
+-            <ol className="summ-list">
+-              <Entry
+-                entry={root}
+-                deep={deep}
+-                closed={closed}
+-                opened={opened}
+-                onToggle={toggle}
+-                atRow={atRow}
+-                current={current}
+-                onJump={onJump}
+-                onClearOverride={clearOverride}
+-                root
+-              />
+-            </ol>
+-          </TooltipGroup>
+-        ) : (
+-          <p className="summ-quiet">This article has no usable tree to summarise.</p>
+-        )}
+-      </div>
+-      )}
+-    </ModeSurface>
+-  );
+-}
+-
+-/**
+- * One node and, unless it is closed or too deep, the ones under it.
+- *
+- * The root renders without a title row — it *is* the article, and the masthead
+- * two inches to the right already says its name. What it contributes is the
+- * article's own gist, which is the one summary the previous version actually
+- * shipped.
+- *
+- * ## The whole entry is the click target
+- *
+- * Greg, 2026-08-26: *"make it easier to click a section in the summary (right
+- * now you have to click the section-title)"*. He is right, and the title was a
+- * bad target for a reason worth writing down: it is one line of 0.82rem text
+- * whose width is whatever the heading happens to be, so a two-word section is a
+- * two-centimetre target inside a panel four times that wide. Everything else in
+- * the row — the number, the paragraph count, the summary itself, the whitespace
+- * — looked exactly as pressable and did nothing.
+- *
+- * So the click lives on `.summ-body`, which is the header, the summary and the
+- * range together, and it does what the gist cells in TableView already do with
+- * a whole `<td>`. Two things keep that honest:
+- *
+- *  - **The keyboard target is still a real button.** The title is unchanged;
+- *    tab still reaches it and Enter still jumps. The div adds mouse area, not a
+- *    second way to operate the panel, which is why its `biome-ignore` below is
+- *    a statement rather than a shrug.
+- *  - **Anything that is itself pressable wins.** The handler bows out when the
+- *    click landed on a button or a link, so the twist opens a section without
+- *    also scrolling the article, and a block id goes to its own paragraph
+- *    rather than to the top of the section it is in.
+- */
+-function Entry({
+-  entry,
+-  deep,
+-  closed,
+-  opened,
+-  onToggle,
+-  atRow,
+-  current,
+-  onJump,
+-  onClearOverride,
+-  root = false,
+-}: {
+-  entry: SummaryNode;
+-  deep: number;
+-  closed: ReadonlySet<string>;
+-  opened: ReadonlySet<string>;
+-  onToggle(id: string, showing: boolean, beyond: boolean): void;
+-  atRow: number | null;
+-  /** The one entry the reader is on — see SummaryPanel § current. */
+-  current: string | null;
+-  onJump(id: BlockId): void;
+-  /**
+-   * Undo this node's `+N` override. Passed to the root and to nothing else:
+-   * every other row collapses from its twist, and the root has none.
+-   */
+-  onClearOverride?(id: string): void;
+-  root?: boolean;
+-}) {
+-  /* The three ways to be hidden, kept apart on purpose — see the file header.
+-     `beyond` is the cut-off, `closed` is the reader shutting it, `opened` is
+-     the reader opening it past the cut-off. None of them changes another, and
+-     `showsChildren` in tree.ts is the one place they are combined, because the
+-     follow has to reach the same answer and a rule written twice will
+-     eventually disagree with itself. */
+-  const beyond = entry.node.depth >= deep;
+-  const openable = entry.children.length > 0;
+-  const showChildren = showsChildren(entry, deep, closed, opened);
+-  const hidden = openable && !showChildren ? entry.children.length : 0;
+-
+-  /* The `+N` badge hands the keyboard to the twist as it unmounts — see its
+-     `onClick`. Two refs rather than a query, because a selector would have to
+-     know this row apart from its children's rows. */
+-  const twistRef = useRef<HTMLButtonElement>(null);
+-  const badgeRef = useRef<HTMLButtonElement>(null);
+-
+-  /* Where the reader is. An ancestor of the current section counts as "here"
+-     too, because at depth 1 the part you are inside is the honest answer to
+-     "where am I" — marking only the deepest visible node would leave the panel
+-     with nothing lit whenever the cut-off is above it.
+-
+-     Except the root, which covers the whole article and is therefore "here"
+-     the entire time the reader is anywhere. Marking it would put a permanent
+-     highlight down the left of the whole outline, which is a light that is
+-     always on and so tells you nothing. */
+-  const here = !root && atRow !== null && atRow >= entry.startRow && atRow <= entry.endRow;
+-
+-  /* And the one row of that chain the reader is *in*, rather than merely under.
+-     Two marks rather than one because they answer different questions: `here`
+-     draws the path down to the reader, which is what makes a shallow cut-off
+-     honest, and `now` says which single row the summary beside the reading line
+-     belongs to. One mark strong enough to find at a glance, on four nested
+-     rows, is four marks and no answer. */
+-  const now = entry.node.id === current;
+-
+-  /** A click anywhere in the entry that nothing else has already claimed. */
+-  const jumpFromBody = (event: MouseEvent<HTMLDivElement>) => {
+-    if ((event.target as HTMLElement).closest("button, a")) return;
+-    onJump(entry.node.range[0]);
+-  };
+-
+-  return (
+-    <li
+-      className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}${
+-        entry.supplement ? " supplement" : ""
+-      }`}
+-    >
+-      {/* Both of these are the same statement, and it is the one in the header:
+-          the keyboard path is the real `.summ-title` button inside this div,
+-          which is unchanged and still focusable. This handler only widens the
+-          MOUSE target to the whole entry — it adds no way to operate the panel
+-          that was not already there. A `role="button"` would be worse than
+-          nothing: it would claim to be one control while containing three, and
+-          it would take the twist out of the tab order.
+-          biome-ignore lint/a11y/useKeyWithClickEvents: as above
+-          biome-ignore lint/a11y/noStaticElementInteractions: as above */}
+-      <div
+-        className="summ-body"
+-        onClick={jumpFromBody}
+-        /* How the panel's scroller finds this row, and **it is on the body
+-           rather than on the `<li>` above**. That is not a detail: an open
+-           `<li>` contains its whole descendant `<ol>`, so its rectangle is the
+-           height of the entire subtree — and "is the current row in view"
+-           measured against that is a question about the section's children.
+-           A part whose own two lines are sitting in the middle of the panel
+-           would read as out of view because a dozen sections under it run off
+-           the bottom, and the panel would scroll for no reason the reader
+-           could see. Caught by GPT Sol's review, 2026-08-26.
+-
+-           An attribute rather than the `now` class, so that restyling the mark
+-           cannot quietly break the scrolling — follow.ts § FOLLOW_ATTR. */
+-        {...{ [FOLLOW_ATTR]: entry.node.id }}
+-      >
+-        {!root && (
+-          <div className="summ-title-row">
+-            {/* Enabled whenever there is anything under this, including when
+-                the Depth cut-off is what is hiding it — that is the whole of
+-                Greg's "click the parent again to collapse", and its opposite:
+-                the twist is now the way to open one part's sections without
+-                moving Depth for the whole article. */}
+-            <button
+-              type="button"
+-              ref={twistRef}
+-              className={`summ-twist${openable ? "" : " leaf"}${showChildren ? " open" : ""}`}
+-              aria-expanded={openable ? showChildren : undefined}
+-              aria-label={showChildren ? `Close ${entry.title}` : `Open ${entry.title}`}
+-              disabled={!openable}
+-              onClick={() => onToggle(entry.node.id, showChildren, beyond)}
+-            >
+-              <ChevronRight size={12} />
+-            </button>
+-            {/* This title only goes to the section, so it is the same block
+-                link as the range beneath it: a real address for modified
+-                clicks, with the section's opening passage in its card. */}
+-            <BlockRef
+-              id={entry.node.range[0]}
+-              onJump={onJump}
+-              className="summ-title"
+-            >
+-              {/* The apparatus wears no number: it is not part N of the
+-                  argument, and numbering it was how "Notes" became part 3.
+-                  src/web/tree.ts § buildSummaryTree. */}
+-              {!entry.supplement && <span className="summ-number">{entry.number}</span>}
+-              {entry.title}
+-            </BlockRef>
+-            {/* "How much is under this" — the gap their "+N hidden" badge filled
+-                and our gist columns still cannot: a section holding forty
+-                paragraphs and one holding three look identical in an L2 cell.
+-                See docs/project/original-version/structure-panel.md. */}
+-            <span className="summ-size" title={`${entry.blocks} paragraphs in this section`}>
+-              {cap(entry.blocks)}¶
+-            </span>
+-          </div>
+-        )}
+-
+-        {/* **The question INSTEAD of the claim, where there is one.**
+-            SPIDERYARN-READING2-24, Greg 2026-09-05, having read the first
+-            version on a real article: *"I quite like some of these new Socratic
+-            questions in the summary mode, but the intent wasn't that we would
+-            show both the gist and the Socratic question, the intent was that we
+-            would show only the Socratic question when we have one."*
+-
+-            That reverses what the block below this one used to argue, and the
+-            argument is left standing further down rather than deleted, because
+-            it was right about the questions it was written for. A question that
+-            merely restated the gist could not carry a row alone; one that names
+-            its topic, presupposes where the section lands and says how big the
+-            answer is can. Which of those we generate is the prompt's business
+-            (src/hierarchy.ts § QUESTIONS), and it is being chosen by
+-            evals/summaries — the render is the same either way.
+-
+-            **A fallback, not a fault.** `question ?? gist` is the whole rule:
+-            every article whose hierarchy predates 2026-09-05 has no question,
+-            and there is nothing wrong with those rows. Only a row with neither
+-            says so. */}
+-        {entry.question ? (
+-          <p className="summ-question">{entry.question}</p>
+-        ) : entry.gist ? (
+-          <p className="summ-text">{entry.gist}</p>
+-        ) : (
+-          /* **Nor is the apparatus missing a summary.** A supplement node has
+-             no gist on purpose — the notes are shown as written and never
+-             summarised (src/supplement.ts) — so "No summary for this section"
+-             reports our own promise as a fault, on the one row where it is
+-             working correctly. */
+-          !root && !entry.supplement && (
+-            <p className="summ-text missing">No summary for this section.</p>
+-          )
+-        )}
+-
+-        {/* **This is where the question used to draw a SECOND time**, under the
+-            gist, from 1V that morning until 24 that evening. The argument for
+-            that is worth keeping, because it was not wrong — it was scoped:
+-
+-            > *"A bit more"* is the whole brief, and it is why this is a second
+-            > line rather than a rewritten gist. A panel of nothing but questions
+-            > fails the first thing vision.md asks of this feature — *scan before
+-            > you commit* — because a reader deciding whether to descend needs to
+-            > know what the section says.
+-
+-            True of a question that restates its gist, which is what the first
+-            prompt asked for in as many words (*"the question this node's text
+-            answers and its gist does NOT"*), so the only honest output was a
+-            bare why. It stops being true once the question carries its topic and
+-            its direction. **The render did not need to be clever about which
+-            kind it has**; the prompt decides, and the fallback above covers the
+-            rest.
+-
+-            **Root and parts only** is still enforced in `questionFor` rather
+-            than merely asked for: one question per section on a fifty-section
+-            article is noise, and at the default `deep=1` these are the only rows
+-            drawn anyway. Note what that means now the question is the primary
+-            line — a depth-1 node built by the deepening cascade has no question
+-            at all, because `EXPAND_SYSTEM` has no such field, so it falls back
+-            to its gist and the panel can mix the two forms at one depth. That
+-            was invisible while the question was a faint second line.
+-            docs/plans/260905f § P1-5. */}
+-
+-        {/* Where this section starts and ends, as two ids you can press.
+-            The same pair a gist cell carries in TableView, and here for the
+-            same two reasons: it is the address of the section, and it is the
+-            one place ids appear at the `gist` rung — which is the default, and
+-            the rung on every article nobody has paid a model call for. */}
+-        {!root && <BlockRange className="summ-range" range={entry.node.range} onJump={onJump} />}
+-      </div>
+-
+-      {hidden > 0 && (
+-        <button
+-          type="button"
+-          className="summ-more"
+-          /* A control since 2026-08-27, and on every row — the root included
+-             since 2026-08-31. It writes this one node into `opened`, the Depth
+-             buttons stay where the reader put them, and every other part stays
+-             shut. See the file header for Greg's ask.
+-
+-             **The root was the exception until Greg pressed it.** The
+-             reasoning for making it a dead fact was sound as far as it went:
+-             the root draws no title row, so it has no twist, and an override
+-             written there could never be taken off again — the `article`
+-             button would stop meaning "the whole article, and nothing under
+-             it" for the rest of the session (GPT Sol's review, 2026-08-27).
+-             What that argued for was a way to undo it, and instead it argued
+-             the press away. Greg, 2026-08-31: *"in Article sub-mode, I can't
+-             click on `+N parts` to expand"*.
+-
+-             So the root now gets the twist it was missing, in the only place
+-             it has: this badge, which flips to `−N parts` once the parts are
+-             open. See `Collapse` below, and the header on why that press must
+-             not go through `closed`. */
+-          onClick={() => {
+-            /* Move the keyboard along with the state. This button is about to
+-               unmount — its job is done the moment the children are open — and
+-               a focused button that disappears drops focus onto `document.body`,
+-               which loses a screen-reader's place in the outline entirely. The
+-               twist is where the reader should land: it stays mounted, it now
+-               reads "Close <title>", and it is the control that undoes this.
+-
+-               Only when the badge actually had focus. Not a keyboard-only
+-               guard: Chrome focuses a button on mousedown, so a real mouse
+-               press takes this path too, and should — the reader was on the
+-               badge, the badge is gone, the twist is where they now are. No
+-               ring paints there, because `:focus-visible` is false for a
+-               mouse-originated focus; the browser draws that line better than
+-               we can. What the check prevents is dragging focus off something
+-               the reader was actually using.
+-
+-               The root keeps the focus instead, because its badge does not
+-               unmount: it becomes the collapse. */
+-            const takeFocus = !root && document.activeElement === badgeRef.current;
+-            onToggle(entry.node.id, false, beyond);
+-            if (takeFocus) twistRef.current?.focus();
+-          }}
+-          ref={badgeRef}
+-          /* Named for the one node it opens. "+3 sections" is what the eye
+-             needs, beside a title it can see; it is also what a screen reader's
+-             button list shows, where four of them in a row are four
+-             indistinguishable controls. Same review. */
+-          aria-label={`Open the ${hidden} ${childLabel(entry.node.depth, hidden)} of ${
+-            entry.title
+-          }`}
+-          title={
+-            beyond
+-              ? `Open just this one's ${childLabel(entry.node.depth, hidden)} — Depth stays on ${
+-                  DEPTH_LABELS[deep] ?? "where it is"
+-                }`
+-              : "Open these"
+-          }
+-        >
+-          +{cap(hidden)} {childLabel(entry.node.depth, hidden)}
+-        </button>
+-      )}
+-
+-      {/* And the other half of the root's twist. It appears only while the
+-          override is the one thing holding these open — at `parts` the Depth
+-          button above is the honest control and this would be a second, worse
+-          one — which is also what makes clearing the override the whole of the
+-          collapse. SummaryPanel § clearOverride has the trap it avoids. */}
+-      {root && onClearOverride && showChildren && beyond && (
+-        <button
+-          type="button"
+-          className="summ-more"
+-          onClick={() => onClearOverride(entry.node.id)}
+-          aria-label={`Close the ${entry.children.length} ${childLabel(
+-            entry.node.depth,
+-            entry.children.length,
+-          )} of ${entry.title}`}
+-          title={`Back to the article on its own — Depth stays on ${
+-            DEPTH_LABELS[deep] ?? "where it is"
+-          }`}
+-        >
+-          −{cap(entry.children.length)} {childLabel(entry.node.depth, entry.children.length)}
+-        </button>
+-      )}
+-
+-      {showChildren && (
+-        <ol className="summ-children">
+-          {entry.children.map((child) => (
+-            <Entry
+-              key={child.node.id}
+-              entry={child}
+-              deep={deep}
+-              closed={closed}
+-              opened={opened}
+-              onToggle={onToggle}
+-              atRow={atRow}
+-              current={current}
+-              onJump={onJump}
+-            />
+-          ))}
+-        </ol>
+-      )}
+-    </li>
+-  );
+-}
+-
+-/**
+- * `99+` past two digits — theirs, verbatim, and for the reason their reviewer
+- * gave: a three-digit badge is a number nobody reads and a column nobody
+- * planned for.
+- */
+-function cap(n: number): string {
+-  return n > 99 ? "99+" : String(n);
+-}
+-
+-/**
+- * What the things under a node at this depth are called — `parts` under the
+- * article, `sections` under a part.
+- *
+- * The badge said "sections" at every depth until 2026-08-27, which was wrong on
+- * the article row and, more to the point, wrong in the one place the reader
+- * needs the badge and the Depth buttons to be talking about the same thing:
+- * the badge now opens what the buttons name, so it had better use their word.
+- */
+-function childLabel(depth: number, n: number): string {
+-  const plural = DEPTH_LABELS[depth + 1] ?? "sections";
+-  return n === 1 ? plural.replace(/s$/, "") : plural;
+-}
+-
+-/** A set with `id` in it, and the same set back when it already was. */
+-function withId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+-  return set.has(id) ? set : new Set(set).add(id);
+-}
+-
+-/** A set without `id`, and the same set back when it was not in it. */
+-function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+-  if (!set.has(id)) return set;
+-  const next = new Set(set);
+-  next.delete(id);
+-  return next;
+-}
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index e19352b41..b5367a144 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -141,7 +141,7 @@
+ import type { Mode } from "../modes.js";
+ import type { AutoRunTarget } from "./auto-run-targets.js";
+ import type { DiagramKind } from "./diagram.js";
+-import type { RememberView, SummaryView } from "./params.js";
++import type { RememberView } from "./params.js";
+ import type { RefereeView } from "./referee-views.js";
+ import type { SubMode } from "./sub-modes.js";
+ import type { StepName } from "../types.js";
+@@ -264,12 +264,17 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+     kind: "none",
+     reason: "reads the tree, the arc and any ideas already made; it never starts a job",
+   },
+-  /* Opens on the outline, which is free. Its plain-words pills arm for
+-     themselves one level down, as Remember's Quiz chip does — so pressing
+-     Summary on an address that still says `?summary=simple` spends nothing. */
++  /* **Opens on a plain-words level and spends nothing.** Until 2026-10-01 it
++     opened on the tree's gists, which were free; that outline went
++     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
++     what is left is an artefact. The press still arms nothing: an article with
++     no plain-words version shows the empty state's "Write it", and the slider
++     and the command bar's three rows arm `simple` for themselves one level
++     down, as Remember's Quiz chip does. Whether opening Summary should start
++     the run is a product question still open (Overseer queue fb7t-7v). */
+   summary: {
+     kind: "none",
+-    reason: "opens on the outline, from the tree the pipeline already built; the plain-words pills arm themselves",
++    reason: "opens on a plain-words level and shows \"Write it\" if there is none; the slider and the command bar's rows arm themselves",
+   },
+ 
+   /* Nothing exists to fill until the reader has typed. */
+@@ -651,14 +656,15 @@ export function subModeGenerates(sub: SubMode): boolean {
+  */
+ export function bandTarget(
+   mode: Mode,
+-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
++  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
+ ): AutoRunTarget | null {
+   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
+   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+   /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
+      one job writes all levels, so Fuller arms `simple` too. Sol's plan review
+-     of 261001b, P1-3. */
+-  if (mode === "summary") return sub.summary === "gists" ? null : "simple";
++     of 261001b, P1-3. Every Summary band is a plain-words level since the
++     outline went on 2026-10-01, so it does not depend on `?summary=`. */
++  if (mode === "summary") return "simple";
+   const decision = MODE_TARGET[mode];
+   switch (decision.kind) {
+     case "fixed":
+diff --git a/src/web/diagram.ts b/src/web/diagram.ts
+index e9a85135b..5fe2e5b31 100644
+--- a/src/web/diagram.ts
++++ b/src/web/diagram.ts
+@@ -724,8 +724,8 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
+  * Preorder, and children in the order the tree stores them, which is document
+  * order — that is the whole invariant every one of these pictures rests on.
+  * A collapsed node keeps its own entry and loses its subtree, which is what
+- * makes "I closed this" different from "there is nothing here" (SummaryPanel.tsx
+- * § two ways to be hidden).
++ * makes "I closed this" different from "there is nothing here" — the
++ * distinction Summary's outline drew, until it went on 2026-10-01.
+  */
+ /**
+  * The deepest level any picture draws.
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index 740baffd3..185e7ef26 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -9,7 +9,7 @@
+  *
+  * Almost all of that was already built. Everything about how you are looking at
+  * an article is in the query string — `?at=` the section, `?mode=`,
+- * `?deep=` and thirty more (docs/project/url-state.md) — so this file is not
++ * `?summary=` and thirty more (docs/project/url-state.md) — so this file is not
+  * about representing reading state. It answers one question: **what remembers
+  * the query string, and when is it replayed?**
+  *
+@@ -69,8 +69,7 @@ export const REMEMBERED = [
+   "spine", // the bird's-eye rail
+   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
+   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
+-  "deep", // how far down summary mode goes
+-  "summary", // gists or one of three plain levels — only a slider gesture spends
++  "summary", // which of three plain-words levels — only a slider gesture spends
+   "diagram", // which of the five pictures
+   "dx", // drift's sideways axis
+   "dhue", // what a dot's colour means
+@@ -136,6 +135,16 @@ export const NEVER_REMEMBERED = [
+      would then overwrite it with the remembered view, taking the probe off the
+      URL that had just switched it on. */
+   "probe",
++  /* **A retired key, kept so an old link still wins.** `?deep=` chose Parts or
++     Sections in Summary's outline until the outline went on 2026-10-01
++     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
++     Nothing writes it now, and nothing reads it, so it is never stored. But
++     an address from before then can be `/read/x?deep=2` with no `mode` on it
++     (Summary wrote `deep`, then Plain changed only `mode`), and dropping the
++     key from both lists would make that address read as bare — so a
++     remembered view would be restored over a link somebody had just opened.
++     GPT Sol's plan review of 261001p, P1. */
++  "deep",
+ ] as const;
+ 
+ /** Every parameter this app puts on an article's address. */
+diff --git a/src/web/layout.ts b/src/web/layout.ts
+index 1d5a14009..a0fd6c869 100644
+--- a/src/web/layout.ts
++++ b/src/web/layout.ts
+@@ -13,6 +13,8 @@
+  * band (`fitMode`). granularity-zoom.md keeps the history of the columns.
+  */
+ 
++import type { Mode } from "../modes.js";
++
+ /**
+  * The painted width of the rail, in px. Mirrors `--spine-w` in styles.css —
+  * and `tests/spine-width.test.ts` is what stops the two drifting, because CSS
+@@ -265,14 +267,41 @@ export function wideIdeal(rootFontPx: number): number {
+  */
+ export const WIDE_SHARE = 0.42;
+ 
++/**
++ * **The roomy band's ceiling** — the standard band's, a touch higher. Summary's,
++ * since 2026-10-01. Greg (SPIDERYARN-READING2-7Q): *"Make the Summary mode
++ * column ever so slightly wider (if on a wide screen)"*. It still takes only
++ * what the prose leaves above `PROSE_MIN`, so below about 957px it is the
++ * standard band and it reaches 448px near 1004px.
++ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
++ */
++export const ROOMY_IDEAL_REM = 28;
++
+ /**
+  * **Which band a mode gets.** Every mode's band is `MODE_MIN`–`MODE_IDEAL` wide,
+  * except Structure's while its two columns are on screen — see
+- * `structureColumnsBand` — and a `"wide"` one, which takes `WIDE_SHARE` of the
++ * `structureColumnsBand` — a `"wide"` one, which takes `WIDE_SHARE` of the
+  * room up to `wideIdeal`, and so is the one band that takes room the prose was
+- * defending.
++ * defending, and a `"roomy"` one, the standard band up to `ROOMY_IDEAL_REM`.
+  */
+-export type BandShape = "standard" | "structure" | "wide";
++export type BandShape = "standard" | "structure" | "wide" | "roomy";
++
++/**
++ * **The band each mode gets** — one answer for the live fit and for the
++ * Marginalia press's `notesFit`, which had each written the same ternary.
++ * Structure's two columns want a band of their own width where they fit
++ * (`structureColumnsBand`, docs/plans/260928a-structure-two-columns-readable.md).
++ * Tweets' posts are prose, so theirs may grow to a prose column's measure —
++ * Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
++ * help to make it be readable."* Summary's paragraphs get a touch more room
++ * (`ROOMY_IDEAL_REM`).
++ */
++export function bandShapeFor(mode: Mode): BandShape {
++  if (mode === "structure") return "structure";
++  if (mode === "tweets") return "wide";
++  if (mode === "summary") return "roomy";
++  return "standard";
++}
+ 
+ /**
+  * **Structure's two columns, as widths.** Calculated from rem, because the
+@@ -811,6 +840,12 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
+     const { min, ideal } = structureColumnsBand(rootFontPx);
+     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
+   }
++  /* Floored at `MODE_IDEAL`, as the wide band's cap is: 28rem at a 12px root
++     is 336, and a roomy band must never be the narrower one. */
++  if (bandShape === "roomy") {
++    const ideal = Math.max(MODE_IDEAL, Math.round(ROOMY_IDEAL_REM * rootFontPx));
++    return clamp(avail - PROSE_MIN, MODE_MIN, ideal);
++  }
+   const standard = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
+   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
+      Structure's two columns. A share of the room (`WIDE_SHARE`), never
+diff --git a/src/web/modes/summary/SummaryMode.tsx b/src/web/modes/summary/SummaryMode.tsx
+index 2a2779d5b..5227d44d7 100644
+--- a/src/web/modes/summary/SummaryMode.tsx
++++ b/src/web/modes/summary/SummaryMode.tsx
+@@ -1,7 +1,6 @@
+ /**
+- * **Summary mode's controller.** The band, and the hook underneath it:
+- * `?deep=`, `?summary=`, the summary tree, and the row the reader is standing
+- * on.
++ * **Summary mode's controller.** The band, its owner/visitor pair, and the
++ * plain-words slider.
+  *
+  * Lifted out of `App.tsx` unchanged on 2026-09-06, in the shape `IdeasMode.tsx`
+  * established two days earlier: a mode's controller, its visitor twin and its
+@@ -9,18 +8,24 @@
+  * byte-for-byte, so `App.tsx` stops knowing what is inside them.
+  * See docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
+  *
+- * **One row of controls since 2026-10-01**: the outline (the tree's gists, at
+- * Parts or Sections), and a slider over three plain-words levels — Brief,
+- * Simple, Fuller — that a model writes on a press
++ * **The piece in plain words, and nothing else, since 2026-10-01.** One row of
++ * controls — a slider over three levels, Brief, Simple and Fuller, that a model
++ * writes on a press — and the chosen level's paragraphs under it
+  * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+  *
+  * ```
+- *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
++ *  ▤ ○──●──○ ▤▤   ⓤ
++ *  the paragraphs, each with the passages it rests on
+  * ```
+  *
+- * The outline fetches nothing, so for it owner and visitor are the same. The
+- * plain-words levels are one artefact, so they brought the owner/visitor pair
++ * It also drew the tree's gists as an outline, at Parts or Sections, until
++ * Greg took that out the same day: *"We already have the structure mode, and
++ * so I think that probably overlaps with the summary parts and sections, and
++ * so let's just get rid of parts and sections"* (spya-b3ggv4,
++ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
++ *
++ * The plain-words levels are one artefact, so they bring the owner/visitor pair
+  * the other artefact modes have: the owner's `OwnerSimple` mounts `useSimple`
+  * (a GET, a job, the press) and supplies the badge, and the visitor's band
+  * hands the panel the stored paragraphs off the public payload with no hook at
+@@ -28,67 +33,55 @@
+  */
+ 
+ import type { ReactNode } from "react";
+-import { useMemo, useRef } from "react";
+-import { useQueryState, useQueryStates } from "nuqs";
+-import type { Article, BlockId, SimpleLevel } from "../../../types.js";
++import { useRef } from "react";
++import { useQueryState } from "nuqs";
++import { TextAlignJustify, TextAlignStart } from "lucide-react";
++import type { BlockId, SimpleLevel } from "../../../types.js";
+ import { SIMPLE_LEVELS } from "../../../types.js";
+ import type { PublicSimpleSummary } from "../../../public-types.js";
+ import { armActivation } from "../../activation.js";
+ import { SUMMARY_SUB_MODES } from "../../sub-modes.js";
+-import { currentAt, deepParam, isPlainLevel, type SummaryView, summaryParam } from "../../params.js";
++import { summaryParam } from "../../params.js";
+ import { useRenderCount } from "../../perf.js";
+-import { buildSummaryTree } from "../../tree.js";
+ import { AboutMade } from "../../BandAbout.js";
++import { ModeSurface } from "../../ModeSurface.js";
+ import { SimplePanel } from "../../SimplePanel.js";
+-import { SummaryPanel } from "../../SummaryPanel.js";
+ import { ControlTip, Tooltip } from "../../Tooltip.js";
+ import { useSimple } from "../../useSimple.js";
+ import { WrittenForYou } from "../../WrittenForYou.js";
+ 
+ /**
+- * The owner's Summary band.
+- *
+- * The outline is drawn from the tree the page already holds; a plain-words
+- * level is `OwnerSimple` below, mounted only while one is open, so its GET and
+- * its `useAutoRun` owner exist exactly as long as the view does — and stay
+- * mounted across a switch between the three levels, which share one artefact.
++ * The owner's Summary band: `OwnerSimple` below, so its GET and its
++ * `useAutoRun` owner exist exactly as long as the band does — and stay mounted
++ * across a move between the three levels, which share one artefact.
+  *
+  * See docs/project/summaries.md.
+  */
+-export function SummaryBand({
+-  slug,
+-  article,
+-  onJump,
+-}: {
+-  slug: string;
+-  article: Article;
+-  onJump(id: BlockId): void;
+-}) {
++export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
+   useRenderCount("SummaryBand");
+-  const { view, setView, onDeep } = useSummaryView();
+-  const mode = useSummaryMode(article);
+-  const panel = (plain: ReactNode, badge: ReactNode, about: ReactNode = null) => (
+-    <SummaryPanel
+-      {...mode}
+-      onDeep={onDeep}
++  const [level, setLevel] = useQueryState("summary", summaryParam);
++  return (
++    <OwnerSimple
++      slug={slug}
++      level={level}
+       onJump={onJump}
+-      subMode={<SummaryControls slug={slug} value={view} onChange={setView} badge={badge} />}
+-      simple={plain}
+-      about={about}
++      render={(body, badge, about) => (
++        <SummarySurface
++          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} badge={badge} />}
++          about={about}
++        >
++          {body}
++        </SummarySurface>
++      )}
+     />
+   );
+-  return isPlainLevel(view) ? (
+-    <OwnerSimple slug={slug} level={view} onJump={onJump} render={panel} />
+-  ) : (
+-    panel(null, null)
+-  );
+ }
+ 
+ /**
+  * The plain-words levels' owner half: the read, the job and the press — and
+- * the *written for you* badge, which belongs in the row above the panel and
+- * needs this hook's answer, so the band hands a `render` in rather than the
+- * row reaching down.
++ * the *written for you* badge, which belongs in the row above the paragraphs
++ * and needs this hook's answer, so the band hands a `render` in rather than
++ * the row reaching down.
+  */
+ function OwnerSimple({
+   slug,
+@@ -99,7 +92,7 @@ function OwnerSimple({
+   slug: string;
+   level: SimpleLevel;
+   onJump(id: BlockId): void;
+-  render(plain: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
++  render(body: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
+ }) {
+   useRenderCount("OwnerSimple");
+   const owner = useSimple(slug);
+@@ -129,56 +122,65 @@ function OwnerSimple({
+  *
+  * The paragraphs came in the page's own payload (`simpleSummary`), or did
+  * not, which means nobody has made them. No `useSimple`, so no read of
+- * `/api/simple/:slug`, no `useAutoRun` and no job, and the pills arm nothing
++ * `/api/simple/:slug`, no `useAutoRun` and no job, and the slider arms nothing
+  * — nothing here can ask the model. A second band rather than a flag because a
+  * hook cannot be called conditionally (src/web/reader-capability.ts).
+  */
+ export function VisitorSummaryBand({
+-  article,
+   simple,
+   onJump,
+ }: {
+-  article: Article;
+   simple: PublicSimpleSummary | undefined;
+   onJump(id: BlockId): void;
+ }) {
+   useRenderCount("VisitorSummaryBand");
+-  const { view, setView, onDeep } = useSummaryView();
++  const [level, setLevel] = useQueryState("summary", summaryParam);
+   return (
+-    <SummaryPanel
+-      /* Keyed on outline-or-not so the outline's scroller is a fresh element
+-         each time it comes back — `useFollow` attaches its wheel listener once
+-         per mount. The owner's band gets the same from `OwnerSimple`'s mount. */
+-      key={isPlainLevel(view) ? "plain" : "outline"}
+-      {...useSummaryMode(article)}
+-      onDeep={onDeep}
+-      onJump={onJump}
+-      subMode={<SummaryControls slug={null} value={view} onChange={setView} badge={null} />}
+-      simple={
+-        isPlainLevel(view) ? (
+-          <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={view} onJump={onJump} />
+-        ) : null
+-      }
+-    />
++    <SummarySurface
++      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} badge={null} />}
++    >
++      <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={level} onJump={onJump} />
++    </SummarySurface>
+   );
+ }
+ 
+ /**
+- * `?summary=` and `?deep=`, and the one verb that writes both: pressing Parts
+- * or Sections under a plain-words level goes back to the outline *at* that
+- * depth, in one history entry, so one Back undoes one press.
++ * The band itself, the same for owner and visitor: the surface, the one row of
++ * controls, and the paragraphs under it.
+  */
+-function useSummaryView() {
+-  const [view, setView] = useQueryState("summary", summaryParam);
+-  const [, setOutline] = useQueryStates({
+-    summary: summaryParam,
+-    deep: deepParam,
+-  });
+-  return {
+-    view,
+-    setView: (next: SummaryView) => void setView(next),
+-    onDeep: (deep: number) => void setOutline({ summary: "gists", deep }),
+-  };
++function SummarySurface({
++  controls,
++  about = null,
++  children,
++}: {
++  controls: ReactNode;
++  /**
++   * What the band's (i) adds after the mode's own words (ModeSurface.tsx §
++   * `about`): for the owner, who wrote the paragraphs and when.
++   */
++  about?: ReactNode;
++  children: ReactNode;
++}) {
++  return (
++    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
++      {/* **No `head`, so there is no title row at all.** It said the mode's own
++          name, which the Dock at the foot of the page is already saying — Greg,
++          2026-09-05: *"I think we can rely on the bottom bar to tell us what
++          mode we're in, so for example 'Summary' mode doesn't need to say
++          `Summary` at the top, nor o any other modes."* Nothing else was in the
++          row, so the row went with it and the band starts at its content. The
++          surface's `label` above is what names the region, and always was — the
++          `<h2>` was never carrying that.
++          docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
++
++      {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
++          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider
++          and the badge, and no labels: the group is named for a screen reader
++          by its hidden legend, and the slider's card says what each level is. */}
++      <div className="summ-controls">{controls}</div>
++      {children}
++    </ModeSurface>
++  );
+ }
+ 
+ /**
+@@ -208,21 +210,30 @@ const PLAIN_HOW =
+   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";
+ 
+ /**
+- * **The plain-words slider, and the badge** — the right half of Summary's one
+- * row (SummaryPanel.tsx draws the Parts | Sections half beside it). Greg,
++ * **The plain-words slider, and the badge** — Summary's one row. Greg,
+  * 2026-09-30 (SPIDERYARN-READING2-7J): *"let's provide a UI-slider with 3
+  * level"*. A slider rather than three pills because the three are one scale —
+  * shorter and plainer to the left, longer and fuller to the right — and a
+  * slider is the control that says so.
+  *
+  * ```
+- *  [ Parts | Sections ]   ○──●──○ Simple   ⓤ
++ *  ▤ ○──●──○ ▤▤   ⓤ
+  * ```
+  *
+- * **Idle while the outline shows**: drawn faint, sitting on Simple (or where
+- * the reader left it), and touching it — a click, a drag or an arrow key —
+- * opens that level. The native `<input type="range">`, so the keyboard and a
+- * screen reader get a real slider (`aria-valuetext` names the level).
++ * **Always live.** It was drawn faint while Summary's outline showed, resting
++ * on a level rather than showing one; the outline went on 2026-10-01, so there
++ * is nothing else for the band to be showing. The native
++ * `<input type="range">`, so the keyboard and a screen reader get a real
++ * slider (`aria-valuetext` names the level).
++ *
++ * **No level name beside it** — Greg, 2026-10-01: *"get rid of the "Simple"
++ * text - perhaps replace with an icon or similar"* (SPIDERYARN-READING2-7R).
++ * A small icon sits at each end instead: short lines at the Brief end, a full
++ * block of text at the Fuller end. Each is a pointer shortcut to that end's
++ * level, through the same `choose` as the slider, so it arms exactly as the
++ * slider does; it is out of the tab order and hidden from a screen reader,
++ * which already has the slider itself. The card names all three levels and
++ * which one is showing.
+  *
+  * @param slug the article, **only so a press can be recorded** — null for a
+  *   visitor, whose press must arm nothing (there is no `useAutoRun` to claim
+@@ -235,14 +246,11 @@ export function SummaryControls({
+   badge,
+ }: {
+   slug: string | null;
+-  value: SummaryView;
+-  onChange(next: SummaryView): void;
++  value: SimpleLevel;
++  onChange(next: SimpleLevel): void;
+   /** The owner's *written for you* badge, or null. */
+   badge?: ReactNode;
+ }) {
+-  const on = isPlainLevel(value);
+-  const level: SimpleLevel = on ? value : "simple";
+-
+   /* **The gesture seam.** Choosing a level with nothing stored writes all
+      three — Greg's rule about opening a mode, one level down
+      (src/web/activation.ts). Here, on the slider's own input events, and not
+@@ -263,11 +271,22 @@ export function SummaryControls({
+   const pointerActive = useRef(false);
+   const pointerChanged = useRef(false);
+   const suppressClick = useRef(false);
++  const shortest: SimpleLevel = "brief";
++  const longest: SimpleLevel = "fuller";
+ 
+   return (
+     <>
+-      <fieldset className={`summ-seg summ-slider${on ? " on" : ""}`}>
++      <fieldset className="summ-seg summ-slider">
+         <legend className="sr-only">In plain words</legend>
++        <button
++          type="button"
++          className="summ-slider-end"
++          tabIndex={-1}
++          aria-hidden="true"
++          onClick={() => choose(shortest)}
++        >
++          <TextAlignStart size={14} />
++        </button>
+         {/* `keepSide` for the reason RefereeViews gives: the band sits at the
+             right of the window and a card flung to the cross axis would land on
+             the controls being read. */}
+@@ -278,6 +297,7 @@ export function SummaryControls({
+           content={
+             <ControlTip
+               head="In plain words"
++              state={`Showing ${PLAIN[value].label}.`}
+               what={SIMPLE_LEVELS.map((l) => `${PLAIN[l].label} — ${PLAIN[l].what}`).join(" ")}
+               how={PLAIN_HOW}
+             />
+@@ -289,9 +309,9 @@ export function SummaryControls({
+               min={0}
+               max={SIMPLE_LEVELS.length - 1}
+               step={1}
+-              value={SIMPLE_LEVELS.indexOf(level)}
+-              aria-label="In plain words: how simple"
+-              aria-valuetext={`${PLAIN[level].label}${on ? "" : " (not showing)"}`}
++              value={SIMPLE_LEVELS.indexOf(value)}
++              aria-label="In plain words: how long and how simple"
++              aria-valuetext={PLAIN[value].label}
+               onPointerDown={() => {
+                 pointerActive.current = true;
+                 pointerChanged.current = false;
+@@ -319,8 +339,8 @@ export function SummaryControls({
+                 }
+               }}
+               /* A click on the thumb where it already sits changes nothing, so
+-                 `change` never fires; this is how the idle slider opens the
+-                 level it is resting on. */
++                 `change` never fires; this is how a press on the level already
++                 showing still arms it — the retry after a failed read. */
+               onClick={(e) => {
+                 if (suppressClick.current) {
+                   suppressClick.current = false;
+@@ -336,47 +356,19 @@ export function SummaryControls({
+                 }
+               }}
+             />
+-            <span className="summ-slider-name" aria-hidden="true">
+-              {PLAIN[level].label}
+-            </span>
+           </label>
+         </Tooltip>
++        <button
++          type="button"
++          className="summ-slider-end"
++          tabIndex={-1}
++          aria-hidden="true"
++          onClick={() => choose(longest)}
++        >
++          <TextAlignJustify size={14} />
++        </button>
+       </fieldset>
+       {badge ? <span className="summ-badge">{badge}</span> : null}
+     </>
+   );
+ }
+-
+-/**
+- * Everything the gists outline does that is not rendering.
+- *
+- * `?deep=` lives here for the reason it used to live in the band: it is
+- * meaningless outside summary mode, and reading it in `Reader` would put a
+- * parameter subscription on every render of the reading view for a value only
+- * this mode uses. Its writer is `useSummaryView`'s `onDeep`, which also leaves
+- * a plain-words level.
+- */
+-function useSummaryMode(article: Article) {
+-  const [deep] = useQueryState("deep", deepParam);
+-
+-  const root = useMemo(
+-    () => buildSummaryTree(article.tree, article.blocks),
+-    [article.tree, article.blocks],
+-  );
+-
+-  /* Read, never written, and not a subscription — see `currentAt` in
+-     params.ts.
+-
+-     Turned into a row index here rather than passed down as an id, because the
+-     panel's question is "is the reader inside this range", and a range is a
+-     pair of row indices — comparing ids would be comparing random strings for
+-     order, which is the one thing block-ids.md forbids. */
+-  const at = currentAt();
+-  const atRow = useMemo(() => {
+-    if (at === null) return null;
+-    const i = article.blocks.findIndex((b) => b.id === at);
+-    return i === -1 ? null : i;
+-  }, [at, article.blocks]);
+-
+-  return { root, deep, atRow };
+-}
+diff --git a/src/web/on-screen.ts b/src/web/on-screen.ts
+index 1131b90b4..2b51a28c2 100644
+--- a/src/web/on-screen.ts
++++ b/src/web/on-screen.ts
+@@ -97,7 +97,7 @@ export function onScreenIds(rows: readonly RowBox[], viewTop: number, viewBottom
+  * switch a set of declarations on. The colour is still a token
+  * (`--block-link-on-screen`, prose.css), so the look stays the stylesheet's.
+  * `opacity: 1` lifts the link's own resting 0.5; a parent that dims its links
+- * (Summary's `.summ-range`) still dims them, and the wash still shows.
++ * with its own opacity still dims them, and the wash still shows.
+  *
+  * An id that fails the format is skipped rather than escaped — it is not ours.
+  * Empty for no ids, so the caller can render nothing.
+diff --git a/src/web/outline.ts b/src/web/outline.ts
+index 151725033..3b2704e08 100644
+--- a/src/web/outline.ts
++++ b/src/web/outline.ts
+@@ -5,11 +5,11 @@
+  *
+  * **One function decides what is drawn AND which row is current.** That is the
+  * whole design constraint here, and it comes from a bug this repo has already
+- * paid for: the summary panel's renderer and its `currentEntryId` walk once
++ * paid for: Summary's outline renderer and its `currentEntryId` walk once
+  * wrote the same rule out separately, and when two copies of a rule disagree
+  * nothing errors — the panel scrolls to an element that is not in the DOM, or
+- * marks a row nobody can see. See docs/project/summaries.md § Which row is
+- * "the relevant one", and docs/plans/260828aw-outline-mode.md § The code.
++ * marks a row nobody can see. (Both went with that outline on 2026-10-01, plan
++ * 261001p.) See docs/plans/260828aw-outline-mode.md § The code.
+  *
+  * Pure, and takes no DOM. The fit — which rung actually fits the band — is
+  * decided by OutlinePanel measuring the candidates this builds.
+@@ -178,8 +178,9 @@ const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.
+  * Build the drawn list for one rung.
+  *
+  * The walk is deliberately explicit rather than a recursion over `deep`,
+- * because `showsChildren` in tree.ts cannot express this shape: it has a
+- * whole-level cut-off, a closed set and an opened set, and none of them means
++ * because Summary's outline rule, `showsChildren` (removed with that outline on
++ * 2026-10-01), could not express this shape: it had a whole-level cut-off, a
++ * closed set and an opened set, and none of them meant
+  * *open only the branch containing the reader*. `deep: 1` draws no sections;
+  * `deep: 2` draws every part's sections. Found by GPT Sol reviewing the plan.
+  */
+diff --git a/src/web/params.ts b/src/web/params.ts
+index ac6356ee4..04ed51cf8 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -980,25 +980,14 @@ export const confParam = createParser<number>({
+ }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+ 
+ /* ---------------------------------------------------------- summary mode --
+-   Two controls now: `summary`, which chooses Gists or Simple, and `deep`, how
+-   far down the tree the Gists view goes. There was a `len` control, which chose
+-   between three generated lengths — it went on 2026-08-31 along with the stage
+-   that wrote the two paid ones (docs/plans/260831s-gist-only-summaries.md).
+-   What remains of that older design is free and on the tree.
+-
+-   **What is NOT in the URL, and why.** The panel also lets you open and close
+-   individual sections — including opening one part's sections *past* the depth
+-   cut-off, which is what its `+N sections` badge does since 2026-08-27 — and
+-   docs/project/original-version/structure-panel.md is
+-   emphatic that their version regretted keeping that only in memory. It stays
+-   in memory here anyway, and the reason is the rule that governs everything
+-   else in this app: a per-node open/closed set can only be written down as a
+-   list of node ids, node ids are **positional**, and a re-run of `npm run hierarchy`
+-   renumbers them (docs/project/block-ids.md#why-random-and-not-sequential). A
+-   URL full of them would be long and, after any re-extraction, quietly wrong —
+-   it would open a set of sections that are no longer the ones you opened. What
+-   *is* stable is the depth, so the depth is what a link carries. Their point
+-   still stands and this is the honest version of it. */
++   One control: `summary`, which of the three plain-words levels is open.
++
++   There used to be more. A `len` control chose between three generated lengths
++   until 2026-08-31 (docs/plans/260831s-gist-only-summaries.md); a `gists` view
++   drew the tree's gists as an outline, with `deep` choosing Parts or Sections,
++   until 2026-10-01 — Greg: *"let's just get rid of parts and sections"*
++   (spya-b3ggv4, docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
++   An old link carrying either degrades to the default below. */
+ 
+ /**
+  * Which picture the Diagram mode is drawing.
+@@ -1132,83 +1121,29 @@ export const diagramHueParam = createParser<ScatterHue>({
+   .withOptions({ history: "replace" });
+ 
+ /**
+- * How far down the tree the summary panel goes — their structure panel's depth
+- * cut-off, which is the one control that view had and the one thing it proved:
+- * *one control, whole-document granularity* is usable.
+- *
+- * 1 is the parts, 2 is the sections. It stops at 2 because below it a node is a
+- * single paragraph, which the reader should be reading rather than being told
+- * about.
+- *
+- * Note that this and a node's own open/closed state are **different ways to be
+- * hidden**, and they compose rather than sharing a variable — their version got
+- * that right and it is the one design note worth copying verbatim from it:
+- * "too deep to show" and "I closed this" are different states. There are three
+- * of them here, because "I opened this one anyway" is a third; this parameter
+- * is the only one of the three that is stable enough to write down.
+- *
+- * So a reader who opens one part's sections past the cut-off does **not** move
+- * this value, and a link they share opens at the depth they chose with the
+- * pills. See SummaryPanel.tsx and `showsChildren` in tree.ts.
+- *
+- * An unparseable or out-of-range value falls back to the default rather than
+- * throwing, the same rule as everything else in this file.
+- */
+-export const MAX_SUMMARY_DEPTH = 2;
+-
+-/**
+- * The shallowest depth a reader can choose: the parts. `0`, the article's own
+- * gist alone, was a pill until 2026-10-01 — Greg: *"Remove the "Article"
+- * pill"* (SPIDERYARN-READING2-78) — so an old link's `?deep=0` now reads as
+- * the default. The root's gist still heads the outline at every depth.
+- */
+-export const MIN_SUMMARY_DEPTH = 1;
+-
+-export const deepParam = createParser<number>({
+-  parse: (v) => {
+-    const n = Number.parseInt(v, 10);
+-    return Number.isInteger(n) && n >= MIN_SUMMARY_DEPTH && n <= MAX_SUMMARY_DEPTH ? n : null;
+-  },
+-  serialize: (v) => String(v),
+-})
+-  .withDefault(1)
+-  .withOptions({ history: "push" });
+-
+-/**
+- * Summary's three views: the tree's gists (the outline, at `?deep=`), or one of
+- * the three plain-words levels — `SIMPLE_LEVELS` in src/types.ts, whose names
+- * are these URL values.
+- */
+-export const SUMMARY_VIEWS = ["gists", ...SIMPLE_LEVELS] as const;
+-export type SummaryView = (typeof SUMMARY_VIEWS)[number];
+-
+-/** Is this view one of the plain-words levels? */
+-export function isPlainLevel(view: SummaryView): view is SimpleLevel {
+-  return view !== "gists";
+-}
+-
+-/**
+- * Which part of Summary is open — `gists` (the outline; the default, omitted),
+- * `brief`, `simple` or `fuller`, a few short paragraphs in everyday words at three levels
+- * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
++ * Which plain-words level Summary shows — `brief`, `simple` or `fuller`, a few
++ * short paragraphs in everyday words at three lengths (`SIMPLE_LEVELS` in
++ * src/types.ts, whose names are these URL values;
++ * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+  * *Which thing, within this mode*, so the shape of `?remember=` and
+  * `?referee=`: in the URL, because it changes the whole band, and pushed,
+- * because switching is a deliberate act Back should undo. `?deep=` keeps its
+- * value and is simply unused under a plain-words level.
++ * because switching is a deliberate act Back should undo.
+  *
+- * `gists` has no pill of its own since 2026-10-01: pressing Parts or Sections
+- * is what chooses it (Greg, SPIDERYARN-READING2-7A).
++ * **`simple` is the default**, the stop the slider rests on, and is omitted
++ * from the address. `gists`, the outline this mode drew until 2026-10-01, is
++ * no longer a value, so an old `?summary=gists` reads as `simple` — the same
++ * degrade-to-the-default rule as every other parser in this file.
+  *
+- * **Writing it never spends.** Only a press on a plain-words pill arms the run
++ * **Writing it never spends.** Only a press on the slider arms the run
+  * (SummaryMode.tsx § `SummaryControls`); Back, a pasted link and a last-view
+  * restore arrive here and buy nothing.
+  */
+-export const summaryParam = createParser<SummaryView>({
+-  parse: (v) => (SUMMARY_VIEWS.includes(v as SummaryView) ? (v as SummaryView) : null),
++export const summaryParam = createParser<SimpleLevel>({
++  parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
+   serialize: (v) => v,
+ })
+-  .withDefault("gists")
++  .withDefault("simple")
+   .withOptions({ history: "push" });
+ 
+ /* ------------------------------------------------------------ referee mode --
+diff --git a/src/web/reader/ModeBoundary.tsx b/src/web/reader/ModeBoundary.tsx
+index 910661109..2aa4e8a31 100644
+--- a/src/web/reader/ModeBoundary.tsx
++++ b/src/web/reader/ModeBoundary.tsx
+@@ -121,9 +121,9 @@ export function ModeBoundary({
+   /* Only an owner's band is selected by the first three. A Diagram visitor
+      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
+      address change there is not a new band and must not retry a broken one.
+-     **Summary's is the exception**: a visitor gets Simple too, off the payload
+-     (SummaryMode.tsx § `VisitorSummaryBand`), so Gists and Simple are two
+-     bands for either reader. */
++     **Summary's is the exception**: a visitor gets the plain-words levels
++     too, off the payload (SummaryMode.tsx § `VisitorSummaryBand`), so moving
++     the slider is a new level for either reader, and retries a broken one. */
+   const subMode =
+     mode === "summary"
+       ? sub.summary
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 2c71f9e87..5b3c95ff1 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -125,7 +125,7 @@ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
+ import { jumpToComment, stepToComment } from "../comment-jump.js";
+ import { buildSections, sectionDepth } from "../position.js";
+ import { marginaliaPress, notesFit } from "../marginalia/press.js";
+-import { bandCoversProse, fitView } from "../layout.js";
++import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
+ import { navPlan, useArrowNav } from "../keynav.js";
+ import { ReturnChip } from "../ReturnChip.js";
+ import { BandBackChip } from "../BandBackChip.js";
+@@ -444,13 +444,8 @@ export function Reader({
+       fitView({
+         windowWidth,
+         modeBand: bandOpen,
+-        /* Structure's two columns want a band of their own width where they
+-           fit (layout.ts § `structureColumnsBand`); every other band is the
+-           ordinary one. docs/plans/260928a-structure-two-columns-readable.md.
+-           Tweets' posts are prose, so theirs may grow to a prose column's
+-           measure — Greg, 2026-09-29: *"It could be quite a wide left-hand
+-           column if that will help to make it be readable."* */
+-        bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
++        /* Which band each mode gets, and why: layout.ts § `bandShapeFor`. */
++        bandShape: bandShapeFor(mode),
+         margin: marginOpen,
+         rootFontPx,
+         showSpine,
+@@ -465,7 +460,7 @@ export function Reader({
+       notesFit(
+         {
+           windowWidth,
+-          bandShape: mode === "structure" ? "structure" : mode === "tweets" ? "wide" : "standard",
++          bandShape: bandShapeFor(mode),
+           rootFontPx,
+           showSpine,
+         },
+@@ -2057,16 +2052,13 @@ export function Reader({
+             onJump={bandJump}
+           />
+         );
+-      /* Gists are the tree's own and free to anyone; Simple is an artefact, so
+-         since 2026-09-30 this is an owner/visitor pair — the visitor's band
+-         takes the stored paragraphs off the payload and fetches nothing.
++      /* The plain-words levels are an artefact, so since 2026-09-30 this is an
++         owner/visitor pair — the visitor's band takes the stored paragraphs off
++         the payload and fetches nothing.
+          docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+       case "summary":
+-        if (!owner)
+-          return (
+-            <VisitorSummaryBand article={article} simple={artefacts?.simpleSummary} onJump={bandJump} />
+-          );
+-        return <SummaryBand slug={slug} article={article} onJump={bandJump} />;
++        if (!owner) return <VisitorSummaryBand simple={artefacts?.simpleSummary} onJump={bandJump} />;
++        return <SummaryBand slug={slug} onJump={bandJump} />;
+       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
+          than the owner/visitor pair the artefact modes have, because there is
+          no artefact to carry and no second component to build: the default
+@@ -2601,7 +2593,7 @@ export function Reader({
+            difference is the whole correctness of this: reading the global here
+            would be right only if `Reader` re-rendered on every URL change, and
+            it does not. nuqs subscriptions are key-isolated, so ten reading
+-           parameters owned by child components — `deep`, `diagram`, `dhue`,
++           parameters owned by child components — `summary`, `diagram`, `dhue`,
+            `referee`, `remember` and five more — change the address without
+            waking this component at all. Until `TableView` was memoised, `?at=`
+            re-rendered it once a second and hid that; it does not any more.
+diff --git a/src/web/router.ts b/src/web/router.ts
+index 76a73dc0d..4501bac4f 100644
+--- a/src/web/router.ts
++++ b/src/web/router.ts
+@@ -1309,7 +1309,7 @@ export function onAddressChange(listener: () => void): () => void {
+  * subscribed to nothing is not woken at all.
+  *
+  * That was invisible until `TableView` was memoised. Ten reading parameters are
+- * owned by child components — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`,
++ * owned by child components — `rank`, `bar`, `run`, `conf`, `summary`, `diagram`,
+  * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
+  * only that child. `blockHref` reads the query to build 551 permalinks, and it
+  * used to get away with it because `?at=` re-rendered the whole reading view
+diff --git a/src/web/structure.ts b/src/web/structure.ts
+index 252c5b30a..c1ca47a46 100644
+--- a/src/web/structure.ts
++++ b/src/web/structure.ts
+@@ -17,8 +17,8 @@
+  * there being two columns: when two copies of "which row is the reader in"
+  * disagree, nothing errors — column A marks one part while column B lists
+  * another part's sections, and it looks entirely plausible. The repo has already
+- * paid for this once, in the summary panel's renderer and its `currentEntryId`
+- * walk (docs/project/summaries.md § Which row is "the relevant one").
++ * paid for this once, in Summary's outline renderer and its `currentEntryId`
++ * walk (both removed with that outline on 2026-10-01, plan 261001p).
+  *
+  * Pure, and takes no DOM. Which rung actually fits is decided by the panel
+  * measuring the candidates this builds.
+diff --git a/src/web/styles/summary.css b/src/web/styles/summary.css
+index 2cc09a46b..66541c2f0 100644
+--- a/src/web/styles/summary.css
++++ b/src/web/styles/summary.css
+@@ -1,106 +1,35 @@
+-/* summary.css — the Summary panel: the article at more than one length, as one
+-   nested list with a depth bar down it. SummaryPanel.tsx,
+-   docs/project/summaries.md. */
++/* summary.css — the Summary band: the piece in plain words, a slider over three
++   levels and the chosen level's paragraphs. SummaryMode.tsx, SimplePanel.tsx,
++   docs/project/summaries.md.
+ 
+-/* -------------------------------------------------------- § summary mode ----
+-   The article at more than one length, in the mode band. The shell is
+-   `.mode-band` above; everything here is what goes inside it. See
+-   SummaryPanel.tsx and docs/project/summaries.md.
+-
+-   Two things about this layout are decisions rather than taste:
+-
+-   **The indentation is `padding-left` on a nested `<ol>`, not a margin on the
+-   entry.** The summaries are prose and they wrap, so a wrapped line has to
+-   align with the first one; a margin on the `<li>` does that and a text-indent
+-   does not. It also means the depth colour bar below can run the full height of
+-   a section including its children, which is what makes a part read as one
+-   thing rather than as a heading followed by some unrelated paragraphs.
+-
+-   **The colour of the bar is `--depth-N`**, the same four tokens the gist
+-   columns use. A reader who has met L1 and L2 as colours in the table meets the
+-   same two colours here, so "this is the parts level" needs no legend. Change
+-   them in one place or they stop meaning one thing. */
++   It also drew the tree's gists as a nested outline, at Parts or Sections,
++   until 2026-10-01; that outline and its rules went then
++   (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md). */
+ 
+-/* The title row is `.band-head`, § mode band — where this panel's `flex: none`
+-   now lives, for every band. */
+-
+-/* ---- the two controls ---- */
++/* -------------------------------------------------------- § summary mode ----
++   In the mode band. The shell is `.mode-band`; everything here is what goes
++   inside it. The title row is `.band-head`, § mode band — Summary draws none. */
++
++/* ---- the one row: the slider and the badge (plan 261001b) ----
++   Greg, 2026-09-30: *"avoid wasting vertical space"* (SPIDERYARN-READING2-7A).
++   The group is a `<fieldset>` whose legend only a screen reader hears.
++   **Wrapping rather than scrolling** at the band's narrowest (18rem, MODE_MIN
++   in layout.ts): the badge drops to a second line before anything hides. */
+ .summ-controls {
+   flex: none;
+-  padding: 0.4rem 0.6rem 0.5rem;
+-  border-bottom: 1px solid var(--rule);
+-}
+-/* The band's top row, so it clears the (i) in the corner: mode-band.css § `.mode-band > .band-about`. */
+-.mode-band.has-about > .summ-controls { padding-right: calc(0.6rem + var(--band-about-room)); }
+-.summ-row {
+-  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove border,
+-     side padding and a margin nobody asked for. `display: flex` is doing a
+-     second job beyond layout: a `<legend>` only gets its notched-into-the-
+-     border rendering while the fieldset is a block box, so flex is what turns
+-     the group's label into an ordinary item on the row. */
+-  margin: 0;
+-  padding: 0;
+-  border: 0;
+-  min-width: 0; /* a fieldset defaults to min-content, which refuses to shrink */
+-  display: flex;
+-  align-items: center;
+-  gap: 0.25rem;
+-  /* Wraps rather than scrolling: the band is as narrow as 18rem (MODE_MIN in
+-     layout.ts) and three named rungs plus a label do not always fit on one
+-     line. A horizontal scroller here would hide a control behind a gesture
+-     nobody would think to try on a five-item row. */
+-  flex-wrap: wrap;
+-}
+-.summ-row + .summ-row { margin-top: 0.3rem; }
+-.summ-label {
+-  /* Also the `<legend>` of each group. `padding: 0` because a UA gives a legend
+-     side padding to sit in the border it no longer has. */
+-  width: 3.4rem;
+-  flex: none;
+-  padding: 0;
+-  font-size: 0.79rem;
+-  letter-spacing: 0.09em;
+-  text-transform: uppercase;
+-  color: var(--ink-faint);
+-}
+-.summ-pill {
+-  padding: 0.16rem 0.5rem;
+-  border: 1px solid var(--rule-strong);
+-  border-radius: 999px;
+-  background: transparent;
+-  color: var(--ink-soft);
+-  font: inherit;
+-  font-size: 0.85rem;
+-  cursor: pointer;
+-  transition: color 0.12s, border-color 0.12s;
+-}
+-.summ-pill:not(:disabled):hover { color: var(--ink); border-color: var(--highlight); }
+-.summ-pill.on {
+-  border-color: var(--highlight);
+-  background: var(--highlight-wash);
+-  color: var(--highlight-ink);
+-}
+-/* Dimmed, not gone. A rung that has not been generated yet still has to be
+-   visible, or there is nothing on screen to explain what the button at the
+-   bottom of the panel would buy. */
+-.summ-pill:disabled { opacity: 0.4; cursor: default; }
+-
+-/* ---- the one row: two groups, no labels (plan 261001b) ----
+-   Greg, 2026-09-30: *"avoid wasting vertical space, and use the UI design to
+-   give the user a clue about how they work and are related to each other"*
+-   (SPIDERYARN-READING2-7A). Each group is a `<fieldset>` whose legend only a
+-   screen reader hears; the gap between groups is what says "a different
+-   choice". */
+-/* **One row**, wrapping rather than scrolling at the band's narrowest (18rem,
+-   MODE_MIN in layout.ts): the slider drops to a second line before anything
+-   hides. */
+-.summ-controls {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 0.3rem 0.9rem;
++  padding: 0.4rem 0.6rem 0.5rem;
++  border-bottom: 1px solid var(--rule);
+ }
++/* The band's top row, so it clears the (i) in the corner: mode-band.css § `.mode-band > .band-about`. */
++.mode-band.has-about > .summ-controls { padding-right: calc(0.6rem + var(--band-about-room)); }
+ .summ-seg {
++  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove
++     border, side padding and a margin nobody asked for, and a min-content
++     width that refuses to shrink. */
+   margin: 0;
+   padding: 0;
+   border: 0;
+@@ -108,29 +37,13 @@
+   display: flex;
+   align-items: center;
+ }
+-/* **Parts | Sections joined into one segment**: they share a border, so they
+-   read as one scale rather than two unrelated buttons. */
+-.summ-seg > .summ-pill { border-radius: 0; }
+-.summ-seg > .summ-pill:first-of-type { border-radius: 999px 0 0 999px; }
+-.summ-seg > .summ-pill:last-of-type { border-radius: 0 999px 999px 0; }
+-.summ-seg > .summ-pill + .summ-pill { margin-left: -1px; }
+-/* Parts while Sections is chosen: included, not chosen — the ladder's lower
+-   rung, lit more softly than the one pressed. `aria-pressed` stays false. */
+-.summ-pill.included {
+-  border-color: var(--highlight);
+-  background: color-mix(in srgb, var(--highlight-wash) 45%, transparent);
+-  color: var(--ink);
+-}
+-/* The chosen pill's border sits above its neighbour's where they overlap. */
+-.summ-seg > .summ-pill.on { position: relative; z-index: 1; }
+ 
+ /* **The plain-words slider** (SPIDERYARN-READING2-7J): three stops, shorter
+-   and plainer to the left. Faint while the outline shows — it is resting on
+-   a level, not showing one — and full strength while a level is open. */
++   and plainer to the left. Always live since the outline went. */
++.summ-slider { gap: 0.3rem; }
+ .summ-slider-track {
+   display: inline-flex;
+   align-items: center;
+-  gap: 0.45rem;
+   cursor: pointer;
+ }
+ .summ-slider input[type="range"] {
+@@ -139,288 +52,48 @@
+   accent-color: var(--highlight);
+   cursor: pointer;
+ }
+-.summ-slider-name {
+-  min-width: 3.1rem;
+-  font-size: 0.85rem;
+-  color: var(--ink-faint);
+-}
+-.summ-slider:not(.on) input[type="range"] { opacity: 0.5; }
+-.summ-slider.on .summ-slider-name { color: var(--highlight-ink); }
+-.summ-slider:not(.on) .summ-slider-track:hover input[type="range"] { opacity: 0.8; }
+-
+-/* The *written for you* badge, pushed to the row's far end. */
+-.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
+-
+-/* ---- the outline ---- */
+-/* The reader's own scroller, and also the one the panel moves itself to follow
+-   the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
+-   here**: that rule would animate every write to `scrollTop`, including the ones
+-   that must be instant — the first placement, and every frame of the panel's own
+-   animation, which sets `scrollTop` sixty times a second and would be smoothed
+-   into treacle. follow.ts decides the motion per move, which is also the only
+-   way `prefers-reduced-motion` can be honoured for a scroll that is sometimes
+-   wanted instantly anyway. */
+-.summ-scroll {
+-  flex: 1;
+-  min-height: 0;
+-  overflow-y: auto;
+-  padding: 0.6rem 0.7rem 0.8rem;
+-  /* Wheeling past the end of the outline must not start scrolling the article.
+-     Chrome chains an over-scroll to the nearest scrollable ancestor by default,
+-     and here that ancestor is the page — so a flick at the top of the list moved
+-     the reader's place in the piece, which moved `?at=`, which moved this panel.
+-     A flick in the outline is not a request to go somewhere. Found at a narrow
+-     window, where the panel and the prose sit close enough that it is easy to
+-     do by accident (browser pass, 2026-08-26). */
+-  overscroll-behavior: contain;
+-}
+-
+-.summ-list, .summ-children { margin: 0; padding: 0; list-style: none; }
+-.summ-children {
+-  /* The indent, and the depth bar it makes room for. */
+-  margin-top: 0.35rem;
+-  padding-left: 0.75rem;
+-  border-left: 2px solid var(--rule);
+-}
+-
+-.summ-entry + .summ-entry { margin-top: 0.7rem; }
+-.summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
+-.summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
+-
+-/* The apparatus, in the same key it wears in the spine: present in the
+-   structure, quieter than the argument, and carrying no number. It is a row the
+-   reader can jump to and never a section of the piece — the same grammar
+-   `.spine-part.supplement` uses (and `.arc-step.arc-supplement` used, until the
+-   arc's column went), so a reader who has learned it in one panel reads it in
+-   this one without being told. docs/plans/260828o-footnotes.md. */
+-.summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
+-  color: var(--ink-faint);
+-  font-weight: 500;
+-  letter-spacing: 0.04em;
+-  text-transform: uppercase;
+-}
+-
+-/* Where the reader actually is. Every ancestor of the current section is marked
+-   too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
+-   you are inside is the honest answer to "where am I", and marking only the
+-   deepest visible node would leave the panel with nothing lit at all. */
+-.summ-entry.here > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+-.summ-entry.here > .summ-children { border-left-color: var(--highlight); }
+-
+-/* And the one row of that chain the reader is actually *in*, which is the row
+-   the panel scrolls to. Two marks rather than one: `here` draws the path down
+-   to the reader, `now` says where the path ends. One mark strong enough to find
+-   at a glance, repeated on every ancestor, is a stripe down the panel and no
+-   answer.
+-
+-   The wash goes on `.summ-body`, which is the same box the hover already tints,
+-   so the two must stay apart: hover is `--surface-raised`, a neutral lift, and
+-   this is `--highlight-wash`, the orange the pressed pills use. The bar down
+-   the left is what actually finds the row in peripheral vision — a background
+-   alone reads as "hovered" on a panel the pointer is sitting over.
+-
+-   `box-shadow: inset`, not a `border-left`: `.summ-body` carries a negative
+-   margin so the tint reaches into the panel's gutter, and a border would add a
+-   pixel to the box and shift every line of the row's text sideways as the
+-   reader crossed into it. An inset shadow paints inside the box it already has. */
+-.summ-entry.now > .summ-body {
+-  background: var(--highlight-wash);
+-  box-shadow: inset 2px 0 0 var(--highlight);
+-}
+-.summ-entry.now > .summ-body:hover { background: var(--highlight-wash); }
+-.summ-entry.now > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+-.summ-entry.now > .summ-body > .summ-text { color: var(--ink); }
+-
+-/* The click target, and the reason it exists: the title alone was a line of
+-   0.82rem text as wide as the heading happened to be, inside a panel four times
+-   that. Everything around it looked as pressable and did nothing. Now the
+-   header, the summary and the range are one target — the same call TableView
+-   makes with a whole gist `<td>`. SummaryPanel.tsx § the whole entry.
+-
+-   The negative margin plus matching padding is what lets the highlight reach
+-   past the text without indenting it: the entry keeps the position it had, and
+-   the hover extends into the panel's own gutter. */
+-.summ-body {
+-  margin: 0 -0.35rem;
+-  padding: 0.15rem 0.35rem 0.2rem;
+-  border-radius: 5px;
+-  cursor: pointer;
+-  transition: background-color 0.12s;
+-}
+-.summ-body:hover { background: var(--surface-raised); }
+-@media (prefers-reduced-motion: reduce) {
+-  .summ-body { transition: none; }
+-}
+-
+-.summ-title-row {
+-  display: flex;
+-  align-items: baseline;
+-  gap: 0.25rem;
+-}
+-
+-.summ-twist {
++/* **An icon at each end instead of the level's name** — Greg, 2026-10-01:
++   *"get rid of the "Simple" text - perhaps replace with an icon"*
++   (SPIDERYARN-READING2-7R). Short lines at the Brief end, a full block at the
++   Fuller end. Muted, because they label the scale rather than compete with
++   the thumb; a press on one goes to that end. */
++.summ-slider-end {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+-  width: 1rem;
+-  height: 1rem;
+-  flex: none;
+-  padding: 0;
++  padding: 0.1rem;
+   border: 0;
+   background: transparent;
+   color: var(--ink-faint);
+   cursor: pointer;
+-  /* Only the rotation animates, and only when the reader has not asked for
+-     less. `transform` is composited, so this is free even on a long outline. */
+-  transition: transform 0.15s;
++  transition: color 0.12s;
+ }
+-.summ-twist.open { transform: rotate(90deg); }
+-.summ-twist.leaf { visibility: hidden; }
+-.summ-twist:not(:disabled):hover { color: var(--ink); }
++.summ-slider-end:hover { color: var(--ink); }
+ @media (prefers-reduced-motion: reduce) {
+-  .summ-twist { transition: none; }
+-}
+-
+-.summ-title {
+-  flex: 1;
+-  min-width: 0;
+-  padding: 0;
+-  border: 0;
+-  background: transparent;
+-  color: var(--ink);
+-  font: inherit;
+-  font-size: 0.91rem;
+-  font-weight: 600;
+-  text-align: left;
+-  cursor: pointer;
+-}
+-/* The title is a BlockRef as well as the row's full-size link. Restore the
+-   prose type after prose.css's id-chip rule, without touching the dimmed
+-   missing-block span; only a live anchor takes the hover treatment. */
+-.summ-title.block-ref { letter-spacing: inherit; }
+-a.summ-title.block-ref,
+-a.summ-title.block-ref:hover { opacity: 1; text-decoration: none; }
+-a.summ-title:hover { color: var(--highlight-ink); }
+-.summ-number {
+-  margin-right: 0.4rem;
+-  color: var(--ink-faint);
+-  font-family: var(--font-mono);
+-  font-size: 0.83rem;
+-  font-weight: 400;
+-}
+-
+-/* How much is under this — the question our gist columns cannot answer, since a
+-   section holding forty paragraphs and one holding three look identical in an
+-   L2 cell. docs/project/original-version/structure-panel.md. */
+-.summ-size {
+-  flex: none;
+-  color: var(--ink-faint);
+-  font-family: var(--font-mono);
+-  font-size: 0.81rem;
+-}
+-
+-.summ-text {
+-  margin: 0.25rem 0 0 1.25rem;
+-  /* The reading face, not the UI one: these are sentences somebody wrote, and
+-     a summary set in the interface font reads as a system message. Same call
+-     `.chat-scroll` makes for the same reason. */
+-  font-family: var(--font-reading);
+-  font-size: 0.93rem;
+-  line-height: 1.5;
+-  color: var(--ink-soft);
+-  /* Paragraphs in the longer rungs arrive as blank lines in one string. */
+-  white-space: pre-wrap;
+-}
+-.summ-list > .summ-entry > .summ-body > .summ-text {
+-  /* The root has no title row to indent under. */
+-  margin-left: 0;
+-  color: var(--ink);
+-}
+-.summ-text.missing { color: var(--ink-faint); font-style: italic; }
+-
+-/* **The Socratic question, under the claim it leaves open.**
+-   SPIDERYARN-READING2-1V.
+-
+-   Deliberately a *different kind of line* rather than a second sentence in the
+-   same voice: italic, a step down, and fainter, so the eye reading the panel
+-   for what the article says can skip the whole column of them, and the reader
+-   looking for a way in finds one on every part. No label and no "?" glyph —
+-   the question mark it ends with is the only marker it needs.
+-
+-   It follows `.summ-text`'s indent so the two line up under the title, and it
+-   takes the same un-indenting on the root, where there is no title row. */
+-/* **The question is the row's summary now, not a note under it** — it replaced
+-   the gist rather than joining it on 2026-09-05 (SPIDERYARN-READING2-24), so it
+-   takes `.summ-text`'s weight exactly: the same size, the same ink, the same
+-   reading face. It was 0.87rem italic `--ink-faint` while it was the second
+-   line, and leaving it there would have made every row's only sentence look
+-   like a footnote to a claim that is no longer above it.
+-
+-   **The italic went with the demotion.** It marked the question as a different
+-   kind of thing from the sentence above; there is no sentence above, and a
+-   panel set entirely in italic is a panel that is harder to read for a
+-   distinction nobody can see any more. The question mark does that job. */
+-.summ-question {
+-  margin: 0.25rem 0 0 1.25rem;
+-  font-family: var(--font-reading);
+-  font-size: 0.93rem;
+-  line-height: 1.5;
+-  color: var(--ink-soft);
+-}
+-.summ-list > .summ-entry > .summ-body > .summ-question { margin-left: 0; }
+-/* Lifts on the current row exactly as the gist does (§ `.summ-entry.now`), and
+-   to the same `--ink` rather than the `--ink-soft` it lifted to as a second
+-   line — it is the claim on that row now. */
+-.summ-entry.now > .summ-body > .summ-question { color: var(--ink); }
+-
+-/* The citation chips inside a summary. Smaller than chat's, because a summary
+-   is denser than an answer and the chips are punctuation in it rather than
+-   claims of their own. `white-space: normal` undoes `.summ-text`'s `pre-wrap`
+-   for the chip alone — inside a `pre-wrap` box the space between two ids in one
+-   bracket is preserved twice and the flex gap adds a third. */
+-.summ-text .cite {
+-  white-space: normal;
+-  vertical-align: baseline;
+-}
+-.summ-text .cite .block-ref { font-size: 0.74rem; }
+-
+-/* Where this section starts and ends. Under the summary, as in a gist cell —
+-   and the one place ids appear at the `gist` rung, which is the default and the
+-   only rung an article nobody has paid for has at all. */
+-.summ-range {
+-  margin: 0.2rem 0 0 1.25rem;
+-  opacity: 0.75;
++  .summ-slider-end { transition: none; }
+ }
+-.summ-range:hover { opacity: 1; }
+-.summ-list > .summ-entry > .summ-body > .summ-range { margin-left: 0; }
+ 
++/* The *written for you* badge, pushed to the row's far end. */
++.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
+ 
+-/* "+4 sections", and "−2 parts" on the root once its parts are open. A control
+-   on every row since 2026-08-31, the root included — it writes one node into
+-   `opened` rather than moving the Depth buttons. SummaryPanel.tsx. */
+-.summ-more {
+-  margin: 0.3rem 0 0 1.25rem;
+-  padding: 0.1rem 0.4rem;
+-  border: 1px dashed var(--rule-strong);
+-  border-radius: 999px;
+-  background: transparent;
+-  color: var(--ink-faint);
+-  font: inherit;
+-  font-family: var(--font-ui);
+-  font-size: 0.81rem;
+-  cursor: pointer;
++/* ---- the paragraphs' scroller ---- */
++/* The reader's own scroller (SimplePanel.tsx). `overscroll-behavior: contain`
++   because wheeling past the end must not start scrolling the article: Chrome
++   chains an over-scroll to the nearest scrollable ancestor by default, and
++   here that ancestor is the page — so a flick at the top of the list moved the
++   reader's place in the piece. Found at a narrow window, where the band and
++   the prose sit close enough that it is easy to do by accident (browser pass,
++   2026-08-26). Ideas, Timeline and the others copy this rule for that reason. */
++.summ-scroll {
++  flex: 1;
++  min-height: 0;
++  overflow-y: auto;
++  padding: 0.6rem 0.7rem 0.8rem;
++  overscroll-behavior: contain;
+ }
+-.summ-more:hover { color: var(--ink); border-color: var(--highlight); }
+ 
+ .summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
+ 
+-/* **The Gists spend nothing, so they have no foot.** `.summ-foot`,
+-   `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
+-   2026-08-31 with the generated length ladder (docs/plans/260831s-gist-only-summaries.md).
+-   Simple, below, is the half that spends, and it borrows the glossary's empty
+-   and stale treatments (`.gloss-empty`, `.gloss-stale`) rather than bringing
+-   those five back. */
+-
+ /* -------------------------------------------------------- § simple ----------
+    Summary's plain-words sub-mode (SimplePanel.tsx,
+    docs/plans/260930i-simple-summaries-eli15-sub-mode.md): a few short
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index ccd38a205..91c86cf21 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -61,8 +61,6 @@
+ /* ---- the model: everything an AI wrote ----------------------------------- */
+ :root[data-voices] :is(
+     /* summaries and gists */
+-    .summ-text:not(.missing),
+-    .summ-question,
+     .struct-gist,
+     .outln-gist,
+     .outln-arc,
+diff --git a/src/web/sub-modes.ts b/src/web/sub-modes.ts
+index 8b7a52bbe..896e8e8d4 100644
+--- a/src/web/sub-modes.ts
++++ b/src/web/sub-modes.ts
+@@ -19,11 +19,10 @@
+  * them. What a sub-mode *arms* is activation.ts § `subModeTarget`, next to the
+  * mode table it extends.
+  *
+- * **Not a sub-mode, deliberately**: Summary's outline (`?summary=gists`), which
+- * has no control of its own since 2026-10-01 — pressing Parts or Sections is
+- * what chooses it, and the Summary mode row is the way there — and the
+- * orderings inside a mode (Quotes' rank, Glossary's sort, Search's matcher),
+- * which reorder a band rather than replace it.
++ * **Not a sub-mode, deliberately**: the orderings inside a mode (Quotes' rank,
++ * Glossary's sort, Search's matcher), which reorder a band rather than replace
++ * it. Summary's outline (`?summary=gists`) was the other, until it was removed
++ * on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).
+  * docs/plans/261001d-command-bar-lists-sub-modes.md.
+  */
+ import type { Mode } from "../modes.js";
+@@ -198,8 +197,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
+  * writes these through nuqs (Reader.tsx), the metadata page builds an href from
+  * them (Dock.tsx), so the two cannot land in different places.
+  *
+- * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch
+- * and Criteria disappear from the address rather than leaving a redundant
++ * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
++ * Criteria and Simple disappear from the address rather than leaving a redundant
+  * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
+  * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
+  * and one Back undoes the whole trip.
+@@ -210,7 +209,7 @@ export interface SubModeParams {
+   readonly thread?: null;
+   readonly diagram?: DiagramKind | null;
+   readonly referee?: RefereeView | null;
+-  readonly summary?: SimpleLevel;
++  readonly summary?: SimpleLevel | null;
+ }
+ 
+ export function subModeParams(sub: SubMode): SubModeParams {
+@@ -224,7 +223,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
+     case "referee":
+       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
+     case "summary":
+-      return { mode: "summary", summary: sub.view };
++      return { mode: "summary", summary: sub.view === "simple" ? null : sub.view };
+     default: {
+       const never: never = sub;
+       return never;
+diff --git a/src/web/tree.ts b/src/web/tree.ts
+index 55c3616f0..29f7d759b 100644
+--- a/src/web/tree.ts
++++ b/src/web/tree.ts
+@@ -371,9 +371,10 @@ export function buildOutline(
+ }
+ 
+ /* ------------------------------------------------------- the summary tree --
+-   What summary mode renders: the tree, indented and numbered, with the
+-   one-sentence gist stage 4 wrote onto every internal node. See
+-   docs/project/summaries.md and SummaryPanel.tsx for the view.
++   The tree, nested and numbered, with the one-sentence gist stage 4 wrote onto
++   every internal node. Named for summary mode, which drew it as an outline
++   until 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md);
++   Structure, Outline, Diagram and the graph read it now.
+ 
+    **This reads nothing but the tree**, which is the whole of what changed on
+    2026-08-31 when the generated length ladder was removed
+@@ -420,17 +421,17 @@ export interface SummaryNode {
+   /**
+    * The Socratic question under it, on the root and depth-1 nodes only, and
+    * only on trees built after 2026-09-05 — types.ts § `TreeNode.question`.
+-   * Absent everywhere else, and the panel simply draws no second line.
++   * Absent everywhere else.
+    */
+   question?: string;
+   children: SummaryNode[];
+ }
+ 
+ /**
+- * The tree as the summary panel wants it: nested and numbered.
++ * The tree as the modes that draw it want it: nested and numbered.
+  *
+- * `depthLimit` stops the walk. It is 2 by default because that is where
+- * params.ts stops offering — below it a node is one paragraph, which the reader
++ * `depthLimit` stops the walk. It is 2 by default — the parts and their
++ * sections; below that a node is one paragraph, which the reader
+  * should be reading rather than being told about (types.ts § TreeNode.gist).
+  */
+ export function buildSummaryTree(
+@@ -449,7 +450,7 @@ export function buildSummaryTree(
+ 
+     /* **The apparatus is a leaf here, whatever the tree says.** Descending gave
+        "Notes" one child per endnote — each with no title, no gist and no
+-       summary — and `SummaryPanel` drew six phantom rows under a numbered part
++       summary — and Summary's outline drew six phantom rows under a numbered part
+        3, every one of them saying "No summary for this section". The notes are
+        in the structure and are not part of the argument; that is the whole
+        promise of this stage, and summary mode was the one place still breaking
+@@ -491,88 +492,3 @@ export function buildSummaryTree(
+ 
+   return build(tree.nodes[tree.rootId], "");
+ }
+-
+-/**
+- * Which entry the reader is actually in, as the panel is currently drawn.
+- *
+- * Greg, 2026-08-26: *"If I'm in 'Summary' mode, can we highlight and scroll to
+- * the relevant Summary section that corresponds to the current position of the
+- * text?"* — and "the relevant one" is the question this function exists to
+- * answer once, in one place.
+- *
+- * `here` in SummaryPanel.tsx marks **every** ancestor of the reader's section,
+- * deliberately: at a shallow depth cut-off, the part you are inside is the
+- * honest answer to *where am I*. But a highlight that strong on four nested
+- * rows says nothing, and there is only one row to scroll to. So this picks the
+- * **deepest entry that is actually on screen**, which is not the same as the
+- * deepest entry that contains the reader:
+- *
+- *  - a node below the `deep` cut-off is not drawn, so its parent is where the
+- *    reader is *as far as this panel goes* — unless the reader pressed that
+- *    node's `+N sections` badge, which opens it past the cut-off and puts its
+- *    children back on screen;
+- *  - a node inside a section the reader closed is not drawn either, and closing
+- *    a section must not put the mark somewhere invisible.
+- *
+- * **The walk mirrors `Entry`'s own `showChildren`**, and that agreement is the
+- * whole risk in this function. Get it wrong and nothing errors: the panel
+- * scrolls to an element that is not there (no move at all), or marks a row the
+- * reader cannot see, which reads as "the highlight is broken" rather than as a
+- * rule disagreeing with itself. docs/reusable/silent-success.md. Which is why
+- * both sides call `showsChildren` below rather than each writing the rule out.
+- *
+- * Returns `null` above the first section, and for the root — which covers the
+- * whole article and is therefore "here" the entire time, a light that is always
+- * on. At `deep: 0` only the root is drawn, so there is correctly nothing to
+- * mark and nothing to scroll to.
+- */
+-export function currentEntryId(
+-  root: SummaryNode,
+-  atRow: number | null,
+-  deep: number,
+-  closed: ReadonlySet<string>,
+-  opened: ReadonlySet<string> = new Set(),
+-): string | null {
+-  if (atRow === null) return null;
+-  let node: SummaryNode | undefined = root;
+-  let deepest: string | null = null;
+-  while (node) {
+-    if (node !== root) deepest = node.node.id;
+-    if (!showsChildren(node, deep, closed, opened)) break;
+-    node = node.children.find((c) => atRow >= c.startRow && atRow <= c.endRow);
+-  }
+-  return deepest;
+-}
+-
+-/**
+- * Whether one entry's children are drawn — the single rule, in one place.
+- *
+- * There are **three** states in it and each is its own variable, which is the
+- * design note copied verbatim from their structure panel and then extended by
+- * one:
+- *
+- *  - `deep` is the cut-off, and it removes a whole level of the tree;
+- *  - `closed` is the set the reader shut;
+- *  - `opened` is the set the reader opened *past* the cut-off, by pressing a
+- *    `+N sections` badge on a node the cut-off was hiding.
+- *
+- * They compose, and none of them silently rewrites another: moving the Depth
+- * buttons does not un-close anything, and pressing `+N` on one part does not
+- * move the Depth buttons. `closed` wins over `opened` because it is the more
+- * recent statement about that node — a collapse always clears the override, so
+- * the two can never both be set (SummaryPanel § toggle).
+- *
+- * The panel's `Entry` and `currentEntryId` above both call this. They used to
+- * write the rule out separately, which is a rule that will eventually disagree
+- * with itself in a way nothing errors on.
+- */
+-export function showsChildren(
+-  entry: SummaryNode,
+-  deep: number,
+-  closed: ReadonlySet<string>,
+-  opened: ReadonlySet<string>,
+-): boolean {
+-  if (entry.children.length === 0) return false;
+-  if (closed.has(entry.node.id)) return false;
+-  return entry.node.depth < deep || opened.has(entry.node.id);
+-}
+diff --git a/src/web/visitor.ts b/src/web/visitor.ts
+index 72ed672da..9ffc1cb9f 100644
+--- a/src/web/visitor.ts
++++ b/src/web/visitor.ts
+@@ -179,11 +179,15 @@ const POLICY: Record<Mode, VisitorPolicy> = {
+      button*, this table decides what a visitor is shown on arrival, and a
+      shared URL must show two people the same thing. */
+   structure: { kind: "available" },
+-  /* And summary, since 2026-08-31. It used to be an artefact mode, gated on a
+-     `summary.json` a visitor's payload might not carry. The generated ladder is
+-     gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the
+-     tree's own gists, which are in the payload the visitor already holds — so
+-     there is nothing left to be missing. */
++  /* And summary, since 2026-08-31, when it drew the tree's own gists from the
++     payload (docs/plans/260831s-gist-only-summaries.md). **Still `available`
++     now that it is only the plain-words levels**, which are an artefact
++     (the gists' outline went on 2026-10-01,
++     docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md):
++     `VisitorSummaryBand` reads them off the payload and, when nobody has made
++     them, says so in its own words beside the slider. An artefact gate here
++     would replace that with the generic visitor boundary and take the slider
++     away. GPT Sol's plan review of 261001p, P2. */
+   summary: { kind: "available" },
+   /* **Marginalia, 2026-10-01** (called Annotations until later that day), the
+      same bargain: its column is drawn from the tree (the parts' questions) and
+diff --git a/tests/command-bar-sub-modes.test.tsx b/tests/command-bar-sub-modes.test.tsx
+index 6f2ca8ada..b12bc6098 100644
+--- a/tests/command-bar-sub-modes.test.tsx
++++ b/tests/command-bar-sub-modes.test.tsx
+@@ -392,7 +392,6 @@ describe("the registry's two answers agree", () => {
+     diagram: "sketch",
+     referee: "criteria",
+     remember: "recall",
+-    summary: "gists",
+   } as const;
+ 
+   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {
+@@ -414,6 +413,8 @@ describe("the registry's two answers agree", () => {
+       { mode: "remember", view: "recall" },
+       { mode: "diagram", view: "sketch" },
+       { mode: "referee", view: "criteria" },
++      /* Simple, since the outline went and it became Summary's default (plan 261001p). */
++      { mode: "summary", view: "simple" },
+     ] as const satisfies readonly SubMode[]) {
+       const key = sub.mode;
+       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index 51d941651..8fb999b60 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -98,6 +98,7 @@ import type {
+   Ideas,
+   Quotes,
+   SearchRun,
++  SimpleSummary,
+   Timeline,
+   Trajectory,
+   TweetThread,
+@@ -173,7 +174,11 @@ const SECOND = "A later chapter revisits the same episode from the other side.";
+  * Hierarchy's gist columns had to show, until that mode retired on 2026-09-29.)
+  */
+ const COLUMN_GIST = "Where the argument finally lands.";
+-/** The root's gist, which is what Summary's band is built from. */
++/**
++ * The root's gist. Summary's band drew it until its outline went on 2026-10-01
++ * (plan 261001p); nothing asserts it now, and it stays so the tree is a real
++ * one, different from every string in `DRAWS`.
++ */
+ const ROOT_GIST = "The piece says the instruments came first.";
+ /** The child node's title — the one row Outline can draw on this fixture. */
+ const OUTLINE_ROW = "The instrument came first";
+@@ -404,6 +409,38 @@ const CITATIONS: Citations = {
+   elapsedMs: 1,
+ };
+ 
++/**
++ * **A plain-words paragraph** — what Summary's band draws since its outline
++ * went (plan 261001p). The default level's first paragraph; the others are
++ * different strings, so the row proves the band opened on `simple`.
++ */
++const SIMPLE_PARA = "The piece says the instrument was built before anyone knew what it measured.";
++
++const SIMPLE: SimpleSummary = {
++  version: "simple/2",
++  generator: "test",
++  slug: SLUG,
++  sourceHash: "hash",
++  generatedAt: "2026-09-01T09:00:00.000Z",
++  elapsedMs: 1,
++  profileHash: null,
++  levels: {
++    brief: [
++      { text: "A short one about the rig.", ids: ["spya-bbbbbb" as BlockId] },
++      { text: "And why it matters.", ids: ["spya-cccccc" as BlockId] },
++    ],
++    simple: [
++      { text: SIMPLE_PARA, ids: ["spya-bbbbbb" as BlockId] },
++      { text: "It matters because the theory came later.", ids: ["spya-cccccc" as BlockId] },
++    ],
++    fuller: [
++      { text: "The fuller one names the rig.", ids: ["spya-bbbbbb" as BlockId] },
++      { text: "Then says what it measured.", ids: ["spya-bbbbbb" as BlockId] },
++      { text: "Then why the order matters.", ids: ["spya-cccccc" as BlockId] },
++    ],
++  },
++};
++
+ const THREAD: TweetThread = {
+   version: "tweets/5",
+   generator: "test",
+@@ -765,6 +802,8 @@ function artefact(url: string): Response | null {
+       ? json({ sketch: SKETCH, stale: false, outdated: false, profileChanged: false })
+       : GONE();
+   if (url.startsWith("/api/illustrated/")) return GONE();
++  if (url.startsWith("/api/simple/"))
++    return has ? json({ simpleSummary: SIMPLE, stale: false, outdated: false, profileChanged: false }) : GONE();
+   return null;
+ }
+ 
+@@ -1135,8 +1174,11 @@ const SPENDS: Record<Mode, Spend> = {
+   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
+   /* The same tree again, in linked columns or one nested list. */
+   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
+-  /* And the same gists again, in a band instead of in the columns. */
+-  summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
++  /* The plain-words levels are an artefact, but the bar's press arms nothing:
++     the band opens on its empty state, and the slider arms `simple` one level
++     down (activation.ts § MODE_TARGET.summary; plan 261001p). Whether opening
++     should start the run is an open product question (fb7t-7v). */
++  summary: { kind: "none", why: "opens on a plain-words level; only the slider inside it arms the run" },
+   /* The tree's questions, the arc and the ideas already made — read, never
+      generated. A press that started the Ideas job here would be the bug. */
+   marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
+@@ -1393,8 +1435,9 @@ const DRAWS: Record<Mode, Draws> = {
+      raw, a `textContent` assertion here would be satisfied by a panel whose
+      visible columns rendered nothing at all. */
+   structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW, about: "corner" },
+-  /* The root's own gist, drawn as the band rather than as a column. */
+-  summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST, about: "corner" },
++  /* The default level's first paragraph, off `/api/simple/` — the outline
++     that drew the root's gist here went on 2026-10-01 (plan 261001p). */
++  summary: { kind: "band", where: ".mode-band.summ", says: SIMPLE_PARA, about: "corner" },
+   /* An entry's name, which is what a closed row shows — a canary the panel
+      cannot draw without having drawn the list. */
+   glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM, about: "corner" },
+diff --git a/tests/last-view.test.ts b/tests/last-view.test.ts
+index 6c66901df..5d7e20515 100644
+--- a/tests/last-view.test.ts
++++ b/tests/last-view.test.ts
+@@ -32,15 +32,26 @@ import {
+ 
+ describe("rememberableSearch", () => {
+   it("keeps the parameters that say how you are looking at the article", () => {
+-    expect(rememberableSearch("?at=spya-tgnssb&mode=summary&deep=2")).toBe(
+-      "?at=spya-tgnssb&mode=summary&deep=2",
++    expect(rememberableSearch("?at=spya-tgnssb&mode=summary&summary=fuller")).toBe(
++      "?at=spya-tgnssb&mode=summary&summary=fuller",
+     );
+   });
+ 
++  it("never stores `deep`, but lets an old link carrying it win over a restore", () => {
++    /* `?deep=` was Summary's Parts | Sections until the outline went on
++       2026-10-01 (plan 261001p). Nothing writes it now, so it is never
++       stored — but `/read/x?deep=2` is an address somebody may still open,
++       and it must read as a link, not as a bare address a remembered view
++       could be restored over. GPT Sol's plan review of 261001p, P1. */
++    expect(rememberableSearch("?mode=summary&deep=2")).toBe("?mode=summary");
++    expect(hasArticleState("?deep=2")).toBe(true);
++    expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
++  });
++
+   it("keeps Summary's sub-mode, which only a press on its chip can spend on", () => {
+     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
+-       is armed by the chip's click (SummaryMode.tsx), never by arrival — so it
+-       is a place you were, like `?deep=`. Plan 260930i. */
++       is armed by the slider's press (SummaryMode.tsx), never by arrival — so
++       it is a place you were, like `?at=`. Plan 260930i. */
+     expect(rememberableSearch("?mode=summary&summary=simple")).toBe("?mode=summary&summary=simple");
+     expect(hasArticleState("?summary=simple")).toBe(true);
+   });
+@@ -229,8 +240,8 @@ describe("restoredHref", () => {
+     // Nothing left worth restoring is the same as nothing stored.
+     expect(restoredHref("/read/x", "", "?text=0")).toBe(null);
+     // And a parameter that is still remembered rides through untouched.
+-    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2&deep=2")).toBe(
+-      "/read/x?at=spya-a&deep=2",
++    expect(restoredHref("/read/x", "", "?at=spya-a&text=0&cols=1,2&summary=brief&deep=2")).toBe(
++      "/read/x?at=spya-a&summary=brief",
+     );
+   });
+ 
+diff --git a/tests/layout-margin.test.ts b/tests/layout-margin.test.ts
+index 8fa22330f..98a043480 100644
+--- a/tests/layout-margin.test.ts
++++ b/tests/layout-margin.test.ts
+@@ -106,7 +106,7 @@ describe("the marginalia column", () => {
+ 
+   /* **Beside a band**, since 2026-10-01 —
+      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+-  const SHAPES = ["standard", "structure", "wide"] as const;
++  const SHAPES = ["standard", "structure", "wide", "roomy"] as const;
+   const BANDED = CASES.flatMap((c) => SHAPES.map((bandShape) => ({ ...c, bandShape })));
+ 
+   it("draws the column beside an open band once the window is wide enough for all three", () => {
+diff --git a/tests/layout.test.ts b/tests/layout.test.ts
+index 58a36a027..e2f1165e4 100644
+--- a/tests/layout.test.ts
++++ b/tests/layout.test.ts
+@@ -10,6 +10,7 @@
+ import { describe, expect, it } from "vitest";
+ import {
+   bandCoversProse,
++  bandShapeFor,
+   DEFAULT_ROOT_PX,
+   fitView,
+   MODE_IDEAL,
+@@ -219,3 +220,69 @@ describe("a wide band", () => {
+     expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(400);
+   });
+ });
++
++/**
++ * **The roomy band — Summary's, since 2026-10-01.**
++ *
++ * > Make the Summary mode column ever so slightly wider (if on a wide screen)
++ * >
++ * > — Greg, 2026-10-01 (SPIDERYARN-READING2-7Q)
++ *
++ * The standard band with a higher ceiling, 28rem rather than 25rem, and it
++ * still only takes what the prose leaves above `PROSE_MIN` — so it is the
++ * standard band until about 957px and reaches its cap near 1004px.
++ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
++ * Numbers written out, for the reason the wide band's header gives.
++ */
++describe("a roomy band", () => {
++  const roomy = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
++    fitView({ windowWidth, modeBand: true, bandShape: "roomy", rootFontPx, showSpine });
++  const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX, showSpine: boolean | null = null) =>
++    fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx, showSpine });
++
++  it("is a touch wider than the standard band on a wide window", () => {
++    expect(roomy(1440).modeW).toBe(448);
++    expect(roomy(1440).widths).toEqual([1440 - SPINE_W - 448]);
++  });
++
++  it("is the standard band where the prose has nothing to spare", () => {
++    // 950 − 12 − 544 = 394, under both ceilings.
++    expect(roomy(950).modeW).toBe(standard(950).modeW);
++    expect(roomy(950).modeW).toBe(394);
++    expect(roomy(390).modeW).toBe(0);
++  });
++
++  it("never comes out narrower than an ordinary band at a small root", () => {
++    // 28rem at a 12px root is 336, under `MODE_IDEAL`.
++    expect(roomy(1440, 12).modeW).toBe(MODE_IDEAL);
++    expect(roomy(1440, 20).modeW).toBe(560);
++  });
++
++  it("holds its invariants at every width, root and rail", () => {
++    for (const root of [9, 12, 16, 20]) {
++      for (const spine of [null, false] as const) {
++        for (let w = 320; w <= 2400; w++) {
++          const f = roomy(w, root, spine);
++          const s = standard(w, root, spine);
++          expect(f.overflowing).toBe(false);
++          if (f.modeW === 0) {
++            expect(s.modeW).toBe(0); // covers exactly where the standard band does
++            continue;
++          }
++          expect(f.modeW).toBeGreaterThanOrEqual(s.modeW);
++          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root));
++          expect(f.modeW + (f.widths[0] ?? 0)).toBe(w - (spine === false ? 0 : SPINE_W));
++        }
++      }
++    }
++  });
++});
++
++describe("bandShapeFor", () => {
++  it("gives each mode its band, and Summary the roomy one", () => {
++    expect(bandShapeFor("structure")).toBe("structure");
++    expect(bandShapeFor("tweets")).toBe("wide");
++    expect(bandShapeFor("summary")).toBe("roomy");
++    expect(bandShapeFor("chat")).toBe("standard");
++  });
++});
+diff --git a/tests/mode-surface-changes-no-markup.test.tsx b/tests/mode-surface-changes-no-markup.test.tsx
+index 2889b1678..da39946cf 100644
+--- a/tests/mode-surface-changes-no-markup.test.tsx
++++ b/tests/mode-surface-changes-no-markup.test.tsx
+@@ -264,7 +264,7 @@ const { OutlinePanel } = await import("../src/web/OutlinePanel.js");
+ const { VisitorBand } = await import("../src/web/PublicChrome.js");
+ const { QuizPanel } = await import("../src/web/QuizPanel.js");
+ const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
+-const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
++const { VisitorSummaryBand } = await import("../src/web/modes/summary/SummaryMode.js");
+ const { TimelinePanel } = await import("../src/web/TimelinePanel.js");
+ const { TweetsPanel } = await import("../src/web/Tweets.js");
+ const { assignSlots } = await import("../src/web/hit-colours.js");
+@@ -1447,14 +1447,16 @@ function mountVisitor(): ReactNode {
+   });
+ }
+ 
++/* The visitor's band, so no `useSimple` and no network: the shape is the
++   band's, and the owner's draws the same surface around the same row
++   (SummaryMode.tsx § `SummarySurface`). Under nuqs, which renders no element,
++   so the band is still the whole output. */
+ function mountSummary(): ReactNode {
+-  return createElement(SummaryPanel, {
+-    root: ROOT,
+-    deep: 1,
+-    onDeep: noop,
+-    atRow: 0,
+-    onJump: noop,
+-  });
++  return createElement(
++    NuqsAdapter,
++    null,
++    createElement(VisitorSummaryBand, { simple: undefined, onJump: noop }),
++  );
+ }
+ 
+ function mountGlossary(access: GlossaryAccess): ReactNode {
+@@ -1671,14 +1673,16 @@ const VISITOR: BandShape = {
+   ],
+ };
+ 
+-/* Summary is one of the three bands with no header at all, and `root: null`
+-   draws the same two children with a sentence inside the scroller — so the
+-   empty tree is not a second shape. */
++/* Summary is one of the three bands with no header at all. Since 2026-10-01
++   (plan 261001p) it is SummaryMode.tsx's own surface rather than
++   SummaryPanel's, with the same three children: the scroller is now
++   SimplePanel's, and with no paragraphs it holds a sentence instead — so the
++   empty level is not a second shape. */
+ const SUMMARY: BandShape = {
+   className: "mode-band summ has-about",
+   label: "Summary",
+   head: false,
+-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll"],
++  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
+ };
+ 
+ const GLOSSARY_SHAPE: BandShape = {
+diff --git a/tests/pressing-a-chip-arms-it.test.tsx b/tests/pressing-a-chip-arms-it.test.tsx
+index 289b20d65..d9c4bc5c3 100644
+--- a/tests/pressing-a-chip-arms-it.test.tsx
++++ b/tests/pressing-a-chip-arms-it.test.tsx
+@@ -241,7 +241,7 @@ describe("Remember's Recall | Quiz toggle", () => {
+ const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
+ 
+ /** `slug: null` is the visitor's slider, which must arm nothing. */
+-function mountSummaryControls(value: "gists" | "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
++function mountSummaryControls(value: "brief" | "simple" | "fuller", slug: string | null = SLUG): string[] {
+   const changes: string[] = [];
+   act(() => {
+     root.render(
+@@ -268,20 +268,20 @@ function slideTo(stop: number): void {
+ 
+ describe("Summary's plain-words slider", () => {
+   it("is a named range with three stops that says which level it is on", () => {
+-    mountSummaryControls("gists");
++    mountSummaryControls("simple");
+     const group = host.querySelector("fieldset.summ-slider");
+     expect(group?.querySelector("legend")?.textContent).toBe("In plain words");
+     expect(group?.querySelector("legend")?.className).toBe("sr-only");
+     const input = slider();
+     expect([input.min, input.max, input.step, input.value]).toEqual(["0", "2", "1", "1"]);
+-    expect(input.getAttribute("aria-valuetext")).toBe("Simple (not showing)");
++    expect(input.getAttribute("aria-valuetext")).toBe("Simple");
+     mountSummaryControls("fuller");
+     expect(slider().value).toBe("2");
+     expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
+   });
+ 
+   it("arms the run when moved to a level, and moves to it", () => {
+-    const changes = mountSummaryControls("gists");
++    const changes = mountSummaryControls("simple");
+     expect(armed("simple")).toBe(false);
+     slideTo(0);
+     expect(armed("simple")).toBe(true);
+@@ -295,15 +295,17 @@ describe("Summary's plain-words slider", () => {
+     expect(changes).toEqual(["fuller"]);
+   });
+ 
+-  it("opens the level it rests on when the idle slider is clicked", () => {
+-    const changes = mountSummaryControls("gists");
+-    click(".summ-slider input[type=range]");
++  it("goes to the end an icon names, and arms it", () => {
++    const changes = mountSummaryControls("simple");
++    const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider-end")];
++    expect(ends).toHaveLength(2);
++    act(() => ends[0]?.click());
+     expect(armed("simple")).toBe(true);
+-    expect(changes).toEqual(["simple"]);
++    expect(changes).toEqual(["brief"]);
+   });
+ 
+   it("arms once when a pointer move emits both input and click", () => {
+-    const changes = mountSummaryControls("gists");
++    const changes = mountSummaryControls("simple");
+     const input = slider();
+     act(() => {
+       input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+@@ -339,7 +341,7 @@ describe("Summary's plain-words slider", () => {
+   });
+ 
+   it("arms nothing for a visitor, who still gets to move it", () => {
+-    const changes = mountSummaryControls("gists", null);
++    const changes = mountSummaryControls("brief", null);
+     slideTo(2);
+     expect(armed("simple")).toBe(false);
+     expect(changes).toEqual(["fuller"]);
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index 6eb39594a..72bbcd3ff 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -197,16 +197,15 @@ const PDF_META = {
+ };
+ 
+ /**
+- * The one sentence a visitor's summary band must put on screen — and it is the
+- * **tree's own gist**, not an artefact.
+- *
+- * Stage 5e is gone (docs/plans/260831s-gist-only-summaries.md), so summary mode is now
+- * free for a visitor the way the table of contents is. That is worth a rendered
+- * assertion rather than a unit test: the mode used to be gated on a
+- * `summary.json` the payload might not carry, and a gate left behind would show
+- * *"Nobody has built a summary"* over a panel that has everything it needs.
++ * What a visitor's Summary band says when the payload carries no plain-words
++ * version — **in Summary's own band**, beside its slider, and not the generic
++ * *"Nobody has built"* boundary. Summary drew the tree's own gists, free, until
++ * 2026-10-01; it is the plain-words levels alone now (plan 261001p), and
++ * visitor.ts keeps it `available` so this sentence is what an empty one says.
++ * Written out rather than imported from SimplePanel.tsx, so a change to it is
++ * a change somebody made here on purpose.
+  */
+-const PUBLIC_GIST = "What the piece says.";
++const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this piece yet.";
+ 
+ /**
+  * **A drawing, because the fixture's diagram band is a visitor's default now.**
+@@ -871,8 +870,9 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
+      is the network trace, which is the question this file is actually about.
+      GPT Sol's review of the plan, finding 8. */
+   structure: { where: ".mode-band.struct", says: OUTLINE_ROW },
+-  /* Free since 2026-08-31 — the gist, with no summary artefact behind it. */
+-  summary: { where: ".mode-band.summ", says: PUBLIC_GIST },
++  /* No plain-words version on the payload, so its own empty sentence, in its
++     own band — not the boundary (visitor.ts keeps Summary `available`). */
++  summary: { where: ".mode-band.summ", says: PUBLIC_NO_SIMPLE },
+   /* The payload carries a glossary, so the visitor gets the real thing. */
+   glossary: { where: ".mode-band.gloss", says: PUBLIC_TERM },
+   /* And a list of ideas — the fixture is asymmetric on purpose. */
+@@ -1115,24 +1115,27 @@ describe("a signed-out browser on a shared document", () => {
+    * deleting the visitor's summary band from App.tsx left the whole suite
+    * green, because nothing ever put one on screen.
+    *
+-   * **What it asserts changed on 2026-08-31, and the change is the point.** It
+-   * used to prove the band drew the *artefact* — `?len=long`, so the assertion
+-   * could not be satisfied by the tree's own gist. Stage 5e is gone
+-   * (docs/plans/260831s-gist-only-summaries.md) and the gist is now the whole of what
+-   * this mode shows, so the thing worth proving is the opposite one: a visitor
+-   * gets summary mode **for free**, on a payload carrying no summary artefact
+-   * of any kind, with no *"nobody has built"* boundary in the way. A gate left
+-   * behind in `visitorGap` is exactly what this reddens.
++   * **What it asserts has changed twice.** It proved the band drew the
++   * *artefact* until 2026-08-31, then that a visitor got the tree's own gists
++   * for free (docs/plans/260831s-gist-only-summaries.md). The gists' outline
++   * went on 2026-10-01 (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md),
++   * so what is worth proving now: an old outline link, on a payload carrying
++   * no plain-words version, still opens **Summary's own band** — its slider on
++   * the default level and its own empty sentence — with no *"nobody has
++   * built"* boundary in the way, no Parts | Sections, and no request beyond
++   * the public one. A gate added to `visitorGap` is exactly what this reddens.
+    */
+-  it("gives a visitor the summary outline, with no artefact behind it", async () => {
+-    await open("?mode=summary");
++  it("gives a visitor Summary's own band on an old outline link, with nothing behind it", async () => {
++    await open("?mode=summary&summary=gists&deep=2");
+ 
+-    expect(host.textContent).toContain(PUBLIC_GIST);
++    const band = host.querySelector(".mode-band.summ");
++    expect(band, "the Summary band is open").not.toBeNull();
++    expect(readable(band as Element)).toContain(PUBLIC_NO_SIMPLE);
+     expect(host.textContent).not.toContain("Nobody has built");
+-    /* And the Parts | Sections control, which is the one thing the outline
+-       offers — so this cannot pass on a band that rendered its heading and
+-       nothing else. (It was labelled "Depth" until plan 261001b.) */
+-    expect(host.querySelector(".summ-seg .summ-pill")?.textContent).toBe("Parts");
++    /* The slider, on the default level — so this cannot pass on a band that
++       rendered its surface and nothing else. */
++    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Simple");
++    expect(band?.querySelector(".summ-pill"), "no Parts | Sections").toBeNull();
+     expect(outsidePublic()).toEqual([]);
+   });
+ 
+@@ -3472,9 +3475,13 @@ describe("an owner's reading view, left alone", () => {
+     entries: [{ range: ["spya-bbbbbb", "spya-cccccc"], text: "Where the piece goes." }],
+   };
+ 
+-  /* Two modes, because a subscriber mounted only inside Summary would pass a
+-     Plain-only guard. */
+-  it.each(["plain", "summary"] as const)("asks for the job list once, then nothing for a minute, in %s", async (mode) => {
++  /* Two modes, because a subscriber mounted only inside a band would pass a
++     Plain-only guard. Structure rather than Summary since 2026-10-01: Summary
++     was the gists' outline, which watched nothing, and is now the plain-words
++     levels, an artefact band whose `useSimple` watches the queue exactly as
++     Glossary's does below (plan 261001p). Structure is the band that reads
++     only the tree. */
++  it.each(["plain", "structure"] as const)("asks for the job list once, then nothing for a minute, in %s", async (mode) => {
+     session.user = { id: "owner-1", email: "greg@example.com" };
+     owned = () => json({ ...OWNED, arc: OWNED_ARC });
+     await open(`?mode=${mode}`);
+diff --git a/tests/simple-panel.test.tsx b/tests/simple-panel.test.tsx
+index 0999b8390..dda75c34d 100644
+--- a/tests/simple-panel.test.tsx
++++ b/tests/simple-panel.test.tsx
+@@ -15,17 +15,18 @@
+  *  2. **The press.** The real `SummaryControls` slider over the real
+  *     `useSimple`, under `<StrictMode>`, counting job requests the way
+  *     tests/modes-that-start-themselves.test.tsx does: choosing a level with
+- *     nothing stored buys exactly one run; arriving on `?summary=simple` (a
+- *     pasted link, a Back step, a restore — all the same setter) buys nothing;
+- *     and a second press recovers from a failed read.
+- *  3. **The outline's ladder** beside it: Parts | Sections.
++ *     nothing stored buys exactly one run; arriving on a level (a pasted link,
++ *     a Back step, a restore — all the same setter) buys nothing; and a second
++ *     press recovers from a failed read.
++ *  3. **The band**: the real `SummaryBand` and `VisitorSummaryBand` on an old
++ *     outline link, which must land on the default level with no Parts |
++ *     Sections anywhere (plan 261001p).
+  */
+ import { act, createElement, type ReactElement, StrictMode, useState } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+ import type { UseSimple } from "../src/web/useSimple.js";
+-import type { SummaryView } from "../src/web/params.js";
+ 
+ (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+ 
+@@ -121,8 +122,9 @@ const { SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
+   "../src/web/SimplePanel.js"
+ );
+ const { BlockLinkProvider } = await import("../src/web/BlockLinkCard.js");
+-const { SummaryPanel } = await import("../src/web/SummaryPanel.js");
+-const { SummaryControls } = await import("../src/web/modes/summary/SummaryMode.js");
++const { SummaryBand, SummaryControls, VisitorSummaryBand } = await import(
++  "../src/web/modes/summary/SummaryMode.js"
++);
+ const { useSimple } = await import("../src/web/useSimple.js");
+ const { resetActivations } = await import("../src/web/activation.js");
+ const { jobEngine } = await import("../src/web/jobEngine.js");
+@@ -355,10 +357,10 @@ function SimpleProbe({ slug }: { slug: string }): ReactElement {
+ }
+ 
+ /** The address-bar setter, which is what a pasted link, Back and a restore all reach. */
+-let arrive: (next: SummaryView) => void = () => {};
++let arrive: (next: SimpleLevel) => void = () => {};
+ 
+-function Band({ slug, start }: { slug: string; start: SummaryView }): ReactElement {
+-  const [view, setView] = useState<SummaryView>(start);
++function Band({ slug, start }: { slug: string; start: SimpleLevel }): ReactElement {
++  const [view, setView] = useState<SimpleLevel>(start);
+   arrive = setView;
+   return createElement(
+     "div",
+@@ -366,11 +368,11 @@ function Band({ slug, start }: { slug: string; start: SummaryView }): ReactEleme
+     createElement(SummaryControls, { slug, value: view, onChange: setView }),
+     /* One element for every level, so moving between levels keeps the hook
+        mounted — as `OwnerSimple` does in the real band. */
+-    view !== "gists" ? createElement(SimpleProbe, { slug }) : null,
++    createElement(SimpleProbe, { slug }),
+   );
+ }
+ 
+-async function open(start: SummaryView): Promise<void> {
++async function open(start: SimpleLevel): Promise<void> {
+   await act(async () => {
+     root.render(createElement(StrictMode, null, createElement(Band, { slug: "a-piece", start })));
+   });
+@@ -383,7 +385,7 @@ function slider(): HTMLInputElement {
+   return found;
+ }
+ 
+-/** A click on the slider where it rests — how the idle slider opens Simple. */
++/** A click on the slider where it rests, on Simple — a press on the level showing. */
+ async function pressSimple(): Promise<void> {
+   const input = slider();
+   await act(async () => input.click());
+@@ -404,21 +406,41 @@ const simpleGets = (): string[] => gets.filter((u) => u.startsWith("/api/simple/
+ 
+ describe("choosing a plain-words level", () => {
+   it("writes them when nothing is stored, once", async () => {
+-    await open("gists");
+-    expect(simpleGets(), "the outline reads nothing").toEqual([]);
++    await open("simple");
++    expect(posts, "arriving buys nothing").toEqual([]);
+     await pressSimple();
+     expect(simpleGets().length).toBeGreaterThan(0);
+     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+   });
+ 
+   it("writes them once when the reader goes straight to Fuller", async () => {
+-    await open("gists");
++    await open("simple");
+     await slideTo(2);
+     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+   });
+ 
++  it("goes to an end, and arms, from the icon at that end", async () => {
++    await open("simple");
++    const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider .summ-slider-end")];
++    expect(ends, "an icon at each end").toHaveLength(2);
++    /* Out of the tab order and out of the accessibility tree: the slider is
++       the control a keyboard or a screen reader uses. */
++    for (const end of ends) {
++      expect(end.tabIndex).toBe(-1);
++      expect(end.getAttribute("aria-hidden")).toBe("true");
++    }
++    await act(async () => ends[1]?.click());
++    await settle();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
++    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
++    await act(async () => ends[0]?.click());
++    await settle();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
++    expect(posts, "one run writes every level").toEqual([{ slug: "a-piece", steps: ["simple"] }]);
++  });
++
+   it("does not write them a second time when pressed again, or moved to another level", async () => {
+-    await open("gists");
++    await open("simple");
+     await pressSimple();
+     await pressSimple();
+     await slideTo(0);
+@@ -427,7 +449,7 @@ describe("choosing a plain-words level", () => {
+ 
+   it("writes nothing when they are already stored", async () => {
+     artefactStatus = 200;
+-    await open("gists");
++    await open("simple");
+     await pressSimple();
+     await slideTo(2);
+     expect(simpleGets().length).toBeGreaterThan(0);
+@@ -436,7 +458,7 @@ describe("choosing a plain-words level", () => {
+ 
+   it("recovers from a failed read on a second press", async () => {
+     artefactFails = true;
+-    await open("gists");
++    await open("simple");
+     await pressSimple();
+     expect(posts, "a failed read is not an answer").toEqual([]);
+ 
+@@ -456,7 +478,7 @@ describe("arriving at a level without choosing it", () => {
+   });
+ 
+   it("spends nothing on a Back step into it", async () => {
+-    await open("gists");
++    await open("brief");
+     await act(async () => arrive("simple"));
+     await settle();
+     expect(simpleGets().length).toBeGreaterThan(0);
+@@ -464,67 +486,65 @@ describe("arriving at a level without choosing it", () => {
+   });
+ });
+ 
+-/* ------------------------------------------------------ the outline ladder -- */
++/* ------------------------------------------------------------ the band -- */
+ 
+-describe("Parts | Sections beside the slider", () => {
+-  async function panel(deep: number, plain: boolean, onDeep: (d: number) => void): Promise<void> {
++/**
++ * **Summary is the slider and the paragraphs, and nothing else** — Greg,
++ * 2026-10-01 (spya-b3ggv4): *"let's just get rid of parts and sections"*.
++ * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
++ *
++ * The real bands, under the real address bar, on the address an old link
++ * carries: `?summary=gists&deep=2` was the outline at Sections. It must land
++ * on the default plain-words level, with no Parts | Sections pair and no
++ * outline anywhere in the band, for the owner and for a visitor.
++ */
++describe("Summary's band, arriving on an old outline link", () => {
++  const OLD_LINK = "/read/a-piece?mode=summary&summary=gists&deep=2";
++
++  async function band(which: "owner" | "visitor"): Promise<void> {
++    history.replaceState(null, "", OLD_LINK);
++    const { NuqsAdapter } = await import("nuqs/adapters/react");
++    const inner =
++      which === "owner"
++        ? createElement(SummaryBand, { slug: "a-piece", onJump: () => {} })
++        : createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
+     await act(async () => {
+-      root.render(
+-        createElement(SummaryPanel, {
+-          root: null,
+-          deep,
+-          onDeep,
+-          atRow: null,
+-          onJump: () => {},
+-          simple: plain ? createElement("div", { "data-simple": "" }, "Simple body") : null,
+-        }),
+-      );
++      root.render(createElement(NuqsAdapter, null, inner));
+     });
++    await settle();
+   }
+-  const pill = (label: string): HTMLButtonElement => {
+-    const found = [...host.querySelectorAll<HTMLButtonElement>(".summ-pill")].find((b) => b.textContent === label);
+-    if (!found) throw new Error(`no ${label} pill`);
+-    return found;
+-  };
+ 
+-  it("has no Article pill and no visible labels — one row, two named groups", async () => {
+-    await panel(1, false, () => {});
+-    expect([...host.querySelectorAll(".summ-pill")].map((b) => b.textContent)).toEqual(["Parts", "Sections"]);
+-    expect([...host.querySelectorAll("legend")].map((l) => [l.textContent, l.className])).toEqual([
+-      ["Outline", "sr-only"],
+-    ]);
+-    expect(host.querySelectorAll(".summ-controls")).toHaveLength(1);
+-  });
++  function noOutline(): void {
++    const labels = [...host.querySelectorAll("button, legend")].map((el) => el.textContent?.trim());
++    expect(labels, "no Parts | Sections pair").not.toContain("Parts");
++    expect(labels).not.toContain("Sections");
++    expect(labels, "no outline group").not.toContain("Outline");
++    expect(host.querySelector(".summ-pill"), "no pills").toBeNull();
++    expect(host.querySelector(".summ-list"), "no gist outline").toBeNull();
++    expect(host.querySelectorAll(".mode-band.summ"), "one Summary band").toHaveLength(1);
++    expect(host.querySelectorAll(".summ-controls"), "one row of controls").toHaveLength(1);
++  }
+ 
+-  it("lights Parts as included under Sections, with aria-pressed on the chosen depth only", async () => {
+-    await panel(2, false, () => {});
+-    expect(pill("Sections").getAttribute("aria-pressed")).toBe("true");
+-    expect(pill("Sections").classList.contains("on")).toBe(true);
+-    expect(pill("Parts").getAttribute("aria-pressed")).toBe("false");
+-    expect(pill("Parts").classList.contains("included")).toBe(true);
+-    await panel(1, false, () => {});
+-    expect(pill("Parts").getAttribute("aria-pressed")).toBe("true");
+-    expect(pill("Sections").classList.contains("included")).toBe(false);
++  it("draws the owner the default plain-words level, not the outline", async () => {
++    await band("owner");
++    noOutline();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
++    /* The plain-words body, at its empty state — the GET answered 404. */
++    expect(text()).toContain(SIMPLE_NONE_OWNER);
++    expect(posts, "arriving on a link spends nothing").toEqual([]);
+   });
+ 
+-  it("steps Sections back to Parts when pressed while chosen", async () => {
+-    const onDeep = vi.fn();
+-    await panel(2, false, onDeep);
+-    await act(async () => pill("Sections").click());
+-    expect(onDeep).toHaveBeenLastCalledWith(1);
+-    await act(async () => pill("Parts").click());
+-    expect(onDeep).toHaveBeenLastCalledWith(1);
++  it("draws a visitor the stored paragraphs at the default level", async () => {
++    await band("visitor");
++    noOutline();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
++    expect(text()).toContain(WHAT);
++    expect(gets, "a visitor's band reads nothing").toEqual([]);
+   });
+ 
+-  it("draws the pair unlit under a plain-words level, and a press asks for that depth", async () => {
+-    const onDeep = vi.fn();
+-    await panel(2, true, onDeep);
+-    expect(host.querySelector("[data-simple]")).not.toBeNull();
+-    expect(pill("Sections").getAttribute("aria-pressed")).toBe("false");
+-    expect(pill("Parts").classList.contains("included")).toBe(false);
+-    expect(onDeep).not.toHaveBeenCalled();
+-    /* Not "step back": under a level, Sections is not chosen, so it asks for 2. */
+-    await act(async () => pill("Sections").click());
+-    expect(onDeep).toHaveBeenLastCalledWith(2);
++  it("says the slider's three levels without a visible level name beside it", async () => {
++    await band("owner");
++    expect(host.querySelector(".summ-slider-name")).toBeNull();
++    expect(host.querySelector(".summ-controls")?.textContent ?? "").not.toMatch(/Brief|Simple|Fuller/);
+   });
+ });
+diff --git a/tests/summary-expand.test.tsx b/tests/summary-expand.test.tsx
+deleted file mode 100644
+index 4dda4bcc2..000000000
+--- a/tests/summary-expand.test.tsx
++++ /dev/null
+@@ -1,600 +0,0 @@
+-// @vitest-environment jsdom
+-/**
+- * **The `+N sections` badge is a control even when the Depth cut-off is what
+- * hid those sections**, and the twist above the part closes them again.
+- *
+- * Greg, 2026-08-27:
+- *
+- * > when it has collapsed more granular levels, the only way to see the more
+- * > granular levels is to switch articles -> parts -> sections. Could we make
+- * > it easier to see them for this part of the doc (e.g. click `+N sections`
+- * > to expand those, and click the parent again to collapse)?
+- *
+- * The thing worth a test rather than a look is that **it must not move the
+- * Depth buttons**: opening one part past the cut-off has to leave every other
+- * part shut and `onDeep` untouched, which is the difference between a per-node
+- * override and a control that silently overrules the one above it. A panel
+- * that expanded everything would look right in a screenshot of the part you
+- * clicked.
+- *
+- * The other half is `currentEntryId`, which walks the same rule for the follow
+- * and used to write it out a second time. If the two disagree the panel
+- * scrolls to an element that is not on screen, which moves nothing and reports
+- * nothing — docs/reusable/silent-success.md. Both now call `showsChildren`,
+- * and the last case here is what keeps them calling it.
+- */
+-import { act, createElement } from "react";
+-import { createRoot, type Root } from "react-dom/client";
+-
+-/* Every update here goes through `act`, so say so — otherwise React logs
+-   "the current testing environment is not configured to support act(...)" on
+-   each render and the file passes while shouting. */
+-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+-import type { TreeNode } from "../src/types.js";
+-import { SummaryPanel } from "../src/web/SummaryPanel.js";
+-import { currentEntryId, showsChildren, type SummaryNode } from "../src/web/tree.js";
+-
+-/* A two-part article, three sections each, built by hand — the join from
+-   tree.json is buildSummaryTree's business and is not what is under test. */
+-function node(
+-  id: string,
+-  depth: number,
+-  title: string,
+-  parent: string | null,
+-  children: string[] = [],
+-): TreeNode {
+-  return {
+-    id,
+-    depth,
+-    title,
+-    /* `parent` and `children` are what a TreeNode is threaded on, so the
+-       fixture states them rather than casting past them: the panel reads only
+-       id, depth, title and range, but a node that claimed no parent would be
+-       a different shape from anything stage 5 writes. */
+-    parent,
+-    children,
+-    range: [`spya-${id}a`, `spya-${id}z`],
+-    gist: `The gist of ${title}.`,
+-  };
+-}
+-
+-function section(id: string, title: string, row: number, parent: string): SummaryNode {
+-  return {
+-    node: node(id, 2, title, parent),
+-    number: id,
+-    title,
+-    startRow: row,
+-    endRow: row,
+-    blocks: 1,
+-    gist: `The gist of ${title}.`,
+-    children: [],
+-  };
+-}
+-
+-/**
+- * The apparatus as `buildSummaryTree` now hands it over: one row, `supplement`,
+- * no number, no children, and **no gist** — a supplement node never has one,
+- * which is the whole promise (src/supplement.ts).
+- */
+-function apparatus(): SummaryNode {
+-  const n = node("notes", 1, "Notes", "root");
+-  delete (n as { gist?: string }).gist;
+-  return {
+-    node: n,
+-    number: "",
+-    title: "Notes",
+-    startRow: 6,
+-    endRow: 11,
+-    blocks: 6,
+-    supplement: true,
+-    children: [],
+-  };
+-}
+-
+-function tree(withApparatus = false): SummaryNode {
+-  const one = [
+-    section("1.1", "Alpha", 0, "1"),
+-    section("1.2", "Beta", 1, "1"),
+-    section("1.3", "Gamma", 2, "1"),
+-  ];
+-  const two = [
+-    section("2.1", "Delta", 3, "2"),
+-    section("2.2", "Epsilon", 4, "2"),
+-    section("2.3", "Zeta", 5, "2"),
+-  ];
+-  const ids = (kids: SummaryNode[]) => kids.map((k) => k.node.id);
+-  return {
+-    node: node("root", 0, "The whole thing", null, ["1", "2"]),
+-    number: "",
+-    title: "The whole thing",
+-    startRow: 0,
+-    endRow: 5,
+-    blocks: 6,
+-    gist: "The gist of the whole thing.",
+-    children: [
+-      { node: node("1", 1, "First part", "root", ids(one)), number: "1", title: "First part", startRow: 0, endRow: 2,
+-        blocks: 3, gist: "The gist of the first part.", children: one },
+-      { node: node("2", 1, "Second part", "root", ids(two)), number: "2", title: "Second part", startRow: 3, endRow: 5,
+-        blocks: 3, gist: "The gist of the second part.", children: two },
+-      ...(withApparatus ? [apparatus()] : []),
+-    ],
+-  };
+-}
+-
+-let host: HTMLDivElement;
+-let root: Root;
+-const deeps: number[] = [];
+-const jumps: string[] = [];
+-
+-/* `deep` is the caller's state in the app, so the harness passes it in and
+-   records what the panel asks for rather than moving it. */
+-const panel = (deep: number, withApparatus = false) =>
+-  createElement(SummaryPanel, {
+-    root: tree(withApparatus),
+-    deep,
+-    onDeep: (d: number) => deeps.push(d),
+-    atRow: null,
+-    onJump: (id: string) => jumps.push(id),
+-  });
+-
+-beforeEach(() => {
+-  deeps.length = 0;
+-  jumps.length = 0;
+-  host = document.createElement("div");
+-  document.body.append(host);
+-  root = createRoot(host);
+-  // "parts": the state in Greg's screenshot, where every section is below the
+-  // cut-off and the badges are the only way to reach one.
+-  act(() => {
+-    root.render(panel(1));
+-  });
+-});
+-
+-afterEach(() => {
+-  act(() => root.unmount());
+-  host.remove();
+-});
+-
+-const titles = () => [...host.querySelectorAll(".summ-title")].map((b) => b.textContent ?? "");
+-const badges = () =>
+-  [...host.querySelectorAll<HTMLButtonElement>(".summ-more")].map((b) => b.textContent ?? "");
+-/* The entry whose OWN title says this — `:scope >` throughout, because an open
+-   `<li>` contains its whole subtree and a plain descendant query would hand
+-   back the root row for every name in the outline. */
+-const entryFor = (part: string): HTMLLIElement => {
+-  const entry = [...host.querySelectorAll<HTMLLIElement>("li.summ-entry")].find((li) =>
+-    li.querySelector(":scope > .summ-body .summ-title")?.textContent?.includes(part),
+-  );
+-  if (!entry) throw new Error(`no entry titled "${part}"`);
+-  return entry;
+-};
+-const badgeFor = (part: string): HTMLButtonElement => {
+-  const badge = entryFor(part).querySelector<HTMLButtonElement>(":scope > .summ-more");
+-  if (!badge) throw new Error(`no +N badge on "${part}"`);
+-  return badge;
+-};
+-const twistFor = (part: string): HTMLButtonElement => {
+-  const twist = entryFor(part).querySelector<HTMLButtonElement>(":scope > .summ-body .summ-twist");
+-  if (!twist) throw new Error(`no twist on "${part}"`);
+-  return twist;
+-};
+-const click = (el: HTMLElement) =>
+-  act(() => {
+-    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+-  });
+-
+-describe("opening one part past the depth cut-off", () => {
+-  it("makes a section title a real block link", () => {
+-    const title = host.querySelector<HTMLAnchorElement>(".summ-title");
+-    expect(title?.tagName).toBe("A");
+-    expect(title?.getAttribute("data-block-link")).toBe("spya-1a");
+-    expect(title?.getAttribute("href") ?? "").toContain("at=spya-1a");
+-
+-    act(() => {
+-      title?.dispatchEvent(
+-        new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, metaKey: true }),
+-      );
+-    });
+-    expect(jumps).toEqual([]);
+-
+-    act(() => {
+-      title?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+-    });
+-    expect(jumps).toEqual(["spya-1a"]);
+-  });
+-
+-  it("starts with the parts and no sections, and a live badge on each part", () => {
+-    expect(titles()).toEqual(["1First part", "2Second part"]);
+-    // The word is the Depth control's own. At `parts` the article row is
+-    // already showing everything it has, so only the two parts hold a badge —
+-    // drop to `article` and the root grows a "+2 parts".
+-    expect(badges()).toEqual(["+3 sections", "+3 sections"]);
+-    // Live: this is the whole change. It was `disabled` until 2026-08-27.
+-    expect(badgeFor("First part").disabled).toBe(false);
+-  });
+-
+-  it("opens just that part's sections, and leaves Depth and the other part alone", () => {
+-    click(badgeFor("First part"));
+-    expect(titles()).toEqual([
+-      "1First part",
+-      "1.1Alpha",
+-      "1.2Beta",
+-      "1.3Gamma",
+-      "2Second part",
+-    ]);
+-    // The other part is untouched and still says how much it is holding back.
+-    expect(badgeFor("Second part").textContent).toBe("+3 sections");
+-    // And the Depth buttons above were not moved on the reader's behalf.
+-    expect(deeps).toEqual([]);
+-    expect(twistFor("First part").getAttribute("aria-expanded")).toBe("true");
+-  });
+-
+-  it("collapses again from the parent's twist", () => {
+-    click(badgeFor("First part"));
+-    expect(titles()).toContain("1.1Alpha");
+-    click(twistFor("First part"));
+-    expect(titles()).toEqual(["1First part", "2Second part"]);
+-    expect(badgeFor("First part").textContent).toBe("+3 sections");
+-    expect(twistFor("First part").getAttribute("aria-expanded")).toBe("false");
+-  });
+-
+-  it("re-opens after a collapse, which is where a one-set version breaks", () => {
+-    click(badgeFor("First part"));
+-    click(twistFor("First part"));
+-    click(badgeFor("First part"));
+-    expect(titles()).toContain("1.2Beta");
+-  });
+-
+-  it("names the badge for the one node it opens", () => {
+-    // "+3 sections" is what the eye needs beside a title it can see. A screen
+-    // reader's button list has no such context, and four of these in a row
+-    // were four identical controls.
+-    expect(badgeFor("First part").getAttribute("aria-label")).toBe(
+-      "Open the 3 sections of First part",
+-    );
+-    expect(badgeFor("Second part").getAttribute("aria-label")).toBe(
+-      "Open the 3 sections of Second part",
+-    );
+-  });
+-
+-  it("hands the keyboard to the twist, because the badge is about to unmount", () => {
+-    // A focused button that disappears drops focus on `document.body`, which
+-    // loses a screen reader's place in the outline. GPT Sol's review, 2026-08-27.
+-    const badge = badgeFor("First part");
+-    badge.focus();
+-    expect(document.activeElement).toBe(badge);
+-    click(badge);
+-    expect(document.activeElement).toBe(twistFor("First part"));
+-  });
+-
+-  it("moves only the focus that was already on the badge", () => {
+-    /* The guarantee is not "keyboard only" — Chrome focuses a button on
+-       mousedown, so a real mouse press takes this same path, and that is fine:
+-       the reader landed on the badge, the badge is gone, the twist is where
+-       they now are. `:focus-visible` is false for a mouse-originated focus, so
+-       no ring paints, which is the browser drawing the line better than we
+-       could. What must never happen is focus being dragged off something the
+-       reader was actually using. jsdom's dispatched click does not focus the
+-       button, which is exactly the shape of that case. */
+-    const elsewhere = host.querySelector<HTMLButtonElement>(".summ-pill");
+-    if (!elsewhere) throw new Error("no pill to park the keyboard on");
+-    elsewhere.focus();
+-    click(badgeFor("First part"));
+-    expect(titles()).toContain("1.1Alpha");
+-    expect(document.activeElement).toBe(elsewhere);
+-  });
+-});
+-
+-/**
+- * **The root's badge is a control too**, since 2026-08-31.
+- *
+- * Greg: *"in Article sub-mode, I can't click on `+N parts` to expand"*. He is
+- * right, and the old answer — the badge is a fact on the root, pointing at the
+- * Depth buttons — was answering a different objection. That objection was real:
+- * the root draws no title row, so it has no twist, and an override written
+- * there could never be taken off again (GPT Sol, 2026-08-27).
+- *
+- * The fix is to give the root the thing it was missing rather than to take the
+- * press away. Opening the root's parts puts a `−N parts` badge in the same
+- * place, and that is the twist the root never had.
+- *
+- * **What must not happen is the root landing in `closed`.** A collapse
+- * anywhere else writes the node into that set, and on the root that would
+- * survive the Depth buttons: press `parts` afterwards and the outline would be
+- * empty, with the control that says `parts` apparently doing nothing. So the
+- * root's collapse clears the override and touches nothing else, which is the
+- * last case below.
+- */
+-describe("the root badge opens the parts, and closes them again", () => {
+-  /* Re-render at `article`, since `deep` belongs to the panel's caller. This
+-     is the state Greg was in: the parts are all below the cut-off and the
+-     badge is the only thing on screen that names them. */
+-  const atArticle = () =>
+-    act(() => {
+-      root.render(panel(0));
+-    });
+-  const rootBadge = () => {
+-    const badge = host.querySelector<HTMLButtonElement>("li.summ-entry > .summ-more");
+-    if (!badge) throw new Error("no badge on the root");
+-    return badge;
+-  };
+-
+-  it("opens the parts without moving Depth", () => {
+-    atArticle();
+-    expect(titles()).toEqual([]);
+-    expect(rootBadge().textContent).toBe("+2 parts");
+-    expect(rootBadge().disabled).toBe(false);
+-    click(rootBadge());
+-    expect(titles()).toEqual(["1First part", "2Second part"]);
+-    // The Depth control still says `article`, and was not moved on the
+-    // reader's behalf — the same promise the per-part badge makes.
+-    expect(deeps).toEqual([]);
+-  });
+-
+-  it("turns into the twist the root never had", () => {
+-    atArticle();
+-    click(rootBadge());
+-    expect(rootBadge().textContent).toBe("\u22122 parts");
+-    expect(rootBadge().getAttribute("aria-label")).toBe("Close the 2 parts of The whole thing");
+-    click(rootBadge());
+-    expect(titles()).toEqual([]);
+-    expect(rootBadge().textContent).toBe("+2 parts");
+-    expect(deeps).toEqual([]);
+-  });
+-
+-  it("leaves `parts` still meaning parts after a collapse", () => {
+-    /* The one state a shared `closed` set would break. Open the parts at
+-       `article`, shut them again, then raise Depth: the parts must come back,
+-       because the reader never said anything about this node that outlives the
+-       cut-off. */
+-    atArticle();
+-    click(rootBadge());
+-    click(rootBadge());
+-    act(() => {
+-      root.render(panel(1));
+-    });
+-    expect(titles()).toEqual(["1First part", "2Second part"]);
+-  });
+-});
+-
+-describe("the follow agrees with what is drawn", () => {
+-  it("marks the section once it is open past the cut-off, and the part before", () => {
+-    const t = tree();
+-    const shut: ReadonlySet<string> = new Set();
+-    // Cut-off at `parts`, nothing overridden: the part is as deep as it goes.
+-    expect(currentEntryId(t, 1, 1, shut, new Set())).toBe("1");
+-    // The reader opened part 1. Now the section under the reading line is the
+-    // deepest row actually on screen, so it is the one the panel scrolls to.
+-    expect(currentEntryId(t, 1, 1, shut, new Set(["1"]))).toBe("1.2");
+-    // Part 2 is untouched by that, exactly as the panel draws it.
+-    expect(currentEntryId(t, 4, 1, shut, new Set(["1"]))).toBe("2");
+-  });
+-
+-  it("lets a close beat an override, so a collapsed part stays collapsed", () => {
+-    const t = tree();
+-    expect(showsChildren(t.children[0]!, 1, new Set(), new Set(["1"]))).toBe(true);
+-    expect(showsChildren(t.children[0]!, 1, new Set(["1"]), new Set(["1"]))).toBe(false);
+-  });
+-});
+-
+-/* --------------------------------------------------- and the apparatus -- */
+-
+-/**
+- * **The notes are a row, not a section of the argument.**
+- *
+- * `buildSummaryTree` stops descending into a supplement and hands it over
+- * unnumbered; this is the other half, which is what a reader actually sees.
+- * Before it, "Notes" was numbered part 3, carried one blank child per endnote,
+- * and every one of them said "No summary for this section" — reporting the
+- * promise of this whole stage as a fault. GPT Sol, second review, 2026-08-29.
+- */
+-describe("the apparatus in summary mode", () => {
+-  const render = () => {
+-    act(() => root.render(panel(1, true)));
+-  };
+-  const rowFor = (title: string) =>
+-    [...host.querySelectorAll("li.summ-entry")].find(
+-      (li) => li.querySelector(".summ-title")?.textContent?.includes(title),
+-    );
+-
+-  /* Three separate tests, not three assertions in one. A failing assertion ends
+-     its test, so with the number check first a probe that reverted *both* halves
+-     of the fix reddened only the number and never ran the missing-summary
+-     check at all. Each half of a fix needs its own probe — the identical trap
+-     the two hash pins fell into earlier the same day. */
+-  it("shows Notes as a row of the apparatus, not a part of the argument", () => {
+-    render();
+-    const notes = rowFor("Notes");
+-    expect(notes).toBeTruthy();
+-    expect(notes!.className).toContain("supplement");
+-  });
+-
+-  it("gives Notes no number", () => {
+-    render();
+-    // No "3." in front of it — it is not part 3 of a two-part argument.
+-    expect(rowFor("Notes")!.querySelector(".summ-number")).toBe(null);
+-  });
+-
+-  it("does not report the apparatus as missing a summary", () => {
+-    render();
+-    expect(rowFor("Notes")!.textContent).not.toContain("No summary for this section");
+-  });
+-
+-  it("hangs no phantom row per endnote under it", () => {
+-    render();
+-    expect(rowFor("Notes")!.querySelectorAll("li.summ-entry").length).toBe(0);
+-  });
+-
+-  /* The follow path, which reads the same tree. A reader whose `?at=` row is
+-     inside the notes must land on the Notes row itself — not on a phantom
+-     child, which is where it went before, and not on nothing. `showsChildren`
+-     already returns false for a childless entry, so this is asking whether the
+-     two rules still agree once the apparatus has no children; if they ever
+-     disagree the panel scrolls to an element that is not on screen, which moves
+-     nothing and reports nothing. */
+-  it("makes the Notes row itself the current entry for a reader inside it", () => {
+-    const withNotes = tree(true);
+-    // Row 8 is inside the apparatus (rows 6–11), well past the argument.
+-    expect(currentEntryId(withNotes, 8, 1, new Set())).toBe("notes");
+-    // And a reader in the argument is unaffected.
+-    expect(currentEntryId(withNotes, 4, 1, new Set())).toBe("2");
+-  });
+-
+-  /* The control: the parts of the argument keep their numbers and keep saying
+-     when they have no summary, so the two assertions above are about the
+-     apparatus and not about the panel having quietly stopped numbering or
+-     stopped reporting anything at all. */
+-  it("still numbers the argument's own parts", () => {
+-    render();
+-    const first = rowFor("First part");
+-    expect(first!.querySelector(".summ-number")?.textContent).toBe("1");
+-    expect(rowFor("Second part")!.querySelector(".summ-number")?.textContent).toBe("2");
+-    expect(rowFor("First part")!.className).not.toContain("supplement");
+-  });
+-});
+-
+-/**
+- * **A panel with nothing in it must say so**, and until 2026-08-31 it did not.
+- *
+- * GPT Sol's review of the built code found the state. `tree-invariants.ts`
+- * permits a root that is a **leaf** — one block, and no gist, because a summary
+- * must never stand where the real prose could (granularity-zoom.md § node
+- * shape). A one-passage article is exactly that. `buildSummaryTree` returns it,
+- * so `root` is non-null and the "no usable tree" line does not fire; the root
+- * draws no title row, no range and no missing-summary text; and with no
+- * children there is no `+N` badge either. The reader got the word SUMMARY, the
+- * Depth pills, and a blank panel with no explanation.
+- *
+- * It matters more since the mode stopped being gated: a visitor used to be told
+- * *"nobody has built a summary for this piece yet"* and now opens the band
+- * unconditionally (src/web/visitor.ts), so this is the state they land in.
+- *
+- * The same line covers a tree whose gists were never written — a provisional
+- * heading tree — for the same reason, which is that there is nothing to draw.
+- */
+-describe("an article with nothing to outline", () => {
+-  /** The root as a leaf: one block, no gist, no children. The validator's own case. */
+-  const lonely = (): SummaryNode => {
+-    const n = node("root", 0, "The whole thing", null);
+-    delete (n as { gist?: string }).gist;
+-    return { node: n, number: "", title: "The whole thing", startRow: 0, endRow: 0, blocks: 1, children: [] };
+-  };
+-
+-  const render = (r: SummaryNode) =>
+-    act(() => {
+-      root.render(
+-        createElement(SummaryPanel, {
+-          root: r,
+-          deep: 1,
+-          onDeep: (d: number) => deeps.push(d),
+-          atRow: null,
+-          onJump: () => {},
+-        }),
+-      );
+-    });
+-
+-  it("says there is nothing to outline rather than drawing an empty list", () => {
+-    render(lonely());
+-    expect(titles()).toEqual([]);
+-    expect(badges()).toEqual([]);
+-    expect(host.querySelector(".summ-quiet")?.textContent).toContain("no parts");
+-    /* Not the other sentence. "No usable tree" is about a tree we could not
+-       read, and this tree is perfectly good — it just has one passage in it.
+-       Saying the wrong one of those reports a fault where there is none. */
+-    expect(host.textContent).not.toContain("no usable tree");
+-  });
+-
+-  it("still draws a root that has a gist but no parts", () => {
+-    /* The control, and the reason the condition is `no gist AND no children`
+-       rather than either alone: a short article whose root carries a gist has
+-       exactly one useful row, and hiding it behind an empty-state message would
+-       be the same bug pointing the other way. */
+-    const withGist = { ...lonely(), gist: "The gist of the whole thing." };
+-    render(withGist);
+-    expect(host.querySelector(".summ-text")?.textContent).toBe("The gist of the whole thing.");
+-    expect(host.querySelector(".summ-quiet")).toBeNull();
+-  });
+-});
+-
+-/**
+- * **The Socratic question sits under the claim, and only on the rows that have
+- * one.** SPIDERYARN-READING2-1V — Greg, 2026-09-05:
+- *
+- * > Tweak the prompt that generates the Summary mode to be a bit more in the
+- * > form of Socratic questions that encourage the reader to read the actual
+- * > text to get the full answers
+- *
+- * *"A bit more"* is what these assertions are really about. The gist stays —
+- * a reader deciding whether to descend needs to know what the section says,
+- * which is vision.md's *scan before you commit* — and the question is an extra
+- * line beside it, not a replacement for it. A version that swapped one for the
+- * other would satisfy the word "Socratic" and lose the panel's whole job.
+- *
+- * The absence case is the other half, and it is the common one: every article
+- * whose hierarchy was built before 2026-09-05 has no questions at all, and the
+- * panel has to look exactly as it always did rather than drawing a gap or a
+- * "no question" line. A missing gist says so on screen; a missing question
+- * must not (src/types.ts § `TreeNode.question`).
+- */
+-describe("the Socratic question in the panel", () => {
+-  const asked = (): SummaryNode => {
+-    const t = tree();
+-    t.question = "Why should any of this change how you read?";
+-    const parts = t.children;
+-    if (parts[0]) parts[0].question = "How does the first part earn its claim?";
+-    if (parts[1]) parts[1].question = "What follows if the second part is right?";
+-    return t;
+-  };
+-
+-  const questions = () => [...host.querySelectorAll(".summ-question")].map((p) => p.textContent);
+-
+-  /**
+-   * **This case asserted the opposite until the evening of the same day.** It
+-   * required the gist to survive beside the question, with the message *"a
+-   * question replaced a gist instead of joining it — the panel stopped saying
+-   * what the article says"*. That was a faithful reading of 1V, and it caught
+-   * the change when the change came, which is what it was for.
+-   *
+-   * SPIDERYARN-READING2-24 reversed it, from Greg, having read the shipped
+-   * version: *"the intent wasn't that we would show both the gist and the
+-   * Socratic question, the intent was that we would show only the Socratic
+-   * question when we have one."* The old assertion is not weakened here, it is
+-   * inverted — the gists must be **gone** — because "either would do" is how a
+-   * rule stops holding anything.
+-   *
+-   * The rest of the rule lives in tests/summary-question-replaces-gist.test.tsx.
+-   */
+-  it("draws one on the article and one on each part, INSTEAD of their gists", () => {
+-    act(() => {
+-      root.render(
+-        createElement(SummaryPanel, {
+-          root: asked(),
+-          deep: 1,
+-          onDeep: () => {},
+-          atRow: null,
+-          onJump: () => {},
+-        }),
+-      );
+-    });
+-
+-    expect(questions()).toEqual([
+-      "Why should any of this change how you read?",
+-      "How does the first part earn its claim?",
+-      "What follows if the second part is right?",
+-    ]);
+-    expect(
+-      [...host.querySelectorAll(".summ-text")].map((p) => p.textContent),
+-      "a gist was drawn beside a question — SPIDERYARN-READING2-24 asks for the question alone",
+-    ).toEqual([]);
+-  });
+-
+-  it("draws nothing at all for an article built before the field existed", () => {
+-    /* `beforeEach` already rendered exactly that tree. */
+-    expect(questions()).toEqual([]);
+-    expect(
+-      host.textContent,
+-      "an article with no questions grew a placeholder where a question would go",
+-    ).not.toContain("?");
+-  });
+-});
+diff --git a/tests/summary-question-replaces-gist.test.tsx b/tests/summary-question-replaces-gist.test.tsx
+deleted file mode 100644
+index 3261c7513..000000000
+--- a/tests/summary-question-replaces-gist.test.tsx
++++ /dev/null
+@@ -1,196 +0,0 @@
+-// @vitest-environment jsdom
+-/**
+- * **A row shows its question INSTEAD of its gist, or its gist, or it says so.**
+- *
+- * SPIDERYARN-READING2-24, Greg 2026-09-05, after reading the first version on a
+- * real article:
+- *
+- * > I quite like some of these new Socratic questions in the summary mode, but
+- * > the intent wasn't that we would show both the gist and the Socratic
+- * > question, the intent was that we would show only the Socratic question when
+- * > we have one.
+- *
+- * The morning's version drew both, and the reasoning for that is preserved in
+- * `SummaryPanel.tsx` because it was right about the questions it was written
+- * for. This file holds the rule that replaced it.
+- *
+- * **Why a test rather than a look.** The interesting half is not that the
+- * question appears — it is that the gist *disappears*, and that nothing
+- * disappears on the rows that have no question. A panel that dropped both would
+- * pass any assertion that only asked "is the question drawn", and an article
+- * whose hierarchy predates 2026-09-05 has a question on no row at all. So every
+- * case here asserts a presence AND an absence, and the mixed case is the one
+- * that would have caught shipping this against the real corpus, where a
+- * cascade-built part could carry no question at all — P1-5, fixed at generation
+- * by `expand/4` on 2026-09-07 (docs/plans/260907d § stage 2). **The rule here
+- * did not change with it**: absence is still ordinary — every tree built before
+- * the field existed has none, and a part whose answer came back without one is
+- * a logged omission rather than a failure — so the panel's fallback is exactly
+- * as load-bearing as it was.
+- */
+-import { act, createElement } from "react";
+-import { createRoot, type Root } from "react-dom/client";
+-
+-/* Every update goes through `act`, so say so — otherwise React logs on each
+-   render and the file passes while shouting. Same reason as summary-expand. */
+-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+-import type { TreeNode } from "../src/types.js";
+-import { SummaryPanel } from "../src/web/SummaryPanel.js";
+-import type { SummaryNode } from "../src/web/tree.js";
+-
+-function node(
+-  id: string,
+-  depth: number,
+-  title: string,
+-  parent: string | null,
+-  children: string[] = [],
+-): TreeNode {
+-  return {
+-    id,
+-    depth,
+-    title,
+-    parent,
+-    children,
+-    range: [`spya-${id}a`, `spya-${id}z`],
+-    gist: `The gist of ${title}.`,
+-  };
+-}
+-
+-/**
+- * One part. `question: undefined` is the pre-2026-09-05 article and is spelled
+- * as an absent key rather than an empty string — `questionFor` drops a blank,
+- * so a row can only ever have a real question or none, and a fixture carrying
+- * `""` would be testing a state the pipeline cannot produce.
+- */
+-function part(id: string, title: string, row: number, question?: string): SummaryNode {
+-  const n = node(id, 1, title, "root");
+-  return {
+-    node: n,
+-    number: id,
+-    title,
+-    startRow: row,
+-    endRow: row,
+-    blocks: 3,
+-    gist: `The gist of ${title}.`,
+-    ...(question !== undefined ? { question } : {}),
+-    children: [],
+-  };
+-}
+-
+-function tree(parts: SummaryNode[], rootQuestion?: string): SummaryNode {
+-  return {
+-    node: node(
+-      "root",
+-      0,
+-      "The whole thing",
+-      null,
+-      parts.map((p) => p.node.id),
+-    ),
+-    number: "",
+-    title: "The whole thing",
+-    startRow: 0,
+-    endRow: parts.length - 1,
+-    blocks: parts.length,
+-    gist: "The gist of the whole thing.",
+-    ...(rootQuestion !== undefined ? { question: rootQuestion } : {}),
+-    children: parts,
+-  };
+-}
+-
+-let host: HTMLDivElement;
+-let root: Root;
+-
+-const render = (t: SummaryNode) => {
+-  act(() => {
+-    root.render(
+-      createElement(SummaryPanel, {
+-        root: t,
+-        deep: 1,
+-        onDeep: () => {},
+-        atRow: null,
+-        onJump: () => {},
+-      }),
+-    );
+-  });
+-};
+-
+-beforeEach(() => {
+-  host = document.createElement("div");
+-  document.body.append(host);
+-  root = createRoot(host);
+-});
+-
+-afterEach(() => {
+-  act(() => root.unmount());
+-  host.remove();
+-});
+-
+-const texts = (sel: string) => [...host.querySelectorAll(sel)].map((e) => e.textContent ?? "");
+-const questions = () => texts(".summ-question");
+-const gists = () => texts(".summ-text");
+-
+-describe("a row with a question", () => {
+-  it("shows the question and NOT the gist", () => {
+-    render(
+-      tree([
+-        part("1", "First part", 0, "Functionalism (4 arguments): why isn't computation enough?"),
+-      ]),
+-    );
+-    expect(questions()).toContain(
+-      "Functionalism (4 arguments): why isn't computation enough?",
+-    );
+-    /* The half that matters. Drawing the question is easy; the report was that
+-       both were drawn. */
+-    expect(gists()).not.toContain("The gist of First part.");
+-  });
+-
+-  it("does the same on the root, which is the row Greg was looking at", () => {
+-    render(tree([part("1", "First part", 0)], "Conscious AI: why believe it is close?"));
+-    expect(questions()).toContain("Conscious AI: why believe it is close?");
+-    expect(gists()).not.toContain("The gist of the whole thing.");
+-  });
+-});
+-
+-describe("a row with no question", () => {
+-  it("still shows its gist, because an article from before this has none", () => {
+-    render(tree([part("1", "First part", 0)]));
+-    expect(gists()).toContain("The gist of First part.");
+-    expect(questions()).toHaveLength(0);
+-  });
+-
+-  it("says so only when it has neither", () => {
+-    const p = part("1", "First part", 0);
+-    delete (p as { gist?: string }).gist;
+-    delete (p.node as { gist?: string }).gist;
+-    render(tree([p]));
+-    expect(gists()).toContain("No summary for this section.");
+-  });
+-});
+-
+-/**
+- * The case that would have caught this against real data: a part carrying no
+- * question beside siblings that do, so the panel draws two different kinds of
+- * line at one depth. That is not a fault and must not be reported as one; it is
+- * why the fallback is `question ?? gist` and not `question ?? "No summary"`.
+- *
+- * Until `expand/4` (2026-09-07) it was the *ordinary* state of any part the
+- * deepening cascade built, because `EXPAND_SYSTEM` had no question field at all.
+- * It is now the residue: a tree built before the field existed, and a part whose
+- * answer came back without one — which is counted
+- * (src/hierarchy-deepen.ts § `DeepenStats.missingQuestions`) and never fixed by
+- * hiding the neighbour's gist.
+- */
+-describe("a part built by the cascade, beside parts that were not", () => {
+-  it("falls back to its gist rather than reporting a fault", () => {
+-    render(
+-      tree([
+-        part("1", "First part", 0, "First part (two cases): how does it hold up?"),
+-        part("2", "Second part", 1),
+-      ]),
+-    );
+-    expect(questions()).toEqual(["First part (two cases): how does it hold up?"]);
+-    expect(gists()).toContain("The gist of Second part.");
+-    expect(gists().join(" ")).not.toContain("No summary");
+-  });
+-});
