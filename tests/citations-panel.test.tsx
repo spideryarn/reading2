@@ -659,6 +659,34 @@ describe("the by-line", () => {
     expect(plain?.classList.contains("cite-by-more")).toBe(false);
   });
 
+  it("draws an entry from a visitor's public citation row", async () => {
+    const id = "spya-v2e3n4";
+    const entry = "Chen, J. et al. (2017) Shared memories. Nat. Neurosci. 20, 115–125";
+    await drawVisitor({
+      capped: false,
+      citations: [
+        {
+          id,
+          title: "Shared memories",
+          authors: "Chen et al.",
+          year: "2017",
+          why: "Cited for the method.",
+          entry,
+          mentions: [],
+          citedAt: [FIRST],
+          firstCited: FIRST,
+          citedInBody: true,
+          url: "https://doi.org/10.1000/shared",
+          linkFrom: "doi",
+        },
+      ],
+    });
+
+    const by = row(id).querySelector(".cite-by");
+    expect(by?.textContent).toBe(`Chen et al. · 2017 — ${entry}`);
+    expect((await cardFor(by as Element)).what).toBe(entry);
+  });
+
   it("keeps the full author list in the accessibility tree when the visible by-line is shortened", async () => {
     const listed = work({
       id: "spya-f2u3l4",

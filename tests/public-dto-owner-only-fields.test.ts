@@ -396,11 +396,17 @@ describe("cross-references (5Z)", () => {
 
   it("drop a link that is malformed, self-referring, or to a block this payload lacks", () => {
     const nested = sentinel("owner id nested in a malformed link");
+    const privatePhrase = sentinel("owner identity in a malformed cross-reference phrase");
     const built = publicArticle({
       ...NONE,
       crossrefs: crossrefs([
         GOOD,
         { from: { ownerId: nested }, phrase: "x y", to: P2.id },
+        /* Three well-typed fields and two real block ids are not enough: the
+           phrase itself must be proved to be characters already present in the
+           public source block. JSONB is unchecked, and freshness authenticates
+           the article inputs rather than this stored output. */
+        { from: P1.id, phrase: privatePhrase, to: P2.id },
         { from: P1.id, phrase: "  ", to: P2.id },
         { from: P1.id, phrase: "the measure", to: P1.id },
         { from: P1.id, phrase: "the measure", to: "spya-zzzzzz" },
@@ -409,6 +415,7 @@ describe("cross-references (5Z)", () => {
       crossrefsFresh: true,
     });
     expect(built.crossrefs).toEqual({ links: [GOOD] });
+    expect(JSON.stringify(built)).not.toContain(privatePhrase);
   });
 
   it("an empty list crosses as empty: the model found nothing worth linking", () => {

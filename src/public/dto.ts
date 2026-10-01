@@ -1048,14 +1048,18 @@ function publicIdeas(ideas: Ideas): PublicIdeas {
  *
  * **Each link is checked, not copied**, because JSONB arrives unchecked (GPT
  * Sol, plan review P2): a record of three strings, both ends blocks of this
- * payload and not the same block. Anything else is dropped. `dropped`, the
+ * payload and not the same block, and a phrase whose exact characters are
+ * already present in its public source block. Freshness authenticates the
+ * article inputs, not the stored model output: without the phrase check, a
+ * malformed JSONB row could put arbitrary private text on the public wire while
+ * carrying a current `sourceHash`. Anything else is dropped. `dropped`, the
  * counts, and the stamp stay behind.
  */
 function publicCrossrefs(
   crossrefs: Crossrefs,
   fresh: boolean,
   slug: string,
-  blockIds: ReadonlySet<string>,
+  blocks: ReadonlyMap<string, PublicBlock>,
 ): PublicCrossrefs | undefined {
   const doc: unknown = crossrefs;
   if (!fresh || !isRecord(doc) || doc.slug !== slug || !Array.isArray(doc.links)) return undefined;
@@ -1064,7 +1068,16 @@ function publicCrossrefs(
     if (!isRecord(link)) continue;
     const { from, phrase, to } = link;
     if (typeof from !== "string" || typeof phrase !== "string" || typeof to !== "string") continue;
-    if (phrase.trim() === "" || from === to || !blockIds.has(from) || !blockIds.has(to)) continue;
+    const source = blocks.get(from);
+    if (
+      phrase.trim() === "" ||
+      from === to ||
+      source === undefined ||
+      !blocks.has(to) ||
+      (!source.text.includes(phrase) && !source.html.includes(phrase))
+    ) {
+      continue;
+    }
     links.push({ from: from as BlockId, phrase, to: to as BlockId });
   }
   return { links };
@@ -1145,11 +1158,12 @@ export function publicArticle(row: {
   navLabelStatus: NavLabelStatus;
 }): PublicArticle {
   const blocks = row.blocks.map(publicBlock);
+  const blocksById = new Map(blocks.map((block): [string, PublicBlock] => [block.id, block]));
   const blockText = new Map(blocks.map((block): [string, string] => [block.id, block.text]));
   const crossrefs =
     row.crossrefs === null
       ? undefined
-      : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, new Set(blockText.keys()));
+      : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
   return {
     meta: publicMeta(row),
     blocks,
