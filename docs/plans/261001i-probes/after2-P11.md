@@ -4,7 +4,7 @@
 1. `CLAUDE.md` (AGENTS) — pointed to reading-view-overview and its sub-docs; helped.
 2. `docs/project/ideas.md` — went straight to it from the entry-point listing; its "Code:" paragraph and the bold "A visitor to a public article sees a stored list" paragraph answered the task directly. Very helpful.
 3. `docs/project/public-shelf.md` — opened by mistake of keyword (it is the listing, not the read path); it did say so itself and redirected to security-map and new-mode. Minor detour.
-4. `docs/project/new-mode.md` § Where else to look — named `POLICY` (`src/web/visitor.ts`) and `REVISION_READ_POLICY` (`src/store/pg.ts`). Helpful.
+4. `docs/project/mode.md` § Where else to look — named `POLICY` (`src/web/visitor.ts`) and `REVISION_READ_POLICY` (`src/store/pg.ts`). Helpful.
 
 ## 2. Code files you would edit
 Finding: the feature already exists in this tree, so I would edit nothing, only verify.
@@ -19,7 +19,7 @@ Finding: the feature already exists in this tree, so I would edit nothing, only 
 No new helper needed.
 
 ## 4. Rules to follow
-- Visitor sees what is stored and never starts a paid call (new-mode.md, citing the 260929c plan by title only; I did not open it).
+- Visitor sees what is stored and never starts a paid call (mode.md, citing the 260929c plan by title only; I did not open it).
 - Reproduce with a failing test first (CLAUDE.md); likely `tests/visitor-gaps.test.ts` (named in `visitor.ts`) and `tests/store-revision-columns.test.ts` (named in pg.ts) as homes.
 - Do not widen `REVISION_READ_POLICY` casually; threat model in `docs/project/security-map.md` (not opened).
 - Run `npm test`, `npm run typecheck`, lint on touched files; GPT Sol review before commit; work in a worktree; commit own files by name, push to `dev`.

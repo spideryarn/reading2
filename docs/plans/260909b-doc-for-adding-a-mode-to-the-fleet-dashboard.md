@@ -23,7 +23,7 @@ doc is 1,400 lines about *where the Overseer is going*, and it owns the seam bet
 its face. A procedure with a checklist in it would be the only present-tense recipe in a document
 that is otherwise entirely future tense, and it is the thing a new session needs first — so it wants
 its own line under the entry point, findable by name. The reading view's counterpart,
-[new-mode.md](../project/new-mode.md), settled the same question the same way on 2026-09-03.
+[mode.md](../project/mode.md), settled the same question the same way on 2026-09-03.
 
 **Also passed over: fixing the mechanism.** `MODE_ICONS` and `MODE_TIPS` being in `Dock.tsx` while
 `MODES` and `MODE_LABELS` are in `mode.ts` means four registrations in two files, one of which

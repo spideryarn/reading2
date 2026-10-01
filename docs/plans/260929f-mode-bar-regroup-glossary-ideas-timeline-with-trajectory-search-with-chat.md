@@ -45,7 +45,7 @@ which to join:
 - `passages` + `dimensions` → **`guides`**: ways through the piece, each drawn from it along one
   line — its route, its quotes, questions it answers, its terms, its ideas, its dates.
 - `talk` → **`input`**: modes that wait on the reader's own words — a word to find, a conversation,
-  what they took from it. The category [new-mode.md](../project/new-mode.md) already names.
+  what they took from it. The category [mode.md](../project/mode.md) already names.
 
 The first draft said `contents` and `ask`. GPT Sol: `contents` calls a model's reading literal
 contents (FAQ's questions, Ideas' unstated assumptions, Trajectory's route are all generated), and

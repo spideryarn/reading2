@@ -21,7 +21,7 @@
  * here — *"Written by AI in plain words to help you get your bearings…"* —
  * until Greg, 2026-09-30 (SPIDERYARN-READING2-7B): *"we don't want these mode
  * descriptions - they waste space."* Each pill's card says it now, and
- * docs/project/new-mode.md has the rule.
+ * docs/project/mode.md has the rule.
  */
 import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";

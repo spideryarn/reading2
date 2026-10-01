@@ -7,7 +7,7 @@ not be mistaken for FAQ (model-written, passage-answered) or Quiz (article asks 
 ## 1. Docs opened, in order
 1. `CLAUDE.md` (in context) - pointed straight to reading-view-overview and new-mode; helpful.
 2. `docs/project/reading-view-overview.md` - the modes list; helpful, and showed Annotations as the nearest sibling (it reads the same Socratic questions).
-3. `docs/project/new-mode.md` - the checklist; excellent, gave nearly every file and test.
+3. `docs/project/mode.md` - the checklist; excellent, gave nearly every file and test.
 4. `docs/project/experimental-features.md` - the switch, `experimental` flag, table row to add; helpful.
 5. `docs/project/faq.md` (first 40 lines) - to see how it differs from a "Questions" mode; helpful.
 
@@ -32,10 +32,10 @@ not be mistaken for FAQ (model-written, passage-answered) or Quiz (article asks 
 - No new hook needed (no artefact, no job). Would write one small new panel component.
 
 ## 4. Rules/policies I would follow
-- Add to `MODES`, then let the compiler list the totals; run the suite for the six silent tests (new-mode.md).
-- Decide experimental in `MODE_CATALOG` and mirror in `BEHIND_THE_SWITCH`, plus row and reason in experimental-features.md (new-mode.md § Moving a mode).
-- Card copy: `description` + `how` about the mode not the press, no price (new-mode.md § The card on the button).
-- No description line in the band, no band title naming the mode (new-mode.md, Greg 2026-09-30/09-05).
+- Add to `MODES`, then let the compiler list the totals; run the suite for the six silent tests (mode.md).
+- Decide experimental in `MODE_CATALOG` and mirror in `BEHIND_THE_SWITCH`, plus row and reason in experimental-features.md (mode.md § Moving a mode).
+- Card copy: `description` + `how` about the mode not the press, no price (mode.md § The card on the button).
+- No description line in the band, no band title naming the mode (mode.md, Greg 2026-09-30/09-05).
 - Block ids, never offsets (block-ids.md); view state in the URL (url-state.md) - no new param expected.
 - Nothing generated, so no streaming, no cost row, no `PROMPT_VERSION`; `MODE_TARGET` = `none` with reason.
 - Visitor sees what is stored (visitor.ts `POLICY` available), never starts a paid call.
@@ -45,7 +45,7 @@ not be mistaken for FAQ (model-written, passage-answered) or Quiz (article asks 
 - The task name collides with several existing things (FAQ, Quiz, Annotations' questions, Chat); no doc says what "Questions" would mean or that `question` is reserved as Chat's alias (found only in a comment in `mode-catalog.ts`).
 - I could not tell whether the Socratic questions are stored on every tree node or only depth 0-1 (types.ts says root and depth-1) without reading more code.
 - No `annotations.md` exists, so the closest precedent (a free mode reading existing data) lives only in a plan I may not open; I learned its shape from code comments.
-- Did not verify the exact set of silent tests beyond new-mode.md's list; its lists are dated and may have grown.
+- Did not verify the exact set of silent tests beyond mode.md's list; its lists are dated and may have grown.
 
 ## 6. Confidence
 7/10 that I found everything; the main uncertainty is product intent for "Questions".

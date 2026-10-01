@@ -148,7 +148,7 @@
  * The rule itself, and why the current mode is retained rather than dropped, is
  * `visibleModes` below. The manual is
  * docs/project/experimental-features.md; the checklist is
- * docs/project/new-mode.md.
+ * docs/project/mode.md.
  *
  * `Thread` became `Tweets` in the same breath, matching the page's own name
  * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
@@ -613,7 +613,7 @@ interface Props {
  *    Citations, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
  *    conversation, what they took from it (Search, Chat, Remember) — the
- *    same category docs/project/new-mode.md already names.
+ *    same category docs/project/mode.md already names.
  *
  * Six runs became five later the same day, when Greg moved Glossary, Ideas
  * and Timeline in with Trajectory and Search in with Chat

@@ -4,7 +4,7 @@
 - `AGENTS.md` / CLAUDE.md (in context) - pointed to reading-view-overview; signpost helped.
 - `docs/project/reading-view-overview.md` - mode list, led to glossary.md and web-client.md; helped.
 - `docs/project/glossary.md` (head, then the "two GETs" section) - explained `status: "loading"` and that the owner band's `loading` is the only loading state; helped.
-- `docs/project/new-mode.md` (grep hit) - "Where else to look" bullet sends the waiting state to web-client.md; very direct.
+- `docs/project/mode.md` (grep hit) - "Where else to look" bullet sends the waiting state to web-client.md; very direct.
 - `docs/project/web-client.md` § Empty is not the same as not asked yet, § The waiting state, § Testing it - the rule and the house shape (`useSlow`, `LoaderCircle` + `.cmt-spinner`, `role="status"`, named sentence); the key doc.
 - `docs/project/icons.md` (grep only) - spinner section, confirms "never a spinner with no words".
 
@@ -32,7 +32,7 @@
 - No model call or cost involved; no migration.
 
 ## 5. Where I got lost
-- Almost nowhere. Note the premise: a loading line already exists (plain text, no spinner), so the task is upgrading it. glossary.md does not mention spinner conventions; I found them only via new-mode.md's pointer and a grep. Unclear whether the panel is also the one used during a job run (there are other `LoaderCircle`s at lines ~1578, ~1771 for different actions).
+- Almost nowhere. Note the premise: a loading line already exists (plain text, no spinner), so the task is upgrading it. glossary.md does not mention spinner conventions; I found them only via mode.md's pointer and a grep. Unclear whether the panel is also the one used during a job run (there are other `LoaderCircle`s at lines ~1578, ~1771 for different actions).
 - I did not check what the Reader-level `useGlossaryRead` shows before the band opens.
 
 ## 6. Confidence

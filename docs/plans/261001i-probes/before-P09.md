@@ -6,7 +6,7 @@
 - `docs/project/prompting-guide.md` - helpful: the 8-step blind A/B method, `evals/plain-words/run.ts` coin, control arm.
 - `evals/README.md` (head) - listed evals; did not mention `quiz-build-up.ts`, which I found only via `ls evals` and the quiz.md/header references.
 - `evals/quiz.ts` header and `evals/quiz-build-up.ts` header - the build-up header gives the exact before/after/pairs/report commands.
-- Did not open `docs/project/new-mode.md`, `cost-tracking.md` (only grepped) - not needed for a prompt-only edit.
+- Did not open `docs/project/mode.md`, `cost-tracking.md` (only grepped) - not needed for a prompt-only edit.
 
 ## 2. Code files you would edit
 - `src/quiz.ts` - `QUIZ_SYSTEM`: add a section (near "KEEP TO WHAT MATTERS" / "WHAT IS NOT A QUESTION HERE") telling the model not to build questions on the article's worked examples, illustrations, anecdotes, analogies or case studies; ask about the principle they illustrate, in general terms. Update the long comment above it.

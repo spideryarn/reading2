@@ -134,7 +134,7 @@ height moves. One shared constant rather than six literals.
 
 ## 4. Diagram behind the switch (4R)
 
-The three edits [new-mode.md § Moving a mode in or out of the switch](../project/new-mode.md#moving-a-mode-in-or-out-of-the-switch)
+The three edits [mode.md § Moving a mode in or out of the switch](../project/mode.md#moving-a-mode-in-or-out-of-the-switch)
 names: `experimental: true` in `MODE_CATALOG`, `diagram` in `BEHIND_THE_SWITCH`, and a row with the
 reason in [experimental-features.md](../project/experimental-features.md). Plus the comments that say
 Diagram is in everybody's bar (Dock.tsx header and row, the test header), and the Features page

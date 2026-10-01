@@ -27,7 +27,7 @@ An independent pass first:
 - the export;
 - the migration (it uses `ADD COLUMN IF NOT EXISTS` — check the CHECK constraint literal matches `STEP_ORDER`);
 - prompt injection surface: quotes are article text inside the prompt;
-- anything in docs/project/new-mode.md § The artefact that was missed.
+- anything in docs/project/mode.md § The artefact that was missed.
 
 You can run pure test files yourself, e.g. `npx vitest run tests/trajectory.test.ts`. Anything touching Postgres will not work in your sandbox. The Postgres-backed results, run by me after the commit: `tests/trajectory.test.ts tests/db-step-constraint.test.ts tests/doc-links.test.ts tests/fixture-ids.test.ts` gave 4 files and 46 tests passed, and `npm run typecheck` exited 0.
 

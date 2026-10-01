@@ -34,7 +34,7 @@ What landed:
   - a new section says what production actually does;
   - the one-hour cache is worked out against not caching at all, and it does not pay here;
   - Simple's stagger is named as the pattern for a mode that makes several calls over one article.
-- **new-mode.md** has an "Its cache group" item.
+- **mode.md** has an "Its cache group" item.
 - **`npm run eval:caching`** reads articles from the database again. It also gained a pipeline-wire
   check with a negative control, and that check has passed twice on a real article.
 - **A test** proves that a real job marks both members of a cached pair and leaves a lone mode

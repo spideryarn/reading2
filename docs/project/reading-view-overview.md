@@ -50,7 +50,7 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
-- **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
+- **[mode.md](mode.md)** — the one checklist for adding a mode: the tables the compiler
   checks, then the residue it does not, for the client and for a generated artefact.
 - **A band names its mode for three seconds after a press, and at no other time** — the name and
   the catalog's sentence in a card at the band's bottom-left, standing on its pinned foot, since the

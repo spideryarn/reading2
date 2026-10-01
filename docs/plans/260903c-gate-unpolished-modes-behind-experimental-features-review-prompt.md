@@ -16,7 +16,7 @@ Read, in this order:
 6. `src/web/dock-fit.ts` and `fitSignature` in `Dock.tsx` (~line 552).
 7. `src/web/useSession.ts` — what stage 1 proposes to read.
 8. `src/modes.ts` — the thirteen modes.
-9. `docs/project/new-mode.md` — the checklist for adding a mode.
+9. `docs/project/mode.md` — the checklist for adding a mode.
 
 ## The context you need
 

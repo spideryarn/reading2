@@ -154,7 +154,7 @@ interpretive feature.
 
 1. **The artefact and the step** (server) — `FaqQuestion`/`Faq` types in `src/types.ts`,
    `ArtifactKind` `faq`, `StepName` `faq`, and every total the compiler asks for
-   ([new-mode.md § The artefact](../project/new-mode.md#the-artefact-if-the-mode-shows-one)):
+   ([mode.md § The artefact](../project/mode.md#the-artefact-if-the-mode-shows-one)):
    `SHAPE`, `STAMP_SOURCE`, `STEP_BUDGET_MS`, `STEPS`, `STEP_ORDER`, `TASK_TIER`, `TASK_WIRE`,
    `MODEL_ENV_VAR`, `STAGE_EFFORT`, `ARTICLE_RENDERER`, `REVISION_CARRY_POLICY`, `ArticleReader` and
    its adapter; `FORCE_ONLY_WHEN_NAMED`; the migration — `drizzle-kit generate` makes the column and
@@ -171,10 +171,10 @@ interpretive feature.
    metadata; `faq` not forced by an earlier forced step. **A real run** on two local articles, with
    what it produced written below and each row classified as FAQ, Summary, Ideas, Quiz or unsupported.
 2. **The mode** (client) — `MODES` and every client total
-   ([new-mode.md § The client](../project/new-mode.md#the-client)) and the test tables it lists as
+   ([mode.md § The client](../project/mode.md#the-client)) and the test tables it lists as
    going red without a type error; `useFaq` on `useOrderedRead`/`useStepJob`/`useAutoRun`;
    `FaqPanel` in `ModeSurface`; `experimental: true` and `BEHIND_THE_SWITCH`; the card's two
-   sentences written to [§ The card on the button](../project/new-mode.md#the-card-on-the-button);
+   sentences written to [§ The card on the button](../project/mode.md#the-card-on-the-button);
    `docs/project/faq.md`, its line under reading-view-overview.md, and the row in
    experimental-features.md. The Citations stage-2 commit `abde65f7` is the file list. Done when the
    typecheck and the scoped suite are green and a browser run (a Sonnet subagent, Playwright on the
@@ -195,7 +195,7 @@ interpretive feature.
   passage.
 - **The reader's profile** shaping which questions are asked (Ideas does this; it adds a stamp input
   and a staleness sentence).
-- **Visitors** on a public-readable article — a projection and the four places new-mode.md lists.
+- **Visitors** on a public-readable article — a projection and the four places mode.md lists.
 - **Real FAQs** — the questions readers actually asked in comments, fed back in.
 
 ## Review ledger — GPT Sol on the plan, 2026-09-16 (findings-only)

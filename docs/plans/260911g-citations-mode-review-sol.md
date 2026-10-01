@@ -64,14 +64,14 @@ Smallest change: defer selection/highlighting and store only the earliest verifi
 
 ---
 
-**F8 — P2 — Several `new-mode.md` residue items are not named.**
+**F8 — P2 — Several `mode.md` residue items are not named.**
 
 The generic “every client total” does not cover:
 
-- the `search-hits.ts` resolver required for passage marks ([new-mode.md:53](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/new-mode.md:53));
-- `CACHEABLE` for the new GET route ([new-mode.md:100](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/new-mode.md:100));
-- containment `WITNESS` coverage ([new-mode.md:43](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/new-mode.md:43));
-- the independent `GENERATES`, visitor-gap, page-title, passage-producer and possible stylesheet-manifest tests ([new-mode.md:345](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/new-mode.md:345), [new-mode.md:359](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/new-mode.md:359)).
+- the `search-hits.ts` resolver required for passage marks ([mode.md:53](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/mode.md:53));
+- `CACHEABLE` for the new GET route ([mode.md:100](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/mode.md:100));
+- containment `WITNESS` coverage ([mode.md:43](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/mode.md:43));
+- the independent `GENERATES`, visitor-gap, page-title, passage-producer and possible stylesheet-manifest tests ([mode.md:345](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/mode.md:345), [mode.md:359](/home/greg/code/spideryarn2/.claude/worktrees/citations-mode/docs/project/mode.md:359)).
 
 Smallest change: add these explicitly to Stage 2’s checklist and acceptance tests.
 

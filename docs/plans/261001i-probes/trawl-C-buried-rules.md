@@ -104,7 +104,7 @@ or a doc that its own plan calls rule-bearing or a hash pins), so it needs Greg'
     - In `docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md`, Greg asks for *"the same
       approach we use for the glossary … a prioritized ordering by default with a threshold"*.
 
-    Each mode's own doc states these for itself. `docs/project/new-mode.md` states neither as a
+    Each mode's own doc states these for itself. `docs/project/mode.md` states neither as a
     convention: it has the `useOrderedRead` hook only. 260930b, *"grep for 'not designed' / 'nobody'
     comments"* when a mode becomes reachable, belongs in the same checklist. **Knowledge.**
 12. **Client-state habits.**

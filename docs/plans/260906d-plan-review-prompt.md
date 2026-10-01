@@ -24,7 +24,7 @@ Start with, for context (all committed, unchanged):
   which inherits the layer.
 - `docs/project/design-css-overview.md` — the map of the five stylesheets and which mechanism owns
   what.
-- `docs/project/new-mode.md` — the checklist for adding a mode. § *The client* is the list of
+- `docs/project/mode.md` — the checklist for adding a mode. § *The client* is the list of
   compiler-checked tables, followed by "the residue, which is why this page exists".
 - `src/modes.ts` (`MODES`, 14 words), `src/title-text.ts` (`MODE_LABEL`), `src/web/visitor.ts`
   (`POLICY`), `src/web/activation.ts` (`MODE_TARGET`, line 177 — the `Partial` one),

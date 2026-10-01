@@ -47,5 +47,5 @@ Also: an accepted-job-later-fails test is missing from the new file (your plan r
 status `failed` may be enough — see src/types.ts `Job` and src/web/useStepJob.ts for what it reads).
 Check the prose I changed (docblocks in activation.ts, useAutoRun.ts, auto-run-targets.ts,
 Tweets.tsx, Dock.tsx, Link.tsx, CommandBar.tsx, and docs/project/reading-view-overview.md,
-new-mode.md, web-client.md) for anything now false, and grep for any remaining claim that the Tweets
+mode.md, web-client.md) for anything now false, and grep for any remaining claim that the Tweets
 link or row arms a run.

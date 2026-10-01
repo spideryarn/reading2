@@ -8,7 +8,7 @@ Part of [prompt-caching.md](../project/prompt-caching.md). From Greg, via the Ov
 > delegate an agent to do some Sonnet web research on prompt caching best practices, then look for
 > ways we could restructure prompts and/or improve the way we're calling the AI to make much more
 > effective use of prompt caching across the board. Run spikes, perhaps even create an eval,
-> measure, get input/review from GPT Sol, update @docs/project/new-mode.md etc, follow & update
+> measure, get input/review from GPT Sol, update @docs/project/mode.md etc, follow & update
 > @docs/project/prompt-caching.md etc.
 >
 > — Greg, 2026-10-01
@@ -141,7 +141,7 @@ is spiked, measured, and put to the Overseer as a recommendation with numbers be
    builds (src/jobs.ts, where `cacheArticle` is set) carries `true` for both members of a same-group
    pair and `false` for a lone stage — through the code that builds it, not a hand-built context. If
    such a test already exists, cite it instead.
-3. **new-mode.md**: a short "Its cache group" item — a new article-reading stage takes a row in
+3. **mode.md**: a short "Its cache group" item — a new article-reading stage takes a row in
    `STAGE_EFFORT` and `ARTICLE_RENDERER` (the compiler already asks), and the choice of renderer and
    effort *is* the choice of which stages it shares an article with; say which group it joins, or
    that it is alone, in the comment on its row. Point at prompt-caching.md.
@@ -209,7 +209,7 @@ The simpler options it passed over:
   `onStart` stagger as the pattern for a call site that fans out, Debate's unexplained reads as an
   open question; floors brought up to date; the 1h arithmetic against *not marking*; the eval
   paragraph rewritten for the new arm.
-- **new-mode.md** § Its cost: an "Its cache group" item.
+- **mode.md** § Its cost: an "Its cache group" item.
 - **`npm run eval:caching -- <slug> [--wire=chat|messages|both]`**: loads from the store; the new
   Messages arm runs real `generateGlossary` → `generateQuotes` with the article marked, plus an
   effort-changed control. First run on noema-mythology-of-conscious-ai (~13k tokens): **PASS** —

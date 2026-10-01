@@ -86,7 +86,7 @@ A mutation in an already-discovered panel can still make the test red and appear
 
 (b) Add:
 
-> Each controller batch updates its feature doc’s code signposts. Stage 3 updates `web-client.md` for the new `article/`, `reader/` and `modes/` boundaries. Stage 4 updates `new-mode.md` and `url-state.md` for exhaustive dispatch/selection. These are signpost corrections and require no important-doc wording approval.
+> Each controller batch updates its feature doc’s code signposts. Stage 3 updates `web-client.md` for the new `article/`, `reader/` and `modes/` boundaries. Stage 4 updates `mode.md` and `url-state.md` for exhaustive dispatch/selection. These are signpost corrections and require no important-doc wording approval.
 
 ### F6 — P2 — established: the stage/commit boundaries are unnecessarily broad
 

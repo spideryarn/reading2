@@ -290,7 +290,7 @@ was two parallel ternary chains inside `Reader` until 2026-09-06, and both ended
 so `?mode=plain` was drawing Search's, correct only for as long as the outgoing band cleared it on
 the way out (earlier the same day that clear became a layout cleanup, which is what stopped it
 painting a frame). A fifteenth mode is now a compile error there rather than another inheritor
-([new-mode.md](new-mode.md),
+([mode.md](mode.md),
 [260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
 § Stage 4b).
 

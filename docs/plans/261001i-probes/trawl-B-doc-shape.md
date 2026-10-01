@@ -170,7 +170,7 @@ These were verified against the code. Line numbers are as of this trawl.
     - Doc (line 534): cites `columnLabel`. Code: it was deleted.
     - The parameter table has no rows for the live `crits`, `refscale` (`CriteriaPanel.tsx`),
       `debatethread` or `event`.
-16. **`new-mode.md` (line 334).**
+16. **`mode.md` (line 334).**
     - Doc: tells you to update `liftStrandedText`.
     - Code: `src/web/router.ts` says it was removed on 2026-09-29.
 17. **`testing.md`.** It cites `tests/api.test.ts` (line 404) and

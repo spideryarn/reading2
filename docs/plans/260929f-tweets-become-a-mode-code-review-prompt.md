@@ -39,7 +39,7 @@ now carries `blocks` (source block ids, from prompt `tweets/5`) drawn as `BlockR
    reads.
 5. **The wide band** (`bandWidth`, `wideIdeal` in src/web/layout.ts) never makes the page overflow
    and still covers the article below the crossover.
-6. Anything in docs/project/new-mode.md's checklist this change missed.
+6. Anything in docs/project/mode.md's checklist this change missed.
 
 Also look at the panel (src/web/Tweets.tsx `TweetsPanel`) for a visitor seeing an owner-only
 control or sentence, and for accessibility of the per-post links.

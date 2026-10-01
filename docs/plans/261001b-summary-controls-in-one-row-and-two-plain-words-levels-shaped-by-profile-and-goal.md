@@ -23,7 +23,7 @@ and [-7B](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-7B) (`spya-a5y
 > — Greg, 2026-09-30 (7A — supersedes 78's layout)
 
 > Remove "Written by AI in plain words to help you get your bearings. The article says it better, and
-> each paragraph links to where." from Summary mode. And make a note in the new-mode.md (or similar)
+> each paragraph links to where." from Summary mode. And make a note in the mode.md (or similar)
 > that we don't want these mode descriptions - they waste space. Either put them as tooltips for an
 > (i) icon, or just try and make things self-explanatory.
 >
@@ -252,7 +252,7 @@ reads as a notch up from Simple.**
    *Write it again* on a changed profile, tooltip cards rewritten; tests; CSS; browser check in a
    Sonnet subagent at full width and at `MODE_MIN`. Docs: [summaries.md](../project/summaries.md),
    [url-state.md](../project/url-state.md), and **the rule in
-   [new-mode.md](../project/new-mode.md)** — no description lines in a mode, Greg's words quoted; a
+   [mode.md](../project/mode.md)** — no description lines in a mode, Greg's words quoted; a
    tooltip on the control, or an (i), or nothing. GPT Sol code review. Commit.
 3. **Land** — scoped tests, typecheck, one full suite under `tmux-job`, push to `dev`, the note in
    `docs/user-feedback/` with all three report ids, `feedback-endings.ts`.
@@ -396,6 +396,6 @@ share a cache write would save most of it and add the cache write's latency. Nam
 - **ⓤ**, the owner's compact *written for you* badge, at the row's end; a changed profile also shows
   *Write it again* under the paragraphs.
 - **No description line** (7B): the foot is gone, its sense moved into the slider's card, and
-  [new-mode.md](../project/new-mode.md) carries the rule in Greg's words.
+  [mode.md](../project/mode.md) carries the rule in Greg's words.
 - **Artefact `simple/2`**: `levels: { brief, simple, fuller }` and `profileHash`, one guard
   (`isSimpleLevels`) at every read boundary, a `simple/1` row read as absent.

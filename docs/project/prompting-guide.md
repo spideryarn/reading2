@@ -5,7 +5,7 @@ This is what the rule is, how it trades plain words against the paper's own word
 lives, and how to measure a prompt change before calling it an improvement. Part of
 [architecture.md](architecture.md); the prompts themselves are listed in
 [ai-gateway.md](ai-gateway.md) and each mode's own doc, and a new mode's checklist is
-[new-mode.md](new-mode.md).
+[mode.md](mode.md).
 
 ## The rule, in Greg's words
 

@@ -346,7 +346,7 @@ Docs, and the two things a stage cannot check about itself.
   then [comments.md](../project/comments.md), [chat-tools.md](../project/chat-tools.md),
   [search.md](../project/search.md), [timeline.md](../project/timeline.md),
   [diagram.md](../project/diagram.md), [security-map.md](../project/security-map.md),
-  [new-mode.md](../project/new-mode.md) — whose checklist grows the public row — and the Progress
+  [mode.md](../project/mode.md) — whose checklist grows the public row — and the Progress
   log of [260827ai](260827ai-public-read-only-access.md).
 - **The payload measurement** the architectural call above owes: a real article with comments, chat
   and searches on it, measured through the real route, against the 4.5 MB cap.
