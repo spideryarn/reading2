@@ -1,6 +1,6 @@
 # 261001s — which model should write a *Dig deeper* answer? A quality-and-cost eval
 
-Status: **planned, plan reviewed** — Sol's plan review
+Status: **stage 2 built and smoke-run; stage 3 not started** — Sol's plan review
 ([261001s-…-plan-review-sol.md](261001s-dig-deeper-answer-model-eval-plan-review-sol.md)): *build
 after fixes*; all nine findings taken, two of them reshaped (§ What the plan review changed). Owner:
 the session in worktree `dig-deeper-eval`, dispatched by the Overseer from [Q-dig-deeper-eval].
@@ -279,6 +279,58 @@ All nine of Sol's findings are taken. Two are reshaped:
   finalist run adds a second look at the finalists.
 - **F2's production-shaped finalist check** is kept but small: Opus and two finalists, one run per
   example.
+
+## What building changed
+
+Stage 2, 2026-10-01. Each is the closest sound option to what the plan said, and why.
+
+- **A glossary press is anchored by production's `anchorIn`, not by the block the example was
+  chosen around** (now exported from src/term-lookup.ts, with `refuseUnfinished`). The plan's
+  anchors were the picker's; a real press anchors on the first block using the name or an alias.
+  So `kuhn-challenge` anchors on the abstract (`spya-qm5580`, the same list of ten categories), and
+  `seth-naturalism` on the heading *3: Life Matters* (`spya-tzj2rd`, the alias "Life matters") —
+  which is what a reader pressing that entry sends today, a weaker sentence to aim the search with.
+  The gold notes are unchanged: the judges have the whole article.
+- **A cell's key hashes the eval source that builds and accepts it, not the git commit.** Every
+  request, the capture's hash, the arm and the ceiling are in it as planned; the commit is recorded
+  on each cell instead. Keyed on the commit, any later commit — the stage-4 review's own edits
+  included — would have voided every paid cell.
+- **Citations capture runs production's press itself**, `makeInvestigateCitation` with production's
+  deps and four seams: a fake allowance (the shared database's is not spent), a writer that refuses
+  to save, timing wrappers round the search and the paper read, and a `run` that records the request
+  and stops. So the frozen request is the body production would have streamed, built by
+  `investigateRequest` inside the press. *Look it up* saves its find, as a first press does.
+- **The finalist run, on Citations, streams the captured production request with the model
+  swapped** (job `citation-investigate`, tool on) and applies `reading()`'s rules, rather than
+  calling the whole press again, which would re-run the search, the lookup and the paper read and
+  read different pages. On the glossary and comments it is `explainStream` itself.
+- **No reader profile** on any press. The comment route sends one when the reader has written one;
+  every arm here is pitched at the default reader.
+- **The judges go through job `eval`, all three** — judging is not a press. Opus still thinks at
+  `high` there (`wireEffort` keys on the model). Score ranges are checked in code, not in the
+  schema, so a provider's partial support for numeric keywords cannot loosen them.
+- **What a call cost is the ledger's own rule** (`totalSpend`, src/ai-spend.ts), not
+  `usage.cost` alone. The smoke run found **Luna served BYOK**: `usage.cost` is a legitimate $0 of
+  credits, and the inference is billed to our own OpenAI key. Read raw, Luna and the Luna draft
+  would have priced at nothing. The report names every BYOK model.
+- **Settling a call with no cost has three cases, not one.** A call that *finished* and reported
+  none halts the run, as planned. One that *our clock cut off* (or that broke after answering) is
+  settled at its step's whole upper bound, with a note — unknown but bounded; the smoke run's
+  DeepSeek finalist hit explain's two-minute deadline and halted the run under the first rule, which
+  would let one slow model stop the matrix. One *refused before it answered* (a 4xx, no model
+  named, no tokens) settles at $0: OpenRouter does not bill it.
+- **The check's verdict may sit in one ```` ```json ```` fence**; anything else not exactly `keep` or
+  a non-empty `replace` is a failed press.
+- **With fewer than three judges** (the smoke run), *acceptable* needs two thirds of them rounded up,
+  and an error counts when `min(2, judges)` point at the same evidence.
+- **The bill, with all six captured** (the free preflight, 2026-10-02): about **$36.6** for the
+  full matrix — answers $13.5, judging $13.6, the re-judge $3.7, the finalist run and its judging
+  $5.7, the probe a few cents — plus the $0.14 the capture spent. Over the $35 line, so § Spend's
+  cut applies before stage 3 (the judges' third run alone is about $4.5). Kimi's judging is $3.7 of
+  it; outputs are assumed (2,000 tokens an answer, 2,500 a judgement), so the real figure moves.
+- **Residual, not changed:** explain's `SYSTEM` still says *You have a web search tool … lean
+  towards searching*; only `DIG`'s sentence is replaced, as planned, and the eval line after it says
+  no further search is possible. Every arm reads the same contradiction.
 
 ## Simpler options passed over
 

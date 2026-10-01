@@ -129,4 +129,6 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "scripts/probes/261001h-fidelity-guard-probe.ts":
     "a one-off measurement; it asks for per-paragraph verdicts in JSON, which no reader sees",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
+  "evals/dig-deeper/answer.ts":
+    "an eval that sends production's own Dig deeper prompts (explain's SYSTEM and INVESTIGATE_SYSTEM carry plainWords(\"explain\")) to other models, and production's search step, which is exempt as src/dig-deeper.ts",
 };

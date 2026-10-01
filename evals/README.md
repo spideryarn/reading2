@@ -1112,6 +1112,32 @@ writes. The method all three follow is
   one round's bars and runs are the two `quiz-reading-goal-261001c-*` files
   ([261001c](../docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md)).
 
+## `dig-deeper/` — which model should write a *Dig deeper* answer?
+
+```
+npm run eval:dig-deeper                                   # preflight: free — builds every request, prints the bill
+npm run eval:dig-deeper -- capture --spend                # the search step, once per example, frozen
+npm run eval:dig-deeper -- answers --spend                # 6 examples × 12 arms × 3 runs
+npm run eval:dig-deeper -- judge --spend                  # three judges, small blind batches, an Opus anchor in each
+npm run eval:dig-deeper -- report                         # free: output/dig-deeper-runs/<run>/report.md
+```
+
+Plan [261001s](../docs/plans/261001s-dig-deeper-answer-model-eval.md). Six real presses, two per
+entry point (glossary, comment, citation), have their search step run once by production's own code
+and frozen; every arm then answers from production's own messages with the web tool removed and the
+one search-again sentence replaced, and each answer goes through its entry point's real acceptance
+rule before it may be judged. Also `diagnose` (length failures again at 8,000 tokens), `finalists
+--arms a,b` (production-shaped, tool on) and `probe --arms a,b` (can a model force its own search).
+Header of [`dig-deeper/run.ts`](dig-deeper/run.ts) for every flag.
+
+What is worth copying: **`--spend` is the only way to spend**, and the budget is one file per run
+that reserves an upper bound before each call and halts on a call that reports no cost
+([`budget.ts`](dig-deeper/budget.ts)); **the expected matrix is written before anything is
+bought**, cells are keyed by a hash of their full request, and the report says PARTIAL until every
+cell is present ([`manifest.ts`](dig-deeper/manifest.ts)). Everything raw — web excerpts, paper
+text, the reader's other articles, answers — stays in the gitignored run directory; only the
+report may be promoted.
+
 **Not yet described here**, though they exist: `plain-words/`, `simple/`, `faq-levels/`, `sketch/`,
 `illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-claims.ts`, `referee-mirror.ts`,
 `remember-stances.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
