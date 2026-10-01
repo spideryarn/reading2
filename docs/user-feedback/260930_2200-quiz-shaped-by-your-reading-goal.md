@@ -66,7 +66,8 @@ You answered the deviation above (relayed by the Overseer):
 >
 > — Greg, 2026-10-01
 
-**Ending: Shipped as a partial step** — on `dev`, not deployed. The prompt now asks for what you
+**Ending: Shipped as a partial step** — on `dev` in `4e65a05c`, `94ab1df4` and `59787248` (merged
+as `691b714a`), not deployed. The prompt now asks for what you
 said. The measurement shows the goal half working and the balance improved. It does **not yet show
 *About you* moving the quiz heavily.**
 

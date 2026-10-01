@@ -264,3 +264,14 @@ runs, $10–15; or (2) accept *About you* as best effort for now and let readers
   explicit About, F4 the balance's scaling, F5 central points from the abstract and summary, F6
   integer bars, F7 provenance and same-day old-prompt controls, F8 rules only with a profile, F9 the
   other stale comments. Plan revised as above.
+- 2026-10-01: built; 28 paid runs in two rounds; four blind judges (see *What the measurement
+  found*). GPT Sol code review, write-capable
+  ([prompt](261001c-quiz-profile-and-goal-code-review-prompt.md),
+  [answer](261001c-quiz-profile-and-goal-code-review-sol.md),
+  [diff](261001c-quiz-profile-and-goal-code-review.diff); exit 0, file fresh): *do not ship as-is*
+  on the claim, code sound; its fixes kept except the `QUIZ_SYSTEM` digest pin. Opus arbitrated:
+  ship as a partial step (*The decision*).
+- 2026-10-01: merged `origin/dev` twice. Full `npm test` on the first merge: 1,283 files passed, 6
+  red — three fleet files needing a build a fresh worktree lacks, and three repo-wide guards red on
+  `dev`'s own new files, which `1bf28f9d` fixed; green on the second merge with typecheck. Pushed as
+  `691b714a`.
