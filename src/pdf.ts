@@ -351,6 +351,14 @@ export type RecordType =
  * not tightened with the change that showed them — a stricter gate would buy
  * re-reads, and so money, on every import, for text the reader sees only as
  * a note — and the place to revisit is here, if a note is ever caught lying.
+ *
+ * **Table cells are the second exception, and they are gated** (`CHECKED`,
+ * below). Since 2026-10-01 `renderHtml` writes `tabledata` inside its table's
+ * figure. They stay out of this set because this set is also the *in-place*
+ * vocabulary — continuations, seam repair and the front-matter window read it,
+ * and none of them should treat a cell as prose. But a table is mostly numbers
+ * a reader will quote, so unlike a note an invented cell fails the chunk.
+ * docs/plans/261001q-pdf-tables-and-composite-figures.md; GPT Sol, plan review.
  */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "heading1",
@@ -363,6 +371,15 @@ export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "table",
   "code",
 ]);
+
+/**
+ * **What the check gates on** — invented numbers, markup and replacement
+ * characters in these fail a chunk; in anything else they are only reported
+ * (src/pdf-score.ts § `scorePage`). `RENDERED` and the table cells, which are
+ * shown inside their table rather than in place. Footnotes are shown too and are
+ * deliberately not here — `RENDERED`'s comment says why.
+ */
+export const CHECKED: ReadonlySet<RecordType> = new Set<RecordType>([...RENDERED, "tabledata"]);
 
 /** How many pages must share a line before it is furniture rather than prose. */
 const FURNITURE_PAGES = 3;

@@ -41,8 +41,10 @@ every time — `[492,80,870,919]` on p4, `[75,128,570,871]` on p5, `[750,79,893,
 `judgeLocatedBox` stores an *embedded picture, whole*, so a box has to point into exactly
 one picture, and rule 6 refuses one with a neighbour (`assembly`).
 
-Every route defines a figure as one thing — one embedded picture, or one connected drawing
-— and a multi-panel figure is neither. In biomedical papers that is most figures. In
+Every route has a narrow idea of what a figure is — one embedded picture; or drawings
+with no picture on the page, each panel at least 36 pt a side (the drawn route admits up to
+six separate drawings, but Fig 2's legend is a 67×7 pt component); or a box around exactly
+one picture — and a multi-panel figure fits none of them. In biomedical papers that is most figures. In
 production today: **36 PDF figure markers on current revisions, 10 stored, 22 `ambiguous`,
 4 `not-located`.** Most of the 26 are this.
 
@@ -50,7 +52,7 @@ production today: **36 PDF figure markers on current revisions, 10 stored, 22 `a
 
 **A transcription or recovery rule that admits only the single-unit case, with the plural
 case left as "deferred" — and nothing that counts how often the deferred case occurs.**
-Tables: "show a subset" with the cells outside it. Figures: "one picture", "one drawing",
+Tables: "show a subset" with the cells outside it. Figures: "one picture", "drawings with no picture on the page",
 "one picture in the box". Each refusal is correct locally; together they withhold most of
 what a scientific PDF has in it. The postmortem is
 [261001b](../postmortems/261001b-pdf-tables-and-figures-withheld-by-a-one-thing-rule.md).
@@ -80,17 +82,66 @@ after the caption:
 - **No prompt change, no `PROMPT_VERSION` bump.** The cells are already transcribed, so
   no cached chunk goes stale and no import pays for this. That is how 260930k showed
   footnotes. A `|` the model did not use leaves a row of one cell — readable, and visible.
-- **The check is unchanged.** `tabledata` stays outside `RENDERED`, so the scorer still
-  reports rather than fails on it, which is the footnote stance (`RENDERED`'s comment),
-  stated there as the same gap.
+- **The check now gates the cells** (changed after Sol's review, finding 2). `tabledata`
+  stays outside `RENDERED`, which is also the in-place vocabulary that continuations, seam
+  repair and the front-matter window read. The scorer gates on a new set, `CHECKED` =
+  `RENDERED` + `tabledata` (`src/pdf.ts`), so an invented number in a cell fails the
+  chunk as it would in prose. Footnotes stay report-only. The cost: a chunk whose cells
+  carry a number absent from the text layer is now re-read where it used to pass.
 - **Downstream needs nothing new.** A `<figure>` is a leaf block (`src/blocks.ts`) of
   kind `media`, and a `<figure>` holding a `<table>` is what ar5iv's tables already are,
   which the reading view draws. The sanitiser keeps table elements.
 - **Forward-only.** Stage 2 has to re-run for an article to change, and re-running it on
   a PDF re-buys the transcription. Greg's article needs a re-extraction to get its
   tables; this plan does not run one (production write).
+- **A re-extracted table gets a new block id** (Sol, finding 3). A `<figure>` is one
+  block, its text goes from the caption to the caption plus every cell, and carry-over
+  matches whole text. Accepted rather than special-cased: three PDF articles in
+  production have tables, a table is rarely where a bookmark or a note sits, and a
+  caption-only carry-over rule would be a migration path kept for ever for one change.
+- **What the delimiters cannot say** (Sol, finding 11). `|` and newline are what the
+  model writes, not a contract the prompt states: a literal `|` in a cell splits it, and a
+  line break inside a cell becomes a row. Seam repair (`mendSeamHyphens`) does not reach
+  cells. A structured row/cell schema in the transcription is the sound fix and costs a
+  `PROMPT_VERSION` bump; deferred until a table is seen to come out wrong.
 
-## Stage 2 — draw a composite figure from the model's box (`src/pdf-figure-locate.ts`, `src/collect-pdf-figures.ts`)
+## Stage 2 — draw a composite figure from the model's box — **not built: deferred**
+
+**Status, 2026-10-01: designed, reviewed, not built.** GPT Sol's plan review
+([261001q-plan-review-sol.md](261001q-plan-review-sol.md)) found the acceptance rule
+below unsafe as written (P0), and its fixes add up to a project rather than a stage:
+
+- **A wrong region can pass** (P0). `captionPrintedOn` matches a caption's opening
+  anywhere on the page, so a prose mention can satisfy rule 1 while the page's only real
+  caption is another figure's; and a model box around a captionless *table* can absorb its
+  cells as "labels" and pass rule 3. Every page in this paper carries a table. The rule
+  needs a positive binding: the caption located at a line start, and a spatial relation
+  between that caption and the region, with no table caption between them.
+- **The safety vetoes cannot simply be kept** (P1). The drawn route refuses a page whose
+  forgiving and strict pdf.js reads disagree, and the layout reader opens the document with
+  `maxImageSize: 1`, so **every page with a picture on it disagrees**. Keeping the veto
+  refuses Fig 1 and Fig 3 outright; dropping it re-admits the paint pdf.js skips and
+  PDFium draws. A layout read that measures pictures is the prerequisite.
+- **`other` image paints have no trustworthy box** (P1). Fig 3 has two inline images, and
+  the paint interpreter files inline images, repeats, groups and masks under one `other`
+  with a placeholder box. Snapping needs them split and bounded.
+- And: low-text scans skip `readPdfRasters`' paint read (P1, 6); the located route does
+  not read layouts today (7); two located crops of one figure need refusing together (8);
+  the renderer draws a 4 pt pad the containment box must match (9); the integration test
+  must include a zero-picture page and the adversarial set (10).
+
+**Sol's simpler alternative**, worth trying first when this is picked up: these three
+figures are each drawn inside **one printed rectangular frame** that the model's box
+matches. Require exactly one such frame on the page, bound to the caption by position,
+and render the frame. Narrow — only framed figures — but with a positive ownership proof
+instead of an inferred one. Or the whole-page fallback below, which is a product call.
+
+**Which to build is Greg's call**, because the two cheap options change what a reader
+sees: a framed-figure-only rule recovers some journals and none of the unframed ones; a
+whole page in the figure's place is always available and never the wrong picture, but it
+is a page of prose at column width with the figure somewhere on it.
+
+The design as first proposed, kept for the record:
 
 When `judgeLocatedBox` refuses an answer because the box holds **no single picture**
 (`not-one-picture`) or **a picture with neighbours** (`assembly`), a second, pure judge,
@@ -156,15 +207,15 @@ covers the whole-page case only.
 - **Change the prompt to mark header rows.** Costs a `PROMPT_VERSION` bump and an eval;
   deferred until a reader asks for header styling.
 
-## Tests
+## Tests, as built
 
-- Stage 1: `renderHtml` on records with a table and two `tabledata` rows; with
-  furniture between; an orphan run; `|`-less rows; escaping; `uncertain`. Watch them red
-  on today's code first.
-- Stage 2: `judgeLocatedRegion` as synthetic boxes — the three real pages' geometry,
-  two-figure page refused, prose-in-region refused, snap growth refused, background
-  refused, taken refused. An integration test in `tests/collect-pdf-figures.test.ts` with
-  a scripted locator over a fixture page that has two pictures, red today (`ambiguous`)
-  and stored after.
-- The real paper, by hand: `collectPdfFigures` with the real locator on the production
-  PDF, all three stored, PNGs looked at.
+- Stage 1: `tests/pdf-tables.test.ts` — cells inside the figure after the caption, one
+  `media` block, cells kept across a footer at a page turn, two tables, cells after prose
+  not carried back, a captionless table, escaping, `uncertain`, separator-only rows. All
+  nine red on the code before the change.
+- The gate: two cases in `tests/pdf-score.test.ts` — an invented number in a cell is
+  `invented`, a footnote's stays `unshown`. Red with `tabledata` taken back out of
+  `CHECKED`.
+- Stage 2, when it is built: Sol's list (finding 10) — a zero-picture vector page, a
+  different sole caption, a captionless table, a low-text scan, an `other` paint, shading
+  or unmeasured paint, two markers choosing one region — plus the real paper by hand.
