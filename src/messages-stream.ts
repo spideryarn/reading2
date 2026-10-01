@@ -4,10 +4,14 @@
  * The sibling of [`src/openrouter-stream.ts`](openrouter-stream.ts), and named
  * for the same thing it is: a *wire shape*, not a vendor. Both files talk to
  * OpenRouter. That one speaks OpenAI's chat/completions shape, for the calls a
- * reader waits on. This one speaks Anthropic's Messages shape, for the seven
- * pipeline stages — through OpenRouter's Anthropic-compatible endpoint,
+ * reader waits on. This one speaks Anthropic's Messages shape, for the pipeline
+ * stages `TASK_WIRE` (src/models.ts) puts on it — through OpenRouter's
+ * Anthropic-compatible endpoint,
  * `POST https://openrouter.ai/api/v1/messages`, which its docs call the
  * "Anthropic Skin".
+ *
+ * The one way a Messages-wire pipeline stage calls a model: `streamMessage`, then
+ * `finalMessage()` — ai-gateway.md#one-gateway-five-wires.
  *
  * ## Why the SDK is still here
  *

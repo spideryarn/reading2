@@ -1,6 +1,8 @@
 # Database
 
-**The database is Supabase Postgres, and everything is moving into it.**
+**The database is Supabase Postgres, and since 2026-09-05 all relational application data is in
+it.** Raw source documents and article images use the blob seam: Supabase Storage when credentials
+are present, and `data/_blobs/` as the local fallback, described below.
 
 > We were using flat JSON files initially, but we're moving everything to Postgres/Supabase to run
 > across Vercel webservers that don't have a shared filesystem.
@@ -10,8 +12,16 @@
 That is the whole reason, and it is the same one [vision.md](vision.md#one-the-database) gives for
 reversing *"filesystem over database"*: a single writable disk is the thing serverless hosting does
 not have, so the choice is a database or no deploy. The work is
-[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); there are 27 migrations under `drizzle/` and
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); the migrations are under `drizzle/` and
 the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
+
+**Where to look for an article's data.** Every application table is in the `spideryarn` schema, not
+`public`, so
+a query or a dashboard filtered to `public` finds nothing. An article's AI artefacts — quotes, ideas,
+timeline, glossary and the rest — are `jsonb` columns on `spideryarn.article_revisions`, and
+`articles.current_revision_id` points at the published one; they are not tables of their own. The
+`checkpoints` table is a cache of work a failed attempt paid for, not where finished artefacts live
+([§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for)).
 
 **Before you add a column or a table, read [sql.md](sql.md)** — the shape we want the schema to have,
 in Greg's words: real columns rather than JSON, foreign keys rather than good intentions, and a
@@ -42,15 +52,15 @@ reader cannot express "somebody who is not the owner". That is why
 is Postgres-only by nature rather than by preference — `data/` is one directory per slug and there is
 nowhere in it to record who may read what.
 
-The house rule where the two stores meet is a **refusal, never a fallback**:
+The house rule where the two stores met was a **refusal, never a fallback**:
 
 > Do not catch a Postgres error and fall back to files.
 
-A fallback would hide exactly the divergence the parity test exists to find, and would do it in
-production, silently. The same reasoning governs each place a feature has no filesystem answer —
-admin's user list, the visibility switch, public reading — and each of them refuses with its own
-sentence rather than returning a plausible default. Those branches are **scaffolding around a store
-that is going away**, and they get deleted rather than maintained.
+A fallback would have hidden exactly the divergence the parity test existed to find, and done it in
+production, silently. The same reasoning governed each place a feature had no filesystem answer —
+admin's user list, the visibility switch, public reading — and each refused with its own sentence
+rather than returning a plausible default. Those branches were scaffolding, and they went with the
+store.
 
 Every store seam must have a **Postgres implementation**, and
 [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts)
@@ -71,36 +81,39 @@ map would have had to name every seam, so it went and the assertion narrowed to 
 
 ## The filesystem era: files under `data/<slug>/`
 
-One directory per article, one file per pipeline stage:
+**This was the store until 2026-09-05, and it is gone.** This section keeps its outline, the one
+estimate it taught us to distrust, and the pieces that outlived it. The full history — what each
+file held, how two stores were kept answering alike, and the order things moved in — is in
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) and
+[260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
 
-```
-data/writes/
-  raw.html      fetched bytes          (stage 1)
-  meta.json     title, url, fetched-at
-  blocks.json   the sanitised blocks   (stage 3)
-  tree.json     the hierarchy / zoom tree (stages 4-5)
-  arc.json
-  comments.json
-  tweets.json
-  glossary.json
-data/_jobs/
-  spya-*.json   one file per ingest job
-data/_uploads/
-  <uuid>.json   one file per upload attempt   (files store only — see below)
-```
+**What it was.** One directory per article, one JSON file per pipeline stage (`raw.html`,
+`meta.json`, `blocks.json`, `tree.json`, and one per AI artefact), with ingest jobs under
+`data/_jobs/` and upload attempts under `data/_uploads/`. It was the store because of an early
+principle, *"Prefer boring: filesystem over database, one server process"*, reversed for the reason
+Greg gives at the top of this file.
 
-**And one thing that used to be in there is not an artefact and is no longer a file.**
-`labels-progress.json` and `pdf-chunks/<key>.json` were **checkpoints**: work a failed attempt
-already paid for, kept so the retry does not buy it again. They are rows in the `checkpoints` table
-since 2026-09-01, because a directory could not do the one job they exist for — see § Checkpoints
-below. Old `data/` fixtures still carry the files; nothing reads them.
+**The estimate it taught us to distrust.** Reads went through `src/api.ts`, and this doc once called
+that "the one file the store lives behind". It was only the *read* seam. Writes went through
+`PipelineStep.outputs(ctx)`, which returned **file paths** and was implemented across seven stage
+modules, so any estimate that treated the Postgres move as a one-file change was wrong from the
+start. Both went on 2026-09-05. A step now declares `produces` — the *kinds* it makes — and returns
+its product to the store ([§ Next: Supabase Postgres](#next-supabase-postgres), below).
 
-**And, since 2026-08-27, one thing that is deliberately not a file here at all.** An uploaded PDF's
-bytes go to **Supabase Storage**, in the private `sources` bucket, because the browser has to be
-able to write them without passing through our server — a serverless function refuses a body over
-4.5 MB. The article's directory still gets its `raw.pdf` and `raw.json` the way a fetched one does;
-Storage additionally holds a copy at `sha256/<hash>.pdf`, keyed by its own contents so two readers
-with the same paper converge on one object.
+Old `data/` fixtures may still carry `labels-progress.json` or `pdf-chunks/`; nothing reads them.
+Those were **checkpoints**, and they have been rows since 2026-09-01, because a directory could not
+do the one job they exist for — [§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for).
+
+### What outlived it: source documents live in Storage
+
+A raw source document's bytes go to **Supabase Storage**, in the private `sources` bucket, keyed by
+their own contents (`sha256/<hash>.pdf`) so two readers with the same paper converge on one object.
+Uploads went there first, on 2026-08-27, because the browser has to be able to write them without
+passing through our server — a serverless function refuses a body over 4.5 MB. Since 2026-09-01 a
+revision row holds a reference to its source document rather than the bytes; the `raw_bytes` column
+was dropped. [260827o-raw-bytes-in-storage.md](../plans/260827o-raw-bytes-in-storage.md) drew the
+line that decided it: not size but **immutability** — content-addressed and immutable goes to
+Storage, revision-scoped and rewritable stays in Postgres.
 
 **What the bucket will accept is a decision, and it is enforced on both sides.** `sources` declares
 five types in [`supabase/config.toml`](../../supabase/config.toml) — PDF, HTML, and PNG/JPEG/GIF for
@@ -117,106 +130,67 @@ exists because the allowlist has drifted on production twice
 ([260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md)). Adding an
 image format means the config, the sniffer, and a thought about what the sanitiser now has to survive.
 
-So there are now **two** stores under the filesystem era, and the seam between them is
-[`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
-design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row
-holding a key and a checksum, which is
-[the appendix of 260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md#appendix-where-the-bytes-should-eventually-live),
-and the seam is what makes that a follow-on rather than a rewrite.
+The seam is [`src/store/blobs.ts`](../../src/store/blobs.ts). Blobs follow the credentials, not any
+flag: with a Supabase service key they go to Storage; without one, under `data/_blobs/`, which is
+enough for tests and a laptop and cannot mint an upload grant, so nothing in production can come to
+depend on it.
 
-**Since 2026-08-27 that follow-on is planned rather than merely intended** —
-[260827o-raw-bytes-in-storage.md](../plans/260827o-raw-bytes-in-storage.md), which answers the question it turns on
-(*should everything large go to Storage, for consistency?*) with a measured no. The line it draws is
-not size but **immutability**: content-addressed and immutable goes to Storage, revision-scoped and
-rewritable stays in Postgres. Raw source is 86% of every byte here and the only thing on the first
-side of that line.
+### What outlived it: upload attempts are a table
 
-`data/_uploads/` is **queue state, not article state** — created, claimed and finished inside one
-ingest, and meaningless once the article exists. It was on the filesystem because `data/_jobs/` is,
-and it said it would move when that moved.
+`data/_uploads/` was **queue state, not article state** — created, claimed and finished inside one
+ingest. It moved first, on 2026-08-27, because minting a grant and queueing the job are **two HTTP
+requests**, and on a serverless host they may not run on the same machine. It is the
+`spideryarn.uploads` table behind [`src/store/uploads.ts`](../../src/store/uploads.ts). The rules the
+record obeys never moved: `canTransition`, `grantExpired` and `sweepable` are in
+[`src/source.ts`](../../src/source.ts) and touch no storage, which is what made this a change of
+adapter rather than of rules. Finalising has to be *exactly once*; the filesystem needed a
+create-only marker file (`open(…, "wx")`) for that, and Postgres needs one conditional `UPDATE` and
+`rowCount` ([260827h-durable-queue-and-uploads.md](../plans/260827h-durable-queue-and-uploads.md)).
 
-**It moved first, on 2026-08-27**, and the reason it did not wait is that it had a harder deadline
-than the queue: minting a grant and queueing the job are **two HTTP requests**, and on a serverless
-host they may not run on the same machine, so a record on a function's local disk is one the second
-request cannot find. There is now a `spideryarn.uploads` table behind
-[`src/store/uploads.ts`](../../src/store/uploads.ts). There were two adapters and a flag choosing
-between them until 2026-09-05, exactly as for everything else. The rules the record obeys never moved at all: `canTransition`,
-`grantExpired` and `sweepable` are in [`src/source.ts`](../../src/source.ts) and touch no storage,
-which is what made this a change of adapter rather than of rules.
-
-**The one place the two adapters are genuinely different code** is the claim, and it is worth
-knowing which way round it goes. Finalising has to be *exactly once*, and read-then-write has a gap
-in it however short — so the filesystem needs a create-only marker file beside the record
-(`open(…, "wx")`, atomic at the kernel, working across processes rather than only across the awaits
-in one). Postgres needs one conditional `UPDATE` and `rowCount`. The database makes the filesystem
-adapter's cleverest piece of machinery disappear. `tests/store-uploads-parity.test.ts` runs the same
-two-simultaneous-claims race against both.
-
-**And the queue has not moved**, so this is not yet a deployable upload — see
-[260827h-durable-queue-and-uploads.md](../plans/260827h-durable-queue-and-uploads.md), whose first line is about why
-a durable record for one part of an ingest does not make the ingest durable.
-
-**Reads** all go through `src/api.ts` — `loadArticle`, `loadTweets`,
-`loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes
-through it, and [glossary.md](glossary.md) says why it has to.) [library.md](library.md) makes the same point from the other side.
-
-**Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
-that is only half true — it is the *read* seam. The write path was
-`PipelineStep.outputs(ctx): string[]`, an interface that returned **file paths**, implemented across
-seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treated
-the Postgres move as a one-file change was wrong, and this is where that mistake started.
-
-**Both of those are gone now**, and the paragraph is kept because the estimate it corrects is the
-thing worth remembering. `src/api.ts` went on 2026-09-05 with the filesystem store it was the reader
-for; `outputs` went the same day, once nothing in `src/` called it. A step declares `produces` — the
-*kinds* it makes — and the `ArtifactStore` decides where those go.
-
-Why files at all: *"Prefer boring: filesystem over database, one server process"* —
-[AGENTS.md](../../AGENTS.md). Each stage writes JSON and every stage stays independently runnable.
-See [architecture.md](architecture.md#stage-ownership).
+### What outlived it: what a stage's cache is keyed on
 
 **Caching was not what the docs claimed, and since 2026-08-31 it very nearly is.** "Anything
 expensive is cached on a content hash" began as a claim about `tweets` and `glossary` alone, via
 `hashBlocks` in [`src/source-hash.ts`](../../src/source-hash.ts) and the optional `isDone(ctx)` hook
 on `PipelineStep`. (That helper began life inside `src/tweets.ts` and moved out when the glossary
 needed the identical question answered — two stages computing "the same" fingerprint two ways can
-only ever disagree.) `arc` joined on 2026-08-29 with the first fingerprint that covered everything
-its prompt actually reads.
+only ever disagree.) Which steps carry a stamp is read off each entry's `stamp` in
+[`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`, not counted here.
 
-**All six article-reading stages are now fingerprinted against everything their prompt reads** —
-the blocks, the tree and the head — through **one function per prompt head** in the same file:
+**Every article-reading stage is fingerprinted against everything its prompt reads** — the blocks,
+the tree and the head — through **one function per prompt head** in `src/source-hash.ts`:
 `articleFingerprint` for the stages that send `articleText`, and `articleWithIdsFingerprint` for
-`ideas` and `sketch`, whose head also prints a `URL:` line and whose absent-metadata fallback is a
-synthetic `TITLE: <tree.slug>`. A stage with a head of its own adds a function and a domain string
-rather than widening one of these — which is what `timeline` did when it needed the publication
-date. The stages that hashed less than that were harmless only because the
-pipeline's artefact reads return `null` today and the stage re-runs regardless; the moment those
-reads succeed, an incomplete stamp lets a **stale artefact skip**.
-[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1. `assets` keeps the
-narrow blocks-only hash, honestly: it fetches the images the blocks name and has no prompt.
+those whose head also prints a `URL:` line and whose absent-metadata fallback is a synthetic
+`TITLE: <tree.slug>`. A stage with a head of its own adds a function and a domain string rather than
+widening one of these — which is what `timeline` did when it needed the publication date
+(`datedArticleFingerprint`). The stages that once hashed less than that were harmless only while the
+pipeline's artefact reads returned `null` and every stage re-ran regardless; once those reads
+succeeded, an incomplete stamp would have let a **stale artefact skip**.
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
+`assets` keeps the narrow blocks-only hash, honestly: it fetches the images the blocks name and has
+no prompt.
 
-`hierarchy` still uses `stepIsDone`, an
-`access()` existence check — a file exists, therefore the step is done, whatever it was generated
-from. That is deliberate rather than pending, and
-[`src/pipeline.ts`](../../src/pipeline.ts) § `hierarchy` explains at length why a stamp there needs
-consumer invalidation first. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
-`hashBlocks` hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because
-those bytes change when an unread field is recomputed and *don't* change when two blocks swap ids —
-and the article fingerprints put the tree's `structureHash` and the prompt head beside it, because a
-stage's fingerprint has to cover **everything its prompt reads** — including the lines that are not
-about the article's text at all, and including whatever the stage substitutes when an input is
-missing.
+`hierarchy` still has no stamp and is done when its artefacts exist, whatever they were generated
+from. That is deliberate rather than pending, and [`src/pipeline.ts`](../../src/pipeline.ts) §
+`hierarchy` explains at length why a stamp there needs consumer invalidation first. When it comes to
+generalising this, copy their choice of **hash input**, not just the idea: `hashBlocks` hashes
+`id \t text` per block, deliberately *not* the serialised blocks, because those bytes change when an
+unread field is recomputed and *don't* change when two blocks swap ids — and the article
+fingerprints put the tree's `structureHash` and the prompt head beside it, because a stage's
+fingerprint has to cover **everything its prompt reads** — including the lines that are not about
+the article's text at all, and including whatever the stage substitutes when an input is missing.
 
 ## Next: Supabase Postgres
 
-**The schema now exists and has been applied to a real Postgres — locally.** Nothing reads or writes
-it; the app is still entirely on files. What is built:
+**The heading is from when this was the plan; it is now the store, and the only one.** This section
+is the operating manual for it: the files that hold the schema, the commands, how a job's writes
+reach a published revision, and the backup. The pieces:
 
 | File | What it is |
 |---|---|
 | [`src/db/schema.ts`](../../src/db/schema.ts) | the tables, in TypeScript. The source of truth. There were nine when this line was written and eighteen on 2026-08-29; `tests/db-schema-drift.test.ts` holds the current list, and holds it as a *set* rather than a count so that one table swapped for another is still somebody's job to look at |
 | [`drizzle/0000_initial_schema.sql`](../../drizzle/0000_initial_schema.sql) | generated from it by `npm run db:generate` |
-| [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, and the two guards that make global concurrency 1 a database fact rather than a convention |
+| [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, and the guards that made the global job cap a database fact rather than a convention (the cap is six since [`drizzle/0032_jobs_concurrency_cap.sql`](../../drizzle/0032_jobs_concurrency_cap.sql)) |
 | [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) | that the schema *enforces* what the plan promises — nine cases when this line was written, 23 on 2026-08-29. Run it rather than counting from here |
 | [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | `npm run db:migrate` |
 
@@ -236,6 +210,14 @@ do, so that did not go through` names neither the constraint nor the fix.
 connection details, so `push` — which introspects a live database and computes a diff — cannot
 connect at all. That is a guard rail rather than a rule to remember.
 
+**A migration's DDL run by hand, in `psql` or Studio, changes the schema and writes no ledger row.**
+Every worktree on the box shares one local Supabase, so the next `db:migrate` anywhere then meets a
+schema and a ledger that disagree. On 2026-09-28 a session whose `db:migrate` refused — because a
+peer had already applied its own unlanded migration — ran its DDL directly to get past it, and that
+wedged `db:migrate` for every tree until the Overseer repaired the ledger by hand. A refusal over a
+peer's migration is the guard in [§ A watermark is not a ledger](#a-watermark-is-not-a-ledger)
+working; the peer whose migration is in the way is the one who can resolve it.
+
 The schema tests **skip** rather than fail when there is no database, and a skipped test protects
 nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the difference is
 visible; it was not in the first version of that file, which reported nine passes for having checked
@@ -253,9 +235,6 @@ session (`pgStoreSession`, [`src/store/pg-session.ts`](../../src/store/pg-sessio
 one into that claim's draft revision as the job runs. A `done` ending publishes the draft and
 finishes the job in **one transaction**
 ([ingest-queue.md § A finished job publishes the article](ingest-queue.md#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not)).
-Under `files` (the default) the same stages, through the same interface, write `data/<slug>/*.json`
-instead — there is no draft and nothing to publish.
-
 Until 2026-09-01 a decorator, `publishingSession`, stood in the gap: the stages wrote their own files
 and it copied a finished job's into a draft after the fact. That is gone —
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
@@ -292,9 +271,8 @@ reader told to try again:
 The lesson worth carrying has its own section below:
 [§ Tightening an invariant over stored data is a migration](#tightening-an-invariant-over-stored-data-is-a-migration).
 
-**A writable disk is still what the `files` store *is*** — that host question is unchanged — but it
-is no longer a waypoint Postgres writes pass through, because `ArtifactStore.write()` has one caller
-and every step reaches it. Since 2026-08-29 a step returns a *product* —
+**There is one write path.** `ArtifactStore.write()` has one caller and every step reaches it.
+Since 2026-08-29 a step returns a *product* —
 `{ detail, parts?, stamp? }` — and the commit after it
 ([`src/store/session.ts`](../../src/store/session.ts)) writes that product, checks it, and finishes
 the step. The boundary landed empty on purpose, so that the stages could move behind it one at a
@@ -371,18 +349,18 @@ column on an exported table is still a hand-written line in `exportArticle`, whi
 
 | File | What it is |
 |---|---|
-| [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |
-| [`src/store/index.ts`](../../src/store/index.ts) | which store is in use. **No fallback lives here**, by design |
+| [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — what a store can be asked. It was cut as the deleted `src/api.ts`'s surface, function for function, so the cutover changed one variable |
+| [`src/store/index.ts`](../../src/store/index.ts) | wires the Postgres stores — the only ones. **No fallback lives here**, by design |
 | [`src/store/pg.ts`](../../src/store/pg.ts) · [`pg-comments.ts`](../../src/store/pg-comments.ts) | the Postgres reader and comment store |
 | [`src/store/export.ts`](../../src/store/export.ts) | the exporter that is the rollback. **There is no importer** — `npm run db:import` and `src/store/import.ts` were deleted on 2026-09-01, because a re-import wrote `raw_bytes` and left the source reference alone, describing two different acquisitions in one row. (That column was dropped on 2026-09-01; the document is an object in the `sources` bucket.) [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 |
 | [`src/owner.ts`](../../src/owner.ts) | who owns a row — the request-scoped owner, and the environment's when there is no request |
-| [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
-| [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts) | the same, for Referee's two stores — the suite that would have caught Claims shipping filesystem-only |
-| [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts) | every seam in `contracts.ts` has both adapters, or declares its one-sidedness — see below |
+| [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | the corpus loaded into Postgres through the real write path and read back. It compared two stores until 2026-09-05; its header says what survived and what was dropped |
+| [`tests/store-parity-referee.test.ts`](../../tests/store-parity-referee.test.ts) | what the Postgres store answers about Referee mode — a parity suite until 2026-09-05, written after Claims shipped filesystem-only |
+| [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts) | every seam in `contracts.ts` has a Postgres implementation — see [§ There is one store](#there-is-one-store-and-nothing-left-of-the-flag) |
 | [`tests/referee-routes-postgres.test.ts`](../../tests/referee-routes-postgres.test.ts) | Referee's routes driven against Postgres — which every route suite does since 2026-09-05, and this one did first |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
 
-Three rules that outrank convenience, all learned the expensive way:
+The rules that outrank convenience, all learned the expensive way:
 
 - **Never catch a Postgres error and fall back to files.** It hides divergence, in production, where
   nobody is comparing. A write with no Postgres implementation yet must refuse (501) rather than
@@ -405,7 +383,7 @@ Three rules that outrank convenience, all learned the expensive way:
   [`tests/public-imports.test.ts`](../../tests/public-imports.test.ts). See
   [the postmortem](../postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
-Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
+The decisions the schema was built on are below, all of them built. The whole design — the schema, the reasoning, and the things that break quietly —
 is in [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md). The parts worth knowing before you
 touch anything storage-shaped:
 
@@ -420,7 +398,7 @@ touch anything storage-shaped:
   wrong in the way that matters**. Having the column is not having the `where`. Nothing filtered on
   it until 2026-08-27, and because `articles.slug` is globally unique the second person did not get
   an empty library — they got the first one's. Every path from a slug to an article now goes through
-  `ownedSlug()` in [`src/store/pg.ts`](../../src/store/pg.ts), which is the only sanctioned spelling
+  `ownedSlug()` in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts), which is the only sanctioned spelling
   and the thing a test greps for; [auth.md § Whose data is it](auth.md#whose-data-is-it) has the
   design and [`src/owner.ts`](../../src/owner.ts) has where the id comes from.
 - **Drizzle for data, Supabase for Auth alone** — over `pg`, through Supabase's transaction-mode
@@ -429,7 +407,15 @@ touch anything storage-shaped:
   transaction would have had to become a PL/pgSQL function to work around it. See
   [§ The client](../plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth).
 - **RLS is deferred**, so grants carry the whole weight —
-  [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now). The answer is
+  [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now):
+
+  > I had dreamed of using RLS instead of an API, but maybe that's overcomplicating things. Use your
+  > judgment. […] I think the RLS and realtime syncing is aspirational. Let's just use a normal API
+  > for everything for now, and we can add RLS in later.
+  >
+  > — Greg, 2026-08-25
+
+  The answer is
   structural rather than careful: **don't expose the `spideryarn` schema through the Data API at
   all**, and give the runtime a dedicated least-privilege role. PostgREST then cannot see the schema
   whatever the keys are.
@@ -898,7 +884,10 @@ independently.
 **The prompt only appears when a column is added and another dropped in the same
 diff** — drizzle cannot tell a rename from a replacement, so it asks. Add and
 drop in two separate migrations and it never comes up, which is the way out if
-you would rather not fight it.
+you would rather not fight it. A plain `ADD COLUMN` or new table generates fine
+headless. Hand-writing the `.sql` to dodge the prompt is worse than either: it
+leaves no snapshot in `drizzle/meta/`, so the next `generate` diffs against a
+schema that never had your change and emits it again.
 
 To answer it without a terminal, give it one:
 
@@ -968,7 +957,7 @@ three verified after the fact rather than assumed.
 
 ### The migration role that cannot exist
 
-Seven `owner_id` columns are `references auth.users(id)`. Creating those foreign keys needs
+The `owner_id` columns are `references auth.users(id)` — seven when this was written, and more since; the foreign keys are in hand-written migrations, so `grep 'REFERENCES "auth"."users"' drizzle/*.sql` lists them. Creating those foreign keys needs
 `REFERENCES` on `auth.users`, and **no role we can reach is able to grant it**:
 
 - `auth.users` is owned by `supabase_auth_admin`, which nothing is a member of.
@@ -1422,7 +1411,7 @@ adapter uses `getDb()` and takes no `tx`.
   Preview and Production on 2026-09-06 and stage I of
   [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) deleted
   the last code that named it.)
-- **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
+- **`on delete restrict` is inherited, not chosen.** Most `owner_id` foreign keys use it (a few later tables cascade instead; `grep 'REFERENCES "auth"."users"' drizzle/*.sql` shows which), which
   means deleting the user from the Auth admin API or the dashboard will fail with `23503` while any
   row is owned. Supabase's own guidance is `cascade` or `set null`; keeping `restrict` is defensible
   for a reading library, but it needs an export/delete workflow rather than silence.

@@ -1,5 +1,7 @@
 # The changelog
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 `/changelog` is the public page that says what changed and why, deploy by deploy, in language a
 reader who has never seen the code can follow. This doc is the **process that writes it** — what a
 version is, how the commits get turned into entries, and which of those steps is allowed to assert

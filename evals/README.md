@@ -1081,6 +1081,30 @@ prerequisite are in
 [results/embedding-retrieval-2026-08-26.md](results/embedding-retrieval-2026-08-26.md);
 the decision is recorded in [search.md](../docs/project/search.md).
 
+## Quiz — three evals, one per question asked of the prompt
+
+Each file's header comment is its manual: the commands, which are paid and which free, and what it
+writes. The method all three follow is
+[prompting-guide.md § Measuring a prompt change](../docs/project/prompting-guide.md#measuring-a-prompt-change).
+
+- [`quiz.ts`](quiz.ts) (`npm run eval:quiz`) — **do the two prompts behave?** Generates a real batch
+  to read, and marks eight hand-written answers, one of them against a deliberately poisoned
+  reference. [quiz.md](../docs/project/quiz.md) says to read it before editing either prompt.
+- [`quiz-build-up.ts`](quiz-build-up.ts) — **does a batch get easier per question and build up?**
+  Before and after arms separated in time, a blind side-by-side per article
+  ([260930c](../docs/plans/260930c-quiz-questions-that-build-up-to-the-takeaways.md)).
+- [`quiz-reading-goal.ts`](quiz-reading-goal.ts) — **does who is reading, and why, move the
+  quiz?** The newest of the three and the fullest harness: arms per profile and reading goal, each
+  run stamped with the prompt that wrote it, a seeded `blind` sheet for a judge, and `score` to join
+  the labels back. Its judge's brief is [`quiz-reading-goal-judge.md`](quiz-reading-goal-judge.md);
+  one round's bars and runs are the two `quiz-reading-goal-261001c-*` files
+  ([261001c](../docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md)).
+
+**Not yet described here**, though they exist: `plain-words/`, `simple/`, `faq-levels/`, `sketch/`,
+`illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-claims.ts`, `referee-mirror.ts`,
+`remember-stances.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
+or README says what it measures.
+
 ## Results
 
 `results/` holds one JSON per run, named by slug and timestamp to the minute, committed. The minute

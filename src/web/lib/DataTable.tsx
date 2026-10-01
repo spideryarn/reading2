@@ -335,10 +335,19 @@ export function chipClass(pressed: boolean): string {
 export function SortChips<T>({
   table,
   label = "Sort",
+  labelHidden = false,
   order,
 }: {
   table: Table<T>;
   label?: string;
+  /**
+   * **Read, not drawn.** The legend still names the group to a screen reader,
+   * but takes no room on screen. The shelf asks for it: Greg, 2026-09-29
+   * (`spya-tw6zxw`), *"get rid of the "Sort" text at the beginning of the
+   * row … it'll be obvious enough to the user already"*. The arrows on the
+   * chips say what the row is.
+   */
+  labelHidden?: boolean;
   /**
    * Which chips come first, by column id.
    *
@@ -362,7 +371,11 @@ export function SortChips<T>({
        role exists to imitate, and it groups the chips so a screen reader
        announces one control rather than six unrelated buttons. */
     <fieldset className="tw:m-0 tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-1 tw:border-0 tw:p-0">
-      <legend className="tw:float-left tw:mr-2 tw:p-0 tw:text-xs tw:text-muted-foreground">
+      <legend
+        className={
+          labelHidden ? "tw:sr-only" : "tw:float-left tw:mr-2 tw:p-0 tw:text-xs tw:text-muted-foreground"
+        }
+      >
         {label}
       </legend>
       {ranked.map((column) => {

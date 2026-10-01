@@ -1,5 +1,7 @@
 # Deployment
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 Spideryarn on Vercel: how it gets there, what is live, and the five things that
 break without saying so.
 
@@ -163,6 +165,14 @@ are in [260827v-deploy-pipeline.md](../plans/260827v-deploy-pipeline.md);
 [`scripts/deploy.ts`](../../scripts/deploy.ts) is the file and its header is the
 short version.
 
+That nobody applies the migrations by hand is the point, in Greg's words when
+the remote box took production migrations over
+([260902a](../plans/260902a-remote-box-runs-production-migrations-without-a-human-in-the-loop.md)):
+
+> I don't want to be in the loop. I don't want to have to do something manually.
+>
+> — Greg, 2026-09-02
+
 | | |
 |---|---|
 | `npm run deploy` | the whole thing |
@@ -222,6 +232,11 @@ They used to be copied out of **the laptop's own** `data/` and `output/`, which
 are gitignored. So the gate really asked *did whoever is deploying happen to have
 run the pipeline here* — a question about a person, not about a commit — and it
 could not pass in a fresh clone, on the remote box, or in a worktree.
+
+> I'm really hoping that we can either make `data/` completely superfluous (i.e. not needed, no big
+> deal if it's missing), or if it really is important (e.g. for evals) then commit it to the repo.
+>
+> — Greg, 2026-08-31, [260901b](../plans/260901b-committed-fixture-corpus.md)
 
 They now come from the tracked corpus at `tests/fixtures/data-root/`, copied out
 of **the gate's own worktree** rather than out of this tree, so a commit that

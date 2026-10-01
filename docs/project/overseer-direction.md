@@ -1643,7 +1643,13 @@ becoming reachable from anywhere that is not a device Greg controls.
   the tenth subcommand should make it rather than inherit it.
 - **One adapter per harness, and honest about what each can do.** Claude, Codex and bare shells have
   genuinely different capabilities; flattening them into one "message an agent" verb produces a UI
-  that lies.
+  that lies. Not being tied to one harness at all is Greg's starting point
+  ([260907e](../plans/260907e-agent-fleet-dashboard.md)):
+
+  > I'd rather not make this Claude-specific, and I think the Claude Code UI is weak, and we want to
+  > extend/improve on what's possible by building our own custom UI.
+  >
+  > — Greg, 2026-09-07
 - **Actions before buttons.** Because the orchestrator is eventually a program, every steering action
   is a typed function first and a click second.
 - **This is not Spideryarn.** It runs on the box, spans repos, and must not depend on the product

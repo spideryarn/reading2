@@ -346,7 +346,7 @@ repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touc
 >
 > — Greg, 2026-08-28
 
-The bottom bar's buttons are **52px tall and at least 40px wide on a coarse pointer**, up from
+The bottom bar's buttons are **52px tall and at least 44px wide on a coarse pointer**, up from
 roughly 35 × 30. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § **a coarse pointer** — and three things about it are worth carrying
 to anything else that has to be pressed with a thumb:
 
@@ -393,8 +393,9 @@ Two more rules live in § a coarse pointer now, and
 [narrow-windows.md § What a control owes a finger](narrow-windows.md#what-a-control-owes-a-finger)
 is where they are written down:
 
-- **40px on both order rows** — the dock's own number, given to both because they are one control
-  written twice and a floor given to one is a report filed about the other.
+- **40px on both order rows** — the dock's old floor, retained independently for this one control
+  written twice; a floor given to one is a report filed about the other. The dock itself moved to
+  44px on 2026-10-01.
 - **16px on every text field**, because iOS zooms the page in on a smaller one and does not zoom
   back out. **That one asks `any-pointer: coarse`**, unlike every other size rule here, and the
   reason is in narrow-window.css § a field iOS zooms into: one point of type is not chrome, so the

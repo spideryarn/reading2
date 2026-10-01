@@ -1,5 +1,7 @@
 # Quiz — the questions the article asks back
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-31 to 2026-09-01.** The second half of [Remember](remember-mode.md). Recall asks the
 reader what they took from the piece; Quiz walks them, one small question at a time, up to the
 piece's takeaways, and says how each answer sits against it.

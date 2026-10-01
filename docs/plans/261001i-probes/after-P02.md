@@ -1,0 +1,49 @@
+# Probe P02 (after): a "why this matters" line, generated once, on the metadata page
+
+## 1. Docs opened, in order
+- `CLAUDE.md` (AGENTS.md) — signpost; pointed me at cost-tracking, new-mode, architecture. Helped.
+- `docs/project/cost-tracking.md` — the three rules for a new paid call (gateway, scope, article attribution); metadata page "What it cost" line. Very helpful.
+- `docs/project/new-mode.md` — "Adjacent shapes": a pipeline step with no band (a line on the Metadata page) takes only § The artefact and § Its cost; the full total-record list. Most helpful.
+- `docs/project/architecture.md` (§ Stage ownership, § Shared code) — step table, helper list (`streamMessage`, `parseJsonAnswer`, `articleFingerprint`). Helped.
+- `docs/project/prompting-guide.md` (§ Where it lives) — `plainWords(...)`, `PLAIN_WORDS_EXEMPT`, coverage test. Helped.
+- Skimmed headings only of `docs/project/ai-gateway.md` and `database.md` (large; not needed beyond headings).
+
+## 2. Code files I would edit
+- `src/why-it-matters.ts` (new, modelled on `src/arc.ts`: SYSTEM prompt, `PROMPT_VERSION`, `generate…`, fingerprint, `isStale`)
+- `src/types.ts` (`StepName`, new artefact type), `src/store/artifacts.ts` (`ArtifactKind`, `ArtifactMap`, `SHAPE`, `STAMP_SOURCE`)
+- `src/step-order.ts` (`STEP_ORDER`), `src/pipeline.ts` (`STEPS` entry + stamp; decide `DEFAULT_INGEST_STEPS` / `FORCE_ONLY_WHEN_NAMED`), `src/jobs.ts` (`STEP_BUDGET_MS`)
+- `src/models.ts` (`Task`, `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`, `STAGE_EFFORT`, `ARTICLE_RENDERER`; maybe an `AiJob` entry)
+- `src/cost-categories.ts` (`JOB_DISPOSITION` row if a new `AiJob`)
+- `src/db/schema.ts` (new jsonb column on `article_revisions`) + a generated migration in `drizzle/` (also the step_name CHECK constraint literal)
+- `src/store/pg-revisions.ts` (`REVISION_CARRY_POLICY`), `src/store/pg.ts` (read projections, `REVISION_READ_POLICY`, currency `case`), `src/store/contracts.ts` (`ArticleReader`), `src/store/export.ts` (the `put` chain), `src/store/public-reader.ts` + `src/public/dto.ts` only if visible to visitors (the metadata page is owner-only, so probably leave out and say so)
+- `src/routes.ts` (metadata/article payload to carry the line, if no new GET route), `src/web/Metadata.tsx` (draw it, near the "In one sentence" section; step icon map at ~line 335), `src/title-text.ts` / `src/messages.ts` only if a step label is needed
+- tests: `tests/db-step-constraint.test.ts` passes via the migration; a new unit test for the pure parts.
+
+## 3. Existing helpers to reuse
+- `src/messages-stream.ts` § `streamMessage`, `wasRefused` (pipeline-stage call on the Messages wire; do not write my own client)
+- `src/parse-json.ts` § `parseJsonAnswer`; `src/anthropic-call.ts` § `anthropicCallFailed`; `src/token-budget.ts` § `budgetFor`, `truncationFailure`; `src/job-failure.ts` § `stageFailure`
+- `src/article-prompt.ts` § `articleText`; `src/plain-words.ts` § `plainWords`
+- `src/source-hash.ts` § `articleFingerprint`; `src/models.ts` § `generatorFor`, `CAPABLE_MODEL`, `effortFor`
+- `src/arc.ts` as the template for the whole step (nearest existing article-level one-sentence step)
+- No new helper for the stream/refusal/truncation sequence: docs say none exists, copy the neighbour.
+
+## 4. Rules to follow
+- Call through the gateway only; inside `runStep` so spend is attributed to the article and shows as its own line in "What it cost" (`cost-tracking.md`). New `AiJob` needs a `JOB_DISPOSITION` row (`new-mode.md` § Its cost).
+- Cost figures admin-only: no money in reader copy or in the metadata payload; `tests/no-ai-cost-for-readers.test.ts` guards (`cost-tracking.md`).
+- Pipeline step: total records the compiler demands, plus the residue (CHECK constraint migration, export put-chain, `PROMPT_VERSION` as one exported constant, bump on prompt change) (`new-mode.md`).
+- Cache on a content hash (`architecture.md` § Conventions); "once per article" = a freshness stamp.
+- Plain-words rule: `plainWords(...)` in the prompt, name it `…_SYSTEM`; `tests/plain-words-coverage.test.ts` (`prompting-guide.md`).
+- Block ids never shown in prose; reader copy rules (`copy.md`, not opened).
+- Migration: additive, apply it and say what I ran; read `Target:` line (`CLAUDE.md`).
+- Reproduce/test first, `npm test` + `npm run typecheck`, `npm run lint` on touched files; GPT Sol plan + code review; worktree, commit own files by name, push to `dev` (`CLAUDE.md`).
+- Streaming rule does not apply (batch pipeline step, nobody waiting).
+
+## 5. Where I got lost
+- No doc says how the Metadata page gets its data or how to add a line to it; I inferred from `src/web/Metadata.tsx` and the `arc` wiring. `new-mode.md` mentions "a line on the Metadata page" only in passing.
+- Unsure whether this should be a new artefact column at all or a field on `meta.json`/an existing artefact (simpler); no doc weighs that.
+- `arc` wiring is spread over ~12 files in `pg.ts`; the list in `new-mode.md` helped, but several `pg.ts` tables (projections, currency `case`) are not named there as a checklist.
+- The "once per article" decision (in `DEFAULT_INGEST_STEPS` or not, i.e. paid on every import) is a product call to surface to Greg.
+- Did not read `ai-gateway.md` in full (1063 lines).
+
+## 6. Confidence
+7/10

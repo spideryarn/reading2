@@ -197,6 +197,7 @@ describe("the bar chooses the widest rung that fits", () => {
    strip them where they need to. `src/web/styles.css` is thirty-eight
    `@import` lines since 2026-09-06; tests/helpers/stylesheets.ts. */
 const CSS = readerCss();
+const CSS_NO_COMMENTS = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Selectors in a stylesheet that set `display: none` on a bar label. */
 function labelHiders(css: string): string[] {
@@ -255,6 +256,22 @@ function floorIsUnconditional(css: string): boolean {
 }
 
 describe("the stylesheet backs the ladder", () => {
+  it("carries the new loose-control gap and keeps rung 3 tighter than rung 2", () => {
+    expect(CSS_NO_COMMENTS).toMatch(/\.dock\s*\{[^}]*gap:\s*0\.3rem/);
+    const rung2 =
+      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn,\s*\.dock\.dock-fit-2 \.dock-mode\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+        CSS_NO_COMMENTS,
+      );
+    const rung3 =
+      /\.dock\.dock-fit-3 \.dock-btn,\s*\.dock\.dock-fit-3 \.dock-home\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+        CSS_NO_COMMENTS,
+      );
+    /* Rung 2 stays at 0.6: widening it cost 1280 its labels (dock-fit.css). */
+    expect(rung2?.[1], "rung 2's icon padding moved").toBe("0.6");
+    expect(rung3?.[1], "rung 3 lost its wider icon padding").toBe("0.55");
+    expect(Number(rung3?.[1])).toBeLessThan(Number(rung2?.[1]));
+  });
+
   /**
    * A rung with no rule is a rung that measures as fitting and changes nothing,
    * so the ladder walks straight past it to the next one.

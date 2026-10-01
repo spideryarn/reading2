@@ -782,7 +782,7 @@ export function QuizPanel({
       }
       /* No standing *Write them again* under the question any more — Greg,
           2026-09-29 (SPIDERYARN-READING2-53): *"let's just rely on the
-          Metadata mode for that."* Metadata's *Re-run AI processing* has a
+          Metadata mode for that."* Metadata's *AI processing* has a
           Quiz row; the stale banner keeps its own button.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 

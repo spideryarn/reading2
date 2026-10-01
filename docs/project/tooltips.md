@@ -1,5 +1,7 @@
 # Tooltips
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 > In the left-most column, add a nice hover-tooltip to show more detail somehow.
 >
 > — Greg, 2026-08-25
@@ -11,6 +13,18 @@ real position indicator, and which also means a short section is a two-pixel sli
 a word. The design accepted that cost knowingly. The tooltip is where the cost gets paid back.
 
 So this is not "a label, but on hover". It is the one surface in the rail that can hold a sentence.
+
+## When something needs one
+
+> Firstly, anything like that that's hard for the user to guess/intuit should always have a tooltip
+> (make a note in `design.md` or similar).
+>
+> — Greg, 2026-09-29 (`spya-f28vqj`), about the unlabelled count bars in the shelf's topic detail view
+
+So the test is not whether a thing is a control. A bar, a label, a coloured mark or a word whose
+meaning a reader has to work out deserves a card as much as a button does; the bar that prompted this
+is decorative and `aria-hidden`, and has one anyway
+([261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 2).
 
 ## What we chose
 
@@ -153,6 +167,16 @@ or removed on 2026-09-02, after a cross-family review;
 paragraphs against each other and against the label rather than checking that the card is long.
 **It catches copying and not paraphrase**, which is written down there rather than left to be
 discovered.
+
+**A card keyed by mode is read on at least four surfaces, and they behave differently**: the Dock's
+segment on the reading view (a press there can start a run), the loose mode links on the metadata
+page (they only navigate), either of those seen by a visitor (who gets `VisitorBand`, not a
+generator), and either of them where the artefact already exists (nothing runs). So *"opening it
+runs a model pass"* is false on three of the four; the catalogue describes the artefact rather than
+the gesture.
+On 2026-09-07 four of the fourteen mode cards opened that way in first draft, and only a
+cross-family review caught them —
+[new-mode.md § The card on the button](new-mode.md#the-card-on-the-button).
 
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for

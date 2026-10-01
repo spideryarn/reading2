@@ -15,6 +15,9 @@
  *
  * Pure, and takes `now` as an argument, because a function that reads the clock
  * is a function nothing can test.
+ *
+ * The client's one relative-time formatter, paired with `useNow` for the clock;
+ * `ago` in Metadata.tsx is an older private copy — web-client.md#shared-code-client.
  */
 
 /** How far past which a date reads better as a date. */

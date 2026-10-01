@@ -113,7 +113,7 @@ answered by a model now. FAQ never marks the reader and never writes an answer.
 
 ## Making it again
 
-From the Metadata page: *Re-run AI processing* has an FAQ row, since 2026-09-29, and it is the only
+From the Metadata page: *AI processing* has an FAQ row, since 2026-09-29, and it is the only
 redo — the panel says nothing when its list was made by an older prompt
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
 model call; the list is replaced only if the run succeeds. The row is drawn with the experimental
@@ -122,7 +122,10 @@ switch off too, as Timeline's and Debate's are. Why it is safe to offer is in
 
 ## Who sees it
 
-Asking for one is owner-only, and behind the [experimental switch](experimental-features.md). **Since
+Asking for one is owner-only, and behind the [experimental switch](experimental-features.md) — which
+is also why the add page's *generate the main modes* box does not make one after an import: that
+list is every mode outside the switch that makes something, derived in [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)
+([ingest-queue.md § The add page](ingest-queue.md#the-add-page)). **Since
 2026-09-29 a visitor to a public article sees a stored FAQ**, drawn from the page's own payload with
 no way to ask for another; with none stored they are told nobody has built one (SPIDERYARN-READING2-56,
 [260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).

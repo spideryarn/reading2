@@ -1,5 +1,7 @@
 # Glossary — the terms this piece uses, and where it uses them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.
@@ -101,6 +103,10 @@ occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching r
 [`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` in
 [`src/web/styles/glossary.css`](../../src/web/styles/glossary.css). Tests:
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
+
+What every band shares rather than the Glossary alone — the waiting and empty states, what a visitor
+sees, the checklist for changing a band — is in [new-mode.md](new-mode.md) and
+[web-client.md § The waiting state](web-client.md#the-waiting-state).
 
 ## Where it lives, and why that cost nothing
 
@@ -619,7 +625,10 @@ Three decisions inside it:
   answer from the recalled one has lost the thing the labels above exist to give them.
 - **`searches: 0` is drawn, not hidden.** The model decides per call, so "it judged it already knew"
   is a real outcome and the globe has an off state saying so. Without that, an answer that was never
-  checked looks identical to one that was.
+  checked looks identical to one that was. The label says it in plain words — *from a web search*, or
+  *no web search — from the model's own knowledge* — since 2026-10-01; it said *checked* and *asked,
+  not checked*, and Greg could not tell what the second meant (`spya-puyb6d`,
+  [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 4).
 
 Sources render as **host names with the page title in a hover tooltip** — Greg's own suggestion, and
 the shape an 18rem band can take: the title is the useful thing to read and the wrong thing to lay

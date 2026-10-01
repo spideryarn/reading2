@@ -1,5 +1,5 @@
 /**
- * **The steps the Metadata page offers a *Re-run AI processing* row for**
+ * **The steps the Metadata page offers an *AI processing* row for**
  * — `METADATA_RERUN_STEPS` in src/rerun-steps.ts, and the two properties that
  * make each of them safe to press.
  *

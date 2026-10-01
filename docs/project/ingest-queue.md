@@ -4,9 +4,27 @@ Paste a URL on the homepage and an article appears on the shelf a minute or two 
 stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
 `/add/<the URL>` — [§ The add page](#the-add-page).
 
+**Where a job's life is decided, in [`src/jobs.ts`](../../src/jobs.ts)** — read these before the
+history below, most of which is how they came to be:
+
+- **Created**: `enqueue` (and `enqueueReset` for starting an article again).
+- **Run**: `advanceJob` → `advanceJobWith` → `walkClaim`, which walks every step under one claim;
+  each step is `runStep`.
+- **Succeeded**: the last step's commit ends the job inside the session —
+  `pgStoreSession` in [`src/store/pg-session.ts`](../../src/store/pg-session.ts) publishes the draft
+  and finishes the job in one transaction
+  ([§ A finished job publishes the article](#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not)).
+- **Failed or cancelled**: `endJob`, through the session's `settleJob`; `endAsStorageFailure` for a
+  store that refused, and `lostTheClaim` when another claimant owns the row.
+- **Either way**: `noteEnded` writes the one log line and trims old jobs.
+- **Retried or stopped from outside**: `retryJob`, `cancelJob`.
+
+The job row itself is behind `JobStore` in [`src/store/jobs.ts`](../../src/store/jobs.ts).
+
 > **The record moved on 2026-08-27, and the artefacts did not.** A job now lives behind `JobStore`
-> ([`src/store/jobs.ts`](../../src/store/jobs.ts)) — a filesystem adapter writing the same
-> `data/_jobs/*.json` as before, and a Postgres one — so `POST /api/jobs/:id/advance` can be answered
+> ([`src/store/jobs.ts`](../../src/store/jobs.ts)) — then a filesystem adapter writing the same
+> `data/_jobs/*.json` as before, and a Postgres one; only the Postgres one since 2026-09-05 — so
+> `POST /api/jobs/:id/advance` can be answered
 > by an instance that did not create the job. p-queue and the in-memory `Map` are gone with it, and
 > what replaced them is a **claim**: an attempt token, a lease, and every write fenced on
 > `id = $id and attempt_id = $attempt and status = 'running'`.
@@ -639,21 +657,26 @@ machine, which is a real loss and a small one — this reads published articles.
 
 ## The pipeline is a list, not a function
 
-The steps, in [`src/step-order.ts`](../../src/step-order.ts) — **which is the authority; there are
-sixteen and this is the front of the list**, kept short because what it is illustrating is the shape
-rather than the roster:
+The steps, in [`src/step-order.ts`](../../src/step-order.ts) § `STEP_ORDER` — **which is the
+authority, so the count is not repeated here**; each step's label and the artefact kinds it
+`produces` are on its entry in [`src/pipeline.ts`](../../src/pipeline.ts) § `STEPS`. This is the
+front of the list, kept short because what it is illustrating is the shape rather than the roster:
 
 ```
-  fetch     Fetching the page              → data/<slug>/raw.html
-  extract   Extracting the article         → output/<slug>.html, data/<slug>/meta.json
-  blocks    Splitting into blocks          → output/<slug>.blocks.json   (and the sanitiser)
-  hierarchy Building the table of contents → data/<slug>/tree.json, data/<slug>/blocks.json,
-                                             data/<slug>/labels.json (EMPTY — see `labels`)
-  labels    Labelling the paragraphs       → data/<slug>/labels.json, data/<slug>/tree.json
-                                             (never on a plain add)
-  arc       Writing the arc                → data/<slug>/arc.json
-  tweets    Writing the thread             → data/<slug>/tweets.json     (never on a plain add)
+  fetch     Fetching the page              → raw
+  extract   Extracting the article         → extractedHtml, meta
+  blocks    Splitting into blocks          → blocks, stampedHtml   (and the sanitiser)
+  hierarchy Building the hierarchy         → tree, labels (EMPTY — see `labels`), blocks
+  labels    Labelling the paragraphs       → labels, tree          (never on a plain add)
+  assets    Fetching the images            → assets
+  arc       Writing the arc                → arc
+  tweets    Writing the thread             → tweets                (never on a plain add)
 ```
+
+The names on the right are artefact kinds, not files: a step returns its product and the store
+writes it into the job's draft revision ([database.md](database.md#next-supabase-postgres)). Until
+2026-09-05 each was a file under `data/<slug>/` or `output/`, which is what older passages below
+still call them.
 
 Each step is a name, a label, **the artefact it produces**, and the function that produces it. A job
 is a *list of step names*, which is the whole reason this is data rather than four `await`s in a row.
@@ -772,9 +795,11 @@ pipeline already knows.
 
 ### A reader can ask for them again, from the Metadata page
 
-`/read/<slug>/metadata` has a **Re-run AI processing** section (called *Generate it again* until
+`/read/<slug>/metadata` has an **AI processing** section (called *Generate it again* until
 2026-09-29, when it absorbed *Start this article again*, went shut by default and moved above Archive —
-[260929b](../plans/260929b-one-place-to-re-run-ai-processing.md)). Since the same day it is the only
+[260929b](../plans/260929b-one-place-to-re-run-ai-processing.md); then *Re-run AI processing* until
+2026-10-01, when the record of which stages have run joined it —
+[261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 5). Since the same day it is the only
 place a mode's standing redo lives; a mode keeps only the button inside its out-of-date banner. One
 row per offered step (`METADATA_RERUN_STEPS`, [src/rerun-steps.ts](../../src/rerun-steps.ts)), and pressing
 it posts `{ slug, steps: [step], force: [step] }` — this queue, this route, nothing new. Greg asked

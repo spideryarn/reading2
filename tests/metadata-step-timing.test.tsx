@@ -144,10 +144,11 @@ function answer(stageRows: StageState[]) {
 }
 
 /**
- * Mount the page, open *Technical details*, and hand back the step row's card.
+ * Mount the page, open *AI processing*, and hand back the step row's card.
  *
  * **The disclosure is not an implementation detail here.** `What we did to it`
- * is a subheading inside the shut `Technical details` section, so a test that
+ * is a subheading inside the shut `AI processing` section (in `Technical
+ * details` until 2026-10-01, `spya-qgh5ta`), so a test that
  * only mounted would find no rows at all — measured in a browser before this
  * file was written, and it is the likeliest reason the existing card went
  * unfound.
@@ -172,9 +173,9 @@ async function cardText(stageRows: StageState[]): Promise<string> {
   });
 
   const disclosure = [...(host.querySelector("main")?.querySelectorAll("h2 button") ?? [])].find(
-    (b) => b.textContent?.includes("Technical details"),
+    (b) => b.textContent?.includes("AI processing"),
   ) as HTMLButtonElement | undefined;
-  expect(disclosure, "no Technical details disclosure — the page shape moved").toBeTruthy();
+  expect(disclosure, "no AI processing disclosure — the page shape moved").toBeTruthy();
   await act(async () => disclosure?.click());
 
   const trigger = [...host.querySelectorAll("button")].find((b) =>

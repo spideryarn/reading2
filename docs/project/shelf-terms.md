@@ -171,14 +171,20 @@ route is not cached — which is the accepted limit.
 >
 > — Greg, 2026-09-28
 
+The word **Topics** at the head of the row has a card saying how they are picked and ordered —
+Greg, `spya-tw6zxw`, 2026-09-29 — and the sort row above it has no visible *Sort* label (the legend
+is still read to a screen reader). [261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 3.
+
 - **Pills**, the default: the first twelve topics in the server's rank order, plus any chosen one
   further down, in its own place — never re-sorted by count, so nothing moves when you press one.
   **"All N topics"** expands the same row to every pill; it is shown only when there are more than
   twelve.
 - **More detail** (`?topicsView=detail`): every topic, in rank order, one compact row each — a colour
   swatch, the chip, a bar for its live count (relative to the largest count shown, so the bars line
-  up in one column and compare at a glance), *"7 of 38 on the shelf"*, and the three articles that
-  use it most, as links. The chip in a row **is** the pill (`TermChip`): the same toggle, the same
+  up in one column and compare at a glance, with a card saying so), and the three articles that use
+  it most, as links. The row said *"7 of 38 on the shelf"* until 2026-10-01; Greg: *"if we have the
+  bar we can remove the "N of M on the shelf""* (`spya-f28vqj`), and the chip's card still gives
+  both denominators. The chip in a row **is** the pill (`TermChip`): the same toggle, the same
   `aria-pressed`, the same tooltip. The toggle between the views stays in one place, so focus stays
   on it. Chosen over cards and two-line rows from screenshots, plan
   [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.

@@ -1,5 +1,7 @@
 # The reader profile — telling the model who is reading
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 Every model call in this app used to write for a reader it knew nothing about. The glossary
 explained *entropy* to a physicist; chat pitched an answer at nobody in particular. This is the box
 where you say who you are, and the plumbing that carries it to the calls that should care.
@@ -666,6 +668,9 @@ The measurements, both reviews and the two bugs the tests found after the review
 [260827k-microphone-device-and-recording.md](../plans/260827k-microphone-device-and-recording.md).
 
 ## Where the pieces are
+
+The experimental switch is the existing per-reader setting beside the profile; its layers are
+traced in [experimental-features.md § Where it lives](experimental-features.md#where-it-lives).
 
 | | |
 |---|---|

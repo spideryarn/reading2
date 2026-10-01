@@ -1,5 +1,7 @@
 # Remember mode — say what you took from it, and find out
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 **Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they got from the article, and the model helps them find where their account and
@@ -58,7 +60,10 @@ written down; this is that idea with the direction reversed, the reader supplyin
 
 ## The four stances
 
-The reader picks one per turn, from a `<select>` under the box.
+The reader picks one per turn, from a `<select>` under the box. Its card lists the four in a line
+each, from the reader's side, and the one rule nothing else on screen says — a direct question or
+*"just tell me"* gets a plain answer whatever is picked (`StanceTip` in
+[`ChatPanel.tsx`](../../src/web/ChatPanel.tsx); Greg, `spya-xunuum`, 2026-09-29).
 
 | Stance | What the reply is |
 |---|---|

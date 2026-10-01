@@ -145,8 +145,8 @@ export function PageContents({
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
     /* **Layout can change without the entry list changing**, and then nothing
-       above would fire: opening "Technical details" adds two cards' worth of
-       height and moves every heading under it, but the rescan derives the same
+       above would fire: opening a collapsed section adds content and moves
+       every heading under it, but the rescan derives the same
        entries, so this effect does not re-run and no scroll happens. Watching
        the container's box catches that and anything else that reflows it —
        an image loading, the purpose box growing a line. GPT Sol, 2026-09-03.

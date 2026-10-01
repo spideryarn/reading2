@@ -3,22 +3,24 @@
 The **Feedback** button, the dialog behind it, and the two places a bug report ends up. Part of
 [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
 
-**One dialog, three shapes of button, since 2026-09-08.** The dialog is mounted once, at the
+**One dialog, four shapes of button.** The dialog is mounted once, at the
 signed-in `App` level, and hands `open()` down through a context — otherwise a bar that unmounts
 takes a half-written report with it. The button is at the right-hand end of the bottom bar on the
 two pages that mount a `Dock` — the article and its metadata page (the tweets page was a third until 2026-09-29, when it became a mode), each in an
 owner's and a visitor's shape
 ([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)); in the shelf's
-own masthead row on the homepage (§ below); and fixed in the window's top-right corner everywhere
-else. On a phone the bar's copy costs it being always-visible: that row already scrolls, and this
+own masthead row on the homepage (§ below); in `SiteNav` on its four signed-in pages since
+2026-10-01; and fixed in the window's top-right corner everywhere else. On a phone the bar's copy
+costs it being always-visible: that row already scrolls, and this
 button is at the end you have to drag to. Taken deliberately — if reports from phones fall off, that
 is the first place to look.
 
-**The rule behind those three is "the page's own chrome cluster, and the corner only if there
+**The rule behind those four is "the page's own chrome cluster, and the corner only if there
 isn't one."** The corner is the fallback, not the convention: it was every page's until the reading
 view grew a bar, and it stopped being the shelf's when the shelf's masthead turned out to be where
-readers actually look. `FEEDBACK_SHAPE` in [`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx)
-is the whole table, and `App.tsx` carries the two exclusions in one expression.
+readers actually look. The same rule moved it into `SiteNav` where a corner trigger overlapped the
+nav's last link. `FEEDBACK_SHAPE` in [`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx)
+is the whole table, and `App.tsx` carries the three exclusions in one predicate.
 
 ### The shelf's button is in its masthead, since 2026-09-08
 
@@ -375,7 +377,7 @@ which *is* the verified account id.
 
 | what | file |
 |---|---|
-| the dialog's host, the three shapes of trigger, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
+| the dialog's host, the four shapes of trigger, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |

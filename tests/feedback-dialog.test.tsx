@@ -22,6 +22,7 @@ import { ADMIN_EMAIL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
+import { exactly } from "../src/web/relative-time.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
@@ -1276,6 +1277,44 @@ describe("the Earlier tab", () => {
       "in the version of Spideryarn you're using",
     );
     expect(items[1]?.querySelector(".fb-earlier-shipped")).toBeNull();
+  });
+
+  /* spya-yvwpek, Greg 2026-09-30: "remove the text that says 'A rough note is
+     worth far more than nothing'". Here because the Write panel is mounted. */
+  it("no longer says a rough note is worth more than nothing", async () => {
+    mount();
+    await act(async () => {});
+    expect(panelOf("Write").textContent).toContain("Thank you");
+    expect(host.textContent).not.toContain("rough note");
+  });
+
+  /* spya-d9xdhs, Greg 2026-09-30: "can we include the exact timestamp and maybe
+     a human-readable `3d ago` or `3h ago`?" Past relative-time.ts's 30-day
+     threshold the relative half goes and the exact time stands alone. */
+  it("dates each report exactly, and says how long ago while that is still relative", async () => {
+    const now = Date.parse("2026-09-15T10:45:00.000Z");
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      listAnswer = page({
+        reports: [
+          { ...REPORTS.reports[0], createdAt: "2026-09-12T10:45:00.000Z" },
+          { ...REPORTS.reports[1], createdAt: "2026-07-01T08:00:00.000Z" },
+        ],
+        more: false,
+      });
+      mount();
+      click(tab("Earlier"));
+      await act(async () => {});
+      const times = [...panelOf("Earlier").querySelectorAll("li time")];
+      expect(times[0]?.textContent).toBe(`${exactly("2026-09-12T10:45:00.000Z")} · 3d ago`);
+      /* Not only "whatever `exactly` says": a time of day, which the date
+         alone this replaced did not have. */
+      expect(times[0]?.textContent).toMatch(/\d{1,2}:\d{2}/);
+      expect(times[0]?.getAttribute("dateTime")).toBe("2026-09-12T10:45:00.000Z");
+      expect(times[1]?.textContent).toBe(exactly("2026-07-01T08:00:00.000Z"));
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   /* SPIDERYARN-READING2-7D: "In Feedback / Earlier / All, add the indicator

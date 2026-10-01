@@ -1,5 +1,7 @@
 # The Overseer's queue
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 Up: [overseer.md](overseer.md), whose gate 3 ends *"nothing dispatched that Greg did not queue"*. This
 file is the queue's slow lane: work Greg has approved in principle but deferred, kept here so a lull
 has something to fill it with and so a good idea does not have to be re-found. Being on this list is
@@ -44,6 +46,15 @@ still asks Greg about anything that outlives the branch.
 > Greg's banding is applied with `overseer-queue set-priorities --from <file>`, which prints a plan
 > and writes nothing until `--apply`, and then only against the queue version *and* the file bytes
 > that were reviewed.
+
+**Two things the CLI says that mislead.** `export` prints every item's whole authorisation history
+inline — about 280 KB for 54 items on 2026-09-17, more as the queue ages — so a harness spills it out
+of context; `list` is the ordered view. In `export --json` the feedback-report id is
+`metadata.source`, and there is no top-level `source`, so a filter on `it.source` matched none of 55
+items on 2026-09-20 and read as "nothing queued". And `edit` by anyone but Greg prints *"this LAPSES
+Greg's authorisation"* whenever it changes content, whether or not the item was authorised
+(`scripts/overseer-queue.ts` § `lapses`); on a proposal nothing lapses, and `show <id>`'s
+`authority:` line before the edit is what says which case it was.
 
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to

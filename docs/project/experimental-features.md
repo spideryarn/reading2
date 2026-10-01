@@ -50,6 +50,15 @@ generated answer. Whatever the reader made while it was on is still there when i
 
 ## Where it lives
 
+**This setting crosses every layer**, all of which are written down here: a nullable column on `readerProfiles` in
+[`src/db/schema.ts`](../../src/db/schema.ts) (whose comment says when settings should get a table of
+their own), a read/write pair on `ReaderStore` in [`contracts.ts`](../../src/store/contracts.ts)
+implemented in [`pg-reader.ts`](../../src/store/pg-reader.ts), one field on `GET`/`PATCH
+/api/reader`, and a client store with the three states below. The other value on that row is the
+profile text itself — [reader-profile.md § Where the pieces are](reader-profile.md#where-the-pieces-are).
+The shelf's browser-only preference instead skips the server and uses `localStorage`, guarded in
+[`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
+
 | | |
 |---|---|
 | Column | `spideryarn.reader_profiles.experimental_since timestamptz null` — [`drizzle/0037_experimental_features_and_callout_blocks.sql`](../../drizzle/0037_experimental_features_and_callout_blocks.sql) |
@@ -201,9 +210,10 @@ anything a model wrote in Courier, anything the reader typed in Arial. Greg aske
 and Courier summaries are a lot to hand every paying reader as an experiment.
 [typography.md § A face per voice](typography.md#a-face-per-voice-experimental-since-2026-10-01).
 
-**And one control on the Metadata page: *Start this article again*** — a block inside *Re-run AI
-processing* since 2026-09-29 rather than a section of its own (a reset, and optionally
-the modes made again), since 2026-09-28. It re-reads the article with today's pipeline, so a
+**And one control on the Metadata page: *Start this article again*** — a block inside *AI
+processing* rather than a section of its own: a reset, and optionally the modes made again. The
+control has been behind the switch since 2026-09-28 and joined this section — then called *Re-run
+AI processing* — on 2026-09-29. It re-reads the article with today's pipeline, so a
 paragraph whose text comes out different — mostly maths in articles added before maths was drawn —
 detaches any comment on it, and pressing it with the extras ticked spends a model call per mode. That
 earns a trial before everybody has the button; the route itself is not gated.

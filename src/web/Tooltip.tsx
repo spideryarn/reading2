@@ -3,6 +3,10 @@
  *
  * Why a library at all, and why this one: docs/project/tooltips.md.
  *
+ * The one place a tip on a control comes from — `Tooltip`, `ControlTip` and
+ * `TipNote` below. The prose's hover cards are the other implementation, and
+ * tooltips.md#the-second-implementation-and-why-there-is-one says why.
+ *
  * The short version — the spine's bands are strictly *proportional*, so a short
  * section is a two-pixel sliver with no room for a word (Spine.tsx). The detail
  * has to go somewhere, and the somewhere is a tooltip. But a tooltip anchored to

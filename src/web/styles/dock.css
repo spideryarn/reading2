@@ -51,7 +51,9 @@
   z-index: 96;
   display: flex;
   align-items: stretch;
-  gap: 0.15rem;
+  /* 0.3rem, doubled from 0.15 on 2026-10-01 for Greg's "a teeny bit more
+     horizontal space" (dock-fit.css § rung 2 has the rest of that change). */
+  gap: 0.3rem;
   /* The bottom term is `--safe-bottom`, and it is in the shorthand rather than
      in a `padding-bottom` of its own on purpose: a longhand declared *before*
      this line is silently reset by it, which is how the home indicator got its
@@ -411,6 +413,41 @@
   color: var(--highlight-ink);
   background: var(--highlight-wash);
   box-shadow: inset 0 2px 0 var(--highlight);
+}
+
+/* -------------------------------------------------- the Feedback circle --
+   Greg, 2026-09-30 (spya-xgqv50): *"move the Feedback icon all the way to the
+   right, and perhaps wrap it in its own circle or something to show it's
+   something a little different from the other modes."* docs/plans/261001j-….
+
+   **Right by an auto margin**, which takes whatever room the row has spare
+   and is zero when the row overflows, so on a phone it is simply last, as it
+   was. On a coarse pointer the buttons grow to share a wide bar instead, and
+   there the growth takes the room first; it is still the last thing in the
+   row.
+
+   **The circle is round the glyph, not the button** (`ring` in
+   FeedbackButton.tsx's shape table), so the word can sit beside it on rung 0
+   and the button can grow on a tablet without the circle becoming a pill. The
+   button keeps its whole box as the target and its own focus ring; the hover
+   wash moves from the box onto the circle, because a square wash behind a
+   round outline reads as two controls. */
+.dock-feedback { margin-inline-start: auto; }
+.dock-feedback:hover { background: transparent; }
+.dock-feedback-ring {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.dock-feedback:hover .dock-feedback-ring {
+  border-color: var(--highlight);
+  background: var(--panel);
 }
 
 /* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
