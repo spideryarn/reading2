@@ -645,8 +645,8 @@ function lapsedCopy(plan: Extract<ReaderPlan, { kind: "lapsed" }>): PlanCopy {
     ? {
         headline: "Your plan has ended",
         detail:
-          `You are back on the free allowance${ofWhat}, with ${plan.remaining} of ${plan.limit} ` +
-          "left. Everything you added while subscribed is still here, and reading is " +
+          `You are back on the free allowance${ofWhat}, with room for ${plan.remaining} further private ` +
+          `${plan.remaining === 1 ? "article" : "articles"}. Everything you added while subscribed is still here, and reading is ` +
           "unaffected — resubscribing is what adds more.",
       }
     : {

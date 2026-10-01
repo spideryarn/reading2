@@ -79,11 +79,12 @@ describe("the lapsed plan, which is the one that must not read as a bug", () => 
 
   it("shows what is left when the free allowance is not yet spent", () => {
     /* A lapsed account can still have room — somebody who subscribed, added one
-       article and cancelled. `remaining` can never exceed `limit`, so the ratio
-       here is bounded and true, which is why this case is allowed to have one. */
+       article and cancelled. `remaining` is private headroom, not the unused end
+       of a ratio; public and High-powered charges can make the two differ. */
     const words = rendered({ kind: "lapsed", limit: 3, remaining: 2 });
     expect(words).toContain("plan has ended");
-    expect(words).toContain("2 of 3");
+    expect(words).toContain("2 further private articles");
+    expect(words).not.toContain("2 of 3");
   });
 });
 
@@ -630,5 +631,16 @@ describe("a gifted allowance says what it is made of (261001m)", () => {
       gifts: [gift, { ...gift, articles: 5, noticeKey: "j" }],
     });
     expect(words).toContain("3 free + 25 from gifts");
+  });
+
+  it("does not turn a lapsed reader's private headroom into an N-of-M ratio", () => {
+    const words = rendered({
+      kind: "lapsed",
+      limit: 28,
+      remaining: 4,
+      gifts: [gift, { ...gift, articles: 5, noticeKey: "j" }],
+    });
+    expect(words).not.toContain("4 of 28");
+    expect(words).toContain("4 further private articles");
   });
 });
