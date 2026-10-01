@@ -121,5 +121,7 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "a one-off reproduction; it sends production's own INVESTIGATE_SYSTEM, which carries plainWords(\"explain\")",
   "scripts/probes/260930a-investigate-probe.ts":
     "a one-off probe; its prompt, in scripts/probes/260930a-investigate-prompt.ts, carries plainWords(\"explain\")",
+  "scripts/probes/261001a-paper-read-probe.ts":
+    "a one-off probe; it runs production's own Investigate press, whose prompts are production's (INVESTIGATE_SYSTEM carries plainWords(\"explain\"); the passages call is exempt above)",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
 };

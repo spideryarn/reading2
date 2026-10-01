@@ -564,7 +564,7 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
  * page a current *Look it up* read) and its own store —
  * src/citation-investigate.ts. Below `fetchAllowanceStore` for the same reason.
  */
-export const investigateCitationDeps: InvestigateCitationDeps = {
+export const investigateCitationDeps = {
   reader,
   finds: citationFindStore,
   investigations: citationInvestigationStore,
@@ -573,7 +573,7 @@ export const investigateCitationDeps: InvestigateCitationDeps = {
      (plan 261001a stage 3). tests/citation-investigate-wiring.test.ts holds
      this to the real function. */
   readPaper: readCitedPaper,
-};
+} satisfies InvestigateCitationDeps;
 export const investigateCitation = makeInvestigateCitation(investigateCitationDeps);
 
 /** An uploaded paper's guessed web address — one row per article, a claim then an answer. */
