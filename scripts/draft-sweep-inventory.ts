@@ -59,7 +59,6 @@ if (!url) {
 console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
 
 const ssl = sslDecisionFor(url);
-if (ssl.mode === "encrypted-unverified") console.warn(`⚠ ${ssl.why}`);
 
 const pool = new Pool({
   connectionString: url,

@@ -54,7 +54,7 @@ import pg, { type ClientConfig, type QueryResultRow } from "pg";
 import { parse as parseConnectionString, toClientConfig } from "pg-connection-string";
 
 import { isAdmin } from "../src/admin.js";
-import { sslDecisionFor } from "../src/db/ssl.js";
+import { sslDecisionFor, TLS_URL_KEYS } from "../src/db/ssl.js";
 import { readEnvProd } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
 
@@ -200,22 +200,6 @@ export type Lookup = (reportId: string) => Promise<LookupResult>;
 /** The one remote whose rows can establish that this project's administrator filed a report. */
 const PRODUCTION_PROJECT_REF = "alschkahzfagtppxspfq";
 const HOSTED_SUPABASE = /^(?:[a-z0-9-]+\.pooler\.supabase\.com|db\.[a-z0-9]+\.supabase\.co)$/;
-
-/**
- * `pg` parses these out of the URL *after* it receives the explicit `ssl`
- * object, and therefore replaces the verified CA decision with the URL's
- * value. Refuse the ambiguity rather than claim `sslDecisionFor` controls a
- * socket that is actually controlled elsewhere.
- */
-const TLS_URL_KEYS = [
-  "ssl",
-  "sslmode",
-  "sslrootcert",
-  "sslcert",
-  "sslkey",
-  "sslnegotiation",
-  "uselibpqcompat",
-] as const;
 
 export interface ProductionConnection {
   config: ClientConfig;

@@ -107,12 +107,18 @@ import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js
 import { verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
+  judgeFallback,
   labelled,
+  listInputs,
+  openedId,
   rememberDevice,
+  rememberDeviceLabel,
   rememberedDevice,
+  rememberedDeviceLabel,
 } from "./mic-devices.js";
 import { type MicRecording, type MicTape, type TapeEvents, extFor, recordTrack } from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
+import { useQuietChime } from "./quiet-chime.js";
 
 /**
  * The tape lost audio part-way — one of its recorders failed, never finished,
@@ -312,8 +318,14 @@ export interface UseDictation {
    * being used. Said out loud rather than left for the reader to notice, since
    * transcribing from a device they did not pick is the failure this round is
    * about. GPT Sol's code review, item 2.
+   *
+   * `wanted` is the browser's name for the one they chose, so the sentence can
+   * say which — null for a choice stored before names were kept, which is
+   * warned about once and then forgotten. Not set when the device that opened
+   * is the chosen one under an id that stopped resolving, which is not news
+   * (spya-k3q9mc; mic-devices.ts § judgeFallback).
    */
-  deviceUnavailable: boolean;
+  deviceUnavailable: false | { wanted: string | null };
   /**
    * Choose a microphone, and restart on it if a dictation is running — a picker
    * that needs a second press to take effect looks broken, which is the whole
@@ -354,6 +366,26 @@ export interface UseDictation {
    * Does nothing when {@link canRetry} is false.
    */
   retry(): void;
+  /**
+   * **Which thing the line under the box is about**, as a number that moves
+   * whenever something new could appear there: a new dictation, a Retry, a
+   * recovered recording, a discard. Read it at the moment that matters and
+   * hand it back to {@link dismiss}.
+   */
+  artifact(): number;
+  /**
+   * Clear the error and everything kept from the last dictation — the audio,
+   * the Retry offer, the device copy — **if it is still the artifact `seen`
+   * and nothing is running**. Otherwise nothing.
+   *
+   * For a box whose draft is finished: the Feedback dialog calls it when a
+   * report is filed, because it is mounted for the life of the page and a
+   * `[mic-silent]` otherwise greeted every later opening (SPIDERYARN-READING2-7Z).
+   * The `seen` check is because a send can land after the reader has started
+   * something newer, which is theirs and not the report's. GPT Sol's plan
+   * review, F1; plan 261001k.
+   */
+  dismiss(seen: number): void;
 }
 
 /**
@@ -604,6 +636,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(() => rememberedDevice());
   const [recording, setRecording] = useState<DictationRecording | null>(null);
+  /** See {@link UseDictation.artifact}. A ref: it is read in a click, never rendered. */
+  const artifactSeq = useRef(0);
+  /** `phase` as of the last render, for `dismiss`, which is called from outside a render. */
+  const phaseNow = useRef(phase);
+  phaseNow.current = phase;
   /**
    * The recording behind `recording` **and where it was going**, held for a
    * retry.
@@ -636,7 +673,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const retryGeneration = useRef(0);
   /** The retry request in flight, so an unmount can cancel it. */
   const retryUpload = useRef<AbortController | null>(null);
-  const [deviceUnavailable, setDeviceUnavailable] = useState(false);
+  const [deviceUnavailable, setDeviceUnavailable] = useState<UseDictation["deviceUnavailable"]>(false);
   /* Whether *this* dictation will produce live words. Not a constant: it is a
      property of the capture that actually opened, and a `start()` that refused
      turns a live browser into a silent one for one press. */
@@ -648,6 +685,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const mounted = useRef(true);
 
   const measured = useAudioLevel(track, ctx);
+  /* The chime that goes with the strip's quiet warning, through the same
+     context the meter reads from — the one the press created inside its
+     gesture. `startedAt` is the dictation it belongs to. Plan 261001k. */
+  useQuietChime(measured.quiet, startedAt, ctx);
   const detectedLevel = useRef(0);
   /* One or the other, never a blend. `measured.measuring` only goes true once
      samples are genuinely flowing from a running context, so the fallback is
@@ -1423,11 +1464,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     retryable.current = null;
     setCanRetry(false);
     retryGeneration.current++;
+    artifactSeq.current++;
     /* Its device copy is released rather than forgotten: moving on is not the
        same as throwing it away, so it comes back the next time this box is. */
     holdKept(null);
 
     const preferred = rememberedDevice();
+    const preferredLabel = rememberedDeviceLabel();
     void (async () => {
       /* **Before `getUserMedia`, and that is the whole point** — the gap this
          closes is between one instance opening a device and another instance
@@ -1458,15 +1501,63 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         return;
       }
 
+      /* Own the track before the first await after capture. A stop while device
+         enumeration is pending must stop it before `finish` releases this
+         session's page-wide microphone claim. */
+      s.track = outcome.track;
       s.live = outcome.live;
       setLiveText(outcome.live);
-      setDeviceUnavailable(preferred !== null && !outcome.honoured);
-      s.track = outcome.track;
+      const opened = labelled(outcome.track);
+      /* **Was it the microphone they chose?** Asked of the name as well as the
+         id since 2026-10-01: on an iPhone with AirPods every press said the
+         chosen microphone was not available and then worked (spya-k3q9mc). A
+         remembered id can stop resolving while the device is still there, and
+         the name — unique among the inputs, and agreeing with the id that
+         opened — is how that is told apart from a headset that has gone.
+         mic-devices.ts § judgeFallback. The inputs are listed only on this
+         path, and only now, when there is permission and so there are names. */
+      setDeviceUnavailable(false);
+      if (preferred !== null && outcome.honoured) {
+        rememberDeviceLabel(opened);
+      } else if (preferred !== null) {
+        const inputs = await listInputs();
+        if (session.current !== s || s.finished) {
+          /* `finish` owned the track across the await, and stopped it before it
+             released the claim. Nothing from this stale continuation may land. */
+          return;
+        }
+        const verdict = judgeFallback(
+          preferredLabel,
+          { label: opened, id: openedId(outcome.track) },
+          inputs,
+        );
+        switch (verdict.kind) {
+          case "same-device":
+            rememberDevice(verdict.id);
+            rememberDeviceLabel(opened);
+            setDeviceId(verdict.id);
+            break;
+          case "forget":
+            /* Said once, then dropped: stored before names were kept, it can
+               never be checked, and would otherwise warn on every press. */
+            rememberDevice(null);
+            setDeviceId(null);
+            setDeviceUnavailable({ wanted: null });
+            break;
+          case "different":
+            setDeviceUnavailable({ wanted: verdict.wanted });
+            break;
+          default: {
+            const never: never = verdict;
+            void never;
+          }
+        }
+      }
       /* **The name of what we opened**, which is the piece that was missing. A
          meter reading zero and a meter pointed at a dead conferencing loopback
          are the same picture until something says which device produced it.
          docs/plans/260827k-microphone-device-and-recording.md. */
-      setDeviceLabel(labelled(outcome.track));
+      setDeviceLabel(opened);
       /* The context is created only now, and only when there is something to
          measure. It is a shared singleton, so this is a get rather than a build
          most of the time. */
@@ -1562,8 +1653,33 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     retryable.current = null;
     setCanRetry(false);
     forgetHeld();
+    artifactSeq.current++;
+    /* **And the sentence that pointed at it.** Every error that sits beside a
+       recording is about that recording — silent, failed, broken, recovered —
+       so *"the audio is below"* over no audio is a sentence about nothing.
+       Plan 261001k. */
+    setError(null);
     setPhase("idle");
   }, [forgetHeld]);
+
+  const artifact = useCallback(() => artifactSeq.current, []);
+
+  const dismiss = useCallback(
+    (seen: number) => {
+      if (seen !== artifactSeq.current) return;
+      /* A live microphone, a transcript on its way, or a retry in flight is not
+         "the last dictation" — and `clearRecording` would drop it to `idle`.
+         `phaseNow` is render state: immediately after `start()` or `retry()` it
+         can still say `idle`. The refs are written synchronously, so they close
+         that render gap; `phaseNow` covers the transcript-draining interval,
+         whose session has already been removed. Each operation also moved
+         `artifactSeq`, so this is the second lock on the door rather than the
+         first. */
+      if (session.current || retryUpload.current || phaseNow.current !== "idle") return;
+      clearRecording();
+    },
+    [clearRecording],
+  );
 
   /**
    * Send the kept recording up again.
@@ -1595,6 +1711,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        which would drop a *live* dictation back to `idle` from underneath a
        reader who had started one. Same reason `newest` exists for sessions. */
     const mine = ++retryGeneration.current;
+    artifactSeq.current++;
     /* Aborted by the unmount effect below. The `mounted` guard already stops a
        gone component writing state; this stops the *request* — and the paid
        model call behind it — outliving the page. GPT Sol's code review, R3. */
@@ -1619,6 +1736,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          that is genuinely open, and `transcribed.current?.()` would splice a
          stale transcript into the middle of a live dictation's span. */
       if (!mounted.current || retryGeneration.current !== mine || session.current) return;
+      retryUpload.current = null;
       setPhase("idle");
       if (results.some((r) => !r.ok && "abandoned" in r)) return;
       /* What came back this time is kept for the next go, whatever happens to
@@ -1709,6 +1827,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
             })),
           };
           holdKept(found.tape);
+          /* Something new on the strip, so a send that did not see it cannot
+             dismiss it. GPT Sol's plan review, F5. */
+          artifactSeq.current++;
           setRecording(recorded);
           setError(found.complete ? RECOVERED : RECOVERED_CUT);
           if (!found.broken) {
@@ -1794,6 +1915,8 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     clearRecording,
     canRetry,
     retry,
+    artifact,
+    dismiss,
   };
 }
 

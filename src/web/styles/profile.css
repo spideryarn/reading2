@@ -80,6 +80,25 @@
    about. This is the warning, not the wall. */
 .prof-count.over { color: var(--highlight); }
 
+/* Where the save stands — `SaveStatus` in ProfileBox.tsx. A fixed height, so
+   the line changing from "Saving…" to "Saved" does not move anything below it.
+   The tick is the palette's bluish green (`--cat-2`), the one green here that
+   is told apart from the orange by readers who cannot tell red from green —
+   docs/project/colour-scales.md. Spinner: `.cmt-spinner`, the house one. */
+.prof-save {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.2rem;
+  margin: 0.35rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+}
+.prof-save svg { flex: none; }
+.prof-save.is-saved { color: rgb(var(--cat-2-rgb)); }
+.prof-save.is-error { color: var(--highlight); }
+
 .prof-box-error {
   display: flex;
   align-items: center;
@@ -108,6 +127,18 @@
 .prof-listening-what {
   flex: none;
   color: var(--ink-faint);
+}
+/* Nothing heard for ten seconds: the same words, warm rather than faint, and a
+   glyph, so it is noticed while the microphone is still on. The colour is
+   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k. */
+.prof-listening.quiet .prof-listening-what {
+  color: var(--highlight-ink, var(--highlight));
+  font-weight: 600;
+}
+.prof-quiet-icon {
+  flex: none;
+  align-self: center;
+  color: var(--highlight-ink, var(--highlight));
 }
 
 /* The unconfirmed tail of a dictation. Italic and faint because it is a guess
