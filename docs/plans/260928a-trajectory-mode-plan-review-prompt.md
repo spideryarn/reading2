@@ -11,7 +11,7 @@ Commit `fb96e2ad` on branch `worktree-trajectory-mode` (repo root is your cwd). 
 
 Then the precedents the plan says it copies, as far as you need to check its claims:
 `docs/plans/260916d-faq-mode.md` (the most recent artefact-backed mode, and its commits `b31d8b87`, `0e947eb4`),
-`src/faq.ts`, `src/ideas.ts` (profile plumbing), `src/profile.ts`, `docs/project/new-mode.md` (the checklist),
+`src/faq.ts`, `src/ideas.ts` (profile plumbing), `src/profile.ts`, `docs/project/mode.md` (the checklist),
 `docs/project/keyboard.md` and `src/web/keynav.ts` (who owns ← / →), `docs/project/granularity-zoom.md § The tree`,
 `docs/project/quotes.md`, `src/step-order.ts`, `docs/project/vision.md`. Scope is not limited to these.
 
@@ -23,7 +23,7 @@ An independent attack on the plan first. In particular:
 - **The reuse decision** (plan § Reuse): A (a thin new artefact that is only an ordering over block ranges) vs B (an ordering over existing Quotes) vs C (no model call). Is A the right v1 given Greg's "one reusable set of highlights" wish? Is there a better option the plan did not consider?
 - The data shape: a single ordered array with a per-stop `depth` so that depths nest. Sound? Failure modes in the validation rules (demote/promote, overlap, span, caps)?
 - The keyboard claim: ← / → are owned globally by keynav.ts for stride. Is claiming them in Trajectory mode feasible and safe as described?
-- Anything in new-mode.md's checklist the stages would miss; any claim about the precedents that is false in the code.
+- Anything in mode.md's checklist the stages would miss; any claim about the precedents that is false in the code.
 - Is "not streamed" acceptable against the repo's rule "stream any model call a person is waiting on"? (AGENTS.md; FAQ and Ideas are not streamed either — check.)
 - A simpler v1 that gets most of the value?
 

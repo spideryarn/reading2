@@ -176,7 +176,7 @@ runs a model pass"* is false on three of the four; the catalogue describes the a
 the gesture.
 On 2026-09-07 four of the fourteen mode cards opened that way in first draft, and only a
 cross-family review caught them —
-[new-mode.md § The card on the button](new-mode.md#the-card-on-the-button).
+[mode.md § The card on the button](mode.md#the-card-on-the-button).
 
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
@@ -265,8 +265,8 @@ Three things about it are not true of any other set here.
 - **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
   ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
   too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
-  else in this file the words sit beside the JSX. [new-mode.md § The card on the
-  button](new-mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
+  else in this file the words sit beside the JSX. [mode.md § The card on the
+  button](mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
   the rule that **no card in this bar names a price** — the command bar says `generates` and no
   figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
 - **The same fourteen modes are drawn by two different components**, and only one of them had a

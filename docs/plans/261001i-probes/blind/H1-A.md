@@ -4,7 +4,7 @@
 - `CLAUDE.md` (AGENTS.md) — pointed at reading-view-overview, citations.md, copy.md; helped.
 - `docs/project/citations.md` — helped: the "Look it up" is now step one of Investigate; also the Find it and registry lookups.
 - `docs/project/copy.md` — helped a lot: four rules, kinds `retry/ours/bug/blocked`, bracketed code, prefix `cite-`, tests match the code not prose.
-- (Did not open reading-view-overview.md / web-client.md / new-mode.md; grepped code instead.)
+- (Did not open reading-view-overview.md / web-client.md / mode.md; grepped code instead.)
 
 ## 2. Code files you would edit
 - `src/messages.ts` — message text and the `cite-*` kind table (around line 313 and 5150-5260).

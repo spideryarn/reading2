@@ -39,7 +39,7 @@ three rules**, and each rule has something that enforces it:
      (`?slug=`) and dictation (`context.slug`).
 
 A **new mode** needs nothing beyond this: its step name *is* its line on the article's cost
-breakdown. [new-mode.md § Its cost](new-mode.md#its-cost) says what to check.
+breakdown. [mode.md § Its cost](mode.md#its-cost) says what to check.
 
 ## Where the figures show up
 

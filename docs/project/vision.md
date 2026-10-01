@@ -203,7 +203,7 @@ Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the ne
   consciousness"*, *"generate me Quotes and an Illustrated diagram"*, *"explain how access
   consciousness is different from phenomenal consciousness"*. Greg: *"Dunno if a mode registry would
   help with this!"* — one was deliberately rejected for the current shape, and the reasoning is in
-  [new-mode.md](new-mode.md); a command bar would be the first argument on the other side.
+  [mode.md](mode.md); a command bar would be the first argument on the other side.
 - **Reader-built modes.** *"a world in which users can build their own new modes (generate UI), or a
   marketplace of modes — though all that is far in the future"*.
 

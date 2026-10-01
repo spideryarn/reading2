@@ -2723,6 +2723,7 @@ export const AUTH_EXCHANGE_FAILED: ReaderFacingFailure = {
 export function authConfirmationSent(email: string): string {
   return (
     `Check ${email} for a confirmation link. The account will not work until you have clicked it. ` +
+    "If the link opens in a new tab, come back to this tab afterwards to carry on where you left off. " +
     "[auth-confirm]"
   );
 }

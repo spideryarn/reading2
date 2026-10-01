@@ -6,7 +6,7 @@ Do not edit files. Read the code it names to check its claims: src/web/layout.ts
 PROSE_MIN, MODE_PROSE_FLOOR, proseAloneMaxPx), src/web/reader/Reader.tsx (bandOpen, fit, modeBand, quizAfter,
 className on .reader), src/web/TableView.tsx (quizAfter rendering inside td.text), src/web/styles/narrow-window.css
 (`.text-alone` centring), src/web/styles/shell.css (.reader padding), src/web/visitor.ts (POLICY),
-src/web/useIdeas.ts (useIdeasRead), docs/project/new-mode.md, src/hierarchy.ts (question on depth-1 nodes),
+src/web/useIdeas.ts (useIdeasRead), docs/project/mode.md, src/hierarchy.ts (question on depth-1 nodes),
 src/web/useArc.ts, src/web/reader/useReadingPosition.ts (`at`).
 
 Context: Greg's two reports are quoted in the plan. CLAUDE.md has the house rules (prefer simple; block ids; view
@@ -20,7 +20,7 @@ Look especially for:
    ancestor? the table's `table-layout: fixed`?), cause horizontal page scroll, interfere with selection.ts, the
    gutter, the reading-time hairline, or `memo(TableView)`?
 3. The collision pass: anything that will make it loop, thrash, or go stale (zoom, images, fonts, notes map change)?
-4. new-mode.md checklist: anything the plan misses, or gets wrong (e.g. `bandOpen` false for a non-plain mode —
+4. mode.md checklist: anything the plan misses, or gets wrong (e.g. `bandOpen` false for a non-plain mode —
    what else assumes `mode !== "plain"` means a band? `band-covers` class keyed on `fit.modeW === 0`; ModeHerald;
    `proseOnScreen`; last-view restore; the Dock).
 5. Visitor path: can a visitor get the tree questions, the arc, and Ideas without any POST? Is "Ideas only where a

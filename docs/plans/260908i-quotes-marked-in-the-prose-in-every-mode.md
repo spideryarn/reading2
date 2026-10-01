@@ -333,7 +333,7 @@ Answer file: `qam-review-answer.md`.
 
 - [quotes.md](../project/quotes.md) § *Every visible quote is marked* becomes *in every mode*;
   [reading-view-overview.md](../project/reading-view-overview.md),
-  [new-mode.md](../project/new-mode.md) and [touch.md](../project/touch.md) where they describe the
+  [mode.md](../project/mode.md) and [touch.md](../project/touch.md) where they describe the
   one-slot rule and what a tap does; `/design`'s overlap specimen stops saying "not reachable".
 - Playwright on the box, on a **deliberately dense** article — 260907c's specimens are two-quote
   cases and nobody has ever looked at 32 marks at once ([quotes.md](../project/quotes.md) says so).

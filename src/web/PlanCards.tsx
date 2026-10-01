@@ -159,7 +159,7 @@ export interface PlanCard {
  * Stripe…"). It would be shorter to pass a `pressed` boolean and let this file
  * write that sentence, and it would put a fact about Stripe inside a component
  * whose whole claim is that it knows nothing about billing — on `/pricing` the
- * signed-out press does not go to Stripe at all, it goes to the sign-in panel.
+ * signed-out press does not go to Stripe at all, it goes to `/login`.
  */
 export interface PlanCardAction {
   readonly label: string;
@@ -593,10 +593,11 @@ function OnePlan({
           three CTAs line up however the lines above them wrap. */}
       <div className="tw:mt-6 tw:flex-1" />
 
-      {/* **A `<button>`, not the anchor the spike used.** Every action here is a
-          press with an effect — a checkout POST, or a jump to the panel that
-          signs you in — and none of them is a destination, so there is no href
-          to give. `site-cta` styles both the same way. */}
+      {/* **A `<button>`, not the anchor the spike used.** A paid press has an
+          effect before it navigates — it stores the chosen tier — and the
+          caller owns both that work and the eventual destination, so there is
+          no href this presentation component can honestly give. `site-cta`
+          styles both elements the same way. */}
       {act && (
         <button
           type="button"

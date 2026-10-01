@@ -8,7 +8,7 @@ You are reviewing a PLAN, before anything is built, in the repo at the current w
 full. Greg's request is quoted at its top; only his sentences express intent.
 
 **Background to read, as needed** (not a limit on scope): `AGENTS.md`; `docs/project/block-ids.md`
-(the contract: text is addressed by block id only); `docs/project/new-mode.md` § The artefact;
+(the contract: text is addressed by block id only); `docs/project/mode.md` § The artefact;
 `src/ideas.ts` (the template: `validateOccurrences`, `buildIdeas`, `generateIdeas`);
 `src/referee-claims.ts` (`validateClaims`, the "spaced" match); `src/web/annotate.ts` (`annotateHtml`,
 the `cite` kind and `citeMarks`); `src/web/TableView.tsx` (the `proseHtml` memo and the delegated

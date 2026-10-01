@@ -620,7 +620,7 @@ both would apply to any future schema change here.
   selection from A3. Retain separate slots unless a tested single-owner alternative is simpler.
 - [x] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
   re-exports after the caller census is empty. Assert feature files cannot import `App.tsx`.
-- [x] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
+- [x] Update [new-mode](../project/mode.md), [web-client](../project/web-client.md),
   [URL state](../project/url-state.md) and feature signposts. Acceptance: adding a fixture mode
   makes all required policy decisions visible, and leaves article access/position code untouched.
 
@@ -724,7 +724,7 @@ both would apply to any future schema change here.
   Any changed rule wording follows the important-doc process; signpost moves do not need approval. —
   **not done, and there is now a fifth destination**: `design-css-overview.md` was split on
   2026-09-07 and the reading view's own narrow-window arithmetic lives in
-  [narrow-windows.md](../project/narrow-windows.md). [new-mode.md](../project/new-mode.md) has been
+  [narrow-windows.md](../project/narrow-windows.md). [mode.md](../project/mode.md) has been
   updated (render the band with `ModeSurface`; decide whether the header row should *persist* or
   *not exist*), and so has [keyboard.md](../project/keyboard.md), which gained the modal/modeless
   contract in stage 5a — a sixth destination, and the one that needed no device. The four above still

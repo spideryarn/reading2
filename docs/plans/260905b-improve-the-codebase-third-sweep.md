@@ -453,7 +453,7 @@ Negative results from a real sweep, recorded so the next run does not re-spend a
 - **The web client is coherent.** A whole-zone pass turned up one four-line dedup and nothing else.
   Escape-key handling looks like nine rival copies and is nine documented contracts; nuqs vs raw
   `URLSearchParams` is a documented split; the mode hooks all import the two shared hooks
-  `new-mode.md` requires; `CACHEABLE` is derived and tested, not hand-maintained; the "13 modes, 4
+  `mode.md` requires; `CACHEABLE` is derived and tested, not hand-maintained; the "13 modes, 4
   experimental" counts in the docs match `src/modes.ts` exactly.
 - **The type system is not the weak point.** Zero real `as any` in `src/` or `api/`; the 29
   `as unknown as` sites are commented, single-purpose seam escapes. `strict`,

@@ -13,7 +13,7 @@
   **Fix:** decide explicitly whether chat is an exception. If Greg’s request covers every reader-facing notice, remove this sentence and update its tests/docs. Do not change visitor/access code.
 
 - **F4 — P2 — docs omitted from the plan**  
-  Current documentation promises banners/actions that this change removes: `docs/project/trajectory.md:79`, `docs/project/quotes.md:593`, `docs/project/quotes.md:631`, `docs/project/glossary.md:535`, and `docs/project/new-mode.md:249`. `docs/project/chat-tools.md:218` also changes if F3 is taken.  
+  Current documentation promises banners/actions that this change removes: `docs/project/trajectory.md:79`, `docs/project/quotes.md:593`, `docs/project/quotes.md:631`, `docs/project/glossary.md:535`, and `docs/project/mode.md:249`. `docs/project/chat-tools.md:218` also changes if F3 is taken.  
   **Fix:** add these documentation updates to the plan; historical plans and feedback notes can remain historical.
 
 The stale/profile/outdated branches are otherwise clean: stale wins in all nine panels, profile notices are separate except Trajectory’s intentional helper, and removing only the outdated arms leaves no empty banner.

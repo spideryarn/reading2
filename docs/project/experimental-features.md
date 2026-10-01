@@ -189,7 +189,7 @@ cannot be added without somebody deciding which side of the line it is on.
 **The table is the list, and nothing counts the modes.** Both halves used to be restated — a count
 in five source comments and two other docs, and the complement written out by name — so promoting
 one mode meant editing arithmetic in eight places, one of which had already drifted wrong and gone
-on passing ([new-mode.md § Moving a mode in or out](new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+on passing ([mode.md § Moving a mode in or out](mode.md#moving-a-mode-in-or-out-of-the-switch)).
 Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src/modes.ts)).
 
 | Mode | Why it is behind the switch |

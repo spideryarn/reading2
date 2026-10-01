@@ -379,7 +379,7 @@ plan's worktree, tests, review, browser validation and commit/push cadence.
   only allowed surfaces/data; metadata import does not pull React or pipeline modules across layers.
 - [ ] Check that catalog enumeration causes no fetch, generation or controller mount. Measure the
   build graph. Expand to the remaining built-ins only if the four counterexamples remain readable.
-- [ ] Update `new-mode.md`, `web-client.md` and relevant ownership signposts after it lands.
+- [ ] Update `mode.md`, `web-client.md` and relevant ownership signposts after it lands.
 
 ### Stage: Establish typed actions and a deterministic command bar
 

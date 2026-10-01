@@ -161,7 +161,7 @@ with the numbers written here. Footnote expansion in code is what keeps the per-
 
 1. **The artefact and the stage** (server) — `Citation`/`Citations` types, `ArtifactKind`
    `citations`, the step, and every total the compiler asks for
-   ([new-mode.md § The artefact](../project/new-mode.md#the-artefact-if-the-mode-shows-one)):
+   ([mode.md § The artefact](../project/mode.md#the-artefact-if-the-mode-shows-one)):
    `SHAPE`, `STAMP_SOURCE`, `STEP_BUDGET_MS`, `STEPS`, `STEP_ORDER`, `TASK_TIER`, `TASK_WIRE`,
    `MODEL_ENV_VAR`, `STAGE_EFFORT`, `ARTICLE_RENDERER`, `REVISION_CARRY_POLICY`, `ArticleReader` and
    its adapter; the migration (a column on `article_revisions`, the step-name CHECK, which
@@ -172,7 +172,7 @@ with the numbers written here. Footnote expansion in code is what keeps the per-
    footnote expansion, dedupe and id inheritance, score drops, truncation. A real run on two or three
    of the local test articles (below), with what it produced written here.
 2. **The mode** (client) — `MODES` and every client total
-   ([new-mode.md § The client](../project/new-mode.md#the-client)): `MODE_LABEL`,
+   ([mode.md § The client](../project/mode.md#the-client)): `MODE_LABEL`,
    `OWNER_MODE_NOTE`, `MODE_CATALOG` (both card sentences, aliases, `experimental: true`), `MODES_UI`,
    `POLICY`, `BAND_SAYS`, `MODE_TARGET`, `SPENDS`, `DRAWS`, `modeBand()`, `MODE_CONTAINMENT` and its
    `WITNESS`, `selectPassages` (`NO_FOUND`, named a non-producer in
@@ -219,7 +219,7 @@ in its own table like [`pg-lookups.ts`](../../src/store/pg-lookups.ts), read bac
   `influence` from memory into evidence; a new outbound dependency with its own failure modes.
 - **Batch web search** for every unlinked entry at generation time — searches are billed, not
   results, and nothing bounds them.
-- **Visitors** (public-readable) — a projection away, and new-mode.md lists the four places it touches.
+- **Visitors** (public-readable) — a projection away, and mode.md lists the four places it touches.
 - **Marking citations in the prose** as their own underline and hover card, like glossary terms.
 - **Relevance from the reader's profile.**
 
@@ -256,7 +256,7 @@ The reader's own article is not in the local database.
 | F5 | P1 | the cap does not give "a link to all of them" | Overruled (Fable arbitrated): the brief authorises it; `capped` reported by the model, honest foot sentence, coverage witness logged |
 | F6 | P1 | ids, dedupe and lookup survival unspecified | Accepted: code-minted ids, dedupe key, id inheritance, lookups keyed on id |
 | F7 | P2 | passage navigation is unrequested scope | Accepted: first-cited jump only; selection and marks deferred |
-| F8 | P2 | new-mode.md residue not named | Accepted: listed in stage 2 |
+| F8 | P2 | mode.md residue not named | Accepted: listed in stage 2 |
 | F9 | P2 | the product hides a central obscure work | Accepted: `(2r + i) / 3` |
 | F10 | P2 | no budget design | Accepted: field caps, explicit estimate, headroom measured in stage 1 |
 

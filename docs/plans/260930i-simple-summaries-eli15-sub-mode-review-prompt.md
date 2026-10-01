@@ -1,6 +1,6 @@
 You are reviewing a PLAN (not code) in the Spideryarn repo, read-only. The plan is
 docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Read it, then read enough of the repo to test it:
-CLAUDE.md, docs/project/summaries.md, docs/project/new-mode.md, docs/project/prompting-guide.md,
+CLAUDE.md, docs/project/summaries.md, docs/project/mode.md, docs/project/prompting-guide.md,
 docs/project/vision.md, the FAQ stage-1 commit b31d8b87 (show --stat, and the files) and stage-2 0e947eb4
 as templates, src/web/modes/summary/SummaryMode.tsx, src/web/SummaryPanel.tsx, the Remember/Quiz sub-mode
 (`?remember=quiz`, src/web/useQuiz.ts, src/web/auto-run-targets.ts, src/web/useAutoRun.ts), src/models.ts,

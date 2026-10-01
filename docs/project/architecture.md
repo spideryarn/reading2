@@ -510,6 +510,6 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 
 ### Adding an artefact-backed mode
 
-The checklist lives in **[new-mode.md § The artefact](new-mode.md#the-artefact-if-the-mode-shows-one)**
+The checklist lives in **[mode.md § The artefact](mode.md#the-artefact-if-the-mode-shows-one)**
 since 2026-09-03, beside the client half. This heading stays so links to it keep working.
 

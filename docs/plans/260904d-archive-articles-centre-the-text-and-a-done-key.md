@@ -282,7 +282,7 @@ would typecheck in silence. `tests/client-imports.test.ts` is the diagnostic; th
 ever a plaster over one breach of it.
 
 Also this pass's, and small: the stale citation in
-[new-mode.md](../project/new-mode.md) that still sent a reader to `pipeline.ts` for the array.
+[mode.md](../project/mode.md) that still sent a reader to `pipeline.ts` for the array.
 
 **The check was proved able to fail** before it was believed: a `node:crypto` import added to
 `step-order.ts` turns the allowlist entry red, and removing it turns it green again.

@@ -3,7 +3,7 @@
 ## 1. Docs opened, in order
 - `AGENTS.md` (as CLAUDE.md) — pointed me at the reading-view entry point; the rules are generic, not mode-specific.
 - `docs/project/reading-view-overview.md` — helpful: lists every mode and its owner doc, and points to the checklist.
-- `docs/project/new-mode.md` — the key doc; a complete checklist (totals the compiler checks, plus untested residue).
+- `docs/project/mode.md` — the key doc; a complete checklist (totals the compiler checks, plus untested residue).
 - `docs/project/experimental-features.md` — helpful: the three edits to put a mode behind the switch and the table to add a row to.
 - `docs/project/faq.md` (first 60 lines only) — to see the closest sibling ("the questions a careful reader would ask"); showed the task name collides with FAQ.
 - Greps in `src/` and `tests/` for `faq` and `annotations` — to find the real touch points of a recent mode.
@@ -30,21 +30,21 @@
 - I would NOT write a new helper unless the spec needs one; I found no existing "questions" component.
 
 ## 4. Rules/policies to follow
-- Add the word to `MODES`, then let the typecheck list the totals — `new-mode.md` § The client, and its measured "what goes red" tables.
-- `experimental: true` in `MODE_CATALOG`, a name in `BEHIND_THE_SWITCH`, and a row with a reason in `experimental-features.md` — `new-mode.md` § Moving a mode in or out of the switch.
-- Nothing counts modes; no "N modes" anywhere — `new-mode.md`.
-- No description line in the band (Greg, 2026-09-30); `description`/`how` written about the mode, no price — `new-mode.md` § The card on the button.
-- Render through `ModeSurface` with a required `aria-label`; decide whether the head persists — `new-mode.md`.
-- A press on the button runs generation, arrival does not; `MODE_TARGET` decides spending — `reading-view-overview.md`, `new-mode.md`.
+- Add the word to `MODES`, then let the typecheck list the totals — `mode.md` § The client, and its measured "what goes red" tables.
+- `experimental: true` in `MODE_CATALOG`, a name in `BEHIND_THE_SWITCH`, and a row with a reason in `experimental-features.md` — `mode.md` § Moving a mode in or out of the switch.
+- Nothing counts modes; no "N modes" anywhere — `mode.md`.
+- No description line in the band (Greg, 2026-09-30); `description`/`how` written about the mode, no price — `mode.md` § The card on the button.
+- Render through `ModeSurface` with a required `aria-label`; decide whether the head persists — `mode.md`.
+- A press on the button runs generation, arrival does not; `MODE_TARGET` decides spending — `reading-view-overview.md`, `mode.md`.
 - Stream any model call a person waits on; `PROMPT_VERSION`; `plainWords(...)` in the prompt (`prompting-guide.md`); cost tracking via `runStep` and `JOB_DISPOSITION` (`cost-tracking.md`) — only if generated.
-- Visitor policy: stored output visible to visitors, making it is the owner's (`new-mode.md` on `PUBLIC_PROJECTIONS`).
+- Visitor policy: stored output visible to visitors, making it is the owner's (`mode.md` on `PUBLIC_PROJECTIONS`).
 - Project rules (`AGENTS.md`): work in a worktree, plan doc under `docs/plans/` and GPT Sol review, failing test first, `npm test` and `npm run typecheck`, merge not rebase, commit own files by name, push to `dev`, ask before any change to production data. Additive migration is fine to apply.
 - Doc rule: new doc needs one parent (`tests/doc-links.test.ts`).
 
 ## 5. Where I got lost
 - The task is underspecified: "Questions" overlaps FAQ, Quiz, Remember, and Annotations' per-part Socratic questions. No doc says which one a "Questions" mode would be, or lists those four side by side. I would have to ask Greg, and I planned the cheapest reading (client-only, no artefact).
-- `new-mode.md` § "Before you call it finished" still says `band()`, while the table says `modeBand()` (renamed 2026-09-11). `docs/project/new-mode.md` also counts "sixteen" and "fourteen" modes in places, despite saying nothing may count them.
-- `new-mode.md` never says how Annotations (a mode with no band, drawn to the right) was added; the overview points to a plan in `docs/plans/261001d-*`, which I was not allowed to open. So I could not learn the pattern for a mode that generates nothing.
+- `mode.md` § "Before you call it finished" still says `band()`, while the table says `modeBand()` (renamed 2026-09-11). `docs/project/mode.md` also counts "sixteen" and "fourteen" modes in places, despite saying nothing may count them.
+- `mode.md` never says how Annotations (a mode with no band, drawn to the right) was added; the overview points to a plan in `docs/plans/261001d-*`, which I was not allowed to open. So I could not learn the pattern for a mode that generates nothing.
 - Never opened: `docs/project/web-client.md`, `url-state.md`, `visitor.ts`, `Dock.tsx` bodies, so exact edit shapes in those are unverified.
 
 ## 6. Confidence

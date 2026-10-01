@@ -188,7 +188,7 @@ const PLAIN: Record<SimpleLevel, { label: string; what: string }> = {
 
 /**
  * What the foot under the paragraphs used to say, now said where it is asked
- * for (Greg, SPIDERYARN-READING2-7B; docs/project/new-mode.md).
+ * for (Greg, SPIDERYARN-READING2-7B; docs/project/mode.md).
  */
 const PLAIN_HOW =
   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";

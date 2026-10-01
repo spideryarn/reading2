@@ -32,7 +32,7 @@ What we did:
 - **`npm run test:paid`**: three tiny real calls, checked through the ledger rows and the admin
   query. About $0.00008 a run; $0.000324 spent in total while building it.
 - **[cost-tracking.md](../project/cost-tracking.md)** is the new doc, and
-  [new-mode.md § Its cost](../project/new-mode.md#its-cost) says what a new mode needs (nothing, if
+  [mode.md § Its cost](../project/mode.md#its-cost) says what a new mode needs (nothing, if
   it runs as a step).
 
 **For Greg, one decision:** the section shows only your own articles, because the admin pages

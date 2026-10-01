@@ -61,6 +61,35 @@ export function rememberReturn(path: string): void {
 }
 
 /**
+ * Drop whatever was remembered — for a sign-in that failed before it left the
+ * page, so it cannot steer the next one. docs/plans/261001m, GPT Sol's plan
+ * review F1.
+ */
+export function forgetReturn(): void {
+  try {
+    storage()?.removeItem(KEY);
+  } catch {
+    /* As `rememberReturn`: never take the page down for this. */
+  }
+}
+
+/**
+ * The destination `/login?next=…` names, if it is one we are willing to use.
+ *
+ * **A candidate, never an instruction.** The sign-in page passes it to the
+ * controls, which write it through `rememberReturn` only when the reader
+ * actually signs in; the signed-in `/login` branch of App.tsx then *takes* it.
+ * So a signed-in visit to an old or shared `/login?next=…` goes to the shelf.
+ * The sign-in page itself is refused as well as the callback — a loop.
+ */
+export function loginNext(search: string, callbackPath: string): string | null {
+  const next = new URLSearchParams(search).get("next");
+  if (next === null || !isSafeReturn(next, callbackPath)) return null;
+  const { pathname } = new URL(next, location.origin);
+  return /^\/login\/?$/.test(pathname) ? null : next;
+}
+
+/**
  * Where we were, and **forget it in the same breath**.
  *
  * Read-and-delete rather than read-then-maybe-delete: a value that survives a

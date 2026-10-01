@@ -53,10 +53,11 @@ import {
 /**
  * **`signedIn` is threaded in rather than asked for here**, because App.tsx
  * already knows: this page is mounted from both of its branches, and the two
- * differ in what the top bar may honestly offer. `/#sign-in` from a signed-in
- * reader lands on the shelf, which has no such panel — a link that visibly does
- * nothing, and the older half of GPT Sol's stage 2 finding 1. It is a boolean
- * and not a reader id because nothing on this page reads a reader's data.
+ * differ in what the top bar may honestly offer. Before the dedicated sign-in
+ * page, `/#sign-in` from a signed-in reader landed on the shelf, which had no
+ * such panel — a link that visibly did nothing, and the older half of GPT Sol's
+ * stage 2 finding 1. It is a boolean and not a reader id because nothing on
+ * this page reads a reader's data.
  */
 export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
   useDocumentTitle(pageTitle({ kind: "features" }));
