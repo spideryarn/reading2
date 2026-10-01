@@ -180,7 +180,28 @@ export interface LookupDeps {
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
 const MAX_ID_LENGTH = 300;
 
-function doiId(doi: string): WorkId | null {
+/**
+ * A publisher's page suffix glued onto a DOI by a copied address —
+ * `10.1101/2020.06.26.174482v2.full.pdf` from bioRxiv, `….1.full` from a
+ * journal. Neither registry knows those spellings (both 404'd in the 261001a
+ * probe). Only the two observed publisher shapes are rewritten. DOI suffixes
+ * are opaque, so a generic DOI ending `.pdf`, `.full` or `v2` is left alone.
+ * A wrong strip is still caught downstream, where the registry's title must
+ * agree with the citation's.
+ */
+const BIORXIV_STEM = "10\\.1101\\/(?:\\d{4}\\.\\d{2}\\.\\d{2}\\.)?\\d+";
+const BIORXIV_PAGE = new RegExp(`^(${BIORXIV_STEM})(?:v\\d+)?\\.(?:full\\.pdf|full-text|full|abstract|short|pdf)$`, "i");
+const BIORXIV_VERSION = new RegExp(`^(${BIORXIV_STEM})v\\d+$`, "i");
+/* BioOne's observed article route. Keep this narrow: a DOI suffix is opaque,
+   so a generic `.full`/`.pdf` rule can silently rewrite a real DOI. */
+const BIOONE_PAGE = /^(10\.1636\/[a-z]+(?:-[a-z]+)*-\d{2}-\d{3}\.\d+)\.(?:full(?:\.pdf)?|abstract|short|pdf)$/i;
+
+function withoutPageSuffix(doi: string): string {
+  return doi.replace(BIORXIV_PAGE, "$1").replace(BIORXIV_VERSION, "$1").replace(BIOONE_PAGE, "$1");
+}
+
+function doiId(raw: string): WorkId | null {
+  const doi = withoutPageSuffix(raw);
   const m = DOI_SHAPE.exec(doi);
   if (!m?.[1] || !PRINTABLE_ASCII.test(m[1])) return null;
   const id = `doi:${m[1].toLowerCase()}`;

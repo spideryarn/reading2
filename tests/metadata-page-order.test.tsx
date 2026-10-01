@@ -226,16 +226,15 @@ describe("what the page puts first", () => {
     expect(firstRow?.closest("[hidden]"), "opening did not show the rows").toBeNull();
   });
 
-  it("puts the machinery last, above only the thing that takes the article off the shelf", async () => {
+  it("puts Export near the foot without splitting the two ending pairs", async () => {
     await mount();
     const order = sections();
 
-    /* **The last two by name, not a pair of index comparisons.** "Technical
-       details is somewhere after Your reading and somewhere before Archive" is
-       satisfied by a page that has grown two more sections underneath it — and
-       "nothing that takes the article away sits above something somebody came
-       here to read" is a claim about the *end* of the page. GPT Sol,
-       2026-09-03.
+    /* **The whole foot by name, not a pair of index comparisons.** "Export is
+       somewhere after Your reading and somewhere before Archive" is satisfied
+       by a page that later grows more sections between them. This pins the two
+       pairs whose adjacency matters: Re-run then Archive, and Archive then
+       Delete. GPT Sol, 2026-09-03; Greg, 2026-10-01.
 
        **It said "Delete this article" until 2026-09-04**, over a control that
        had only ever archived — the rename that answers report
@@ -248,8 +247,14 @@ describe("what the page puts first", () => {
        order Greg asked for: *"underneath Archive"*. The pin that keeps the word
        honest is no longer this list but tests/metadata-delete-permanently.test.tsx,
        which asserts a `DELETE` goes out and what it costs. */
-    expect(order.slice(-4)).toEqual([
+    expect(order.slice(-5)).toEqual([
       "Technical details",
+      /* Since 2026-10-01, under the machinery rather than above it — Greg
+         (SPIDERYARN-READING2-7H): *"move "Export" section further down"*. As
+         low as it goes without parting the pairs below it; an administrator
+         also sees *What it cost* between it and Technical details.
+         docs/plans/261001c-metadata-cost-shut-with-its-total-and-export-further-down.md. */
+      "Export",
       /* Since 2026-09-29: asking again sits between the machinery and the
          endings — see the test above. */
       "Re-run AI processing",

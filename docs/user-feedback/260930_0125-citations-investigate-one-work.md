@@ -46,3 +46,13 @@ Two calls are left for Greg, listed in [awaiting-approval.md](awaiting-approval.
 - whether to build reading the paper itself (5G's proposed stage).
 
 Plan: [260930a](../plans/260930a-citations-investigate-one-work-on-demand.md).
+
+## Follow-up, 2026-10-01: reading the paper itself
+
+Greg answered the open call (build it). **Investigate now reads the cited paper itself** before
+the answer, when it can reach a PDF code confirms is this work. It shows up to three passages
+found by code in that text, and says on the row what was read and when. See the 5G note's follow-up
+([260929_1835](260929_1835-citations-say-whether-we-read-the-paper.md)) and plan
+[261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
+The global daily limit is now 50 presses rather than 55, because a press can cost up to ~40¢ when
+it reads the paper.

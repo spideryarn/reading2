@@ -124,6 +124,14 @@ describe("the investigate context", () => {
     expect(context.reference).toBe("Kaplan 2020");
   });
 
+  it("uses the article's whole reference-list entry when one was recovered", () => {
+    const context = investigateContext(
+      work({ entry: "Kaplan et al. Scaling Laws for Neural Language Models. 2020." }),
+      textOf(BLOCKS),
+    );
+    expect(context.reference).toBe("Kaplan et al. Scaling Laws for Neural Language Models. 2020.");
+  });
+
   it("includes the paper selection version in the fingerprint", () => {
     const context = investigateContext(work(), textOf(BLOCKS));
     const articleKey = investigateArticleKey(META, BLOCKS);
@@ -179,6 +187,7 @@ describe("attaching a stored investigation", () => {
     ["link", work({ url: "https://doi.org/10.1/x" })],
     ["link source", work({ linkFrom: "article" })],
     ["reference", work({ reference: { blockId: D, quote: "Kaplan et al. 2020", start: 0 } })],
+    ["reference-list entry", work({ entry: "Kaplan et al. Scaling Laws for Neural Language Models. 2020." })],
     ["citing passages", work({ firstCited: B, citedAt: [B, C] })],
   ])("hides it when the row's %s changed", (_what, changed) => {
     expect(attach(changed)).toBeUndefined();

@@ -757,6 +757,13 @@
       "when": 1790818355223,
       "tag": "20261001013235_citation_investigation_paper",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1790819611763,
+      "tag": "20261001015331_citation_investigation_no_extract_with_paper",
+      "breakpoints": true
     }
   ]
 }

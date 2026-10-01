@@ -27,9 +27,11 @@ entry](#which-citation-and-whose-entry) is what the by-line and *first cited* sh
 [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md)
 stage 5): at the end of the step, each row whose link is a DOI or arXiv address — at most 80 — is
 looked up at Crossref or DataCite through the shared, cached lookup
-([`bibliographic.ts`](../../src/bibliographic.ts)), and the record is kept on the row only when its
-title agrees with the article's. A disagreement is kept as a *conflict*, and the row says the
-article's identifier points to a different title. The by-line stays as the article gives it; where
+([`bibliographic.ts`](../../src/bibliographic.ts)), and the record is kept on the row only when
+`registryIdentifiesCitation` confirms it. Usually the titles agree. When the article gives only an
+author–year label, its own reference entry must also contain the registry title; author and year
+alone are inconclusive, because two works can share both. A disagreement is kept as a *conflict*,
+and the row says the article's identifier points to a different title. The by-line stays as the article gives it; where
 the article gives no authors or no year, the registry's are drawn, marked *from Crossref* / *from
 DataCite*. A visitor's row carries a found record, never a conflict. Outside the stamp and the
 prompt, and the step never fails for it ([`citation-registry.ts`](../../src/citation-registry.ts)).
@@ -380,8 +382,11 @@ Between the quick check and the answer, a press reads the cited paper through
 [261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md),
 stages 2 and 3): the row's own DOI or arXiv link, else the page the quick check matched. Only a PDF's
 text layer counts as the paper, and code must confirm it is this work — the title at the top of page
-one, then an identifier or the first author; a registry title that disagrees with the article's is an
-identity conflict, so a DOI the article typed wrongly is never read as the work. The row then says,
+one, then an identifier or the first author. A title restored only from repeated page furniture also
+needs its author's by-line immediately after it, so an issue header cannot confirm the wrong PDF; an
+author–year label needs the article's own reference entry to corroborate the registry title. A
+registry title that disagrees with the article's is an identity conflict, so a registry-known
+mistyped DOI is refused before its paper is fetched. The row then says,
 from stored columns, one of six things — *we read the paper itself: a PDF from arxiv.org, 11,200
 words; the AI was shown 4,900 of them…*, or why it could not — and the day it did so. It is a dated
 snapshot: nothing re-fetches the paper on read, so the row never claims the remote paper is
