@@ -503,35 +503,70 @@ for (const gate of document.querySelectorAll('.gate')) {
  * normalises whitespace across the whole selection rather than special-casing the
  * one layer that does it today.
  */
+// Everything we add around the prose. `user-select: none` should keep it out of a
+// selection already, but `cloneContents()` ignores `user-select`, so anything not
+// listed here is copied. verify.mjs checks this list against the apparatus it knows.
+const APPARATUS = '.gutter, .margin, .seam, .arc-turn, .role-tag, .gate, .idea-stamp, .gloss-note';
+const PARAGRAPH = ' ';
+
 document.addEventListener('copy', (e) => {
+  // What you typed into a gate is yours; the browser copies it as it is.
+  if (e.target instanceof Element && e.target.matches('input, textarea')) return;
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) return;
-  const frag = sel.getRangeAt(0).cloneContents();
-  // Belt and braces: `user-select: none` should have kept these out already, but a
-  // selection made with the keyboard, or a browser that disagrees, would carry them.
-  for (const el of frag.querySelectorAll('.gutter, .margin, .seam, .arc-turn, .gate, .idea-stamp, .gloss-note')) {
-    el.remove();
-  }
-  const text = (frag.textContent ?? '').replace(/\s+/g, ' ').trim();
-  if (!text) return;
+  const range = sel.getRangeAt(0);
+  // A selection that starts and ends inside one piece of apparatus clones to a bare
+  // text node, with no element left to strip, so ask where it sits instead.
+  const inside = range.commonAncestorContainer;
+  const host = inside.nodeType === Node.ELEMENT_NODE ? inside : inside.parentElement;
+  const frag = range.cloneContents();
+  for (const el of frag.querySelectorAll(APPARATUS)) el.remove();
+  // Blocks have no whitespace between them in the markup, so mark where each ends,
+  // or two paragraphs paste as "rights.It matters".
+  for (const blk of frag.querySelectorAll('.blk')) blk.append(PARAGRAPH);
+  const text = host?.closest(APPARATUS)
+    ? ''
+    : (frag.textContent ?? '')
+        .split(PARAGRAPH)
+        .map((p) => p.replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .join('\n\n');
+  // A selection of nothing but apparatus copies nothing, rather than falling
+  // through to the browser's copy, which would carry it.
   e.clipboardData.setData('text/plain', text);
   e.preventDefault();
 });
 
 /* ------------------------------------------------------------ keyboard -- */
 
+// Lower-cased so caps lock still works. Ctrl, Cmd and Alt combinations belong to
+// the browser (Ctrl+L is the address bar, Ctrl+S is save), so they are left alone.
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') hideTip();
   if (e.target.matches('input, textarea')) return;
-  if (e.key === 'l') { open(panel.hidden); e.preventDefault(); }
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  const key = e.key.toLowerCase();
+  if (key === 'l') { open(panel.hidden); e.preventDefault(); }
   // Hold X for the x-ray: the rhetorical layer as a momentary thing you ask for,
   // which is how it stays inside the no-persistent-highlighter rule.
-  if (e.key === 'x' && !e.repeat) root.classList.add('L-roles');
+  if (key === 'x') root.classList.add('L-roles');
   // Hold S for the skim path. Same idea, and it is the better way to use this one:
   // you ask where to go next, you do not read in it.
-  if (e.key === 's' && !e.repeat) root.classList.add('skim-peek');
+  if (key === 's') root.classList.add('skim-peek');
 });
+
+// Releasing takes no notice of modifiers, so pressing Shift mid-hold cannot lose it.
+const releaseX = () => {
+  if (!panelBody.querySelector('[data-layer="L-roles"]').checked) root.classList.remove('L-roles');
+};
+const releaseS = () => root.classList.remove('skim-peek');
 document.addEventListener('keyup', (e) => {
-  if (e.key === 'x' && !panelBody.querySelector('[data-layer="L-roles"]').checked) root.classList.remove('L-roles');
-  if (e.key === 's') root.classList.remove('skim-peek');
+  const key = e.key.toLowerCase();
+  if (key === 'x') releaseX();
+  if (key === 's') releaseS();
 });
+// Hold a key, Alt-Tab away, let go: the keyup goes to another window and the held
+// state would stay on until you came back and pressed the key again.
+const releaseAll = () => { releaseX(); releaseS(); };
+window.addEventListener('blur', releaseAll);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
