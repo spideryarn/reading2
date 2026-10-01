@@ -357,7 +357,8 @@ export type RecordType =
  * figure. They stay out of this set because this set is also the *in-place*
  * vocabulary — continuations, seam repair and the front-matter window read it,
  * and none of them should treat a cell as prose. But a table is mostly numbers
- * a reader will quote, so unlike a note an invented cell fails the chunk.
+ * a reader will quote, so unlike a note an invented cell becomes a content
+ * warning and triggers the ordinary best-effort retry for an uncached chunk.
  * docs/plans/261001q-pdf-tables-and-composite-figures.md; GPT Sol, plan review.
  */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
@@ -374,10 +375,12 @@ export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
 
 /**
  * **What the check gates on** — invented numbers, markup and replacement
- * characters in these fail a chunk; in anything else they are only reported
- * (src/pdf-score.ts § `scorePage`). `RENDERED` and the table cells, which are
- * shown inside their table rather than in place. Footnotes are shown too and are
- * deliberately not here — `RENDERED`'s comment says why.
+ * characters in these produce a content warning; in anything else they are
+ * only reported (src/pdf-score.ts § `scorePage`). An uncached warning gets the
+ * stage's ordinary best-effort retry before it is published. `RENDERED` and the
+ * table cells, which are shown inside their table rather than in place.
+ * Footnotes are shown too and are deliberately not here — `RENDERED`'s comment
+ * says why.
  */
 export const CHECKED: ReadonlySet<RecordType> = new Set<RecordType>([...RENDERED, "tabledata"]);
 

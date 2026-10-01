@@ -1776,11 +1776,11 @@ export function mendSeamHyphens(
  * since 2026-10-01. Rule 7 of the prompt has always asked for them as
  * `tabledata` records, and until then they were transcribed, scored and never
  * shown: every table in every PDF was a caption over nothing (report
- * spya-pawfwx). `tabledata` stays outside `RENDERED`, the footnote stance —
- * the cells are drawn from the records here, and the scorer still reports
- * rather than fails on them. `tableOwners` says which table a run of cells
- * belongs to; a run with none is shown in a figure of its own rather than
- * dropped. No prompt change, so no cached chunk goes stale.
+ * spya-pawfwx). `tabledata` stays outside `RENDERED` because it is not prose in
+ * place, but `CHECKED` includes it: invented numbers and markup in visible cells
+ * gate like prose. `tableOwners` says which table a run of cells belongs to; a
+ * run with none is shown in a figure of its own rather than dropped. No prompt
+ * change, so no cached chunk goes stale.
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
@@ -1799,7 +1799,7 @@ export function renderHtml(
      the figure. */
   const blocks: RenderBlock[] = [];
   const blockOf = new Map<number, number>();
-  const owners = tableOwners(records);
+  const owners = tableOwners(records, targets);
   for (const [i, record] of records.entries()) {
     if (record.type === "tabledata") {
       const rows = tableRows(record.text);
@@ -1810,7 +1810,13 @@ export function renderHtml(
         /* The table's caption made no block — the model gave it none — or the
            run has no table at all. Its cells are still the author's. */
         into = blocks.length;
-        blocks.push({ record: { ...record, type: "table", text: "" }, text: "", uncertain: false, pieces: [], rows: [] });
+        blocks.push({
+          record: { ...record, type: "table", text: "" },
+          text: "",
+          uncertain: false,
+          pieces: [],
+          rows: [],
+        });
         blockOf.set(owner, into);
       }
       const block = blocks[into]!;
@@ -1910,21 +1916,31 @@ interface RenderBlock {
  * the nearest table before it, **when nothing the reader sees lies between**:
  * page furniture (a footer at a page turn, a footnote) may, and so may another
  * table's own cells. Anything else — prose, a heading, a figure, a reference —
- * ends the table, and cells after it are a new run with no caption. A caption
- * continued onto the next page (`continues`) is still its table.
+ * ends the table, and cells after it are a new run with no caption.
+ *
+ * A continued caption stays with its first piece only when `targets` says those
+ * pieces really join. Raw `continues` is not enough: `continuationTargets`
+ * rejects page gaps and other barriers, and letting ownership disagree would
+ * emit the later caption in one figure while silently moving its cells into an
+ * earlier one.
  */
-function tableOwners(records: readonly PdfRecord[]): (number | undefined)[] {
+function tableOwners(
+  records: readonly PdfRecord[],
+  targets: readonly (number | null)[],
+): (number | undefined)[] {
   const owners: (number | undefined)[] = [];
+  const tableOwner = new Map<number, number>();
   let open: number | undefined;
   let orphanRun: number | undefined;
   for (const [i, record] of records.entries()) {
     if (record.type === "table") {
-      if (!(record.continues && open !== undefined)) open = i;
+      const target = targets[i];
+      open = target === null || target === undefined ? i : (tableOwner.get(target) ?? i);
+      tableOwner.set(i, open);
       orphanRun = undefined;
     } else if (record.type === "tabledata") {
       if (open === undefined) orphanRun ??= i;
       owners[i] = open ?? orphanRun;
-      continue;
     } else if (!PAGE_FURNITURE.has(record.type)) {
       open = undefined;
       orphanRun = undefined;

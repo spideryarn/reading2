@@ -78,6 +78,33 @@ describe("a PDF's table shows its cells", () => {
     expect(html).not.toContain("ascopubs");
   });
 
+  it("keeps cells with a caption that continues across a page footer", () => {
+    const html = render([
+      r(4, "table", "Table 1. Counts"),
+      r(4, "publisher", "Downloaded from ascopubs.org"),
+      r(5, "table", "by group.", { continues: true }),
+      r(5, "tabledata", "a | 1"),
+    ]);
+    expect(html).toContain("<figcaption>Table 1. Counts by group.</figcaption><table>");
+    expect(tables(html)).toEqual([[["a", "1"]]]);
+  });
+
+  it("uses the checked continuation target, not an invalid continues flag, to own cells", () => {
+    /* `continuationTargets` refuses the second caption's three-page jump. Cell
+       ownership must make the same decision or the second caption is emitted as
+       one figure while its cells silently move into the first. */
+    const html = render([
+      r(1, "table", "Table 1. Earlier."),
+      r(1, "tabledata", "a | 1"),
+      r(1, "publisher", "Downloaded from example.test"),
+      r(4, "table", "Table 2. Later.", { continues: true }),
+      r(4, "tabledata", "b | 2"),
+    ]);
+    expect(html).toContain("<figcaption>Table 1. Earlier.</figcaption><table><tbody><tr><td>a</td><td>1</td></tr>");
+    expect(html).toContain("<figcaption>Table 2. Later.</figcaption><table><tbody><tr><td>b</td><td>2</td></tr>");
+    expect(tables(html)).toEqual([[["a", "1"]], [["b", "2"]]]);
+  });
+
   it("gives two tables their own cells", () => {
     const html = render([
       r(6, "table", "Table 4. One."),
@@ -101,6 +128,39 @@ describe("a PDF's table shows its cells", () => {
     expect(html.indexOf("Prose between.")).toBeLessThan(html.indexOf("<td>b</td>"));
   });
 
+  it("keeps a continued paragraph in its first place, before the table that interrupted it", () => {
+    const html = render([
+      r(2, "paragraph", "The result was significant"),
+      r(2, "table", "Table 1. Counts."),
+      r(2, "tabledata", "a | 1"),
+      r(2, "paragraph", "across groups.", { continues: true }),
+    ]);
+    expect(html).toContain("<p>The result was significant across groups.</p>\n<figure>");
+    expect(html.match(/<td>a<\/td>/g)).toHaveLength(1);
+  });
+
+  it("shows cells before any table as their own figure, in place", () => {
+    const html = render([
+      r(1, "paragraph", "Before."),
+      r(1, "tabledata", "orphan | 1"),
+      r(1, "table", "Table 2. Later."),
+      r(1, "tabledata", "owned | 2"),
+    ]);
+    expect(tables(html)).toEqual([[["orphan", "1"]], [["owned", "2"]]]);
+    expect(html.indexOf("<td>orphan</td>")).toBeLessThan(html.indexOf("Table 2. Later."));
+  });
+
+  it("does not carry cells back across a figure", () => {
+    const html = render([
+      r(1, "table", "Table 1. Counts."),
+      r(1, "tabledata", "owned | 1"),
+      r(1, "figure", "Figure 1. Plot."),
+      r(1, "tabledata", "orphan | 2"),
+    ]);
+    expect(tables(html)).toEqual([[["owned", "1"]], [["orphan", "2"]]]);
+    expect(html.indexOf("Figure 1. Plot.")).toBeLessThan(html.indexOf("<td>orphan</td>"));
+  });
+
   it("shows cells whose table has no caption, rather than dropping them", () => {
     const html = render([r(3, "table", ""), r(3, "tabledata", "a | 1\nb | 2"), r(3, "paragraph", "After.")]);
     expect(html).toContain("<figure><table>");
@@ -121,5 +181,14 @@ describe("a PDF's table shows its cells", () => {
   it("skips a row that is only separators, and an empty cell run stays a cell", () => {
     const html = render([r(1, "table", "Table 1. T."), r(1, "tabledata", "a | b\n\n | \nc |  | d")]);
     expect(tables(html)).toEqual([[["a", "b"], ["c", "", "d"]]]);
+  });
+
+  it("does not let an empty tabledata record drop or duplicate the rows after it", () => {
+    const html = render([
+      r(1, "table", "Table 1. T."),
+      r(1, "tabledata", " | "),
+      r(1, "tabledata", "a | 1"),
+    ]);
+    expect(tables(html)).toEqual([[["a", "1"]]]);
   });
 });

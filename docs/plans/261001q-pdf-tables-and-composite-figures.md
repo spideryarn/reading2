@@ -44,9 +44,11 @@ one picture, and rule 6 refuses one with a neighbour (`assembly`).
 Every route has a narrow idea of what a figure is — one embedded picture; or drawings
 with no picture on the page, each panel at least 36 pt a side (the drawn route admits up to
 six separate drawings, but Fig 2's legend is a 67×7 pt component); or a box around exactly
-one picture — and a multi-panel figure fits none of them. In biomedical papers that is most figures. In
-production today: **36 PDF figure markers on current revisions, 10 stored, 22 `ambiguous`,
-4 `not-located`.** Most of the 26 are this.
+one picture — and a multi-panel figure assembled from several PDF objects, like these three,
+fits none of them. In production today: **36 PDF figure markers on current revisions, 10
+stored, 22 `ambiguous`, 4 `not-located`.** The census proves that multiple-picture ambiguity is the
+dominant final refusal; it does not classify how many of those 22 pages hold one composite
+figure rather than several unrelated pictures.
 
 ## The class
 
@@ -71,6 +73,8 @@ after the caption:
   `table` record before it, when only `tabledata`, page furniture (`publisher`,
   `footnote`) and nothing rendered lies between. That is the order rule 7 asks for, and
   it is the same "floats and furniture" vocabulary `continuationTargets` already uses.
+  A caption marked `continues` keeps the earlier table only when `continuationTargets`
+  accepts that join; otherwise its cells stay with the newly emitted caption.
   A run with no table to belong to (a table the model gave no caption, so `renderHtml`
   skips its empty `table` record) renders as a `<figure>` holding just the `<table>`,
   in place: the cells are the author's, and dropping them is today's bug.
@@ -85,14 +89,19 @@ after the caption:
 - **The check now gates the cells** (changed after Sol's review, finding 2). `tabledata`
   stays outside `RENDERED`, which is also the in-place vocabulary that continuations, seam
   repair and the front-matter window read. The scorer gates on a new set, `CHECKED` =
-  `RENDERED` + `tabledata` (`src/pdf.ts`), so an invented number in a cell fails the
-  chunk as it would in prose. Footnotes stay report-only. The cost: a chunk whose cells
-  carry a number absent from the text layer is now re-read where it used to pass.
+  `RENDERED` + `tabledata` (`src/pdf.ts`), so an invented number in a cell becomes a
+  content warning as it would in prose. Footnotes stay report-only. The cost: a fresh or
+  uncheckpointed chunk whose cells carry a number absent from the text layer is now
+  re-read once where it used to pass, then published with the warning if it persists.
+  A stored checkpoint is re-scored but is re-read only for a structural fault, not a
+  content warning; changing that would change checkpoint policy beyond this stage.
 - **Downstream needs nothing new.** A `<figure>` is a leaf block (`src/blocks.ts`) of
   kind `media`, and a `<figure>` holding a `<table>` is what ar5iv's tables already are,
   which the reading view draws. The sanitiser keeps table elements.
-- **Forward-only.** Stage 2 has to re-run for an article to change, and re-running it on
-  a PDF re-buys the transcription. Greg's article needs a re-extraction to get its
+- **Forward-only.** Stage 2 has to re-run for an article to change. Because neither the
+  prompt nor its fingerprint changed, the run reuses every valid stored chunk
+  transcription; it buys only chunks with no reusable checkpoint and the small,
+  uncheckpointed front-matter call. Greg's article needs a re-extraction to get its
   tables; this plan does not run one (production write).
 - **A re-extracted table gets a new block id** (Sol, finding 3). A `<figure>` is one
   block, its text goes from the caption to the caption plus every cell, and carry-over
@@ -210,12 +219,14 @@ covers the whole-page case only.
 ## Tests, as built
 
 - Stage 1: `tests/pdf-tables.test.ts` — cells inside the figure after the caption, one
-  `media` block, cells kept across a footer at a page turn, two tables, cells after prose
-  not carried back, a captionless table, escaping, `uncertain`, separator-only rows. All
-  nine red on the code before the change.
+  `media` block, ownership across valid and invalid caption continuations, cells kept
+  across a footer at a page turn, two tables, a paragraph retaining its first position,
+  orphan cells and figure/prose barriers, a captionless table, escaping, `uncertain`,
+  separator-only and empty records. All fifteen are red on the old renderer; the invalid
+  continuation case is also red on the first Stage 1 build.
 - The gate: two cases in `tests/pdf-score.test.ts` — an invented number in a cell is
-  `invented`, a footnote's stays `unshown`. Red with `tabledata` taken back out of
-  `CHECKED`.
+  `invented`, while a footnote's stays `unshown`. The cell case is red with `tabledata`
+  taken back out of `CHECKED`; the footnote case pins the deliberate contrast.
 - Stage 2, when it is built: Sol's list (finding 10) — a zero-picture vector page, a
   different sole caption, a captionless table, a low-text scan, an `other` paint, shading
   or unmeasured paint, two markers choosing one region — plus the real paper by hand.

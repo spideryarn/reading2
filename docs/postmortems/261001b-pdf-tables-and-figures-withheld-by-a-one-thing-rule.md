@@ -36,12 +36,14 @@ written down as deferred, and nothing counted how often the deferred case came u
   subset"*. Showing the cells was never on anyone's list. Footnotes, the other member of the
   hidden subset, were shown on 2026-09-30 because a reader asked. Nobody asked about tables
   until today.
-- The figure routes came in `260906a` (bitmap: one picture), `260912a` (drawn: no picture,
-  panels at least 36 pt) and `b22840083` (2026-09-28, located: one picture, refuses
-  `assembly`). Each plan named composites as deferred, and each refusal is right on its own:
+- The figure rules came in `0297784f6` (2026-09-06, bitmap: one picture), `52d8d47a9`
+  (2026-09-12, drawn: no picture, panels at least 36 pt) and `b22840083` (2026-09-28,
+  located: one picture, refuses `assembly`). Each plan named composites as deferred, and
+  each refusal is right on its own:
   *a missing figure is visible; a wrong one is not.* But the manifest records only the
   refusal word, and nobody had ever asked what share of real figures the deferred case was.
-  It was most of them.
+  The production census later found 26 final refusals among 36 markers, including 22
+  `ambiguous`; that state does not distinguish composites from pages with unrelated pictures.
 
 ## The class
 
@@ -51,7 +53,7 @@ deliberate, because it is. Together they withhold most of the content, and the r
 be seen from inside any one stage, because each stage did the right thing. It sits beside
 [260928a](260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md), a library
 field that holds one value for a list, and is the same shape one level up: a pipeline that
-holds one figure where the page has several.
+expects one embedded picture where a figure has several panels or pictures.
 
 ## The fix
 
@@ -75,10 +77,10 @@ holds one figure where the page has several.
    does not compile until someone decides whether a reader sees it. Red on the old renderer
    for `tabledata` only. **Done.**
 2. **Count every refusal word in production, and read the counts before calling a route
-   finished.** One `jsonb_array_elements` query over `assets->'pdfFigures'` gives 22
+   finished.** A `jsonb_array_elements` query over `assets->'pdfFigures'` gives 22
    `ambiguous` out of 36. A route that refuses 60% of its inputs is not done, whatever its
-   per-case reasoning says. The query is in the plan, and the
-   [article-images.md](../project/article-images.md) bullet now carries the numbers.
+   per-case reasoning says. The read-only production provenance and counts are in the plan,
+   and the [article-images.md](../project/article-images.md) bullet now carries the numbers.
    Cheap, but it is a habit, not a check: nothing runs it.
 3. **The reader-visible note names the refusal class to the owner.** "We couldn't recover
    this figure" for 26 of 36 figures made the gap look like rare bad luck. Rejected for

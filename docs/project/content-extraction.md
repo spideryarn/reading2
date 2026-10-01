@@ -62,7 +62,8 @@ The differences that matter to a reader:
   shape-checked and revalidated against the current page-integrity rules before reuse; a defective
   one is recovered without rebuying its valid neighbours. A recovered chunk is saved only after the
   final cross-chunk deduplication still leaves every witnessed page present. Re-running after a
-  *renderer* fix is free.
+  *renderer* fix reuses every valid stored transcription checkpoint; only an
+  uncheckpointed or unusable chunk, plus the small front-matter call, is bought again.
   A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
   nothing between runs at all, because a command
