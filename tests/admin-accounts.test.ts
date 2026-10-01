@@ -23,6 +23,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   accountFrom,
+  confirmedAccountByEmail,
   gotruePages,
   listAccounts,
   type AccountPage,
@@ -586,4 +587,70 @@ describe("the request itself", () => {
     await withFetch(spy, () => gotruePages("https://project.supabase.co/", "k")(2, 50));
     expect(url).toBe("https://project.supabase.co/auth/v1/admin/users?page=2&per_page=50");
   });
+});
+
+/* The gift voucher's email asks who has an address (261002a). */
+describe("the one account with this address, and only if confirmed", () => {
+  const user = (id: string, email: string | null, confirmed: boolean) =>
+    raw(id, { email, email_confirmed_at: confirmed ? "2026-09-01T00:00:00Z" : null });
+  /** Real pages through `listAccounts`, one account each, so matching and paging are both exercised. */
+  const served =
+    (users: Record<string, unknown>[], opts: { total?: number } = {}) =>
+    (): GetAccountPage =>
+    async (page) => ({
+      users: users.slice(page - 1, page),
+      total: opts.total ?? users.length,
+      hasNext: page < users.length,
+    });
+
+  it("finds it across pages, whatever its case and spaces", async () => {
+    const pages = served([user("1", "b@x.test", true), user("2", "c@x.test", true), user("3", " A@X.test ", true)]);
+    expect(await confirmedAccountByEmail("a@x.test", { pages })).toEqual({ kind: "one", id: "3" });
+  });
+
+  it("is none for an unconfirmed address, no address, or nobody", async () => {
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([user("1", "a@x.test", false)]) })).toEqual({
+      kind: "none",
+    });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([user("1", null, true)]) })).toEqual({ kind: "none" });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([]) })).toEqual({ kind: "none" });
+  });
+
+  it("is several for two accounts with the address, even when only one has confirmed it", async () => {
+    for (const second of [true, false]) {
+      const pages = served([user("1", "a@x.test", true), user("2", "A@x.test", second)]);
+      expect(await confirmedAccountByEmail("a@x.test", { pages })).toEqual({ kind: "several" });
+    }
+  });
+
+  it("is unavailable, never a throw, for a short listing or a refusal — and repeats nothing it was told", async () => {
+    const short = served([user("1", "a@x.test", true)], { total: 5 });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: short })).toEqual({
+      kind: "unavailable",
+      reason: "the account list failed",
+    });
+    const refused = (): GetAccountPage => async () => {
+      throw new Error("refused for project abcdef a@x.test");
+    };
+    expect(await confirmedAccountByEmail("a@x.test", { pages: refused })).toEqual({
+      kind: "unavailable",
+      reason: "the account list failed",
+    });
+  });
+
+  it("gives up at its deadline, and the signal it hands the pages is what aborts them", async () => {
+    let seen: AbortSignal | undefined;
+    const hung = (signal: AbortSignal): GetAccountPage => {
+      seen = signal;
+      return () =>
+        new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        });
+    };
+    expect(await confirmedAccountByEmail("a@x.test", { pages: hung })).toEqual({
+      kind: "unavailable",
+      reason: "timed out",
+    });
+    expect(seen?.aborted).toBe(true);
+  }, 10_000);
 });
