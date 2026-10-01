@@ -342,6 +342,16 @@ describe("/admin/vouchers", () => {
       expect(text).toContain("Email to you: failed (Resend answered 422)");
     });
 
+    it("does not claim a thrown request definitely failed", async () => {
+      listAnswer = withEmails(
+        delivery({ status: "failed", detail: "request outcome unknown (TimeoutError)", retryable: true }),
+      );
+      await mount();
+      const text = statusCell()?.textContent ?? "";
+      expect(text).toContain("request outcome unknown (TimeoutError)");
+      expect(text).toContain("may or may not have gone");
+    });
+
     it("says waiting and sending, and warns when a send has been stuck for over ten minutes", async () => {
       const fresh = new Date(Date.now() - 60_000).toISOString();
       listAnswer = withEmails(
@@ -384,11 +394,14 @@ describe("/admin/vouchers", () => {
       });
       await mount();
       const before = calls.length;
-      await act(async () => buttonIn(statusCell(), "Retry")?.click());
+      const retry = buttonIn(statusCell(), "Retry");
+      await act(async () => {
+        /* Both invocations happen before React can draw `disabled`. */
+        retry?.click();
+        retry?.click();
+      });
       await settle();
       expect(buttonIn(statusCell(), "Retry")?.disabled).toBe(true);
-      await act(async () => buttonIn(statusCell(), "Retry")?.click());
-      await settle();
       const posts = calls.slice(before).filter((c) => c.method === "POST");
       expect(posts).toEqual([
         { method: "POST", url: `/api/admin/voucher-emails/${GIFT_ID}/retry`, body: undefined },
@@ -396,6 +409,23 @@ describe("/admin/vouchers", () => {
       await act(async () => answer({ status: 202, body: { id: GIFT_ID, email: "sending" } }));
       await settle();
       expect(calls.slice(before).some((c) => c.method === "GET")).toBe(true);
+    });
+
+    it("does not read or schedule a later read when an in-flight Retry outlives the page", async () => {
+      listAnswer = withEmails(delivery({ status: "failed", detail: "Resend answered 500", retryable: true }));
+      let answer: (value: { status: number; body: unknown }) => void = () => {};
+      retryAnswer = new Promise((resolve) => {
+        answer = resolve;
+      });
+      await mount();
+      const reads = calls.filter((c) => c.method === "GET").length;
+      await act(async () => buttonIn(statusCell(), "Retry")?.click());
+      act(() => root.unmount());
+      await act(async () => answer({ status: 202, body: { id: GIFT_ID, email: "sending" } }));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(calls.filter((c) => c.method === "GET")).toHaveLength(reads);
+      /* afterEach unmounts again; give it a root to unmount. */
+      root = createRoot(host);
     });
 
     it("shows a refused Retry in the server's words", async () => {

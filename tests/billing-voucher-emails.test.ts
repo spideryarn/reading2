@@ -299,7 +299,7 @@ describe("on create, the recipient is emailed once, after the response", () => {
         async () => {
           throw new TypeError("network down");
         },
-        "TypeError",
+        "request outcome unknown (TypeError)",
       ],
     ] as const) {
       control.deps = mailbox({ answer }).deps;
@@ -377,7 +377,7 @@ describe("on create, the recipient is emailed once, after the response", () => {
     expect(await delivery(id)).toMatchObject({ status: "sent", attempts: 2 });
   });
 
-  it("records Resend's idempotency refusals: a different body under a key is failed and logged as a breach; concurrent is retryable", async () => {
+  it("records a different body under a key as a breach, but keeps a concurrent same-key request ambiguous", async () => {
     const breach = mailbox({ answer: resendError(409, "invalid_idempotent_request") });
     const { delivery: a } = await givenVoucher(READER, 2);
     const said = await logLinesWhile(async () => {
@@ -391,9 +391,11 @@ describe("on create, the recipient is emailed once, after the response", () => {
     const { id: voucher, delivery: b } = await givenVoucher(OTHER, 2);
     await sendQueuedVoucherEmail(b, busy.deps);
     expect(await delivery(b)).toMatchObject({
-      status: "failed",
-      detail: "Resend answered 409 concurrent_idempotent_requests",
+      status: "sending",
+      detail: null,
     });
+    expect((await listVouchers()).find((v) => v.id === voucher)?.emails.gift?.retryable).toBe(false);
+    await backdateLease(b, 11);
     expect((await listVouchers()).find((v) => v.id === voucher)?.emails.gift?.retryable).toBe(true);
   });
 });
@@ -405,6 +407,18 @@ describe("at most once", () => {
     const box = mailbox();
     const { delivery: id } = await givenVoucher(READER, 2);
     await Promise.all(Array.from({ length: 10 }, () => sendQueuedVoucherEmail(id, box.deps)));
+    expect(box.fetch).toHaveBeenCalledTimes(1);
+    expect(await delivery(id)).toMatchObject({ status: "sent", attempts: 1 });
+  });
+
+  it("makes one call when an automatic send and Retry race for a queued delivery", async () => {
+    const box = mailbox();
+    const { delivery: id } = await givenVoucher(READER, 2);
+    const retry = async () => {
+      const reserved = await reserveVoucherEmailRetry(id);
+      if (reserved.kind === "reserved") await deliverReservedVoucherEmail(id, reserved.attempts, box.deps);
+    };
+    await Promise.all([sendQueuedVoucherEmail(id, box.deps), retry()]);
     expect(box.fetch).toHaveBeenCalledTimes(1);
     expect(await delivery(id)).toMatchObject({ status: "sent", attempts: 1 });
   });
@@ -433,11 +447,13 @@ describe("at most once", () => {
     const taken = await reserveVoucherEmailRetry(id);
     expect(taken).toEqual({ kind: "reserved", attempts: 2 });
     /* Attempt 1 comes back late, with a failure. */
+    const stale = mailbox({ answer: async () => new Response("{}", { status: 500 }) });
     const said = await logLinesWhile(async () => {
-      await deliverReservedVoucherEmail(id, 1, mailbox({ answer: async () => new Response("{}", { status: 500 }) }).deps);
+      await deliverReservedVoucherEmail(id, 1, stale.deps);
     });
     expect(await delivery(id)).toMatchObject({ status: "sending", attempts: 2 });
-    expect(said).toContain("a newer attempt took this delivery over");
+    expect(stale.fetch).not.toHaveBeenCalled();
+    expect(said).toContain("no longer owns the delivery");
     expect(said).not.toContain("@example.invalid");
   });
 
@@ -555,6 +571,42 @@ describe("on claim, the creator is emailed", () => {
     expect(later.sent[0]?.to).toEqual([creatorEmail(CREATOR_A)]);
   });
 
+  it("does not let a creator lookup that outlived its lease call Resend", async () => {
+    await givenVoucher(READER, 2);
+    const [notice] = (await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) }))
+      .deliveries;
+    if (!notice) throw new Error("expected a notice");
+
+    let releaseLookup: (answer: AccountEmail) => void = () => {};
+    let markLookupStarted: () => void = () => {};
+    const lookupStarted = new Promise<void>((resolve) => {
+      markLookupStarted = resolve;
+    });
+    const stale = mailbox({
+      lookup: () => {
+        markLookupStarted();
+        return new Promise<AccountEmail>((resolve) => {
+          releaseLookup = resolve;
+        });
+      },
+    });
+    const first = sendQueuedVoucherEmail(notice, stale.deps);
+    await lookupStarted;
+    await backdateLease(notice, 11);
+
+    const current = mailbox({ lookup: async () => ({ kind: "found", email: "current-creator@example.invalid" }) });
+    const reserved = await reserveVoucherEmailRetry(notice);
+    if (reserved.kind !== "reserved") throw new Error("expected the stale lease to be taken");
+    await deliverReservedVoucherEmail(notice, reserved.attempts, current.deps);
+    releaseLookup({ kind: "found", email: "stale-creator@example.invalid" });
+    await first;
+
+    expect(current.sent).toHaveLength(1);
+    expect(current.sent[0]?.to).toEqual(["current-creator@example.invalid"]);
+    expect(stale.fetch).not.toHaveBeenCalled();
+    expect(await delivery(notice)).toMatchObject({ status: "sent", attempts: 2, recipient: "current-creator@example.invalid" });
+  });
+
   it("makes one notice from twenty concurrent claims of one voucher", async () => {
     const { id } = await givenVoucher(READER, 2);
     const answers = await Promise.all(
@@ -668,6 +720,29 @@ describe("changing an unclaimed voucher's address", () => {
     expect(answer).toMatchObject({ kind: "updated", giftDelivery: expect.any(String) });
     expect(await delivery(original)).toMatchObject({ status: "skipped", detail: "address changed" });
   });
+
+  it("keeps the PATCH and its 200 when the new address's send fails", async () => {
+    const { id } = await givenVoucher(READER, 4);
+    const fixed = `failed-${emailOf(READER)}`;
+    control.deps = mailbox({
+      answer: async () => {
+        throw new TypeError("network down");
+      },
+    }).deps;
+    const reply = await drive(
+      "PATCH",
+      `/api/admin/vouchers/${id}`,
+      JSON.stringify({ email: fixed }),
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(reply.status).toBe(200);
+    expect(reply.body).toEqual({ ok: true, email: "queued" });
+    expect((await listVouchers()).find((v) => v.id === id)?.email).toBe(fixed);
+    expect((await deliveriesOf(id)).find((d) => d.recipient === fixed)).toMatchObject({
+      status: "failed",
+      detail: "request outcome unknown (TypeError)",
+    });
+  });
 });
 
 /* ------------------------------------------------- logs, and the route -- */
@@ -675,12 +750,47 @@ describe("changing an unclaimed voucher's address", () => {
 describe("what is said, and to whom", () => {
   it("puts no address and no note in any log line or detail", async () => {
     const said = await logLinesWhile(async () => {
-      control.deps = mailbox({ answer: async () => new Response("{}", { status: 422 }) }).deps;
+      control.deps = mailbox({
+        answer: async () =>
+          new Response(
+            JSON.stringify({
+              name: "validation_error",
+              message: `${emailOf(READER)} ${SECRET_NOTE} provider-body-secret`,
+            }),
+            { status: 422 },
+          ),
+      }).deps;
       const id = randomUUID();
       await drive(
         "POST",
         "/api/admin/vouchers",
         JSON.stringify({ id, email: emailOf(READER), articles: 2, note: SECRET_NOTE }),
+        ADMIN_USER_ID_LOCAL,
+      );
+      /* A fetch error is outside our control and may echo its request. It is
+         reduced to its class before either the log or `detail` sees it. */
+      control.deps = mailbox({
+        answer: async () => {
+          throw new Error(`${emailOf(OTHER)} ${SECRET_NOTE} provider-body-secret`);
+        },
+      }).deps;
+      await drive(
+        "POST",
+        "/api/admin/vouchers",
+        JSON.stringify({ id: randomUUID(), email: emailOf(OTHER), articles: 2, note: SECRET_NOTE }),
+        ADMIN_USER_ID_LOCAL,
+      );
+      /* A successful response's provider id is provider-controlled too. */
+      control.deps = mailbox({
+        answer: async () =>
+          new Response(JSON.stringify({ id: `${emailOf(OTHER)}-${SECRET_NOTE}-provider-body-secret` }), {
+            status: 200,
+          }),
+      }).deps;
+      await drive(
+        "POST",
+        "/api/admin/vouchers",
+        JSON.stringify({ id: randomUUID(), email: emailOf(OTHER), articles: 3, note: SECRET_NOTE }),
         ADMIN_USER_ID_LOCAL,
       );
       control.deps = mailbox({ lookup: async () => ({ kind: "unavailable", reason: "Auth answered 503" }) }).deps;
@@ -695,7 +805,14 @@ describe("what is said, and to whom", () => {
     expect(said).toContain("voucher: gift");
     expect(said).toContain("voucher: claimed");
     expect(said).toContain("creator's address could not be looked up");
-    for (const secret of [emailOf(READER), creatorEmail(CREATOR_A), SECRET_NOTE, "@example.invalid"]) {
+    for (const secret of [
+      emailOf(READER),
+      emailOf(OTHER),
+      creatorEmail(CREATOR_A),
+      SECRET_NOTE,
+      "@example.invalid",
+      "provider-body-secret",
+    ]) {
       expect(said).not.toContain(secret);
     }
     if (!pool) return;

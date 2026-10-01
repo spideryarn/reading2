@@ -130,7 +130,19 @@ describe("sendEmail", () => {
     await expect(sendEmail(EMAIL, "test", { fetch, env: PROD })).resolves.toEqual({
       kind: "failed",
       reason: "TypeError",
+      ambiguous: true,
     });
+
+    const namedFromRequest = new Error("network down");
+    namedFromRequest.name = "someone@example.com";
+    await expect(
+      sendEmail(EMAIL, "test", {
+        fetch: vi.fn<typeof globalThis.fetch>(async () => {
+          throw namedFromRequest;
+        }),
+        env: PROD,
+      }),
+    ).resolves.toEqual({ kind: "failed", reason: "unknown error", ambiguous: true });
   });
 });
 

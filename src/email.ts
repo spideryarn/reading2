@@ -29,7 +29,7 @@
  * sending again, which is what lets a stored delivery be retried at most once.
  */
 
-import { errorFields, log } from "./log.js";
+import { log } from "./log.js";
 
 const logger = log("email");
 
@@ -121,6 +121,8 @@ export type SendResult =
       readonly kind: "failed";
       /** A status code or an error name, plus an allowlisted Resend name — never a body or an address. */
       readonly reason: string;
+      /** The request threw, so Resend may have accepted it before the connection failed. */
+      readonly ambiguous?: true;
       /** Present only when Resend answered with a name on `RESEND_ERROR_NAMES`. */
       readonly providerError?: ResendErrorName;
     };
@@ -165,6 +167,13 @@ function whyNotSend(env: EmailEnv): SkipReason | null {
   if (!optedIn && env.VERCEL_ENV !== "production") return "not production";
   if (!env.RESEND_API_KEY) return "no RESEND_API_KEY";
   return null;
+}
+
+/** Error classes fetch/AbortSignal may produce; anything else is withheld. */
+const SAFE_SEND_ERROR_NAMES = new Set(["Error", "TypeError", "AbortError", "TimeoutError", "NetworkError", "FetchError"]);
+
+function sendErrorName(err: unknown): string {
+  return err instanceof Error && SAFE_SEND_ERROR_NAMES.has(err.name) ? err.name : "unknown error";
 }
 
 /**
@@ -224,11 +233,17 @@ export async function sendEmail(email: Email, label: string, deps: EmailDeps = {
 
     const body = (await response.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" ? body.id : null;
-    logger.info({ label, id }, "sent email");
+    /* `id` is returned to callers, but the provider's response body is not a
+       log field: only values we wrote ourselves cross that boundary. */
+    logger.info({ label }, "sent email");
     return { kind: "sent", id };
   } catch (err) {
-    logger.error({ label, ...errorFields(err) }, "sending email failed");
-    return { kind: "failed", reason: err instanceof Error ? err.name : "unknown error" };
+    /* A fetch implementation may put request data in its error message. The
+       recipient and body are deliberately in that request, so keep only the
+       error's class in both the log and the stored SendResult. */
+    const error = sendErrorName(err);
+    logger.error({ label, error }, "sending email failed");
+    return { kind: "failed", reason: error, ambiguous: true };
   }
 }
 

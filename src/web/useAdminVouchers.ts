@@ -87,6 +87,7 @@ export function useAdminVouchers(): UseAdminVouchers {
      changed form or a success lets it go. */
   const pendingCreate = useRef<{ readonly key: string; readonly id: string } | null>(null);
   const laterReads = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const mounted = useRef(true);
 
   const reload = useCallback(() => {
     const mine = ++generation.current;
@@ -112,17 +113,20 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   /* The second reads die with the page. */
   useEffect(() => {
+    mounted.current = true;
     const timers = laterReads.current;
     return () => {
+      mounted.current = false;
       for (const t of timers) clearTimeout(t);
       timers.clear();
     };
   }, []);
 
   const readAgainLater = useCallback(() => {
+    if (!mounted.current) return;
     const timer = setTimeout(() => {
       laterReads.current.delete(timer);
-      void reload();
+      if (mounted.current) void reload();
     }, SECOND_READ_MS);
     laterReads.current.add(timer);
   }, [reload]);
@@ -142,7 +146,7 @@ export function useAdminVouchers(): UseAdminVouchers {
           (e: Error): Written => ({ ok: false, message: describeFetchFailure(e) }),
         )
         .then(async (written) => {
-          await reload();
+          if (mounted.current) await reload();
           return written;
         }),
     [reload],

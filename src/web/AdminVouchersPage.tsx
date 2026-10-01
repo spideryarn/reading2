@@ -179,6 +179,9 @@ function emailState(e: VoucherEmailState, now: number): string {
     case "skipped":
       return e.detail ? `not sent (${e.detail})` : "not sent";
     case "failed":
+      if (e.detail?.startsWith("request outcome unknown")) {
+        return `${e.detail}; it may or may not have gone`;
+      }
       return e.detail ? `failed (${e.detail})` : "failed";
     case "queued":
       return "waiting to send";
@@ -210,15 +213,24 @@ function EmailLine({
   retry: UseAdminVouchers["retry"];
 }) {
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [refusal, setRefusal] = useState<string | null>(null);
 
   async function again() {
-    if (busy) return;
+    /* State disables the drawn button; the ref also closes the same-tick gap
+       before React has rendered that state. The server still owns the real
+       at-most-once guard, but the losing 409 should not overwrite success here. */
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setRefusal(null);
-    const answer = await retry(email.id);
-    setBusy(false);
-    setRefusal(answer);
+    try {
+      const answer = await retry(email.id);
+      setRefusal(answer);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   return (

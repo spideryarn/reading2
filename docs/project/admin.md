@@ -767,8 +767,10 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ email, articles, note? }` → a waiting voucher, `created_by` the administrator's id |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
+| `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
 | `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, email, revoked }`; the address only while unclaimed (409 after) |
+| `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
 
 Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
 [`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): articles a whole number 1–1000, a note of at
@@ -788,6 +790,13 @@ Every write is followed by a fresh read, and a refusal is shown in the server's 
 row. The wire shape is [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), a flat import-free
 module shared by the store and the client because the browser may not import `pg-vouchers.ts`, even
 for a type. `tests/admin-vouchers-page.test.tsx` mounts it.
+
+**Each voucher sends two emails, and the Status cell says what became of each**: *Email to them*
+(the gift, sent when the voucher is made and again when its address is corrected) and *Email to you*
+(the creator, when it is claimed) — sent, not sent and why, failed and why, waiting, or sending, with
+a Retry where the server allows one. How they are kept to once each is
+[email.md § Gift voucher emails](email.md#gift-voucher-emails); the plan is
+[261001p](../plans/261001p-voucher-emails-to-recipient-and-creator.md).
 
 ## What it cannot do, and what is not built
 

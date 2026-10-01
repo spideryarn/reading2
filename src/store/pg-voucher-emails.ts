@@ -374,7 +374,10 @@ function outcomeOf(result: SendResult): Outcome {
     case "skipped":
       return { status: "skipped", detail: result.reason };
     case "failed":
-      return { status: "failed", detail: result.reason };
+      return {
+        status: "failed",
+        detail: result.ambiguous ? `request outcome unknown (${result.reason})` : result.reason,
+      };
     default: {
       const unhandled: never = result;
       return unhandled;
@@ -418,6 +421,8 @@ export async function deliverReservedVoucherEmail(
     const [row] = await getDb()
       .select({
         kind: billingVoucherEmails.kind,
+        status: billingVoucherEmails.status,
+        attempts: billingVoucherEmails.attempts,
         recipient: billingVoucherEmails.recipient,
         subject: billingVoucherEmails.subject,
         bodyText: billingVoucherEmails.bodyText,
@@ -429,6 +434,13 @@ export async function deliverReservedVoucherEmail(
       .where(eq(billingVoucherEmails.id, deliveryId))
       .limit(1);
     if (!row) return;
+    /* A stale worker can resume after Retry has taken its lease. Stop before
+       Resend, not merely at completion: the idempotency key is a final defence,
+       not a reason to make a provider call this attempt no longer owns. */
+    if (row.status !== "sending" || row.attempts !== attempts) {
+      logger.warn({ deliveryId, attempts }, "voucher email: this attempt no longer owns the delivery — not sent");
+      return;
+    }
 
     let recipient = row.recipient;
     if (recipient === null) {
@@ -445,10 +457,21 @@ export async function deliverReservedVoucherEmail(
         .set({ recipient: found.email, updatedAt: sql`now()` })
         .where(and(eq(billingVoucherEmails.id, deliveryId), isNull(billingVoucherEmails.recipient)));
       const [frozen] = await getDb()
-        .select({ recipient: billingVoucherEmails.recipient })
+        .select({
+          recipient: billingVoucherEmails.recipient,
+          status: billingVoucherEmails.status,
+          attempts: billingVoucherEmails.attempts,
+        })
         .from(billingVoucherEmails)
         .where(eq(billingVoucherEmails.id, deliveryId))
         .limit(1);
+      /* The Auth lookup is a network call and can outlive the ten-minute
+         lease. If Retry took the delivery while it was away, the newly frozen
+         recipient belongs to the row, but this worker no longer gets to send. */
+      if (frozen?.status !== "sending" || frozen.attempts !== attempts) {
+        logger.warn({ deliveryId, attempts }, "voucher email: this attempt lost its lease during creator lookup — not sent");
+        return;
+      }
       recipient = frozen?.recipient ?? null;
       if (recipient === null) throw new Error("a claim notice's recipient did not freeze");
     }
@@ -469,6 +492,14 @@ export async function deliverReservedVoucherEmail(
       /* The same key with a different body: the frozen request changed, which
          nothing here may do. Failed, and loud. */
       logger.error({ deliveryId }, "voucher email: Resend saw this key with a different request — an invariant is broken");
+    }
+    if (result.kind === "failed" && result.providerError === "concurrent_idempotent_requests") {
+      /* Another request with this key is still in flight. It may be accepted,
+         so `failed` would falsely say no email went. Leave this attempt
+         `sending`: after its lease ages, Retry asks Resend for the same frozen
+         request and key, and the page says it may or may not have gone. */
+      logger.warn({ deliveryId, attempts }, "voucher email: the same request is already in flight — outcome is not known yet");
+      return;
     }
     const recorded = await finish(deliveryId, attempts, outcomeOf(result));
     if (!recorded) {
