@@ -1,0 +1,71 @@
+# Loading spinners
+
+The app has two, and which one a wait gets depends on what else is on the screen:
+
+| | Where | What it is |
+| --- | --- | --- |
+| **The wordmark** | a whole page with nothing on it yet — the article page while it fetches | [`LogoLoader`](../../src/web/LogoLoader.tsx): the spider and the name, large and centred, never doing the same thing for long |
+| **`LoaderCircle`** | inline, beside a sentence, in a page that is otherwise drawn — a button, a row, a badge | Lucide's open arc on a CSS spin; its detail stays in [icons.md § The loading spinner](icons.md#the-loading-spinner) |
+
+> Instead of "Fetching the article and its summaries", show an animated loading spinner.
+>
+> Perhaps actually it would be fun to make a rich, complex, fun, ever-morphing animation of the logo
+> itself as the loading spinner?
+>
+> — Greg, 2026-10-01 ([the note](../user-feedback/261001_1725-logo-loading-spinner.md),
+> [the plan](../plans/261001q-logo-loading-spinner.md))
+
+## Two rules both share
+
+- **Nothing before 600ms.** A spinner that flashes and vanishes reads as breakage. Gate it on
+  [`useSlow`](../../src/web/useSlow.ts), which owns the threshold; the loader is never a placeholder
+  for a fast fetch, which is also why it cannot delay the first paint or the article.
+- **The words are kept.** Each wait still has a sentence naming what it is waiting for. Beside
+  `LoaderCircle` it is visible. In `LogoLoader` it is visually-hidden text beside an `aria-hidden`
+  wordmark, and it is what a reader who asked for reduced motion sees *instead* of the wordmark
+  (below). It is not a live region: on the article page the tab title already announces the wait
+  ([page-titles.md](page-titles.md)), and a region mounted already filled announces nothing.
+
+## The wordmark loader
+
+**It is not a new animation.** It is [the wordmark's hover set](design-logo.md) run on two tracks
+at once on one host: one track draws from the animations that move only the spider, the other from
+the ones that move only the letters, never the same twice in a row, and the spider's starts 1.1s
+after the letters', so the two are out of step and something is changing most of the time. The
+restrained ones — *Warm Drift* above all — would look stalled alone and read as texture beside a
+partner, which is why one track was passed over.
+
+**Each draw is held for whole loops of itself.** A keyframe animation whose class is removed
+mid-loop jumps home from wherever it was, and nothing can ease it — so `LOADER_HOLD_MS` holds a loop
+for a whole number of loops after its delay, and a one-shot until it has finished. The Settle, a
+transition, gets a 300ms rest after it so its exit can ease. The loop lengths live in the
+stylesheet, so [`tests/logo-loader.test.tsx`](../../tests/logo-loader.test.tsx) reads them from
+there and fails if a hold stops agreeing.
+
+**Four of the thirteen are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
+and `spya-dawn` reach both halves (the first holds the letters while the spider hauls; the second
+masks the whole host) and would override the other track; `spya-seam` and `spya-i` hold a pose
+whose transition is scoped to their class, so leaving them snaps. **A fourteenth hover animation
+fails the test until it is put in one list or the other**, and the same test reads the
+stylesheet's selectors and fails if anything in a track touches the other half.
+
+**Reduced motion gets the sentence, not the spider.** The global guard collapses every one of these
+to a still, so a cycling wordmark would be a still logo twitching between poses — neither motion nor
+information. `LogoLoader` follows the media query live, so turning it on mid-wait stops the timers
+at once.
+
+**Not free, but nothing before the wait is real.** No new asset (the spider is already on the
+page), nothing that changes layout, and nothing at all before the 600ms threshold. Three of the
+animations repaint rather than composite — Misregistration's `text-shadow`, Warm Drift's filter,
+Radius Sweep's conic gradient — which is fine for a page with nothing else on it.
+
+**Live on `/design`**, in the Wordmark animations section, since a fast local fetch never shows it.
+
+## Using it elsewhere
+
+`<LogoLoader label="…" />`, inside a `useSlow` guard, with the label a sentence without its ellipsis.
+It sizes itself; the caller decides where it sits (the article page centres it in 70dvh). Reach for
+it when the whole page is the wait; anywhere something else is already drawn, the wordmark would
+outshout it and `LoaderCircle` is the one.
+
+Up: [design-css-overview.md](design-css-overview.md)

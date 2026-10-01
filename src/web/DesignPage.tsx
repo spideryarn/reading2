@@ -44,6 +44,7 @@ import { Button } from "@/components/ui/button";
 import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { LOGO_ANIMATIONS } from "./logo-animation.js";
+import { LogoLoader } from "./LogoLoader.js";
 /* Type-only, and deliberately so: it is erased at build, so `/design` does not
    pull the eagerly-loaded annotator into its lazy chunk — see `SPECIMEN_OUT`. */
 import type { Mark } from "./annotate.js";
@@ -1218,6 +1219,15 @@ function LogoAnimations() {
             <LogoGlyph wrapper="dock-btn-label" />
           </span>
         </div>
+      </div>
+      <div className="design-panel">
+        <p className="design-note">
+          <strong>As the loading spinner</strong> — the article page draws this while a fetch has
+          taken longer than 600ms: one spider animation and one letters animation at once, each
+          redrawn every 2.4s, half a period apart. src/web/LogoLoader.tsx and
+          docs/project/loading-spinner.md.
+        </p>
+        <LogoLoader label="The loading wordmark" />
       </div>
       <Button variant="outline" onClick={() => setTake((n) => n + 1)}>
         Play again

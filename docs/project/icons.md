@@ -108,6 +108,9 @@ looks wrong.
 
 ## The loading spinner
 
+A whole page waiting gets the wordmark instead —
+[loading-spinner.md](loading-spinner.md) says which wait gets which.
+
 There is one, it is an icon like any other, and it is
 [`LoaderCircle`](https://lucide.dev/icons/loader-circle) turned by a CSS keyframe:
 
