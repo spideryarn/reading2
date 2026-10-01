@@ -1,0 +1,122 @@
+{
+  "arm": "high-about-slider2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-10-01T00:07:38.279Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 12817,
+  "costUsd": 0.151868,
+  "tokens": {
+    "input": 61314,
+    "output": 2924,
+    "reasoning": 994
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 252,
+  "fullerWords": 261,
+  "briefWords": 170,
+  "paragraphs": [
+    {
+      "text": "This is a review article on using partial information decomposition (PID) to study how neural circuits compute, not just how they transmit signals. PID splits the information that two or more input neurons carry about a target neuron into redundant (shared), unique, and synergistic parts. Synergy is information only visible when you look at the inputs jointly, not from either one alone.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd",
+        "spya-q2b0e5"
+      ]
+    },
+    {
+      "text": "The authors argue that measures like mutual information and transfer entropy only track information flow, not what circuits do with it. Synergy is their proposed signature of actual computation, since it shows a neuron responding to the pattern of its inputs rather than just summing them.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "Using multielectrode recordings from cortical cultures, they found synergy tracks feedforward transfer entropy closely, running at roughly a quarter of it. Synergy concentrated in \"rich clubs\" (densely connected hub neurons), which held 2.7x the synergy of non-hub triads despite containing under 40% of neurons. More recurrent connections between source neurons raised synergy, feedback connections slightly lowered it, and synergy peaked when source neurons were moderately correlated rather than fully independent or fully redundant. In behaving macaques, synergy still dominated overall but shifted toward redundancy during motor execution, and different brain regions peaked in synergy at different task phases.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The piece also covers practical issues: no single agreed formula for redundancy exists, computing PID for many inputs explodes combinatorially, and available software tools each have tradeoffs. It closes by pointing to newer directions, like time-resolved local PID and multi-target extensions covering multiple outputs at once.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-z39m3x"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article arguing that multivariate information theory, especially a method called partial information decomposition (PID), gives a principled way to study how neural circuits process information, not just transmit it. It works through the math and practical tools, then surveys recent experiments on cortical neurons and behaving animals.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "The piece's case for why this matters: standard tools like mutual information and transfer entropy can show that information flows from one neuron to another, but they can't capture how a neuron combines inputs from multiple sources into something new. PID splits the information two sources give about a target into redundant (shared), unique, and synergistic parts. Synergy, information only visible when you look at both sources jointly, is treated as a signature of actual computation, since it means a neuron isn't just summing inputs but reading patterns across them.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-u5ra3d",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Applying PID to recordings from hundreds of cortical neurons in culture, the authors found synergy tracks feedforward signal strength, runs about 2.7x higher in densely connected \"rich club\" hub neurons, rises with recurrent connections among source neurons but not with feedback connections, and peaks when source neurons are moderately (not maximally) correlated. In behaving monkeys, synergy dominated overall, but redundancy spiked during motor execution, matched to different brain regions' task phases.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "text": "The review also covers practical limits: choosing a redundancy measure, software tools, and the combinatorial explosion of possible information \"atoms\" as more neurons are added, which makes PID intractable beyond small groups. It closes by pointing to extensions like time-resolved local PID and multi-target versions as promising next steps.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-z39m3x",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece asks how brain circuits actually process information, not just pass it along. It argues that a method called partial information decomposition (PID) can split the information two neurons give about a third neuron's future activity into separate parts: redundant, unique, and synergistic.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Synergy, information only visible when you look at both inputs together, is the part the authors treat as true computation, since it means a neuron is reading patterns, not just summing inputs. Across recordings of hundreds of cortical neurons, triads with more synergy clustered in \"rich clubs\" of highly connected neurons, rose with recurrent (but not feedback) connections, and peaked when input neurons were moderately, not maximally, correlated.",
+      "ids": [
+        "spya-e94ury",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "In behaving macaques, synergy still dominated overall, but redundancy spiked during motor execution, suggesting the brain duplicates signals when reliability matters most. The article also walks through the math of PID, the competing ways to define redundancy, available software tools, and open limits like combinatorial explosion for many-neuron systems and the need for better multi-target and time-resolved versions.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 5,
+    "unanchored": 0
+  }
+}

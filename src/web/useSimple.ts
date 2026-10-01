@@ -3,8 +3,8 @@
  * stored paragraphs, whether they still describe the article, and the verbs
  * that write them. docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
  *
- * `useFaq`'s shape, because the artefact's contract is the same: one model pass
- * over the article, stored once, replaced on a re-run, and two staleness facts
+ * `useFaq`'s shape, because the artefact's contract is the same: model work over
+ * the article, stored once, replaced on a re-run, and two staleness facts
  * — `stale` (the article moved: the panel says so) and `outdated` (an older
  * prompt: silent). The read half is `GET /api/simple/:slug`; the write half is
  * a job (`steps: ["simple"]`). Ordering is src/web/useOrderedRead.ts's, the job
@@ -12,7 +12,7 @@
  * starts it through src/web/useAutoRun.ts — so this file is only the parse,
  * the 404 branch and the verbs.
  *
- * **Mounted only while Simple is on screen, and only for an owner**
+ * **Mounted only while a plain-words level is on screen, and only for an owner**
  * (modes/summary/SummaryMode.tsx § `OwnerSimple`): `useAutoRun`'s owner must
  * die with the view so a press cannot be spent after the reader has left it,
  * and a visitor reads the paragraphs off the public payload with no hook at all.
@@ -31,6 +31,10 @@ export interface UseSimple {
   stale: boolean;
   /** The article is the same and the current prompt would write this differently. */
   outdated: boolean;
+  /** Written for a profile — derived from the artefact's `profileHash`, as `useIdeas` does. */
+  profiled: boolean;
+  /** The reader has changed their profile since. Never stale; it offers a rewrite. */
+  profileChanged: boolean;
   slug: string;
   error: string | null;
   /** The job writing this article's Simple, if one is. */
@@ -55,6 +59,7 @@ export function useSimple(slug: string): UseSimple {
   const [simple, setSimple] = useState<SimpleSummary | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /* `current()` after every `await`, before any state is set: false means this
@@ -69,6 +74,7 @@ export function useSimple(slug: string): UseSimple {
           setSimple(null);
           setStale(false);
           setOutdated(false);
+          setProfileChanged(false);
           setError(null);
           setStatus("none");
           return;
@@ -78,6 +84,7 @@ export function useSimple(slug: string): UseSimple {
         setSimple(loaded.simpleSummary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
+        setProfileChanged(loaded.profileChanged);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -124,6 +131,8 @@ export function useSimple(slug: string): UseSimple {
     simple,
     stale,
     outdated,
+    profiled: simple?.profileHash != null,
+    profileChanged,
     slug,
     error,
     job: queue.job,

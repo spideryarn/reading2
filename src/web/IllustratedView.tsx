@@ -61,20 +61,21 @@ import type { IllustratedPlate } from "../illustrated-plate.js";
 import type { Block, BlockId } from "../types.js";
 import { JobProgress } from "./JobProgress.js";
 import { apiFetch } from "./lib/api.js";
-/* The Sketch's own two numbers, imported rather than restated — see
-   `SKETCH_THEN_PAINT_COST`. They lived in `./SketchView.js` until 2026-09-07 and
+/* The Sketch's own wait, imported rather than restated — see
+   `SKETCH_THEN_PAINT`. They lived in `./SketchView.js` until 2026-09-07 and
    moved to a leaf when a third caller arrived (the Metadata page's *Generate it
    again* row), which also takes the panel-to-panel edge out of the graph
    entirely rather than leaving a one-way one for `npm run check`'s cycle gate to
    keep quiet about. */
-import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 
 /**
- * **What a press costs, in one phrase, in exactly one place.**
+ * **What a press buys, in one phrase, in exactly one place** — the work and
+ * the wait, never the price.
  *
- * Measured over three articles on 2026-09-04, under the lettering prompt and
+ * What it costs us, for developers: measured over three articles on 2026-09-04, under the lettering prompt and
  * `google/gemini-3.1-flash-image` at 1K: $0.41, $0.49 and $0.62 all in, about
  * two thirds of it the brief call rather than the pictures
  * (docs/project/diagram.md § The wire, and what it costs). It went up from
@@ -82,22 +83,27 @@ import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
  * on the wire now at $0.068 rather than arriving as a $0.013 BYOK figure, and
  * the brief is longer because it writes a caption for every vignette.
  *
- * **This is the number in front of the press**, so it is quoted rather than
- * rounded, and named as a constant because the empty state and the chip's hover
- * card must not be able to drift apart. A price that has quietly stopped being
- * true is worse than no price: the reader agreed to *this* one.
+ * **The dollar figure was in front of the press until 2026-09-30**, as
+ * `ILLUSTRATED_PRICE`, and came out when Greg ruled that what AI processing
+ * costs us is for the administrator alone (*"i don't want any regular users to
+ * know how much AI processing of their articles costs"*). What the reader is
+ * still owed before this, the dearest and slowest button in the app, is what it
+ * does and how long it takes — so that is what is named, as a constant because
+ * the empty state and the chip's hover card must not be able to drift apart.
+ * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md § 3.
  */
-export const ILLUSTRATED_PRICE = "$0.40–$0.65";
+export const ILLUSTRATED_WORK = "a brief plus one image call per plate";
 /** Brief plus plates, measured 2026-09-04: 220 s, 276 s and 385 s. */
 export const ILLUSTRATED_WAIT = "four to seven minutes";
 
 /**
- * **What one press buys when it has to draw the Sketch first**, built out of the
- * four constants rather than out of a fifth number.
+ * **What one press does when it has to draw the Sketch first**, built out of
+ * the three constants rather than out of new words.
  *
- * A sum would read better and would be the wrong thing: `$0.20 + $0.27–$0.40`
- * is a range whose ends are measured separately, and a total written here is a
- * number nothing measures — the kind of fact
+ * It named both prices until 2026-09-30 (see `ILLUSTRATED_WORK` for why it no
+ * longer does), and the reasoning for naming each half rather than a total still
+ * holds for the waits: a sum would read better and would be a number nothing
+ * measures — the kind of fact
  * [260903b-facts-that-were-wrong](../../docs/research/260903b-facts-that-were-wrong.md)
  * is about. Both halves named is also what the reader actually needs to know,
  * because the two steps fail, stop and finish separately.
@@ -107,12 +113,12 @@ export const ILLUSTRATED_WAIT = "four to seven minutes";
  * "illustrated"])`, which turns one press into a hidden $0.20 charge and a
  * three-minute wait that nothing warned about"* — and Greg asked for the chain
  * anyway. **The objection was to the hiding, not to the chain**, so the chain
- * lands and the price does not.
+ * lands and the second step — and its wait — is named before the press.
  */
-export const SKETCH_THEN_PAINT_COST =
-  `The Sketch first: one model call, ${SKETCH_PRICE}, taking ${SKETCH_WAIT}. Then the painting: ` +
-  `${ILLUSTRATED_PRICE}, taking ${ILLUSTRATED_WAIT}. Two paid steps for one press — Stop takes ` +
-  `effect after the step that is running, so stopping during the Sketch leaves the painting unbought.`;
+export const SKETCH_THEN_PAINT =
+  `The Sketch first: one model call, taking ${SKETCH_WAIT}. Then the painting: ` +
+  `${ILLUSTRATED_WORK}, taking ${ILLUSTRATED_WAIT}. Two steps for one press — Stop takes ` +
+  `effect after the step that is running, so stopping during the Sketch leaves the painting unstarted.`;
 
 /**
  * One plate's bytes, as an object URL, or the sentence saying why not.
@@ -682,17 +688,18 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
  * Greg asked for the chain the day after. The old sentence is kept here rather
  * than deleted because it is still right about the danger and still constrains
  * the code: **the objection was to the hiding, not to the chain**, so what the
- * reversal costs is a sentence naming both prices and both waits in front of
- * the press — `SKETCH_THEN_PAINT_COST`, built from the two panels' own
+ * reversal costs is a sentence naming both steps and both waits in front of
+ * the press — `SKETCH_THEN_PAINT`, built from the two panels' own
  * constants so the combined copy cannot drift from the single-step copy.
  * The other route is untouched: a reader who would rather look at the Sketch
  * before spending anything on a painting presses the chip one to the left, and
  * is not doing anything wrong.
  *
  * The fourth is the ordinary one: there is a Sketch, nobody has painted it, and
- * **the price goes in front of the press**. `ILLUSTRATED_PRICE` is measured
- * (evals/results/illustrated-2026-09-03/README.md) and it is dearer than every
- * other button in this app, so it is stated rather than implied.
+ * **what it does and how long it takes go in front of the press** — a brief,
+ * then the plates, and `ILLUSTRATED_WAIT`. It is the slowest and dearest
+ * button in this app (evals/results/illustrated-2026-09-03/README.md), so it is
+ * stated rather than implied; the dollar figure is the administrator's alone.
  *
  * **A run in flight outranks all four**, and that ordering is a fix rather than
  * a preference: the refusal branches carry no `JobProgress`, so a job started in
@@ -767,13 +774,13 @@ function Empty({ view }: { view: UseIllustrated }) {
           {why} Press <strong>Sketch</strong>, the chip one to the left, and draw{" "}
           {sketch.kind === "absent" ? "one" : "it again"} first — or do both from here:
         </p>
-        {/* **The price of both steps, before the press.** This is the whole of
+        {/* **Both steps, and both waits, before the press.** This is the whole of
             what the old refusal was protecting, and it is the reason the chain
             is allowed now: the objection was never to `["sketch",
             "illustrated"]`, it was to a reader buying the Sketch without being
-            told. See `SKETCH_THEN_PAINT_COST`. */}
+            told. See `SKETCH_THEN_PAINT`. */}
         <p className="ill-empty-why" data-ill-both-cost="">
-          {SKETCH_THEN_PAINT_COST}
+          {SKETCH_THEN_PAINT}
         </p>
         <div className="ill-run">
           {/* **`drawThenPaint`, and unforced.** The Sketch half runs only if
@@ -818,14 +825,14 @@ function Empty({ view }: { view: UseIllustrated }) {
   return (
     <>
       <p>Nobody has painted this one yet.</p>
-      {/* **What it costs, before the press rather than after it** — the same
+      {/* **What it does and how long it takes, before the press rather than after it** — the same
           rule the chips' hover cards follow, and it matters more here than
           anywhere else in the app, because this is the dearest and slowest
           button in it. */}
       <p className="ill-empty-why">
         A model reads the article and the Sketch and writes an illustration brief, then an image
-        model paints it — one plate for the whole argument and one for each part. It costs{" "}
-        {ILLUSTRATED_PRICE} and takes {ILLUSTRATED_WAIT}, so it is never painted until you ask.
+        model paints it — one plate for the whole argument and one for each part. It takes{" "}
+        {ILLUSTRATED_WAIT}, so it is never painted until you ask.
       </p>
       <p className="ill-empty-why">
         It is an interpretation and cannot be checked. Sketch, one chip to the left, stays the

@@ -111,7 +111,6 @@ import {
   saidNothing,
 } from "./messages.js";
 import { articlePower, modelFor } from "./models.js";
-import { currentOwnerId } from "./owner.js";
 import { MAX_EVIDENCE_EXCERPT, providerFailedMidAnswer } from "./openrouter-stream.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
@@ -788,7 +787,7 @@ export function makeInvestigateCitation(
           listed,
           article,
           /* The nested find-first path takes the article's power too (Sol F4). */
-          articlePower(article.highPowerSince, currentOwnerId()),
+          articlePower(article.highPowerSince),
         );
       } catch (err) {
         if (!isLookupCallFailure(err)) throw err;
@@ -828,7 +827,7 @@ export function makeInvestigateCitation(
       /* High-powered AI (plan 260930f): the reader seam is owner-scoped, so the
          ambient owner is this article's. The fingerprint below takes the
          model's generation, so a toggle does not detach the answer. */
-      const power = articlePower(article.highPowerSince, currentOwnerId());
+      const power = articlePower(article.highPowerSince);
       const model = modelFor("citation-investigate", power);
       const contextHash = investigateContextHash(
         context,

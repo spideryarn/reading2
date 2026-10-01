@@ -1,0 +1,130 @@
+{
+  "arm": "high-goalA-slider1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/2",
+  "sourceSha256": "05a0b0c6f7168c7ca9c62211586243c0fbd2d27aab2cec2b0b1ed8cc5fae87e1",
+  "at": "2026-09-30T23:52:58.702Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 27461,
+  "costUsd": 0.213452,
+  "tokens": {
+    "input": 86556,
+    "output": 4034,
+    "reasoning": 1963
+  },
+  "ok": true,
+  "reader": "goalA",
+  "words": 229,
+  "fullerWords": 360,
+  "briefWords": 148,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's 2020 essay on GPT-3, OpenAI's then-largest language model, and what it implies for the scaling hypothesis: the idea that just making neural networks bigger, with more data and compute, is enough to produce qualitatively new abilities, without new architectures or algorithms. GPT-3 was trained only to predict the next word in text, yet it learned to follow instructions and pick up new tasks from a few examples—meta-learning—despite nobody designing it to do that.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because GPT-3's architecture is old and crude, its training is \"dumb,\" and yet its scaling curves show no sign of bending: performance keeps improving smoothly as size grows, exactly as predicted by earlier scaling-law papers. That predictability, Gwern says, makes scaling feel more like statistics than traditional AI research.",
+      "ids": [
+        "spya-fvqe70",
+        "spya-asr663",
+        "spya-sctj6d"
+      ]
+    },
+    {
+      "text": "The core explanation offered is the \"blessings of scale\": large models act like ensembles of many sub-models, and as data and size grow, simple memorizing solutions get outcompeted by more general, abstract ones—because memorization can't scale but true algorithms can. This is framed as a broader pattern across deep learning, not unique to language models.",
+      "ids": [
+        "spya-jwq3zr",
+        "spya-grkhs8",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "Gwern contrasts OpenAI's bet on scaling against DeepMind's preference for hand-built, brain-inspired modules, and argues most AI researchers and forecasters have no real model of why scaling works or what would falsify it—so their public reassurances about AI risk carry little weight either way.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an essay about GPT-3, and about whether simply scaling up neural networks — more parameters, more data, more compute, no new algorithm — is enough on its own to produce more general intelligence. That claim, stated plainly, is what the author calls the scaling hypothesis.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "GPT-3 was trained the same way as GPT-2, just far bigger, yet it gained an ability nobody built in: learning a new task from a few examples given in the prompt, with no retraining (meta-learning). The author argues this matters because it shows raw scaling of unsupervised learning can supply a capability other approaches, like robotics or reinforcement learning, have struggled to get any other way. The scaling curves for GPT-3's prediction loss also kept improving smoothly past the point where people expected diminishing returns, with no sign yet of bending.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663",
+        "spya-kc39vs"
+      ]
+    },
+    {
+      "text": "The piece calls this pattern the \"blessings of scale\": hard problems get easier, not harder, as models, data, and compute grow, while small versions of the same model get stuck on shortcuts. Its proposed explanation: a large model effectively contains many overlapping sub-models; simple ones that memorize surface patterns win early, but once training data is large and varied enough, only sub-models that learn real structure, like an actual arithmetic rule rather than memorized answers, keep winning. Relatedly, the \"pretraining thesis\" holds that since predicting text well means getting even rare, hard cases right, pushing prediction loss down far enough eventually forces genuine reasoning and world knowledge rather than just vocabulary and grammar.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-vkkfzh",
+        "spya-rjwfkb"
+      ]
+    },
+    {
+      "text": "The author argues most large labs have not scaled comparable models because they hold a weaker version of the hypothesis: that intelligence needs specific modules engineered and understood piece by piece, only scaled up once found, rather than emerging wholesale from size alone. OpenAI, by contrast, restructured itself financially to bet on the strong version being true.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-arrq35"
+      ]
+    },
+    {
+      "text": "The piece is also skeptical of mainstream AI forecasters, who it says repeatedly called brute-force scaling a dead end right up until GPT-3 and rarely revised their views afterward. It leaves open just how much further the scaling curves can run, and what capabilities a further large drop in loss would unlock.",
+      "ids": [
+        "spya-b93jbz",
+        "spya-m9r8zx",
+        "spya-edr6mj"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece looks at GPT-3, a 175-billion-parameter language model, and asks what its scaling curves imply about the scaling hypothesis: that intelligence can emerge from stacking more compute, data, and parameters onto simple architectures, without new algorithms. GPT-3 kept improving on the same logarithmic curve past the point many expected diminishing returns, and picked up meta-learning it wasn't explicitly trained for.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author argues this matters because it settles, for them, a long-running debate: connectionists like Moravec and Sutskever bet that scale alone would work, while most researchers assumed complex architectures were needed. GPT-3's results suggest otherwise.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa",
+        "spya-cty5hx"
+      ]
+    },
+    {
+      "text": "The proposed mechanism is that big models act like ensembles of many sub-models; easy, memorizing sub-models win early, but at large enough scale and data, only sub-models that generalize (arithmetic, meta-learning, and so on) achieve low loss, so generalization emerges as a side effect of scale rather than being designed in.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-vkkfzh"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

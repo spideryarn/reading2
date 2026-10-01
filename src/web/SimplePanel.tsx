@@ -5,30 +5,33 @@
  * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/project/summaries.md § Simple.
  *
- * Drawn inside the Summary band, below the Gists | Simple switch
- * (SummaryPanel.tsx), so there is no `ModeSurface` here — this is the body.
+ * Drawn inside the Summary band, below the one row of controls
+ * (SummaryMode.tsx § `SummaryControls`), so there is no `ModeSurface` here —
+ * this is the body. Two levels, `simple` and `fuller`, one artefact: the panel
+ * draws whichever the row has chosen.
  *
- * Three things keep it an orientation rather than a replacement for reading,
- * and the file must go on doing all three:
+ * Two things keep it an orientation rather than a replacement for reading,
+ * and the file must go on doing both:
  *
  * - **every paragraph is a door** — its ids are drawn with the same `BlockRef`
  *   chips the gists use, hover shows the passage, a click goes there;
- * - **it says what it is**, in the foot (`SIMPLE_FOOT`);
  * - **plain text**, never markdown — model output is not HTML (security.md).
+ *
+ * **What it is lives on the pills, not under the paragraphs.** There was a foot
+ * here — *"Written by AI in plain words to help you get your bearings…"* —
+ * until Greg, 2026-09-30 (SPIDERYARN-READING2-7B): *"we don't want these mode
+ * descriptions - they waste space."* Each pill's card says it now, and
+ * docs/project/new-mode.md has the rule.
  */
 import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { BlockId, SimpleParagraph } from "../types.js";
+import type { BlockId, SimpleLevel, SimpleParagraph } from "../types.js";
 import type { PublicSimpleSummary } from "../public-types.js";
 import type { UseSimple } from "./useSimple.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
-
-/** The one line under the paragraphs, for owner and visitor alike. */
-export const SIMPLE_FOOT =
-  "Written by AI in plain words to help you get your bearings. The article says it better, and each paragraph links to where.";
 
 /** A visitor on a public article whose owner never asked for one. */
 export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this piece yet.";
@@ -47,13 +50,28 @@ export type SimpleAccess =
   | { kind: "owner"; owner: UseSimple }
   | { kind: "visitor"; simple: PublicSimpleSummary | null; owner?: never };
 
-export function SimplePanel({ access, onJump }: { access: SimpleAccess; onJump(id: BlockId): void }) {
+export function SimplePanel({
+  access,
+  level,
+  onJump,
+}: {
+  access: SimpleAccess;
+  /** Which of the three levels the row has chosen. */
+  level: SimpleLevel;
+  onJump(id: BlockId): void;
+}) {
   useRenderCount("SimplePanel");
   const owner = access.kind === "owner" ? access.owner : null;
-  const paragraphs = access.kind === "owner" ? access.owner.simple?.paragraphs : access.simple?.paragraphs;
+  const paragraphs =
+    access.kind === "owner" ? access.owner.simple?.levels[level] : access.simple?.levels[level];
   /* A visitor's paragraphs arrived with the page, so they are ready by construction. */
   const ready = paragraphs !== undefined && (owner === null || owner.status === "ready");
-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* The button beside paragraphs already there: while a job runs or after one
+     failed, and — since the paragraphs are written for the reader — once the
+     reader has changed their profile, so *Write it again* picks up the new one
+     (the quiz's rule; the badge in the row says why, in its card). */
+  const showJob =
+    owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed || owner.profileChanged);
 
   /**
    * @param again whether this is the button beside paragraphs already there.
@@ -94,8 +112,8 @@ export function SimplePanel({ access, onJump }: { access: SimpleAccess; onJump(i
         <div className="gloss-empty">
           <p>{SIMPLE_NONE_OWNER}</p>
           <p className="gloss-hint">
-            One model pass over the article, about ten seconds. Written once and kept — you will not be
-            asked again unless the article changes.
+            All three levels are written together, usually in under half a minute. Written once and kept —
+            you will not be asked again unless the article changes.
           </p>
           {run("Write it")}
         </div>
@@ -125,7 +143,6 @@ export function SimplePanel({ access, onJump }: { access: SimpleAccess; onJump(i
               ))}
             </div>
           </TooltipGroup>
-          <p className="simple-foot">{SIMPLE_FOOT}</p>
           {showJob && <div className="simple-job">{run("Write it again", true)}</div>}
         </>
       )}

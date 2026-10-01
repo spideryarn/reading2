@@ -1,0 +1,163 @@
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 4e899734..6f57b468 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -3916,6 +3916,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+           blocks: run.blocks,
+           paragraphs: counts,
+           words,
++          /* Three, or more when a level was asked twice (`LEVEL_ATTEMPTS`). A rise
++             here is a prompt that has started missing its own limits. */
++          calls: run.calls,
+           /* The profile's LENGTH, never the profile — it is the reader's own
+              words about themselves. */
+           profileChars: ctx.profile?.length ?? 0,
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index df8812ed..bf249b7a 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -125,6 +125,9 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
+ /** Passages per paragraph. Extra ids are dropped and counted. */
+ export const MAX_IDS = SIMPLE_MAX_IDS;
+ 
++/** Asks per level: the first, and one more if its answer fails validation (`writeLevel`). */
++export const LEVEL_ATTEMPTS = 2;
++
+ /**
+  * One call's answer budget in tokens, sized for the larger level: Fuller's
+  * word ceiling (480 words, ~640 tokens at 0.75 words a token, nearly doubled for
+@@ -526,6 +529,8 @@ export interface SimpleSummaryRun {
+   cacheWriteTokens: number;
+   maxTokens: number;
+   elapsedMs: number;
++  /** Requests made, across every level and retry — three when nothing was asked twice. */
++  calls: number;
+ }
+ 
+ export async function generateSimpleSummary(opts: {
+@@ -579,7 +584,8 @@ export async function generateSimpleSummary(opts: {
+     opts.onProgress(`${chars.toLocaleString("en-GB")} characters so far`);
+   };
+ 
+-  const writeLevel = async (level: SimpleLevel) => {
++  /** One request for one level: its answer text, or a throw for the call itself failing. */
++  const askLevel = async (level: SimpleLevel): Promise<{ raw: string; usage: Anthropic.Usage }> => {
+     let message: Anthropic.Message;
+     try {
+       const call = streamMessage(
+@@ -628,8 +634,36 @@ export async function generateSimpleSummary(opts: {
+       .filter((b): b is Anthropic.TextBlock => b.type === "text")
+       .map((b) => b.text)
+       .join("");
+-    const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, dropped);
+-    return { paragraphs, usage: message.usage };
++    return { raw, usage: message.usage };
++  };
++
++  /**
++   * **One level, with one second chance when its answer fails validation.**
++   * All-or-none over three calls turns each level's small failure rate into a
++   * press that fails about one time in twelve (plan 261001b § Ledger: 22 of 24
++   * stored all three; the losses were a level one word over its ceiling, a
++   * level whose ids matched no passage, and a stray character after the JSON).
++   * Each is a fresh sample's problem, so that level alone is asked again —
++   * once. A failed *call* (network, refusal, truncation, an abort) is not
++   * retried here: those have their own handling, and the job can be re-run.
++   *
++   * A rejected attempt's tally is discarded, so `dropped` counts what the kept
++   * answer lost; every attempt's tokens are returned, because they were spent.
++   */
++  const writeLevel = async (level: SimpleLevel) => {
++    const usages: Anthropic.Usage[] = [];
++    for (let attempt = 1; ; attempt += 1) {
++      const { raw, usage } = await askLevel(level);
++      usages.push(usage);
++      const tally = emptyDropped();
++      try {
++        const paragraphs = buildLevel(parseJsonAnswer<unknown>(raw, `the model's "${level}" answer`), level, evidenceIds, tally);
++        for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
++        return { paragraphs, usages, attempts: attempt };
++      } catch (err) {
++        if (attempt >= LEVEL_ATTEMPTS || signal.aborted) throw err;
++      }
++    }
+   };
+ 
+   /* `Promise.all` alone returns on the first rejection. That would let the
+@@ -662,7 +696,7 @@ export async function generateSimpleSummary(opts: {
+     SimpleParagraph[]
+   >;
+   const sum = (pick: (u: Anthropic.Usage) => number | null | undefined) =>
+-    written.reduce((n, w) => n + (pick(w.usage) ?? 0), 0);
++    written.reduce((n, w) => n + w.usages.reduce((m, u) => m + (pick(u) ?? 0), 0), 0);
+ 
+   const simpleSummary = stamped(levels, {
+     power: opts.power,
+@@ -685,6 +719,7 @@ export async function generateSimpleSummary(opts: {
+     cacheReadTokens: sum((u) => u.cache_read_input_tokens),
+     cacheWriteTokens: sum((u) => u.cache_creation_input_tokens),
+     maxTokens,
++    calls: written.reduce((n, w) => n + w.usages.length, 0),
+     elapsedMs: Date.now() - started,
+   };
+ }
+diff --git a/tests/simple-summary.test.ts b/tests/simple-summary.test.ts
+index 47af68c5..9d12e4e5 100644
+--- a/tests/simple-summary.test.ts
++++ b/tests/simple-summary.test.ts
+@@ -33,7 +33,7 @@ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
+ /* ------------------------------------------------------- the stubbed model -- */
+ 
+ /** One answer for every call, or one per level — told apart by the level's system prompt. */
+-let answer: string | Partial<Record<SimpleLevel, string>> = "";
++let answer: string | Partial<Record<SimpleLevel, string | string[]>> = "";
+ let stop: string = "end_turn";
+ let waitForAbort: SimpleLevel | null = null;
+ const abortSettled = new Set<SimpleLevel>();
+@@ -45,8 +45,13 @@ const levelOf = (body: unknown): SimpleLevel => {
+ };
+ 
+ /** A level the case does not name gets a good answer, so each case is about the level it names. */
+-const answerFor = (level: SimpleLevel): string =>
+-  typeof answer === "string" ? answer : (answer[level] ?? JSON.stringify({ paragraphs: GOOD[level] }));
++/** A list is handed out one answer per call, in order — a level asked twice gets the second. */
++const answerFor = (level: SimpleLevel): string => {
++  if (typeof answer === "string") return answer;
++  const given = answer[level];
++  if (Array.isArray(given)) return (given.length > 1 ? given.shift() : given[0]) ?? "";
++  return given ?? JSON.stringify({ paragraphs: GOOD[level] });
++};
+ 
+ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
+@@ -392,6 +397,30 @@ describe("the request", () => {
+     expect(abortSettled).toEqual(new Set(["brief"]));
+   });
+ 
++  it("asks a level again, once, when its answer fails validation, and keeps the second", async () => {
++    const overCeiling = answerOf([para(words(SIMPLE_LIMITS.brief.maxWords + 1), INTRO.id), para("Two.", WHY.id)]);
++    answer = { brief: [JSON.stringify(overCeiling), JSON.stringify(answerOf(BRIEF))] };
++    const out = await run();
++    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
++    expect(out.calls).toBe(4);
++    expect(sent.filter((c) => levelOf(c.body) === "brief")).toHaveLength(2);
++    /* The rejected attempt's tokens were spent, so they are counted. */
++    expect(out.outputTokens).toBe(4);
++  });
++
++  it("does not ask a third time: a level that fails twice fails the run", async () => {
++    answer = { fuller: ["{ not json", JSON.stringify(answerOf([para("One.", INTRO.id)]))] };
++    await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
++    expect(sent.filter((c) => levelOf(c.body) === "fuller")).toHaveLength(2);
++  });
++
++  it("does not retry a refusal", async () => {
++    stop = "refusal";
++    answer = "";
++    await expect(run()).rejects.toThrow();
++    expect(sent).toHaveLength(3);
++  });
++
+   it("reports what it dropped on the run, and does not store it", async () => {
+     answer = {
+       simple: JSON.stringify(answerOf([para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)])),

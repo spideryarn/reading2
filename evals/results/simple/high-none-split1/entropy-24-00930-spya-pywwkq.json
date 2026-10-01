@@ -1,0 +1,101 @@
+{
+  "arm": "high-none-split1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "4cefbf1ba90cafe46894c7c7a6131e2524be52053507a3c4a51e05b32835e2cf",
+  "at": "2026-09-30T23:45:12.471Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 86313,
+  "costUsd": 0.050328,
+  "tokens": {
+    "input": 20294,
+    "output": 974,
+    "reasoning": 380
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 225,
+  "fullerWords": 347,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how scientists can measure and understand the way brain circuits handle information. It focuses on a mathematical tool called partial information decomposition, or PID, which helps break down how neurons combine signals from other neurons.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says a basic unsolved puzzle in neuroscience is figuring out how brains actually process information from their senses to produce behavior. Until recently, scientists lacked both large enough recordings of neuron activity and good enough analysis methods to tackle this puzzle; PID is presented as a major step toward fixing the analysis side.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID looks at two or more source neurons feeding into one target neuron, and splits the information they provide into three kinds: redundant (the same information repeated in both sources), unique (information only one source has), and synergistic (information that only appears when you look at both sources together, not available from either alone). Synergy is treated as a sign that a neuron is truly combining or computing on its inputs, not just adding them up.",
+      "ids": [
+        "spya-u5ra3d",
+        "spya-e94ury",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Using real recordings from mouse brain tissue and from monkeys performing tasks, the authors found synergy (computation) is higher in densely connected \"rich club\" neurons, increases with more feedback loops between source neurons, peaks when source neurons are moderately similar to each other, and shifts depending on what behavior an animal is doing.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This article is a review about how scientists can study the way brain circuits combine and transform signals from many neurons, what the authors call neural information processing. Their main tool is partial information decomposition, or PID, which looks at how the past activity of two source neurons predicts a target neuron's future activity. The review offers an accessible introduction to PID and summarizes findings from applying it to real recordings of neurons in the brain.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Understanding this matters because brains take in signals and use them to produce behavior, yet how signals are changed along the way is poorly understood. Progress was long blocked by two problems: not enough data from many neurons recorded at once, and no good way to make sense of that data. New recording technology has largely solved the first problem; this review focuses on how PID helps solve the second.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID's key idea is to split the total information that two source neurons give about a shared target into parts. Redundant information is what either source neuron could tell you on its own. Unique information is what only one particular source can reveal. Synergistic information only shows up when you look at both sources' patterns together; it cannot be found in either neuron alone. This is treated as a sign of real computation.",
+      "ids": [
+        "spya-e94ury",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Recordings from neurons in mouse brain-slice cultures showed synergy rises reliably with the strength of feedforward information flow between source and target neurons. Synergy was also far higher in \"rich club\" neurons, the densely connected hubs of a network; rich-club triads carried 2.7 times more synergy than others. Synergy grew further with more recurrent connections between the two source neurons, though connections feeding back from the target were not reliably linked to it.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "Similar patterns showed up in macaque monkeys performing a behavioral task, including a rich club and more synergy in well-connected neurons. The balance between synergy and redundancy also shifted with the task. Redundancy, the duplicated information carried by both sources, rose sharply during movement execution, likely helping send a reliable \"move\" signal to distant muscles.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aqcngt"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  }
+}

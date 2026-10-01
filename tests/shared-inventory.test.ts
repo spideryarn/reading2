@@ -28,7 +28,7 @@ import { describe, expect, it } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { OWNER_MODE_NOTE } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import type { Glossary, PublicArtefacts } from "../src/types.js";
+import type { Glossary, PublicArtefacts, SimpleSummary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { sharedInventory, type InventoryItem } from "../src/web/shared-inventory.js";
 import { ARTEFACT_KEYS, asPublicArtefacts } from "../src/web/AccessSharing.js";
@@ -538,16 +538,28 @@ describe("what counts as shareable", () => {
       trajectory: null,
       faq: null,
       simpleSummary: {
-        version: "simple/1",
+        version: "simple/2",
         generator: "test",
         slug: "x",
         sourceHash: "0000000000000000",
         generatedAt: "2020-01-01T00:00:00.000Z",
         elapsedMs: 1,
-        paragraphs: [
-          { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
-          { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
-        ],
+        profileHash: null,
+        levels: {
+          brief: [
+            { text: "What it is.", ids: ["spya-k3m9qt"] },
+            { text: "Why it matters.", ids: ["spya-p7w2dn"] },
+          ],
+          simple: [
+            { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
+            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+          ],
+          fuller: [
+            { text: "What the piece is about, in more detail.", ids: ["spya-k3m9qt"] },
+            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
+            { text: "How it makes the argument.", ids: ["spya-k3m9qt"] },
+          ],
+        },
       },
       citations: null,
       debate: null,
@@ -573,9 +585,24 @@ describe("what counts as shareable", () => {
         sourceHash: "0000000000000000",
         generatedAt: "2020-01-01T00:00:00.000Z",
         elapsedMs: 1,
-        /* Fewer than two paragraphs is not a usable or public Simple. */
-        paragraphs: [],
-      },
+        profileHash: null,
+        /* Every level is valid-looking: the old version alone must refuse it. */
+        levels: {
+          brief: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+          ],
+          simple: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+          ],
+          fuller: [
+            { text: "One.", ids: ["spya-k3m9qt"] },
+            { text: "Two.", ids: ["spya-k3m9qt"] },
+            { text: "Three.", ids: ["spya-k3m9qt"] },
+          ],
+        },
+      } as unknown as SimpleSummary,
       citations: null,
       debate: null,
       glossary: null,

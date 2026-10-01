@@ -4609,24 +4609,61 @@ export interface SimpleParagraph {
   ids: BlockId[];
 }
 
-/** The stored Simple contract, shared by generation and every read boundary. */
-export const SIMPLE_MIN_PARAGRAPHS = 2;
-export const SIMPLE_MAX_PARAGRAPHS = 4;
+/**
+ * **The three plain-words levels**, in the order the slider runs: `brief`,
+ * short and very simple; `simple`, fairly simple and just under the first
+ * version's length; `fuller`, moderately complex and just over it. Greg,
+ * 2026-09-30 (SPIDERYARN-READING2-7J): *"a UI-slider with 3 level (short &
+ * very-simple, just-under-current-length and fairly-simple,
+ * just-over-current-length and moderately-complex)"*.
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+ *
+ * Also the `?summary=` values for these views (src/web/params.ts), so
+ * `simple` keeps the value readers' links already carry.
+ */
+export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
+export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
+
+/** The stored shape's version, beside the guard that decides whether it is usable. */
+export const SIMPLE_ARTIFACT_VERSION = "simple/2";
+
+/** One level's limits — the stored Simple contract, shared by generation and every read boundary. */
+export interface SimpleLevelLimits {
+  minParagraphs: number;
+  maxParagraphs: number;
+  /** The hard ceiling on the level's words; the prompt asks for well under it. */
+  maxWords: number;
+}
+
+/*
+ * The word ceilings sit above the longest the measurement saw at each level
+ * (210, 338 and 431, plan 261001b § Ledger) — a ceiling is the line between an
+ * orientation and a digest, not a length target, and with three calls a tight
+ * one loses all three for one level's ten words. The prompt's asks are what
+ * set the length.
+ */
+export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
+  brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
+  simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
+  fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
+};
+
+/** Passages per paragraph, at every level. */
 export const SIMPLE_MAX_IDS = 3;
-export const SIMPLE_MAX_WORDS = 320;
 
 /**
- * Is this a usable stored paragraph list?
+ * Is this a usable stored paragraph list for this level?
  *
  * The generator performs the evidence-dependent check that every id belongs
  * to the exact body it sent. This is the part a reader can check without the
  * article: the same quantity, text, id and word limits the generator enforces.
  */
-export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
+export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is SimpleParagraph[] {
+  const limits = SIMPLE_LIMITS[level];
   if (
     !Array.isArray(value) ||
-    value.length < SIMPLE_MIN_PARAGRAPHS ||
-    value.length > SIMPLE_MAX_PARAGRAPHS
+    value.length < limits.minParagraphs ||
+    value.length > limits.maxParagraphs
   ) {
     return false;
   }
@@ -4654,20 +4691,69 @@ export function isSimpleParagraphs(value: unknown): value is SimpleParagraph[] {
       return false;
     }
   }
-  return words <= SIMPLE_MAX_WORDS;
+  return words <= limits.maxWords;
+}
+
+/**
+ * **Are all three stored levels present and within their limits?** The content
+ * half of `isUsableSimpleSummary` below, which is the whole-artefact guard every
+ * read boundary uses (Sol's plan review, P1-2).
+ */
+export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const levels = value as Partial<Record<SimpleLevel, unknown>>;
+  return SIMPLE_LEVELS.every((level) => isSimpleParagraphs(levels[level], level));
 }
 
 /** The artefact. The `simple_summary` column on `article_revisions`. */
 export interface SimpleSummary {
-  version: string;
+  version: typeof SIMPLE_ARTIFACT_VERSION;
   generator: string;
   slug: string;
-  /** A hash of the body-only article rendering actually sent (src/simple-summary.ts). */
+  /**
+   * A hash of the body-only article rendering and the **profile-free** user
+   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * it, so a changed profile never makes the paragraphs stale.
+   */
   sourceHash: string;
   generatedAt: string;
   elapsedMs: number;
-  /** Two to four, enforced by code — fewer is a failure and nothing is stored. */
-  paragraphs: SimpleParagraph[];
+  /**
+   * `hashProfile` of the rendered profile these were written for, or `null`
+   * for none. Having the field is what puts Simple in the owner's *make public*
+   * dialog as personalised (`ProfileCarrying`, src/store/pg.ts); it never
+   * reaches a visitor (src/public/dto.ts).
+   */
+  profileHash: string | null;
+  /** Every level, always — validation stores all of them or none. */
+  levels: Record<SimpleLevel, SimpleParagraph[]>;
+}
+
+/**
+ * **Is this a complete, current-shape Simple artefact?** One answer for every
+ * read boundary. Checking `levels` alone is not enough: an imported or edited
+ * `simple/1` row can happen to carry a field with that name and must still read
+ * as absent, while `profileHash` is required provenance in `simple/2`.
+ */
+export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const simple = value as Partial<Record<keyof SimpleSummary, unknown>>;
+  return (
+    simple.version === SIMPLE_ARTIFACT_VERSION &&
+    typeof simple.generator === "string" &&
+    simple.generator.length > 0 &&
+    typeof simple.slug === "string" &&
+    simple.slug.length > 0 &&
+    typeof simple.sourceHash === "string" &&
+    simple.sourceHash.length > 0 &&
+    typeof simple.generatedAt === "string" &&
+    simple.generatedAt.length > 0 &&
+    typeof simple.elapsedMs === "number" &&
+    Number.isFinite(simple.elapsedMs) &&
+    simple.elapsedMs >= 0 &&
+    (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    isSimpleLevels(simple.levels)
+  );
 }
 
 /**
@@ -4680,9 +4766,16 @@ export interface SimpleSummaryResponse {
   stale: boolean;
   /** The article is the same and we would write this differently now. */
   outdated: boolean;
+  /**
+   * The reader has changed their profile since these were written —
+   * `profileIsStale` in src/profile.ts, added by the route
+   * (`withProfileChanged`). Never makes them stale.
+   */
+  profileChanged: boolean;
 }
 
-export type SimpleSummaryFound = SimpleSummaryResponse;
+/** What the store hands the route, before the route adds the profile answer. */
+export type SimpleSummaryFound = Omit<SimpleSummaryResponse, "profileChanged">;
 
 /* -------------------------------------------------------------- crossrefs --
    Links inside one article: a short phrase in one block that refers to what

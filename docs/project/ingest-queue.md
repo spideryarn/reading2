@@ -982,12 +982,13 @@ taking the lock. What stands in for it is a test — the parity suite's cap case
 a `claim` that ignored its argument, on both adapters
 ([`tests/store-jobs-parity.test.ts`](../../tests/store-jobs-parity.test.ts)).
 
-**What the number rations is spend and provider rate limits**, not CPU, memory or connections. There
-is no spend cap anywhere in this repo, and the label and summary fan-outs each multiply by N. It does
-not ration correctness: which jobs may run on one article at once is the article's own line below
-and not this one. Since 2026-09-29 that line lets compatible mode jobs run side by side, so one
-reader opening four modes can take every slot — left at 3 on purpose, and Greg's call
-([260929c § Deferred](../plans/260929c-modes-generate-in-parallel-on-one-article.md#deferred)).
+**What the number primarily rations is spend and provider rate limits**, with memory also relevant
+when Vercel packs several PDF parses onto one instance. There is no spend cap anywhere in this repo,
+and the label and summary fan-outs each multiply by N. It does not ration correctness: which jobs
+may run on one article at once is the article's own line below and not this one. Since 2026-09-29
+that line lets compatible mode jobs run side by side, so one reader can take every global slot. The
+cap went from three to six on 2026-10-01; the reason and the limits considered are in
+[`src/jobs.ts`](../../src/jobs.ts) § `DEFAULT_JOB_CONCURRENCY`.
 
 **The pump does not start on Vercel.** It cannot outlive the invocation that made it, so all it
 could produce there is a `running` row whose claimant is already frozen. The browser is the only

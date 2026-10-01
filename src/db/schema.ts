@@ -4866,7 +4866,8 @@ export const billingAccounts = spideryarn.table(
 
 /**
  * **Every new ingest an owner is charged for, reserved before it runs and
- * settled when it ends.** One row per *attempt to spend* — not per article, and
+ * settled when it ends** — and, since 2026-09-30, every High-powered AI upgrade,
+ * born settled (`kind`). One row per *attempt to spend* — not per article, and
  * not per job.
  *
  * ## Why this is not a count of jobs, or of articles
@@ -4952,6 +4953,24 @@ export const ingestEvents = spideryarn.table(
     succeededAt: timestamp("succeeded_at", { withTimezone: true }),
     /** Set when the job failed, was cancelled, or never became a job at all. */
     releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * **What this charge is for**: `'ingest'` — a URL or file added, reserved
+     * before it runs and settled when it ends, which is every row before
+     * 2026-09-30 — or `'high_power'`, one article switched to High-powered AI.
+     *
+     * An upgrade is one more article's worth, priced exactly like an ingest of
+     * the same article (2 half-units private, 1 public, live; frozen on delete),
+     * so the article costs double — Greg, 2026-09-30: *"it should double the
+     * processing cost per-article"*. It is inserted already settled, in the
+     * transaction that switches the article on, and never refunded
+     * (`chargeHighPower`, src/store/pg-billing.ts).
+     *
+     * **The wall adds both kinds; every sentence that says "added" counts only
+     * ingests.** `Usage` in pg-billing.ts splits them, which is what stops one
+     * public high-powered article reading as two public articles on /profile.
+     * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
+     */
+    kind: text("kind").notNull().default("ingest"),
     /**
      * **The article this charge produced** — written in the same statement that
      * sets `succeeded_at`, and null on every other kind of row.
@@ -5099,6 +5118,33 @@ export const ingestEvents = spideryarn.table(
       "ingest_events_frozen_only_after_unlink",
       sql`${t.articleId} is null or ${t.articleVisibilityAtDelete} is null`,
     ),
+    check("ingest_events_kind", sql`${t.kind} in ('ingest','high_power')`),
+    /**
+     * **An upgrade is born settled, and stays that way.** A `high_power` row
+     * with no `succeeded_at` would be counted as an ingest in flight by every
+     * usage reader, and one with neither a live article nor a frozen price would
+     * be charged full price for nothing anybody can name. Both columns receive
+     * the same database timestamp, so the equality is exact. GPT Sol, plan
+     * review finding 6, 2026-09-30.
+     */
+    check(
+      "ingest_events_high_power_shape",
+      sql`${t.kind} <> 'high_power'
+          or (${t.succeededAt} is not null
+              and ${t.releasedAt} is null
+              and ${t.reservedAt} = ${t.succeededAt}
+              and (${t.articleId} is not null or ${t.articleVisibilityAtDelete} is not null))`,
+    ),
+    /**
+     * **One upgrade per article, for ever.** Switching off refunds nothing and
+     * switching on again charges nothing; the handler checks under the billing
+     * lock, and this is the backstop that makes a second charge an error rather
+     * than a bill. A deleted article's rows lose their `article_id`, so its
+     * frozen upgrade leaves the index and nothing can collide with it.
+     */
+    uniqueIndex("ingest_events_high_power_once")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'high_power' and ${t.articleId} is not null`),
     /* The admission query, which runs on the critical path of every ingest. */
     index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),
     /**

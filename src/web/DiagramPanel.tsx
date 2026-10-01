@@ -96,7 +96,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { PublicSketch } from "../public-types.js";
 import { SketchView } from "./SketchView.js";
 import { useSketchCaption } from "./useSketch.js";
-import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
+import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -321,7 +321,7 @@ const KIND_UI: Record<
     /* **"the list under it is both" said checked, and only half of it is.** The
        quotes are the article's own words and their destinations are checked;
        what the row says is *drawn* is the model's. GPT Sol, 2026-09-03. */
-    how: `Made from the Sketch rather than the article, so draw that one first. Costs ${ILLUSTRATED_PRICE} and takes ${ILLUSTRATED_WAIT}, and is never painted until you ask. Nothing in the picture is checked or clickable; the list under it quotes the article and jumps into it.`,
+    how: `Made from the Sketch rather than the article, so draw that one first. It is ${ILLUSTRATED_WORK}, takes ${ILLUSTRATED_WAIT}, and is never painted until you ask. Nothing in the picture is checked or clickable; the list under it quotes the article and jumps into it.`,
   },
 };
 

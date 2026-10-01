@@ -248,11 +248,11 @@ export type GateVerdict = "go" | "abandoned";
 export interface RendezvousOutcome {
   /** The slugs whose measured step reached the entry, in the order they did. */
   arrived: string[];
-  /** How many parties the rendezvous has in total — three, in phase D. */
+  /** How many parties the rendezvous has in total — the production default, in phase D. */
   expected: number;
   /**
    * **How many *this* wait needed**, which is not always all of them: the
-   * readiness wait needs the two load steps and deliberately leaves the book out,
+   * readiness wait needs every load step and deliberately leaves the book out,
    * because the book is not driven until the readiness wait has ended.
    */
   needed: number;
@@ -272,19 +272,19 @@ export interface RendezvousOutcome {
 }
 
 /**
- * **An eval-only start rendezvous, so that phase D's three measured windows can
+ * **An eval-only start rendezvous, so that phase D's measured windows can
  * actually intersect.**
  *
  * The arithmetic in `peakConcurrency` was right and the phase did not arrange
  * the thing it measures. The book's job is a forced `hierarchy` and begins its
- * measured step at once; the two load articles begin at `fetch` and reach
- * `hierarchy` only after stages 1-3. Whether the three windows shared a common
+ * measured step at once; the load articles begin at `fetch` and reach
+ * `hierarchy` only after stages 1-3. Whether all windows shared a common
  * intersection was left to how long those stages happened to take — and a peak
- * below three makes question 5 unanswerable *after* the money has gone.
+ * below the planned width makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
  *
- * **The first fix was a latch and the second was two-party; this one holds all
- * three.** Announcing an arrival is not the same as being *at* the entry when
+ * **The first fix was a latch and the second was load-only; this one holds every
+ * job.** Announcing an arrival is not the same as being *at* the entry when
  * the others get there, so `arrive` **holds its caller** (DPN-20). But holding
  * only the two load steps and then releasing them before driving the book left
  * the same hole one party over: with another job holding the third queue slot,
@@ -293,17 +293,17 @@ export interface RendezvousOutcome {
  *
  * **So there are two waits, and only the second one opens the gate.**
  *
- * 1. `waitFor(2, …)` — **readiness**. Both load steps are at the entry and still
+ * 1. `waitFor(expected - 1, …)` — **readiness**. All load steps are at the entry and still
  *    held; nothing has been bought for the book, which has not been driven or
  *    even queued. A readiness wait that does not end `"all"` is where the run
  *    stops: `loadReadiness`.
  * 2. `wait(…)` — **the gate**. The book is driven, reaches the same entry through
- *    the same hook, and all three are released together.
+ *    the same hook, and every job is released together.
  *
  * **The book does arrive inside its own claim, and that is sound rather than a
  * concession.** Its `hierarchy` needs 658-778 s against a 740 s deadline and can
  * give up none of it — but by the time it is driven, everybody else is already
- * waiting *for it*, so its own wait is one microtask. The two load steps are the
+ * waiting *for it*, so its own wait is one microtask. The load steps are the
  * ones that really hold, inside their claims, and what they pay is in `held`.
  *
  * **It gives up rather than hanging, and lets go when it does.** A load job that
@@ -325,7 +325,7 @@ export interface RendezvousOutcome {
  * `abandonStep` is what the caller does with it. The verdict is **latched at the
  * first opening**, because `runPhaseD`'s `finally` calls `release()` on every
  * path including the successful one — a second call must not turn a gate that
- * opened on all three into an abandonment under three running steps.
+ * opened on everybody into an abandonment under running steps.
  */
 export function startRendezvous(opts: {
   expected: number;
@@ -467,9 +467,9 @@ export const ABANDONED_MARKER = "ABANDONED AT THE START RENDEZVOUS";
  * The gate can open without everybody at the entry — the book failing to get a
  * claim slot inside the deadline is the likeliest way, and on a shared box that
  * is closer to the expected case than to the tail. Every measured step that runs
- * after that is bought for an answer question 5 will refuse: three windows are
- * what it needs, and this phase no longer has them. On the book that is $7.40 of
- * a $40.90 run. So the step throws **before** `step.run`, having bought nothing.
+ * after that is bought for an answer question 5 will refuse: all planned windows
+ * are what it needs, and this phase no longer has them. So the step throws
+ * **before** `step.run`, having bought nothing.
  * ⟨Greg, 2026-09-05, after round 5 left this as the last known money-waster.⟩
  *
  * **Two guards, and neither is negotiable.**
@@ -493,8 +493,8 @@ export function abandonStep(opts: {
   if (opts.dryRun) return null;
   return new Error(
     `${ABANDONED_MARKER}: \`${opts.step}\` on ${opts.slug} was released by a start rendezvous that ` +
-      "GAVE UP rather than opening on all three, so this eval stopped it before it ran and it " +
-      "bought nothing. The three measured windows cannot now overlap, so question 5 is " +
+      "GAVE UP rather than opening on every job, so this eval stopped it before it ran and it " +
+      "bought nothing. The measured windows cannot now all overlap, so question 5 is " +
       "unanswerable whatever this step did — running it would have spent money on an answer the " +
       "report would then refuse to quote. This job's `error` is this eval's doing, not the " +
       "pipeline's.",
@@ -510,7 +510,7 @@ export function abandonStep(opts: {
  * findings already on the record, and the run then buy the book's whole wave
  * into a phase that could not answer the only question that pass exists for.
  * Question 1 is phases A and B only; **the phase-D book pass is for question 5
- * and nothing else**, and question 5 needs three windows open at one instant. No
+ * and nothing else**, and question 5 needs every planned window open at one instant. No
  * load steps at the entry, no question 5, so no reason to buy it.
  * ⟨GPT Sol, DPN-23.⟩
  *
@@ -531,7 +531,7 @@ export function loadReadiness(ready: RendezvousOutcome): {
           `Phase D: only ${ready.arrived.length} of ${ready.needed} load step(s) reached the entry ` +
           `to the measured step (the wait ended "${ready.why}" after ${(ready.ms / 1000).toFixed(1)}s). ` +
           "The book's pass under load was NOT DRIVEN and NOT BOUGHT: it exists to answer question 5, " +
-          "question 5 needs all three measured windows open at one instant, and with the load steps " +
+          `question 5 needs all ${ready.expected} measured windows open at one instant, and with the load steps ` +
           "gone that is no longer possible. Question 5 is absent, not zero, and the phase-D book " +
           "repeat is missing from the driving.",
       },
@@ -700,25 +700,25 @@ export function requeueFinding(opts: {
   };
 }
 
-/* ---------------------------------------------- one fate, three measured jobs -- */
+/* --------------------------------------------------- one fate, all measured jobs -- */
 
 /**
  * **The invariant phase D was missing, and the fifth time it was missing it.**
  *
  * Four separate guards had already been fitted for four separate ways of buying
  * something the run already knew it could not use, and here was a fifth: the
- * three measured jobs were driven concurrently and *drained* together, and
+ * measured jobs were driven concurrently and *drained* together, and
  * nothing else passed between them. Load 1's `hierarchy` could fail on its
  * structure call while the book and load 2 went on admitting expansion and label
- * calls — for a question 5 that could no longer reach three usable completions.
+ * calls — for a question 5 that could no longer reach every required completion.
  * ⟨GPT Sol, DPN-26.⟩
  *
  * So rather than a fifth guard, the rule those four are instances of:
  *
- * > **The three measured jobs share one fate, and none of them starts more paid
+ * > **The measured jobs share one fate, and none of them starts more paid
  * > work after any of them has lost it.**
  *
- * Anything that puts three usable completions out of reach loses it: a measured
+ * Anything that puts all usable completions out of reach loses it: a measured
  * step that failed, a wave that fell back to wave 1, a claim handed back at the
  * deadline.
  *
@@ -834,7 +834,7 @@ export function fateReason(opts: {
 /**
  * **One writer at a time, and a temporary name nobody else can hold.**
  *
- * Phase D drives three jobs concurrently and every one of them checkpoints, so
+ * Phase D drives the default cap's jobs concurrently and every one checkpoints, so
  * two calls could interleave on a single `run.json.<pid>.tmp`: both write it,
  * both rename it, and one legal ordering leaves the second rename with
  * `ENOENT`. That rejection travelled out of `driveJob`, through `Promise.all`,
@@ -965,7 +965,7 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
  * that is what the runner does with `since`.
  *
  * **`slug` is a filter on the NAME, not only on the contents.** Phase D has
- * three jobs writing into one directory, and this used to parse every new file
+ * several jobs writing into one directory, and this used to parse every new file
  * before asking whose it was: a parse failure on a sibling's file rejected the
  * whole read, marked the *asking* job fatal and left its own `recordsFiles`
  * empty. ⟨GPT Sol, DPN-14.⟩ Both halves matter, and the name is the cheap one —

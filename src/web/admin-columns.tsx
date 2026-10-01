@@ -200,17 +200,29 @@ function Ingests({ user }: { user: AdminUser }) {
        subscription whose stored period has run out has no window to count
        inside, so this is a lifetime count against a monthly limit — and `active`
        in the Plan column beside it is the status of dates we could not read.
-       Drawn as `61 / 20 ?` rather than as a bare fraction. GPT Sol, 2026-09-03. */
+       Drawn in half-slots with a `?`, rather than as a bare ingest fraction,
+       so public rows and High-powered upgrades remain visible without claiming
+       a lifetime numerator belongs to this month's denominator. */
+    const halfUnits =
+      (user.ingests - user.ingestsShared) * 2 +
+      user.ingestsShared +
+      (user.highPower - user.highPowerShared) * 2 +
+      user.highPowerShared;
+    const budget = user.ingestLimit * 2;
     return (
       <span
         className="tw:text-muted-foreground"
         title={
-          `${user.ingests} used over the lifetime of the account, against this tier's ` +
-          `${user.ingestLimit} a month — the two are not the same window. Stripe's stored ` +
+          `${user.ingests} added over the lifetime of the account, ${user.ingestsShared} public now` +
+          (user.highPower === 0
+            ? ""
+            : `, and ${user.highPower} switched to High-powered AI, ${user.highPowerShared} public now`) +
+          `. That is ${halfUnits} half-slots against this tier's ${budget} a month — the two are ` +
+          "not the same window. Stripe's stored " +
           "billing period does not contain now, so there is no current period to count inside."
         }
       >
-        {user.ingests} / {user.ingestLimit} ?
+        {halfUnits} / {budget} half ?
       </span>
     );
   }
@@ -228,7 +240,7 @@ function Ingests({ user }: { user: AdminUser }) {
      would read as the wall having failed — the same rendering the half form
      below exists to avoid, arrived at from the other direction. GPT Sol,
      2026-09-05. */
-  if (user.ingestsShared === 0 && user.ingests <= user.ingestLimit) {
+  if (user.ingestsShared === 0 && user.highPower === 0 && user.ingests <= user.ingestLimit) {
     return (
       <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
         {user.ingests} / {user.ingestLimit}
@@ -243,7 +255,13 @@ function Ingests({ user }: { user: AdminUser }) {
      a whole article*), so the cell shows the enforcement pair in its own unit
      and names it. The arithmetic is done here from integer counts rather than
      sent as a total — the server has no better claim on `× 2` than the page. */
-  const halfUnits = (user.ingests - user.ingestsShared) * 2 + user.ingestsShared;
+  /* High-powered AI's upgrades are one more article's worth each, priced like
+     an ingest of the same article — so they join the same sum. */
+  const halfUnits =
+    (user.ingests - user.ingestsShared) * 2 +
+    user.ingestsShared +
+    (user.highPower - user.highPowerShared) * 2 +
+    user.highPowerShared;
   const budget = user.ingestLimit * 2;
   return (
     <span
@@ -253,6 +271,9 @@ function Ingests({ user }: { user: AdminUser }) {
            it is the one that explains a cell like `12 / 6 half` on an account
            with nothing shared: they were public when they were added. */
         (user.ingestsShared === 0 ? "none of them public now" : `${user.ingestsShared} of them public`) +
+        (user.highPower === 0
+          ? ""
+          : `, and ${user.highPower} switched to High-powered AI, which counts as one more article each`) +
         `. A public article counts as half, so that is ${halfUnits} half-slots against an ` +
         `allowance of ${user.ingestLimit} articles, which is ${budget}.`
       }

@@ -180,7 +180,6 @@
    can claim to hold every model this app sends without repeating anybody's
    literal. src/embeddings.ts owns that decision; this file only needs the
    string. */
-import { isAdmin } from "./admin.js";
 import { EMBEDDING_MODEL } from "./embeddings.js";
 import {
   HIGH_POWER_MODEL,
@@ -271,9 +270,8 @@ export { HIGH_POWER_MODEL, HIGH_POWER_MODEL_OPENROUTER, isHighPowerModel };
 
 /**
  * **Which of the two capable models an article's calls go to.** `"high"` only
- * for an article whose `high_power_since` is set *and* whose owner is an
- * administrator (plan 260930f decision 4) — the caller decides that; this file
- * only answers what each value means.
+ * for an article whose `high_power_since` is set. The caller decides that;
+ * this file only answers what each value means.
  *
  * **A required argument everywhere it is taken, never ambient state**
  * (decision 5): a call site that has not decided does not compile, where an
@@ -339,23 +337,23 @@ export function sameGenerator(a: string, b: string): boolean {
 }
 
 /**
- * **The power an article's calls run at**: high only when its
- * `high_power_since` is set **and** its owner is an administrator.
+ * **The power an article's calls run at**: high exactly when its
+ * `high_power_since` is set.
  *
- * The second half should never matter in v1 — only an administrator can set the
- * column — and it is there so a row copied, restored or hand-edited onto a
- * reader's article cannot quietly double what we spend on it before the billing
- * half exists. When the reader-facing half lands, this is the one line that
- * changes. Plan 260930f decision 4.
+ * Until 2026-09-30 this also required the owner to be an administrator, because
+ * only an administrator could set the column and nothing charged a reader for
+ * it (260930f decision 4). Readers can now switch it on, and the one writer that
+ * sets the column for them — `switchOnHighPower`, src/store/pg-billing.ts —
+ * charges in the same transaction, so the column set is the charge paid. Nothing
+ * copies the column onto another article. What is left is a hand-edit on
+ * production, which spends our money rather than a reader's allowance.
+ * docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md, decision 6.
  *
  * One function, used by the job runner and by every request-path route, so the
  * rule has one spelling.
  */
-export function articlePower(
-  highPowerSince: string | Date | null | undefined,
-  ownerId: string | null | undefined,
-): ModelPower {
-  return highPowerSince != null && isAdmin(ownerId) ? "high" : "standard";
+export function articlePower(highPowerSince: string | Date | null | undefined): ModelPower {
+  return highPowerSince != null ? "high" : "standard";
 }
 
 /**
@@ -1433,8 +1431,8 @@ export function modelFor(task: Task, power: ModelPower): string {
 export const DISPLAY_NAME: Record<string, string> = {
   "claude-sonnet-5": "claude-sonnet-5",
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
-  /* The high-power model, plan 260930f — sent only for an administrator's
-     article with High-powered AI switched on. */
+  /* The high-power model, plan 260930f — sent only for an article with
+     High-powered AI switched on. */
   "claude-opus-5-5": "claude-opus-5-5",
   "anthropic/claude-opus-5.5": "claude-opus-5-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
@@ -1445,6 +1443,9 @@ export const DISPLAY_NAME: Record<string, string> = {
      reaches somewhere it does not. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
   "openai/gpt-transcribe": "gpt-transcribe",
   "google/gemini-3-flash-preview": "gemini-3-flash-preview",
+  /* The Illustrated painter (`IMAGE_MODEL`, src/illustrated.ts), missing here
+     until plan 260930k — so /privacy was never required to name it. */
+  "google/gemini-3.1-flash-image": "gemini-3.1-flash-image",
   "openai/gpt-6-luna": "gpt-6-luna",
 };
 

@@ -1,0 +1,61 @@
+{
+  "arm": "high-15-beforeB",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/1",
+  "sourceSha256": "6c49115ee96b573bb7404451c4faba69dc5526b330c7da1f4929ec1fb2bfd05c",
+  "at": "2026-09-30T23:24:04.989Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 13836,
+  "costUsd": 0.025934,
+  "tokens": {
+    "input": 5442,
+    "output": 1505,
+    "reasoning": 789
+  },
+  "ok": true,
+  "words": 261,
+  "paragraphs": [
+    {
+      "text": "This is an informal note about \"distributed representations\" - a way neural networks (and brains) spread information across many neurons instead of using one neuron per idea. The author, Chris Olah, argues this term actually hides two different strategies, which he calls \"composition\" and \"superposition.\" He explains both using simple examples of neurons representing colored shapes.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "This matters because understanding how networks pack information is needed to break past the \"curse of dimensionality\" - the problem of things getting harder to track as more features pile up. It also matters for truly understanding, or \"reverse engineering,\" how neural networks work inside.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "In a \"local\" code, each neuron stands for one exact combination, like \"red circle\" - wasteful but very flexible. In a \"compositional\" code, separate neurons stand for color and shape separately and combine together, using fewer neurons and letting the network generalize: learning about green circles helps it understand green squares. In a \"dense\" or superposition code, many combinations get squeezed into very few neurons, fitting in far more information but losing the ability to cleanly read off single features.",
+      "ids": [
+        "spya-u4qtn4",
+        "spya-kcjqdw",
+        "spya-xcdtte"
+      ]
+    },
+    {
+      "text": "The key claim is that composition and superposition actually compete for the same limited space: fully combinable features need room that grows exponentially, while superposition can store far more items only if they rarely combine freely. The two can mix a bit when features are sparse, rarely appearing together, which leaves \"room\" for superposition. The note concludes that telling these two ideas apart matters, since they behave very differently for generalization and for understanding what a network is really doing.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-sq6424",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

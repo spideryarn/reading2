@@ -1,5 +1,5 @@
 {
-  "id": "f69f6758-9cce-4d9f-ba29-1ecfb3eaa890",
+  "id": "f0af1b6e-db8e-443a-a0b0-9e36049c3456",
   "prevId": "e2531b93-b181-4c04-b0f7-6c8ecaa0b43c",
   "version": "7",
   "dialect": "postgresql",
@@ -2423,84 +2423,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
-        },
-        "paper_state": {
-          "name": "paper_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_requested_url": {
-          "name": "paper_requested_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_final_url": {
-          "name": "paper_final_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_host": {
-          "name": "paper_host",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_words": {
-          "name": "paper_words",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_sent_words": {
-          "name": "paper_sent_words",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_chunks": {
-          "name": "paper_chunks",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_matched_by": {
-          "name": "paper_matched_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_unreadable_why": {
-          "name": "paper_unreadable_why",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_evidence_sha": {
-          "name": "paper_evidence_sha",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_selection_version": {
-          "name": "paper_selection_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_read_at": {
-          "name": "paper_read_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paper_passages": {
-          "name": "paper_passages",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -2532,34 +2454,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "citation_investigations_paper_state": {
-          "name": "citation_investigations_paper_state",
-          "value": "\"spideryarn\".\"citation_investigations\".\"paper_state\" is null or \"spideryarn\".\"citation_investigations\".\"paper_state\" in ('read', 'no-address', 'unreadable', 'not-the-full-text', 'not-confirmed', 'identity-conflict')"
-        },
-        "citation_investigations_paper_dated": {
-          "name": "citation_investigations_paper_dated",
-          "value": "(\"spideryarn\".\"citation_investigations\".\"paper_state\" is null) = (\"spideryarn\".\"citation_investigations\".\"paper_read_at\" is null)"
-        },
-        "citation_investigations_paper_address": {
-          "name": "citation_investigations_paper_address",
-          "value": "(\"spideryarn\".\"citation_investigations\".\"paper_state\" is not null and \"spideryarn\".\"citation_investigations\".\"paper_state\" <> 'no-address') = (\"spideryarn\".\"citation_investigations\".\"paper_requested_url\" is not null) and (\"spideryarn\".\"citation_investigations\".\"paper_requested_url\" is not null) = (\"spideryarn\".\"citation_investigations\".\"paper_host\" is not null)"
-        },
-        "citation_investigations_paper_final_url": {
-          "name": "citation_investigations_paper_final_url",
-          "value": "coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" in ('read', 'not-the-full-text', 'not-confirmed'), false) = (\"spideryarn\".\"citation_investigations\".\"paper_final_url\" is not null)"
-        },
-        "citation_investigations_paper_read": {
-          "name": "citation_investigations_paper_read",
-          "value": "coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_words\" is not null) and coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_sent_words\" is not null) and coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_chunks\" is not null) and coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_matched_by\" is not null) and coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_evidence_sha\" is not null) and coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false) = (\"spideryarn\".\"citation_investigations\".\"paper_selection_version\" is not null) and (\"spideryarn\".\"citation_investigations\".\"paper_passages\" is null or coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'read', false))"
-        },
-        "citation_investigations_paper_read_values": {
-          "name": "citation_investigations_paper_read_values",
-          "value": "(\"spideryarn\".\"citation_investigations\".\"paper_matched_by\" is null or \"spideryarn\".\"citation_investigations\".\"paper_matched_by\" in ('doi', 'arxiv', 'title-author')) and (\"spideryarn\".\"citation_investigations\".\"paper_words\" is null or (\"spideryarn\".\"citation_investigations\".\"paper_words\" >= 0 and \"spideryarn\".\"citation_investigations\".\"paper_sent_words\" >= 0 and \"spideryarn\".\"citation_investigations\".\"paper_sent_words\" <= \"spideryarn\".\"citation_investigations\".\"paper_words\")) and (\"spideryarn\".\"citation_investigations\".\"paper_evidence_sha\" is null or \"spideryarn\".\"citation_investigations\".\"paper_evidence_sha\" ~ '^[0-9a-f]{64}$') and (\"spideryarn\".\"citation_investigations\".\"paper_passages\" is null or (case when jsonb_typeof(\"spideryarn\".\"citation_investigations\".\"paper_passages\") = 'array' then jsonb_array_length(\"spideryarn\".\"citation_investigations\".\"paper_passages\") <= 3 else false end))"
-        },
-        "citation_investigations_paper_unreadable": {
-          "name": "citation_investigations_paper_unreadable",
-          "value": "coalesce(\"spideryarn\".\"citation_investigations\".\"paper_state\" = 'unreadable', false) = (\"spideryarn\".\"citation_investigations\".\"paper_unreadable_why\" is not null) and (\"spideryarn\".\"citation_investigations\".\"paper_unreadable_why\" is null or \"spideryarn\".\"citation_investigations\".\"paper_unreadable_why\" in ('invalid-url', 'blocked', 'refused', 'not-found', 'site-error', 'network', 'timeout', 'too-large', 'not-a-document', 'paywall-or-empty', 'scan', 'damaged'))"
-        },
         "citation_investigations_entry_id_format": {
           "name": "citation_investigations_entry_id_format",
           "value": "\"spideryarn\".\"citation_investigations\".\"entry_id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
@@ -3124,6 +3018,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ingest'"
+        },
         "article_id": {
           "name": "article_id",
           "type": "uuid",
@@ -3144,6 +3045,22 @@
         }
       },
       "indexes": {
+        "ingest_events_high_power_once": {
+          "name": "ingest_events_high_power_once",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"ingest_events\".\"kind\" = 'high_power' and \"spideryarn\".\"ingest_events\".\"article_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "ingest_events_owner_reserved": {
           "name": "ingest_events_owner_reserved",
           "columns": [
@@ -3226,6 +3143,14 @@
         "ingest_events_frozen_only_after_unlink": {
           "name": "ingest_events_frozen_only_after_unlink",
           "value": "\"spideryarn\".\"ingest_events\".\"article_id\" is null or \"spideryarn\".\"ingest_events\".\"article_visibility_at_delete\" is null"
+        },
+        "ingest_events_kind": {
+          "name": "ingest_events_kind",
+          "value": "\"spideryarn\".\"ingest_events\".\"kind\" in ('ingest','high_power')"
+        },
+        "ingest_events_high_power_shape": {
+          "name": "ingest_events_high_power_shape",
+          "value": "\"spideryarn\".\"ingest_events\".\"kind\" <> 'high_power'\n          or (\"spideryarn\".\"ingest_events\".\"succeeded_at\" is not null\n              and \"spideryarn\".\"ingest_events\".\"released_at\" is null\n              and \"spideryarn\".\"ingest_events\".\"reserved_at\" = \"spideryarn\".\"ingest_events\".\"succeeded_at\"\n              and (\"spideryarn\".\"ingest_events\".\"article_id\" is not null or \"spideryarn\".\"ingest_events\".\"article_visibility_at_delete\" is not null))"
         }
       },
       "isRLSEnabled": false

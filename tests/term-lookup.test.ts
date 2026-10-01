@@ -334,10 +334,10 @@ describe("High-powered AI (plan 260930f) — the lookup's explain follows the ar
     expect(h.powers).toEqual(["high"]);
   });
 
-  it("asks at standard power when the owner is not an administrator", async () => {
+  it("asks at high power for a reader's article too — the column is the charge paid (plan 260930k)", async () => {
     const h = harness({ text: "JFK was assassinated in 1963.", entry, citations: [], highPowerSince: "2026-09-30T00:00:00.000Z" });
     await runAsOwner(DEV_OWNER_ID, () => h.lookUp("harness", entry.id));
-    expect(h.powers).toEqual(["standard"]);
+    expect(h.powers).toEqual(["high"]);
   });
 });
 

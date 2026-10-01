@@ -225,8 +225,11 @@ export const ARTICLE_TABLE_COVERAGE = {
       why:
         "The same cache, and the bundle has a second reason: a row is written from the " +
         "reader's own profile, so it is the one per-article artefact that says more " +
-        "about the person than about the piece. Rebuilding it costs a fraction of a " +
-        "penny and it is meaningless outside the card it is drawn on.",
+        /* It said what a rebuild costs, in pennies, until 2026-09-30; this reaches
+           the reader in the export, and what AI processing costs us is for the
+           administrator alone (plan 260930k § 3). */
+        "about the person than about the piece. It is quick to make again, and it " +
+        "is meaningless outside the card it is drawn on.",
     },
   },
   /* An uploaded paper's guessed web address, and the claim that found it —
@@ -276,9 +279,12 @@ export const ARTICLE_TABLE_COVERAGE = {
     bundle: {
       exported: false,
       why:
-        "The spend ledger. `article_id` is nullable and many of an article's calls " +
-        "carry none, so a per-article total would be quietly wrong rather than " +
-        "merely absent — which is worse than saying nothing.",
+        /* Read by the reader: this sentence is in the export's manifest and its
+           index.html. What AI processing costs us is for the administrator
+           alone (Greg, 2026-09-30; plan 260930k § 3), so it says what the table
+           is and nothing about the figure. */
+        "The record of what the AI processing cost Spideryarn. It is Spideryarn's " +
+        "own accounting rather than anything of yours, so it is kept out of exports.",
     },
   },
   realtime_sessions: {
@@ -314,8 +320,9 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: {
       exported: false,
       why:
-        "The ingest quota's ledger — one row per *attempt to spend*, carrying when " +
-        "a slot was reserved and whether it was charged or given back. It is an " +
+        "The ingest quota's ledger — one row per *attempt to spend* (an ingest, or " +
+        "one article's High-powered AI), carrying when a slot was reserved and " +
+        "whether it was charged or given back. It is an " +
         "abuse boundary against model spend, not article state " +
         "(docs/project/billing.md § The quota), and it is deliberately Postgres-" +
         "only: there is no filesystem quota and there will not be one, so a " +
