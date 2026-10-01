@@ -1128,6 +1128,9 @@ const SPENDS: Record<Mode, Spend> = {
   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
   /* And the same gists again, in a band instead of in the columns. */
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
+  /* The tree's questions, the arc and the ideas already made — read, never
+     generated. A press that started the Ideas job here would be the bug. */
+  annotations: { kind: "none", why: "draws what the article already has; it never starts a job" },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1313,6 +1316,17 @@ const DRAWS: Record<Mode, Draws> = {
     why: "it leaves the article alone",
     query: "?mode=plain",
     control: { where: ".prose", says: PARAGRAPH },
+  },
+  /* **No band: a column right of the prose.** The control is the owner's stored
+     idea, drawn as a stamp beside the block it occurs in — which proves the
+     read of the ideas happened, reached the notes and was put in a cell. jsdom
+     lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
+     room and the notes are drawn. */
+  annotations: {
+    kind: "none",
+    why: "its notes sit beside the prose, in the table's own cells",
+    query: "?mode=annotations",
+    control: { where: ".marg-note", says: IDEA_NAME },
   },
   /* The child node's title, from the tree in the payload — the one row this
      fixture's structure can produce. Deliberately **not** a gist: gists were in

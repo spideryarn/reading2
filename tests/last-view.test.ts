@@ -87,7 +87,9 @@ describe("rememberableSearch", () => {
   });
 
   it("keeps every other mode as it stands", () => {
-    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline"]) {
+    /* `annotations` since 2026-10-01: it reads what the article already has
+       and starts no job, so restoring it is as inert as Structure. */
+    for (const mode of ["plain", "glossary", "search", "referee", "summary", "ideas", "structure", "quotes", "timeline", "annotations"]) {
       expect(rememberableSearch(`?mode=${mode}`), mode).toBe(`?mode=${mode}`);
     }
     expect(rememberableSearch("?mode=glossary&term=spya-h4r2wd")).toBe(

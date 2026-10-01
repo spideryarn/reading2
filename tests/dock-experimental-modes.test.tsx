@@ -98,6 +98,10 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
      yet."* The whole mode this time, not only four of its pictures.
      docs/project/experimental-features.md. */
   "diagram",
+  /* 2026-10-01: a first experiment with a column right of the prose, which
+     Greg asked to "play with" (SPIDERYARN-READING2-7K) —
+     docs/project/experimental-features.md. */
+  "annotations",
 ];
 
 /**

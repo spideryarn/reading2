@@ -185,6 +185,12 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      tree's own gists, which are in the payload the visitor already holds — so
      there is nothing left to be missing. */
   summary: { kind: "available" },
+  /* **Annotations, 2026-10-01**, the same bargain: its column is drawn from the
+     tree (the parts' questions) and the arc in the payload a visitor already
+     holds, plus the ideas where the payload carries them. No artefact is
+     required and nothing is requested, so there is nothing to be short of.
+     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+  annotations: { kind: "available" },
 
   glossary: { kind: "artefact", key: "glossary" },
   ideas: { kind: "artefact", key: "ideas" },

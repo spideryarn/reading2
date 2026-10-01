@@ -190,6 +190,7 @@ import {
   BookText,
   BadgeQuestionMark,
   Route,
+  PanelRight,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -712,6 +713,16 @@ const MODES_UI = [
     mode: "summary",
     group: "shape",
     icon: Layers,
+  },
+  /* **Annotations, 2026-10-01**, in the shape run beside Summary because what
+     it draws is mostly the article's shape — each part's question, where the
+     argument has got to — put beside the text instead of in a band. Behind the
+     switch. `PanelRight`: the one mode whose column is on the right.
+     docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+  {
+    mode: "annotations",
+    group: "shape",
+    icon: PanelRight,
   },
   /* **A mode since 2026-09-29**, a loose link to a page of its own before
      (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is

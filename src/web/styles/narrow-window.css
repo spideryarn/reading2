@@ -361,9 +361,14 @@
    banner is one sentence about the layout, the layout has just put a panel
    over the whole article, and a sentence nobody can read is not a sentence.
 
+   **Annotations names its narrow state instead of a band.** Its prose stays
+   visible, so the masthead and shared notice stay too; only this banner goes,
+   because its claim that a mode panel covers the article is false while the
+   mode is showing its own "needs a wider window" line.
+
    It is *hidden*, never dismissed — pressing Plain brings it back, which is
    the state the banner is about. src/web/SmallScreenHint.tsx. */
-.reader.band-covers:has(.mode-band) .small-screen-hint { display: none; }
+.reader.band-covers:has(.mode-band, .marg-narrow) .small-screen-hint { display: none; }
 
 /* **A band that has stepped aside.** `band-away` is written by `Reader` beside
    `band-covers`, only while that is on, after a reader follows a passage link
@@ -1020,6 +1025,7 @@
   .install-hint,
   .spine,
   .mode-band,
+  .marg-head,
   /* **The overflow fade was missing from this list and is not missing from the
      one it mirrors** — it is `position: fixed` at `top: var(--bar-bottom)` and
      it draws the trailing edge of an overflowing table (table.css § overflow),

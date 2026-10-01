@@ -670,6 +670,16 @@ interface Props {
    * **Memoise it in the caller**, for `afterBlock`'s reason.
    */
   quizAfter?: ReadonlyMap<BlockId, ReactElement> | null | undefined;
+  /**
+   * **Annotations mode's notes, each beside its block** — absolutely
+   * positioned just past the cell's right edge (marginalia.css), so they scroll
+   * with their row and sit level with it. Out of flow, so they cost the prose
+   * no height, and outside `.prose`, so selection offsets (selection.ts) never
+   * see them. AnnotationsColumn.tsx.
+   *
+   * **Memoise it in the caller**, for `afterBlock`'s reason.
+   */
+  margin?: ReadonlyMap<BlockId, ReactElement> | null | undefined;
 }
 
 /**
@@ -735,6 +745,7 @@ function TableViewInner({
   slug,
   afterBlock,
   quizAfter,
+  margin,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -1616,6 +1627,8 @@ function TableViewInner({
                 {quizAfter?.get(block.id)}
                 {/* The open mode's door, after its block — `Props.afterBlock`. */}
                 {afterBlock?.blockId === block.id && afterBlock.node}
+                {/* Annotations' notes, right of the cell — `Props.margin`. */}
+                {margin?.get(block.id)}
               </td>
           </tr>
         ))}
