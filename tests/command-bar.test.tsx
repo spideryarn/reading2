@@ -362,6 +362,22 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
   });
 });
 
+describe("Marginalia's old name", () => {
+  it("selects Marginalia, not the Comments action that shares its annotations alias", () => {
+    const onMode = vi.fn();
+    reading({ onMode, experimental: EXPERIMENTAL_ON, drawer: A_DRAWER });
+    openBar();
+    type("annotations");
+
+    /* Both rows deliberately accept this reader word. Modes precede actions
+       on an equal match tier, so the renamed mode must be the selected one. */
+    expect(listed()).toEqual(["Marginalia", "Comments"]);
+    expect(selected()).toBe("Marginalia");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("marginalia");
+  });
+});
+
 describe("a query that matches nothing", () => {
   /**
    * **Exactly this sentence and nothing beside it**, which is Greg's answer 3

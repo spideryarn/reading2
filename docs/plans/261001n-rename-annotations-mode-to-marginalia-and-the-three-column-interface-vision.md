@@ -110,3 +110,20 @@ surface here is small (no stored data, no URL change).
   Debate's `disputes` rows are disputes, and its three better first questions (the Dock question
   waits until the content it would hide is reachable another way). Its point that the docs claimed
   completion early is met by landing the docs with the rename, not before.
+- 2026-10-01: built (`4849b82f5`): the rename by an Opus subagent from the inventory; the
+  red-first `tests/marginalia-name.test.ts` went 4/4 red, then green, and mirrored
+  `?mode=marginalia` conflict tests sit beside every legacy `?mode=annotations` one (the arrival
+  test was seen to go red with the Reader's predicate put back to the literal).
+- 2026-10-01: GPT Sol's code review ([261001n-marginalia-code-review-sol.md](261001n-marginalia-code-review-sol.md)):
+  no P0/P1, "land after fixes". It fixed three tests: typing "annotations" in the command bar opens
+  Marginalia rather than Comments, which shares the alias; mounted owner and visitor arrival with
+  `margin=0` in both orders for both spellings; identical server titles for both spellings. Left
+  for Greg: [reading-view-overview.md](../project/reading-view-overview.md)'s Marginalia entry
+  says the last press wins below 900px, which is true only from 612px — an entry-point doc, so its
+  wording waits for approval; [interface-vision.md](../project/interface-vision.md) has it right.
+- 2026-10-01: Playwright, 1440×900, owner, `fowler-phrenology`: the Dock says Marginalia;
+  ⌘K finds it by "marginalia" and by "annotations"; `?mode=marginalia` and `?mode=annotations`
+  land on `?margin=1` with the column drawn; Glossary and the notes side by side; no console
+  errors from our code. Seen once and not chased: on the very first load after a cold dev-server
+  start, `?mode=marginalia` drew the column but kept the old URL for 5s; two reloads rewrote it.
+  The rewrite is the same effect as before the rename, with only its literal replaced.

@@ -1531,19 +1531,24 @@ describe("Marginalia's notes", () => {
  * **Either word for the notes on `?mode=` lands on `?margin=1` on arrival** —
  * `marginalia`, the mode's word since 261001n, and `annotations`, its word
  * until then, which old links still carry. The mounted Reader rewrites both
- * (`isMarginaliaModeWord`), for an owner and for a visitor alike: the notes'
- * column is drawn, no band opens, and no `mode=` is left on the address.
+ * (`isMarginaliaModeWord`), for an owner and for a visitor alike: the margin
+ * state is on, no band opens, and no `mode=` is left on the address. The owner
+ * fixture below also has enough content to prove the column itself draws.
  */
 describe("a ?mode= word for the notes, on arrival", () => {
   it.each([
-    { word: "annotations", as: "owner" },
-    { word: "annotations", as: "visitor" },
-    { word: "marginalia", as: "owner" },
-    { word: "marginalia", as: "visitor" },
-  ])("?mode=$word as $as opens Plain with the notes on", async ({ word, as }) => {
+    { search: "?mode=annotations", as: "owner" },
+    { search: "?mode=annotations", as: "visitor" },
+    { search: "?mode=marginalia", as: "owner" },
+    { search: "?mode=marginalia", as: "visitor" },
+    { search: "?mode=annotations&margin=0", as: "owner" },
+    { search: "?margin=0&mode=annotations", as: "visitor" },
+    { search: "?mode=marginalia&margin=0", as: "owner" },
+    { search: "?margin=0&mode=marginalia", as: "visitor" },
+  ])("$search as $as opens Plain with the notes on", async ({ search, as }) => {
     if (as === "owner") who.set(OWNER_A);
     experimentalSince = "2026-09-01T09:00:00.000Z";
-    await open(`?mode=${word}`);
+    await open(search);
     const toggle = () => host.querySelector<HTMLElement>('.dock-modes [aria-pressed="true"]');
     for (let i = 0; i < 40 && toggle() === null; i++) await settle();
 

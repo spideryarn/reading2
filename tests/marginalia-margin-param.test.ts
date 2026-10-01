@@ -48,6 +48,10 @@ describe("the margin switch", () => {
     expect(modeFromParam("marginalia")).toBe(null);
     expect(modeParam.parse("marginalia")).toBe(null);
     expect(readMode("/read/x?mode=marginalia")).toBe("plain");
+    /* The server composes the same Plain title for both spellings. */
+    const plainTitle = documentTitle("A piece", "plain");
+    expect(documentTitle("A piece", readMode("/read/x?mode=annotations"))).toBe(plainTitle);
+    expect(documentTitle("A piece", readMode("/read/x?mode=marginalia"))).toBe(plainTitle);
     /* The positive control: a band mode still parses. */
     expect(modeParam.parse("glossary")).toBe("glossary");
   });
