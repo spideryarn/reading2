@@ -15,13 +15,15 @@
  *
  * Only the Supabase SDK and `fetch` are stubbed, as tests/admin-page.test.tsx.
  */
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import type { AdminFeedbackPage, AdminFeedbackReport } from "../src/types.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -37,7 +39,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { AdminFeedbackPage: Page } = await import("../src/web/AdminPage.js");
 
-const READER = "3f7b19d4-6c28-4e51-8a03-b5d7e2914c6f";
+const READER = "f6fa5f50-fb98-47a9-84b4-03d6edba7136";
 
 function report(id: string, ownerId: string, body: string): AdminFeedbackReport {
   return {
@@ -64,8 +66,12 @@ function report(id: string, ownerId: string, body: string): AdminFeedbackReport 
 const jsonOk = (body: AdminFeedbackPage) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 
-/** Every request the page made, and a hand to answer each when the test says. */
-const asked: { url: string; answer: (page: AdminFeedbackPage) => void }[] = [];
+/** Every request the page made, its lifetime, and a hand to answer it when the test says. */
+const asked: {
+  url: string;
+  signal: AbortSignal | null;
+  answer: (page: AdminFeedbackPage) => void;
+}[] = [];
 
 let host: HTMLDivElement;
 let root: Root;
@@ -75,9 +81,23 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(
-      (input: RequestInfo | URL) =>
-        new Promise<Response>((resolve) => {
-          asked.push({ url: String(input), answer: (page) => resolve(jsonOk(page)) });
+      (input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const signal = init?.signal ?? null;
+          const abort = () => {
+            signal?.removeEventListener("abort", abort);
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+          signal?.addEventListener("abort", abort, { once: true });
+          asked.push({
+            url: String(input),
+            signal,
+            answer: (page) => {
+              signal?.removeEventListener("abort", abort);
+              resolve(jsonOk(page));
+            },
+          });
+          if (signal?.aborted) abort();
         }),
     ),
   );
@@ -120,6 +140,18 @@ function bodies(): string[] {
 }
 
 describe("Readers only", () => {
+  it("starts a live request again when StrictMode rehearses the effect", async () => {
+    await act(async () => root.render(<StrictMode><Page /></StrictMode>));
+    await waitFor("StrictMode's live request", () => asked.some((request) => !request.signal?.aborted));
+
+    const live = asked.filter((request) => !request.signal?.aborted);
+    expect(live).toHaveLength(1);
+    expect(asked.filter((request) => request !== live[0]).every((request) => request.signal?.aborted)).toBe(true);
+
+    await act(async () => live[0]?.answer({ reports: [], hasMore: false, nextCursor: null }));
+    await waitFor("the live answer", () => host.textContent?.includes("0 reports") === true);
+  });
+
   it("asks the server for readers on every page", async () => {
     await act(async () => root.render(<Page />));
     await waitFor("the first request", () => asked.length === 1);
@@ -171,6 +203,10 @@ describe("Readers only", () => {
     await waitFor("the readers request", () => asked.length === 3);
     expect(asked[2]?.url).toContain("from=readers");
     expect(asked[2]?.url).not.toContain("before=");
+    /* The keyed remount prevents stale state from painting; aborting also
+       releases the old response body and connection instead of leaving a
+       request for a component that no longer exists. */
+    expect(asked[1]?.signal?.aborted).toBe(true);
 
     /* Answered out of order: readers first, then the stale everyone page. */
     await act(async () =>

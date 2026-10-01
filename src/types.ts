@@ -6050,11 +6050,9 @@ export interface FeedbackDiagnostics {
  * response whose size is decided by whoever wrote the most, so the ceiling is
  * here rather than in the caller's good intentions.
  *
- * There is no pagination and that is deliberate for a v1 that expects tens of
- * rows: the page says *"showing the newest N"* when it is full, so the moment
- * this number starts hiding reports is a thing Greg can see rather than a thing
- * he has to suspect. docs/plans/260902l-admin-feedback-page.md § The simpler
- * options passed over.
+ * The inbox is keyset-paged. This is therefore a ceiling on one response, not
+ * on how many reports the administrator can reach; `AdminFeedbackPage.hasMore`
+ * says whether the store saw another row and `nextCursor` reaches it.
  */
 export const ADMIN_FEEDBACK_MAX = 500;
 

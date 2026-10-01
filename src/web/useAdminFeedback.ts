@@ -41,11 +41,11 @@ export interface UseAdminFeedback {
  * `from` is fixed for the life of one hook. **A caller that lets the reader
  * change it remounts the component that holds this hook** (`key={from}`,
  * AdminPage.tsx § `AdminFeedbackPage`) rather than passing a new value in:
- * `busy` would drop the reload a switch asked for while a *Load older* was in
- * flight, and that older page would then land under the new filter. A fresh
- * hook has its own `busy`, its own cursor and no reports, and the old one's
- * late answer reaches a component that is gone. GPT Sol, plan review,
- * docs/plans/261001l-….
+ * the in-flight guard would drop the reload a switch asked for while a *Load
+ * older* was in flight, and that older page would then land under the new
+ * filter. A fresh hook has its own guard, cursor and reports, and cleanup aborts
+ * the old request rather than leaving its response to a component that is gone.
+ * GPT Sol, plan review, docs/plans/261001l-….
  */
 export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedback {
   const [reports, setReports] = useState<AdminFeedbackReport[] | null>(null);
@@ -60,11 +60,22 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
    * between them — and both would fetch the same cursor, appending one page
    * twice. A ref is written synchronously.
    */
-  const busy = useRef(false);
+  /* The controller is also the synchronous in-flight guard. Keeping the request
+     itself here matters when `key={from}` unmounts this hook: the fresh inbox
+     has already made the old answer irrelevant, so cleanup frees its connection
+     and response body rather than merely relying on React to ignore setState on
+     an unmounted component.
+
+     Identity is load-bearing under StrictMode. Its synthetic cleanup aborts and
+     clears the first controller before the effect starts again; when that first
+     promise reaches `finally`, it must not clear the second request's guard or
+     loading state. */
+  const inFlight = useRef<AbortController | null>(null);
 
   const fetchPage = useCallback(async (before: FeedbackCursor | null) => {
-    if (busy.current) return;
-    busy.current = true;
+    if (inFlight.current) return;
+    const stop = new AbortController();
+    inFlight.current = stop;
     setLoading(true);
     try {
       /* No `?limit=`. The server's default is the one number, and a client that
@@ -76,7 +87,13 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
       if (from !== "everyone") params.set("from", from);
       const qs = params.toString();
       const query = qs ? `?${qs}` : "";
-      const body = await readJson<AdminFeedbackPage>(await apiFetch(`/api/admin/feedback${query}`));
+      const body = await readJson<AdminFeedbackPage>(
+        await apiFetch(`/api/admin/feedback${query}`, { signal: stop.signal }),
+      );
+      /* A test double can resolve after an abort even though browser `fetch`
+         rejects. The signal, not the transport's manners, decides whether this
+         hook still owns the answer. */
+      if (stop.signal.aborted) return;
       /* Appended when there was a cursor, replaced when there was not — so
          `reload` and `loadMore` are one request with one difference, rather
          than two code paths that can come to disagree about the shape. */
@@ -87,6 +104,8 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
          no error at all. */
       setError(null);
     } catch (e) {
+      /* A keyed remount or unmount is this hook leaving, not a failed inbox. */
+      if (stop.signal.aborted) return;
       /* Through the one rule the shelf uses — see `describeFetchFailure`. */
       setError(describeFetchFailure(e instanceof Error ? e : new Error(String(e))));
       /* What is already held is left alone rather than blanked, the same call
@@ -94,8 +113,12 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
          says, and replacing it with nothing throws away the only reports we
          have. */
     } finally {
-      busy.current = false;
-      setLoading(false);
+      /* An aborted predecessor may settle after StrictMode has started a fresh
+         request. Only the request still holding the slot may release it. */
+      if (inFlight.current === stop) {
+        inFlight.current = null;
+        setLoading(false);
+      }
     }
   }, [from]);
 
@@ -105,7 +128,16 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
     await fetchPage(cursor);
   }, [cursor, fetchPage]);
 
-  useEffect(() => void reload(), [reload]);
+  useEffect(() => {
+    void reload();
+    return () => {
+      const stop = inFlight.current;
+      /* Clear synchronously before aborting, so StrictMode's repeated setup can
+         start the replacement instead of seeing the abandoned request as busy. */
+      inFlight.current = null;
+      stop?.abort();
+    };
+  }, [reload]);
 
   return { reports, error, loading, hasMore, reload, loadMore };
 }

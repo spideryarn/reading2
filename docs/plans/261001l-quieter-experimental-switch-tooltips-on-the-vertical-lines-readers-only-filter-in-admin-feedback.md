@@ -157,3 +157,21 @@ found two blockers and three smaller things; all five were taken.
 - **P2:** `?from=` with an empty value is a 400, not *everyone* — only an absent parameter is.
 - **P2:** the comments that described the lit frame were rewritten with the change.
 - **P2:** the page is 200 reports by the server's default, not 50 (corrected above).
+
+## Built, checked, reviewed
+
+**Browser** (Playwright against system Chrome, 1400px and 390px): the switch on is grey, filled,
+knob right, no `.on` and no orange until hovered; off is an outline, knob left. The reading-time
+line's own pixels now find `span.blk-read` and its title; one pixel left of it is still the cell,
+and the hovered row's "…" button keeps both its edges. Annotations' question notes carry their
+title. `/admin/feedback`: 24 reports under *Everyone*, 4 under *Readers only* (none by the dev
+admin), the request carrying `from=readers`, no sideways scroll at 390px.
+
+**GPT Sol's code review**
+([answer](261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback-code-review-sol.md))
+found three P2s and fixed them: the superseded request is now aborted on remount rather than left to
+finish (StrictMode-safe); the route test now proves the filter reaches the store, not just that the
+status is 200; and a stale "there is no pagination" comment in src/types.ts. Its sandbox could not
+reach Postgres, so those two suites were run here: green.
+
+**Status: shipped to `dev`**, not deployed.
