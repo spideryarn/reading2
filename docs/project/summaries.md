@@ -666,9 +666,15 @@ is said in the slider's card, not in a line under the paragraphs (below).
   profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
   for the owner's profile.
-- **One press writes all three**: one model call per level, run side by side, all or none stored; a
-  level whose answer fails validation is asked once more on its own. A
-  `simple/1` row reads as absent and the next press replaces it.
+- **One press writes all three**: one model call per level, all or none stored; a level whose answer
+  fails validation is asked once more on its own. A `simple/1` row reads as absent and the next press
+  replaces it.
+- **The three share one cached copy of the article** (since 2026-10-01): Fuller is asked first with
+  the article marked, and Brief and Simple start once its stream has begun, so they read the cache
+  instead of paying for the article again. About 37% cheaper a press for about 2 s more wait; one
+  call for all three was measured and is far slower. Below the cache floor they run together, as
+  before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
+  streaming question for Greg.
 - **The door rule.** Choosing a level with nothing stored runs the `simple` job; arriving on
   `?summary=simple` — a link, Back, a restored view — reads what is stored and spends nothing, and
   the Summary button itself arms nothing ([new-mode.md](new-mode.md), `useAutoRun`). A visitor on a

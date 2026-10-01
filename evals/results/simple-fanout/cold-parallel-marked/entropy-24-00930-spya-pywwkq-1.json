@@ -1,0 +1,164 @@
+{
+ "arm": "parallel-marked",
+ "cold": true,
+ "slug": "entropy-24-00930-spya-pywwkq",
+ "run": 1,
+ "at": "2026-10-01T10:49:39.521Z",
+ "wallMs": 8733,
+ "costUsd": 0.16769,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 1087,
+   "doneMs": 5187,
+   "input": 1855,
+   "cacheRead": 0,
+   "cacheWrite": 18516,
+   "output": 378
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 5,
+   "firstTextMs": 4520,
+   "doneMs": 8120,
+   "input": 1805,
+   "cacheRead": 0,
+   "cacheWrite": 18516,
+   "output": 695
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 5,
+   "firstTextMs": 1156,
+   "doneMs": 8729,
+   "input": 1860,
+   "cacheRead": 0,
+   "cacheWrite": 18516,
+   "output": 705
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 144,
+   "paragraphs": 3,
+   "readyMs": 5187,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 213,
+   "paragraphs": 3,
+   "readyMs": 8120,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 271,
+   "paragraphs": 5,
+   "readyMs": 8729,
+   "check": "passed",
+   "flags": 0
+  }
+ },
+ "reasoningTokens": 152,
+ "text": {
+  "brief": [
+   {
+    "text": "This article is about how scientists study the way brain cells handle information. It explains a tool called partial information decomposition, or PID, which splits up what several brain cells together tell us about another cell's behavior into separate pieces.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-wer4cd"
+    ]
+   },
+   {
+    "text": "This matters because just tracking information moving between two cells does not show how cells actually combine signals to do something new. PID can reveal when two inputs together carry information that neither carries alone, called synergy, which the article treats as a sign of real computation happening.",
+    "ids": [
+     "spya-s0db2g",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "Studies described here found that synergy shows up more in densely connected hub cells called rich clubs, grows when cells have more connections looping back between them, and depends on how similar incoming signals are. In monkeys doing tasks, the mix of synergy and its opposite, redundancy (repeated information), changed depending on what the task demanded.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-t8fayf"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This is a review article about how scientists try to measure the way brain cells handle information. It focuses on a method called partial information decomposition, or PID, which splits the information that two or more neurons give about a third neuron into separate pieces: information they share (redundant), information only one of them has (unique), and information that only shows up when you look at them together (synergistic).",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "The piece argues this matters because simply tracking how information flows from one neuron to another does not tell you how neurons actually combine and transform that information into something new, which is what people mean by \"processing\" or \"computation.\" The synergy piece in particular captures this: it shows when a neuron is reacting to the pattern of several inputs together, not just adding them up.",
+    "ids": [
+     "spya-s0db2g",
+     "spya-wer4cd",
+     "spya-rc5z33"
+    ]
+   },
+   {
+    "text": "Using recordings from hundreds of neurons grown in lab dishes, the authors found synergy tracks several things: it rises with stronger feedforward connections, is much higher in densely connected \"rich club\" neuron hubs, grows with more loop-like (recurrent) connections among source neurons, and peaks when source neurons' activity is moderately, not too strongly, similar to each other. Similar patterns, plus task-related shifts in synergy versus redundancy, were also found in brain recordings from monkeys doing a reaching task.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-ybmve2"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This article is a science review about how brains process information. It asks how groups of neurons combine signals from multiple sources into something new, rather than just passing signals along one at a time.",
+    "ids": [
+     "spya-xn9j9k",
+     "spya-rxcze4"
+    ]
+   },
+   {
+    "text": "The question matters because scientists now have detailed recordings of hundreds or thousands of neurons firing, but still need good tools to make sense of them. The article argues that a method called partial information decomposition, or PID, helps fill that gap by splitting the information neurons share into separate pieces.",
+    "ids": [
+     "spya-s9kmxa",
+     "spya-gzwbsr"
+    ]
+   },
+   {
+    "text": "PID breaks down the information that two or more source neurons carry about a target neuron into parts: redundant information (carried by either source alone), unique information (carried by only one source), and synergistic information (only visible when you look at the sources together). Synergy is treated as a sign of real computation, since it means the neuron is responding to patterns across inputs, not just adding them up.",
+    "ids": [
+     "spya-h5jzvm",
+     "spya-e94ury"
+    ]
+   },
+   {
+    "text": "Using recordings from mouse brain tissue and from monkeys doing tasks, the authors found synergy clusters in densely connected \"rich club\" neurons, rises with feedforward and recurrent (mutual) connections but not feedback connections, and peaks when source neurons' signals are moderately similar rather than too similar or too different. In monkeys, synergy also shifted with task stage, dropping during precise movements when the brain seemed to favor redundancy instead, suggesting information processing patterns relate to behavior.",
+    "ids": [
+     "spya-fud8q3",
+     "spya-sd9fzd",
+     "spya-t8fayf"
+    ]
+   },
+   {
+    "text": "The piece closes with practical guidance and open problems: choosing the right tools and data types, the huge number of possible information \"atoms\" as more neurons are included, and newer extensions like decomposing information over time or across multiple targets.",
+    "ids": [
+     "spya-aby2dp",
+     "spya-cds6mm",
+     "spya-uktkdy"
+    ]
+   }
+  ]
+ }
+}

@@ -43,6 +43,13 @@ import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 let answer: string | Partial<Record<SimpleLevel, string | string[]>> = "";
 let stop: string = "end_turn";
 let waitForAbort: SimpleLevel | null = null;
+/** When the stub streams "begin" (plan 261001j), and whether they ever do. */
+let startGate: Promise<void> = Promise.resolve();
+let neverStart = false;
+/** A level whose call fails outright, before its stream begins. */
+let failCall: SimpleLevel | null = null;
+/** When every stub call answers. */
+let finalGate: Promise<void> = Promise.resolve();
 const abortSettled = new Set<SimpleLevel>();
 const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
 
@@ -86,9 +93,16 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
       };
       return {
         onText: () => undefined,
+        /* The stream "begins" when the gate opens; `neverStart` is a call that
+           fails before it begins, so the hook never fires. */
+        onStart: (listener: () => void) => {
+          if (neverStart) return;
+          void startGate.then(listener);
+        },
         aborted: () => false,
         finalMessage: () => {
-          if (level !== waitForAbort) return Promise.resolve(message);
+          if (level === failCall) return Promise.reject(new Error("upstream 502"));
+          if (level !== waitForAbort) return finalGate.then(() => message);
           return new Promise((_, reject) => {
             const finish = () => {
               /* Deliberately later than the failing sibling's rejection. A
@@ -153,6 +167,10 @@ beforeEach(() => {
   answer = "";
   stop = "end_turn";
   waitForAbort = null;
+  startGate = Promise.resolve();
+  neverStart = false;
+  failCall = null;
+  finalGate = Promise.resolve();
   abortSettled.clear();
   sent.length = 0;
 });
@@ -812,6 +830,83 @@ describe("the fidelity guard (plan 261001i)", () => {
     expect(isUsableSimpleSummary(out.simpleSummary)).toBe(true);
     const checked = await run();
     expect(isUsableSimpleSummary(checked.simpleSummary)).toBe(true);
+  });
+});
+
+/* ------------------------------------------------- one cache, three levels -- */
+
+describe("the staggered fan-out (plan 261001j)", () => {
+  /* The same ids as the small fixture, with enough words to clear the cache floor. */
+  const FILLER = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
+  const LONG = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${FILLER}` }));
+  const run = (blocks: Block[], extra: { cacheArticle?: boolean } = {}) =>
+    generateSimpleSummary({ power: "standard", article: { ...example, slug: "simple-test", blocks }, profile: null, guard: false, ...extra });
+  const marked = (i: number) =>
+    "cache_control" in ((sent[i]?.body as { system?: Record<string, unknown>[] } | undefined)?.system?.[0] ?? {});
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const gate = () => {
+    let open = () => {};
+    const promise = new Promise<void>((r) => {
+      open = r;
+    });
+    return { promise, open };
+  };
+  beforeEach(() => {
+    answer = {};
+  });
+
+  it("on a long article, writes Fuller first with the article marked, and the others once it has begun", async () => {
+    const start = gate();
+    const final = gate();
+    startGate = start.promise;
+    finalGate = final.promise;
+    const pending = run(LONG);
+    await tick();
+    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
+    start.open();
+    await tick();
+    expect(sent.map((c) => levelOf(c.body)).sort()).toEqual(["brief", "fuller", "simple"]);
+    final.open();
+    const out = await pending;
+    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
+  });
+
+  it("does not leave the others waiting when the first never says it has begun", async () => {
+    neverStart = true;
+    const out = await run(LONG);
+    expect(sent).toHaveLength(3);
+    expect(out.simpleSummary.levels.fuller).toEqual(FULLER);
+  });
+
+  /* Sol's plan review, P1: the wait used to end on the failure itself, and the
+     other two could open (billable) calls before the press was aborted. */
+  it("opens no other call when the first call fails before it begins", async () => {
+    neverStart = true;
+    failCall = "fuller";
+    await expect(run(LONG)).rejects.toThrow();
+    await tick();
+    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
+  });
+
+  it("fails as before, without hanging, when the first fails before it begins", async () => {
+    neverStart = true;
+    answer = { fuller: ["{ not json", "{ still not json"] };
+    await expect(run(LONG)).rejects.toThrow();
+  });
+
+  it("below the cache floor, asks all three at once and marks nothing — there is no cache to share", async () => {
+    startGate = gate().promise;
+    const pending = run(BLOCKS);
+    await tick();
+    expect(sent).toHaveLength(3);
+    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+    await pending;
+  });
+
+  it("still marks a short article when the job says another step shares it, as before", async () => {
+    await run(BLOCKS, { cacheArticle: true });
+    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
   });
 });
 

@@ -392,6 +392,14 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
 export interface MeteredCall {
   /** Progress, exactly as `stream.on("text", …)` gave it. */
   onText: (listener: (delta: string) => void) => void;
+  /**
+   * Once, when the response has begun (`message_start`) — before any thinking
+   * or text, and the moment a prompt cache this request writes becomes
+   * readable by another. Never, if the call fails before it begins; a caller
+   * waiting on it must also wait on `finalMessage()`. Simple's staggered
+   * fan-out starts its other levels here (plan 261001j).
+   */
+  onStart: (listener: () => void) => void;
   /** `stream.finalMessage()`, plus the spend record. The only way to get the answer. */
   finalMessage: () => Promise<Anthropic.Message>;
   /** Whether the stream ended because somebody aborted it. */
@@ -568,6 +576,14 @@ export function streamMessage(
   return {
     onText: (listener) => {
       stream.on("text", listener);
+    },
+    onStart: (listener) => {
+      let fired = false;
+      stream.on("streamEvent", (event: { type: string }) => {
+        if (fired || event.type !== "message_start") return;
+        fired = true;
+        listener();
+      });
     },
     finalMessage,
     aborted: () => stream.aborted,

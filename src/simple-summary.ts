@@ -80,7 +80,7 @@ import { createHash } from "node:crypto";
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Article } from "./article-input.js";
-import { articleWithIds } from "./article-prompt.js";
+import { articleWithIds, underCacheFloor } from "./article-prompt.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
@@ -129,6 +129,14 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
 
 /** Passages per paragraph. Extra ids are dropped and counted. */
 export const MAX_IDS = SIMPLE_MAX_IDS;
+
+/**
+ * **The level asked first, with the others waiting until its stream has begun**
+ * — so it writes the article's cache entry and they read it (plan 261001j).
+ * Fuller, because it is the longest to write: starting it first keeps the
+ * press's wait closest to the unstaggered one.
+ */
+export const FIRST_LEVEL: SimpleLevel = "fuller";
 
 /** Asks per level: the first, and one more if its answer fails validation (`writeLevel`). */
 export const LEVEL_ATTEMPTS = 2;
@@ -619,6 +627,26 @@ export async function generateSimpleSummary(opts: {
   const started = Date.now();
   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
   const article = articleWithIds(meta, evidence);
+
+  /* **One cache for the press's three calls** (plan 261001j). Fired together,
+     three calls each pay the article in full — or, if it is marked, each pay
+     the 1.25x cache write, because an entry cannot be read until the request
+     writing it has begun (docs/project/prompt-caching.md § What breaks a
+     cache, 4). So the article is marked, `FIRST_LEVEL` goes first, and the
+     other two wait for its stream to begin: measured on three articles from
+     cold, $0.142 a press became $0.090, for about two seconds more wait (16.2 s
+     median against 14.2). Below the cache floor nothing can be cached, so
+     the three go together, unmarked, as before. */
+  const stagger = !underCacheFloor(article, modelFor("simple", opts.power));
+  const markArticle = opts.cacheArticle === true || stagger;
+  /* How the first level's first call got going: its stream began; it ended
+     without saying so; or it failed before it began. Settled once, so a call
+     that never begins never strands the others. */
+  type FirstCall = "started" | "ended" | "failed";
+  let begun: (how: FirstCall) => void = () => {};
+  const firstBegun = new Promise<FirstCall>((resolve) => {
+    begun = resolve;
+  });
   const user = renderPrompt(opts.profile);
   const dropped = emptyDropped();
 
@@ -627,6 +655,10 @@ export async function generateSimpleSummary(opts: {
      list nobody will keep. The job's own signal still stops all of them. */
   const sibling = new AbortController();
   const signal = opts.signal ? AbortSignal.any([opts.signal, sibling.signal]) : sibling.signal;
+  const untilAborted = new Promise<void>((resolve) => {
+    if (signal.aborted) resolve();
+    else signal.addEventListener("abort", () => resolve(), { once: true });
+  });
 
   let chars = 0;
   let last = 0;
@@ -658,7 +690,7 @@ export async function generateSimpleSummary(opts: {
             {
               type: "text" as const,
               text: article,
-              ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+              ...(markArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
             },
             { type: "text" as const, text: SIMPLE_SYSTEMS[level] },
           ],
@@ -671,12 +703,15 @@ export async function generateSimpleSummary(opts: {
       );
       writerCalls += 1;
       call.onText(onText);
+      if (level === FIRST_LEVEL) call.onStart(() => begun("started"));
       /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
          is what records what this call cost. src/messages-stream.ts. */
       message = await call.finalMessage();
     } catch (err) {
+      if (level === FIRST_LEVEL) begun("failed");
       throw anthropicCallFailed(err);
     }
+    if (level === FIRST_LEVEL) begun("ended");
     if (wasRefused(message)) {
       return {
         failure: stageFailure(MODEL_REFUSED, {
@@ -742,6 +777,14 @@ export async function generateSimpleSummary(opts: {
         flags: flagged.flags,
       });
     };
+    if (stagger && level !== FIRST_LEVEL) {
+      /* A first call that failed before it began fails the press (its first
+         attempt has no flagged fallback), and the abort follows a few ticks
+         later. Wait for it rather than opening two calls into it — they would
+         be billed (Sol's plan review, P1). */
+      if ((await firstBegun) === "failed") await untilAborted;
+      signal.throwIfAborted();
+    }
     for (let attempt = 1; ; attempt += 1) {
       let raw: string;
       try {

@@ -1,0 +1,174 @@
+{
+ "arm": "parallel-marked",
+ "cold": true,
+ "slug": "scaling-hypothesis",
+ "run": 1,
+ "at": "2026-10-01T10:51:08.227Z",
+ "wallMs": 40632,
+ "costUsd": 0.3036765,
+ "calls": [
+  {
+   "levels": [
+    "brief"
+   ],
+   "startMs": 0,
+   "firstTextMs": 32777,
+   "doneMs": 33860,
+   "input": 1854,
+   "cacheRead": 0,
+   "cacheWrite": 26899,
+   "output": 3713
+  },
+  {
+   "levels": [
+    "simple"
+   ],
+   "startMs": 1,
+   "firstTextMs": 15177,
+   "doneMs": 18205,
+   "input": 1804,
+   "cacheRead": 0,
+   "cacheWrite": 26899,
+   "output": 1636
+  },
+  {
+   "levels": [
+    "fuller"
+   ],
+   "startMs": 1,
+   "firstTextMs": 39160,
+   "doneMs": 40628,
+   "input": 1859,
+   "cacheRead": 0,
+   "cacheWrite": 26899,
+   "output": 3741
+  }
+ ],
+ "levels": {
+  "brief": {
+   "ok": true,
+   "words": 106,
+   "paragraphs": 3,
+   "readyMs": 33860,
+   "check": "passed",
+   "flags": 0
+  },
+  "simple": {
+   "ok": true,
+   "words": 316,
+   "paragraphs": 4,
+   "readyMs": 18205,
+   "check": "passed",
+   "flags": 0
+  },
+  "fuller": {
+   "ok": true,
+   "words": 257,
+   "paragraphs": 5,
+   "readyMs": 40628,
+   "check": "flagged",
+   "flags": 1
+  }
+ },
+ "reasoningTokens": 7247,
+ "text": {
+  "brief": [
+   {
+    "text": "This piece is about GPT-3, a huge program that predicts text. It is the biggest neural network ever trained, by far. GPT-3 surprised people by learning new tasks from just a few examples, without special training.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-suzdvz"
+    ]
+   },
+   {
+    "text": "This matters because almost no one expected size alone to produce such skills. The author argues this supports the scaling hypothesis. That idea says bigger networks, more data, and more computing power will make them more intelligent.",
+    "ids": [
+     "spya-ag750z",
+     "spya-m3gtj6",
+     "spya-b93jbz"
+    ]
+   },
+   {
+    "text": "One key idea is the blessings of scale: as programs grow bigger, hard problems get easier. New abilities, like learning from a few examples, can appear on their own, without being built in.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-jwq3zr",
+     "spya-aqts9c"
+    ]
+   }
+  ],
+  "simple": [
+   {
+    "text": "This piece is about GPT-3, a huge text-prediction computer program released in 2020, and what its success means for building smarter machines. It argues for the \"scaling hypothesis\": the idea that intelligence comes mainly from running simple learning methods at enormous size, not from clever new designs. GPT-3 was built far bigger than its predecessor GPT-2, and it kept getting better as it grew, surprising even the author, who had expected gains to level off.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-ag750z",
+     "spya-asr663"
+    ]
+   },
+   {
+    "text": "The piece says this matters because GPT-3 learned to follow instructions and pick up brand-new tasks from just a few examples, something nobody specifically trained it to do. This \"meta-learning\" (learning how to learn, rather than just one skill) suggests that simply making models bigger can produce new abilities nobody built in. Since GPT-3 is still cheap compared to large government or company budgets, far bigger models are likely coming, which raises big questions about what such systems might eventually be able to do.",
+    "ids": [
+     "spya-aqts9c",
+     "spya-ewxv9q",
+     "spya-khnsat"
+    ]
+   },
+   {
+    "text": "A core idea is the \"blessings of scale\": many problems that are hard for small neural networks get easier, not harder, as the network and its training data grow, bringing more stability, better generalization, and meta-learning. The piece explains this partly through networks containing huge numbers of possible \"sub-models\"; simple shortcut solutions win early on, but with enough data the sub-models that do genuine reasoning start winning instead. It also lays out the \"pretraining thesis\": a model trained only to guess the next word must eventually learn real-world understanding, because cheap tricks like matching letter frequencies stop working once the easy gains run out.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-grkhs8",
+     "spya-rjwfkb"
+    ]
+   },
+   {
+    "text": "The article also criticizes AI experts for failing to predict GPT-3's abilities and for dismissing large-scale approaches beforehand. A later section, \"It From Byte,\" argues that a model trained on so much human-written text, full of people planning and pursuing goals, may inevitably pick up agent-like planning behavior itself, not just passive pattern-copying.",
+    "ids": [
+     "spya-m9r8zx",
+     "spya-mkbrjp",
+     "spya-cw7jg4"
+    ]
+   }
+  ],
+  "fuller": [
+   {
+    "text": "This piece is about GPT-3, a huge language-prediction AI model released in 2020, and what it reveals about the scaling hypothesis. That hypothesis says making neural networks (brain-inspired learning systems) much bigger, with more data and computing power, makes them more capable, without needing clever new designs.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-suzdvz"
+    ]
+   },
+   {
+    "text": "GPT-3 surprised researchers because it did more than learn facts: it showed meta-learning, learning to follow new instructions and solve new tasks from just a few examples. The piece argues such models could become key building blocks for future AI, and that scaling may be the real path to far more powerful systems.",
+    "ids": [
+     "spya-ewxv9q",
+     "spya-aqts9c"
+    ]
+   },
+   {
+    "text": "A key idea is the blessings of scale: many problems hard for small neural networks become easy once the networks and their training data are made far bigger. This runs backwards from most research, where small tasks stay easy and big ones get impossible; here, abilities like generalizing to new situations emerge from size alone.",
+    "ids": [
+     "spya-sfkxh8",
+     "spya-ypbup8"
+    ]
+   },
+   {
+    "text": "One explanation offered: a large enough model behaves like a huge collection of smaller sub-models, and training naturally favors simple ones. With a small model or little data, the simplest working sub-model often just memorizes surface patterns. But with enough size and data, memorizing stops working, and sub-models that capture deeper rules, like real arithmetic, win out instead.",
+    "ids": [
+     "spya-grkhs8",
+     "spya-uknzzk",
+     "spya-vkkfzh"
+    ]
+   },
+   {
+    "text": "The piece also looks at who is acting on this idea: OpenAI, it says, has bet its whole strategy on scaling being true. Other major labs like DeepMind or Google Brain doubt scale alone is enough, and favor building intelligence piece by piece instead.",
+    "ids": [
+     "spya-arrq35",
+     "spya-scr8jb",
+     "spya-vr9q2p"
+    ]
+   }
+  ]
+ }
+}
