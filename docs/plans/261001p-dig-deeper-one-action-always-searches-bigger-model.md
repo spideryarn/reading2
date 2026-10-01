@@ -1,6 +1,6 @@
 # 261001p — *Dig deeper*: one dig-in action, which always searches the web and uses the bigger model
 
-Status: **plan reviewed by Sol (build with changes, F1–F10 folded in below); stage 1 building**. Owner: the session in worktree `go-deeper`. Overseer-dispatched from
+Status: **built** — stages 1–3 landed; Sol reviewed the plan and each code stage (F1–F18 below and in the review files). Owner: the session in worktree `go-deeper`. Overseer-dispatched from
 a question to Greg ([Q-glossary-web]), not a reader report; the glossary half was raised by
 `spya-puyb6d` and written up in
 [261001_1200](../user-feedback/261001_1200-five-small-tooltips-and-labels.md) as a follow-up.
@@ -198,6 +198,15 @@ committed order (search, then claim) never touches the stored answer on a failur
 - Copy: **Investigate** → **Dig deeper**, **Investigate again** → **Dig deeper again**, the footer
   *Investigated <date> · Investigate again* → *Researched <date> · Dig deeper again* (Sol's wording).
 
+**Landed** (commit `5aeb86b17`, then the review fixes). Sol's code review
+([261001p-dig-deeper-stage2-review-sol.md](261001p-dig-deeper-stage2-review-sol.md)): *land after
+fixes*, all taken — **F15** (P1) a lookup made inside a press now reattaches even with a Find model
+override set; **F16** the answer's ceiling is `DIG_ANSWER_TOKENS` (4,000), since Opus reasons out of
+it; **F17** export and provenance wording; **F18** (the cost comment's Opus price) made moot by
+replacing the estimate with measured presses. The implementer ran the search before *Look it up*
+rather than after, since the lookup is on Opus too and a failed search should waste nothing; and
+added a `searching` stage frame, which an older client ignores.
+
 ### Stage 3 — docs, the browser check, the feedback note
 
 `tooltips.md`, `glossary.md` (§ Checking a term on the web, the mock, § No rate limit — now one),
@@ -240,6 +249,41 @@ scales with the article: a 100k-token paper is about $0.60.
 `DIG_DEEPER_RATE_POLICY` bounds it — 20 an hour, 60 a day per reader, two at once, and a global fuse
 of 100 presses a day (~$60 at the very worst, $5–25 mostly warm). The glossary and comment presses
 had no limit at all before this.
+
+### Citations' Dig deeper (stage 2)
+
+Measured 2026-10-01 with `npx tsx scripts/probes/261001p-investigate-cost.ts`, the production
+`investigateCitation` under `collectSpend`, provider-reported cost, on `scaling-hypothesis` (~42k
+tokens):
+
+| cited work | search | *Look it up* (Opus) | answer (Opus) | press | wall clock |
+|---|---|---|---|---|---|
+| spya-cxq887 | $0.007 | $0.049 | $0.258 | **$0.314** | 40 s |
+| spya-x70954 | $0.007 | $0.050 | $0.235 | **$0.292** | 34 s |
+
+Before, on Sonnet: $0.120 average, $0.153 worst (plan 260930a's probe). So about **2–2.5×**.
+`INVESTIGATE_PRESS_BUDGET_USD` is $0.80 and the fuse 25 a day ($20), inside the existing
+`citation-investigate` allowance (20 a day per reader).
+
+**An observation, not fixed here:** the second press, a minute after the first on the same article,
+read **nothing** from the cache (42,460 written, 0 read), although the route is pinned to Anthropic
+and the article part is byte-identical. Explain's dig presses do read across presses (41.7k in the
+eval above), so the difference is likely Investigate's Exa server-tool parameters
+(`max_characters`) or OpenRouter's tool loop. Whether it predates this plan was not checked. Worth
+about $0.18 a press on a long article — a follow-up.
+
+## Follow-ups
+
+- **Investigate's cross-press cache miss** — above.
+- **Library passages as links**: the answer names another article by title; a link to the passage
+  needs a stored shape in three places.
+- **`SPIDERYARN_CITATION_INVESTIGATE_MODEL` no longer moves any reader-triggered call** (every
+  reader-visible call in a press is `DIG_DEEPER_MODEL`); it stays in the inventory, documented as
+  such in setup-dev.md. Retire it, or keep it for evals.
+- **The $20/day Investigate fuse against 20 a day per reader** — two busy readers can use it up; the
+  ceiling is Greg's.
+- **Search quality**: one browser press on *charisma* returned some odd hosts (an audio-AI site, a
+  conference upload). The search step's prompt is one line of aim; worth an eval if readers notice.
 
 ## Simpler options passed over
 

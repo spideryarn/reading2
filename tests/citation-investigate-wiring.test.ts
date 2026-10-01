@@ -32,6 +32,19 @@ describe("Investigate's composition root (plan 261001a stage 3)", () => {
     expect(investigateCitationDeps.readPaper).toBe(readCitedPaper);
   });
 
+  /* Plan 261001p stage 2: Dig deeper's forced search also looks in the
+     reader's other articles, through the root's one library search. */
+  it("wires the reader's library search into the press", async () => {
+    const { librarySearch } = await import("../src/store/index.js");
+    const spy = vi.spyOn(librarySearch, "searchLibrary").mockResolvedValue({ hits: [], capped: false });
+    try {
+      await investigateCitationDeps.library('"scaling laws"', 4, { excludeSlug: "here" });
+      expect(spy).toHaveBeenCalledWith('"scaling laws"', 4, { excludeSlug: "here" });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("hands the paper read stage 1's lookupWork itself as its registry", async () => {
     const input = {
       work: { title: "T", authors: null, url: "https://arxiv.org/abs/2001.08361", why: "w", passages: [] },

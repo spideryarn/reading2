@@ -3388,6 +3388,14 @@ export type ThreadKind = "chat" | "remember" | "candidates";
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
 
+/**
+ * The most block ids one chat question may say were on screen. A screenful is a
+ * few dozen even of one-line blocks on a tall monitor; this bounds a request,
+ * and the client trims to it rather than having Send refused.
+ * docs/plans/261001q-chat-knows-the-blocks-on-screen.md.
+ */
+export const MAX_VISIBLE_BLOCKS = 100;
+
 /** Is this one of the three? Used by both stores' normalisers and by the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
@@ -3983,8 +3991,8 @@ export interface CitationInvestigation {
   longestExtractWords: number;
   /**
    * The host of the page *Look it up* matched to this work, **only when that
-   * page was among this answer's own extracts**; `null` means no result was
-   * confirmed to be the work itself, and the view says so.
+   * page was among the extracts shown to this answer**; `null` means no result
+   * was confirmed to be the work itself, and the view says so.
    */
   matchedHost: string | null;
   /** Billed searches the call reported; `null` when the provider did not say. */
@@ -4080,7 +4088,9 @@ export interface InvestigateCitationDone {
 }
 
 /**
- * Which step of the one *Investigate* press is running (plan 260930d): `finding`
+ * Which step of the one *Dig deeper* press (was *Investigate*) is running:
+ * `searching` — the forced web search, first, on every press (plan 261001p
+ * stage 2); then (plan 260930d) `finding`
  * — the lookup that looks for the work's own page, only when the row has no
  * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
  * paper itself fetched and checked, and when read, its passages asked for),
@@ -4088,7 +4098,7 @@ export interface InvestigateCitationDone {
  * a `lookup` frame after `finding` carries the lookup's answer, the same
  * `FindCitationResponse` `POST …/find` answers.
  */
-export type InvestigateStage = "finding" | "reading-paper" | "reading";
+export type InvestigateStage = "searching" | "finding" | "reading-paper" | "reading";
 
 /** What *Find it on the web* kept for one work. src/citation-find.ts. */
 export interface CitationFound {
@@ -4750,6 +4760,14 @@ export interface SimpleSummary {
    * reaches a visitor (src/public/dto.ts).
    */
   profileHash: string | null;
+  /**
+   * The prompt's own version, `SIMPLE_PROMPT_VERSION` in src/simple-summary.ts,
+   * separate from `version`, which is the stored shape and must match exactly.
+   * **Absent on a row written before 2026-10-01**, which is the first prompt
+   * (`simplePromptVersion` reads it as `simple-prompt/1`): usable, but
+   * outdated. Plan 261001p.
+   */
+  promptVersion?: string;
   /** Every level, always — validation stores all of them or none. */
   levels: Record<SimpleLevel, SimpleParagraph[]>;
   /**
@@ -4879,6 +4897,7 @@ export function isUsableSimpleSummary(value: unknown): value is SimpleSummary {
     Number.isFinite(simple.elapsedMs) &&
     simple.elapsedMs >= 0 &&
     (simple.profileHash === null || (typeof simple.profileHash === "string" && simple.profileHash.length > 0)) &&
+    (simple.promptVersion === undefined || (typeof simple.promptVersion === "string" && simple.promptVersion.length > 0)) &&
     isSimpleLevels(simple.levels) &&
     /* Absent is a row from before the guard, or with it off; present must be whole. */
     (simple.check === undefined || isSimpleCheck(simple.check, simple.levels))

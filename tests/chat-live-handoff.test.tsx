@@ -413,6 +413,19 @@ describe("the live session in the shipping chat composer", () => {
     }
   });
 
+  it("shows the shared microphone choice that was made while Live was idle", async () => {
+    const { api } = fakeLive("idle");
+    paint(api);
+    window.localStorage.setItem("spya.dictation.deviceId", "headphones");
+
+    api.phase = "connecting";
+    paint(api);
+    await act(async () => { await Promise.resolve(); });
+
+    const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Microphone device"]');
+    expect(picker?.value, "Live still showed the preference from its first render").toBe("headphones");
+  });
+
   it("does not show another conversation's live words or error", () => {
     const { api } = fakeLive("live");
     api.threadId = "spya-other1";

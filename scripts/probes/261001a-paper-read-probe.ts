@@ -306,6 +306,9 @@ async function paidPress(c: Candidate): Promise<PaidRow> {
       take: async () => ({ kind: "allowed", id: "probe-261001a" }),
       finish: async () => {},
     },
+    /* Since plan 261001p stage 2 a press searches the reader's library too.
+       This probe is about the paper, so it searches none. */
+    library: async () => ({ hits: [] }),
     readPaper: async (input: PaperEvidenceInput) => {
       evidence = await readCitedPaper(input);
       return evidence;

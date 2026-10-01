@@ -1323,16 +1323,110 @@ describe("live audio and tool recovery", () => {
     h.unmount();
   });
 
+  it("opens the operating system's default by name when the browser lists it", async () => {
+    vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockResolvedValue([
+      { kind: "audioinput", deviceId: "default", label: "Default - USB Webcam" },
+      { kind: "audioinput", deviceId: "browser-choice", label: "Built-in Microphone" },
+    ] as MediaDeviceInfo[]);
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia");
+
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+
+    expect(capture).toHaveBeenCalledWith({ audio: { deviceId: { exact: "default" } } });
+    h.unmount();
+  });
+
+  it("falls back quietly when the listed system default disappears", async () => {
+    vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockResolvedValue([
+      { kind: "audioinput", deviceId: "default", label: "Default - USB Webcam" },
+      { kind: "audioinput", deviceId: "browser-choice", label: "Built-in Microphone" },
+    ] as MediaDeviceInfo[]);
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia")
+      /* Deliberately not a DOMException: Chromium's OverconstrainedError is not
+         reliably one, which is why the shared `deviceMissing` reads its name. */
+      .mockRejectedValueOnce({ name: "OverconstrainedError", constraint: "deviceId" });
+
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+
+    expect(capture.mock.calls.map(([constraints]) => constraints)).toEqual([
+      { audio: { deviceId: { exact: "default" } } },
+      { audio: true },
+    ]);
+    expect(h.get().phase).toBe("live");
+    expect(h.get().notice).not.toMatch(/your chosen microphone/i);
+    h.unmount();
+  });
+
+  it("does not open a microphone after the session stops while checking the default", async () => {
+    let enumerations = 0;
+    let releaseDefaultCheck!: () => void;
+    vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockImplementation(async () => {
+      enumerations += 1;
+      /* Placement checks first, before the ticket and microphone claim. The
+         second call is the new system-default check under that claim. */
+      if (enumerations === 1) return [];
+      await new Promise<void>((resolve) => { releaseDefaultCheck = resolve; });
+      return [{ kind: "audioinput", deviceId: "default", label: "Default - USB Webcam" }] as MediaDeviceInfo[];
+    });
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia");
+    const h = mount({ wiring: wiringFor(ticketWith()) });
+
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
+    await settle();
+    expect(enumerations).toBe(2);
+
+    let stopped!: Promise<void>;
+    act(() => { stopped = h.get().stop(); });
+    await act(async () => {
+      releaseDefaultCheck();
+      await stopped;
+    });
+    await settle();
+
+    expect(capture, "a stale session opened a microphone after releasing its claim").not.toHaveBeenCalled();
+    h.unmount();
+  });
+
   it("falls back visibly when the remembered microphone was unplugged", async () => {
     vi.spyOn(window.localStorage, "getItem").mockImplementation((key) =>
       key === "spya.dictation.deviceId" ? "unplugged" : null,
     );
+    vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockResolvedValue([
+      { kind: "audioinput", deviceId: "default", label: "Default - USB Webcam" },
+      { kind: "audioinput", deviceId: "browser-choice", label: "Built-in Microphone" },
+    ] as MediaDeviceInfo[]);
     const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia")
-      .mockRejectedValueOnce(new DOMException("Device absent", "OverconstrainedError"));
+      .mockRejectedValueOnce({ name: "OverconstrainedError", constraint: "deviceId" });
     const h = await connected({ wiring: wiringFor(ticketWith()) });
     expect(capture).toHaveBeenCalledTimes(2);
+    expect(capture.mock.calls.map(([constraints]) => constraints)).toEqual([
+      { audio: { deviceId: { exact: "unplugged" } } },
+      { audio: { deviceId: { exact: "default" } } },
+    ]);
     expect(h.get().phase).toBe("live");
-    expect(h.get().notice).toMatch(/microphone|device/i);
+    expect(h.get().notice).toBe("Your chosen microphone is unavailable. Using the system default microphone.");
+    h.unmount();
+  });
+
+  it("does not claim the system default when both exact device ids disappeared", async () => {
+    vi.spyOn(window.localStorage, "getItem").mockImplementation((key) =>
+      key === "spya.dictation.deviceId" ? "unplugged" : null,
+    );
+    vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockResolvedValue([
+      { kind: "audioinput", deviceId: "default", label: "Default - USB Webcam" },
+    ] as MediaDeviceInfo[]);
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia")
+      .mockRejectedValueOnce({ name: "OverconstrainedError", constraint: "deviceId" })
+      .mockRejectedValueOnce({ name: "NotFoundError" });
+
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+
+    expect(capture.mock.calls.map(([constraints]) => constraints)).toEqual([
+      { audio: { deviceId: { exact: "unplugged" } } },
+      { audio: { deviceId: { exact: "default" } } },
+      { audio: true },
+    ]);
+    expect(h.get().notice).toBe("Your chosen microphone is unavailable. Using another microphone.");
     h.unmount();
   });
 

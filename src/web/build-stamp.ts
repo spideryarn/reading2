@@ -58,8 +58,10 @@ export function shortCommit(commit: string): string {
  * machine from a push to `main`, `scripts/deploy.ts` has no channel into that
  * build's environment (nothing sets `SPIDERYARN_BUILD_COMMIT` there — only
  * `deploy.ts`'s own local gate worktree uses it), and a release's line in
- * `changelog-versions.ndjson` is written *after* it ships, so a build's own sha
- * is never in the copy of that file it is carrying. The sha is the one fact both
+ * `changelog-versions.ndjson` is appended *after* it ships, so a build's own sha
+ * is never in the copy of that file it is carrying (its notes are, in the
+ * pending file, and the page dates them with `buildTime` below — ChangelogPage.tsx
+ * § `withPending`). The sha is the one fact both
  * ends hold with certainty, so the sha is what this says — and `/changelog`
  * numbers releases from its own line count, where the whole file is in hand
  * (ChangelogPage.tsx § A release is shut, and its number is its line).

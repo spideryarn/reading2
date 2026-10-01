@@ -5263,7 +5263,7 @@ export const CITATION_INVESTIGATE_QUOTED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "This answer tried to quote a source directly, which we can't check, so it was stopped and not kept. " +
-    "Investigating again usually gets one that says it in its own words. [cite-quoted]",
+    "Digging deeper again usually gets one that says it in its own words. [cite-quoted]",
 };
 
 /** The search came back with no extract to read, so an answer could only have been from memory. */
@@ -5318,16 +5318,21 @@ export const DIG_DEEPER_NO_SEARCH: ReaderFacingFailure = {
     "Trying again usually works. [dig-no-search]",
 };
 
-/** *Investigate* refused by its allowance (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. */
+/**
+ * Citations' *Dig deeper* (was *Investigate*) refused by its allowance
+ * (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. "On a cited work",
+ * because this allowance is not the glossary's and comments' one
+ * (`DIG_DEEPER_BUSY` above): a dig running there does not refuse this.
+ */
 export const CITATION_INVESTIGATE_BUSY =
-  "Another Investigate is still running. Wait for it to finish, then try this one.";
+  "Another Dig deeper on a cited work is still running. Wait for it to finish, then try this one.";
 export const CITATION_INVESTIGATE_LIMITED =
-  "You have investigated a lot of works recently. Try again in a while — the row's link is still there.";
+  "You have dug deeper into a lot of works recently. Try again in a while — the row's link is still there.";
 /** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
 export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "Investigate has done as many as it can for today, so asking again today will get the same " +
+    "Dig deeper on cited works has done as many as it can for today, so asking again today will get the same " +
     "answer. Try again tomorrow — the row's link is still there. [cite-investigate-resting]",
 };
 

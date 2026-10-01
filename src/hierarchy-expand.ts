@@ -78,6 +78,7 @@ import { type Effort, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer, MalformedJson } from "./parse-json.js";
 import { budgetFor, THINKING_HEADROOM } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import type { Block } from "./types.js";
 
 /* ------------------------------------------------------------- the prompt */
@@ -124,8 +125,13 @@ import type { Block } from "./types.js";
  *
  * **`expand/6`, 2026-09-28**: EXPAND_SYSTEM gained the shared plain-words core,
  * `plainWords()` from src/plain-words.ts, at its end. Plan 260926a § Stage 3.
+ *
+ * **`expand/7`, 2026-10-01**: EXPAND_SYSTEM gained the paperwork rule,
+ * `paperwork("structure")` from src/paperwork.ts, after the plain-words core —
+ * a child that is only authors, funding or disclosures is labelled, not
+ * summarised, and asked no question. Plan 261001p.
  */
-export const EXPAND_PROMPT_VERSION = "expand/6";
+export const EXPAND_PROMPT_VERSION = "expand/7";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -386,7 +392,9 @@ order you were given them, each naming its own number:
 
 Use only block ids that appear in that section's blocks. Do not invent ids.
 
-${plainWords()}`;
+${plainWords()}
+
+${paperwork("structure")}`;
 
 /* ------------------------------------------------------------ the request */
 

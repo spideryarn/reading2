@@ -38,6 +38,7 @@ import { useExperimental } from "../useExperimental.js";
 import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
+import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
@@ -522,6 +523,14 @@ export function Reader({
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
   }, [setReadingCounting, proseOnScreen]);
+  /* **What chat is told is on screen**, read once per question — the same
+     `proseOnScreen` the recorder above trusts, so a band lying over the prose
+     on a phone reports nothing rather than the rows hidden under it.
+     docs/plans/261001q-chat-knows-the-blocks-on-screen.md. */
+  const chatOnScreen = useCallback(
+    (): readonly BlockId[] => (proseOnScreen ? blocksOnScreenNow() : []),
+    [proseOnScreen],
+  );
   /* **A jump made while a band lay over the prose flashes when the prose comes
      back** — the band closed or stepped aside. flash.ts holds it until then,
      reading the same fact off the DOM (`.band-covers`, a `.mode-band`, no
@@ -1965,6 +1974,7 @@ export function Reader({
             blocks={blockText}
             onJump={bandJump}
             kind="chat"
+            onScreen={chatOnScreen}
             handoff={chatHandoff}
             onHandoffTaken={handoffTaken}
           />

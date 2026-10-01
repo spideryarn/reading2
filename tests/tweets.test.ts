@@ -20,10 +20,12 @@ import {
   isStale,
   LIMIT,
   MAX_POST_BLOCKS,
+  PROMPT_VERSION,
   sentIds,
   overLimit,
   suggestedLength,
   TARGET,
+  TWEETS_SYSTEM,
 } from "../src/tweets.js";
 import { articleFingerprint } from "../src/source-hash.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
@@ -324,6 +326,22 @@ describe("hashBlocks and isStale", () => {
     expect(isStale(freshThread(), BLOCKS, STALE_TREE, { ...STALE_META, title: "Renamed" })).toBe(
       true,
     );
+  });
+});
+
+/**
+ * **No mutation involving the store: no store reaches this block.** It pins the
+ * `tweets/6` wording (plan 261001p) beside the stamp that names it, so the text
+ * cannot change without the stamp being looked at.
+ */
+describe("the tweets/6 prompt", () => {
+  it("pins the paperwork and safe-takeaway rules behind the new stamp", () => {
+    expect(PROMPT_VERSION).toBe("tweets/6");
+    expect(TWEETS_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
+    expect(TWEETS_SYSTEM).toContain("any implication it states\nitself");
+    expect(TWEETS_SYSTEM).toContain("If it deliberately reaches no conclusion");
+    /* The shared omission rule must not erase a substantive disclosure. */
+    expect(TWEETS_SYSTEM).toContain("a funder's role that\nit says may bias the result");
   });
 });
 

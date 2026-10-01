@@ -43,7 +43,7 @@
  * with the checker itself playing the part of the thing that reports success.
  */
 
-import { baselineFor, type Pass0, type PdfRecord, RENDERED } from "./pdf.js";
+import { baselineFor, CHECKED, type Pass0, type PdfRecord } from "./pdf.js";
 import {
   integrityVerdict,
   structuralFailureMessages,
@@ -737,8 +737,8 @@ export function scorePage(
   const text = said(records);
   const got = tokens(text);
   /* What the reader will actually see, for the checks that gate. */
-  const shownText = said(records.filter((r) => RENDERED.has(r.type)));
-  const hiddenText = said(records.filter((r) => !RENDERED.has(r.type)));
+  const shownText = said(records.filter((r) => CHECKED.has(r.type)));
+  const hiddenText = said(records.filter((r) => !CHECKED.has(r.type)));
   const shared: Omit<
     PageScore,
     "recall" | "precision" | "order" | "spans" | "absent" | "invented" | "unshown"

@@ -204,6 +204,88 @@ export function deployBranchProblem(branch: string): string | null {
 }
 
 /**
+ * The lock a deploy holds, in the shared git directory — and `release-notes.ts`
+ * holds it too, for `prepare` and `promote`, so that notes are never planned
+ * against a history that a deploy finishing underneath them is about to
+ * promote onto (GPT Sol on 261001q, round 2, finding 4).
+ */
+export const RELEASE_LOCK_FILE = "spideryarn-deploy.lock";
+
+/**
+ * **Do this candidate's own release notes cover everything it ships?**
+ * docs/plans/261001q, and docs/project/changelog.md § The pending release.
+ *
+ * Judged on the candidate commit's files — what will actually be built — not on
+ * the working tree. *Described* is the pending release's `sha`, or the
+ * history's last `sha` when nothing is pending. The rule is strict: **no commit
+ * that changes what a reader sees may sit after it.** A weaker rule (allow late
+ * commits so long as the notes are fresh) was proposed and refused in review,
+ * because a revert landing after the notes ships notes about a feature the
+ * deployed tree no longer has, and nothing would ever correct them.
+ *
+ * `--force-gate=changelog` is the hotfix escape. What that ships uncovered,
+ * `promote` leaves behind the watermark for the next `prepare` to describe.
+ */
+export function changelogGap(opts: {
+  /** Problems parsing the candidate's history and pending file, chain included. */
+  problems: string[];
+  /** The sha the candidate's notes describe up to. */
+  described: string;
+  /** Is `described` an ancestor of (or equal to) the candidate? */
+  describedInCandidate: boolean;
+  /** Release-path commits in `described..candidate`, oldest first. */
+  uncovered: string[];
+}): string | null {
+  const { problems, described, describedInCandidate, uncovered } = opts;
+  if (problems.length > 0) {
+    return `the candidate's changelog files do not parse: ${problems.slice(0, 3).join("; ")}`;
+  }
+  if (!describedInCandidate) {
+    return `its release notes describe ${described.slice(0, 8)}, which this commit does not contain`;
+  }
+  if (uncovered.length > 0) {
+    const shown = uncovered
+      .slice(0, 3)
+      .map((s) => s.slice(0, 8))
+      .join(" ");
+    return (
+      `${uncovered.length} commit(s) after ${described.slice(0, 8)} change what a reader sees and no release ` +
+      `notes describe them (${shown}${uncovered.length > 3 ? " …" : ""}) — run npm run changelog:prepare`
+    );
+  }
+  return null;
+}
+
+/**
+ * **Is the deploy this one replaces in the history the candidate carries?**
+ *
+ * `promote` records a deploy from production's own build stamp, and only while
+ * that build is serving. Deploy over an unpromoted one and its id is gone from
+ * the history for good — GPT Sol's code review of 261001q, finding 1. So the
+ * gate asks before the deploy rather than hoping a `prepare` ran: the remedy is
+ * `npm run changelog:promote`, then pull.
+ *
+ * Fails closed on an unreadable stamp, like `trunkGap`: "could not tell" and
+ * "it is recorded" must not pass alike. `--force-gate=changelog` is the escape
+ * when production is down and the fix cannot wait.
+ */
+export function servingUnrecorded(opts: {
+  /** `deploymentId` from production's `/build.json`, or null when it could not be read. */
+  servingDeploymentId: string | null;
+  recordedDeploymentIds: readonly string[];
+}): string | null {
+  const { servingDeploymentId, recordedDeploymentIds } = opts;
+  if (servingDeploymentId === null) {
+    return "could not read production's /build.json, so cannot tell whether the deploy it replaces is in the changelog's history";
+  }
+  if (recordedDeploymentIds.includes(servingDeploymentId)) return null;
+  return (
+    `production is serving ${servingDeploymentId}, which the changelog's history does not record — ` +
+    "deploying over it would lose it; run npm run changelog:promote, then pull"
+  );
+}
+
+/**
  * **Being on the trunk is not the same as being level with it**, and this is the
  * gap that accepting `dev` opened.
  *

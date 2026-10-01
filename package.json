@@ -19,6 +19,8 @@
     "check:staged-revert": "tsx scripts/check-staged-revert.ts",
     "check:conflicts": "tsx scripts/conflict-markers.ts",
     "deploy": "tsx scripts/deploy.ts",
+    "changelog:prepare": "tsx scripts/changelog/release-notes.ts prepare",
+    "changelog:promote": "tsx scripts/changelog/release-notes.ts promote",
     "count-lines": "tsx scripts/count-lines.ts",
     "fleet:restart": "tsx scripts/fleet-restart.ts",
     "cost": "tsx scripts/ai-cost.ts",

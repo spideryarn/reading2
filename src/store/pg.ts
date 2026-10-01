@@ -80,7 +80,8 @@ import {
 import {
   inputFingerprint as simpleFingerprint,
   isStale as simpleIsStale,
-  SIMPLE_VERSION,
+  SIMPLE_PROMPT_VERSION,
+  simplePromptVersion,
 } from "../simple-summary.js";
 import {
   PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
@@ -102,6 +103,7 @@ import {
   investigateContextHash,
   matchedPageOf,
 } from "../citation-investigate-context.js";
+import { DIG_DEEPER_MODEL } from "../dig-deeper.js";
 import { investigationFromRow } from "./citation-investigation-row.js";
 import { renderProfile } from "../profile.js";
 import {
@@ -150,7 +152,7 @@ import {
    same head (plan 261001b); re-exported for every caller that imports them
    from here. */
 export { citedMetaFingerprintOf, metaFingerprintOf };
-import { isStale as tweetsStale } from "../tweets.js";
+import { isStale as tweetsStale, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../tweets.js";
 import type {
   Arc,
   ArcFound,
@@ -2966,7 +2968,15 @@ const rawPgArticleReader: ArticleReader = {
           /* The cited head since `tweets/5`, which sends `articleWithIds`; a
              thread from before it is judged on the head it was written from
              inside `isStale` (src/tweets.ts § `fingerprintFor`). */
-          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, citedFingerprint));
+          if (!thread || !tree || tweetsStale(thread, blocks, tree, citedFingerprint)) return false;
+          /* **And the prompt and the model**, as every neighbour asks: until
+             2026-10-01 this arm compared only the article, so a `tweets/5`
+             thread was "current" for ever after `tweets/6` and Metadata never
+             offered the rewrite (GPT Sol's plan review of 261001p, P1-5). */
+          return sameStamp(
+            { promptVersion: thread.version, model: thread.generator },
+            { promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL },
+          );
         }
         case "glossary":
           return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
@@ -3141,12 +3151,12 @@ const rawPgArticleReader: ArticleReader = {
           return sameStamp(
             {
               inputHash: simple.sourceHash,
-              promptVersion: simple.version,
+              promptVersion: simplePromptVersion(simple),
               model: simple.generator,
             },
             {
               inputHash: simpleFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: SIMPLE_VERSION,
+              promptVersion: SIMPLE_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3668,7 +3678,7 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         !tree ||
         simpleIsStale(simpleSummary, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: simpleSummary.version !== SIMPLE_VERSION,
+      outdated: simplePromptVersion(simpleSummary) !== SIMPLE_PROMPT_VERSION,
     };
   },
 
@@ -3817,13 +3827,19 @@ const rawPgArticleReader: ArticleReader = {
        `lookupContext` the call built its prompt from. Before `attachFinds`, so
        the row it sees is the artefact's, not the upgraded one. */
     const text = new Map(blocks.map((b) => [b.id as string, b.text]));
-    /* `standard` whatever the article's power: the fingerprint hashes the
-       model's generation, so a lookup made at either power attaches (plan
-       260930f, Sol F1). */
-    const model = modelFor("citations-find", "standard");
-    const withLookups = attachLookups(citations, finds, (work) =>
-      lookupContextHash(lookupContext(work, (id) => text.get(id)), model),
-    );
+    /* Standalone Find keeps its configured standard model, including an eval
+       override. Dig deeper deliberately ignores that override and writes its
+       lookup with `DIG_DEEPER_MODEL`, so accept both current policies here.
+       In production Sonnet and Opus share a generation and these are the same
+       hash; the second matters only while a Find-only override is active. */
+    const standaloneFindModel = modelFor("citations-find", "standard");
+    const withLookups = attachLookups(citations, finds, (work) => {
+      const context = lookupContext(work, (id) => text.get(id));
+      return [
+        lookupContextHash(context, standaloneFindModel),
+        lookupContextHash(context, DIG_DEEPER_MODEL),
+      ];
+    });
     const withFinds = attachFinds(withLookups, finds);
     /* **Investigate's answers, the same way and after `attachFinds`** — the
        row the call was made from is the upgraded one, so that is the row the
@@ -3857,8 +3873,10 @@ const rawPgArticleReader: ArticleReader = {
         shelfFrom(found.article),
       );
       const articleKey = investigateArticleKey(promptMeta, blocks);
-      /* `standard` for `model`'s reason above. */
-      const investigateModel = modelFor("citation-investigate", "standard");
+      /* **Dig deeper's model, the very constant the press writes with** (plan
+         261001p stage 2, Sol F2) — not `modelFor`, whose environment override
+         would make this side hash another model and hide every kept answer. */
+      const investigateModel = DIG_DEEPER_MODEL;
       withInvestigations = attachInvestigations(
         withFinds,
         new Map(investigated.map((row) => [row.entryId, investigationFromRow(row)])),
