@@ -393,6 +393,7 @@ describe("a text field iOS must not zoom into", () => {
   });
 });
 
+
 describe("an order row on a touch screen", () => {
   /* Greg, 2026-10-01 (Q-landscape-orders, option B): *"On touch screens only,
      keep it to one line and let it scroll sideways."* The 40px floor above made
@@ -427,11 +428,13 @@ describe("an order row on a touch screen", () => {
   }
   const POINTER = /@media\s*\(\s*pointer:\s*coarse\s*\)\s*\{/g;
   const ANY_COARSE = /@media\s*\(\s*(?:any-)?pointer:\s*coarse\s*\)\s*\{/g;
+  const ANY_MEDIA = /@media\s*[^{}]+\{/g;
 
   /** Every rule whose selector list names `selector` exactly or ends in it, in cascade order. */
   function rulesFor(css: string, selector: string) {
     const pointer = spans(css, POINTER);
     const coarse = spans(css, ANY_COARSE);
+    const media = spans(css, ANY_MEDIA);
     const inside = (at: number, s: [number, number][]) => s.some(([a, b]) => at > a && at < b);
     return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .map((m) => ({ parts: selectors(m[1] ?? ""), decls: m[2] ?? "", at: m.index }))
@@ -442,6 +445,7 @@ describe("an order row on a touch screen", () => {
         decls: r.decls,
         pointer: inside(r.at, pointer),
         coarse: inside(r.at, coarse),
+        media: inside(r.at, media),
       }));
   }
 
@@ -454,7 +458,9 @@ describe("an order row on a touch screen", () => {
         setsWrap.filter((r) => !r.exact),
         `a heavier selector sets ${row}'s flex-wrap`,
       ).toEqual([]);
-      const touch = setsWrap.filter((r) => r.pointer || !r.coarse);
+      /* A primary coarse pointer also satisfies `any-pointer: coarse`, so both
+         queries belong in the simulated cascade. Unrelated media rules do not. */
+      const touch = setsWrap.filter((r) => r.coarse || !r.media);
       const last = touch[touch.length - 1];
       expect(last?.wrap, `the last flex-wrap a touch screen gets for ${row}`).toBe("nowrap");
       expect(last?.pointer, `${row}'s nowrap must be under (pointer: coarse)`).toBe(true);
@@ -465,20 +471,32 @@ describe("an order row on a touch screen", () => {
     });
   }
 
-  it(".gloss-sort-group scrolls sideways under pointer: coarse, and only there", () => {
-    const all = rulesFor(readerCssNoComments(), ".gloss-sort-group").filter((r) => r.exact);
+  it("the button group scrolls, keeps its focus room, and leaves the trail pinned", () => {
+    const css = readerCssNoComments();
+    const all = rulesFor(css, ".gloss-sort-group").filter((r) => r.exact);
     const touch = all
       .filter((r) => r.pointer)
       .map((r) => r.decls)
       .join(";");
+    expect(touch).toMatch(/flex-wrap:\s*nowrap/);
     expect(touch).toMatch(/overflow-x:\s*auto/);
+    expect(touch).toMatch(/overflow-y:\s*hidden/);
     expect(touch, "the dock's hidden scrollbar").toMatch(/scrollbar-width:\s*none/);
+    expect(touch, "room for the three-pixel focus outline").toMatch(/padding:\s*3px/);
+    expect(touch, "focus room is returned to the flex row").toMatch(/margin:\s*-3px/);
     const mouse = all
       .filter((r) => !r.coarse)
       .map((r) => r.decls)
       .join(";");
     expect(mouse, "control: the desktop rule is found").toMatch(/display:\s*flex/);
     expect(mouse).not.toMatch(/overflow-x/);
+
+    for (const selector of [".gloss-sort-group > *", ".gloss-sort-trail"]) {
+      const fixed = rulesFor(css, selector)
+        .filter((r) => r.pointer && r.exact)
+        .map((r) => r.decls)
+        .join(";");
+      expect(fixed, `${selector} can shrink out of the pinned row`).toMatch(/flex-shrink:\s*0/);
+    }
   });
 });
-

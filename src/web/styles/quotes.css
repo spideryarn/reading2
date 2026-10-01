@@ -294,4 +294,3 @@
 /* Narrow, because it holds two short lines and a wide card over a list row
    covers the rows either side of the one being pointed at. */
 .score-bars-card { max-width: 15rem; }
-

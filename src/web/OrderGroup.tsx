@@ -14,9 +14,10 @@
  * ancestor — the band and the page — to bring the button into *their* view.
  *
  * **Again after a reflow, not only on opening.** The UI face swaps in after a
- * mode mounts (fonts.ts § onFontsChanged), and a rotation or the trail arriving
- * narrows the group; any of them can push the pressed button out without the
- * selection changing. GPT Sol, on the plan.
+ * mode mounts (fonts.ts § onFontsChanged), a rotation or the trail arriving
+ * narrows the group, and newly available orders can move the pressed button;
+ * any of them can push it out without changing the selection. GPT Sol, on the
+ * plan; the option-set case was completed in its code review.
  *
  * Where nothing overflows — a mouse, or a wide band — there is nothing to
  * scroll and this does nothing, so the touch-only rule stays in one place: the
@@ -61,8 +62,24 @@ export function OrderGroup({
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reveal);
     ro?.observe(group);
     for (const child of group.children) ro?.observe(child);
+    /* A constrained group's box does not change when a new option makes its
+       contents wider, and existing buttons only move — neither wakes a
+       ResizeObserver. Observe new children too, then put the pressed one back
+       in view. `childList` deliberately ignores `aria-pressed`: `selected`
+       owns that path synchronously through the layout effect. */
+    const mutations =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            ro?.disconnect();
+            ro?.observe(group);
+            for (const child of group.children) ro?.observe(child);
+            reveal();
+          });
+    mutations?.observe(group, { childList: true });
     const offFonts = onFontsChanged(reveal);
     return () => {
+      mutations?.disconnect();
       ro?.disconnect();
       offFonts();
     };

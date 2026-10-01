@@ -63,6 +63,22 @@ GPT Sol, read-only, on this plan ([review](261001o-order-row-plan-review-sol.md)
    added. `flex: 0 1 auto` and `min-width: 0` dropped from the CSS: the first is the default and the
    second was already there.
 
+## What the code review changed
+
+1. **Medium — an option added before the pressed one was still missed.** A constrained group's box
+   stays the same size when its contents grow, and the existing buttons move without resizing, so
+   neither the group nor button `ResizeObserver` fires. `OrderGroup` now watches its direct child
+   list, re-attaches the resize observer to the current buttons and reveals the pressed order. The
+   component test was red first with `scrollLeft` staying at 0 instead of moving to 80.
+2. **Low — the cascade test omitted matching `any-pointer: coarse` rules.** It insisted the winning
+   declaration itself use `pointer: coarse`, but excluded a later `any-pointer: coarse` declaration
+   from the simulated cascade even though a primary coarse pointer satisfies both queries. The walk
+   now includes both while still requiring the winner to be the chosen `pointer` query. A deliberate
+   later `wrap` stayed green before this fix and went red after it; removing Quotes' late override
+   also went red, so the original source-order regression is witnessed too.
+3. The focused coverage now also drives the resize and font-change callbacks and checks the CSS
+   pieces that keep the trail fixed and make room for the focus outline.
+
 ## The simpler option passed over
 
 Pure CSS, no component: the row scrolls, but a band opened with the fourth order selected would show
@@ -81,10 +97,29 @@ the same div.
 - **A test for the touch-only rule** in tests/touch-controls.test.ts: the row's `nowrap` and the
   group's `overflow-x: auto` are written inside a `(pointer: coarse)` block, and not in any rule
   outside one (that second half is what keeps desktop unchanged). Red first: written before the CSS.
-- **A component test** for `OrderGroup`: in jsdom with stubbed rects, the pressed button right of the
-  view moves `scrollLeft`; one already in view leaves it alone.
+- **A component test** for `OrderGroup`: in jsdom with stubbed rects, buttons beyond either edge are
+  revealed, one already in view is left alone, and resize, font and option-set changes reveal again.
 - **Playwright** at 844×390 with `hasTouch`/`isMobile` (so `pointer: coarse` matches) and at 1280×900
   with a mouse, in Quotes, Citations and Glossary: the row's height, whether it scrolls, whether the
   trail is inside the band's right edge, and with the last order selected and the band reopened,
   that it is in view. Screenshots beside this plan.
 - `npm test`, `npm run typecheck`, lint on the touched files.
+
+## What the browser showed
+
+Playwright on this worktree's own dev server, 2026-10-01, `pointer: coarse` read back true on the
+touch context and false on the desktop one. Quotes on `entropy-24-00930-spya-pywwkq`, Citations on
+`spider-silk-spya-ge30uz`, Glossary on `noema-mythology-of-conscious-ai` (no one article had all
+three).
+
+| Mode | 844×390 touch: row | one line | group scroll / client | 1280 mouse: row |
+|---|---|---|---|---|
+| Quotes | 54px (was 98) | yes | 360 / 240 | 64px, wraps as before |
+| Citations | 54px (was 98) | yes | 313 / 240 | 37px |
+| Glossary | 54px (was 98) | yes | 312 / 196 | 37px |
+
+Buttons kept their 40px floor on touch. Glossary's profile badge stayed pinned inside the band's
+right edge; Quotes and Citations drew no trail on those articles, so the pinned trail is measured in
+Glossary only. With the last order tapped and the page reloaded (the order is in the URL), the
+pressed button came back fully in view in all three — `scrollLeft` 116, 69 and 113. Screenshots:
+`261001o-shot-<mode>-<touch|desktop>.png`.

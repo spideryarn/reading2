@@ -1,0 +1,650 @@
+diff --git a/docs/plans/261001o-order-buttons-one-sideways-scrolling-line-on-touch-screens.md b/docs/plans/261001o-order-buttons-one-sideways-scrolling-line-on-touch-screens.md
+new file mode 100644
+index 000000000..4df577805
+--- /dev/null
++++ b/docs/plans/261001o-order-buttons-one-sideways-scrolling-line-on-touch-screens.md
+@@ -0,0 +1,90 @@
++# Order buttons: one sideways-scrolling line on touch screens
++
++The follow-up to [261001l](261001l-compact-quotes-and-citations-band-tops-and-click-a-diagram-to-enlarge.md)
++§ Stage 3, "Not trimmed, and why", for report `spya-gcdwps`
++([note](../user-feedback/260910_2051-quotes-and-other-bands-on-a-landscape-phone.md)). Greg chose it
++on 2026-10-01 (question `Q-landscape-orders`, option B), as it was put to him:
++
++> B. On touch screens only, keep it to one line and let it scroll sideways. This saves about 49px,
++> but orders past the edge stay hidden until you swipe. You made the same choice for the bottom bar
++> on 2026-08-28.
++
++## The problem
++
++On a touch screen every order button has a 40px floor (narrow-window.css § a coarse pointer, the fix
++for SPIDERYARN-READING2-2J). In the ~290px band of a landscape iPhone the row of four orders wraps
++onto two of those lines: 98px of a 338px band, measured at 844×390 in 261001l, in Quotes, Citations
++and Glossary alike.
++
++## What we build
++
++**CSS, under the same `@media (pointer: coarse)` that sets the floor** — the wrap is caused by the
++floor, so it is undone under the same query. Desktop, and a fine pointer at any width, are untouched.
++
++- `.gloss-sort`, `.quotes-rank` (the row): `flex-wrap: nowrap`.
++- `.gloss-sort-group` (the buttons): `flex-wrap: nowrap`, `min-width: 0`, `flex: 0 1 auto`, and the
++  bottom bar's sideways treatment (dock.css § the floor under the bar's fit ladder):
++  `overflow-x: auto; overflow-y: hidden; scrollbar-width: none`, `::-webkit-scrollbar { display:
++  none }`, and every child `flex-shrink: 0`. The same declarations, cited rather than shared: the
++  dock's are unconditional and these are touch-only, so one selector list cannot hold both.
++- `.gloss-sort-trail` (the count and the profile badge, Glossary and Quotes): `flex-shrink: 0`. It
++  already sits at the far end with `margin-left: auto`, so it stays pinned while the group scrolls.
++  The (i) is the band's own (`BandAbout`, absolutely placed in the corner) and is not in the row.
++- A scrolling box clips its children's focus outline (2px + 1px offset). A few px of padding on the
++  group, given back with a negative margin, keeps the ring visible without changing the row's height.
++
++**One small component, `src/web/OrderGroup.tsx`**: the `role="group"` div every order row already
++draws by hand, plus a layout effect that, when the band opens (and whenever the selection changes),
++scrolls the pressed button into the group's view by setting `scrollLeft` from the two rects. Not
++`scrollIntoView`, which also scrolls every scrolling ancestor — the band and the page. Where nothing
++overflows it changes nothing, so it needs no touch condition of its own; the touch-only rule stays
++in one place, the CSS.
++
++**All five rows that draw `.gloss-sort-group`**, not just the three named: Quotes, Citations,
++Glossary, and also Debate and FAQ. They are one control written five times; the 40px floor already
++reaches all five, so they all wrap the same way, and a row that wrapped while its siblings scrolled
++would be the drift touch-controls.test.ts exists to stop. Debate's row measured 54px (one line) in
++261001l, so it mostly gains nothing — but it can still wrap on a narrower band.
++
++## What the plan review changed
++
++GPT Sol, read-only, on this plan ([review](261001o-order-row-plan-review-sol.md)):
++
++1. **High — Quotes would still have wrapped.** narrow-window.css loads before quotes.css, so an
++   equal-weight `.quotes-rank { flex-wrap: nowrap }` there loses to quotes.css's own `wrap`, and a
++   test that only asked whether `nowrap` was *written* would have passed. Built instead: the touch
++   rules live in glossary.css § a touch screen, after the base rules, and Quotes' one line in
++   quotes.css after its own. The test walks the rules in cascade order and asks which `flex-wrap` a
++   touch screen ends up with — red against the narrow-window.css placement, checked.
++2. **Medium — reveal only on opening is not enough.** A font swap, a rotation or the trail arriving
++   can push the pressed order out without the selection changing. `OrderGroup` re-reveals on a
++   `ResizeObserver` (group and buttons) and on `onFontsChanged`.
++3. **Low — the test took `any-pointer` too, and the component test lacked the left-edge case.** Both
++   added. `flex: 0 1 auto` and `min-width: 0` dropped from the CSS: the first is the default and the
++   second was already there.
++
++## The simpler option passed over
++
++Pure CSS, no component: the row scrolls, but a band opened with the fourth order selected would show
++the first three and hide the one that is on. The reader could not see how the list is ordered, which
++is the one thing the row is for. The component is ~30 lines and replaces five hand-written copies of
++the same div.
++
++## Not done
++
++- No fade or arrow at the clipped edge. Greg accepted "hidden until you swipe", the same as the dock;
++  an edge hint is a later decision if the swipe turns out not to be found.
++- Search's `.srch-sort-btn` row is a different control with its own styles; not touched.
++
++## Checks
++
++- **A test for the touch-only rule** in tests/touch-controls.test.ts: the row's `nowrap` and the
++  group's `overflow-x: auto` are written inside a `(pointer: coarse)` block, and not in any rule
++  outside one (that second half is what keeps desktop unchanged). Red first: written before the CSS.
++- **A component test** for `OrderGroup`: in jsdom with stubbed rects, the pressed button right of the
++  view moves `scrollLeft`; one already in view leaves it alone.
++- **Playwright** at 844×390 with `hasTouch`/`isMobile` (so `pointer: coarse` matches) and at 1280×900
++  with a mouse, in Quotes, Citations and Glossary: the row's height, whether it scrolls, whether the
++  trail is inside the band's right edge, and with the last order selected and the band reopened,
++  that it is in view. Screenshots beside this plan.
++- `npm test`, `npm run typecheck`, lint on the touched files.
+diff --git a/docs/project/web-client.md b/docs/project/web-client.md
+index 574a6c5e5..159a00b08 100644
+--- a/docs/project/web-client.md
++++ b/docs/project/web-client.md
+@@ -116,6 +116,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
+ - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
+   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
+   passing confirmation.
++- **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
++  on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
++  (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
+ - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
+   `applyThreshold`** — "show the items above this score". The FAQ uses the component; the
+   Glossary's `GateSlider` and the `BarSlider`s in Citations and Quotes draw the same row for
+diff --git a/src/web/CitationsPanel.tsx b/src/web/CitationsPanel.tsx
+index ae80297c6..5801aaa6d 100644
+--- a/src/web/CitationsPanel.tsx
++++ b/src/web/CitationsPanel.tsx
+@@ -35,6 +35,7 @@
+ import type { ReactNode } from "react";
+ import { useTapReveal } from "./useTapReveal.js";
+ import { ScoreBars } from "./ScoreBars.js";
++import { OrderGroup } from "./OrderGroup.js";
+ import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
+ import {
+   MAX_CITATIONS,
+@@ -863,9 +864,7 @@ function OrderBar({
+ }) {
+   return (
+     <div className="gloss-sort">
+-      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+-          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
+-      <div className="gloss-sort-group" role="group" aria-label="Order the citations by">
++      <OrderGroup label="Order the citations by" selected={order}>
+         {options.map((option) => (
+           <button
+             key={option.key}
+@@ -878,7 +877,7 @@ function OrderBar({
+             {option.label}
+           </button>
+         ))}
+-      </div>
++      </OrderGroup>
+     </div>
+   );
+ }
+diff --git a/src/web/DebatePanel.tsx b/src/web/DebatePanel.tsx
+index d2fa756d0..b3bc06e35 100644
+--- a/src/web/DebatePanel.tsx
++++ b/src/web/DebatePanel.tsx
+@@ -186,6 +186,7 @@ import { readStoredSynthesis } from "../debate-synthesis.js";
+ import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
+ import { JobProgress } from "./JobProgress.js";
+ import { AboutMade } from "./BandAbout.js";
++import { OrderGroup } from "./OrderGroup.js";
+ import { ModeSurface } from "./ModeSurface.js";
+ import { Tooltip } from "./Tooltip.js";
+ import { useRenderCount } from "./perf.js";
+@@ -1532,9 +1533,7 @@ function OrderBar({
+ }) {
+   return (
+     <div className="gloss-sort">
+-      {/* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+-          list, not form controls — GlossaryPanel.tsx § SortBar says why. */}
+-      <div className="gloss-sort-group" role="group" aria-label="Order the sources by">
++      <OrderGroup label="Order the sources by" selected={order}>
+         {options.map((key) => (
+           <button
+             key={key}
+@@ -1547,7 +1546,7 @@ function OrderBar({
+             {ORDER_OPTION[key].label}
+           </button>
+         ))}
+-      </div>
++      </OrderGroup>
+     </div>
+   );
+ }
+diff --git a/src/web/FaqPanel.tsx b/src/web/FaqPanel.tsx
+index 9da4c850a..73e71dfc2 100644
+--- a/src/web/FaqPanel.tsx
++++ b/src/web/FaqPanel.tsx
+@@ -56,6 +56,7 @@ import type { UseFaq } from "./useFaq.js";
+ import type { PublicFaq } from "../public-types.js";
+ import { AboutMade } from "./BandAbout.js";
+ import { BlockRef } from "./BlockRef.js";
++import { OrderGroup } from "./OrderGroup.js";
+ import {
+   availableOrders,
+   barMax,
+@@ -306,9 +307,7 @@ function OrderBar({
+   return (
+     <div className="gloss-sort">
+       {options.length > 0 && (
+-        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a
+-           list, not form controls — GlossaryPanel.tsx § SortBar says why. */
+-        <div className="gloss-sort-group" role="group" aria-label="Order the questions by">
++        <OrderGroup label="Order the questions by" selected={order}>
+           {options.map((key) => (
+             <button
+               key={key}
+@@ -321,7 +320,7 @@ function OrderBar({
+               {ORDER_BUTTON[key].label}
+             </button>
+           ))}
+-        </div>
++        </OrderGroup>
+       )}
+     </div>
+   );
+diff --git a/src/web/GlossaryPanel.tsx b/src/web/GlossaryPanel.tsx
+index 51483dae5..4e23becef 100644
+--- a/src/web/GlossaryPanel.tsx
++++ b/src/web/GlossaryPanel.tsx
+@@ -83,6 +83,7 @@ import type { BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+ import type { TermSort } from "./params.js";
+ import { BlockRef } from "./BlockRef.js";
+ import { ScoreBars } from "./ScoreBars.js";
++import { OrderGroup } from "./OrderGroup.js";
+ import { BlockNav, nudgeTo } from "./BlockNav.js";
+ import { Tooltip } from "./Tooltip.js";
+ /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
+@@ -1049,11 +1050,7 @@ function SortBar({
+ }) {
+   return (
+     <div className="gloss-sort">
+-      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
+-          controls and wants a <legend>; these are toggle buttons that change
+-          how a list is ordered, and `role="group"` with an accessible name is
+-          exactly what ARIA has for that. */}
+-      <div className="gloss-sort-group" role="group" aria-label="Order the terms by">
++      <OrderGroup label="Order the terms by" selected={sort}>
+         {/* No "order" word in front since 2026-09-29 — Greg asked for it to go,
+             and the group's `aria-label` still says it to a screen reader. */}
+         {options.map((option) => (
+@@ -1068,7 +1065,7 @@ function SortBar({
+             {option.label}
+           </button>
+         ))}
+-      </div>
++      </OrderGroup>
+       {trailing && <span className="gloss-sort-trail">{trailing}</span>}
+     </div>
+   );
+diff --git a/src/web/OrderGroup.tsx b/src/web/OrderGroup.tsx
+new file mode 100644
+index 000000000..e59de096f
+--- /dev/null
++++ b/src/web/OrderGroup.tsx
+@@ -0,0 +1,80 @@
++/**
++ * **The order buttons of a band, as the named group — and on a touch screen,
++ * one line that scrolls sideways with the pressed order kept in view.**
++ *
++ * Greg, 2026-10-01 (Q-landscape-orders, option B): *"On touch screens only,
++ * keep it to one line and let it scroll sideways. This saves about 49px, but
++ * orders past the edge stay hidden until you swipe."* The one line is CSS
++ * (glossary.css § a touch screen); this component's job is the half CSS cannot
++ * do. A band opened with its last order pressed would otherwise show the first
++ * three and hide the one in force — and how the list is ordered is the one thing
++ * the row is for. Plan 261001o.
++ *
++ * **`scrollLeft`, not `scrollIntoView`**, which also scrolls every scrolling
++ * ancestor — the band and the page — to bring the button into *their* view.
++ *
++ * **Again after a reflow, not only on opening.** The UI face swaps in after a
++ * mode mounts (fonts.ts § onFontsChanged), and a rotation or the trail arriving
++ * narrows the group; any of them can push the pressed button out without the
++ * selection changing. GPT Sol, on the plan.
++ *
++ * Where nothing overflows — a mouse, or a wide band — there is nothing to
++ * scroll and this does nothing, so the touch-only rule stays in one place: the
++ * CSS.
++ *
++ * The buttons are the caller's, with `aria-pressed`; the trailing count or
++ * badge goes beside this, not in it, because the group is what a screen reader
++ * announces as "Order the … by" (GlossaryPanel.tsx § SortBar).
++ */
++import { type ReactNode, useLayoutEffect, useRef } from "react";
++import { onFontsChanged } from "./fonts.js";
++
++/** Scroll `group` the least distance that shows its pressed button whole. */
++export function revealPressed(group: HTMLElement): void {
++  const on = group.querySelector<HTMLElement>('[aria-pressed="true"]');
++  if (!on) return;
++  const view = group.getBoundingClientRect();
++  const button = on.getBoundingClientRect();
++  if (button.left < view.left) group.scrollLeft -= view.left - button.left;
++  else if (button.right > view.right) group.scrollLeft += button.right - view.right;
++}
++
++export function OrderGroup({
++  label,
++  selected,
++  children,
++}: {
++  /** The group's accessible name, "Order the terms by". */
++  label: string;
++  /** The pressed order's key — a change re-runs the reveal. */
++  selected: string;
++  children: ReactNode;
++}) {
++  const ref = useRef<HTMLDivElement>(null);
++
++  // biome-ignore lint/correctness/useExhaustiveDependencies: `selected` is the trigger, not an input — the pressed button is read from the DOM.
++  useLayoutEffect(() => {
++    const group = ref.current;
++    if (!group) return;
++    const reveal = () => revealPressed(group);
++    reveal();
++    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reveal);
++    ro?.observe(group);
++    for (const child of group.children) ro?.observe(child);
++    const offFonts = onFontsChanged(reveal);
++    return () => {
++      ro?.disconnect();
++      offFonts();
++    };
++  }, [selected]);
++
++  return (
++    /* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
++       controls and wants a <legend>; these are toggle buttons that change how a
++       list is ordered, and `role="group"` with an accessible name is exactly
++       what ARIA has for that. */
++    <div ref={ref} className="gloss-sort-group" role="group" aria-label={label}>
++      {children}
++    </div>
++  );
++}
+diff --git a/src/web/QuotesPanel.tsx b/src/web/QuotesPanel.tsx
+index 390b13429..efec93b8b 100644
+--- a/src/web/QuotesPanel.tsx
++++ b/src/web/QuotesPanel.tsx
+@@ -56,6 +56,7 @@ import type { UseQuotes } from "./useQuotes.js";
+ import type { StepFailure } from "./useStepJob.js";
+ import { BlockRef } from "./BlockRef.js";
+ import { ScoreBars } from "./ScoreBars.js";
++import { OrderGroup } from "./OrderGroup.js";
+ import { Tooltip } from "./Tooltip.js";
+ import { builtButEmpty } from "../messages.js";
+ import { JobProgress } from "./JobProgress.js";
+@@ -935,11 +936,7 @@ function RankBar({
+ }) {
+   return (
+     <div className="quotes-rank">
+-      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> is for form
+-          controls and wants a <legend>; these are toggle buttons that change how
+-          a list is ordered, and `role="group"` with an accessible name is exactly
+-          what ARIA has for that. Same call GlossaryPanel's SortBar makes. */}
+-      <div className="gloss-sort-group" role="group" aria-label="Order the quotes by">
++      <OrderGroup label="Order the quotes by" selected={rank}>
+         {/* No "order" word in front since 2026-10-01, as in Glossary; the
+             group's `aria-label` still says it to a screen reader. */}
+         {options.map((option) => (
+@@ -954,7 +951,7 @@ function RankBar({
+             {option.label}
+           </button>
+         ))}
+-      </div>
++      </OrderGroup>
+       {trailing && <span className="gloss-sort-trail">{trailing}</span>}
+     </div>
+   );
+diff --git a/src/web/styles/glossary.css b/src/web/styles/glossary.css
+index 3cf0045ba..1839cff2a 100644
+--- a/src/web/styles/glossary.css
++++ b/src/web/styles/glossary.css
+@@ -95,6 +95,44 @@
+ }
+ .gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+ 
++/* **§ a touch screen: one line that scrolls sideways.** Greg, 2026-10-01
++   (Q-landscape-orders, option B): *"On touch screens only, keep it to one line
++   and let it scroll sideways. This saves about 49px, but orders past the edge
++   stay hidden until you swipe."* The 40px finger floor (narrow-window.css § a
++   coarse pointer) wrapped four orders onto two lines in a landscape phone's
++   band — 98px of 338 (plan 261001l). Plan 261001o.
++
++   `pointer: coarse` because the floor is: the wrap is the floor's, so it is
++   undone under the same query, and a mouse at any width is untouched.
++
++   **Here, not in narrow-window.css**, because that sheet loads before
++   quotes.css, and an equal-weight `.quotes-rank { flex-wrap: nowrap }` there
++   would lose to quotes.css's own `wrap` (GPT Sol, on the plan). Each row's
++   one-line rule sits in the sheet that owns the row, after its base rule; the
++   Quotes row's is in quotes.css.
++
++   The scrolling is the bottom bar's treatment, cited rather than shared —
++   dock.css § the floor under the bar's fit ladder; its rules are unconditional
++   and these are touch-only, so one selector list cannot hold both. The group
++   shrinks (`min-width: 0`, above) and the trail does not, so the count and the
++   badge stay pinned at the end while the orders scroll under them.
++   OrderGroup.tsx keeps the pressed order in view. The padding, given back by
++   the margin, is room for the focus ring a scrolling box would clip. */
++@media (pointer: coarse) {
++  .gloss-sort { flex-wrap: nowrap; }
++  .gloss-sort-group {
++    flex-wrap: nowrap;
++    overflow-x: auto;
++    overflow-y: hidden;
++    scrollbar-width: none;
++    padding: 3px;
++    margin: -3px;
++  }
++  .gloss-sort-group::-webkit-scrollbar { display: none; }
++  .gloss-sort-group > *,
++  .gloss-sort-trail { flex-shrink: 0; }
++}
++
+ /* The threshold slider — the one control in this panel that sets a number
+    rather than picking from a list. Shown only in `prioritised` order.
+ 
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index d0d69869f..95543af2e 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -844,7 +844,9 @@
+      so the label sits in the middle of the taller box and the row is the only
+      thing that grows. A one-line row goes 37px → 43px, a wrapped two-line row
+      64px → 97px. That is real height in a band, and it is the trade the dock
+-     already made in the axis that has room. */
++     already made in the axis that has room. **Since 2026-10-01 the row does not
++     wrap on a touch screen** — one line that scrolls sideways, Greg's choice —
++     in glossary.css § a touch screen (plan 261001o). */
+   .gloss-sort-btn,
+   .quotes-rank-btn {
+     display: inline-flex;
+diff --git a/src/web/styles/quotes.css b/src/web/styles/quotes.css
+index 9dcdd582d..67b813e90 100644
+--- a/src/web/styles/quotes.css
++++ b/src/web/styles/quotes.css
+@@ -56,6 +56,11 @@
+   color: var(--highlight-ink);
+ }
+ .quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
++/* One line on a touch screen, after the base rule so it wins — glossary.css §
++   a touch screen has the decision and the rest of the treatment. */
++@media (pointer: coarse) {
++  .quotes-rank { flex-wrap: nowrap; }
++}
+ 
+ /* The bar. Same rules as `.gloss-gate`, and the same reason for the native
+    range input: `accent-color` is one line where `::-webkit-slider-thumb` is the
+diff --git a/tests/order-group.test.tsx b/tests/order-group.test.tsx
+new file mode 100644
+index 000000000..fa45b479b
+--- /dev/null
++++ b/tests/order-group.test.tsx
+@@ -0,0 +1,106 @@
++// @vitest-environment jsdom
++/**
++ * `OrderGroup` keeps the pressed order in view when the row scrolls sideways
++ * (plan 261001o). jsdom has no layout, so the rects are stubbed: a 200px-wide
++ * group from x=0, and buttons wherever each case puts them. What this proves is
++ * the arithmetic and the wiring; that the row really scrolls on a phone is the
++ * Playwright pass in the plan.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { OrderGroup, revealPressed } from "../src/web/OrderGroup.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++function rect(left: number, width: number): DOMRect {
++  return { left, right: left + width, width, top: 0, bottom: 40, height: 40, x: left, y: 0 } as DOMRect;
++}
++
++/** A group 200px wide whose pressed button sits at `left` (already scrolled). */
++function group(left: number, width = 80): HTMLElement {
++  const g = document.createElement("div");
++  const b = document.createElement("button");
++  b.setAttribute("aria-pressed", "true");
++  g.append(b);
++  g.getBoundingClientRect = () => rect(0, 200);
++  b.getBoundingClientRect = () => rect(left - g.scrollLeft, width);
++  return g;
++}
++
++describe("revealPressed", () => {
++  it("scrolls right just far enough to show a pressed button past the right edge", () => {
++    const g = group(300);
++    revealPressed(g);
++    expect(g.scrollLeft).toBe(180); // its right edge, 380, lands on 200
++  });
++
++  it("scrolls left to show a pressed button before the left edge", () => {
++    const g = group(20);
++    g.scrollLeft = 100; // the button is now at -80
++    revealPressed(g);
++    expect(g.scrollLeft).toBe(20);
++  });
++
++  it("leaves a button already in view alone", () => {
++    const g = group(50);
++    g.scrollLeft = 10;
++    revealPressed(g);
++    expect(g.scrollLeft).toBe(10);
++  });
++
++  it("does nothing when no button is pressed", () => {
++    const g = group(300);
++    g.querySelector("button")?.removeAttribute("aria-pressed");
++    revealPressed(g);
++    expect(g.scrollLeft).toBe(0);
++  });
++});
++
++describe("OrderGroup", () => {
++  let host: HTMLDivElement;
++  let root: Root;
++  beforeEach(() => {
++    host = document.createElement("div");
++    document.body.append(host);
++    root = createRoot(host);
++  });
++  afterEach(() => {
++    act(() => root.unmount());
++    host.remove();
++  });
++
++  it("is the named group, and reveals the pressed order when it opens and when it changes", () => {
++    /* Stubbed on the prototype, because the reveal runs in a layout effect —
++       before a test could reach the element to stub it. Button `i` sits at
++       100·i, 80 wide; the group is 200 wide. */
++    const groupRect = HTMLDivElement.prototype.getBoundingClientRect;
++    const buttonRect = HTMLButtonElement.prototype.getBoundingClientRect;
++    HTMLDivElement.prototype.getBoundingClientRect = () => rect(0, 200);
++    HTMLButtonElement.prototype.getBoundingClientRect = function (this: HTMLButtonElement) {
++      const i = Number(this.dataset.i);
++      const scrolled = (this.parentElement as HTMLElement).scrollLeft;
++      return rect(100 * i - scrolled, 80);
++    };
++    try {
++      const draw = (selected: number) =>
++        createElement(OrderGroup, {
++          label: "Order the terms by",
++          selected: String(selected),
++          children: [0, 1, 2, 3].map((i) =>
++            createElement("button", { key: i, type: "button", "data-i": i, "aria-pressed": i === selected }),
++          ),
++        });
++      act(() => root.render(draw(3)));
++      const g = host.querySelector<HTMLElement>('[role="group"]');
++      expect(g?.getAttribute("aria-label")).toBe("Order the terms by");
++      expect(g?.className).toBe("gloss-sort-group");
++      expect(g?.scrollLeft).toBe(180); // button 3 is 300–380; its right edge lands on 200
++      act(() => root.render(draw(0)));
++      expect(g?.scrollLeft).toBe(0);
++    } finally {
++      HTMLDivElement.prototype.getBoundingClientRect = groupRect;
++      HTMLButtonElement.prototype.getBoundingClientRect = buttonRect;
++    }
++  });
++});
+diff --git a/tests/touch-controls.test.ts b/tests/touch-controls.test.ts
+index 41003bf53..fcab3b41b 100644
+--- a/tests/touch-controls.test.ts
++++ b/tests/touch-controls.test.ts
+@@ -392,3 +392,93 @@ describe("a text field iOS must not zoom into", () => {
+     expect(offenders).toEqual([]);
+   });
+ });
++
++describe("an order row on a touch screen", () => {
++  /* Greg, 2026-10-01 (Q-landscape-orders, option B): *"On touch screens only,
++     keep it to one line and let it scroll sideways."* The 40px floor above made
++     the four orders wrap onto two lines in a landscape phone's band — 98px of
++     338. Plan 261001o.
++
++     **Asked of the cascade, not of the text.** The first draft only asked that
++     a `nowrap` was written inside a coarse block, and GPT Sol showed it would
++     pass with Quotes still wrapping: narrow-window.css loads before quotes.css,
++     so an equal-weight `nowrap` there loses to quotes.css's `wrap`. So this
++     walks every rule naming the selector in cascade order and asks which
++     `flex-wrap` is the last one a touch screen gets — and **`pointer: coarse`
++     only**, the floor's own query, since `coarseBlocks` also takes
++     `any-pointer`. The other half of the decision, *touch only*, is that no
++     rule outside a coarse block says `nowrap`. */
++  const ROWS = [".gloss-sort", ".quotes-rank", ".gloss-sort-group"] as const;
++
++  /** `[start, end)` of every block opened by `query`, in `css`. */
++  function spans(css: string, query: RegExp): [number, number][] {
++    const out: [number, number][] = [];
++    for (const m of css.matchAll(query)) {
++      let depth = 1;
++      let i = m.index + m[0].length;
++      while (i < css.length && depth > 0) {
++        if (css[i] === "{") depth++;
++        else if (css[i] === "}") depth--;
++        i++;
++      }
++      out.push([m.index, i]);
++    }
++    return out;
++  }
++  const POINTER = /@media\s*\(\s*pointer:\s*coarse\s*\)\s*\{/g;
++  const ANY_COARSE = /@media\s*\(\s*(?:any-)?pointer:\s*coarse\s*\)\s*\{/g;
++
++  /** Every rule whose selector list names `selector` exactly or ends in it, in cascade order. */
++  function rulesFor(css: string, selector: string) {
++    const pointer = spans(css, POINTER);
++    const coarse = spans(css, ANY_COARSE);
++    const inside = (at: number, s: [number, number][]) => s.some(([a, b]) => at > a && at < b);
++    return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
++      .map((m) => ({ parts: selectors(m[1] ?? ""), decls: m[2] ?? "", at: m.index }))
++      .filter((r) => r.parts.some((p) => p === selector || p.endsWith(` ${selector}`)))
++      .map((r) => ({
++        exact: r.parts.includes(selector),
++        wrap: /flex-wrap:\s*([\w-]+)/.exec(r.decls)?.[1],
++        decls: r.decls,
++        pointer: inside(r.at, pointer),
++        coarse: inside(r.at, coarse),
++      }));
++  }
++
++  for (const row of ROWS) {
++    it(`${row} ends on one line on a pointer: coarse screen, and only there`, () => {
++      const setsWrap = rulesFor(readerCssNoComments(), row).filter((r) => r.wrap);
++      /* Heavier selectors would race on specificity rather than order; there
++         are none, and a new one should be thought about rather than lost. */
++      expect(
++        setsWrap.filter((r) => !r.exact),
++        `a heavier selector sets ${row}'s flex-wrap`,
++      ).toEqual([]);
++      const touch = setsWrap.filter((r) => r.pointer || !r.coarse);
++      const last = touch[touch.length - 1];
++      expect(last?.wrap, `the last flex-wrap a touch screen gets for ${row}`).toBe("nowrap");
++      expect(last?.pointer, `${row}'s nowrap must be under (pointer: coarse)`).toBe(true);
++      /* The mouse half, with a control: the base rule is there to be found. */
++      const mouse = setsWrap.filter((r) => !r.coarse);
++      expect(mouse.length, `no desktop flex-wrap found for ${row}`).toBeGreaterThan(0);
++      expect(mouse.map((r) => r.wrap)).not.toContain("nowrap");
++    });
++  }
++
++  it(".gloss-sort-group scrolls sideways under pointer: coarse, and only there", () => {
++    const all = rulesFor(readerCssNoComments(), ".gloss-sort-group").filter((r) => r.exact);
++    const touch = all
++      .filter((r) => r.pointer)
++      .map((r) => r.decls)
++      .join(";");
++    expect(touch).toMatch(/overflow-x:\s*auto/);
++    expect(touch, "the dock's hidden scrollbar").toMatch(/scrollbar-width:\s*none/);
++    const mouse = all
++      .filter((r) => !r.coarse)
++      .map((r) => r.decls)
++      .join(";");
++    expect(mouse, "control: the desktop rule is found").toMatch(/display:\s*flex/);
++    expect(mouse).not.toMatch(/overflow-x/);
++  });
++});
++

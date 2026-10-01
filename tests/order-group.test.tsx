@@ -6,7 +6,7 @@
  * the arithmetic and the wiring; that the row really scrolls on a phone is the
  * Playwright pass in the plan.
  */
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { OrderGroup, revealPressed } from "../src/web/OrderGroup.js";
@@ -84,13 +84,13 @@ describe("OrderGroup", () => {
     };
     try {
       const draw = (selected: number) =>
-        createElement(OrderGroup, {
-          label: "Order the terms by",
-          selected: String(selected),
-          children: [0, 1, 2, 3].map((i) =>
-            createElement("button", { key: i, type: "button", "data-i": i, "aria-pressed": i === selected }),
-          ),
-        });
+        (
+          <OrderGroup label="Order the terms by" selected={String(selected)}>
+            {[0, 1, 2, 3].map((i) => (
+              <button key={i} type="button" data-i={i} aria-pressed={i === selected} />
+            ))}
+          </OrderGroup>
+        );
       act(() => root.render(draw(3)));
       const g = host.querySelector<HTMLElement>('[role="group"]');
       expect(g?.getAttribute("aria-label")).toBe("Order the terms by");
@@ -99,6 +99,99 @@ describe("OrderGroup", () => {
       act(() => root.render(draw(0)));
       expect(g?.scrollLeft).toBe(0);
     } finally {
+      HTMLDivElement.prototype.getBoundingClientRect = groupRect;
+      HTMLButtonElement.prototype.getBoundingClientRect = buttonRect;
+    }
+  });
+
+  it("reveals again when an option is inserted before the unchanged pressed order", async () => {
+    const groupRect = HTMLDivElement.prototype.getBoundingClientRect;
+    const buttonRect = HTMLButtonElement.prototype.getBoundingClientRect;
+    HTMLDivElement.prototype.getBoundingClientRect = () => rect(0, 200);
+    HTMLButtonElement.prototype.getBoundingClientRect = function (this: HTMLButtonElement) {
+      const siblings = [...(this.parentElement?.children ?? [])];
+      const i = siblings.indexOf(this);
+      const scrolled = (this.parentElement as HTMLElement).scrollLeft;
+      return rect(100 * i - scrolled, 80);
+    };
+    try {
+      const draw = (keys: readonly string[]) =>
+        (
+          <OrderGroup label="Order the terms by" selected="selected">
+            {keys.map((key) => (
+              <button key={key} type="button" aria-pressed={key === "selected"} />
+            ))}
+          </OrderGroup>
+        );
+      await act(() => root.render(draw(["first", "selected"])));
+      const g = host.querySelector<HTMLElement>('[role="group"]');
+      expect(g?.scrollLeft).toBe(0);
+      await act(() => root.render(draw(["new", "first", "selected"])));
+      expect(g?.scrollLeft).toBe(80);
+    } finally {
+      HTMLDivElement.prototype.getBoundingClientRect = groupRect;
+      HTMLButtonElement.prototype.getBoundingClientRect = buttonRect;
+    }
+  });
+
+  it("reveals again after a resize or a font load", () => {
+    const NativeResizeObserver = globalThis.ResizeObserver;
+    const groupRect = HTMLDivElement.prototype.getBoundingClientRect;
+    const buttonRect = HTMLButtonElement.prototype.getBoundingClientRect;
+    let resize: ResizeObserverCallback | null = null;
+    let fontChanged: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resize = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    Object.defineProperty(globalThis, "ResizeObserver", {
+      value: FakeResizeObserver,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(document, "fonts", {
+      value: {
+        addEventListener(_type: string, callback: () => void) {
+          fontChanged = callback;
+        },
+        removeEventListener() {},
+      },
+      configurable: true,
+    });
+    HTMLDivElement.prototype.getBoundingClientRect = () => rect(0, 200);
+    let pressedLeft = 300;
+    HTMLButtonElement.prototype.getBoundingClientRect = function (this: HTMLButtonElement) {
+      const scrolled = (this.parentElement as HTMLElement).scrollLeft;
+      return rect(pressedLeft - scrolled, 80);
+    };
+    try {
+      act(() =>
+        root.render(
+          <OrderGroup label="Order the terms by" selected="selected">
+            <button type="button" aria-pressed="true" />
+          </OrderGroup>,
+        ),
+      );
+      const g = host.querySelector<HTMLElement>('[role="group"]');
+      expect(g?.scrollLeft).toBe(180);
+
+      g!.scrollLeft = 0;
+      pressedLeft = 260;
+      act(() => resize?.([], {} as ResizeObserver));
+      expect(g?.scrollLeft).toBe(140);
+
+      g!.scrollLeft = 0;
+      pressedLeft = 240;
+      act(() => fontChanged?.());
+      expect(g?.scrollLeft).toBe(120);
+    } finally {
+      if (NativeResizeObserver === undefined) Reflect.deleteProperty(globalThis, "ResizeObserver");
+      else globalThis.ResizeObserver = NativeResizeObserver;
+      Reflect.deleteProperty(document, "fonts");
       HTMLDivElement.prototype.getBoundingClientRect = groupRect;
       HTMLButtonElement.prototype.getBoundingClientRect = buttonRect;
     }
