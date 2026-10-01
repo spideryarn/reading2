@@ -12,7 +12,10 @@ describe("jobConcurrency", () => {
   });
 
   it("is six when nothing is set", () => {
-    vi.stubEnv("SPIDERYARN_JOB_CONCURRENCY", "");
+    /* `undefined` makes Vitest delete the key, even when the shell running the
+       suite supplied it. This is the production path, not merely another
+       invalid-value case. */
+    vi.stubEnv("SPIDERYARN_JOB_CONCURRENCY", undefined);
     expect(DEFAULT_JOB_CONCURRENCY).toBe(6);
     expect(jobConcurrency()).toBe(6);
   });
@@ -24,7 +27,7 @@ describe("jobConcurrency", () => {
 
   /* `0` would stop every job in the account and read exactly like a wedged
      queue, so anything that is not a positive whole number falls back. */
-  it.each(["0", "-2", "2.5", "eight"])("ignores %j and uses the default", (value) => {
+  it.each(["", "0", "-2", "2.5", "eight"])("ignores %j and uses the default", (value) => {
     vi.stubEnv("SPIDERYARN_JOB_CONCURRENCY", value);
     expect(jobConcurrency()).toBe(DEFAULT_JOB_CONCURRENCY);
   });

@@ -559,7 +559,7 @@ export function readExpansion(opts: {
  * **This is an ambition, and `WidthGate` is what happens when it is wrong** — it
  * halves on a 429 and earns a slot back per width successes, exactly as it does
  * for the PDF stage. The number to revisit it with is stage 5's live run under
- * three concurrent jobs.
+ * six concurrent jobs.
  */
 export const EXPANSION_CONCURRENCY = 8;
 

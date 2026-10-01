@@ -7955,7 +7955,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          can drive paid `explain` calls as fast as they can post: ownership says
          *which* article, not *how many* requests, and `withSpendAttribution`
          records the spend rather than authorising it. **This request never
-         enters the job queue**, so the queue's concurrency of three is not a
+         enters the job queue**, so the queue's concurrency cap is not a
          limit on it either — a first draft of this comment claimed it was, and
          GPT Sol was right that it is false. Stated rather than fixed here
          because it is the shape of every paid request in this file and a scheme

@@ -829,7 +829,7 @@ until 2026-09-29, when Greg asked for it to go to save a phone two lines
 form's hourly cap. So **an owner with one article of their own can drive paid `explain` calls as fast
 as they can post**, each of which may run up to eight web searches. Ownership decides *which* article,
 not *how many* requests; `withSpendAttribution` records the spend rather than authorising it; and this
-request never enters the job queue, so the concurrency limit of three is not a limit on it. Written
+request never enters the job queue, so the queue's concurrency cap is not a limit on it. Written
 down rather than fixed, because it is the shape of every paid request in this file and a scheme
 invented for one endpoint would be the wrong place to start. **A decision for Greg**, raised by GPT
 Sol's review of the built code, 2026-09-04, and in

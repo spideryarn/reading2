@@ -36,8 +36,8 @@ one set of per-process model-width gates.
 So which limit binds depends on placement: spread across instances, upstream provider throughput;
 packed onto one, memory under concurrent PDF parses. Neither is measured at N > 3. That argues for
 **6**, the conservative end of the range Greg approved: it doubles the machine, lets one reader open
-four modes and still leave two slots, and keeps the unmeasured worst cases at twice what production
-has already run rather than nearly three times. **8 is the next step once production has run at 6**
+four modes and still leave two slots, and keeps the unmeasured worst cases at twice the previous
+configured ceiling rather than nearly three times. **8 is the next step once production has run at 6**
 without provider 429s in `ai_calls`, function memory errors or pool timeouts — an environment variable
 the Overseer can set on Vercel, no code change.
 
@@ -57,9 +57,10 @@ the busiest day 34.
 - Stale "3" / "three" where the *current* value is stated: `jobConcurrency`'s docblock, the "three
   global slots" sentence in `src/jobs.ts`, `src/vercel-health.ts`, `src/illustrated.ts`,
   `src/hierarchy-deepen.ts`. Dated records (plans, worktrees.md's incident) stay as they were.
-- `evals/deepen` phase D runs three jobs and compares the runtime cap with `DEFAULT_JOB_CONCURRENCY`;
-  at 6 it still runs three, all claimed at once, and its gate still passes. Its prose that equates
-  "three jobs" with "all the slots" becomes stale; noted, not rerun (it is a paid eval).
+- `evals/deepen` phase D used to hard-code three jobs while comparing only the runtime cap with
+  `DEFAULT_JOB_CONCURRENCY`; at 6 its gate would have passed over half the load it claimed to test.
+  It now derives one book job plus the remaining load jobs from the default, and its estimate and
+  expected-job count follow the same number. Not rerun (it is a paid eval).
 
 ## Deferred: a per-reader share
 
@@ -94,3 +95,11 @@ code, but it makes the number production actually runs live somewhere no test or
   the owner count under concurrency; "everyone else keeps three" is collective not each; a stale
   comment in `src/illustrated.ts`. Verdict: choose 6 and defer the per-reader share. **All taken**;
   the plan above is the revision.
+- **Code review, GPT Sol, round 1** (2026-10-01, workspace-write, on `ba98a380`): no P0; approve
+  with its fixes. P1 (fixed by Sol): `evals/deepen` phase D still hard-coded three jobs while its
+  gate compared only the runtime cap with the default, so at 6 it would have passed over half the
+  load it claims to measure — it now derives the job count, slugs, estimate and expected jobs from
+  `DEFAULT_JOB_CONCURRENCY`, reusing the first article file when fewer are given. Read and accepted:
+  nothing is spent until somebody reruns it. P2 (fixed): the default-path test now deletes the
+  variable rather than setting it empty; current-tense "three" in `ingest-queue.md`, `glossary.md`,
+  `src/routes.ts` and the eval docs. No test depended on a refusal at the fourth claim.

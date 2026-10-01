@@ -445,20 +445,21 @@ export const REQUEUE_BUDGET = 2;
  * **Six, the low end, because what binds is unmeasured above three.** Which
  * limit bites first depends on where Vercel puts the jobs: spread across
  * instances, it is the model provider's throughput, since the width gates are
- * per process and a PDF extract alone is 100 calls; packed onto one instance,
- * it is memory under several PDF parses. The database and Vercel's own
- * concurrency and duration limits are nowhere near. **Eight is the next step**,
- * as an environment variable, once production has run at six without provider
- * 429s, memory errors or pool timeouts.
+ * per process and a PDF extract alone can put 100 calls in flight; packed onto
+ * one instance, it is memory under several PDF parses. The database and
+ * Vercel's own concurrency and duration limits are nowhere near. **Eight is the
+ * next step**, as an environment variable, once production has run at six
+ * without provider 429s, memory errors or pool timeouts.
  * docs/plans/261001b-raise-the-job-concurrency-cap-to-six.md.
  *
  * **There is no per-reader share, deliberately**: one reader can still take
  * every slot. With one active owner in production a share would only have
  * idled slots; the plan above holds its reviewed shape for when it bites.
  *
- * **What the number is actually rationing is spend and provider rate limits**,
- * not CPU or connections — there is no spend cap anywhere in this repo, and the
- * label and summary fan-outs each multiply by N. It is not rationing
+ * **What the number is primarily rationing is spend and provider rate limits**,
+ * with memory as the unmeasured packed-instance limit above — there is no spend
+ * cap anywhere in this repo, and the label and summary fan-outs each multiply by
+ * N. It is not rationing
  * correctness: which jobs may run on one article at once is the article's own
  * line — the predecessor rule in `claim`, which since 2026-09-29 lets
  * compatible mode jobs overlap and nothing else (src/store/jobs.ts,
