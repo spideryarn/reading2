@@ -373,9 +373,12 @@ share a cache write would save most of it and add the cache write's latency. Nam
   with the *"very-simple"* one now Brief — but it is a change a reader without a profile will see.
 - **Fidelity, T1 and T3.** Flags fell on both arms alike (none new-only, none old-only; both texts in
   7 of 11 pairs, mostly small additions such as "mouse" for a culture study). One is a real
-  reversal — *"synergy … grows with more feedback loops"* on the PID paper — and it is in the first
-  version's outputs too (`high-15-beforeB`, and 260930i's `medium-15`), so it is a standing fault of
-  the stage on that paper, not this change. Recorded, not fixed here.
+  terminology collision — *"synergy … grows with more feedback loops"* on the PID paper, where
+  *feedback* names a different connection type whose effect goes the other way — and it is in the
+  first version's outputs too (`high-15-beforeB`, and 260930i's `medium-15`), so it is a standing
+  fault of the stage on that paper, not this change. Recorded, not fixed here; the likely mechanism, prompt
+  wordings that did not make the fault rare enough to ship, and the guard proposed instead are
+  [261001h](261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md).
 
 ## What shipped
 

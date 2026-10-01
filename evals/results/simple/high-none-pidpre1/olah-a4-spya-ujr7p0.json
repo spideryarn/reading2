@@ -1,0 +1,114 @@
+{
+  "arm": "high-none-pidpre1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "51bf28cf2a374f509b094b285ec9ee3431fca428d3758ee43b25e25986444581",
+  "at": "2026-10-01T06:46:35.938Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 12963,
+  "costUsd": 0.067324,
+  "tokens": {
+    "input": 17757,
+    "output": 3181,
+    "reasoning": 1429
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 203,
+  "fullerWords": 307,
+  "briefWords": 168,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about two ideas often lumped together as \"distributed representations\" in neural networks: composition and superposition. It uses simple examples of neurons that represent colored shapes, like circles and squares in red or blue, to show how these two ideas actually work very differently.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-fyxmks",
+        "spya-u4qtn4"
+      ]
+    },
+    {
+      "text": "This matters because pulling a neural network's internal activity apart into separate, understandable pieces is necessary to truly understand how the network works, rather than getting lost in an impossibly huge space of possibilities. The piece argues that composition and superposition have very different properties, so mixing them up can lead to wrong conclusions about what a network is doing.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition means combining a small number of separate features, like \"red\" and \"square,\" to represent many possible combinations; this uses few neurons, lets the network generalize, and stays easy to interpret. Superposition instead squeezes far more things than there are neurons into the same space, which saves neurons but makes it impossible to cleanly read out individual features. The two strategies compete for the same limited space, so a network can't fully do both at once, though it can mix them when features are sparse, meaning most combinations never actually occur together.",
+      "ids": [
+        "spya-g8cztv",
+        "spya-s9fc6n",
+        "spya-xwq6ty"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah about how a classic idea called \"distributed representations\" — where information is spread across many neurons rather than one neuron per thing — relates to an idea called \"superposition,\" where a network packs more features than it has neurons. The piece argues that \"distributed representations\" actually hides two different strategies, which the author calls composition and superposition.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The author says this distinction matters because breaking a network's representations into separate, understandable pieces is necessary to deal with the sheer number of possible combinations and to actually understand how neural networks work. Composition and superposition behave very differently in terms of generalizing to new cases and in what can be read out with a simple straight-line (linear) calculation, so treating them as one thing can be misleading.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using examples of neurons representing colored shapes, the piece contrasts a \"local\" code (one neuron per shape-color pair), a \"semi-local\" or compositional code (separate neurons for color and shape that combine), and a \"dense\" code using maximal superposition (very few neurons encoding many combinations at once, only readable through a nonlinear step). Composition lets a small number of features combine into exponentially many objects and lets data about one combination help with related ones, but this only works if there's enough room (exp(n) volume for n features). Superposition instead squeezes in exponentially many unrelated items without this flexible combining, trading away easy linear readout and smooth in-between representations.",
+      "ids": [
+        "spya-u4qtn4",
+        "spya-qcd003",
+        "spya-c2eewa"
+      ]
+    },
+    {
+      "text": "The note also shows these strategies can mix: when features are sparse, meaning most combinations rarely occur together, the unused \"holes\" in the compositional space can be filled with other features stored in superposition. The conclusion is that composition and superposition are fundamentally in tension but distinguishing them is important, since only composition lets us understand representations using a manageable, non-exponential number of independent parts.",
+      "ids": [
+        "spya-vefv29",
+        "spya-ajbh7f",
+        "spya-st3tz8"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece looks at how brain cells or artificial neurons might store information, like the color and shape of an object. It uses a simple example: imagining neurons that can only be \"on\" or \"off\", standing for things like red, blue, circle, or square.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-hdz82q",
+        "spya-u4qtn4"
+      ]
+    },
+    {
+      "text": "Figuring this out matters because scientists want to understand what is really happening inside neural networks. If we know how information is packed into neurons, we can better figure out what the network is actually doing.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The piece says there are two different tricks people lump together as \"distributed representations.\" One is composition: combining simple building-block features, like color and shape, to make many combinations using few neurons. The other is superposition: squeezing in more separate things than you have neurons, which saves space but makes it harder to pull one piece of information back out cleanly. The piece argues these two tricks actually work against each other, so a network can use some of each, but not both to the fullest at once.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-xcrca8",
+        "spya-jzkekc"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 6,
+    "unanchored": 0
+  }
+}

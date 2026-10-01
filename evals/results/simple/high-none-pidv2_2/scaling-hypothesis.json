@@ -1,0 +1,126 @@
+{
+  "arm": "high-none-pidv2_2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/3",
+  "sourceSha256": "c84239fe9192af6ff59e122e16a1a1376f6d8f8cf196ae7b07b5fed7ff832ce7",
+  "at": "2026-10-01T07:06:10.355Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 18253,
+  "costUsd": 0.21101,
+  "tokens": {
+    "input": 86670,
+    "output": 3767,
+    "reasoning": 1947
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 268,
+  "fullerWords": 292,
+  "briefWords": 147,
+  "paragraphs": [
+    {
+      "text": "This piece is an essay about GPT-3, a huge AI text-prediction system released in 2020, and what its success means. The author argues for \"the scaling hypothesis\": the idea that making neural networks (brain-like learning systems) much bigger, fed much more data and computing power, is enough to make them more capable, without inventing clever new tricks.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "Why it matters: GPT-3 was not just bigger than its predecessor GPT-2, it showed new abilities nobody deliberately built in, called \"meta-learning\" — the ability to learn a new task just from a few examples given in the prompt, instead of needing special retraining. The piece argues this hints that scaling up alone could be a real path toward AGI (artificial general intelligence, machines as broadly capable as humans), a claim most AI researchers dismiss.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": as networks and training data grow, problems that stump small networks get easier, and new abilities appear unplanned, including generalization and meta-learning. The piece suggests an explanation: a big network holds huge numbers of inner \"sub-models,\" and training favors the simplest one, until the data is rich and varied enough to force out genuinely general solutions instead of shortcuts.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8",
+        "spya-grkhs8"
+      ]
+    },
+    {
+      "text": "Another idea, the \"pretraining thesis,\" says training a model to predict text forces it to learn ever subtler things, from spelling to grammar to reasoning, because only real understanding keeps improving its predictions once the easy patterns are used up. The piece also criticizes AI experts for repeatedly predicting scaling would fail, arguing their forecasts rest on authority and reassurance rather than any real model of how progress happens.",
+      "ids": [
+        "spya-ce0ts7",
+        "spya-kmyg3w",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge text-predicting computer program released in 2020, and what its abilities mean for the future of artificial intelligence (AI). The author argues that simply making these programs much bigger, with more data and computing power, produced surprising new abilities nobody had built into them on purpose.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-suzdvz"
+      ]
+    },
+    {
+      "text": "This matters, the piece says, because GPT-3 showed \"meta-learning\": instead of only doing one trained task like summarizing text, it learned to follow new instructions and pick up unfamiliar tasks from just a few examples. That suggests big models trained on raw, unsorted text could become key parts of future AI systems, since understanding language and the world has long been a weak point for AI.",
+      "ids": [
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The central idea is the \"scaling hypothesis\": once you have a learning method that works at all, simply running it on far more data and far more computing power may be enough to produce increasingly intelligent behavior, without needing clever new designs. The author says this was once a fringe view held by only a few researchers, but GPT-3's results make it look more and more correct.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa"
+      ]
+    },
+    {
+      "text": "A related idea is the \"blessings of scale\": as models, data, and computing power grow, hard problems tend to get easier rather than harder, and quick shortcuts that work on small amounts of data stop working. This pushes the model toward deeper, more general solutions instead of memorized tricks.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-wq498y"
+      ]
+    },
+    {
+      "text": "The piece also explains the \"pretraining thesis\": to keep improving at predicting the next word in text, a model eventually has to grasp real-world facts, logic, and consistency, since only genuine understanding can keep shrinking its prediction errors. It closes by criticizing AI experts who confidently predicted this kind of progress couldn't happen and never admitted being wrong.",
+      "ids": [
+        "spya-rjwfkb",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program that learns to predict text, and a bigger idea called the scaling hypothesis. That idea says smarter behavior shows up just by making neural networks (learning programs loosely modeled on brains) much bigger, with more data and computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "It matters because almost no one expected this to keep working. GPT-3 was not redesigned to be clever; it just got far larger, and it suddenly could follow instructions and learn new tasks from a few examples, a skill called meta-learning, without being specially trained for it.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece argues this is part of a pattern it calls the blessings of scale: hard problems get easier for these models as they grow, instead of harder. It also argues most AI experts failed to predict this, and still have no clear explanation for why it happens or what comes next.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-b6zcpu"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8a2b9ac89358e16422e790adafba3580cfd3774b20f4fb1593e76bf8aa4aa068"
+}

@@ -13,7 +13,7 @@
  *
  * **Since `simple/2`** (plan 261001b) an arm is `<effort>-<reader>[-<tag>]`,
  * the reader being `none`, `about`, `goalA` or `goalB` from readers.json, and
- * both levels are recorded; the ELI12 knob went with the two real levels. The
+ * all three levels are recorded; the ELI12 knob went with the real levels. The
  * `…-15-…` arms under evals/results/simple/ are the older prompt, kept as the
  * `before` side. What follows describes the first probe.
  *
@@ -67,6 +67,16 @@ interface ArmFile {
   briefWords?: number;
   brief?: { text: string; ids: string[] }[];
   dropped?: Record<string, number>;
+  /**
+   * Since plan 261001h, three things that could move between time-separated arms
+   * (Sol's plan review there): the model id actually selected for the call,
+   * Simple's input fingerprint (rendered article plus profile-free user prompt),
+   * and a hash of the three rendered system prompts. These live on failed files
+   * too.
+   */
+  model?: string;
+  articleHash?: string;
+  systemsSha256?: string;
 }
 
 async function list(): Promise<void> {
@@ -118,11 +128,13 @@ async function run(arm: string, slugs: string[]): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const simple = await import("../../src/simple-summary.js");
+  const { modelFor } = await import("../../src/models.js");
   const { isBodyEvidence } = await import("../../src/block-policy.js");
   const { collectSpend } = await import("../../src/ai-spend.js");
   const { costStore } = await import("../../src/store/ai-calls.js");
   const { closeDb } = await import("../../src/db/client.js");
   const sourceSha256 = createHash("sha256").update(fs.readFileSync(SOURCE)).digest("hex");
+  const systemsSha256 = createHash("sha256").update(JSON.stringify(simple.SIMPLE_SYSTEMS)).digest("hex");
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
     await Promise.all(
@@ -131,6 +143,7 @@ async function run(arm: string, slugs: string[]): Promise<void> {
         if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
         const article = await loadArticle(slug);
         const body = article.blocks.filter(isBodyEvidence);
+        const articleHash = simple.inputFingerprint(article.blocks, article.tree, article.meta);
         const base = {
           arm,
           effort,
@@ -141,12 +154,17 @@ async function run(arm: string, slugs: string[]): Promise<void> {
           at: new Date().toISOString(),
           bodyWords: body.reduce((n, b) => n + b.words, 0),
           bodyBlocks: body.length,
+          /* The resolved call model, including a one-off eval override — not the
+             stable generator stamp stored on production artefacts. */
+          model: modelFor("simple", "standard"),
+          articleHash,
+          systemsSha256,
         };
         const started = Date.now();
         let file: ArmFile;
         let spent: { costUsd: number | null; tokens: ArmFile["tokens"] } = { costUsd: null, tokens: null };
         const onDone = (report: { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number }; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }[] }) => {
-          /* Summed over every call: since `simple/2` a run is two, one per level. */
+          /* Summed over every call: since `simple/2` a run is three, one per level. */
           if (report.calls.length === 0) return;
           let nanosTotal: number | null = 0;
           const tokens = { input: 0, output: 0, reasoning: 0 as number | null };

@@ -721,6 +721,12 @@ the granularity filter had already hidden — real money spent generating text n
   sentence about the wrong thing, which is the same residual risk the citation counting in
   [../plans/260826a-chat-mode.md](../plans/260826a-chat-mode.md) leaves behind. The gists come from
   [hierarchy.md](hierarchy.md), so that is where such a check would belong.
+- **Simple can collapse two terms that the paper keeps distinct.** On the PID paper it calls the
+  recurrent connections, which raise synergy, "feedback loops", borrowing the paper's term for the
+  different kind that lowers it. This happened in 6 of 18 outputs across six fresh unchanged-prompt,
+  no-profile runs on 2026-10-01. Neither of two tested prompt wordings made the fault rare enough to
+  ship; the proposed guard checks each paragraph against the passages it cites —
+  [261001h](../plans/261001h-plain-words-summaries-keep-the-piece-s-contrasting-terms.md).
 - **A browser check reported the hover card rendering behind the pills. It does not.** Recorded
   because it cost half an hour and would cost it again. The tooltip layer is `z-index: 100`
   (styles/tooltip.css § `.tooltip-anchor`), above the spine at 45, the band at 44 and the drawer at

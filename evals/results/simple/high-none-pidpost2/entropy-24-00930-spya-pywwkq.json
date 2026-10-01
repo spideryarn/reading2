@@ -1,0 +1,129 @@
+{
+  "arm": "high-none-pidpost2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T06:59:52.598Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 70907,
+  "costUsd": 0.222156,
+  "tokens": {
+    "input": 61473,
+    "output": 9921,
+    "reasoning": 8189
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 208,
+  "fullerWords": 320,
+  "briefWords": 132,
+  "paragraphs": [
+    {
+      "text": "This piece is a review article about how brain circuits process information. It explains a tool called partial information decomposition, or PID, which shows how neurons combine signals from multiple sources. PID comes from information theory, which measures how much knowing one thing reduces uncertainty about another.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The authors say this matters because processing in the brain involves many interacting neurons, and how signals combine is poorly understood. Tools like transfer entropy can track how signals flow between neurons, but cannot show how a neuron combines multiple inputs into something new. PID fills that gap by revealing these hidden patterns of combination.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-fmdncw"
+      ]
+    },
+    {
+      "text": "The core idea: when two source neurons send signals to a target neuron, their shared information splits into three parts. Redundant information is what either source alone could reveal; unique information is what only one source reveals. Synergistic information appears only when both sources are considered together, and the authors treat it as a sign of real computation.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Studying mouse brain tissue in dishes, the authors found synergy is not spread evenly. It clusters in \"rich clubs,\" the best-connected neurons, and rises with more recurrent connections among source neurons. In macaque monkeys performing tasks, different brain regions showed different synergy levels depending on the task phase.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how brains process information, and how scientists can study that using mathematical tools from information theory. The authors focus on a method called partial information decomposition, or PID, which breaks down how groups of neurons share information with a target neuron. They look especially at how neurons combine signals from multiple sources into something new.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ]
+    },
+    {
+      "text": "This matters because we still don't understand exactly how neural circuits turn incoming signals into useful outputs. For a long time, two things held back this kind of research: not enough recorded data, and no good analysis methods. New recording technology has fixed the data problem, and the authors argue that PID helps fix the second.",
+      "ids": [
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "PID splits the information that two source neurons give about a target neuron into three parts: redundant information (available from either source alone), unique information (available from only one source), and synergistic information (only visible when you look at both sources together, as a pattern). Synergy is the key idea here, since it points to real \"computation\" happening, not just signals adding up.",
+      "ids": [
+        "spya-t02v4p",
+        "spya-e94ury",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Using this method on brain-tissue recordings from mice, the authors found that synergy (higher-order information) was concentrated in \"rich clubs,\" tightly connected groups of highly active neurons, which held about 88% of all synergy despite being under 40% of the neurons. Synergy was also higher when neurons were connected in loops back to each other, and it rose then fell as the similarity between source neurons' activity increased, peaking at a specific point rather than growing without limit.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "In monkeys performing a task, the balance between redundant and synergistic information shifted depending on what the animal was doing, rising in redundancy during movement, for example. The paper ends by discussing practical limits of PID, such as how fast it becomes mathematically unwieldy, and by pointing to newer extensions like local, time-resolved versions and versions that handle multiple targets at once.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-zz5xxs"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article explains a math tool called partial information decomposition, or PID, used to study how brains process information. It looks at how neurons combine signals from many other neurons to decide whether to fire.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "This matters because simply adding up each input's effect does not explain neuron behavior. PID can show synergy: information that only appears when you look at two or more inputs together, not from any single one. This reveals neurons doing real computation, not just summing signals.",
+      "ids": [
+        "spya-e94ury",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "Studies using PID on real brain recordings found synergy is higher among densely connected \"rich club\" neurons, and higher when neurons have more recurrent (back-and-forth) connections. Synergy also peaks when input signals are somewhat, but not too, similar. In monkeys, how much synergy appears shifts depending on the task being performed.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 1,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

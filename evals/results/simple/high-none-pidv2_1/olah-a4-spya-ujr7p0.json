@@ -1,0 +1,124 @@
+{
+  "arm": "high-none-pidv2_1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/3",
+  "sourceSha256": "c84239fe9192af6ff59e122e16a1a1376f6d8f8cf196ae7b07b5fed7ff832ce7",
+  "at": "2026-10-01T07:05:16.020Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 12418,
+  "costUsd": 0.06585,
+  "tokens": {
+    "input": 18300,
+    "output": 2925,
+    "reasoning": 1266
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 221,
+  "fullerWords": 255,
+  "briefWords": 147,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah, written to share ideas rather than a polished paper. It looks at \"distributed representations,\" a classic idea in both brain science and AI: the notion that a neural network spreads an idea across many neurons instead of giving each idea its own single neuron. The author argues this familiar term is actually hiding two quite different ideas, which he calls composition and superposition.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-tj6yyz",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "Sorting this out matters because breaking a network's representations into separate, independent pieces is what lets researchers actually understand what a network is doing. Without that, you run into an explosion of possible combinations that is too large to make sense of. The note treats this untangling as necessary groundwork for reverse-engineering how neural networks work.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition means combining separate, simple features, like \"color\" and \"shape,\" so a small number of features can describe a huge number of combined objects, and lets a network generalize what it learned about one combination to others. Superposition instead squeezes more distinct things into a space than there are neurons, by overlapping them, which saves room but makes it harder to cleanly read out any one feature. The note argues these two strategies actually compete for the same limited space, though in some cases, when combinations are rare, a network can partly mix both.",
+      "ids": [
+        "spya-phaxrs",
+        "spya-g8cztv",
+        "spya-bzhkhu"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note, not a polished paper, written by Chris Olah about how neural networks (brain-like computer models) store information. It asks what people really mean when they say a network uses a \"distributed representation,\" where information is spread across many neurons rather than one neuron per idea.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-tj6yyz"
+      ]
+    },
+    {
+      "text": "The question matters because breaking down what a network's internal activity represents, into separate, countable pieces, is necessary to avoid getting lost in an impossibly huge space of possibilities and to actually understand how networks work inside.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The note argues \"distributed representation\" actually hides two different strategies. One is composition: separate features, like color and shape, combine to describe something, which uses few neurons and lets a network generalize to new combinations it hasn't directly seen. The other is superposition: many more things are packed into the same neurons than there are neurons, cramming in far more items but losing the ability to cleanly read off any one feature with a simple linear readout.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-qcd003",
+        "spya-bzhkhu"
+      ]
+    },
+    {
+      "text": "Using examples of neurons representing colored shapes, the note shows these two strategies compete for the same limited space: full composition and full superposition can't both be maximized at once. Yet they can partly mix, because real features are often sparse, meaning most combinations never actually occur, leaving gaps that superposition can quietly fill.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-vefv29"
+      ]
+    },
+    {
+      "text": "The note concludes that telling composition and superposition apart matters, since they have very different properties, and that representations built mainly from composition are far easier to understand in terms of a manageable number of separate features.",
+      "ids": [
+        "spya-st3tz8",
+        "spya-v47ca7"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note by Chris Olah about how neural networks (computer brain-like systems) store ideas using many neurons at once. It looks at an old idea called \"distributed representations,\" where information is spread across neurons rather than one neuron per idea.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The piece argues this spread-out storage actually hides two very different tricks. Telling them apart matters because figuring out how networks store things is key to understanding how they actually work inside.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "One trick, composition, builds ideas by combining simple features, like mixing \"red\" and \"square\" to get a red square; this is easy to understand and lets networks handle new combinations well. The other, superposition, squeezes more ideas than there are neurons by overlapping them, saving space but making the ideas harder to pull back out. The note explains these two tricks actually compete with each other, though networks can partly mix them.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-xcrca8",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 5,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "5e0266204878b1c1",
+  "systemsSha256": "8a2b9ac89358e16422e790adafba3580cfd3774b20f4fb1593e76bf8aa4aa068"
+}

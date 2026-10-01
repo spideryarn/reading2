@@ -1,0 +1,131 @@
+{
+  "arm": "high-none-pidv2_2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "c84239fe9192af6ff59e122e16a1a1376f6d8f8cf196ae7b07b5fed7ff832ce7",
+  "at": "2026-10-01T07:06:10.370Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 26917,
+  "costUsd": 0.1695,
+  "tokens": {
+    "input": 61530,
+    "output": 4644,
+    "reasoning": 2790
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 290,
+  "fullerWords": 284,
+  "briefWords": 143,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how scientists can measure \"information processing\" in the brain — how neurons combine signals from other neurons to produce new patterns of activity. It introduces a tool called partial information decomposition, or PID, which breaks down the information that a neuron's inputs carry into separate pieces. The piece explains how PID works and shows what it has revealed when applied to real recordings of neurons.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says a basic question in neuroscience is how neurons take in inputs and transform them into new information, not just pass signals along unchanged. Simple measures like mutual information (how two neurons' activity relates) or transfer entropy (how one neuron's past predicts another's future) can track signal flow, but they cannot show how neurons combine multiple inputs to generate something new. PID fills this gap by identifying that higher-order combining, called synergy.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target neuron into three kinds: redundant (available from either source alone), unique (available from only one specific source), and synergistic (only visible when looking at both sources together, as a pattern). The article treats synergy as a sign of real computation, since it means the target neuron responds to the combination of inputs, not just their sum.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cultures and from monkeys performing tasks, the authors found that synergy was higher in densely connected \"rich club\" neurons, grew with more feedback loops between source neurons, and depended on how similar the sources' activity was, peaking at a modest level of similarity rather than the highest. In monkeys, which brain regions showed the most synergy shifted depending on the task stage, suggesting synergy reflects what the brain is doing at that moment.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This article is a review about how scientists use information theory - a way of measuring how much one thing tells you about another - to study how brain circuits process information. It focuses on partial information decomposition (PID), a method that breaks down how neurons combine signals from several sources.",
+      "ids": [
+        "spya-ekjksy",
+        "spya-xn9j9k"
+      ]
+    },
+    {
+      "text": "Brains turn signals from the world into adaptive behavior, but how this transformation happens is poorly understood. Until recently, two things blocked progress: not enough recorded data, and no good tools to make sense of it. This piece explains how PID helps solve the second problem, letting researchers spot patterns in how neurons combine inputs.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "PID splits the information that two or more input neurons carry about a target neuron into parts: redundant information, carried by either source alone; unique information, carried by only one source; and synergistic information, only revealed by looking at both sources together as a joint pattern. Synergy is treated as a sign that a neuron is doing real computation, rather than just adding up its inputs.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cell cultures, the authors found synergy is higher in \"rich clubs\" - unusually well-connected groups of neurons. Synergy also rises with the number of connections looping back between two input neurons, and rises with how similar their input patterns are, up to a point; beyond that point, greater similarity produces more redundancy instead.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    },
+    {
+      "text": "Similar patterns appeared in recordings from monkeys performing a task, with synergy levels shifting depending on which part of the task, such as planning or moving, was underway. The piece closes by pointing to open directions, including tracking these information patterns moment to moment and extending the method to cover multiple targets at once.",
+      "ids": [
+        "spya-wr7f6y",
+        "spya-t8fayf",
+        "spya-zz5xxs"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is a science review about how brains process information. It explains a math tool called partial information decomposition, or PID, which helps scientists study how nerve cells combine signals from other cells.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Figuring out how neurons combine inputs is a big unanswered question in brain science. PID matters because it can show whether a neuron is just adding up signals, or doing something more, called synergy: using the pattern of several inputs together in a way no single input alone could explain.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "PID splits shared information into three kinds: redundant (repeated across inputs), unique (only from one input), and synergistic (only from combining inputs). Studies using this method found synergy is common in real brain circuits, especially in densely connected \"rich club\" neurons, in cells with more feedback loops between them, and where input signals are moderately similar to each other.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "8a2b9ac89358e16422e790adafba3580cfd3774b20f4fb1593e76bf8aa4aa068"
+}

@@ -1,0 +1,116 @@
+{
+  "arm": "high-none-pidpost5",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T07:01:53.031Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 11493,
+  "costUsd": 0.188318,
+  "tokens": {
+    "input": 81979,
+    "output": 2436,
+    "reasoning": 302
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 194,
+  "fullerWords": 302,
+  "briefWords": 172,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how brain cells handle information. It introduces a method called partial information decomposition, or PID, which uses math from information theory to study how neurons combine signals from other neurons.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The authors say this matters because it is still unclear how brain circuits actually transform incoming signals into behavior. PID helps answer this by showing whether a neuron's response can only be explained by looking at two input neurons together, not each one alone — a sign the neuron is doing real computation, not just adding up inputs.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target neuron into three kinds: redundant (repeated in both), unique (only from one), and synergistic (only visible when both are considered jointly). Studies using this method, in both cultured mouse brain cells and behaving monkeys, found that synergy is especially high in “rich clubs” of well-connected neurons, grows with more feedback loops between source neurons, and rises when source neurons have moderately similar activity before leveling off. In monkeys, how much synergy versus redundancy appeared also shifted depending on the task stage, such as planning versus executing a movement.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists try to measure \"information processing\" in the brain: how groups of neurons take in signals and combine them into something new. It introduces a tool called partial information decomposition, or PID, which breaks down how much two or more input neurons together tell you about a target neuron's future activity, and sorts that total into separate pieces.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because basic questions about how brain circuits compute are still unanswered, and because new recording tools now let scientists track hundreds or thousands of neurons at once, creating a need for ways to make sense of all that data. PID is offered as a method that can turn those huge recordings into insight about how neurons actually combine signals.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The key idea is that when two input neurons jointly affect a target neuron, their combined information is not just the sum of what each one gives alone. Some information is redundant, meaning either input alone could tell you it; some is unique to one input; and some is synergistic, meaning it only shows up when you look at both inputs together, as a pattern. Synergy is treated as the signature of real computation, since it reflects the target neuron responding to the specific combination of inputs rather than just adding them up.",
+      "ids": [
+        "spya-e94ury",
+        "spya-pjdgu6",
+        "spya-sp50v3"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain tissue in dishes, the authors found synergy is higher in tightly connected \"rich club\" neurons, rises when neurons feed back and forth on each other (recurrent connections), and peaks when the two input neurons' activity is somewhat, but not too, similar. Related work in monkeys doing a hand-movement task found similar patterns, plus shifts between synergy and redundancy depending on what the brain was doing at the time, such as during the actual movement itself.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is about how scientists try to figure out what brain cells are doing when they share and combine information. It uses a tool called partial information decomposition, or PID, which splits up information from multiple sources into separate pieces.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because big questions about the brain are still unanswered, like what wiring patterns help it process information best. New recording technology now lets scientists watch hundreds of neurons at once, so better tools are needed to make sense of all that data.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "One key idea: when two source neurons feed into one target neuron, some of their combined information is redundant, meaning either one alone could tell you it, some is unique to just one source, and some is synergistic, meaning it only shows up when you look at both together. Synergy seems to mark real computation. Studies in cultured mouse brain cells and in monkeys doing tasks found synergy is higher in densely connected hub neurons, called rich clubs, and shifts with the kind of task being done.",
+      "ids": [
+        "spya-e94ury",
+        "spya-fud8q3",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

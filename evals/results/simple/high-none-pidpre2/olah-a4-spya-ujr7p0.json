@@ -1,0 +1,121 @@
+{
+  "arm": "high-none-pidpre2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/2",
+  "sourceSha256": "51bf28cf2a374f509b094b285ec9ee3431fca428d3758ee43b25e25986444581",
+  "at": "2026-10-01T06:47:00.515Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 10994,
+  "costUsd": 0.068354,
+  "tokens": {
+    "input": 17757,
+    "output": 3284,
+    "reasoning": 1757
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 209,
+  "fullerWords": 249,
+  "briefWords": 106,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about \"distributed representations\" — a classic idea in brain science and AI, where information is spread across many neurons rather than each neuron standing for one thing. The piece argues this familiar term actually hides two different strategies, which it calls \"composition\" and \"superposition,\" and explores how they differ using simple examples of neurons representing colored shapes.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks",
+        "spya-u4qtn4"
+      ]
+    },
+    {
+      "text": "This matters because breaking a network's representations into separate, independent pieces is needed to avoid the \"curse of dimensionality\" — the problem that possible combinations explode too fast to track — and because doing so is seen as essential for truly understanding how neural networks work.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Composition means separate features, like color and shape, combine to build up more complex things, which allows learning about one case to help with similar cases and makes each neuron understandable on its own. Superposition means packing more items than there are neurons by overlapping them, which fits more into less space but makes the neurons hard to read individually and needs extra computation to unpack. The note argues these two strategies compete for the same limited space and are fundamentally in tension, though they can be partly mixed when features rarely occur together at the same time.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-vefv29"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah looking at how two ideas relate: \"distributed representations,\" a long-standing idea in neuroscience and AI where information is spread across many neurons instead of one neuron per thing, and \"superposition,\" where a network packs more distinct things than it has neurons by overlapping them.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because breaking a network's internal representations into separate, independent pieces is necessary to understand how neural networks work, rather than being overwhelmed by an exponentially large space of possibilities.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Its main claim is that \"distributed representation\" actually hides two different strategies. One is composition: separate features, like color and shape, combine to represent an object, using toy examples of neurons representing colored shapes borrowed from Thorpe. The other is superposition: a small number of neurons encode far more combinations than they have room for, at the cost of losing the ability to cleanly read out individual features.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-u4qtn4",
+        "spya-gxb7uk"
+      ]
+    },
+    {
+      "text": "The note argues these two strategies actually compete for the same limited space: fully composable features need room that grows exponentially with the number of features, while superposition instead crams in exponentially many unrelated items but only works if there's no composition. The two can mix only when features are sparse, meaning most combinations rarely occur together, leaving gaps that superposition can fill.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-jzkekc",
+        "spya-qbuyka"
+      ]
+    },
+    {
+      "text": "The conclusion is that telling composition and superposition apart matters, since they have very different properties, and understanding which one a network uses is central to reverse-engineering how it actually represents information.",
+      "ids": [
+        "spya-st3tz8",
+        "spya-v47ca7"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note by Chris Olah about how neurons can store information together, an idea called \"distributed representations.\" It asks what that idea really means, using simple examples of neurons representing colored shapes.",
+      "ids": [
+        "spya-zhbm9s",
+        "spya-s2q3w9",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "It matters because breaking down how a network represents things into separate, understandable pieces is needed to truly understand how neural networks work.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The author argues \"distributed representations\" actually hides two different tricks. Composition combines simple features, like \"red\" and \"circle,\" to build many combinations. Superposition squeezes more things into fewer neurons than you would expect, but the two tricks compete: using more of one leaves less room for the other.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-xcrca8",
+        "spya-jzkekc"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

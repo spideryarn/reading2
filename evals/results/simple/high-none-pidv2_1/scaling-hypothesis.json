@@ -1,0 +1,122 @@
+{
+  "arm": "high-none-pidv2_1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/3",
+  "sourceSha256": "c84239fe9192af6ff59e122e16a1a1376f6d8f8cf196ae7b07b5fed7ff832ce7",
+  "at": "2026-10-01T07:05:16.541Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 18887,
+  "costUsd": 0.2727,
+  "tokens": {
+    "input": 115575,
+    "output": 4155,
+    "reasoning": 2065
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 279,
+  "fullerWords": 287,
+  "briefWords": 161,
+  "paragraphs": [
+    {
+      "text": "This piece is about GPT-3, a huge AI language model released in 2020 that predicts text by guessing the next word, and about the \"scaling hypothesis\": the idea that making neural networks (AI systems loosely modeled on brain cells) bigger, with more data and computing power, is itself enough to make them smarter. GPT-3 was built by simply scaling up its predecessor, GPT-2, to 117 times more parameters (the internal numbers a network adjusts while learning).",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 did not just learn more facts than GPT-2. It gained a new ability called meta-learning: following instructions and picking up new tasks from just a few examples, without being specially trained for them. The author argues this hints that large models trained on raw, unlabeled text could become essential building blocks for future AI, and that the scaling hypothesis may be a real path toward much more general intelligence.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The piece explains this through \"blessings of scale\": unlike most research, where small problems are easy and big ones are hard, deep learning seems to get better and more stable the bigger it gets. Its proposed reason is that a big model acts like a crowd of many smaller models; at small scale, simple memorizing tricks win, but at huge scale, trained on vast varied data, those tricks become too costly, and the model shifts toward general, more human-like solutions instead.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "Finally, it argues that measured performance keeps improving smoothly as models grow, with no sign yet of hitting a wall, and criticizes most AI researchers and major labs for not predicting this and for lacking any real explanation of why it works or what it means for the future.",
+      "ids": [
+        "spya-asr663",
+        "spya-m9r8zx",
+        "spya-vr9q2p"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is about GPT-3, a huge text-generating neural network (a brain-like computer model) released by OpenAI in 2020, far bigger than anything before it. It argues for the \"scaling hypothesis\": the idea that making neural networks much bigger, with more data and computing power, is itself enough to make them smarter, without needing clever new designs.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 was trained only to predict the next word in text, yet it learned to follow instructions and pick up new tasks from just a few examples, a skill called meta-learning. It did this without being built for it, and its performance kept improving smoothly as it grew, with no sign of hitting a wall. The author argues this should change how seriously people take scaling, and criticizes most AI experts for confidently predicting such things could not happen.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663",
+        "spya-m9r8zx"
+      ]
+    },
+    {
+      "text": "One key idea is the \"pretraining thesis\": to predict text as well as a human does, a model must eventually learn real understanding, like causality and common sense, because memorizing text alone cannot handle the rarest, hardest cases. Another is the \"blessings of scale\": across many AI systems, simple models trained at large enough size spontaneously gain abilities like generalizing and meta-learning that smaller versions lack, as if hard problems become easier once there is enough scale to solve them properly.",
+      "ids": [
+        "spya-ce0ts7",
+        "spya-sfkxh8",
+        "spya-jwq3zr"
+      ]
+    },
+    {
+      "text": "The piece also contrasts OpenAI's willingness to bet heavily on scaling with other major labs, like DeepMind and Google Brain, which it says doubt the scaling hypothesis and instead favor building specific algorithms piece by piece, closer to how brains might work. It ends by arguing that the field's confident public dismissals of scaling, repeated and wrong for years, tell us little about the future of AI.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-scr8jb",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a giant computer program trained to predict text, and a big idea it seems to prove: the \"scaling hypothesis.\" That idea says you do not need clever new designs to make AI smarter. You just need bigger networks, fed more data, using more computing power.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 did something nobody expected: it learned to follow instructions and pick up brand-new tasks just from a few examples typed into it, without being specially trained for those tasks. The author says this kind of learning-to-learn, called meta-learning, appeared simply because the model and its training data were made so large.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "The piece calls this pattern the \"blessings of scale\": problems that stump a small neural network often get easier, not harder, once the network and its training data grow huge. It argues this could mean real steps toward general AI are closer than most experts think, yet few research groups are willing to bet on it.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-emqjaa"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "8a2b9ac89358e16422e790adafba3580cfd3774b20f4fb1593e76bf8aa4aa068"
+}

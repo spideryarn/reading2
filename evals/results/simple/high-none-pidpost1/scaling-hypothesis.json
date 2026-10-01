@@ -1,0 +1,123 @@
+{
+  "arm": "high-none-pidpost1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T06:59:26.236Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 21203,
+  "costUsd": 0.216906,
+  "tokens": {
+    "input": 86613,
+    "output": 4368,
+    "reasoning": 2644
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 230,
+  "fullerWords": 301,
+  "briefWords": 112,
+  "paragraphs": [
+    {
+      "text": "GPT-3, announced in 2020, is a giant AI language model built to predict text, far bigger than its predecessor GPT-2. This essay argues for the \"scaling hypothesis\": the idea that simply making neural networks much bigger, fed with much more data and computing power, can make them more capable, without needing clever new designs.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ag750z"
+      ]
+    },
+    {
+      "text": "GPT-3 was not trained for any single job. Yet it learned, on its own, to follow instructions and pick up brand-new tasks from just a few examples, a skill the essay calls meta-learning, or \"learning to learn\". That this showed up unplanned suggests that scale alone can produce abilities researchers thought needed special design.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ypbup8"
+      ]
+    },
+    {
+      "text": "The author names this pattern the \"blessings of scale\": problems that stump small neural networks get easier, not harder, once the network and its training data grow large enough. He explains why through \"pretraining\": a model trained just to predict the next word first learns easy patterns like spelling, and squeezing out further small gains increasingly demands something like real reasoning and understanding.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-n4zu5k",
+        "spya-h74fhr"
+      ]
+    },
+    {
+      "text": "The essay also shows AI labs disagreeing sharply over whether to bet on scale: OpenAI built GPT-3 on this belief, while rivals such as DeepMind favor building specific abilities piece by piece. The author criticizes AI experts broadly for repeatedly predicting progress would stall, arguing they have no clear account of why GPT-3 worked or what might come next.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an essay by Gwern about GPT-3, a huge text-predicting computer program (a \"neural network\") released in 2020, and what it means for artificial intelligence. GPT-3 was built simply by making an older, known design much bigger and training it on much more internet text, with no new tricks added. The piece argues this success backs the \"scaling hypothesis\": the idea that making networks bigger, with more data and computing power, is enough by itself to make them smarter.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 did more than get better at tasks it was trained on. It showed \"meta-learning\": the ability to learn a brand-new task just from a few examples typed into its prompt, something nobody deliberately designed it to do. It also matters because GPT-3, though expensive by normal research standards, is still cheap next to scientific or government budgets, meaning far bigger models are affordable soon.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-dfjr4c"
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": in deep learning, unlike most research, hard problems get easier, not harder, as the model grows. The piece explains a big network works like a huge collection of smaller internal sub-models competing to fit the data; simple ones that just memorize win early on, but given enough size and data, sub-models that find real, general patterns eventually win instead, because they fit more cases more compactly.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ]
+    },
+    {
+      "text": "The piece also walks through GPT-3's own training goal, predicting the next character in text, to show why this works: early on the model only learns surface patterns like letter frequency, then spelling and grammar, then word associations, and finally, to keep improving, it is pushed toward things like consistent logic and reasoning. Gwern also argues that AI experts who long dismissed scaling as unpromising were proven wrong, and criticizes them for not updating their views.",
+      "ids": [
+        "spya-ce0ts7",
+        "spya-nhgv5g",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program trained to predict text. It asks a big question: does just making AI bigger make it smarter, with no clever new tricks needed?",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-dfggb3"
+      ]
+    },
+    {
+      "text": "This matters because GPT-3 surprised almost everyone. It wasn't specially trained for new tasks, yet it learned to follow instructions and solve problems just from a few examples, something smaller versions couldn't do.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "The author calls this the scaling hypothesis: make neural networks (computer systems loosely modeled on brains) much bigger, feed them much more data, and new abilities appear on their own. One such ability is meta-learning: learning how to learn new tasks quickly, rather than just memorizing facts.",
+      "ids": [
+        "spya-ag750z",
+        "spya-aqts9c",
+        "spya-sfkxh8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

@@ -1,0 +1,123 @@
+{
+  "arm": "high-none-pidpost2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T06:59:52.685Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "wallMs": 27902,
+  "costUsd": 0.213146,
+  "tokens": {
+    "input": 86613,
+    "output": 3992,
+    "reasoning": 2164
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 267,
+  "fullerWords": 298,
+  "briefWords": 140,
+  "paragraphs": [
+    {
+      "text": "This piece, by Gwern, is about GPT-3, a huge text-prediction computer program released in 2020 by OpenAI. It was the biggest neural network (a type of learning program loosely modeled on brain cells) ever built at the time, trained by reading huge amounts of internet text. The essay asks what GPT-3's surprising abilities tell us about where artificial intelligence is headed.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-m444tq"
+      ]
+    },
+    {
+      "text": "The piece says this matters because GPT-3 did not just know more facts than earlier versions; it learned to follow new instructions and pick up new tasks from just a few examples, without being specially trained for that. GPT-3 is costly by normal research standards, but cheap compared to government or military budgets, meaning far bigger models are affordable. The author argues this should have been a wake-up call, yet most researchers and labs barely reacted.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-dfjr4c",
+        "spya-khnsat"
+      ]
+    },
+    {
+      "text": "The article's central idea is the scaling hypothesis: that making neural networks much bigger, and training them on much more data with much more computing power, is enough by itself to produce new and more intelligent abilities, without inventing clever new tricks. It calls these gains the blessings of scale, where problems that are hard for small models get easier, not harder, as models grow. It also lays out the pretraining thesis, the idea that to get really good at predicting the next word in text, a model must eventually learn real-world reasoning, not just surface patterns.",
+      "ids": [
+        "spya-ag750z",
+        "spya-sfkxh8",
+        "spya-n4zu5k"
+      ]
+    },
+    {
+      "text": "Finally, the piece criticizes AI experts and labs who dismissed scaling as unlikely to work, arguing they offered confident predictions that turned out wrong and have not reconsidered their views despite GPT-3's results.",
+      "ids": [
+        "spya-b6zw9f",
+        "spya-m9r8zx"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Gwern about GPT-3, a very large language model (a computer program, loosely modeled on brain cells, trained to predict text) released in 2020. It argues for the \"scaling hypothesis\": that simply making neural networks bigger, and giving them more data and computing power, is the path toward general intelligence, rather than needing clever new designs.",
+      "ids": [
+        "spya-dfggb3",
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ]
+    },
+    {
+      "text": "GPT-3 surprised researchers because it did more than its predecessor GPT-2. It showed \"meta-learning\": the ability to pick up new tasks, like translation or solving analogies, just from a few examples typed into it, without being retrained for that task. This happened even though GPT-3 used an old, unrefined design merely scaled up, which the essay says suggests far more powerful systems are possible soon, with big implications for AI progress generally.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-fvqe70"
+      ]
+    },
+    {
+      "text": "The essay's key idea is the \"blessings of scale\": unlike most research, where problems get harder as they grow, deep learning problems seem to get easier to solve well as models, data, and computing power all grow together. It pictures a big model as containing countless smaller sub-models; simple ones that just memorize show up early in training, but enough varied data pushes the network toward sub-models that capture real rules, like genuine arithmetic or grammar, because those generalize better and eventually win out.",
+      "ids": [
+        "spya-jwq3zr",
+        "spya-sfkxh8",
+        "spya-grkhs8"
+      ]
+    },
+    {
+      "text": "A related idea, the \"pretraining thesis,\" holds that predicting the next word in text forces a model to learn ever deeper things, moving from letter frequencies up to grammar, facts, and eventually reasoning, because only genuine understanding keeps lowering its prediction error further. The essay also argues that most AI experts dismissed scaling for years and were proven wrong, and it criticizes research labs and commentators for not updating their views or offering testable predictions, even as the evidence piled up.",
+      "ids": [
+        "spya-ce0ts7",
+        "spya-nhgv5g",
+        "spya-b93jbz"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This piece is about GPT-3, a huge computer program built to predict text, far bigger than any before it. Just by being scaled up, it learned to do new things, like arithmetic or translating, just from a few examples in its prompt, without special training for each task. The author calls this meta-learning: learning how to learn a new task on the spot.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ]
+    },
+    {
+      "text": "The author says this matters because it supports the scaling hypothesis: the idea that making neural networks (brain-like learning systems) much bigger, fed much more data and computing power, may be the real route to very flexible, intelligent machines, instead of needing cleverer designs.",
+      "ids": [
+        "spya-ag750z",
+        "spya-emqjaa"
+      ]
+    },
+    {
+      "text": "One key idea is the blessings of scale: as these systems and their training data grow, hard problems get easier instead of harder, and new abilities show up that nobody specifically built in.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-ypbup8"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

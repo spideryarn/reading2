@@ -1,0 +1,122 @@
+{
+  "arm": "high-none-pidpost6",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T07:02:09.134Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 10578,
+  "costUsd": 0.146306,
+  "tokens": {
+    "input": 61473,
+    "output": 2336,
+    "reasoning": 699
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 215,
+  "fullerWords": 267,
+  "briefWords": 155,
+  "paragraphs": [
+    {
+      "text": "This is a science review about how brain cells handle information. It focuses on a method called partial information decomposition, or PID, which looks at how neurons combine signals from multiple other neurons to decide what to do next.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "Brains take in signals from the world and transform them into behavior, but how neurons actually do this transforming is still poorly understood. The review says new recording tools can now track hundreds of neurons at once, and PID offers a way to make sense of all that data.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "PID splits the information that two or more source neurons carry about a target neuron into three parts: redundant information (carried by either source alone), unique information (carried by only one source), and synergistic information (only visible when you look at both sources together). Synergy is treated as a sign that a neuron is doing real computation, not just adding up its inputs.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using this method on recordings from mouse brain tissue, the authors found synergy was higher in densely connected \"rich club\" neurons, in circuits with more recurrent (looping) connections, and when input neurons were moderately correlated in their firing. In monkeys performing a task, synergy patterns shifted with the behavior, rising in redundancy during precise motor actions and varying by brain region and task phase.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists try to understand what brains do with information. It introduces a tool called partial information decomposition, or PID, which breaks down how groups of neurons share and combine information about what a target neuron will do next.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "The piece argues this matters because basic questions about neural information processing remain unanswered: what circuit patterns help neurons process information, and how physiology relates to this. New recording technology now lets scientists record from hundreds of neurons at once, but until recently there was no good way to turn that data into insight about how neurons combine signals into something new, rather than just passing them along.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s9kmxa",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons carry about a target into three parts: redundant information (available from either source alone), unique information (available from only one), and synergistic information (only visible when you look at both sources together, as a pattern). Synergy is treated as a sign of real computation, since it means the target isn't just summing its inputs but reading the specific combination.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Applying PID to real neurons, the authors and others found synergy is higher in triads of neurons that have strong feedforward connections, within densely-connected \"rich club\" neurons, and where source neurons have more recurrent connections between them. Synergy was also highest when two source neurons' activity was moderately, not too strongly, correlated; past a point, correlated activity became redundant instead. In behaving monkeys, synergy shifted with task stage, rising sharply in motor areas during movement execution alongside more redundancy, suggesting synergy reflects both circuit structure and behavioral demands.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is about how scientists study the way brain cells handle information. It introduces a math tool called partial information decomposition, or PID, which breaks down how two or more neurons together explain what a third neuron does.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because neurons do not just add up their inputs like a simple counter. PID can show when neurons combine signals in a special way, producing new information that no single input had alone. This special combining is called synergy, and it may be a sign of real computation happening in the brain.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using PID on real brain recordings, the authors found synergy was higher in well-connected neuron hubs called rich clubs, and in groups with more loop-like, recurrent connections. Synergy was also higher when input signals were somewhat similar, though too much similarity caused redundancy instead. Similar patterns showed up even in monkeys performing tasks, linking this synergy to brain activity during real behavior.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

@@ -1,0 +1,129 @@
+{
+  "arm": "high-none-pidpre3",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/2",
+  "sourceSha256": "51bf28cf2a374f509b094b285ec9ee3431fca428d3758ee43b25e25986444581",
+  "at": "2026-10-01T06:47:23.660Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 14715,
+  "costUsd": 0.149674,
+  "tokens": {
+    "input": 60987,
+    "output": 2770,
+    "reasoning": 848
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 249,
+  "fullerWords": 357,
+  "briefWords": 129,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how scientists try to measure the way neurons in the brain turn incoming signals into new information. Its main tool is partial information decomposition (PID): a way to break down what two source neurons tell you about a target neuron into parts. Some of that information is repeated by both sources (redundant), some comes only from one source (unique), and some only appears when you look at both sources together, a pattern called synergy.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says a basic unanswered question in neuroscience is how brain circuits actually transform information, and PID offers one of the few tools suited to studying that directly, since simpler methods only track information flowing between pairs of neurons, not how neurons combine multiple inputs into something new.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-u5ra3d"
+      ]
+    },
+    {
+      "text": "Studies described in the article found synergy is common in real neural circuits and follows reliable patterns. It is higher among densely connected \"rich club\" neurons, higher when source neurons are strongly interconnected, and it rises then falls as source neurons become more similar to each other. In monkeys performing a task, synergy also shifted with behavior, for example rising in redundancy during movement execution.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-fud8q3",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "text": "The piece also walks through practical issues: choosing how to measure redundancy, picking software tools, and limits such as needing huge amounts of data and the method becoming extremely complex with many neurons. It closes by pointing to newer extensions, like decomposing information about multiple targets at once or tracking these patterns moment by moment.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists can study what neurons actually do with the signals they receive — not just whether information passes between them, but how it gets combined and transformed. The main tool it introduces is called partial information decomposition, or PID: a way of breaking down the information that several input neurons carry about a target neuron's behavior.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The piece says this matters because basic questions about neural information processing remain unanswered: what connection patterns help neurons combine information well, and how do physical features of circuits relate to this processing. Simple tools like mutual information (how much knowing one neuron's activity reduces uncertainty about another) and transfer entropy (how much one neuron's past activity predicts another's future) can track information flow, but they cannot show how two input streams interact to produce something new.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s0db2g",
+        "spya-f6sbgx"
+      ]
+    },
+    {
+      "text": "PID splits the total information two input neurons give about a target into four parts: redundant information (available from either input alone), unique information (from just one input), and synergistic information — information only visible when you look at both inputs together, not reducible to either one alone. Synergy is treated as the signature of real \"computation,\" since it means the target neuron is sensitive to the pattern of combined inputs, not just their sum.",
+      "ids": [
+        "spya-e94ury",
+        "spya-q2b0e5",
+        "spya-h5jzvm"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain cultures and from behaving macaque monkeys, the authors found synergy tracks several circuit features: it rises with the strength of feedforward connections, is far denser inside tightly connected \"rich club\" neuron groups, increases with more recurrent (two-way) connections between inputs, and is non-monotonic with how similar the inputs' activity is — rising then falling as inputs become too alike. In monkeys, synergy also shifted with the task, growing or shrinking in different brain regions depending on the behavioral stage.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    },
+    {
+      "text": "The article also covers practical matters: which software tools exist, how to choose a way of defining \"redundancy\" (since no single agreed method exists), and limits such as the explosive growth of possible information combinations as more neurons are added. It closes by pointing to newer extensions, like decomposing information over time or across multiple targets at once.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is about how brain cells, called neurons, process information together. It explains a math tool called partial information decomposition, or PID, which breaks down how neurons combine signals from other neurons.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because knowing how neurons combine inputs could reveal how brains actually compute, not just how signals move around. PID splits information into separate pieces: shared, unique, and a special one called synergy, where the combination of two inputs reveals something neither reveals alone.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-pjdgu6"
+      ]
+    },
+    {
+      "text": "Studies using this tool found synergy shows up more in tightly connected neuron hubs, and more where neurons have feedback loops with each other. In monkeys performing tasks, synergy patterns shifted depending on what the brain was doing at the moment, suggesting this kind of information combining connects to real behavior.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-b32ecw"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 4,
+    "unanchored": 0
+  }
+}

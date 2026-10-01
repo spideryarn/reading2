@@ -1,0 +1,116 @@
+{
+  "arm": "high-none-pidpost8",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T07:03:00.390Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 16240,
+  "costUsd": 0.149746,
+  "tokens": {
+    "input": 61473,
+    "output": 2680,
+    "reasoning": 1040
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 225,
+  "fullerWords": 277,
+  "briefWords": 142,
+  "paragraphs": [
+    {
+      "text": "This is a review article about how scientists study the way brains \"process information.\" It focuses on a method called partial information decomposition, or PID, which looks at how neurons combine signals from other neurons. The article explains the idea in plain terms and then walks through real experiments that used it.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "The article says a basic mystery in neuroscience is how neurons turn incoming signals into adaptive behavior, and this involves huge numbers of neurons interacting together. Simple measures of information passing from one neuron to another do not show how neurons actually combine multiple signals into something new. PID matters because it can isolate that combining step, which the authors treat as the signature of computation.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target neuron into three parts: redundant (repeated across sources), unique (from just one source), and synergistic (only visible when both sources are considered jointly, beyond what either gives alone). Using recordings from mouse brain cell cultures and from monkeys doing tasks, the authors found synergy was higher in densely connected \"rich club\" neurons, in circuits with more loops back between source neurons, and when source neurons' activity was somewhat, but not too, similar. In monkeys, which kind of information dominated also shifted with the task, for example rising when precise motor signals needed to be sent reliably.",
+      "ids": [
+        "spya-q2b0e5",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This piece is a review article about how scientists use information theory to study how brain circuits process information: how groups of neurons take in signals and turn them into something new. It centers on a method called partial information decomposition, or PID, which breaks down the information that several source neurons give about a target neuron's future activity into separate, distinct pieces.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "This matters because brains take in signals from the world and use them to produce adaptive behavior, but how that transformation actually happens is poorly understood. Progress was long blocked by two things: not enough data, and no good tools for making sense of it. New recording technology now supplies the data, and PID offers a way to pull meaning out of it.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the total information that two source neurons carry about a target neuron's activity into parts: redundant information, which either source alone could already give; unique information, found only from one source; and synergistic information, visible only in the joint pattern of both sources together and not reducible to either one alone. Synergy is treated as a sign that a neuron is actively combining, or \"computing\" on, its inputs rather than just summing them.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury",
+        "spya-wer4cd"
+      ]
+    },
+    {
+      "text": "Applying PID to recordings from mouse cortical cultures grown in dishes found that synergy is denser in \"rich club\" neurons, the small set of best-connected hubs, and rises with feedforward and recurrent (looping) connections between neurons. Synergy also peaked when source neurons' activity was only moderately similar, not maximally similar. Similar patterns showed up in behaving monkeys, where the balance of synergy and redundancy shifted across task stages, for instance redundancy rising sharply during movement execution.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is about how scientists try to figure out how brains process information, by watching many neurons fire at once. It explains a tool called partial information decomposition, which splits the information that neurons share into different kinds.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "This matters because knowing which neurons fire is not enough; scientists want to know how neurons combine signals to create something new. One key idea is synergy: information that only shows up when you look at two neurons together, not from either one alone. This acts like a sign that real computation, not just simple adding up, is happening.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury",
+        "spya-rc5z33"
+      ]
+    },
+    {
+      "text": "Studies described here found synergy was higher in tightly connected neuron hubs called rich clubs, and in neurons with more feedback loops between them. Synergy also changed with how similar neurons' firing patterns were, and shifted depending on what task a brain was doing.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}

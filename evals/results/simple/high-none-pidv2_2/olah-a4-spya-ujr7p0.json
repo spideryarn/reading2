@@ -1,0 +1,122 @@
+{
+  "arm": "high-none-pidv2_2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "olah-a4-spya-ujr7p0",
+  "version": "simple/3",
+  "sourceSha256": "c84239fe9192af6ff59e122e16a1a1376f6d8f8cf196ae7b07b5fed7ff832ce7",
+  "at": "2026-10-01T07:06:09.848Z",
+  "bodyWords": 1754,
+  "bodyBlocks": 49,
+  "wallMs": 13910,
+  "costUsd": 0.07094,
+  "tokens": {
+    "input": 18300,
+    "output": 3434,
+    "reasoning": 1724
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 208,
+  "fullerWords": 280,
+  "briefWords": 149,
+  "paragraphs": [
+    {
+      "text": "This is an informal note by Chris Olah about how neural networks store information. It looks at \"distributed representations,\" an old idea from neuroscience and AI, and argues it actually mixes together two separate ideas: \"composition\" and \"superposition.\" The note explores how these two ideas differ and relate.",
+      "ids": [
+        "spya-s2q3w9",
+        "spya-zhbm9s",
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "This matters because breaking a network's internal representations into separate, independent pieces is necessary to escape a problem with having too many possible combinations to track, called the curse of dimensionality. Doing this is seen as essential for truly understanding how neural networks work.",
+      "ids": [
+        "spya-nwuh77"
+      ]
+    },
+    {
+      "text": "The piece uses an example of neurons representing colored shapes. A \"local\" code has one neuron per exact color-shape pair, which is wasteful but flexible. A \"compositional\" code uses separate neurons for color and for shape that combine together, needing fewer neurons and generalizing well. A \"superposition\" code crams far more combinations than there are neurons by overlapping them, which is efficient but makes individual features hard to read out directly.",
+      "ids": [
+        "spya-u4qtn4",
+        "spya-kcjqdw",
+        "spya-qcd003"
+      ]
+    },
+    {
+      "text": "The note argues composition and superposition are competing strategies for using a network's limited capacity, fundamentally in tension with each other. Still, they can be partly combined: when features rarely all appear together, the unused \"holes\" in a compositional code can be filled using superposition.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-vefv29",
+        "spya-ajbh7f"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is an informal note by Chris Olah, exploring how \"distributed representations\" — an old idea from neuroscience and AI where information is spread across many neurons instead of one neuron per idea — relates to \"superposition,\" a way networks pack more features than they have neurons. The note argues that \"distributed representations\" actually bundles together two different strategies, which it calls composition and superposition, and that people often mix them up.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-fyxmks"
+      ]
+    },
+    {
+      "text": "The piece says this distinction matters because breaking down a network's representations into separate, understandable parts is needed to escape the \"curse of dimensionality\" (the way possibilities explode as you add more dimensions) and to truly understand how neural networks work. Composition and superposition behave very differently here, so telling them apart is key to reverse-engineering what a network is doing.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "Using simple examples of neurons representing colored shapes, the note shows that composition means combining independent features, like separate \"color\" and \"shape\" neurons, so a small number of features can combine into many objects, generalize well, and still be understood piece by piece. Superposition instead squeezes many unrelated combinations into very few neurons at once, letting you store far more items than you have neurons, but at a cost: you lose the ability to cleanly pick out single features or represent things \"in between\" categories.",
+      "ids": [
+        "spya-qcd003",
+        "spya-g8cztv",
+        "spya-xwq6ty"
+      ]
+    },
+    {
+      "text": "The note argues these two strategies compete for the same limited space: fully composable features need exponentially more room as you add features, while superposition instead crams exponentially many unrelated items into limited neurons. Still, the two can partly mix: when combinations of features are rare (sparse), there's leftover room to hide other features in superposition, as shown in Thorpe's \"semi-distributed\" example.",
+      "ids": [
+        "spya-xcrca8",
+        "spya-vefv29",
+        "spya-fknpfa"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an informal note about how neural networks, which are computer systems loosely modeled on brains, store information using groups of neurons. It looks closely at an idea called \"distributed representations,\" where information is spread across many neurons instead of one neuron per idea.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-s2q3w9"
+      ]
+    },
+    {
+      "text": "The author says this matters because understanding how neurons store information is needed to truly understand how neural networks work, by breaking their patterns into separate, understandable pieces instead of one huge tangled mess.",
+      "ids": [
+        "spya-nwuh77",
+        "spya-v47ca7"
+      ]
+    },
+    {
+      "text": "The note argues that \"distributed representations\" actually means two different things. One is composition: combining simple pieces, like color and shape, to build many different objects, which is easy to understand but needs more neurons. The other is superposition: squeezing far more things into fewer neurons by overlapping them, which saves space but makes the pieces harder to pull apart. The note explains these two strategies work against each other.",
+      "ids": [
+        "spya-fyxmks",
+        "spya-xcrca8",
+        "spya-jzkekc"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 3,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "5e0266204878b1c1",
+  "systemsSha256": "8a2b9ac89358e16422e790adafba3580cfd3774b20f4fb1593e76bf8aa4aa068"
+}

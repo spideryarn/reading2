@@ -1,0 +1,128 @@
+{
+  "arm": "high-none-pidpost1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple/3",
+  "sourceSha256": "7680dea0744d8c39d586c7acfca6299670acd79bd438525f3264a9328e5b4983",
+  "at": "2026-10-01T06:59:26.300Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "wallMs": 11311,
+  "costUsd": 0.144216,
+  "tokens": {
+    "input": 61473,
+    "output": 2127,
+    "reasoning": 423
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 209,
+  "fullerWords": 290,
+  "briefWords": 155,
+  "paragraphs": [
+    {
+      "text": "This article is a science review about how brains handle information. It explains a method called partial information decomposition (PID), which breaks down how groups of neurons share information about what another neuron will do next, splitting that sharing into distinct parts.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u0wm5e"
+      ]
+    },
+    {
+      "text": "The piece says this matters because a basic puzzle in brain science is figuring out what brains actually do with incoming signals, and this has long been hard to study. New recording technology can now track hundreds or thousands of neurons at once, finally giving researchers enough data to look for these patterns.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target neuron into redundant (repeated by both), unique (from just one), and synergistic (only visible when looking at both together) information. Synergy is treated as a sign of real computation, since it means the neuron is responding to the pattern of inputs, not just adding them up.",
+      "ids": [
+        "spya-e94ury",
+        "spya-h5jzvm",
+        "spya-rc5z33"
+      ]
+    },
+    {
+      "text": "Using this method on mouse brain tissue, the authors found synergy was higher in densely connected \"rich club\" neurons, rose with more recurrent (looping) connections, and peaked when source neurons' signals were moderately, not highly, similar. Similar synergy patterns also showed up in monkeys performing tasks, with synergy and redundancy shifting depending on the behavior being done.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-hkhpex"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review article about how scientists try to understand what brains are doing when they \"process information\" from the senses. It focuses on a mathematical tool called partial information decomposition, or PID, which breaks down how groups of neurons combine signals from multiple sources into a single output.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ]
+    },
+    {
+      "text": "Figuring out how neural circuits turn raw signals into something useful is one of neuroscience's biggest open questions. The article argues that older tools could track information moving between neurons but could not show how neurons actually combine or transform that information, which is why PID matters: it can reveal the kind of \"computation\" happening when inputs are integrated.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g"
+      ]
+    },
+    {
+      "text": "PID splits the information two source neurons give about a target neuron into parts: redundant information (available from either source alone), unique information (from only one source), and synergistic information (only visible when both sources are considered together, over and above what each gives separately). Synergy is treated as the signature of real information processing, since it reflects sensitivity to patterns of input, not just total input.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ]
+    },
+    {
+      "text": "Using recordings from mouse brain tissue and from monkeys doing a motor task, the authors show that synergy is higher among densely connected \"rich club\" neurons, increases with recurrent connections between source neurons, and rises then falls as the similarity between source neurons' activity increases. In the monkey data, redundancy rose sharply during movement execution, suggesting the brain duplicates signals when reliability matters most.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ]
+    },
+    {
+      "text": "The piece also walks through practical issues: choosing how to measure redundancy, handling limited data, available software tools, and limitations such as the explosive complexity of PID for many neurons. It closes by pointing to newer extensions, like decompositions with multiple targets and moment-by-moment local analyses, as promising future directions.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-aby2dp",
+        "spya-cds6mm"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is about how scientists try to figure out how brains process information. Brain cells (neurons) take in signals and somehow turn them into new signals. The authors look at a tool called partial information decomposition, or PID, that helps break down how neurons combine information from different sources.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ]
+    },
+    {
+      "text": "This matters because it helps answer a basic puzzle: when several neurons feed into one target neuron, does the target just add up their signals, or does it do something more, creating new information from their combined pattern? That extra, combined information is called synergy, and finding it means a neuron is truly computing, not just summing.",
+      "ids": [
+        "spya-e94ury",
+        "spya-rc5z33"
+      ]
+    },
+    {
+      "text": "Using recordings from real brain cells, the authors found synergy shows up more where neurons are heavily connected to each other, and it changes depending on what task the brain is doing. This suggests the brain's wiring patterns and behavior both shape how information gets combined and transformed.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-t8fayf"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 2,
+    "unanchored": 0
+  },
+  "model": "claude-sonnet-5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "7630b5e9aedc58e3fdb22dccbce736399c6c4f41766c43cfac7a708c153e61e1"
+}
