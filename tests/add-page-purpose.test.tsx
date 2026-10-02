@@ -721,3 +721,69 @@ describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => 
     expect(runs()).toEqual(EXPECTED_RUNS());
   });
 });
+
+describe("High-powered AI add-page wiring", () => {
+  const powerBox = (): HTMLInputElement => {
+    const el = host.querySelector<HTMLInputElement>("[data-add-high-power] input[type=checkbox]");
+    if (!el) throw new Error("no High-powered AI box on the page");
+    return el;
+  };
+
+  it("uses the job's allocated slug, not one derived from the address", async () => {
+    addResult = makeJob("job-allocated", "running", "allocated-title-2");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    act(() => powerBox().click());
+    await settle();
+    expect(puts()).toEqual(["put:allocated-title-2:true"]);
+  });
+
+  it("under StrictMode sends one switch request", async () => {
+    strict = true;
+    addResult = makeJob("job-1", "running");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    act(() => powerBox().click());
+    await settle();
+    expect(puts()).toEqual([`put:${SLUG}:true`]);
+  });
+
+  it("starts a new address with a fresh intent and sends only to that address's job slug", async () => {
+    addResult = makeJob("job-1", "running");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    act(() => powerBox().click());
+    await settle();
+
+    const other = { kind: "url", url: "https://example.com/another-paper" } as const;
+    addResult = makeJob("job-2", "running", "allocated-other-paper");
+    jobs = [makeJob("job-1", "running"), addResult];
+    render(other);
+    await settle();
+    expect(powerBox().checked, "the first address's choice leaked into the second").toBe(false);
+    act(() => powerBox().click());
+    await settle();
+
+    expect(puts()).toEqual([`put:${SLUG}:true`, "put:allocated-other-paper:true"]);
+  });
+
+  it("keeps the box on and says switch-off failed when the server refuses it", async () => {
+    addResult = makeJob("job-1", "running");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    act(() => powerBox().click());
+    await settle();
+
+    putAnswer = async () =>
+      new Response(JSON.stringify({ error: "The article could not be changed." }), { status: 503 });
+    act(() => powerBox().click());
+    await settle();
+
+    expect(powerBox().checked, "a refused switch-off was drawn as off").toBe(true);
+    expect(host.textContent).toContain("Not switched off — The article could not be changed.");
+  });
+});

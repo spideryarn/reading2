@@ -122,3 +122,19 @@ uncharged path, and the charge is once per article.
 2. Browser check on the box (desktop and phone width): tick before the job runs, tick while running,
    a refusal.
 3. GPT Sol code review, gates, push, feedback note.
+
+## Code review
+
+GPT Sol, workspace-write: [261002k-high-powered-ai-at-import-code-review-sol.md](261002k-high-powered-ai-at-import-code-review-sol.md)
+(the diff it read is beside it). Verdict *approve after review fixes, no P0*; it fixed four in place,
+each read and kept:
+
+- **P1 — Retry lost the tick.** A job that failed before its claim answers the `PUT` with a final
+  `404`; the job card's *Retry* then makes a new live job, and the intent now goes back to waiting
+  for it (`retryOnNextAlive`).
+- **P1 — a refused switch-off drew off.** A refused `{on: false}` now keeps the box ticked (the last
+  confirmed state was on) and can be tried again; the state carries `on` and `attempted`.
+- **P2 — copy overclaimed.** "this import uses it" became "later work in this import uses it", and
+  `/help` no longer says *the whole import*.
+- **P2 — tests.** The page test now uses a job slug different from the URL's, and covers
+  StrictMode and a new address.

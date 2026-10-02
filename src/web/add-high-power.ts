@@ -37,8 +37,8 @@ export type HighPowerAtAdd =
   | { kind: "waiting" }
   | { kind: "saving"; on: boolean }
   | { kind: "on"; since: string; lateRisk: boolean }
-  /** The server answered no, and nothing changed. */
-  | { kind: "refused"; message: string }
+  /** The server answered no, so the last confirmed state did not change. */
+  | { kind: "refused"; message: string; on: boolean; attempted: boolean }
   /** No answer arrived — the write may or may not have committed. */
   | { kind: "unknown"; message: string };
 
@@ -63,6 +63,8 @@ export class HighPowerIntent {
   private inFlight: Promise<void> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private notYet = 0;
+  /** A terminal pre-claim 404 is waiting for Retry to make the job live again. */
+  private retryOnNextAlive = false;
   private disposed = false;
   private readonly listeners = new Set<() => void>();
 
@@ -83,9 +85,19 @@ export class HighPowerIntent {
    * `job.slug` or the completion's, never one derived from the address.
    */
   observe(slug: string | null, jobAlive: boolean, lateRisk: boolean): void {
-    this.slug = slug;
+    /* Once this add has a slug, a transient poll with no matching job must not
+       erase the only safe target for an unknown write's compensating switch-off. */
+    if (slug !== null) this.slug = slug;
+    const wasAlive = this.jobAlive;
     this.jobAlive = jobAlive;
     this.lateRisk = lateRisk;
+    if (jobAlive && !wasAlive && this.retryOnNextAlive && !this.disposed) {
+      /* A failed job can end before its claim creates the article row. Its 404
+         is final for that attempt, but Retry is still the same reader intent. */
+      this.retryOnNextAlive = false;
+      this.notYet = 0;
+      this.set({ kind: "waiting" });
+    }
     this.kick();
   }
 
@@ -93,11 +105,13 @@ export class HighPowerIntent {
   want(on: boolean): void {
     if (this.disposed || this.state.kind === "saving") return;
     if (on) {
-      if (this.state.kind === "on") return;
+      this.retryOnNextAlive = false;
+      if (this.state.kind === "on" || (this.state.kind === "refused" && this.state.on)) return;
       this.set({ kind: "waiting" });
       this.kick();
       return;
     }
+    this.retryOnNextAlive = false;
     switch (this.state.kind) {
       case "waiting":
         /* Never sent, so nothing to undo and nothing charged. */
@@ -108,6 +122,11 @@ export class HighPowerIntent {
       case "unknown":
         /* `unknown` may be on server-side; switching off is free either way. */
         if (this.slug) this.send(this.slug, false);
+        else this.set({ kind: "off" });
+        return;
+      case "refused":
+        /* A refused switch-off leaves the last confirmed state on. */
+        if (this.state.on && this.slug) this.send(this.slug, false);
         else this.set({ kind: "off" });
         return;
       default:
@@ -140,10 +159,13 @@ export class HighPowerIntent {
   }
 
   private send(slug: string, on: boolean): void {
+    const before = this.state;
     this.set({ kind: "saving", on });
     this.inFlight = this.put(slug, on).then(
       (body) => {
         this.inFlight = null;
+        this.retryOnNextAlive = false;
+        this.notYet = 0;
         this.set(
           body.highPowerSince
             ? { kind: "on", since: body.highPowerSince, lateRisk: this.lateRisk }
@@ -164,7 +186,16 @@ export class HighPowerIntent {
           }, this.retryMs);
           return;
         }
-        this.set(status !== null ? { kind: "refused", message } : { kind: "unknown", message });
+        /* A failed attempt that ended before the article row existed should be
+           tried again when JobCard's Retry produces the replacement job. Do not
+           do that for the five-minute cap while a job is still live. */
+        this.retryOnNextAlive = on && status === 404 && !this.jobAlive && !this.disposed;
+        if (status === null || before.kind === "unknown") {
+          this.set({ kind: "unknown", message });
+          return;
+        }
+        const knownOn = before.kind === "on" || (before.kind === "refused" && before.on);
+        this.set({ kind: "refused", message, on: knownOn, attempted: on });
       },
     );
   }

@@ -20,7 +20,10 @@ export function AddHighPower({ intent }: { intent: HighPowerIntent }) {
   const exempt = isAdmin(user?.id);
 
   const checked =
-    state.kind === "waiting" || state.kind === "on" || (state.kind === "saving" && state.on);
+    state.kind === "waiting" ||
+    state.kind === "on" ||
+    (state.kind === "saving" && state.on) ||
+    (state.kind === "refused" && state.on);
 
   return (
     <div data-add-high-power className="tw:mt-3 tw:text-sm">
@@ -57,19 +60,25 @@ function line(state: ReturnType<HighPowerIntent["get"]>) {
     case "off":
       return null;
     case "waiting":
-      return "Will switch on when the import starts.";
+      return "Will switch on as soon as the import is ready for it.";
     case "saving":
       return "Saving…";
     case "on":
       return state.lateRisk
         ? "On. Some of this import may already have used the standard model — Run it again on the article's Metadata page to redo a mode."
-        : "On — this import uses it.";
+        : "On — later work in this import uses it.";
     case "refused":
+      return (
+        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+          <TriangleAlert size={12} />
+          {state.attempted ? "Not switched on" : "Not switched off"} — {state.message}
+        </span>
+      );
     case "unknown":
       return (
         <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
           <TriangleAlert size={12} />
-          {state.kind === "refused" ? "Not switched on" : "Couldn't confirm that"} — {state.message}
+          Couldn't confirm that — {state.message}
         </span>
       );
     default: {

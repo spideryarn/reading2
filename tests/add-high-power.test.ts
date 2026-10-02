@@ -77,7 +77,7 @@ describe("HighPowerIntent", () => {
     intent.want(true);
     await vi.runAllTimersAsync();
     expect(calls).toHaveLength(MAX_NOT_YET + 1);
-    expect(intent.get()).toEqual({ kind: "refused", message: "gone" });
+    expect(intent.get()).toEqual({ kind: "refused", message: "gone", on: false, attempted: true });
   });
 
   it("takes a 404 as final once the job has ended", async () => {
@@ -86,7 +86,12 @@ describe("HighPowerIntent", () => {
     intent.observe("an-essay", false, false);
     intent.want(true);
     await vi.runAllTimersAsync();
-    expect(intent.get()).toEqual({ kind: "refused", message: "No article artefacts" });
+    expect(intent.get()).toEqual({
+      kind: "refused",
+      message: "No article artefacts",
+      on: false,
+      attempted: true,
+    });
   });
 
   it("shows a refusal and does not retry it", async () => {
@@ -96,7 +101,12 @@ describe("HighPowerIntent", () => {
     intent.want(true);
     await vi.runAllTimersAsync();
     expect(calls).toHaveLength(1);
-    expect(intent.get()).toEqual({ kind: "refused", message: "[pay-high-power] not enough left" });
+    expect(intent.get()).toEqual({
+      kind: "refused",
+      message: "[pay-high-power] not enough left",
+      on: false,
+      attempted: true,
+    });
   });
 
   it("says *unknown*, not off, when no answer arrived", async () => {
@@ -125,6 +135,87 @@ describe("HighPowerIntent", () => {
     intent.observe("an-essay", true, false);
     intent.want(true);
     await vi.runAllTimersAsync();
+    intent.want(false);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([
+      ["an-essay", true],
+      ["an-essay", false],
+    ]);
+    expect(intent.get()).toEqual({ kind: "off" });
+  });
+
+  it("keeps the last confirmed on state when switching off is refused", async () => {
+    const { put, calls } = scripted(SINCE, refusal(503, "Please try again."), null);
+    const intent = new HighPowerIntent(put, 10);
+    intent.observe("an-essay", true, false);
+    intent.want(true);
+    await vi.runAllTimersAsync();
+
+    intent.want(false);
+    await vi.runAllTimersAsync();
+    expect(intent.get()).toEqual({
+      kind: "refused",
+      message: "Please try again.",
+      on: true,
+      attempted: false,
+    });
+
+    /* The checked box can ask to switch off again; the refusal did not turn it off. */
+    intent.want(false);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([
+      ["an-essay", true],
+      ["an-essay", false],
+      ["an-essay", false],
+    ]);
+    expect(intent.get()).toEqual({ kind: "off" });
+  });
+
+  it("keeps a pre-claim intent across a failed job and its Retry", async () => {
+    let rejectFirst: (reason: Error) => void = () => {};
+    const calls: Array<[string, boolean]> = [];
+    const put: PutHighPower = (slug, on) => {
+      calls.push([slug, on]);
+      if (calls.length === 1) {
+        return new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        });
+      }
+      return Promise.resolve({ highPowerSince: SINCE });
+    };
+    const intent = new HighPowerIntent(put, 10);
+    intent.observe("an-essay", true, false);
+    intent.want(true);
+
+    /* The job fails before its claim made the article row, then the PUT says 404. */
+    intent.observe("an-essay", false, false);
+    rejectFirst(refusal(404, "No article artefacts"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(intent.get()).toEqual({
+      kind: "refused",
+      message: "No article artefacts",
+      on: false,
+      attempted: true,
+    });
+
+    /* Retry is still the same add and must revive the checked intent by itself. */
+    intent.observe("an-essay", true, false);
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([
+      ["an-essay", true],
+      ["an-essay", true],
+    ]);
+    expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
+  });
+
+  it("retains the known slug while a poll temporarily has no job", async () => {
+    const { put, calls } = scripted(new TypeError("Failed to fetch"), null);
+    const intent = new HighPowerIntent(put, 10);
+    intent.observe("an-essay", true, false);
+    intent.want(true);
+    await vi.runAllTimersAsync();
+    intent.observe(null, true, false);
+
     intent.want(false);
     await vi.runAllTimersAsync();
     expect(calls).toEqual([
@@ -171,7 +262,12 @@ describe("HighPowerIntent", () => {
       expect(intent.get()).toEqual({ kind: "waiting" });
       await intent.settle("an-essay");
       expect(calls).toHaveLength(2);
-      expect(intent.get()).toEqual({ kind: "refused", message: "No article" });
+      expect(intent.get()).toEqual({
+        kind: "refused",
+        message: "No article",
+        on: false,
+        attempted: true,
+      });
     });
 
     it("waits for a request already in flight", async () => {

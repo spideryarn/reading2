@@ -520,7 +520,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <strong>None of this uses up your allowance</strong> — opening, generating, chatting and
           re-running are included. For a difficult piece, <strong>High-powered AI</strong> uses a
           stronger model (Claude Opus) for work done after you switch it on. Tick it while the
-          article is being added and the whole import uses it; or switch it on later from the
+          article is being added to use it for the work still to come; or switch it on later from the
           article’s Metadata page and use <strong>Run it again</strong> there to redo a mode with it. That switch is the
           one thing besides adding that counts — see <HelpRef to="plans">Plans</HelpRef>.
         </p>
