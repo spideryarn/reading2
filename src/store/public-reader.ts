@@ -48,7 +48,14 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import type { Assets } from "../assets.js";
 import { storedAssetFor } from "../asset-delivery.js";
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, comments, revisionBlocks, searchRuns } from "../db/schema.js";
+import {
+  articleRevisions,
+  articles,
+  comments,
+  revisionBlocks,
+  searchRuns,
+  uploadSourceGuesses,
+} from "../db/schema.js";
 import { relocateEntries } from "../glossary-occurrences.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
@@ -629,6 +636,48 @@ export function publicSearchesQuery(
 }
 
 /**
+ * **Found guesses only.** `searching` is a claim in flight and `none` is a
+ * search that came back empty; neither is an address, and a visitor can do
+ * nothing about either. In the `where` for `PUBLIC_SEARCHES_WHERE`'s reason.
+ */
+const PUBLIC_SOURCE_GUESS_WHERE = sql`${uploadSourceGuesses.status} = 'found'`;
+
+/**
+ * **Where we think a public upload came from — its own query, never the
+ * owner's `sourceGuessFor`**, for the reasons `publicCommentsQuery` gives:
+ * named columns, a join back to `articles`, and **`publicSlug` repeated in this
+ * query's own `where`**, so the article's visibility is asked again here rather
+ * than inherited as an id. Plan 261002g § Decisions 3; the projection
+ * 260929g § Decisions 4 deferred.
+ *
+ * **Not `host`, `why`, `model`, `searches`, `claim_token` or the timestamps.**
+ * `host` in particular is not selected: nothing ties the stored column to
+ * `url`, so the DTO derives it from the address it actually publishes
+ * (src/public/dto.ts § `publicSourceGuess`), which is where `publicSourceUrl`
+ * decides whether there is an address at all.
+ *
+ * **Keyed by article, not by revision**, as the table is. A guess describes the
+ * uploaded file, and every path that writes a new revision of an upload today
+ * carries the same file forward (src/store/pg-revisions.ts); a path that ever
+ * replaced the file would have to clear this row, as it would for the owner.
+ */
+export function publicSourceGuessQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+) {
+  return db
+    .select({
+      url: uploadSourceGuesses.url,
+      kind: uploadSourceGuesses.kind,
+      matchedBy: uploadSourceGuesses.matchedBy,
+    })
+    .from(uploadSourceGuesses)
+    .innerJoin(articles, eq(articles.id, uploadSourceGuesses.articleId))
+    .where(and(publicSlug(slug), PUBLIC_SOURCE_GUESS_WHERE))
+    .limit(1);
+}
+
+/**
  * A public article's blocks — **and `note` is not selected**, rather than
  * projected away afterwards.
  *
@@ -741,6 +790,7 @@ export const pgPublicReader: PublicArticleReader = {
          served. */
       const commentRows = await publicCommentsQuery(db, slug);
       const searchRows = await publicSearchesQuery(db, slug);
+      const [guessRow] = await publicSourceGuessQuery(db, slug);
 
       /**
        * **The article's fingerprint, from the rows this read already has.**
@@ -836,6 +886,13 @@ export const pgPublicReader: PublicArticleReader = {
         crossrefsFresh,
         sketch: found.revision.sketch,
         navLabelStatus: found.revision.navLabelStatus,
+        /* The table's CHECKs make a `found` row carry all three; a row that
+           somehow did not is no guess, as `toSourceGuess` treats it for the
+           owner (src/store/source-guess-row.ts). */
+        sourceGuess:
+          guessRow?.url && guessRow.kind && guessRow.matchedBy
+            ? { url: guessRow.url, kind: guessRow.kind, matchedBy: guessRow.matchedBy }
+            : null,
         /* `null` columns become absent keys, exactly as the artefacts do — the
            mapping is here rather than in the DTO because Drizzle hands back
            `null` and `Comment` says `undefined`. */

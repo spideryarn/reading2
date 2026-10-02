@@ -213,6 +213,10 @@ describe("the public-readable-sharing page", () => {
     /* And the failure mode named, because "no line at all" is friendlier than a
        wrong one and a reader should not have to guess which they got. */
     expect(PAGE).toMatch(/no source line at all/);
+    /* An upload is the separate case added by plan 261002g: there was no
+       recorded address to refuse, and the public projection may carry the
+       matched page as an explicit guess. */
+    expect(PAGE).toMatch(/uploaded file[^.]*clearly marked guess[^.]*page that matches it/i);
   });
 
   /**

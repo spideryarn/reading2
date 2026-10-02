@@ -51,6 +51,8 @@ points, code decides. A wrong link is worse than no link, because the reader wil
    filename, and at least three significant words.
 4. **Owner-only, v1.** *Assumption.* A visitor to a public upload sees no guess; deferred because a
    guessed address wants its own public projection, as `final_url` has `publicSourceUrl`.
+   *Built 2026-10-02* by [261002g](261002g-a-banner-on-every-public-readable-article.md): a found
+   guess now reaches a visitor's banner, through `publicSourceUrl`.
 5. **No retry button.** *Assumption.* A settled `none` is final; Metadata says we looked and found no
    page we could be sure of.
 6. **Bounded like *Find it*.** Its own `AiJob` id, `upload-source-guess`, passed into `findWorkPage`

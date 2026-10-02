@@ -26,6 +26,7 @@ import {
   publicCommentsQuery,
   publicCurrentRevisionQuery,
   publicSearchesQuery,
+  publicSourceGuessQuery,
 } from "../src/store/public-reader.js";
 import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
@@ -452,6 +453,60 @@ describe("the public reads of the owner's own work", () => {
     expect(commentsQuery.sql).toContain('"answer"');
     expect(searchesQuery.sql).toContain('"criterion"');
     expect(searchesQuery.sql).toContain('"hits"');
+  });
+});
+
+/**
+ * **The guessed source of a shared upload** — plan 261002g, the seventh table
+ * tests/public-imports.test.ts admits, and the same three properties the two
+ * reads above are held to: `publicSlug` in its own `where`, the row filter in
+ * SQL, and the columns it must not ask for absent from the statement.
+ */
+describe("the public read of an upload's guessed source", () => {
+  const q = publicSourceGuessQuery(new QueryBuilder() as never, "a-slug").toSQL();
+
+  it("re-asks the visibility question in its own where", () => {
+    expect(q.sql).toMatch(
+      /"articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2/,
+    );
+    expect(q.params[0]).toBe("a-slug");
+    expect(q.params[1]).toBe("public");
+    expect(q.sql).not.toContain("owner_id");
+  });
+
+  it("ties the guess to the same article whose slug was made public", () => {
+    expect(q.sql).toMatch(
+      /inner join "spideryarn"\."articles" on "spideryarn"\."articles"\."id" = "spideryarn"\."upload_source_guesses"\."article_id"/,
+    );
+  });
+
+  it("takes only a found guess", () => {
+    expect(q.sql).toMatch(/"status" = 'found'/);
+  });
+
+  /* `host` above all: nothing ties the stored column to `url`, so the DTO
+     derives it from the address it publishes (src/public/dto.ts §
+     `publicSourceGuess`). GPT Sol, plan review P2-1. */
+  it("leaves the stored host and the operational columns out of the select", () => {
+    for (const column of [
+      '"host"',
+      '"why"',
+      '"claim_token"',
+      '"attempts"',
+      '"searches"',
+      '"model"',
+      '"claimed_at"',
+      '"finished_at"',
+    ]) {
+      expect(q.sql, column).not.toContain(column);
+    }
+  });
+
+  /** And it does read the address, or every absence above proves nothing. */
+  it("asks for the address and the two words that choose its card", () => {
+    expect(q.sql).toContain('"url"');
+    expect(q.sql).toContain('"kind"');
+    expect(q.sql).toContain('"matched_by"');
   });
 });
 
