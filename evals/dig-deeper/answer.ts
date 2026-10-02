@@ -5,9 +5,11 @@
  * Isolated (the main matrix): the arm's request is production's with the
  * declared edits (`isolatedRequest`), streamed through production's runner
  * (`runStream`) on the arm's route, and accepted by its entry point's rule.
- * Production-shaped (the finalist run): `explainStream` itself for a glossary
- * or comment press, and production's own captured Citations request with the
- * model swapped — tool on, production's job and route.
+ * Production-shaped (the finalist run): production's captured request with
+ * the model swapped — tool on, production's job and route, plus the eval's
+ * model-neutral tool-call ceiling. It uses the same runner and then the entry
+ * point's acceptance rule, so the exact request the cell key and budget cover
+ * is the request that goes on the wire.
  *
  * Everything paid goes through `paidStep`, so the cell's calls are the
  * gateway's own spend records: cost, tokens, cache, the model that answered,
@@ -17,9 +19,8 @@ import { type AiRequestBody, type StreamOutcome, openRouterJson } from "../../sr
 import type { SpendRecord } from "../../src/ai-spend.js";
 import { DIG_ANSWER_TIMEOUT_MS, digSearchRequest } from "../../src/dig-deeper.js";
 import { type Usage, whereSearchCountCameFrom } from "../../src/openrouter-stream.js";
-import { EXPLAIN_STALL_MS, explainStream } from "../../src/explain.js";
+import { EXPLAIN_STALL_MS } from "../../src/explain.js";
 import { runStream } from "../../src/stream-run.js";
-import { refuseUnfinished } from "../../src/term-lookup.js";
 import type { Block, Meta, SearchEvidence } from "../../src/types.js";
 import { untrusted } from "../../src/untrusted-fence.js";
 import { acceptCitation, acceptExplain, type Delivery } from "./accept.js";
@@ -53,10 +54,19 @@ export interface CallObs {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
   reasoningTokens: number | null;
+  webSearches: number | null;
   ttftMs: number | null;
   totalMs: number;
   ending: StreamOutcome["kind"] | null;
   finishReason: string | null;
+  /** This call's cached system+article prefix as a share of its message characters. */
+  prefixShare: number;
+}
+
+/** Preserve “provider did not report it”; zero is evidence that no search ran. */
+export function totalReportedWebSearches(calls: readonly Pick<CallObs, "webSearches">[]): number | null {
+  if (calls.some((call) => typeof call.webSearches !== "number")) return null;
+  return calls.reduce((total, call) => total + (call.webSearches as number), 0);
 }
 
 export interface AnswerCell extends CellBase {
@@ -68,6 +78,8 @@ export interface AnswerCell extends CellBase {
   delivery: Delivery;
   /** The text the reader would have got, delivered or not — for diagnosis, never judged unless delivered. */
   raw: string;
+  /** Search results this answer's own production-shaped tool call returned. */
+  evidence?: SearchEvidence[];
   words: number;
   calls: CallObs[];
   check: { verdict: "keep" | "replace" | "invalid"; draftEnding: string | null } | null;
@@ -94,6 +106,7 @@ interface Streamed {
   ttftMs: number | null;
   totalMs: number;
   error: string | null;
+  prefixShare: number;
 }
 
 async function streamOnce(
@@ -115,6 +128,7 @@ async function streamOnce(
     ttftMs: null,
     totalMs: 0,
     error: null,
+    prefixShare: prefixShareOf(request),
   };
   try {
     for await (const ev of runStream({
@@ -157,10 +171,12 @@ function observe(s: Streamed, record: SpendRecord | undefined): CallObs {
     cacheReadTokens: record?.cacheReadTokens ?? null,
     cacheWriteTokens: record?.cacheWriteTokens ?? null,
     reasoningTokens: record?.reasoningTokens ?? null,
+    webSearches: record?.webSearches ?? null,
     ttftMs: s.ttftMs,
     totalMs: s.totalMs,
     ending: s.kind,
     finishReason: s.finishReason,
+    prefixShare: s.prefixShare,
   };
 }
 
@@ -175,8 +191,23 @@ export interface CellInputs {
   arm: Arm;
   ceiling: number;
   mode: "isolated" | "production";
-  /** The article, for the Citations guard and for `explainStream`. */
+  /** The article, for the Citations guard. */
   article: { meta: Meta; blocks: Block[] };
+}
+
+/** OpenRouter lists web search at $0.01 a call. `max_uses` is provider-specific
+ * and known to be ignored outside Anthropic; this top-level ceiling is the
+ * model-neutral limit used on eval calls that keep the production tool. */
+export const MAX_PRODUCTION_TOOL_CALLS = 8;
+const WEB_SEARCH_USD = 0.01;
+
+export function serverToolFeesUpperBound(request: AiRequestBody): number {
+  if (!("tools" in request)) return 0;
+  const n = request.max_tool_calls;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+    throw new Error("a tool-enabled eval request needs an integer max_tool_calls before it can be budgeted");
+  }
+  return n * WEB_SEARCH_USD;
 }
 
 /** The requests a cell will send, as values — what its key is made of and what the test reads. */
@@ -186,7 +217,10 @@ export function cellRequests(inp: CellInputs): { job: string; request: AiRequest
   const sized = (r: AiRequestBody): AiRequestBody => ({ ...r, max_tokens: ceiling });
   if (mode === "production") {
     if (arm.kind !== "single") throw new Error(`${arm.id}: the production-shaped run takes single-model arms`);
-    return [{ job: capture.production.job, request: sized({ ...prod, model: arm.model }) }];
+    /* Production still carries provider-specific `max_uses`. Add the gateway's
+       model-neutral ceiling so the finalist cannot outrun the eval budget on
+       a non-Anthropic route. This is the one declared finalist-only field. */
+    return [{ job: capture.production.job, request: sized({ ...prod, model: arm.model, max_tool_calls: MAX_PRODUCTION_TOOL_CALLS }) }];
   }
   if (arm.kind === "single") {
     return [{ job: jobFor(arm.model), request: sized(isolatedRequest(prod, capture.entry, arm.model)) }];
@@ -238,78 +272,20 @@ export async function answerCell(
   ledger: Ledger,
 ): Promise<AnswerCell> {
   const requests = cellRequests(inp);
-  const boundUsd = requests.reduce((n, r) => n + upperBoundUsd(r.request.model, requestChars(r.request), inp.ceiling), 0);
-  const isCitation = inp.capture.entry === "citation";
-
+  const boundUsd = requests.reduce(
+    (n, r) => n + upperBoundUsd(r.request.model, requestChars(r.request), inp.ceiling, serverToolFeesUpperBound(r.request)),
+    0,
+  );
   type Outcome = { streams: Streamed[]; delivery: Delivery; raw: string; check: AnswerCell["check"]; failure: string | null };
   const { result, spent } = await paidStep(
     budget,
     { id: `${meta.slot}#${meta.key.slice(0, 12)}`, label: meta.slot, boundUsd },
     ledger,
     async (): Promise<Outcome> => {
-      /* ---- production-shaped glossary / comment: explainStream itself ---- */
-      if (inp.mode === "production" && !isCitation) {
-        const ex = inp.capture.explain;
-        if (!ex) throw new Error(`${inp.capture.exampleId}: no explain inputs in the capture`);
-        const started = Date.now();
-        const s: Streamed = {
-          role: "answer",
-          requested: requests[0]?.request.model ?? "",
-          job: "dig-deeper",
-          text: "",
-          deltas: [],
-          kind: null,
-          finishReason: null,
-          evidence: [],
-          ttftMs: null,
-          totalMs: 0,
-          error: null,
-        };
-        let delivery: Delivery | null = null;
-        try {
-          for await (const ev of explainStream({
-            meta: inp.article.meta,
-            blocks: inp.article.blocks,
-            blockId: ex.blockId,
-            quote: ex.quote,
-            dig: inp.capture.findings,
-            power: "high",
-            model: s.requested,
-          })) {
-            if (ev.type === "delta") {
-              s.ttftMs ??= Date.now() - started;
-              s.text += ev.text;
-            } else {
-              s.kind = ev.ending;
-              if (inp.capture.entry === "glossary") {
-                try {
-                  refuseUnfinished(ev.ending);
-                  delivery = { delivered: true, answer: ev.answer, ending: ev.ending };
-                } catch (err) {
-                  delivery = { delivered: false, why: `the glossary refuses ${ev.ending}: ${(err as Error).message}`, ending: ev.ending };
-                }
-              } else {
-                delivery = { delivered: true, answer: ev.answer, ending: ev.ending };
-              }
-            }
-          }
-        } catch (err) {
-          s.error = (err as Error).message;
-        }
-        s.totalMs = Date.now() - started;
-        return {
-          streams: [s],
-          delivery: delivery ?? { delivered: false, why: `explainStream threw: ${s.error ?? "no done"}`, ending: s.kind },
-          raw: s.text,
-          check: null,
-          failure: s.error,
-        };
-      }
-
       const first = requests[0];
       if (!first) throw new Error("no request");
       const job = first.job as "dig-deeper" | "eval" | "citation-investigate";
-      const a = await streamOnce(inp.arm.kind === "check" ? "draft" : "answer", job, first.request, isCitation && inp.mode === "production");
+      const a = await streamOnce(inp.arm.kind === "check" ? "draft" : "answer", job, first.request, inp.mode === "production");
       if (a.error || a.kind === null) {
         return {
           streams: [a],
@@ -399,6 +375,7 @@ export async function answerCell(
     ceiling: inp.ceiling,
     delivery,
     raw: result.raw,
+    evidence: result.streams.flatMap((s) => s.evidence),
     words: words(delivery.delivered ? delivery.answer : result.raw),
     calls,
     check: result.check,
@@ -424,10 +401,19 @@ export async function probeForcedSearch(
   ledger: Ledger,
   id: string,
 ): Promise<{ ok: boolean; searches: number | null; status: string; usd: number | null; returned: string | null }> {
-  const body = { ...digSearchRequest(req), model };
+  const body: AiRequestBody = { ...digSearchRequest(req), model, max_tool_calls: 1 };
   const { result, spent } = await paidStep(
     budget,
-    { id, label: `probe ${model}`, boundUsd: upperBoundUsd(model, requestChars(body), Number((body as Record<string, unknown>).max_completion_tokens ?? 2_000), 0.05) },
+    {
+      id,
+      label: `probe ${model}`,
+      boundUsd: upperBoundUsd(
+        model,
+        requestChars(body),
+        Number((body as Record<string, unknown>).max_completion_tokens ?? 2_000),
+        serverToolFeesUpperBound(body),
+      ),
+    },
     ledger,
     async () => {
       try {

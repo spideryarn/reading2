@@ -27,6 +27,8 @@ export class BudgetRefused extends Error {}
 export class BudgetHalted extends Error {}
 
 export interface BudgetFile {
+  /** Fixed by the first invocation; later commands cannot silently widen it. */
+  capUsd: number;
   spentUsd: number;
   /** Live reservations, by call id. */
   reserved: Record<string, { label: string; usd: number; at: string }>;
@@ -35,7 +37,7 @@ export interface BudgetFile {
   halted: string | null;
 }
 
-const empty = (): BudgetFile => ({ spentUsd: 0, reserved: {}, settled: [], halted: null });
+const empty = (capUsd: number): BudgetFile => ({ capUsd, spentUsd: 0, reserved: {}, settled: [], halted: null });
 
 export interface Budget {
   readonly cap: number;
@@ -56,7 +58,7 @@ export interface Budget {
 export function openBudget(file: string | null, cap: number): Budget {
   if (!Number.isFinite(cap) || cap <= 0) throw new Error(`--cap must be a positive number of dollars, got ${cap}`);
   let lock: string | null = null;
-  let mem = empty();
+  let mem = empty(cap);
   if (file) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     lock = `${file}.lock`;
@@ -68,7 +70,17 @@ export function openBudget(file: string | null, cap: number): Budget {
           "If none is running, delete the lock and look at budget.json's reservations first.",
       );
     }
-    if (fs.existsSync(file)) mem = JSON.parse(fs.readFileSync(file, "utf8")) as BudgetFile;
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as BudgetFile & { capUsd?: number };
+      /* Runs made before capUsd existed adopt the first cap used after this
+         change. From then on it is part of the durable budget. */
+      mem = { ...parsed, capUsd: parsed.capUsd ?? cap };
+      if (mem.capUsd !== cap) {
+        fs.rmSync(lock, { force: true });
+        lock = null;
+        throw new Error(`this run was planned with a $${mem.capUsd.toFixed(2)} cap, not $${cap.toFixed(2)}`);
+      }
+    }
   }
   const save = () => {
     if (!file) return;
@@ -76,6 +88,7 @@ export function openBudget(file: string | null, cap: number): Budget {
     fs.writeFileSync(tmp, `${JSON.stringify(mem, null, 2)}\n`);
     fs.renameSync(tmp, file);
   };
+  save();
   const outstanding = () => Object.values(mem.reserved).reduce((n, r) => n + r.usd, 0);
   return {
     cap,
@@ -123,20 +136,19 @@ export function openBudget(file: string | null, cap: number): Budget {
 /* ------------------------------------------------------- the upper bound -- */
 
 /**
- * **The most a call could cost**: every input token at the dearer of the
- * uncached and cache-write prices, `maxTokens` at the output price, plus tool
- * fees. Tokens are estimated at three characters each, not the usual four, so
- * the bound stays above the real count for prose-heavy prompts.
+ * **The most a call could cost**: one input token per UTF-8 byte at the dearer
+ * of the uncached and cache-write prices, `maxTokens` at the output price, plus
+ * tool fees. A tokenizer cannot emit more tokens than the bytes it tokenises;
+ * this is deliberately much more conservative than a bill estimate.
  */
-export function upperBoundUsd(model: string, inputChars: number, maxTokens: number, toolFeesUsd = 0): number {
+export function upperBoundUsd(model: string, inputBytes: number, maxTokens: number, toolFeesUsd = 0): number {
   const p: Price = priceOf(model);
-  const input = Math.ceil(inputChars / 3);
-  return (input * writePrice(p) + maxTokens * p.output) / 1e6 + toolFeesUsd;
+  return (inputBytes * writePrice(p) + maxTokens * p.output) / 1e6 + toolFeesUsd;
 }
 
-/** The characters a request sends, for the bound. */
+/** UTF-8 bytes a request sends, a true upper bound on its token count. */
 export function requestChars(body: unknown): number {
-  return JSON.stringify(body).length;
+  return Buffer.byteLength(JSON.stringify(body), "utf8");
 }
 
 
@@ -225,7 +237,10 @@ export async function paidStep<T>(
         notes.push(`${c.model} was cut off (${c.outcome}) with no cost reported; settled at the step's upper bound`);
       }
     }
-    if (bounded) usd += step.boundUsd;
+    /* `boundUsd` covers the whole step, including every call whose known cost
+       is already in `usd`. Adding it on top would charge those calls twice and
+       can move the durable total past the cap that admitted the step. */
+    if (bounded) usd = Math.max(step.boundUsd, usd);
     budget.settle(step.id, unknown ? null : usd, unknown ?? (notes.join("; ") || undefined));
     if (threw !== undefined) {
       throw Object.assign(threw instanceof Error ? threw : new Error(String(threw)), { spent: { calls, usd } });

@@ -28,11 +28,16 @@ sees the numbers.
 Six real presses — two per entry point (glossary term, commented passage, cited work), on articles
 of different kinds, each hard in a particular way — have their search step **run once and frozen**.
 Every arm then answers each of the six from the same messages, **built by production's own
-builders** (`buildExplainMessages`, `investigateRequest`) with one eval-only edit (no further search
+builders** (`buildExplainMessages`, `investigateRequest`) with an eval-only edit (no further search
 is possible), three times, at production's 4,000-token ceiling, and each answer goes through its
-entry point's real acceptance rule. A panel of three judges from three families scores the answers
+entry point's real acceptance rule. The first two draws are judged; the third still measures
+delivery, variation, cost and caching without buying a third round of judges. A panel of three
+judges from three families scores the answers
 in small blind batches, each with an Opus answer as a common anchor, against the article and the
-exact evidence the answer saw. Cost, cache use and latency come from the calls themselves. The
+exact evidence the answer saw. The ~255k-token article is the exception: each of its two tasks has
+a declared evidence packet containing the target, every gold-note block and nearby or intervening
+blocks, because the full article plus five answers cannot fit a nominal 262k judge window. Cost,
+cache use and latency come from the calls themselves. The
 report is a table per arm, the cost–quality frontier, and options for Greg — not a single "best
 value", because how much quality a dollar is worth is his to say.
 
@@ -80,15 +85,15 @@ the convention in [evals/results/README.md](../../evals/results/README.md) § `s
 server tool and may search again; here that would let each arm read different pages. Rather than
 leave every arm an instruction it cannot follow, the one line that says to search again is replaced
 in the built messages by an eval line — *"That search is all the research there is; you cannot
-search again."* — in explain's `DIG` and in Citations' `DIG_INVESTIGATE` and `INVESTIGATE_SYSTEM`'s
-*What to search* section. The replacement is a string edit on production's output, and the test
-fails if the sentence it replaces is no longer there, so a prompt change cannot quietly make it a
-no-op.
+search again."* — in explain's `DIG` and whole *Web research* section, and in Citations'
+`DIG_INVESTIGATE`, opening tool claim and `INVESTIGATE_SYSTEM`'s *What to search* section. The
+replacements are string edits on production's output, and the test fails if any text it replaces is
+no longer there, so a prompt change cannot quietly make one a no-op.
 
 **And then once production-shaped** (Sol F2): the best two non-Opus arms and Opus run each example
-once more through `explainStream` / the investigate request **as production sends them** — tool
-on, 4,000 tokens, production's route — to see whether the isolated ranking survives the real
-setting. That run is not judged against the others' scores; it is judged as its own small batch
+once more through production's prompt and route, with the tool on, 4,000 tokens and one eval-only
+model-neutral `max_tool_calls: 8` safety ceiling — to see whether the isolated ranking survives the
+real setting. That run is not judged against the others' scores; it is judged as its own small batch
 (the three answers per example), and the report says whether the order held.
 
 A separate one-call-per-finalist probe records whether a model can run its own **forced** search
@@ -159,10 +164,14 @@ its cache — is not saved at all.
 **Small batches with a common anchor** (Sol F5). For each (example, run, judge), the eleven
 non-anchor arms (`opus-b` included) are split by a seeded shuffle into three batches of three or
 four, and **`opus`'s answer from that run is added to every batch** as the anchor. Each batch is
-labelled with fresh random letters in a fresh order. The judge sees: the article (cached), the
+labelled with fresh random letters in a fresh order. The judge sees: the article (cached), except
+that the ~255k-token Kuhn article becomes a stable task-specific evidence packet containing the
+target, every block named by the gold note and nearby or intervening blocks; the
 **exact last part every arm in that example saw** — the passage or term, the frozen search results
 and library passages, and for Citations the matched page and the paper's evidence (Sol F5) — the
-gold note, and the batch. It returns JSON (a `response_format` schema), per label: 1–5 for
+gold note, and the batch. It is asked for one exact JSON shape, validated locally rather than sent
+with `response_format` (support for that parameter was not established for both non-Opus judges),
+per label: 1–5 for
 
 - **accuracy** — true to the article and the evidence; nothing false;
 - **sourcing** — uses the sources faithfully, says where a point came from, claims no search it did
@@ -176,22 +185,29 @@ source number, or "outside knowledge: …"). An error with no pointer is kept bu
 **Declared before the run** (Sol F5):
 
 - **Primary quality** = an arm's mean of (its overall − the anchor's overall in the same batch),
-  over every example, run and judge. Relative to Opus because absolute scores move with what else
-  is in the batch.
+  over every delivered answer the panel could judge. Relative to Opus because absolute scores move
+  with what else is in the batch. Delivery is shown separately; unlike the quality mean, the
+  acceptable-rate denominator includes every scheduled judged press, so refusal cannot improve it.
 - **Acceptable** = accuracy ≥ 4 and sourcing ≥ 4 from at least two of three judges, and no error
-  with an evidence pointer reported by two or more judges. An arm's **acceptable rate** is over all
-  its presses, a refused press counting as not acceptable.
+  with the same evidence pointer reported by two or more judges. Block IDs and result numbers are
+  already stable pointers; an `outside knowledge:` pointer is keyed by its normalized factual
+  statement so two unrelated external errors cannot create false agreement. A smaller smoke panel
+  cannot certify an answer. An arm's **acceptable rate** is over its judged presses, a refused
+  judged press counting as not acceptable.
 - **The frontier** = arms no other arm beats on both acceptable rate and repeat-press cost, and the
   same on primary quality. No arm is named "best value" by a formula; the report gives Greg the
   frontier and three readings of it (best quality, cheapest within the control spread of Opus,
   cheapest acceptable on every example) with the price of each.
 
-**Noise** (Sol F6): the run-to-run spread within each arm; the `opus`/`opus-b` gap, reported as the
+**Noise** (Sol F6): the run-to-run spread across the two judged draws within each arm; the
+`opus`/`opus-b` gap, reported as the
 incumbent generation spread, not as a universal floor; **judge stability**, by re-judging one run of
 every example a second time with a fresh shuffle and comparing; and intervals bootstrapped over
 examples, since six examples, not 162 calls, are the sample. The all-judge mean is primary; each
 arm's score from judges outside its own family is a sensitivity check, and the report says where it
-disagrees. **Position**: mean score by position within a batch. **Length**: word counts per arm.
+disagrees. **Position**: the repeated Opus answer's mean and the non-anchor mean relative to Opus in
+the same batch, by displayed position; both avoid mistaking a changing answer mix for an order
+effect. **Length**: word counts per arm.
 
 **The panel**: `anthropic/claude-opus-5.5`, `openai/gpt-6.1-sol`, `moonshotai/kimi-k3` — three
 families, each its family's strongest on long context.
@@ -199,22 +215,27 @@ families, each its family's strongest on long context.
 ## Cost and latency
 
 From each call's own `usage` — OpenRouter's `cost`, prompt, cached and cache-write tokens, reasoning
-and completion tokens — and our own clock. **Costs are OpenRouter credits**; cash is about 5.5% more
-when credits are bought (src/cost-report.ts), and the report says so once (Sol F3).
+and completion tokens — and our own clock. Cost uses the ledger's `totalSpend`: ordinary calls are
+OpenRouter credits (cash is about 5.5% more when buying them), while a BYOK call uses its reported
+upstream inference cost, billed on that provider's account.
 
 - **Repeat press** = a run whose cache read covers at least 90% of the article prefix. A run that
-  read less is reported as a **cache miss** and not averaged into the repeat price (Sol F3). Whether
-  a provider caches at all is that column.
+  read less is reported as a **cache miss** and not averaged into the repeat price (Sol F3). A model
+  with no cache price advantage has a valid full-price repeat observation without a cache hit.
 - **First press** is measured where it can be — run 1 of an arm on an example nobody has cached —
   and **reconstructed** where the prefix was already warm (`opus-b`, the check, the second Kuhn
   example): the warm cost plus the prefix's tokens × (write price − read price), validated against
   the arms where both were observed.
 - **Per press** = the arm's own call(s) + what every arm shares: the search step, and on Citations
-  the *Look it up* and paper-passages calls (Opus in production). Shown separately.
+  the *Look it up* and paper-passages calls (Opus in production). Shown separately for first and
+  repeat: a current assessed lookup is skipped on repeat, while a no-match is looked up again.
+  The shared repeat is a conservative reconstruction, not another measured press: apart from that
+  production lookup branch, the captured shared costs and times are held fixed.
 
 **Latency, two columns** (Sol F4): the answer call alone (time to first answer token, total), and
 **what the reader waits**: the captured search time, plus on Citations the lookup and paper times
-(with two states, *lookup needed* — a first press — and *already assessed*, which skips it), plus
+(with two states, first and repeat; an assessed lookup is skipped on repeat, while a no-match is
+looked up again), plus
 the answer's time to first token. For `luna+check` the first word a reader can see comes after
 Luna's whole draft and Opus's verdict (and its whole replacement, since a JSON answer cannot be
 streamed as it is written).
@@ -223,7 +244,8 @@ streamed as it is written).
 
 **The budget is one durable file per run**, shared by capture, probe, answers and judging across
 separate invocations (Sol F7). Before every call the runner **reserves an upper bound** — the
-request's input tokens at the uncached price, plus `max_tokens` at the output price, plus tool fees
+request's UTF-8 bytes as a true token upper bound at the uncached price, plus `max_tokens` at the
+output price, plus tool fees
 — and refuses the call if reserved plus spent would pass `--cap` (default $35). Afterwards it
 settles the reservation to the call's reported cost. **A call that reports no cost, or a
 non-finite one, halts the run** rather than counting as zero.
@@ -232,18 +254,20 @@ The estimate is recomputed by the free preflight once the examples are fixed: it
 request, counts tokens, prices them at today's listing and prints the bill. Rough order, before
 that: answers ~$12 (the two Kuhn examples are most of it — ~255k tokens each, though the second
 reads the first's cache), judging ~$12–18 (Kimi K3 has no cache discount on a 255k-token article),
-capture and probes ~$0.5. **If the preflight says more than ~$35, the plan is cut before spending**
-— first the third run for the judges, then Kimi off the Kuhn batches — and that goes back to the
-Overseer if it still does not fit under $40.
+capture and probes ~$0.5. The third answer draw is already not judged. **If a fresh preflight says
+more than ~$35, the plan is cut before spending** — next Kimi comes off the Kuhn batches — and that
+goes back to the Overseer if it still does not fit under $40.
 
 ## Output and integrity
 
 The run directory holds the **expected matrix, written before anything is bought** (Sol F8): every
 (example, arm, run) answer cell and every (example, run, judge, batch) judging cell. A cell's key is
 a hash of everything that makes it what it is — the full outgoing request, the frozen evidence, the
-arm, the judge prompt and schema, the source commit — so a resume never reuses a cell made under an
-older prompt or input. The report refuses to be written as final until every expected cell is
-present (`completedAt`); a partial one says which cells are missing.
+arm, the judge prompt and validator, plus the eval and imported production source that builds and
+accepts the cell — so a resume never reuses a cell made under an older prompt or input. The commit
+is recorded as provenance rather than used as the key. The report refuses to be written as final
+until every expected cell is present, current and valid (`completedAt`); a failed judge reply
+remains retryable and makes the report partial.
 
 Each cell records the requested model, the model the response named, the generation id and the
 upstream. The report has the table per arm — acceptable rate, primary quality, each criterion,
@@ -258,8 +282,9 @@ price of each per press and per hundred presses.
    the CLI), `npm run eval:dig-deeper`, an `evals/README.md` section, and
    `tests/dig-deeper-eval.test.ts` for the parts that can be wrong silently, **each seen red**: an
    arm's request is production's messages with only the declared fields changed and the
-   search-again sentence really replaced; the shuffle decodes sentinels back to the right arm and
-   balances positions; the budget refuses before the call and halts on missing cost; a judge reply
+   search instructions really replaced; the shuffle decodes sentinels back to the right arm and
+   balances positions; three answer draws create only two judged draws; the budget refuses before
+   the call, uses a real byte upper bound and halts on missing cost; a judge reply
    with a missing, duplicate or extra label, or a score out of range, is refused; a cell key changes
    when the request does; the acceptance rules; the frontier; a returned model that does not match
    is refused. Then a smoke run (~$1: one example, three arms, one judge).
@@ -290,11 +315,13 @@ Stage 2, 2026-10-01. Each is the closest sound option to what the plan said, and
   So `kuhn-challenge` anchors on the abstract (`spya-qm5580`, the same list of ten categories), and
   `seth-naturalism` on the heading *3: Life Matters* (`spya-tzj2rd`, the alias "Life matters") —
   which is what a reader pressing that entry sends today, a weaker sentence to aim the search with.
-  The gold notes are unchanged: the judges have the whole article.
-- **A cell's key hashes the eval source that builds and accepts it, not the git commit.** Every
-  request, the capture's hash, the arm and the ceiling are in it as planned; the commit is recorded
-  on each cell instead. Keyed on the commit, any later commit — the stage-4 review's own edits
-  included — would have voided every paid cell.
+  The gold notes are unchanged: the judges have the whole article, or the declared evidence packet
+  for the one article too long to fit beside a batch of answers.
+- **A cell's key hashes the eval and imported production source that builds and accepts it, not the
+  git commit.** Every request, the capture's hash, the arm and the ceiling are in it as planned; the
+  commit is recorded on each cell instead. Keyed on the commit, any later commit — the stage-4
+  review's own edits included — would have voided every paid cell; omitting the imported acceptance
+  rules would have let a production rule change reuse an old result.
 - **Citations capture runs production's press itself**, `makeInvestigateCitation` with production's
   deps and four seams: a fake allowance (the shared database's is not spent), a writer that refuses
   to save, timing wrappers round the search and the paper read, and a `run` that records the request
@@ -303,12 +330,27 @@ Stage 2, 2026-10-01. Each is the closest sound option to what the plan said, and
 - **The finalist run, on Citations, streams the captured production request with the model
   swapped** (job `citation-investigate`, tool on) and applies `reading()`'s rules, rather than
   calling the whole press again, which would re-run the search, the lookup and the paper read and
-  read different pages. On the glossary and comments it is `explainStream` itself.
+  read different pages. Glossary and comment finalists likewise stream the captured request and
+  apply the same acceptance switch and `refuseUnfinished` rule as `explainStream`. This keeps the
+  request on the wire identical to the one keyed and budgeted; calling `explainStream` would rebuild
+  it and silently drop the eval's safety field. Every finalist request adds `max_tool_calls: 8`:
+  production's `max_uses: 8` is provider-specific and known to be
+  ignored on some routes, so it cannot bound this eval's search bill. The reservation prices all
+  eight possible $0.01 searches. The one-search compatibility probe uses a ceiling of one. Each
+  answer's additional result extracts are stored on its cell and shown only inside its blind letter's
+  judge section, so a judge can check sourcing without seeing an arm name or lending one arm's
+  private results to another. A missing provider search count is printed as “not reported”, not
+  silently turned into zero searches, and a result extract cut by the packet's context allowance is
+  labelled as clipped rather than presented as complete.
 - **No reader profile** on any press. The comment route sends one when the reader has written one;
   every arm here is pitched at the default reader.
 - **The judges go through job `eval`, all three** — judging is not a press. Opus still thinks at
-  `high` there (`wireEffort` keys on the model). Score ranges are checked in code, not in the
-  schema, so a provider's partial support for numeric keywords cannot loosen them.
+  `high` there (`wireEffort` keys on the model). The exact JSON shape and score ranges are checked
+  in code. Round 1 removed the strict `response_format`, whose support had not been established for
+  Sol and Kimi, and cut the judge ceiling from 12,000 to 8,000: the estimate and the smoke output
+  put five score records near 2,500, while the unmeasured Sol and Kimi routes may also spend the
+  allowance on reasoning. The separate long-article evidence packet means that allowance no longer
+  competes with a ~255k-token article inside a nominal 262k context.
 - **What a call cost is the ledger's own rule** (`totalSpend`, src/ai-spend.ts), not
   `usage.cost` alone. The smoke run found **Luna served BYOK**: `usage.cost` is a legitimate $0 of
   credits, and the inference is billed to our own OpenAI key. Read raw, Luna and the Luna draft
@@ -318,19 +360,50 @@ Stage 2, 2026-10-01. Each is the closest sound option to what the plan said, and
   settled at its step's whole upper bound, with a note — unknown but bounded; the smoke run's
   DeepSeek finalist hit explain's two-minute deadline and halted the run under the first rule, which
   would let one slow model stop the matrix. One *refused before it answered* (a 4xx, no model
-  named, no tokens) settles at $0: OpenRouter does not bill it.
+  named, no tokens) settles at $0: OpenRouter does not bill it. Round 1 fixed a composite call's
+  known first cost being added on top of the whole-step bound, and made the first invocation's cap
+  durable so a later command cannot silently raise it.
 - **The check's verdict may sit in one ```` ```json ```` fence**; anything else not exactly `keep` or
   a non-empty `replace` is a failed press.
-- **With fewer than three judges** (the smoke run), *acceptable* needs two thirds of them rounded up,
-  and an error counts when `min(2, judges)` point at the same evidence.
-- **The bill, with all six captured** (the free preflight, 2026-10-02): about **$36.6** for the
-  full matrix — answers $13.5, judging $13.6, the re-judge $3.7, the finalist run and its judging
-  $5.7, the probe a few cents — plus the $0.14 the capture spent. Over the $35 line, so § Spend's
-  cut applies before stage 3 (the judges' third run alone is about $4.5). Kimi's judging is $3.7 of
-  it; outputs are assumed (2,000 tokens an answer, 2,500 a judgement), so the real figure moves.
-- **Residual, not changed:** explain's `SYSTEM` still says *You have a web search tool … lean
-  towards searching*; only `DIG`'s sentence is replaced, as planned, and the eval line after it says
-  no further search is possible. Every arm reads the same contradiction.
+- **A smoke panel cannot certify “acceptable”.** The threshold stays the declared two judges; it
+  does not shrink to one. Repeated anchor ratings are averaged back to one vote per judge. Two
+  judges pointing to the same normalized outside-knowledge fact also trigger the factual-error
+  gate; unrelated external errors do not create false agreement merely because they share that
+  marker.
+- **Three answer draws, the first two judged.** The original single `runs` setting could not express
+  the intended matrix: cutting the third judge run also cut the third answer draw. `judgeRuns` is a
+  separate manifest field and flag now. Acceptable rate uses the 12 judged presses; delivery, cost
+  and cache use all 18 answers.
+- **A Citation repeat skips *Look it up* only after an `assessed` lookup.** A `found` response can
+  still be `no-extract`, `not-identified` or `unreadable`, and production retries all three. New
+  captures record that state; the frozen legacy captures lack it, so the report charges the retry
+  in the conservative direction rather than treating “found” as “assessed”.
+- **The bill, with all six captured** (the free, capture-only preflight calculation, 2026-10-02):
+  about **$28.1** for the full matrix — answers $13.5, the first two answer draws' judging $5.9,
+  the re-judge $2.6, the finalist run and its judging $6.0, and the probe a few cents — plus the
+  $0.14 capture already spent. It fits under the $35 run cap; outputs remain assumptions (2,000
+  tokens an answer, 2,500 a judgement), while reservations use a deliberately larger byte bound.
+- **The isolated prompt now removes every claim that a web tool exists.** Round 1 found that both
+  system prompts still promised the missing tool. Exact guarded replacements now cover explain's
+  whole *Web research* section and Citations' opening claim as well as the three original edits.
+- **A short case runs first, then the 255k-token Kuhn pair.** That spends little to establish each
+  route and judge's JSON shape, then exercises the context-limit risk before buying the rest of the
+  matrix; same-article cases remain adjacent for caching.
+- **The long article is compacted only for judging.** Its full ~255k tokens plus as many as five
+  4,000-token answers and a judge reply do not fit a nominal 262k window. Each Kuhn task therefore
+  gets a stable packet (32KB and 10KB in the frozen captures) of its target, every gold-note block
+  and nearby or short intervening spans. Answer arms still receive the whole article. The prompt
+  names the omission so a judge cannot treat unseen sections as evidence; packets are keyed and
+  cached separately because the two tasks contain different passages.
+- **With all captures frozen, preflight does not open the database.** It reads the six capture
+  files and builds the full bill locally; it opens the store only when it must make a stand-in for
+  a capture that does not exist yet.
+- **Probe results land after each call and resume by arm plus model.** A crash during the second
+  probe no longer loses the first and buys it again. Once finalists exist, their two compatibility
+  probes are part of report completeness; a missing probe makes the report partial.
+- **Position bias uses the repeated control rather than a changing answer mix.** The report groups
+  the Opus answer's own score by its position, and each non-anchor answer's score minus Opus in the
+  same batch by that answer's position. A raw mean over all arms would confound order with quality.
 
 ## Simpler options passed over
 

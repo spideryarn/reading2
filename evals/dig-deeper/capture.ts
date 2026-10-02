@@ -36,7 +36,7 @@ import { DIG_ANSWER_TOKENS, DIG_DEEPER_MODEL, type DigFindings, searchFirst } fr
 import { buildExplainMessages, MAX_SEARCHES } from "../../src/explain.js";
 import type { StreamRun } from "../../src/stream-run.js";
 import { anchorIn } from "../../src/term-lookup.js";
-import type { Block, Meta } from "../../src/types.js";
+import type { Block, CitationLookupState, Meta } from "../../src/types.js";
 import type { Example } from "./examples.js";
 
 export const CAPTURE_VERSION = 1;
@@ -73,6 +73,8 @@ export interface Capture {
     matched: MatchedPage | null;
     lookupRan: boolean;
     lookupOutcome: "found" | "no-match" | null;
+    /** The lookup just written. Only `assessed` makes production skip it next press. Absent on legacy captures. */
+    lookupState?: CitationLookupState | null;
     paperState: string;
     paperRead: boolean;
     paperPassages: number | null;
@@ -212,6 +214,7 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
   let paperState = "not-read";
   const stamps: Record<string, number> = {};
   let lookupOutcome: "found" | "no-match" | null = null;
+  let lookupState: CitationLookupState | null = null;
   const press = makeInvestigateCitation({
     ...deps.investigateDeps,
     allowance: { take: async () => ({ kind: "allowed", id: "dig-deeper-eval" }), finish: async () => {} },
@@ -242,7 +245,9 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
     run: (args) => {
       captured = args;
       return (async function* () {
-        throw STOP;
+        /* `runStream` starts on the first iteration. Reject there, before any
+           answer call, while remaining a real async generator for the seam. */
+        yield await Promise.reject(STOP);
       })();
     },
   });
@@ -250,7 +255,10 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
   try {
     for await (const event of run.stream()) {
       if (event.type === "stage") stamps[event.stage] = Date.now();
-      if (event.type === "lookup") lookupOutcome = event.response.outcome;
+      if (event.type === "lookup") {
+        lookupOutcome = event.response.outcome;
+        lookupState = event.response.outcome === "found" ? event.response.lookup.state : null;
+      }
     }
     throw new Error(`${example.id}: the press finished without reaching its answer`);
   } catch (err) {
@@ -289,6 +297,7 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
       matched,
       lookupRan: lookupOutcome !== null,
       lookupOutcome,
+      lookupState,
       paperState,
       paperRead: paperState === "read",
       paperPassages: passages,

@@ -11,7 +11,8 @@
  * **What is here and what is not** (Sol F9): ids, slugs, block ids, the one
  * selected quote a comment press sends, and a short gold note **in our own
  * words**, pointing at block ids. No other article prose: the judges get the
- * whole article beside the note, so the note only has to say where to look.
+ * whole article beside the note, or for Kuhn a packet built from every block
+ * the note names, so the note only has to say where to look.
  *
  * `hints` are outside knowledge the example-picker added — the history of the
  * electron charge, the likely Schmidhuber papers, Parker's cycle. Nobody here

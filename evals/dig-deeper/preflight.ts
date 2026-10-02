@@ -19,7 +19,7 @@ import { type Arm, articlePartText, armById, judgeById, lastPartText, priceOf, r
 import { cellRequests } from "./answer.js";
 import type { Capture } from "./capture.js";
 import type { Example } from "./examples.js";
-import { JUDGE_SYSTEM } from "./judge.js";
+import { JUDGE_SYSTEM, judgeArticlePart } from "./judge.js";
 import type { Selection } from "./manifest.js";
 
 /** Assumed output tokens per call, reasoning included. Opus answers measured ~1,350-1,750 (plan 261001p). */
@@ -29,6 +29,8 @@ export const ASSUMED = {
   judgeOut: 2_500,
   /** Words of one answer as a judge reads it, in tokens. */
   answerAsRead: 700,
+  /** Capped answer-specific result extracts in a production-shaped finalist judgement. */
+  finalistEvidenceAsRead: 6_000,
   goldTokens: 450,
   /** Search step plus, on Citations, *Look it up* and the passages call — when no capture says. */
   captureUsd: { glossary: 0.008, comment: 0.008, citation: 0.12 },
@@ -81,9 +83,12 @@ export function estimateBill(args: {
     parts.set(part, p);
   };
 
-  /* Same-article examples next to each other, as the runner orders them. */
-  const ordered = orderForCache(args.examples.filter((e) => sel.examples.includes(e.id)));
   const capOf = (e: Example) => args.captures.get(e.id) ?? args.standIn(e);
+  /* A short article first proves every route and response shape cheaply; the longest follows so context failures happen early. */
+  const ordered = orderForCache(
+    args.examples.filter((e) => sel.examples.includes(e.id)),
+    (e) => JSON.stringify(capOf(e).production.request.messages).length,
+  );
 
   if (args.includeCapture) {
     for (const e of ordered) {
@@ -112,12 +117,12 @@ export function estimateBill(args: {
     }
   }
 
-  const judgeCalls = (pass: string, runs: number, batchSize: number[], judges: readonly string[]) => {
+  const judgeCalls = (pass: string, runs: number, batchSize: number[], judges: readonly string[], extraPerAnswer = 0) => {
     for (const e of ordered) {
       const cap = capOf(e);
       const req = cellRequests({ capture: cap, arm: armById("opus"), ceiling: 4_000, mode: "isolated", article: { meta: {} as never, blocks: [] } })[0]?.request;
       if (!req) continue;
-      const article = estimateTokens(articlePartText(req));
+      const article = estimateTokens(judgeArticlePart(e, req));
       const last = estimateTokens(lastPartText(req));
       for (let run = 1; run <= runs; run++) {
         for (const j of judges) {
@@ -125,7 +130,16 @@ export function estimateBill(args: {
           for (const size of batchSize) {
             add(
               `judges${pass}: ${j}`,
-              priced(warm, judge.model, `judge|${e.slug}`, estimateTokens(JUDGE_SYSTEM) + article, last + ASSUMED.goldTokens + size * ASSUMED.answerAsRead, ASSUMED.judgeOut),
+              /* Long same-article examples have different evidence packets,
+                 so only this example's repeated batches share a judge prefix. */
+              priced(
+                warm,
+                judge.model,
+                `judge|${e.id}`,
+                estimateTokens(JUDGE_SYSTEM) + article,
+                last + ASSUMED.goldTokens + size * (ASSUMED.answerAsRead + extraPerAnswer),
+                ASSUMED.judgeOut,
+              ),
             );
           }
         }
@@ -135,7 +149,7 @@ export function estimateBill(args: {
   const others = sel.arms.filter((a) => a !== "opus").length;
   const count = Math.max(1, Math.ceil(others / 4));
   const batchSizes = Array.from({ length: count }, (_, i) => Math.floor(others / count) + (i < others % count ? 1 : 0) + 1);
-  judgeCalls("", sel.runs, batchSizes, sel.judges);
+  judgeCalls("", sel.judgeRuns ?? sel.runs, batchSizes, sel.judges);
   if (sel.rejudge) judgeCalls(" (re-judge)", 1, batchSizes, sel.judges);
 
   if (args.finalists.length > 0) {
@@ -149,7 +163,7 @@ export function estimateBill(args: {
         add("finalists: answers", priced(warm, r.request.model, `prod|${z.prefixKey}`, z.prefix, z.suffix, ASSUMED.answerOut) + ASSUMED.finalistSearchFeesUsd);
       }
     }
-    judgeCalls(" (finalists)", 1, [args.finalists.length + 1], sel.judges);
+    judgeCalls(" (finalists)", 1, [args.finalists.length + 1], sel.judges, ASSUMED.finalistEvidenceAsRead);
     for (const _ of args.finalists) add("probe", ASSUMED.probeUsd, "estimated");
   }
 
@@ -157,10 +171,15 @@ export function estimateBill(args: {
   return { parts: list, total: list.reduce((n, p) => n + p.usd, 0) };
 }
 
-/** Examples on the same article next to each other, first-seen order kept, so the second reads the first's cache. */
-export function orderForCache<T extends { slug: string }>(examples: readonly T[]): T[] {
+/** Same-article examples stay together; optional size puts one cheap compatibility case first, then the riskiest context. */
+export function orderForCache<T extends { slug: string }>(examples: readonly T[], sizeOf?: (example: T) => number): T[] {
   const slugs = [...new Set(examples.map((e) => e.slug))];
-  return slugs.flatMap((s) => examples.filter((e) => e.slug === s));
+  const groups = slugs.map((s, index) => ({ index, members: examples.filter((e) => e.slug === s) }));
+  if (!sizeOf) return groups.flatMap((g) => g.members);
+  groups.sort((a, b) => sizeOf(a.members[0] as T) - sizeOf(b.members[0] as T) || a.index - b.index);
+  const first = groups.shift();
+  groups.sort((a, b) => sizeOf(b.members[0] as T) - sizeOf(a.members[0] as T) || a.index - b.index);
+  return [...(first ? [first] : []), ...groups].flatMap((g) => g.members);
 }
 
 export function renderBill(bill: Bill, cap: number): string {

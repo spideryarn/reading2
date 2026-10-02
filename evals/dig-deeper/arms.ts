@@ -193,6 +193,35 @@ export function modelMatches(requested: string, returned: string | null | undefi
 /** What replaces each search-again sentence (plan § Holding the search step fixed). */
 export const NO_MORE_SEARCH = "That search is all the research there is; you cannot search again.";
 
+/** Explain's whole web-tool section. Leaving any of it behind gives the arm an impossible task. */
+export const EXPLAIN_WEB_RESEARCH = `WEB RESEARCH: LEAN TOWARDS SEARCHING
+
+You have a web search tool. Reach for it BY DEFAULT whenever the answer turns on
+a fact you do not hold with specifics:
+
+- a named person, organisation, work, study, product or event you cannot place
+  with at least one concrete, checkable fact. A category is not a fact. "One of
+  the people thanked" is a category; "co-founded X, wrote Y" is a fact. If all
+  you have is the category, search.
+- anything that may have happened or changed since your training
+- a live argument, a contested number, or any claim you would hedge about
+
+Do not search only to confirm something you could state precisely and would
+stake the answer on.
+
+Use the article to aim the search. The author, the date, the subject and the
+other names around the selection are what turn a common name into a findable
+one, and searching the bare selection on its own usually wastes the call.
+
+Being unsure and not checking is the worst outcome here; a search you did not
+need costs almost nothing. When you have searched, ground the relevant sentence
+in what you found.`;
+
+export const EXPLAIN_FROZEN_RESEARCH = `WEB RESEARCH: THE SEARCH IS ALREADY FINISHED
+
+${NO_MORE_SEARCH} Use the article and the frozen results below. Ground any
+outside fact in those results, and say plainly when they do not establish it.`;
+
 /** explain's `DIG` (src/explain.ts), the search-again sentence, verbatim. */
 export const EXPLAIN_SEARCH_AGAIN =
   "If they do not settle it,\nsearch again, and use the article to aim the search: the author, the date, the\npublication, the other names in the same sentence.";
@@ -203,6 +232,10 @@ export const INVESTIGATE_SEARCH_AGAIN = "Search again only if they do\nnot settl
 /** `INVESTIGATE_SYSTEM`'s *What to search* section body, verbatim. */
 export const INVESTIGATE_WHAT_TO_SEARCH =
   "Search for the work itself: its title, with the first author and year when you\nhave them. Use the article's own link to aim the search when one is given. One\nor two searches is usually enough; do not keep searching once you have found\npages about the work.";
+
+/** The opening claim in `INVESTIGATE_SYSTEM` that a tool is present. */
+export const INVESTIGATE_HAS_WEB_TOOL = "and a web\nsearch tool.";
+export const INVESTIGATE_HAS_FROZEN_RESULTS = "and the frozen results of a web\nsearch.";
 
 /** Replace `find` in `text` exactly once, or throw — the edit must never be a silent no-op. */
 export function replaceOnce(text: string, find: string, by: string, where: string): string {
@@ -217,7 +250,7 @@ type Part = { type: "text"; text: string; cache_control?: { type: "ephemeral" } 
 function lastPartEdited(messages: OpenRouterMessage[], edit: (t: string) => string): OpenRouterMessage[] {
   const out = structuredClone(messages);
   const user = out[out.length - 1];
-  if (!user || user.role !== "user" || typeof user.content === "string") throw new Error("the last message is not the user's parts");
+  if (user?.role !== "user" || typeof user.content === "string") throw new Error("the last message is not the user's parts");
   const parts = user.content as Part[];
   const last = parts[parts.length - 1];
   if (!last) throw new Error("the user message has no parts");
@@ -239,10 +272,14 @@ export function isolatedRequest(production: AiRequestBody, entry: EntryKind, mod
   if (entry === "citation") {
     edited = lastPartEdited(messages, (t) => replaceOnce(t, INVESTIGATE_SEARCH_AGAIN, NO_MORE_SEARCH, "DIG_INVESTIGATE"));
     const system = edited[0];
-    if (!system || system.role !== "system" || typeof system.content !== "string") throw new Error("no system prompt");
+    if (system?.role !== "system" || typeof system.content !== "string") throw new Error("no system prompt");
     system.content = replaceOnce(system.content, INVESTIGATE_WHAT_TO_SEARCH, NO_MORE_SEARCH, "INVESTIGATE_SYSTEM");
+    system.content = replaceOnce(system.content, INVESTIGATE_HAS_WEB_TOOL, INVESTIGATE_HAS_FROZEN_RESULTS, "INVESTIGATE_SYSTEM opening");
   } else {
     edited = lastPartEdited(messages, (t) => replaceOnce(t, EXPLAIN_SEARCH_AGAIN, NO_MORE_SEARCH, "explain DIG"));
+    const system = edited[0];
+    if (system?.role !== "system" || typeof system.content !== "string") throw new Error("no system prompt");
+    system.content = replaceOnce(system.content, EXPLAIN_WEB_RESEARCH, EXPLAIN_FROZEN_RESEARCH, "explain SYSTEM");
   }
   return { ...rest, model, messages: edited } as AiRequestBody;
 }
@@ -261,7 +298,7 @@ export function lastPartText(request: AiRequestBody): string {
 /** The system prompt the request carries. */
 export function systemText(request: AiRequestBody): string {
   const m = (request.messages as OpenRouterMessage[])[0];
-  if (!m || m.role !== "system" || typeof m.content !== "string") throw new Error("no system prompt");
+  if (m?.role !== "system" || typeof m.content !== "string") throw new Error("no system prompt");
   return m.content;
 }
 

@@ -19,7 +19,8 @@
  *
  * Selection flags, for answers, judge and preflight: `--run <name>` (default
  * `main`), `--captures <run>` (whose captures to answer from; default the same
- * run), `--examples a,b`, `--arms a,b`, `--runs N` (3), `--judges a,b`,
+ * run), `--examples a,b`, `--arms a,b`, `--runs N` (3 answer draws),
+ * `--judge-runs N` (2 of those draws), `--judges a,b`,
  * `--no-rejudge`. The manifest is written by the first paid command on a run
  * and every later one must ask for the same selection.
  *
@@ -33,12 +34,12 @@ import path from "node:path";
 import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 import type { Block, Meta } from "../../src/types.js";
-import { type AnswerCell, answerCell, answerKey, cellRequests, probeForcedSearch, type CellInputs } from "./answer.js";
+import { type AnswerCell, answerCell, answerKey, cellRequests, probeForcedSearch, type CellInputs, totalReportedWebSearches } from "./answer.js";
 import { ANCHOR_ARM, ARMS, armById, JUDGES, judgeById, lastPartText, modelMatches } from "./arms.js";
 import { type Budget, BudgetHalted, BudgetRefused, type Ledger, openBudget, paidStep, recordUsd } from "./budget.js";
 import { articleSha, type Capture, captureExample, sha256, type SharedCall } from "./capture.js";
 import { EXAMPLES, type Example, exampleById } from "./examples.js";
-import { type JudgeCell, judgeBatch, judgeKey, judgeRequest } from "./judge.js";
+import { type BatchAnswer, type JudgeCell, judgeBatch, judgeKey, judgeRequest, judgementIsComplete } from "./judge.js";
 import {
   type AnswerSlot,
   completeness,
@@ -56,10 +57,19 @@ import {
   writeManifest,
 } from "./manifest.js";
 import { estimateBill, orderForCache, renderBill } from "./preflight.js";
-import { type ProbeResult, renderReport } from "./report.js";
+import { type ProbeResult, probeResultFor, renderReport } from "./report.js";
 
 const SEED = "261001s";
-const ANSWER_SOURCE = () => sourceHash(["arms.ts", "accept.ts", "answer.ts"]);
+const ANSWER_SOURCE = () =>
+  sourceHash([
+    "arms.ts",
+    "accept.ts",
+    "answer.ts",
+    "../../src/explain.ts",
+    "../../src/term-lookup.ts",
+    "../../src/citation-investigate.ts",
+    "../../src/investigate-quote-guard.ts",
+  ]);
 const JUDGE_SOURCE = () => sourceHash(["judge.ts"]);
 
 /* ------------------------------------------------------------- the flags -- */
@@ -79,7 +89,7 @@ export interface Flags {
 export function parseFlags(argv: readonly string[]): Flags {
   const args = [...argv];
   const cmd = args[0] && !args[0].startsWith("--") ? (args.shift() as string) : "preflight";
-  const known = new Set(["--spend", "--run", "--captures", "--cap", "--examples", "--arms", "--runs", "--judges", "--no-rejudge", "--finalists", "--ceiling", "--recapture"]);
+  const known = new Set(["--spend", "--run", "--captures", "--cap", "--examples", "--arms", "--runs", "--judge-runs", "--judges", "--no-rejudge", "--finalists", "--ceiling", "--recapture"]);
   const value = (name: string): string | undefined => {
     const i = args.indexOf(name);
     if (i < 0) return undefined;
@@ -101,6 +111,10 @@ export function parseFlags(argv: readonly string[]): Flags {
   if (!arms.includes(ANCHOR_ARM) && cmd !== "finalists" && cmd !== "probe") throw new Error(`--arms must include the anchor, ${ANCHOR_ARM}`);
   const runs = Number(value("--runs") ?? 3);
   if (!Number.isInteger(runs) || runs < 1) throw new Error("--runs must be a positive integer");
+  const judgeRuns = Number(value("--judge-runs") ?? 2);
+  if (!Number.isInteger(judgeRuns) || judgeRuns < 1 || judgeRuns > runs) {
+    throw new Error("--judge-runs must be a positive integer no larger than --runs");
+  }
   return {
     cmd,
     spend: args.includes("--spend"),
@@ -111,6 +125,7 @@ export function parseFlags(argv: readonly string[]): Flags {
       examples: list("--examples", EXAMPLES.map((e) => e.id)),
       arms,
       runs,
+      judgeRuns,
       judges: list("--judges", JUDGES.map((j) => j.id)),
       rejudge: !args.includes("--no-rejudge"),
     },
@@ -320,7 +335,10 @@ async function runAnswerSlots(
   budget: Budget,
 ): Promise<void> {
   const captures = capturesOf(m);
-  const exampleOrder = orderForCache(m.selection.examples.map(exampleById)).map((e) => e.id);
+  const exampleOrder = orderForCache(
+    m.selection.examples.map(exampleById),
+    (e) => JSON.stringify(captures.get(e.id)?.production.request.messages ?? []).length,
+  ).map((e) => e.id);
   for (const exampleId of exampleOrder) {
     const mine = slots.filter((s) => s.example === exampleId);
     if (mine.length === 0) continue;
@@ -386,7 +404,7 @@ async function diagnose(f: Flags): Promise<void> {
 /* ---------------------------------------------------------------- judge -- */
 
 type JudgePlan =
-  | { kind: "judge"; key: string; order: string[]; labels: string[]; texts: Record<string, string>; armRequest: ReturnType<typeof cellRequests>[number]["request"]; lastPart: string }
+  | { kind: "judge"; key: string; order: string[]; labels: string[]; answers: BatchAnswer[]; armRequest: ReturnType<typeof cellRequests>[number]["request"]; lastPart: string }
   | { kind: "skip"; key: string; why: string }
   | { kind: "waiting"; why: string };
 
@@ -410,21 +428,37 @@ function judgePlan(run: string, slot: JudgeSlot, captures: Map<string, Capture>,
   if (!req) return { kind: "waiting", why: "no request" };
   const order = keep.map((x) => x.arm);
   const labels = keep.map((x) => x.label);
-  const texts = Object.fromEntries(keep.map((x) => [x.arm, x.cell.delivery.delivered ? x.cell.delivery.answer : ""]));
   const lastPart = lastPartText(req);
+  const answers = order.map((arm, i): BatchAnswer => {
+    const cell = cells.get(arm) as AnswerCell;
+    if (!cell.delivery.delivered) throw new Error(`${slot.slot}: ${arm} was kept for judging without a delivered answer`);
+    return {
+      label: labels[i] as string,
+      text: cell.delivery.answer,
+      ...(slot.pass === "finalists"
+        ? {
+            searches: totalReportedWebSearches(cell.calls),
+            evidence: cell.evidence ?? [],
+          }
+        : {}),
+    };
+  });
   const request = judgeRequest({
     model: judgeById(slot.judge).model,
     example: exampleById(slot.example),
     armRequest: req,
     lastPart,
-    answers: order.map((arm, i) => ({ label: labels[i] as string, text: texts[arm] as string })),
+    answers,
   });
-  return { kind: "judge", key: judgeKey(request, order, JUDGE_SOURCE()), order, labels, texts, armRequest: req, lastPart };
+  return { kind: "judge", key: judgeKey(request, order, JUDGE_SOURCE()), order, labels, answers, armRequest: req, lastPart };
 }
 
 async function runJudgeSlots(f: Flags, m: Manifest, slots: readonly JudgeSlot[], answerSlots: readonly AnswerSlot[], budget: Budget, ledger: Ledger): Promise<void> {
   const captures = capturesOf(m);
-  for (const exampleId of orderForCache(m.selection.examples.map(exampleById)).map((e) => e.id)) {
+  for (const exampleId of orderForCache(
+    m.selection.examples.map(exampleById),
+    (e) => JSON.stringify(captures.get(e.id)?.production.request.messages ?? []).length,
+  ).map((e) => e.id)) {
     const byJudge = new Map<string, JudgeSlot[]>();
     for (const s of slots.filter((x) => x.example === exampleId)) byJudge.set(s.judge, [...(byJudge.get(s.judge) ?? []), s]);
     await pool([...byJudge.values()], 3, async (mine) => {
@@ -434,7 +468,8 @@ async function runJudgeSlots(f: Flags, m: Manifest, slots: readonly JudgeSlot[],
           console.log(`${slot.slot}: waiting — ${plan.why}`);
           return;
         }
-        if (currentCell<JudgeCell>(f.run, slot.slot, plan.key)) return;
+        const existing = currentCell<JudgeCell>(f.run, slot.slot, plan.key);
+        if (existing && judgementIsComplete(existing)) return;
         if (plan.kind === "skip") {
           const skipped: JudgeCell = { slot: slot.slot, key: plan.key, at: new Date().toISOString(), commit: m.commit, example: slot.example, run: slot.run, judge: slot.judge, pass: slot.pass, batch: slot.batch, order: slot.order, labels: slot.labels, requested: judgeById(slot.judge).model, returned: null, generationId: null, usd: 0, inputTokens: null, outputTokens: null, cacheReadTokens: null, ms: 0, scores: null, failure: `skipped: ${plan.why}` };
           writeCell(f.run, skipped);
@@ -442,7 +477,7 @@ async function runJudgeSlots(f: Flags, m: Manifest, slots: readonly JudgeSlot[],
           return;
         }
         const cell = await judgeBatch(
-          { slot: slot.slot, key: plan.key, commit: m.commit, example: exampleById(slot.example), run: slot.run, judge: judgeById(slot.judge), pass: slot.pass, batch: slot.batch, order: plan.order, labels: plan.labels, armRequest: plan.armRequest, lastPart: plan.lastPart, texts: plan.texts },
+          { slot: slot.slot, key: plan.key, commit: m.commit, example: exampleById(slot.example), run: slot.run, judge: judgeById(slot.judge), pass: slot.pass, batch: slot.batch, order: plan.order, labels: plan.labels, answers: plan.answers, armRequest: plan.armRequest, lastPart: plan.lastPart },
           budget,
           ledger,
           modelMatches,
@@ -450,10 +485,14 @@ async function runJudgeSlots(f: Flags, m: Manifest, slots: readonly JudgeSlot[],
         writeCell(f.run, cell);
         console.log(`${slot.slot}: ${cell.failure ? `FAILED (${cell.failure})` : "scored"} $${(cell.usd ?? 0).toFixed(4)}, cache ${cell.cacheReadTokens ?? "?"}/${cell.inputTokens ?? "?"}`);
       };
-      /* The first call per (example, judge) writes the judge's prefix; the rest read it. */
+      /* The first call per (example, judge) writes the judge's prefix; the rest
+         read it. Keep each judge's calls serial: byte-safe reservations for
+         nine concurrent 255k-token packets would exhaust the cap before the
+         calls started, despite their settled bill fitting. The three judges
+         still run beside one another. */
       const [first, ...rest] = mine;
       if (first) await one(first);
-      await pool(rest, 3, one);
+      await pool(rest, 1, one);
     });
   }
 }
@@ -510,7 +549,13 @@ async function probe(f: Flags): Promise<void> {
   if (!requireSpend(f, `probe: one forced-search call each for ${arms.join(", ")}`)) return;
   const store = await openStore();
   const budget = openBudget(path.join(runDir(f.run), "budget.json"), f.cap);
-  const out: ProbeResult[] = [];
+  const probePath = path.join(runDir(f.run), "probe.json");
+  let out: ProbeResult[] = fs.existsSync(probePath) ? (JSON.parse(fs.readFileSync(probePath, "utf8")) as ProbeResult[]) : [];
+  const save = () => {
+    const tmp = `${probePath}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(out, null, 2)}\n`);
+    fs.renameSync(tmp, probePath);
+  };
   try {
     await store.owner(async () => {
       const ex = exampleById("feynman-millikan");
@@ -518,14 +563,20 @@ async function probe(f: Flags): Promise<void> {
       for (const id of arms) {
         const arm = armById(id);
         if (arm.kind !== "single") continue;
+        const existing = probeResultFor(out, id, arm.model);
+        if (existing) {
+          console.log(`${id}: already probed (${existing.status})`);
+          continue;
+        }
         const r = await probeForcedSearch(
           arm.model,
           { subject: ex.entry === "comment" ? ex.quote : "", article: { title: article.meta.title, author: article.meta.byline, date: article.meta.publishedAt } },
           budget,
           store.ledger,
-          `probe:${id}:${Date.now()}`,
+          `probe:${id}:${arm.model}`,
         );
-        out.push({ arm: id, model: arm.model, ok: r.ok, searches: r.searches, status: r.status, usd: r.usd });
+        out = [...out.filter((result) => result.arm !== id), { arm: id, model: arm.model, ok: r.ok, searches: r.searches, status: r.status, usd: r.usd }];
+        save();
         console.log(`${id}: ${r.ok ? `searched (${r.searches})` : `no — ${r.status}`}`);
       }
     });
@@ -533,7 +584,6 @@ async function probe(f: Flags): Promise<void> {
     budget.close();
     await store.close();
   }
-  fs.writeFileSync(path.join(runDir(f.run), "probe.json"), `${JSON.stringify(out, null, 2)}\n`);
 }
 
 /* --------------------------------------------------------------- report -- */
@@ -571,8 +621,17 @@ export function report(f: Flags): void {
     return plan.kind === "waiting" ? null : plan.key;
   });
   const missing = [...ansMissing.missing, ...ansMissing.stale, ...finMissing.missing, ...finMissing.stale, ...jMissing.missing, ...jMissing.stale];
+  for (const s of judgeAll) {
+    const cell = judgements.get(s.slot);
+    if (cell && !judgementIsComplete(cell)) missing.push(`${s.slot} (failed: ${cell.failure ?? "no scores"})`);
+  }
   const probePath = path.join(runDir(f.run), "probe.json");
   const probeResults = fs.existsSync(probePath) ? (JSON.parse(fs.readFileSync(probePath, "utf8")) as ProbeResult[]) : undefined;
+  for (const arm of m.finalists?.arms.filter((id) => id !== ANCHOR_ARM) ?? []) {
+    const configured = armById(arm);
+    if (configured.kind !== "single") throw new Error(`${arm}: a production finalist must be a single-model arm`);
+    if (!probeResultFor(probeResults, arm, configured.model)) missing.push(`probe:${arm}`);
+  }
   const { markdown, complete } = renderReport({ manifest: m, answers, judgements, captures, missing, ...(probeResults ? { probe: probeResults } : {}) });
   const budgetFile = path.join(runDir(f.run), "budget.json");
   const spent = fs.existsSync(budgetFile) ? (JSON.parse(fs.readFileSync(budgetFile, "utf8")) as { spentUsd: number; halted: string | null }) : null;
@@ -593,35 +652,40 @@ export function report(f: Flags): void {
 /* ------------------------------------------------------------ preflight -- */
 
 async function preflight(f: Flags): Promise<void> {
-  const store = await openStore();
-  try {
-    const captures = new Map<string, Capture>();
-    const standIns = new Map<string, Capture>();
-    await store.owner(async () => {
-      for (const id of f.sel.examples) {
-        const c = readCapture(f.captures, id);
-        if (c) captures.set(id, c.capture);
-        else standIns.set(id, await standIn(exampleById(id), store));
-      }
-    });
-    const bill = estimateBill({
-      sel: f.sel,
-      examples: EXAMPLES,
-      captures,
-      standIn: (e) => standIns.get(e.id) as Capture,
-      finalists: f.finalists,
-      includeCapture: true,
-    });
-    console.log(
-      `preflight (free) for run "${f.run}": ${f.sel.examples.length} examples × ${f.sel.arms.length} arms × ${f.sel.runs} runs; judges ${f.sel.judges.join(", ")}; re-judge ${f.sel.rejudge ? "on" : "off"}; finalists ${f.finalists.join(", ")} (estimate)`,
-    );
-    console.log(`captures: ${captures.size} frozen${standIns.size ? `, ${standIns.size} estimated from the article with stand-in findings (${[...standIns.keys()].join(", ")})` : ""}`);
-    console.log(renderBill(bill, f.cap));
-    const p = path.join(runDir(f.run), "budget.json");
-    if (fs.existsSync(p)) console.log(`already spent on run "${f.run}": $${(JSON.parse(fs.readFileSync(p, "utf8")) as { spentUsd: number }).spentUsd.toFixed(4)}`);
-  } finally {
-    await store.close();
+  const captures = new Map<string, Capture>();
+  const standIns = new Map<string, Capture>();
+  for (const id of f.sel.examples) {
+    const c = readCapture(f.captures, id);
+    if (c) captures.set(id, c.capture);
   }
+  const absent = f.sel.examples.filter((id) => !captures.has(id));
+  /* Once captures exist, preflight is a filesystem-only calculation. Open the
+     database only to construct stand-ins for examples not captured yet. */
+  if (absent.length > 0) {
+    const store = await openStore();
+    try {
+      await store.owner(async () => {
+        for (const id of absent) standIns.set(id, await standIn(exampleById(id), store));
+      });
+    } finally {
+      await store.close();
+    }
+  }
+  const bill = estimateBill({
+    sel: f.sel,
+    examples: EXAMPLES,
+    captures,
+    standIn: (e) => standIns.get(e.id) as Capture,
+    finalists: f.finalists,
+    includeCapture: true,
+  });
+  console.log(
+    `preflight (free) for run "${f.run}": ${f.sel.examples.length} examples × ${f.sel.arms.length} arms × ${f.sel.runs} answer runs; ${f.sel.judgeRuns} judged; judges ${f.sel.judges.join(", ")}; re-judge ${f.sel.rejudge ? "on" : "off"}; finalists ${f.finalists.join(", ")} (estimate)`,
+  );
+  console.log(`captures: ${captures.size} frozen${standIns.size ? `, ${standIns.size} estimated from the article with stand-in findings (${[...standIns.keys()].join(", ")})` : ""}`);
+  console.log(renderBill(bill, f.cap));
+  const p = path.join(runDir(f.run), "budget.json");
+  if (fs.existsSync(p)) console.log(`already spent on run "${f.run}": $${(JSON.parse(fs.readFileSync(p, "utf8")) as { spentUsd: number }).spentUsd.toFixed(4)}`);
 }
 
 /** A capture-shaped stand-in for an example not yet captured: the real article, filler findings. Free. */

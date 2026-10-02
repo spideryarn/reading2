@@ -5,7 +5,7 @@
  * A *slot* is a cell's identity: (example, arm, run) for an answer;
  * (example, run, judge, batch, pass) for a judgement. A cell's *key* is a hash
  * of everything that makes it what it is — the full outgoing request, the
- * frozen evidence's hash, the arm, the judge prompt and schema, and the hash of
+ * frozen evidence's hash, the arm, the judge prompt and validator, and the hash of
  * the eval source that builds and accepts it — so a resume never reuses a cell
  * made under an older prompt or input. An answer's key is known before it is
  * bought; a judgement's includes the answers it judges, so it is computed when
@@ -33,7 +33,7 @@ export function runDir(run: string): string {
 export const hashOf = (value: unknown): string =>
   createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value), "utf8").digest("hex");
 
-/** sha256 of the eval files that make a cell what it is. */
+/** sha256 of the eval and imported production files that make a cell what it is. */
 export function sourceHash(files: readonly string[]): string {
   return hashOf(files.map((f) => [f, fs.readFileSync(path.join(import.meta.dirname, f), "utf8")]));
 }
@@ -89,7 +89,10 @@ export interface JudgeSlot {
 export interface Selection {
   examples: string[];
   arms: string[];
+  /** Answer generations bought per arm and example. */
   runs: number;
+  /** The first N answer runs judged. Kept separate so cost draws need not all buy judging. */
+  judgeRuns: number;
   judges: string[];
   /** Judge stability: re-judge run 1 of every example with a fresh shuffle. */
   rejudge: boolean;
@@ -165,7 +168,9 @@ export function expectedSlots(sel: Selection, anchor: string, seedBase: string):
   for (const example of sel.examples) {
     for (let run = 1; run <= sel.runs; run++) {
       for (const arm of sel.arms) answers.push({ slot: answerSlotId(example, arm, run), example, arm, run });
-      for (const judge of sel.judges) judgements.push(...judgeSlots(example, run, judge, "main", sel.arms, anchor, seedBase));
+      if (run <= (sel.judgeRuns ?? sel.runs)) {
+        for (const judge of sel.judges) judgements.push(...judgeSlots(example, run, judge, "main", sel.arms, anchor, seedBase));
+      }
     }
     if (sel.rejudge) {
       for (const judge of sel.judges) judgements.push(...judgeSlots(example, 1, judge, "rejudge", sel.arms, anchor, seedBase));
