@@ -21,7 +21,7 @@ on `arxiv-2508-spya-wrzxkg`, 2026-10-01:
 **Shipped.** Pipeline stage 4's step is now `structure` in the code, the database and the docs; its
 first model call is the *whole-document* pass, so the name does not collide. `?mode=hierarchy` and
 the *Hierarchy* Commands keyword still open Structure. The production migration
-(`drizzle/20261002123135_structure_step.sql`) needs a drained queue at deploy, which the Overseer
+(`drizzle/20261002140803_structure_step.sql`) needs a drained queue at deploy, which the Overseer
 runs. No earlier report asked for this. Two other step names, `simple` and `arc`, are noted for
 Greg rather than renamed. Plan, reviews and the full list of what moved:
 [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md).

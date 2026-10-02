@@ -15,7 +15,7 @@ with your own plan review folded in), then the diff:
 
 Stage 1 renamed files and identifiers and kept every stored literal. Stage 2 (commit d988cc77f) is
 what you are reviewing: the step value and AiJob `"hierarchy"` → `"structure"`, the checkpoint
-namespaces, `drizzle/20261002123135_structure_step.sql`, `RETIRED_STEPS` / `currentStepName` in
+namespaces, `drizzle/20261002140803_structure_step.sql`, `RETIRED_STEPS` / `currentStepName` in
 `src/step-order.ts` applied in `toJob` and the overlap `shape` in `src/store/pg-jobs.ts`, `RENAMED`
 in `src/cost-categories.ts`, the new `tests/retired-step-names.test.ts`, and a large prose pass over
 comments, docs and messages.

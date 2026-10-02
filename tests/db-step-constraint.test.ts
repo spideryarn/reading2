@@ -36,7 +36,7 @@ import { STEP_ORDER } from "../src/pipeline.js";
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
 const SKIM_MIGRATION = path.join(DRIZZLE, "20261001224759_skim.sql");
-const STRUCTURE_MIGRATION = path.join(DRIZZLE, "20261002123135_structure_step.sql");
+const STRUCTURE_MIGRATION = path.join(DRIZZLE, "20261002140803_structure_step.sql");
 
 /**
  * Every `.sql` migration, in the order it runs — **journal order, which is the

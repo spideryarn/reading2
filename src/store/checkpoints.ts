@@ -164,7 +164,7 @@
  * **`structure-labels` names the call, not its owning step.** The split into
  * a separate `labels` step kept the checkpoint keys: `batchFingerprint`
  * (src/labels.ts) carries no step or job identity. The Structure rename moves
- * the namespace's rows in `drizzle/20261002123135_structure_step.sql`, still
+ * the namespace's rows in `drizzle/20261002140803_structure_step.sql`, still
  * preserving those keys, so the old answers remain readable.
  *
  * **Two of these belong to `structure` and one to `labels`, and that is the
