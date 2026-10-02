@@ -1791,6 +1791,21 @@ export interface Article {
   visibility?: Visibility;
 
   /**
+   * **When the owner archived this article — `null` while it is on the shelf.**
+   * For the masthead's Archive button (Masthead.tsx § `ArchiveMark`), which
+   * must know which way round the article is on arrival, or it could only ever
+   * offer *Archive*. Free, off the `articles` row the read already selects, as
+   * `visibility` is. docs/plans/261002a-….
+   *
+   * **Optional for `visibility`'s reason: absent means *nobody could say*.**
+   * A visitor's payload is built from `PublicArticle`, an allowlist that does
+   * not carry it — whether the owner archived a piece is not a stranger's
+   * business — and the masthead draws no button over an absent answer
+   * (`useArchive`'s third state).
+   */
+  archivedAt?: string | null;
+
+  /**
    * **Our guess at where an uploaded paper lives on the web** — `SourceGuess`
    * below, off `upload_source_guesses`.
    * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md.

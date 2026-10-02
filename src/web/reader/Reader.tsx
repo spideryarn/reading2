@@ -84,6 +84,7 @@ import type { SelectionAnchor } from "../selection.js";
 import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
+import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog } from "../AnnotateDialog.js";
 import { CommentDialog } from "../CommentDialog.js";
@@ -216,6 +217,7 @@ export function Reader({
   article,
   capability,
   onRenamed,
+  archive,
 }: {
   slug: string;
   article: Article;
@@ -230,6 +232,8 @@ export function Reader({
    * worse than no button because pressing it is how you find out.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
+  /** The owner's controller, kept above the article/metadata view switch. */
+  archive?: ArchiveControl | undefined;
 }) {
   useRenderCount("Reader");
   /**
@@ -2477,6 +2481,12 @@ export function Reader({
         {
           minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
           "--mode-w": `${fit.modeW}px`,
+          /* The width `fitView` was given — the page beside the scrollbar,
+             notch already out — for the two sticky bars, which were `100vw`
+             and so 15px wider than the page beside a classic scrollbar
+             (measure.ts § `pageWidth`, postmortem 261002a). One number for
+             the layout and the bars, rather than CSS guessing it again. */
+          "--page-w": `${windowWidth}px`,
           /* The table's own width, so the masthead can be as wide as the
              reading column when it is centred over it (styles.css § plain,
              centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
@@ -2507,7 +2517,7 @@ export function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} slug={slug} onRenamed={onRenamed} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} />
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not

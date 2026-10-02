@@ -1,0 +1,1558 @@
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 401fadb03..e49a4fdb1 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -2730,6 +2730,8 @@ const rawPgArticleReader: ArticleReader = {
+          drizzle/0024) is a two-member union TypeScript cannot see the
+          guarantee for. */
+       visibility: found.article.visibility as Visibility,
++      /* Off the same row, for the masthead's Archive button (plan 261002a). */
++      archivedAt: found.article.archivedAt?.toISOString() ?? null,
+       /* Named, for `assets`' reason: required on `Article`, so a projection
+          that forgot it is a type error (src/types.ts § `sourceGuess`). */
+       sourceGuess,
+diff --git a/src/types.ts b/src/types.ts
+index 67965007a..7a15e54a0 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1790,6 +1790,21 @@ export interface Article {
+    */
+   visibility?: Visibility;
+ 
++  /**
++   * **When the owner archived this article — `null` while it is on the shelf.**
++   * For the masthead's Archive button (Masthead.tsx § `ArchiveMark`), which
++   * must know which way round the article is on arrival, or it could only ever
++   * offer *Archive*. Free, off the `articles` row the read already selects, as
++   * `visibility` is. docs/plans/261002a-….
++   *
++   * **Optional for `visibility`'s reason: absent means *nobody could say*.**
++   * A visitor's payload is built from `PublicArticle`, an allowlist that does
++   * not carry it — whether the owner archived a piece is not a stranger's
++   * business — and the masthead draws no button over an absent answer
++   * (`useArchive`'s third state).
++   */
++  archivedAt?: string | null;
++
+   /**
+    * **Our guess at where an uploaded paper lives on the web** — `SourceGuess`
+    * below, off `upload_source_guesses`.
+diff --git a/src/web/Masthead.tsx b/src/web/Masthead.tsx
+index 1731dac36..1b8105d4a 100644
+--- a/src/web/Masthead.tsx
++++ b/src/web/Masthead.tsx
+@@ -49,7 +49,7 @@
+  * stays with you as you read is the spine and the arc column, not this.
+  */
+ import { useMemo, type ReactNode } from "react";
+-import { ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
++import { Archive, ExternalLink, FileQuestion, Globe, Lock, Undo2, Upload } from "lucide-react";
+ import {
+   SHARING_BADGE,
+   SHARING_MARK_HOW_PRIVATE,
+@@ -73,6 +73,7 @@ import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+ import { articleStats } from "./stats.js";
+ import { AuthorNames } from "./AuthorNames.js";
+ import { ControlTip, Tooltip } from "./Tooltip.js";
++import { useArchive } from "./useArchive.js";
+ import { EditableTitle, useArticleRename } from "./TitleEditor.js";
+ 
+ interface Props {
+@@ -107,9 +108,14 @@ interface Props {
+    * the same rule Delete follows on the metadata page. 2026-08-28.
+    */
+   onRenamed?: ((slug: string, title: string) => void) | undefined;
++  /**
++   * The Archive button's latest answer, handed up so the payload the metadata
++   * page and this masthead share carries it — ArticlePage.tsx § `archived`.
++   */
++  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+ }
+ 
+-export function Masthead({ article, slug, onRenamed }: Props) {
++export function Masthead({ article, slug, onRenamed, onArchived }: Props) {
+   const { meta, tree } = article;
+   /* The same rename the shelf offers, from the page you are actually reading —
+      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
+@@ -183,6 +189,12 @@ export function Masthead({ article, slug, onRenamed }: Props) {
+         slug={slug}
+         visibility={onRenamed === undefined ? undefined : article.visibility}
+       />
++      {/* Owner-only on the same two guards. No `key`: ArticlePage mounts the
++          owner's page as `OwnedArticle key={slug}`, so another article is a
++          fresh mount and `useArchive`'s state cannot cross to it. */}
++      {onRenamed !== undefined && article.archivedAt !== undefined ? (
++        <ArchiveMark slug={slug} archivedAt={article.archivedAt} onArchived={onArchived} />
++      ) : null}
+     </>
+   );
+ 
+@@ -832,6 +844,68 @@ function SharingMark({
+   );
+ }
+ 
++/**
++ * **Archive, beside the sharing mark.** Greg, 2026-10-01 (spya-br27ef): *"Add a
++ * button at the top of the reading view to archive the article, next to the
++ * button to share it publicly."*
++ *
++ * The same act as the Metadata page's two Archive buttons, off the same hook —
++ * `useArchive`, which owns the rules: the server's answer rather than the
++ * boolean we sent, a fresh read after a failure, and no button while we do not
++ * know which way round the article is. Here the starting answer comes on the
++ * article itself (`Article.archivedAt`), so `answered` is always true.
++ *
++ * **Nothing navigates**, the Metadata buttons' rule: an archived article stays
++ * readable by its link, so the honest thing for this page to show afterwards is
++ * the state it is now in and the way back, with no clock. The icon flips to
++ * Put back, and the tooltip says which state it is in.
++ *
++ * The 28px box and the colours are `SharingMark`'s, so the two read as a pair;
++ * `IconButton` is not used because the tooltip here is a `ControlTip` card,
++ * which is what `SharingMark` beside it shows.
++ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
++ */
++function ArchiveMark({
++  slug,
++  archivedAt,
++  onArchived,
++}: {
++  slug: string;
++  archivedAt: string | null;
++  onArchived: ((slug: string, at: string | null) => void) | undefined;
++}) {
++  const archive = useArchive(slug, archivedAt, true, false, onArchived);
++  const { at, busy, error, set } = archive;
++  /* `at` turns `undefined` only when a failed press could not be re-read —
++     we no longer know, so the button goes, as it does on the Metadata page. */
++  if (at === undefined) return null;
++  const archived = at !== null;
++  const head = error ? "Couldn't confirm that" : archived ? "Archived" : "On your shelf";
++  const what = error
++    ? `${error} This shows the article as it is now.`
++    : archived
++      ? "Off your shelf. Press to put it back."
++      : "Press to archive it: off your shelf, and reversible.";
++  const how = "Nothing else changes — you stay here and can carry on reading.";
++  return (
++    <Tooltip content={<ControlTip head={head} what={what} how={how} />} placement="bottom" keepSide>
++      <button
++        type="button"
++        data-testid="masthead-archive"
++        data-archived={archived ? "true" : "false"}
++        onClick={() => void set(!archived)}
++        disabled={busy}
++        aria-label={archived ? "Archived — put back on the shelf" : "Archive this article"}
++        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0 tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50 ${
++          error ? "tw:text-destructive" : archived ? "tw:text-highlight" : "tw:text-ink-faint"
++        }`}
++      >
++        {archived ? <Undo2 size={14} strokeWidth={1.75} /> : <Archive size={14} strokeWidth={1.75} />}
++      </button>
++    </Tooltip>
++  );
++}
++
+ /**
+  * **The way to the original file — offered only to the reader who may have it.**
+  *
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 044a41de3..1a89c28dd 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -277,6 +277,7 @@ import { howLong, timeAgo } from "./relative-time.js";
+ import { useNow } from "./useNow.js";
+ import { SLOW_AFTER_MS } from "./useSlow.js";
+ import { useExperimental } from "./useExperimental.js";
++import { type ArchiveControl, useArchive } from "./useArchive.js";
+ import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
+ import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
+ import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+@@ -435,6 +436,7 @@ export function Metadata({
+   article,
+   onRenamed,
+   onVisibility,
++  onArchived,
+ }: {
+   slug: string;
+   article: Article;
+@@ -455,6 +457,12 @@ export function Metadata({
+    * is one of the values.
+    */
+   onVisibility: (slug: string, visibility: Visibility | null) => void;
++  /**
++   * Archived or not, as this page last heard — handed up for `onVisibility`'s
++   * reason, since the masthead has an Archive button too (plan 261002a).
++   * Optional so the tests that mount this page alone need not pass one.
++   */
++  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+ }) {
+   const { meta, tree, arc } = article;
+   const stats = useMemo(() => articleStats(article), [article]);
+@@ -680,6 +688,9 @@ export function Metadata({
+     provenance?.archivedAt,
+     provenance !== null,
+     Boolean(provenanceError),
++    /* Handed up so the masthead one click away agrees; never from the
++       fixture, which has no row and no masthead button. */
++    showingFixture ? undefined : onArchived,
+   );
+   /* The byline leaves this line when the Authors section below says it one name
+      at a time — the same names twice on one screen is noise (plan 260929d). */
+@@ -2415,193 +2426,6 @@ function TechnicalDetails({
+   );
+ }
+ 
+-/**
+- * Archive — and Put back, which is the whole reason it may.
+- *
+- * **It was called Delete until 2026-09-04**, and the handler behind it has
+- * never done anything but archive. That gap is the whole of report
+- * SPIDERYARN-READING2-19: Greg asked for an archive feature, from this page and
+- * from the shelf, that had existed since 2026-08-26 — because the word on the
+- * button told him he was looking at something else. Renaming a control is a
+- * smaller act than building one and it was the entire fix.
+- *
+- * ## Why the placeholder that stood here for two days was right, and what changed
+- *
+- * This was a dimmed `SOON` row until 2026-08-27, and its stated reason was not
+- * that the endpoint was missing — `PATCH /api/library/:slug` has taken
+- * `{ archived }` since 2026-08-26 — but that the shelf's confirmation is a
+- * nine-second Undo strip, and *"a page you can navigate away from is a bad
+- * place to put the only chance to change your mind"*.
+- *
+- * That reason has been answered twice over. The shelf grew a **Show archived**
+- * disclosure the same week, so the strip stopped being the only way back
+- * ([Library.tsx](Library.tsx)); and this control does not use a strip at all.
+- * An archived article stays readable by direct link — only the shelf filters
+- * (docs/project/library.md) — so the reader who archives it from here is still
+- * looking at its page afterwards, and the honest thing for that page to show is
+- * the state it is now in, with the way out of it, and no clock. **The undo here
+- * never expires.** That is a stronger promise than the shelf's, not a weaker
+- * one, and it is available precisely because this page is about one article.
+- *
+- * ## Three states, and the third is the one to get right
+- *
+- * `undefined` is *we have not been told yet* — the metadata request is in
+- * flight, or it failed. Neither may show a button at all, and the failed one
+- * must not say which way round things are: a page that shows Archive over an
+- * already-archived article, or Put back over a live one, has made a claim about
+- * the reader's library out of a request that established nothing. The same rule
+- * `AboutYou` above is arranged around, found by the same review.
+- *
+- * There is a fourth state above those three, and it is a refusal rather than an
+- * ignorance: an address with **no article of its own**, which `loadArticle` and
+- * `articleMetadata` both answer with the fixture. Nothing to archive, and the
+- * PATCH would 404, so the section says so instead of offering a button whose
+- * only outcome is an error. `showingFixture` at the call site.
+- *
+- * Nothing here needs a `key`: App.tsx already mounts this whole page as
+- * `<Metadata key={slug}>`, so switching article remounts everything below it
+- * and none of this state can cross from one article to another. An inner key
+- * was written first and removed as redundant when a review pointed at the outer
+- * one.
+- */
+-type ArchiveControl = {
+-  /** An ISO date, `null` for *on the shelf*, `undefined` for *we do not know*. */
+-  at: string | null | undefined;
+-  /** Unknown because something failed, rather than because nothing has answered yet. */
+-  lost: boolean;
+-  busy: boolean;
+-  error: string | null;
+-  set: (archived: boolean) => Promise<void>;
+-};
+-
+-/** A real answer to the archive question, or `undefined` when the wire did not say. */
+-function archiveAt(value: unknown): string | null | undefined {
+-  if (value === null) return null;
+-  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return undefined;
+-  return value;
+-}
+-
+-/** Read the PATCH representation without turning a malformed success into *on the shelf*. */
+-function archiveAtFromPatch(value: unknown, slug: string): string | null | undefined {
+-  if (value === null || typeof value !== "object") return undefined;
+-  const entry = (value as Record<string, unknown>).entry;
+-  if (entry === null || typeof entry !== "object") return undefined;
+-  const row = entry as Record<string, unknown>;
+-  if (row.slug !== slug) return undefined;
+-  /* `LibraryEntry.archivedAt` is absent when the article is on the shelf; an
+-     explicit null says the same thing in tests and is harmless on the wire. */
+-  return "archivedAt" in row ? archiveAt(row.archivedAt) : null;
+-}
+-
+-/**
+- * **The page's one answer to "is this archived", and the one way to change it.**
+- *
+- * Lifted out of `ArchiveArticle` on 2026-09-30, when Archive got a second
+- * button near the top of the page (`TopActions`, SPIDERYARN-READING2-6Z). Two
+- * buttons with a state each could disagree on one screen — the top saying
+- * *Archive* while the section says *Put back* — so both read this, and a press
+- * on either flips both.
+- * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
+- *
+- * **`failed` makes `at` unknown**, which it did not before the lift: a failed
+- * *refresh* keeps the old `provenance` on the page (see `readProvenance`), so
+- * reading `archivedAt` off it alone offered Archive or Put back from an answer
+- * the latest request could no longer vouch for. What the reader has done since
+- * (`acted`) still wins, because the server told us that after the stale read.
+- * GPT Sol, plan review, 2026-09-30.
+- */
+-function useArchive(
+-  slug: string,
+-  /** From the server, still `unknown` here because `readJson<T>` only casts. */
+-  archivedAt: unknown,
+-  /** Distinguishes an unanswered request from an answered body missing its required field. */
+-  answered: boolean,
+-  failed: boolean,
+-): ArchiveControl {
+-  /* What the reader has just done, if anything — `null` means they have not
+-     touched it, and the server's answer stands. A sentinel object rather than
+-     seeding a `useState` from the prop in an effect, because the prop arrives
+-     late and a seeding effect would need to know whether a later `provenance`
+-     is fresher than a click, which is a question with no good answer.
+-
+-     `at: undefined` inside it is the third answer: *we asked, and we no longer
+-     know*. See the catch below. */
+-  const [acted, setActed] = useState<{ at: string | null | undefined } | null>(null);
+-  const [busy, setBusy] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
+-  /* `disabled` lands on both buttons at the next render. This closes the
+-     smaller window before that render, when the two controls can both dispatch
+-     their click and would otherwise send the same PATCH twice. */
+-  const inFlight = useRef(false);
+-
+-  const fromServer = archiveAt(archivedAt);
+-  const unreadable = answered && fromServer === undefined;
+-  const at = acted ? acted.at : failed || unreadable ? undefined : fromServer;
+-
+-  /* One function for both directions, because they are one PATCH with one
+-     boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
+-     deliberately the same request on the shelf side. Two functions here would
+-     be two places to get the field name wrong. */
+-  async function set(archived: boolean): Promise<void> {
+-    if (inFlight.current) return;
+-    inFlight.current = true;
+-    setBusy(true);
+-    setError(null);
+-    try {
+-      const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
+-        method: "PATCH",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ archived }),
+-      });
+-      /* The server's own answer, not the boolean we sent. Both stores build
+-         this entry through `describeArticle`, so the date on it is the date
+-         that was stored — including the case that makes this worth doing:
+-         archiving something already archived keeps the ORIGINAL date
+-         (src/shelf.ts), and a locally-invented `new Date()` would print a
+-         timestamp the store disagrees with. */
+-      const stored = archiveAtFromPatch(await readJson<unknown>(r), slug);
+-      if (stored === undefined) {
+-        throw new Error("The server's answer did not say whether this article is archived.");
+-      }
+-      setActed({ at: stored });
+-    } catch (e) {
+-      /* **A failed request is not proof that nothing was written**, and saying
+-         so was this control's one dishonest sentence until a cross-model review
+-         took it apart, 2026-08-27. The route writes and *then* reads again to
+-         answer `purpose` (src/routes.ts § patchShelf), both stores persist and
+-         then rebuild the entry to return it, and a response can simply be lost
+-         on the way back. Every one of those fails after the archive has
+-         happened. A page that then says "Nothing changed" and offers Archive
+-         again is telling the reader something it has no way to know — and the
+-         Archive they press next is the one that looks like it did nothing.
+-
+-         So: ask. The answer to "did that work" is a fresh read, not the
+-         request's own exit code. If even the re-read fails we are honestly
+-         lost, and `at: undefined` says so by taking the button away. */
+-      setError((e as Error).message);
+-      try {
+-        const m = await readJson<ArticleMetadata>(
+-          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
+-        );
+-        setActed({ at: archiveAt(m.archivedAt) });
+-      } catch {
+-        setActed({ at: undefined });
+-      }
+-    } finally {
+-      inFlight.current = false;
+-      setBusy(false);
+-    }
+-  }
+-
+-  return {
+-    at,
+-    lost: at === undefined && (failed || unreadable || acted !== null),
+-    busy,
+-    error,
+-    set,
+-  };
+-}
+-
+ /** The quiet inline button this page uses for an act with a sentence beside it. */
+ const QUIET_BUTTON =
+   "tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none tw:text-muted-foreground tw:hover:bg-accent/40 tw:hover:text-foreground tw:focus-visible:bg-accent/40 tw:focus-visible:text-foreground";
+diff --git a/src/web/article/ArticlePage.tsx b/src/web/article/ArticlePage.tsx
+index 8f9574353..9705aa00a 100644
+--- a/src/web/article/ArticlePage.tsx
++++ b/src/web/article/ArticlePage.tsx
+@@ -319,6 +319,19 @@ function OwnedArticle({
+   );
+   const visibility = shared?.slug === slug ? shared.visibility : null;
+ 
++  /**
++   * **Archived or not, as the last Archive button to answer said** — the
++   * sharing switch's hazard again, since 2026-10-02, when the masthead got an
++   * Archive button beside the sharing mark (plan 261002a). The metadata page
++   * reads its own answer and the masthead remounts from the payload, so
++   * archiving on one and stepping to the other showed the state from before
++   * the press. Both report here (`useArchive`'s answer, via `onArchived`) and
++   * the payload carries the latest. `undefined` here is *nobody has said*,
++   * and leaves the payload alone. GPT Sol, plan review.
++   */
++  const [archived, setArchived] = useState<{ slug: string; at: string | null } | null>(null);
++  const archivedAt = archived?.slug === slug ? archived.at : undefined;
++
+   /**
+    * **Where an uploaded paper probably lives on the web, once somebody has
+    * looked** — the third thing layered over the payload, for the rename's
+@@ -336,7 +349,11 @@ function OwnedArticle({
+        truthy that would silently fall through to `fetched`, which is still
+        carrying the override that was just cleared. */
+     const titled = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
+-    const named = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
++    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
++    const named =
++      archivedAt !== undefined && archivedAt !== guessedAt.archivedAt
++        ? { ...guessedAt, archivedAt }
++        : guessedAt;
+     if (visibility === null) return named;
+     if (visibility === "unknown") {
+       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
+@@ -346,12 +363,16 @@ function OwnedArticle({
+       return rest;
+     }
+     return { ...named, visibility };
+-  }, [fetched, title, guessed, visibility]);
++  }, [fetched, title, guessed, visibility, archivedAt]);
+ 
+   const renameTo = useCallback(
+     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
+     [],
+   );
++  /* The same answer twice keeps the state object, for `sharedTo`'s reason below. */
++  const archivedTo = useCallback((forSlug: string, at: string | null) => {
++    setArchived((was) => (was?.slug === forSlug && was.at === at ? was : { slug: forSlug, at }));
++  }, []);
+   /**
+    * **The same answer twice is not a change.**
+    *
+@@ -409,9 +430,10 @@ function OwnedArticle({
+         article={article}
+         onRenamed={renameTo}
+         onVisibility={sharedTo}
++        onArchived={archivedTo}
+       />
+     );
+-  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
++  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} onArchived={archivedTo} />;
+ }
+ /**
+  * **Where the private hooks are mounted, and the only place they are.**
+@@ -433,10 +455,13 @@ function OwnedReader({
+   slug,
+   article,
+   onRenamed,
++  onArchived,
+ }: {
+   slug: string;
+   article: Article;
+   onRenamed: (slug: string, title: string) => void;
++  /** The masthead's Archive button answered — `ArticlePage` § `archived`. */
++  onArchived: (slug: string, at: string | null) => void;
+ }) {
+   const comments = useComments(slug);
+   const chatAnchors = useChatAnchors(slug);
+@@ -554,6 +579,7 @@ function OwnedReader({
+           readingTime,
+         }}
+         onRenamed={onRenamed}
++        onArchived={onArchived}
+       />
+       {/* **"Why are you reading this?", asked once** after a silent import —
+           Greg, 2026-10-01, spya-hbqezu; plan 261001s § Stage 3. Owner-only by
+diff --git a/src/web/article/access.ts b/src/web/article/access.ts
+index 07082092a..61b42127c 100644
+--- a/src/web/article/access.ts
++++ b/src/web/article/access.ts
+@@ -379,7 +379,10 @@ export async function resolveAccess(
+     found.kind === "owned"
+       ? found.article
+       : /* Nor whether the owner switched High-powered AI on — that is the
+-           owner's spend, not the visitor's business (plan 260930f). */
++           owner's spend, not the visitor's business (plan 260930f). Whether
++           they archived it is not here to strip: `PublicArticle` is an
++           allowlist without `archivedAt`, so the masthead draws no Archive
++           button for a visitor (plan 261002a). */
+         { ...found.article, sourceGuess: undefined, highPowerSince: null };
+   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
+     signal: load.signal,
+diff --git a/src/web/layout.ts b/src/web/layout.ts
+index a0fd6c869..1ee04f666 100644
+--- a/src/web/layout.ts
++++ b/src/web/layout.ts
+@@ -840,13 +840,15 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
+     const { min, ideal } = structureColumnsBand(rootFontPx);
+     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
+   }
++  const spare = spareBeyondTheMeasure(avail, rootFontPx);
+   /* Floored at `MODE_IDEAL`, as the wide band's cap is: 28rem at a 12px root
+      is 336, and a roomy band must never be the narrower one. */
+   if (bandShape === "roomy") {
+     const ideal = Math.max(MODE_IDEAL, Math.round(ROOMY_IDEAL_REM * rootFontPx));
+-    return clamp(avail - PROSE_MIN, MODE_MIN, ideal);
++    return Math.max(clamp(avail - PROSE_MIN, MODE_MIN, ideal), spare);
+   }
+   const standard = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
++  if (bandShape === "standard") return Math.max(standard, spare);
+   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
+      Structure's two columns. A share of the room (`WIDE_SHARE`), never
+      narrower than the standard band, never wider than its root-relative cap
+@@ -856,5 +858,33 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
+     const cap = Math.min(Math.max(MODE_IDEAL, wideIdeal(rootFontPx)), avail - MODE_PROSE_FLOOR);
+     return clamp(Math.round(avail * WIDE_SHARE), standard, cap);
+   }
++  /* Structure whose columns do not fit: the ordinary band, and deliberately
++     not `spare` — its list face in a band past `MODE_IDEAL` is a look Greg has
++     not seen (260928a). In practice the columns fit first at every root. */
+   return standard;
+ }
++
++/**
++ * **What the prose cell has beyond the width the prose can use**, offered to a
++ * standard or roomy band, up to a reading measure. Greg, 2026-10-01
++ * (spya-xebdgz): *"if the window is really wide and there's space, the
++ * left-hand column should expand up to that sort of width"* — the measure the
++ * text is set at — *"I think the way it works right now for slightly narrow
++ * windows is pretty good, so we don't want to screw that up … let's not
++ * introduce too much complexity."*
++ *
++ * **No new number.** The prose stops reading wider at `proseAloneMaxPx` — the
++ * measure, its pad and the gutter, the cap it already has alone — so anything
++ * the cell holds past that is page on either side of a centred column. The
++ * band takes it, and stops at `wideIdeal`, which is already this file's name
++ * for a prose column's measure and Tweets' ceiling.
++ *
++ * **Narrow windows are untouched by construction**: this is negative until the
++ * cell is wider than the prose can use, which at a 16px root is a 1220px
++ * window for a standard band (1268 for Summary's roomy one), and below that the
++ * band is exactly what it was. It reaches 34rem at 1364 and stops.
++ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
++ */
++function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
++  return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
++}
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index c88c29091..32d381871 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -216,6 +216,7 @@ export function Reader({
+   article,
+   capability,
+   onRenamed,
++  onArchived,
+ }: {
+   slug: string;
+   article: Article;
+@@ -230,6 +231,8 @@ export function Reader({
+    * worse than no button because pressing it is how you find out.
+    */
+   onRenamed?: ((slug: string, title: string) => void) | undefined;
++  /** Straight through to the masthead's Archive button — Masthead.tsx § `ArchiveMark`. */
++  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+ }) {
+   useRenderCount("Reader");
+   /**
+@@ -2477,6 +2480,12 @@ export function Reader({
+         {
+           minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
+           "--mode-w": `${fit.modeW}px`,
++          /* The width `fitView` was given — the page beside the scrollbar,
++             notch already out — for the two sticky bars, which were `100vw`
++             and so 15px wider than the page beside a classic scrollbar
++             (measure.ts § `pageWidth`, postmortem 261002a). One number for
++             the layout and the bars, rather than CSS guessing it again. */
++          "--page-w": `${windowWidth}px`,
+           /* The table's own width, so the masthead can be as wide as the
+              reading column when it is centred over it (styles.css § plain,
+              centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
+@@ -2507,7 +2516,7 @@ export function Reader({
+       {/* Everything constant about the article — see Masthead.tsx for why
+           constant is the word that decides it belongs here and not in a
+           column. */}
+-      <Masthead article={article} slug={slug} onRenamed={onRenamed} />
++      <Masthead article={article} slug={slug} onRenamed={onRenamed} onArchived={onArchived} />
+       {/* The statement, where a visitor's eye already is on arrival. The
+           *persistent* half of it is the chip in the bar below, which is sticky;
+           this is the sentence and the ask, which belong with the title. Not
+diff --git a/src/web/reader/measure.ts b/src/web/reader/measure.ts
+index cc81ecc03..cdc96d7fc 100644
+--- a/src/web/reader/measure.ts
++++ b/src/web/reader/measure.ts
+@@ -29,24 +29,75 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
+  * `orientationchange` as well as `resize`, because the insets swap sides on
+  * rotation and iOS has historically fired the two in either order.
+  *
+- * **And the layout viewport's width, not `innerWidth` itself** —
+- * `layoutViewportWidth` below says why.
++ * **And the page's width, not `innerWidth` itself** — `pageWidth` below says
++ * why, and why that is not `layoutViewportWidth` either.
++ *
++ * **A `ResizeObserver` on the root as well**, because a classic scrollbar
++ * arriving fires no `resize`: the article loads, the page grows taller than
++ * the window, and 15px of the width goes to the scrollbar without the window
++ * changing at all. The root's box is what shrinks, so the root is what is
++ * watched. Since shell.css reserves the scrollbar's room (`scrollbar-gutter:
++ * stable`) that no longer happens where the property is supported, and this
++ * is the fallback for where it is not. **It could flip**, which an earlier
++ * version of this comment denied: a narrower page is not always a taller one,
++ * because Structure's band jumps from its columns to 400px near 1175 and hands
++ * the prose 200px more (GPT Sol). So it is coalesced to one read a frame, as
++ * dock-fit.ts's observer is, and the gutter is what actually stops the flip.
+  */
+ export function useWindowWidth(): number {
+-  const measure = () => layoutViewportWidth() - horizontalInset(safeAreaInsets());
++  const measure = () => pageWidth() - horizontalInset(safeAreaInsets());
+   const [w, setW] = useState(measure);
+   useEffect(() => {
+     const on = () => setW(measure());
+     window.addEventListener("resize", on);
+     window.addEventListener("orientationchange", on);
++    let frame = 0;
++    const onRoot = () => {
++      cancelAnimationFrame(frame);
++      frame = requestAnimationFrame(on);
++    };
++    const root = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onRoot);
++    root?.observe(document.documentElement);
+     return () => {
+       window.removeEventListener("resize", on);
+       window.removeEventListener("orientationchange", on);
++      root?.disconnect();
++      cancelAnimationFrame(frame);
+     };
+   }, []);
+   return w;
+ }
+ 
++/**
++ * **The width the reading view is laid out in: the root's `clientWidth`.**
++ *
++ * It was `layoutViewportWidth` until 2026-10-02, which is `innerWidth` on a
++ * desktop, and on a desktop with a classic scrollbar — a Mac with a mouse
++ * plugged in, or *Show scroll bars: Always* — that is 15px more than the page
++ * has. `fitView` handed every pixel of it out, `.reader`'s `min-width` asked
++ * for it, and every article with a band open scrolled sideways by exactly the
++ * scrollbar. Greg, spya-y3747g;
++ * docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md.
++ *
++ * **What this gives up is agreement with `@media (max-width)`, which counts
++ * the scrollbar**, and that is why `layoutViewportWidth` chose `innerWidth`.
++ * The disagreement is 15px wide and only beside a classic scrollbar, and the
++ * reading view has one width query left (narrow-window.css § 731px), which
++ * takes the words off the wordmark and the Feedback button — so a window 732
++ * to 746px wide keeps its words while the layout is computed for 717 to 731.
++ * A page that scrolls sideways at every width is the worse of the two.
++ *
++ * **The iOS zoom case is unchanged**, because there the root's `clientWidth`
++ * *is* the layout viewport, which is what `layoutViewportWidth` picked anyway.
++ *
++ * jsdom lays nothing out and answers 0 for the root; `layoutViewportWidth` is
++ * the stand-in there, and no browser gives a standards-mode root a width of 0.
++ */
++export function pageWidth(): number {
++  const root = document.documentElement.clientWidth;
++  return root > 0 ? root : layoutViewportWidth();
++}
++
+ /**
+  * **The width the stylesheet lays out in** — the layout viewport, which every
+  * `@media (max-width)` and every `100vw` is measured against.
+@@ -69,6 +120,11 @@ export function useWindowWidth(): number {
+  * has fallen below the layout — which on the browsers we support means iOS
+  * zoomed in. Everywhere else the answer is exactly `innerWidth`, as it was.
+  *
++ * **No longer what the reading view lays out for**, since 2026-10-02 — that is
++ * `pageWidth` above, because the scrollbar this counts is width the page does
++ * not have. It stays as the answer to *where is the viewport's edge*, which is
++ * the shelf's question (Library.tsx) and `pageWidth`'s jsdom stand-in.
++ *
+  * `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` elsewhere in
+  * `src/web`, and lists the files that want the browser's own answer.
+  */
+diff --git a/src/web/styles/diagram-illustrated.css b/src/web/styles/diagram-illustrated.css
+index f59b138ac..87287ed5d 100644
+--- a/src/web/styles/diagram-illustrated.css
++++ b/src/web/styles/diagram-illustrated.css
+@@ -223,7 +223,9 @@
+    The band is 288–400px and the plates are 2:3 portrait, so in the band a plate
+    is a thumbnail and **this is where one is actually looked at**. */
+ .ill-full {
+-  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
++  /* Across by `left`/`right`, not `100vw` — diagram-sketch.css § `.sk-full`. */
++  left: 0; right: 0; width: auto; max-width: none;
++  height: 100dvh; max-height: 100dvh;
+   margin: 0; padding: 0; border: none; background: transparent;
+   display: none;
+ }
+diff --git a/src/web/styles/diagram-sketch.css b/src/web/styles/diagram-sketch.css
+index 031d3ef37..450a7aa3a 100644
+--- a/src/web/styles/diagram-sketch.css
++++ b/src/web/styles/diagram-sketch.css
+@@ -190,7 +190,10 @@
+  * which is what the reader is here to read. A modal takes it from nothing.
+  */
+ .sk-full {
+-  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
++  /* Across by `left`/`right`, not `100vw`, which counts a classic scrollbar
++     and hung the right edge under it — lightbox.css § `.lightbox`. */
++  left: 0; right: 0; width: auto; max-width: none;
++  height: 100dvh; max-height: 100dvh;
+   margin: 0; padding: 0; border: none; background: transparent;
+   display: none;
+ }
+diff --git a/src/web/styles/dock.css b/src/web/styles/dock.css
+index 734824787..8abf64d82 100644
+--- a/src/web/styles/dock.css
++++ b/src/web/styles/dock.css
+@@ -21,9 +21,15 @@
+    the viewport has nowhere to drift to. */
+ .dock {
+   position: fixed;
++  /* **`right: 0`, not `width: 100vw`, since 2026-10-02.** `100vw` counts a
++     classic scrollbar, so on a Mac with a mouse plugged in the bar ran 15px
++     under it — and since 2026-10-01 the Feedback button sits at exactly that
++     end (§ the Feedback circle). The two zeroes are the viewport beside the
++     scrollbar, which is lightbox.css's reason for `inset: 0`. Greg,
++     spya-y3747g; postmortem 261002a. */
+   left: 0;
++  right: 0;
+   bottom: 0;
+-  width: 100vw;
+   /* `--dock-space`, not `--dock-h`: the bar's own height plus whatever the home
+      indicator has claimed, with the extra spent as padding below the buttons so
+      they sit above it rather than under it. On anything without one both terms
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 5ce3c80a4..e0fc58216 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -304,7 +304,7 @@
+ 
+    `fitMode` returning `modeW: 0` is what makes the rest of the page need no
+    changes at all: every rule that reserves horizontal room for a band reserves
+-   none, so the two sticky bars keep their full `100vw` and `.reader` keeps its
++   none, so the two sticky bars keep their full `--page-w` and `.reader` keeps its
+    ordinary padding. All that is left is to widen the band, which is
+    `position: fixed` and therefore costs the layout underneath it nothing.
+ 
+@@ -325,7 +325,10 @@
+    "full width" meant here. */
+ .reader.band-covers .mode-band {
+   left: calc(var(--spine-w) + var(--safe-left));
+-  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
++  /* `right` rather than a `100vw` width, which counts a classic scrollbar and
++     ran the panel under it — dock.css § `.dock` has the same change and why. */
++  right: var(--safe-right);
++  width: auto;
+   border-right: none;
+ }
+ 
+diff --git a/src/web/styles/shell.css b/src/web/styles/shell.css
+index 4cfc06995..a97020270 100644
+--- a/src/web/styles/shell.css
++++ b/src/web/styles/shell.css
+@@ -163,6 +163,17 @@
+   z-index: 39;
+ }
+ 
++/* **The scrollbar's room is kept whether or not the page scrolls**, since
++   2026-10-02. The reading view lays out for the root's width
++   (reader/measure.ts § `pageWidth`), and beside a classic scrollbar that width
++   used to depend on whether the page was tall enough to scroll — which the
++   layout itself decides. Structure's band jumps from 619px to 400 at a window
++   near 1175px, and a narrower page can be a shorter one, so the scrollbar
++   could come and go and take the layout with it (GPT Sol, plan 261002a).
++   Reserved, the width is fixed and nothing can flip. On overlay scrollbars —
++   phones, trackpad Macs — it reserves nothing. */
++html { scrollbar-gutter: stable; }
++
+ body {
+   margin: 0;
+   background: var(--page);
+@@ -193,11 +204,19 @@ body {
+ .masthead {
+   position: sticky;
+   /* Shifted clear of the mode band, along with the controls bar below it.
+-     Both are `100vw`-wide sticky bars, so without the `--mode-w` term the band
++     Both are page-wide sticky bars, so without the `--mode-w` term the band
+      would paint over their left end — and what it would cover is the article's
+-     own title, which is the one thing on this page you would notice missing. */
++     own title, which is the one thing on this page you would notice missing.
++
++     **`--page-w`, not `100vw`, since 2026-10-02.** `100vw` counts a classic
++     scrollbar the page does not have, so on a Mac with a mouse plugged in
++     these two bars were 15px wider than the page and it scrolled sideways
++     (Greg, spya-y3747g). `--page-w` is the width `fitView` laid the page out
++     for, written on `.reader` by Reader.tsx, with the notch already taken out
++     — so the `--safe-*` terms are not subtracted again here.
++     docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md. */
+   left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+-  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
++  width: calc(var(--page-w) - var(--spine-w) - var(--mode-w));
+   background: var(--page);
+   /* `--safe-top` because this is what sits at y=0 before you scroll, and in the
+      installed app y=0 is under the clock. It is added to the padding rather
+@@ -488,7 +507,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
+   top: var(--safe-top);
+   transform: translateY(var(--bar-hide));
+   left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+-  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
++  /* `--page-w`, the masthead's reason (§ shell, above). */
++  width: calc(var(--page-w) - var(--spine-w) - var(--mode-w));
+   z-index: 40;
+   height: var(--bar-h);
+   display: flex;
+diff --git a/src/web/useArchive.ts b/src/web/useArchive.ts
+new file mode 100644
+index 000000000..14cdc9060
+--- /dev/null
++++ b/src/web/useArchive.ts
+@@ -0,0 +1,216 @@
++/**
++ * **The one answer to "is this article archived", and the one way to change
++ * it** — for every button that offers Archive or Put back.
++ *
++ * Lived in `Metadata.tsx` until 2026-10-02, when Archive got a third button, on
++ * the reading view's masthead beside the sharing mark (Masthead.tsx §
++ * `ArchiveMark`, Greg's spya-br27ef). A second copy of the rules below is the
++ * thing that must not happen: each of them was found by a review, and a copy
++ * that missed one would offer Archive over an archived article.
++ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
++ */
++import { useEffect, useRef, useState } from "react";
++import type { ArticleMetadata } from "../types.js";
++import { apiFetch, readJson } from "./lib/api.js";
++
++/**
++ * Archive — and Put back, which is the whole reason it may.
++ *
++ * **It was called Delete until 2026-09-04**, and the handler behind it has
++ * never done anything but archive. That gap is the whole of report
++ * SPIDERYARN-READING2-19: Greg asked for an archive feature, from this page and
++ * from the shelf, that had existed since 2026-08-26 — because the word on the
++ * button told him he was looking at something else. Renaming a control is a
++ * smaller act than building one and it was the entire fix.
++ *
++ * ## Why the placeholder that stood here for two days was right, and what changed
++ *
++ * This was a dimmed `SOON` row until 2026-08-27, and its stated reason was not
++ * that the endpoint was missing — `PATCH /api/library/:slug` has taken
++ * `{ archived }` since 2026-08-26 — but that the shelf's confirmation is a
++ * nine-second Undo strip, and *"a page you can navigate away from is a bad
++ * place to put the only chance to change your mind"*.
++ *
++ * That reason has been answered twice over. The shelf grew a **Show archived**
++ * disclosure the same week, so the strip stopped being the only way back
++ * ([Library.tsx](Library.tsx)); and this control does not use a strip at all.
++ * An archived article stays readable by direct link — only the shelf filters
++ * (docs/project/library.md) — so the reader who archives it from here is still
++ * looking at its page afterwards, and the honest thing for that page to show is
++ * the state it is now in, with the way out of it, and no clock. **The undo here
++ * never expires.** That is a stronger promise than the shelf's, not a weaker
++ * one, and it is available precisely because this page is about one article.
++ *
++ * ## Three states, and the third is the one to get right
++ *
++ * `undefined` is *we have not been told yet* — the metadata request is in
++ * flight, or it failed. Neither may show a button at all, and the failed one
++ * must not say which way round things are: a page that shows Archive over an
++ * already-archived article, or Put back over a live one, has made a claim about
++ * the reader's library out of a request that established nothing. The same rule
++ * `AboutYou` above is arranged around, found by the same review.
++ *
++ * There is a fourth state above those three, and it is a refusal rather than an
++ * ignorance: an address with **no article of its own**, which `loadArticle` and
++ * `articleMetadata` both answer with the fixture. Nothing to archive, and the
++ * PATCH would 404, so the section says so instead of offering a button whose
++ * only outcome is an error. `showingFixture` at the call site.
++ *
++ * Nothing here needs a `key`: App.tsx already mounts this whole page as
++ * `<Metadata key={slug}>`, so switching article remounts everything below it
++ * and none of this state can cross from one article to another. An inner key
++ * was written first and removed as redundant when a review pointed at the outer
++ * one.
++ */
++export type ArchiveControl = {
++  /** An ISO date, `null` for *on the shelf*, `undefined` for *we do not know*. */
++  at: string | null | undefined;
++  /** Unknown because something failed, rather than because nothing has answered yet. */
++  lost: boolean;
++  busy: boolean;
++  error: string | null;
++  set: (archived: boolean) => Promise<void>;
++};
++
++/** A real answer to the archive question, or `undefined` when the wire did not say. */
++export function archiveAt(value: unknown): string | null | undefined {
++  if (value === null) return null;
++  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return undefined;
++  return value;
++}
++
++/** Read the PATCH representation without turning a malformed success into *on the shelf*. */
++function archiveAtFromPatch(value: unknown, slug: string): string | null | undefined {
++  if (value === null || typeof value !== "object") return undefined;
++  const entry = (value as Record<string, unknown>).entry;
++  if (entry === null || typeof entry !== "object") return undefined;
++  const row = entry as Record<string, unknown>;
++  if (row.slug !== slug) return undefined;
++  /* `LibraryEntry.archivedAt` is absent when the article is on the shelf; an
++     explicit null says the same thing in tests and is harmless on the wire. */
++  return "archivedAt" in row ? archiveAt(row.archivedAt) : null;
++}
++
++/**
++ * **The page's one answer to "is this archived", and the one way to change it.**
++ *
++ * Lifted out of `ArchiveArticle` on 2026-09-30, when Archive got a second
++ * button near the top of the page (`TopActions`, SPIDERYARN-READING2-6Z). Two
++ * buttons with a state each could disagree on one screen — the top saying
++ * *Archive* while the section says *Put back* — so both read this, and a press
++ * on either flips both.
++ * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
++ *
++ * **`failed` makes `at` unknown**, which it did not before the lift: a failed
++ * *refresh* keeps the old `provenance` on the page (see `readProvenance`), so
++ * reading `archivedAt` off it alone offered Archive or Put back from an answer
++ * the latest request could no longer vouch for. What the reader has done since
++ * (`acted`) still wins, because the server told us that after the stale read.
++ * GPT Sol, plan review, 2026-09-30.
++ */
++export function useArchive(
++  slug: string,
++  /** From the server, still `unknown` here because `readJson<T>` only casts. */
++  archivedAt: unknown,
++  /** Distinguishes an unanswered request from an answered body missing its required field. */
++  answered: boolean,
++  failed: boolean,
++  /**
++   * Told every known answer, so the article payload the reading view and the
++   * metadata page share can carry it — ArticlePage.tsx § `archived`. Never
++   * told *we do not know*: an unknown leaves the last known answer standing,
++   * and the button that lost track hides itself.
++   */
++  onAnswer?: (slug: string, at: string | null) => void,
++): ArchiveControl {
++  /* What the reader has just done, if anything — `null` means they have not
++     touched it, and the server's answer stands. A sentinel object rather than
++     seeding a `useState` from the prop in an effect, because the prop arrives
++     late and a seeding effect would need to know whether a later `provenance`
++     is fresher than a click, which is a question with no good answer.
++
++     `at: undefined` inside it is the third answer: *we asked, and we no longer
++     know*. See the catch below. */
++  const [acted, setActed] = useState<{ at: string | null | undefined } | null>(null);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  /* `disabled` lands on both buttons at the next render. This closes the
++     smaller window before that render, when the two controls can both dispatch
++     their click and would otherwise send the same PATCH twice. */
++  const inFlight = useRef(false);
++
++  const fromServer = archiveAt(archivedAt);
++  const unreadable = answered && fromServer === undefined;
++  const at = acted ? acted.at : failed || unreadable ? undefined : fromServer;
++
++  /* One function for both directions, because they are one PATCH with one
++     boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
++     deliberately the same request on the shelf side. Two functions here would
++     be two places to get the field name wrong. */
++  async function set(archived: boolean): Promise<void> {
++    if (inFlight.current) return;
++    inFlight.current = true;
++    setBusy(true);
++    setError(null);
++    try {
++      const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ archived }),
++      });
++      /* The server's own answer, not the boolean we sent. Both stores build
++         this entry through `describeArticle`, so the date on it is the date
++         that was stored — including the case that makes this worth doing:
++         archiving something already archived keeps the ORIGINAL date
++         (src/shelf.ts), and a locally-invented `new Date()` would print a
++         timestamp the store disagrees with. */
++      const stored = archiveAtFromPatch(await readJson<unknown>(r), slug);
++      if (stored === undefined) {
++        throw new Error("The server's answer did not say whether this article is archived.");
++      }
++      setActed({ at: stored });
++    } catch (e) {
++      /* **A failed request is not proof that nothing was written**, and saying
++         so was this control's one dishonest sentence until a cross-model review
++         took it apart, 2026-08-27. The route writes and *then* reads again to
++         answer `purpose` (src/routes.ts § patchShelf), both stores persist and
++         then rebuild the entry to return it, and a response can simply be lost
++         on the way back. Every one of those fails after the archive has
++         happened. A page that then says "Nothing changed" and offers Archive
++         again is telling the reader something it has no way to know — and the
++         Archive they press next is the one that looks like it did nothing.
++
++         So: ask. The answer to "did that work" is a fresh read, not the
++         request's own exit code. If even the re-read fails we are honestly
++         lost, and `at: undefined` says so by taking the button away. */
++      setError((e as Error).message);
++      try {
++        const m = await readJson<ArticleMetadata>(
++          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
++        );
++        setActed({ at: archiveAt(m.archivedAt) });
++      } catch {
++        setActed({ at: undefined });
++      }
++    } finally {
++      inFlight.current = false;
++      setBusy(false);
++    }
++  }
++
++  /* Latest callback in a ref, so a parent's new function identity is not an
++     answer to report again. */
++  const tell = useRef(onAnswer);
++  tell.current = onAnswer;
++  useEffect(() => {
++    if (at !== undefined) tell.current?.(slug, at);
++  }, [slug, at]);
++
++  return {
++    at,
++    lost: at === undefined && (failed || unreadable || acted !== null),
++    busy,
++    error,
++    set,
++  };
++}
+diff --git a/tests/chat.test.ts b/tests/chat.test.ts
+index 6713bce5e..cefbefbca 100644
+--- a/tests/chat.test.ts
++++ b/tests/chat.test.ts
+@@ -206,13 +206,16 @@ describe("fitView in a mode — the band beside the prose", () => {
+   const band = (windowWidth: number) =>
+     fitView({ modeBand: true, windowWidth });
+ 
+-  it("1600px: the band at its ideal width, the rest to the prose", () => {
+-    const f = band(1600);
++  /* 1100 rather than 1600 since 2026-10-02: past about 1220 the band grows
++     again into what the prose cannot use (layout.test.ts § a band past the
++     prose's measure, plan 261002a), so 1600 no longer shows the ideal. */
++  it("1100px: the band at its ideal width, the rest to the prose", () => {
++    const f = band(1100);
+     expect(f.modeW).toBe(MODE_IDEAL);
+-    // 1600 - 12 of spine - 400 of band.
+-    expect(f.widths).toEqual([1188]);
++    // 1100 - 12 of spine - 400 of band.
++    expect(f.widths).toEqual([688]);
+     expect(f.overflowing).toBe(false);
+-    expect(f.minWidth).toBe(1600);
++    expect(f.minWidth).toBe(1100);
+   });
+ 
+   it("the band gives way to the prose before the prose gives way to it", () => {
+@@ -363,14 +366,14 @@ describe("fitView in a mode — the band beside the prose", () => {
+   it("hides the rail in a mode too, when the reader has hidden it", () => {
+     const f = fitView({
+       modeBand: true,
+-      windowWidth: 1600,
++      windowWidth: 1100,
+       showSpine: false,
+     });
+     expect(f.spine).toBe("off");
+     // The rail's 12px goes to the prose; the band keeps its ideal width.
+     expect(f.modeW).toBe(MODE_IDEAL);
+-    expect(f.widths).toEqual([1200]);
+-    expect(f.minWidth).toBe(1600);
++    expect(f.widths).toEqual([700]);
++    expect(f.minWidth).toBe(1100);
+   });
+ 
+   it("takes no room for a band when there is none", () => {
+diff --git a/tests/layout-viewport-width.test.tsx b/tests/layout-viewport-width.test.tsx
+index 37551e2e0..fee09a0e2 100644
+--- a/tests/layout-viewport-width.test.tsx
++++ b/tests/layout-viewport-width.test.tsx
+@@ -21,7 +21,7 @@ import { parse as babelParse } from "@babel/parser";
+ import { isReferenced, type Node } from "@babel/types";
+ import { act } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+-import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import { useWindowWidth } from "../src/web/reader/measure.js";
+ 
+ /**
+@@ -211,10 +211,56 @@ describe("useWindowWidth under zoom", () => {
+     expect(seen.at(-1)).toBe(1180);
+   });
+ 
+-  it("keeps innerWidth where it is the wider one — a desktop's classic scrollbar", () => {
+-    // `@media (max-width)` includes the scrollbar, and so does innerWidth.
++  /* **Inverted on 2026-10-02**, and this test used to pin the bug. It kept
++     `innerWidth` here so `layout.ts` would agree with `@media (max-width)`,
++     which counts the scrollbar — but the page is laid out in the root's
++     `clientWidth`, which does not, so every band mode built `.reader` 15px
++     wider than the room it had and a Mac with classic scrollbars showed a
++     horizontal scrollbar on every article. Greg, spya-y3747g;
++     docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md. */
++  it("lays out for the width beside a desktop's classic scrollbar, not the width under it", () => {
+     setWidths(1280, 1265);
+     act(() => root.render(<Probe />));
+-    expect(seen.at(-1)).toBe(1280);
++    expect(seen.at(-1)).toBe(1265);
++  });
++
++  /* A scrollbar that arrives after the first measure fires no `resize` — the
++     article loads and the page grows tall — so the hook has to hear the root
++     change size, or it keeps the width from before the scrollbar. */
++  it("re-measures when a vertical scrollbar appears without a resize", () => {
++    const observed: { cb: ResizeObserverCallback; target: Element }[] = [];
++    const Original = globalThis.ResizeObserver;
++    globalThis.ResizeObserver = class {
++      constructor(private cb: ResizeObserverCallback) {}
++      observe(target: Element) {
++        observed.push({ cb: this.cb, target });
++      }
++      unobserve() {}
++      disconnect() {}
++    } as unknown as typeof ResizeObserver;
++    try {
++      setWidths(1280, 1280);
++      act(() => root.render(<Probe />));
++      expect(seen.at(-1)).toBe(1280);
++      const onRoot = observed.filter((o) => o.target === document.documentElement);
++      expect(onRoot.length).toBe(1);
++      setWidths(1280, 1265);
++      /* Coalesced to one read a frame (measure.ts), so the frame has to run. */
++      const frames: FrameRequestCallback[] = [];
++      const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
++        frames.push(cb);
++        return frames.length;
++      });
++      act(() => {
++        onRoot[0]!.cb([], {} as ResizeObserver);
++        onRoot[0]!.cb([], {} as ResizeObserver);
++      });
++      expect(seen.at(-1)).toBe(1280); // nothing until the frame
++      act(() => frames.at(-1)!(0));
++      expect(seen.at(-1)).toBe(1265);
++      raf.mockRestore();
++    } finally {
++      globalThis.ResizeObserver = Original;
++    }
+   });
+ });
+diff --git a/tests/layout.test.ts b/tests/layout.test.ts
+index e2f1165e4..a4988cebc 100644
+--- a/tests/layout.test.ts
++++ b/tests/layout.test.ts
+@@ -211,13 +211,18 @@ describe("a wide band", () => {
+     expect(wide(at).widths).toEqual([at - SPINE_W]);
+   });
+ 
+-  it("leaves the standard band exactly as it was", () => {
++  it("leaves the standard band to its own rule", () => {
+     const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX) =>
+       fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx });
+-    expect(standard(1440).modeW).toBe(400);
+-    expect(standard(1440, 20).modeW).toBe(400);
++    /* Past the prose's measure it grows to the same 34rem ceiling (plan
++       261002a, § a band past the prose's measure below), but by what the prose
++       cannot use rather than by a share: 1440 − 12 − 808 = 620, capped at 544;
++       at a 20px root 1428 − 1010 = 418. */
++    expect(standard(1440).modeW).toBe(544);
++    expect(standard(1440, 20).modeW).toBe(418);
++    expect(standard(1100).modeW).toBe(400);
+     // The default shape is the standard one.
+-    expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(400);
++    expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(544);
+   });
+ });
+ 
+@@ -241,8 +246,10 @@ describe("a roomy band", () => {
+     fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx, showSpine });
+ 
+   it("is a touch wider than the standard band on a wide window", () => {
+-    expect(roomy(1440).modeW).toBe(448);
+-    expect(roomy(1440).widths).toEqual([1440 - SPINE_W - 448]);
++    // 1004 − 12 − 544 = 448, the roomy ceiling; the standard band stops at 400.
++    expect(roomy(1100).modeW).toBe(448);
++    expect(standard(1100).modeW).toBe(400);
++    expect(roomy(1100).widths).toEqual([1100 - SPINE_W - 448]);
+   });
+ 
+   it("is the standard band where the prose has nothing to spare", () => {
+@@ -254,7 +261,7 @@ describe("a roomy band", () => {
+ 
+   it("never comes out narrower than an ordinary band at a small root", () => {
+     // 28rem at a 12px root is 336, under `MODE_IDEAL`.
+-    expect(roomy(1440, 12).modeW).toBe(MODE_IDEAL);
++    expect(roomy(1000, 12).modeW).toBe(MODE_IDEAL);
+     expect(roomy(1440, 20).modeW).toBe(560);
+   });
+ 
+@@ -270,7 +277,7 @@ describe("a roomy band", () => {
+             continue;
+           }
+           expect(f.modeW).toBeGreaterThanOrEqual(s.modeW);
+-          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root));
++          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root, wideIdeal(root)));
+           expect(f.modeW + (f.widths[0] ?? 0)).toBe(w - (spine === false ? 0 : SPINE_W));
+         }
+       }
+@@ -278,6 +285,69 @@ describe("a roomy band", () => {
+   });
+ });
+ 
++/**
++ * **A band past the prose's measure** — plan 261002a, since 2026-10-02.
++ *
++ * > if the window is really wide and there's space, the left-hand column should
++ * > expand up to that sort of width … I think the way it works right now for
++ * > slightly narrow windows is pretty good, so we don't want to screw that up.
++ * >
++ * > — Greg, 2026-10-01 (spya-xebdgz)
++ *
++ * The rule before this change is written out here as `before`, so the sweep can
++ * say exactly what did and did not move: the band is `before` until the prose
++ * cell is wider than the prose can use (`proseAloneMaxPx`), and only the excess
++ * goes to the band, up to `wideIdeal`.
++ */
++describe("a band past the prose's measure", () => {
++  const before = (avail: number, shape: "standard" | "roomy", root: number) => {
++    const ideal = shape === "roomy" ? Math.max(MODE_IDEAL, Math.round(28 * root)) : MODE_IDEAL;
++    return Math.min(Math.max(avail - 544, MODE_MIN), ideal);
++  };
++
++  it("starts where the prose has its measure, and stops at 34rem", () => {
++    const chat = (w: number) => fitView({ windowWidth: w, modeBand: true, bandShape: "standard" });
++    // 808 is `proseAloneMaxPx(16)`: 49rem and one gutter cell.
++    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(808);
++    expect(chat(1220).modeW).toBe(400);
++    expect(chat(1280).modeW).toBe(460);
++    expect(chat(1364).modeW).toBe(544);
++    expect(chat(1920).modeW).toBe(544);
++    expect(chat(1920).widths).toEqual([1920 - SPINE_W - 544]);
++  });
++
++  it("changes nothing until the prose cell is wider than the prose can use", () => {
++    for (const shape of ["standard", "roomy"] as const) {
++      for (const root of [9, 12, 16, 20]) {
++        for (const spine of [null, false] as const) {
++          for (let w = 320; w <= 2400; w++) {
++            const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root, showSpine: spine });
++            if (f.modeW === 0) continue; // the covering band, untouched
++            const avail = w - (spine === false ? 0 : SPINE_W);
++            const old = before(avail, shape, root);
++            const measure = proseAloneMaxPx(root);
++            if (avail - old <= measure) {
++              expect(f.modeW, `${shape} ${w}px @${root}`).toBe(old);
++            } else {
++              // Only the excess, and the prose keeps every pixel it can use.
++              expect(f.modeW).toBe(Math.max(old, Math.min(avail - measure, wideIdeal(root))));
++              expect(f.widths[0]).toBeGreaterThanOrEqual(measure);
++            }
++            expect(f.modeW).toBeLessThanOrEqual(Math.max(old, wideIdeal(root)));
++          }
++        }
++      }
++    }
++  });
++
++  it("is the same rule beside the marginalia column", () => {
++    const both = fitView({ windowWidth: 1920, modeBand: true, margin: true });
++    // 1908 − 288 of notes = 1620 of rest; 1620 − 808 > 544, so the band is at its ceiling.
++    expect(both.modeW).toBe(544);
++    expect(both.widths[0]).toBe(808);
++  });
++});
++
+ describe("bandShapeFor", () => {
+   it("gives each mode its band, and Summary the roomy one", () => {
+     expect(bandShapeFor("structure")).toBe("structure");
+diff --git a/tests/masthead-archive-mark.test.tsx b/tests/masthead-archive-mark.test.tsx
+new file mode 100644
+index 000000000..966ff48a4
+--- /dev/null
++++ b/tests/masthead-archive-mark.test.tsx
+@@ -0,0 +1,167 @@
++// @vitest-environment jsdom
++/**
++ * **Archive, beside the sharing mark on the reading view's masthead.**
++ *
++ * > Add a button at the top of the reading view to archive the article, next
++ * > to the button to share it publicly.
++ * >
++ * > — Greg, 2026-10-01 (spya-br27ef)
++ *
++ * What a look at the owner's own page would not show:
++ *
++ *  1. **It starts the right way round.** An article opened while archived
++ *     offers Put back, not Archive — which needs `Article.archivedAt` on the
++ *     payload, the half of this change a click-through on a fresh article
++ *     never exercises.
++ *  2. **The press is the Metadata page's**, the same `PATCH` through the same
++ *     `useArchive`, and the button shows what the *server* said.
++ *  3. **Nobody else gets it** — a visitor, or a payload that could not say.
++ *
++ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Article } from "../src/types.js";
++
++/* The one seam that leaves the browser, mocked at the module for
++   article-rename.test.tsx's reason. */
++const apiFetch = vi.fn();
++vi.mock("../src/web/lib/api.js", async () => {
++  const actual = await vi.importActual<typeof import("../src/web/lib/api.js")>(
++    "../src/web/lib/api.js",
++  );
++  return { ...actual, apiFetch: (...args: unknown[]) => apiFetch(...args) };
++});
++
++const { Masthead } = await import("../src/web/Masthead.js");
++
++const SLUG = "a-piece";
++const WHEN = "2026-10-01T12:00:00.000Z";
++
++function article(archivedAt: string | null | undefined): Article {
++  return {
++    highPowerSince: null,
++    meta: { slug: SLUG, title: "A piece", url: "https://example.com/the-piece" },
++    blocks: [
++      {
++        id: "spya-aaaaaa",
++        tag: "p",
++        kind: "text",
++        text: "A paragraph.",
++        words: 2,
++        html: "<p>A paragraph.</p>",
++        gistable: true,
++      },
++    ],
++    assets: undefined,
++    navLabelStatus: "ready",
++    sourceGuess: undefined,
++    tree: {
++      version: "t",
++      generator: "t",
++      slug: SLUG,
++      rootId: "n0",
++      nodes: {
++        n0: {
++          id: "n0",
++          depth: 0,
++          parent: null,
++          children: [],
++          range: ["spya-aaaaaa", "spya-aaaaaa"],
++          title: "A piece",
++        },
++      },
++    },
++    visibility: "private",
++    /* Conditional: under `exactOptionalPropertyTypes` an absent key and an
++       explicit `undefined` differ, and absent is the state case 3 is about. */
++    ...(archivedAt === undefined ? {} : { archivedAt }),
++  };
++}
++
++/** The PATCH answer both stores give: the shelf entry, `archivedAt` absent when on the shelf. */
++function patched(archivedAt: string | null): Response {
++  const entry = { slug: SLUG, title: "A piece", ...(archivedAt ? { archivedAt } : {}) };
++  return new Response(JSON.stringify({ entry }), {
++    status: 200,
++    headers: { "Content-Type": "application/json" },
++  });
++}
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  history.replaceState(null, "", `/read/${SLUG}`);
++  apiFetch.mockReset();
++  onArchived.mockReset();
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++});
++
++async function mount(archivedAt: string | null | undefined, owner: boolean) {
++  await act(async () => {
++    root.render(
++      createElement(Masthead, {
++        article: article(archivedAt),
++        slug: SLUG,
++        ...(owner ? { onRenamed: () => {}, onArchived } : {}),
++      }),
++    );
++  });
++}
++
++/* The answer handed up to ArticlePage, so the metadata page and a remounted
++   masthead read the state after the press rather than the payload's. */
++const onArchived = vi.fn();
++
++const button = () => host.querySelector<HTMLButtonElement>('[data-testid="masthead-archive"]');
++
++describe("the masthead's Archive button", () => {
++  it("offers Archive on the shelf, and shows the server's answer after the press", async () => {
++    await mount(null, true);
++    expect(button()?.getAttribute("aria-label")).toBe("Archive this article");
++    expect(button()?.dataset.archived).toBe("false");
++
++    apiFetch.mockResolvedValueOnce(patched(WHEN));
++    await act(async () => button()!.click());
++
++    expect(apiFetch).toHaveBeenCalledTimes(1);
++    const [url, init] = apiFetch.mock.calls[0] as [string, RequestInit];
++    expect(url).toBe(`/api/library/${SLUG}`);
++    expect(init.method).toBe("PATCH");
++    expect(JSON.parse(init.body as string)).toEqual({ archived: true });
++    expect(button()?.dataset.archived).toBe("true");
++    expect(button()?.getAttribute("aria-label")).toBe("Archived — put back on the shelf");
++    expect(onArchived).toHaveBeenLastCalledWith(SLUG, WHEN);
++  });
++
++  it("opens an archived article the right way round, and puts it back", async () => {
++    await mount(WHEN, true);
++    expect(button()?.dataset.archived).toBe("true");
++
++    apiFetch.mockResolvedValueOnce(patched(null));
++    await act(async () => button()!.click());
++    const [, init] = apiFetch.mock.calls[0] as [string, RequestInit];
++    expect(JSON.parse(init.body as string)).toEqual({ archived: false });
++    expect(button()?.dataset.archived).toBe("false");
++  });
++
++  it("is not drawn for a visitor", async () => {
++    await mount(null, false);
++    expect(button()).toBeNull();
++  });
++
++  it("is not drawn when the payload could not say", async () => {
++    await mount(undefined, true);
++    expect(button()).toBeNull();
++  });
++});
+diff --git a/tests/page-wide-bars-beside-the-scrollbar.test.ts b/tests/page-wide-bars-beside-the-scrollbar.test.ts
+new file mode 100644
+index 000000000..e6ec7bca2
+--- /dev/null
++++ b/tests/page-wide-bars-beside-the-scrollbar.test.ts
+@@ -0,0 +1,70 @@
++/**
++ * **The reading view's page-wide boxes are as wide as the page, not as wide as
++ * the window.** Greg, 2026-10-01 (spya-y3747g): *"there's a horizontal scroll
++ * bar permanently visible at the bottom of the page on my Mac, even for quite a
++ * wide window."*
++ *
++ * `100vw` counts a classic scrollbar — a Mac with a mouse plugged in, or *Show
++ * scroll bars: Always* — and the page beside it is 15px narrower. The masthead
++ * and the controls bar were `100vw`-wide sticky boxes, so they stuck out by the
++ * scrollbar and the page scrolled sideways; the bottom bar and a covering band
++ * are `fixed`, so they did not scroll the page but ran under the scrollbar, and
++ * the bottom bar's right end is where the Feedback button sits.
++ *
++ * Nothing on a Linux box or a trackpad Mac shows it — both have overlay
++ * scrollbars that take no width — so this is asserted rather than left to a
++ * look. The other half, the layout's own width, is
++ * tests/layout-viewport-width.test.tsx.
++ * docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md.
++ *
++ * A hand scan rather than a CSS parser, as in voices-css.test.ts.
++ */
++import { readFileSync } from "node:fs";
++import { describe, expect, it } from "vitest";
++
++function css(file: string): string {
++  return readFileSync(`src/web/styles/${file}`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
++}
++
++/** Every declaration block whose selector list is exactly `selector`. */
++function blocks(file: string, selector: string): string[] {
++  return [...css(file).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
++    .filter((m) => m[1]!.trim() === selector)
++    .map((m) => m[2]!);
++}
++
++describe("page-wide boxes beside a classic scrollbar", () => {
++  it.each([
++    ["shell.css", ".masthead"],
++    ["shell.css", ".controls"],
++  ])("%s %s is sized from --page-w, which the layout was computed for", (file, selector) => {
++    const found = blocks(file, selector).filter((b) => /(^|;)\s*width\s*:/.test(b));
++    expect(found.length, `${selector} has one width`).toBe(1);
++    expect(found[0]).toMatch(/width\s*:\s*calc\(var\(--page-w\)/);
++    expect(found[0]).not.toContain("100vw");
++  });
++
++  it.each([
++    ["dock.css", ".dock"],
++    ["narrow-window.css", ".reader.band-covers .mode-band"],
++    // The two full-screen pictures, which hung their right edge under it too.
++    ["diagram-sketch.css", ".sk-full"],
++    ["diagram-illustrated.css", ".ill-full"],
++  ])("%s %s spans the viewport by its edges, not by 100vw", (file, selector) => {
++    const found = blocks(file, selector);
++    expect(found.length).toBeGreaterThan(0);
++    for (const b of found) expect(b).not.toContain("100vw");
++    expect(found.some((b) => /(^|;)\s*right\s*:/.test(b))).toBe(true);
++  });
++
++  /* Without it the width depends on whether the page scrolls, which the layout
++     decides — and Structure's band jump can flip both (GPT Sol, plan 261002a). */
++  it("keeps the scrollbar's room whether or not the page scrolls", () => {
++    expect(blocks("shell.css", "html").join(";")).toMatch(/scrollbar-gutter\s*:\s*stable/);
++  });
++
++  it("is written on .reader by the reader, from the width the layout used", () => {
++    const reader = readFileSync("src/web/reader/Reader.tsx", "utf8");
++    expect(reader).toMatch(/"--page-w":\s*`\$\{windowWidth\}px`/);
++  });
++});
+diff --git a/tests/structure-band-width.test.ts b/tests/structure-band-width.test.ts
+index 9a6745717..c92326cec 100644
+--- a/tests/structure-band-width.test.ts
++++ b/tests/structure-band-width.test.ts
+@@ -89,8 +89,11 @@ describe("fitView with Structure's band", () => {
+     expect(band(at - 1, { rootFontPx: 20 }).modeW).toBe(MODE_IDEAL);
+   });
+ 
++  /* Up to 1165 only since 2026-10-02: past about 1220 a standard band grows
++     into what the prose cannot use, which layout.test.ts § a band past the
++     prose's measure owns (plan 261002a). */
+   it("leaves every other mode's band exactly as it was", () => {
+-    for (const w of [700, 900, 1165, 1440, 2560]) {
++    for (const w of [700, 900, 1165]) {
+       const standard = fitView({ windowWidth: w, modeBand: true });
+       expect(standard.modeW, `${w}`).toBe(Math.min(MODE_IDEAL, Math.max(288, w - SPINE_W - PROSE_MIN)));
+     }

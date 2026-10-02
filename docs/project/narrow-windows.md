@@ -35,6 +35,16 @@ The check is one line in the console, at whatever width you are worried about:
 document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
 ```
 
+**Run it beside a classic scrollbar, or it cannot fail on a desktop.** Headless Chrome, the box's
+Playwright and a trackpad Mac all have overlay scrollbars that take no width, and a box sized with
+`100vw` or `innerWidth` overflows only where the scrollbar does take width — a Mac with a mouse, or
+*Show scroll bars: Always*. Every article did that by 15px until 2026-10-02 and no check saw it.
+In Playwright, launch with `ignoreDefaultArgs: ["--hide-scrollbars"]` and confirm
+`innerWidth - clientWidth` is about 15 first. The reading view lays out for the root's
+`clientWidth` (`pageWidth` in `reader/measure.ts`) and its bars read it as `--page-w`; a
+page-wide box sized from `100vw` is the bug —
+[postmortem 261002a](../postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md).
+
 ### A row that pushes a phone page sideways
 
 The same check works on the reading view, at 390px with the mode open — a mode band covers the
@@ -113,6 +123,12 @@ Three things worth carrying to whatever is built next:
   grows once the prose has its minimum, so from about 957px and reaching 448px near 1004px;
   [summaries.md](summaries.md)), Tweets' **wide** one (`WIDE_SHARE` of the room up to `wideIdeal`, the
   one band that takes room the prose was defending), and Structure's, below.
+  **Since 2026-10-02 a standard or roomy band also grows past its ideal on a wide window**, but only
+  into what the prose cell holds beyond the width the prose can use (`proseAloneMaxPx`), and only to
+  34rem (`wideIdeal`) — from a 1220px window, reaching 544px at 1364; below that nothing moved.
+  Greg: *"if the window is really wide and there's space, the left-hand column should expand up to
+  that sort of width"* (spya-xebdgz) — `spareBeyondTheMeasure` in layout.ts,
+  [261002a](../plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md).
 - **Structure's switch point is derived the same way, and its band is the one sized by its
   content rather than a cap.** Its two columns need 17rem of content each, column B's bracket
   inside its track, a 1rem gutter, the band's padding and border — **609px at a 16px root**, so a

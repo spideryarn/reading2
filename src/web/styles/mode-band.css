@@ -224,9 +224,11 @@
 }
 /* **Right edge rather than a second copy of the band's width**, which is not a
    style choice: `tests/spine-width.test.ts` finds the covering rule by looking
-   for that `calc(…)` *once* in the reader's stylesheets, and a verbatim copy
+   for its declarations *once* in the reader's stylesheets, and a verbatim copy
    here made it ambiguous and took three of its cases red. Same box, one
-   arithmetic — and the twin is narrow-window.css § a band with no room. */
+   arithmetic — and the twin is narrow-window.css § a band with no room, which
+   since 2026-10-02 reaches the edge by `right` too, and is told apart by its
+   `border-right: none` (postmortem 261002a). */
 .reader.band-covers .mode-herald-slot {
   right: var(--safe-right);
   width: auto;
