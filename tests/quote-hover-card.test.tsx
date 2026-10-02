@@ -72,7 +72,12 @@ function Harness({ quotes }: { quotes: QuoteCardSource | null }) {
     BLOCKS,
     QUOTES.map((q) => ({ ...q, stroke: quoteStroke(q) })),
   );
-  const marks = hitMarks(found, null, "rg");
+  /* The first quote shares its exact run with a search hit. `data-hit` is then
+     a mixed list, which is the case the card's by-key filtering must survive. */
+  const shared = found[0]
+    ? [{ ...found[0], key: "search:shared:0", runId: "search", slot: 1, quoteStroke: null }]
+    : [];
+  const marks = hitMarks([...found, ...shared], null, "rg");
   return (
     <>
       <table>
@@ -159,8 +164,11 @@ const openInQuotes = () =>
   );
 
 describe("resting on a quote", () => {
-  it("draws both raw scores with their numbers, the reason, and where it sits in the list", () => {
+  it("finds the quote in a mixed data-hit and draws its scores, reason, and position", () => {
     paint();
+    expect(quoteMark(0).getAttribute("data-hit")?.split(" ")).toEqual(
+      expect.arrayContaining([quoteMarkKey(QUOTES[0]!.id, QUOTES[0]!.blockId), "search:shared:0"]),
+    );
     rest(quoteMark(0), QUOTE_OPEN_MS + 10);
     const text = card()?.textContent ?? "";
     expect(text).toContain("1 of 2");
@@ -185,6 +193,18 @@ describe("resting on a quote", () => {
       vi.advanceTimersByTime(QUOTE_OPEN_MS - HOVER_DELAY.open);
     });
     expect(card()).not.toBe(null);
+  });
+
+  it("keeps the short warm swap once another card is already open", () => {
+    paint();
+    rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+    expect(card()?.textContent ?? "").toContain("1 of 2");
+
+    act(() => pointer("pointerover", quoteMark(1)));
+    act(() => {
+      vi.advanceTimersByTime(HOVER_DELAY.open);
+    });
+    expect(card()?.textContent ?? "").toContain("2 of 2");
   });
 
   it("draws nothing for a quote the list no longer holds", () => {

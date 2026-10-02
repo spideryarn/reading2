@@ -355,7 +355,7 @@ describe("the quotes' marks", () => {
        the selection (plan 261002h) — still one object, still `found` and
        `openKey` together. */
     expect(quoteMarks).toMatch(
-      /return useMemo\(\s*\(\) => \(\{ found, openKey, steppable, selectedId, select \}\),\s*\[found, openKey, steppable, selectedId, select\],\s*\);/,
+      /return useMemo\(\s*\(\) => \(\{ found, openKey, steppable, selectedId, select, reveal \}\),\s*\[found, openKey, steppable, selectedId, select, reveal\],\s*\);/,
     );
     /* **And `Reader` must hand that whole slot to `selectPassages`**, so the
        ring and the marks cannot come from different places. It was a pair of
@@ -369,6 +369,14 @@ describe("the quotes' marks", () => {
     expect(passages, "selectPassages must answer quotes mode with the quotes slot").toMatch(
       /case "quotes":\s*return slots\.quotes;/,
     );
+  });
+
+  it("builds the prose card from the marks actually drawn and reveals its row on opening", () => {
+    /* Skim can add its current quote after the Quotes bar hid it. Testing the
+       projection alone is weaker than the claim: Reader has to feed it the
+       merged prose marks, then use the reveal path rather than plain select. */
+    expect(reader).toMatch(/quoteCardQuotes\(allQuotes, proseMarked\)/);
+    expect(reader).toMatch(/onOpenInQuotes:[\s\S]{0,120}revealQuote\(quote\.id\)/);
   });
 });
 

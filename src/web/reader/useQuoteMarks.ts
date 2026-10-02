@@ -43,8 +43,14 @@ import { useQueryState } from "nuqs";
 
 import type { Block, Quote } from "../../types.js";
 import { barParam, quoteParam, rankParam } from "../params.js";
-import { effectiveRank, markedQuotes, quoteStroke } from "../QuotesPanel.js";
-import { quoteMarkKey, resolveQuotes } from "../search-hits.js";
+import {
+  barToReveal,
+  effectiveRank,
+  markedQuotes,
+  QUOTE_BAR_DEFAULT,
+  quoteStroke,
+} from "../QuotesPanel.js";
+import { quoteMarkKey, resolveQuotes, type Found } from "../search-hits.js";
 import type { PassageSlot } from "./passages.js";
 
 /**
@@ -56,9 +62,10 @@ const NO_QUOTES: Quote[] = [];
 
 /**
  * The quotes' slot, plus **the quotes a reader can step to and the
- * selection** — so the band's stepper, ← / → in Quotes mode and the card on a
- * quote in the prose all step through what the prose outlines (`stepQuote` in
- * QuotesPanel.tsx). docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md.
+ * selection** — so the band's stepper and ← / → in Quotes mode step through
+ * what the panel shows (`stepQuote` in QuotesPanel.tsx). The prose card's
+ * document-order list is `quoteCardQuotes` below.
+ * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md.
  *
  * Still a `PassageSlot`, so `selectPassages` can hand it back whole.
  */
@@ -75,6 +82,31 @@ export interface QuoteMarks extends PassageSlot {
   readonly selectedId: string | null;
   /** Write `?quote=`. The setter is nuqs', so it is stable. */
   select(id: string | null): void;
+  /** Select a quote and lower a prioritised bar if it currently hides that row. */
+  reveal(id: string): void;
+}
+
+/**
+ * The quotes whose outlines can open a prose card, in document order.
+ *
+ * Usually `marked` contains `useQuoteMarks`' threshold-visible list. Skim is
+ * the exception: its current stop is a quote and stays outlined even when the
+ * Quotes bar hides it, so the card has to read the prose's merged marks rather
+ * than `steppable`. Filtering `all` preserves the artefact's document order;
+ * `proseFound` deliberately prepends that hidden Skim stop.
+ */
+export function quoteCardQuotes(
+  all: readonly Quote[],
+  marked: readonly Found[],
+): { listed: readonly Quote[]; byKey: ReadonlyMap<string, Quote> } {
+  const keys = new Set(
+    marked.filter((found) => found.quoteStroke !== null).map((found) => found.key),
+  );
+  const listed = all.filter((quote) => keys.has(quoteMarkKey(quote.id, quote.blockId)));
+  return {
+    listed,
+    byKey: new Map(listed.map((quote) => [quoteMarkKey(quote.id, quote.blockId), quote])),
+  };
 }
 
 /**
@@ -93,7 +125,7 @@ export function useQuoteMarks(
   /* Null is "nobody has touched the bar", which `markedQuotes` resolves to
      `QUOTE_BAR_DEFAULT`. Kept as null rather than defaulted here so the default
      stays one number in one file — see `barParam` in params.ts. */
-  const [bar] = useQueryState("bar", barParam);
+  const [bar, setBar] = useQueryState("bar", barParam);
 
   const all = quotes?.quotes ?? NO_QUOTES;
 
@@ -173,8 +205,16 @@ export function useQuoteMarks(
   }, [found, listed]);
   const selectedId = selected?.id ?? null;
   const select = useCallback((id: string | null) => void setQuoteId(id), [setQuoteId]);
+  const reveal = useCallback(
+    (id: string) => {
+      void setQuoteId(id);
+      const lowered = barToReveal(all, id, rank, bar ?? QUOTE_BAR_DEFAULT);
+      if (lowered !== null) void setBar(lowered);
+    },
+    [all, rank, bar, setQuoteId, setBar],
+  );
   return useMemo(
-    () => ({ found, openKey, steppable, selectedId, select }),
-    [found, openKey, steppable, selectedId, select],
+    () => ({ found, openKey, steppable, selectedId, select, reveal }),
+    [found, openKey, steppable, selectedId, select, reveal],
   );
 }

@@ -341,12 +341,16 @@ in the feedback report that asked for it (SPIDERYARN-READING2-1Z):
 
 > skim through it just reading the stuff that is marked
 
-**What is marked is what the panel lists**, and that is one function — `markedQuotes` in
+**Outside Skim, what is marked is what the panel lists**, and that is one function — `markedQuotes` in
 [`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx), called by the panel and, since 2026-09-08, by
 [`useQuoteMarks`](../../src/web/reader/useQuoteMarks.ts) rather than by the band — so the rows and
 the strokes cannot come apart, and the bar doubles as the highlight-density control. A row the bar
 has hidden with its stroke still on the paragraph is the precise failure
 [threshold.ts](../../src/web/threshold.ts) exists to prevent.
+
+**Skim deliberately adds its current stop after that rule.** Its stop remains outlined while the
+reader is standing on it even when Quotes' bar hides it; `proseFound` owns that exception. The spine
+strip and the quote card therefore read the merged prose marks, not only `markedQuotes`.
 
 **One row can legitimately have no mark**, and only one: a quote naming a block the article no
 longer has. `resolveQuotes` drops it; the row stays in the list, unmarked, above a `stale` banner

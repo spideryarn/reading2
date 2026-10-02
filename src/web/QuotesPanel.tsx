@@ -65,7 +65,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
-import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
+import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -523,10 +523,10 @@ export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = QUOTE_BAR_DEF
  * **Extracted on 2026-09-05, when the prose started marking every visible
  * quote.** Until then the panel computed this and the band computed a *piece*
  * of it — enough to notice that the bar had hidden the selected row. Now the
- * marks are this exact list, so the two callers have to be asking one function:
- * a row hidden by the bar with its wash still on the paragraph is precisely the
- * failure src/web/threshold.ts exists to prevent, and it would arrive as two
- * expressions that agreed until one of them was edited.
+ * Quotes' own marks are this exact list, so the panel and its marks have to be
+ * asking one function: a row hidden by the bar with its wash still on the
+ * paragraph is precisely the failure src/web/threshold.ts exists to prevent,
+ * and it would arrive as two expressions that agreed until one was edited.
  */
 export function markedQuotes(
   quotes: readonly Quote[],
@@ -538,9 +538,34 @@ export function markedQuotes(
 }
 
 /**
- * **Where ‹, ›, ← and → go from `currentId`** — the band's stepper, the keys in
- * Quotes mode, and the card on a quote in the prose all ask this one function,
- * so none of them can do more than the others. Greg, 2026-09-11 (spya-mtyquy):
+ * Lower a prioritised bar just enough to reveal `id`, or leave it alone.
+ *
+ * The prose normally cards only threshold-visible quotes. Skim can add its
+ * current quote to the prose after the bar hid it; *open in Quotes* must then
+ * reveal that row before `useQuoteMarks`' `hiddenSelection` effect clears the
+ * selection. This is Quotes' `gateToReveal` (GlossaryPanel.tsx): preserve the
+ * chosen order, move the visible control, and floor to the URL's hundredth so
+ * serialisation can never put the bar back above the quote.
+ */
+export function barToReveal(
+  quotes: readonly Quote[],
+  id: string,
+  rank: QuoteRank,
+  bar: number,
+): number | null {
+  const list = [...quotes];
+  if (effectiveRank(list, rank) !== "prioritised") return null;
+  const quote = list.find((item) => item.id === id);
+  const priority = quote ? priorityOf(quote) : undefined;
+  const shownAt = snapToStop(barStops(list), bar);
+  if (priority === undefined || priority >= shownAt) return null;
+  return floorToGateStep(priority);
+}
+
+/**
+ * **Where ‹, ›, ← and → go from `currentId`** — the band's stepper and the
+ * keys in Quotes mode both ask this one function, so neither can do more than
+ * the other. Greg, 2026-09-11 (spya-mtyquy):
  * *"add fairly big Previous/Next icon-buttons to jump around, and use
  * left/right to navigate between quotes"*.
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 3.

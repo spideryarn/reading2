@@ -47,7 +47,7 @@ import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
-import { useQuoteMarks } from "./useQuoteMarks.js";
+import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
@@ -100,7 +100,6 @@ import {
   blockMatches,
   blockStrength,
   hitMarks as buildHitMarks,
-  quoteMarkKey,
   type Found,
 } from "../search-hits.js";
 import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
@@ -1162,10 +1161,10 @@ export function Reader({
    * another set — a memo has by construction.
    * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
    */
-  const quotes = useQuoteMarks(
-    article.blocks,
-    capability.kind === "owner" ? capability.quotes.quotes : (artefacts?.quotes ?? null),
-  );
+  const quoteSource =
+    capability.kind === "owner" ? capability.quotes.quotes : (artefacts?.quotes ?? null);
+  const allQuotes = quoteSource?.quotes ?? NO_PUBLIC_QUOTES;
+  const quotes = useQuoteMarks(article.blocks, quoteSource);
   /* **A fourth state, for the reason the second and third have their own**, and
      not because Timeline needs anything ideas do not: two modes sharing one
      `Found[]` clear each other on the way out, and which one wins is an
@@ -1336,7 +1335,12 @@ export function Reader({
      ‹ › rule too, so the keys can do no more than the buttons; `null` from it
      (→ on the last) answers "took nothing" and the key goes to the browser.
      keyboard.md § ← / → in Quotes. */
-  const { steppable: steppableQuotes, selectedId: selectedQuote, select: selectQuote } = quotes;
+  const {
+    steppable: steppableQuotes,
+    selectedId: selectedQuote,
+    select: selectQuote,
+    reveal: revealQuote,
+  } = quotes;
   const goToQuote = useCallback(
     (quote: Quote, jump: (id: BlockId) => void) => {
       selectQuote(quote.id);
@@ -1355,33 +1359,29 @@ export function Reader({
   );
   const quoteStepKeys = mode === "quotes" ? quoteKeys : null;
   /* **The card on a quote in the prose** (ProseHoverCard.tsx § `QuoteCard`).
-     Its ‹ › walk **down the page**, in document order — `quotes.found` is in the
-     order the reader meets the marks — where the band and the keys walk the
-     band's list. The two agree in the default order and in *prioritised*; under
-     *most important* the band's order is invisible from the prose, and "next"
-     jumping back up the page would be a surprise (GPT Sol's plan review, P2).
-     Only quotes that have a mark, so no step lands on nothing. `jumpTo` and not
-     `bandJump`: the reader is in the prose already. Opening Quotes selects the
-     quote first, so the band opens on its row. */
+     Its ‹ › walk **down the page**, in document order, where the band and the
+     keys walk the band's list. The two agree in the default order and in
+     *prioritised*; under *most important* the band's order is invisible from
+     the prose, and "next" jumping back up the page would be a surprise (GPT
+     Sol's plan review, P2). `quoteCardQuotes` reads the actual prose marks, not
+     only the band's list: Skim may outline its current quote after the Quotes
+     bar has hidden it. Only outlined quotes enter the map, so no step lands on
+     nothing. `jumpTo` and not `bandJump`: the reader is in the prose already.
+     Opening Quotes selects the quote first, so the band opens on its row. */
   const quoteCard = useMemo<QuoteCardSource | null>(() => {
-    if (steppableQuotes.length === 0) return null;
-    const byKey = new Map(steppableQuotes.map((q) => [quoteMarkKey(q.id, q.blockId), q]));
-    const down = [
-      ...new Set(
-        quotes.found.map((f) => byKey.get(f.key)).filter((q): q is Quote => q !== undefined),
-      ),
-    ];
+    const { listed, byKey } = quoteCardQuotes(allQuotes, proseMarked);
+    if (listed.length === 0) return null;
     return {
-      listed: down,
+      listed,
       byKey,
       inQuotesMode: mode === "quotes",
       onGo: (quote) => goToQuote(quote, jumpTo),
       onOpenInQuotes: (quote) => {
-        selectQuote(quote.id);
+        revealQuote(quote.id);
         void setMode("quotes");
       },
     };
-  }, [steppableQuotes, quotes.found, mode, goToQuote, jumpTo, selectQuote, setMode]);
+  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode]);
   useArrowNav(
     nav,
     article.blocks,

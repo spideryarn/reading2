@@ -1617,20 +1617,21 @@ function ExternalBody({
 
 /**
  * **What the card knows about the quotes**: the list the prose outlines, and
- * what pressing does. Built by `Reader` from `useQuoteMarks`, so the card steps
- * through the very list the band and ← / → do (`stepQuote`).
+ * what pressing does. Built by `Reader` through `quoteCardQuotes`, so the card
+ * walks those outlines in document order even when the band is sorted another
+ * way.
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2.
  */
 export interface QuoteCardSource {
-  /** `markedQuotes`' list, in the order the band shows it. */
+  /** The quotes outlined in the prose, in document order. */
   listed: readonly Quote[];
   /** The same quotes by their mark key (`quoteMarkKey`), which is what `data-hit` holds. */
   byKey: ReadonlyMap<string, Quote>;
   /** Quotes is the mode already, so there is nothing to open. */
   inQuotesMode: boolean;
-  /** Select it (`?quote=`, the ring) and go to its block. */
+  /** Write `?quote=` for Quotes mode and go to the quote's block. */
   onGo(quote: Quote): void;
-  /** Select it and open Quotes mode on it. */
+  /** Reveal and select it, then open Quotes mode on its row. */
   onOpenInQuotes(quote: Quote): void;
 }
 
@@ -1646,9 +1647,9 @@ export interface QuoteCardSource {
  *   rather than the model's judgment.
  * - **Why**, the reason the band keeps behind its ⓘ (Greg, 2026-08-31: *"with
  *   reason as a tooltip"*) — the model's words, so in the model's face.
- * - **‹ ›** step the band's list, not the page: the rule is `stepQuote`, so a
- *   reader who chose *most important* walks the important ones. Disabled at
- *   either end; the card closes on a step, and the reader points at the next.
+ * - **‹ ›** step the outlined quotes down the page, whatever order the band is
+ *   using. Disabled at either end; the card closes on a step, and the reader
+ *   points at the next.
  */
 function QuoteCard({
   quote,

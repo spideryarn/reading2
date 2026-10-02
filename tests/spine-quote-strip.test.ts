@@ -2,14 +2,22 @@
  * **The quotes down the rail's left edge, in every mode** —
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 1.
  *
- * The arithmetic half: which blocks get a strip, how bright, and that nothing
- * that is not a quote ever reaches it.
+ * The arithmetic: which blocks get a strip, how bright, and that nothing that
+ * is not a quote reaches it; plus the CSS clamp and tree order that determine
+ * whether the last strip stays visible and which layers paint over it.
  */
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { quoteAlphaByBlock, quoteRailMarks, type Row } from "../src/web/spine-marks.js";
 import { NO_FOUND, railFound } from "../src/web/reader/passages.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { BlockId } from "../src/types.js";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const spineSource = await readFile(path.join(ROOT, "src/web/Spine.tsx"), "utf8");
+const spineCss = await readFile(path.join(ROOT, "src/web/styles/spine.css"), "utf8");
 
 const rows = new Map<string, Row>([
   ["a", { index: 0, top: 0, height: 100 }],
@@ -73,5 +81,24 @@ describe("quoteRailMarks", () => {
 
   it("skips a block the page does not have rather than drawing it at the top", () => {
     expect(quoteRailMarks(rows, new Map([["gone" as BlockId, 1]]))).toEqual([]);
+  });
+});
+
+describe("the strip's paint contract", () => {
+  it("clamps its three-pixel floor inside the bottom of the rail", () => {
+    expect(spineCss).toMatch(
+      /\.spine-quote\s*\{[\s\S]*?top: min\(var\(--quote-top\), 100% - 3px\);[\s\S]*?min-height: 3px;/,
+    );
+  });
+
+  it("paints over reading and the jump origin, but under search lanes", () => {
+    const reading = spineSource.indexOf('className="spine-read"');
+    const origin = spineSource.indexOf('className="spine-from"');
+    const quotes = spineSource.indexOf('className="spine-quotes"');
+    const matches = spineSource.indexOf('className="spine-matches"');
+    expect([reading, origin, quotes, matches].every((at) => at >= 0)).toBe(true);
+    expect(reading).toBeLessThan(quotes);
+    expect(origin).toBeLessThan(quotes);
+    expect(quotes).toBeLessThan(matches);
   });
 });
