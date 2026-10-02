@@ -1174,12 +1174,10 @@ const SPENDS: Record<Mode, Spend> = {
   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
   /* The same tree again, in linked columns or one nested list. */
   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
-  /* The plain-words levels are an artefact, but the bar's press arms nothing:
-     the band opens on its empty state, and its plain-words controls arm
-     `simple` one level down (activation.ts § MODE_TARGET.summary; plan
-     261001p). Whether opening should start the run is an open product question
-     (fb7t-7v). */
-  summary: { kind: "none", why: "opens on a plain-words level; its controls arm the run" },
+  /* The three plain-words levels, which one job writes. Until 2026-10-02 the
+     press armed nothing and the band waited on "Write it"; Greg asked that
+     opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
+  summary: { kind: "posts", steps: ["simple"] },
   /* The tree's questions, the arc and the ideas already made — read, never
      generated. A press that started the Ideas job here would be the bug. */
   marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
@@ -1337,6 +1335,25 @@ for (const trigger of TRIGGERS) {
     }
   });
 }
+
+/* Summary's row changed from `none` to `fixed/simple` in 261002a. Phase A
+   proves the new press writes a missing artefact; this is the other half of
+   the product rule, through both real doors: the token is consumed without a
+   POST when those plain-words levels are already stored. */
+describe("a stored Summary costs nothing to open", () => {
+  for (const trigger of TRIGGERS) {
+    it(`from the ${trigger.name}`, async () => {
+      fixtures = "populated";
+      await open("", { strict: false });
+
+      await trigger.press("summary");
+
+      expect(modeInUrl()).toBe("summary");
+      expect(posts, "the stored Summary was written again").toEqual([]);
+      expect(stillPending(), "the stored Summary left its press armed").toEqual([]);
+    });
+  }
+});
 
 /* ============================================================== phase B ====
 
