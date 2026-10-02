@@ -15,7 +15,7 @@
  *    the same path, not a hand-copied list of fields. The list the earlier draft
  *    proposed — system, user, model, effort, PROMPT_VERSION — omits `thinking`,
  *    `max_tokens`, the routing `streamMessage` injects, and the difference
- *    between `CAPABLE_MODEL` and the wire id `modelFor("hierarchy")` sends. A
+ *    between `CAPABLE_MODEL` and the wire id `modelFor("structure")` sends. A
  *    hand-maintained list is the blind spot `promptFingerprint` in
  *    src/pdf-read.ts was written to remove, and the mutation test below is
  *    written over `Object.keys` for that reason: a field added to the request
@@ -179,10 +179,10 @@ describe("the structure checkpoint's key", () => {
     expect(request.thinking).toEqual({ type: "adaptive" });
     expect(request.max_tokens).toBe(wholeDocumentRequest(BLOCKS).maxTokens);
     expect(request.provider).toEqual(MESSAGES_PROVIDER);
-    /* `modelFor("hierarchy")`, which is the OpenRouter address the call goes to
+    /* `modelFor("structure")`, which is the OpenRouter address the call goes to
        — NOT `CAPABLE_MODEL`, which is the same model's name and is what a
        hand-copied key would have reached for. src/models.ts § CAPABLE_MODEL. */
-    expect(request.model).toBe(modelFor("hierarchy", "standard"));
+    expect(request.model).toBe(modelFor("structure", "standard"));
     expect(c.promptVersion).toBe(PROMPT_VERSION);
   });
 
@@ -192,7 +192,7 @@ describe("the structure checkpoint's key", () => {
        mutation test below can only enumerate fields the object already has. So
        `request` is `messagesWireBody`'s own output, byte for byte — the same
        function `streamMessage` sends. ⟨GPT Sol, 2026-09-04.⟩ */
-    expect(canonical().request).toEqual(messagesWireBody("hierarchy", wholeDocumentRequest(BLOCKS).params, "standard"));
+    expect(canonical().request).toEqual(messagesWireBody("structure", wholeDocumentRequest(BLOCKS).params, "standard"));
   });
 
   it("moves when any field of that request moves — enumerated, not listed", () => {
@@ -237,9 +237,9 @@ describe("generateStructure and the structure checkpoint", () => {
     const checkpoints = memoryCheckpoints();
     const toc10Key = wholeDocumentKey({
       promptVersion: "toc/10",
-      request: messagesWireBody("hierarchy", toc10FrozenRequest(BLOCKS).params, "standard"),
+      request: messagesWireBody("structure", toc10FrozenRequest(BLOCKS).params, "standard"),
     });
-    await checkpoints.write("structure-checkpoint", "hierarchy-structure", toc10Key, {
+    await checkpoints.write("structure-checkpoint", "structure-whole-document", toc10Key, {
       fingerprint: toc10Key,
       answer: JSON.stringify({
         root: {
@@ -259,7 +259,7 @@ describe("generateStructure and the structure checkpoint", () => {
     });
     expect(wholeDocumentCalls).toBe(1);
     expect(run.wholeDocumentResumed).toBe(false);
-    expect(checkpoints.entries.has(`hierarchy-structure:${toc10Key}`)).toBe(true);
+    expect(checkpoints.entries.has(`structure-whole-document:${toc10Key}`)).toBe(true);
     expect(checkpoints.entries.size).toBe(2);
   });
 
@@ -268,7 +268,7 @@ describe("generateStructure and the structure checkpoint", () => {
     const first = await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(wholeDocumentCalls).toBe(1);
     expect([...checkpoints.entries.keys()]).toHaveLength(1);
-    expect([...checkpoints.entries.keys()][0]).toMatch(/^hierarchy-structure:/);
+    expect([...checkpoints.entries.keys()][0]).toMatch(/^structure-whole-document:/);
 
     const second = await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(wholeDocumentCalls, "the second run bought the structure call again").toBe(1);
@@ -415,7 +415,7 @@ describe("generateStructure and the structure checkpoint", () => {
     it(`buys the tree again when the stored answer ${what}`, async () => {
       const checkpoints = memoryCheckpoints();
       const key = wholeDocumentKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"));
-      await checkpoints.write("structure-checkpoint", "hierarchy-structure", key, {
+      await checkpoints.write("structure-checkpoint", "structure-whole-document", key, {
         fingerprint: key,
         answer,
       });
@@ -425,7 +425,7 @@ describe("generateStructure and the structure checkpoint", () => {
       expect(run.wholeDocumentResumed).toBe(false);
       /* And the row is gone, replaced by one that works — otherwise the next
          attempt pays the same 508 seconds to learn the same thing. */
-      expect(checkpoints.entries.get(`hierarchy-structure:${key}`)).toEqual({
+      expect(checkpoints.entries.get(`structure-whole-document:${key}`)).toEqual({
         fingerprint: key,
         answer: SOUND,
       });
@@ -438,7 +438,7 @@ describe("generateStructure and the structure checkpoint", () => {
        an older format, or by something else entirely, must read as a miss. */
     const checkpoints = memoryCheckpoints();
     const key = wholeDocumentKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"));
-    await checkpoints.write("structure-checkpoint", "hierarchy-structure", key, { answer: 42 });
+    await checkpoints.write("structure-checkpoint", "structure-whole-document", key, { answer: 42 });
     await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
     expect(wholeDocumentCalls).toBe(1);
   });

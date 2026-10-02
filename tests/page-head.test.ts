@@ -569,7 +569,7 @@ describe("the one title rule, applied by both sides", () => {
        function that simply appends every mode.
 
        `DEFAULT_MODE` rather than the literal it used to be. This said
-       `"hierarchy"` until 2026-08-31, when the default moved to `plain` and the
+       `"structure"` until 2026-08-31, when the default moved to `plain` and the
        assertion started failing for the right reason — the omitted mode is
        whichever one is the default, not that particular one. Any other mode is
        named, which is what the second half asserts. */

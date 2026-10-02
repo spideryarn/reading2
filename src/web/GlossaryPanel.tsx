@@ -71,12 +71,14 @@
 import { type ReactNode, useState } from "react";
 import {
   ExternalLink,
+  Eye,
   Globe,
   Info,
   LoaderCircle,
   RotateCcw,
   Search,
   TextSearch,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import type { BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
@@ -192,8 +194,19 @@ function keptWithoutEntry(
  * are. There is a `never` on each of the other two panels for the same reason.
  */
 export type GlossaryAccess =
-  | { kind: "owner"; owner: GlossaryOwner; glossary: { entries: GlossaryEntry[] } | null }
-  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never };
+  | {
+      kind: "owner";
+      owner: GlossaryOwner;
+      /**
+       * **The visible list** — already without the entries the owner hid
+       * (src/web/glossary-shown.ts), so every count, sort and threshold below
+       * is about what the reader can see.
+       */
+      glossary: { entries: GlossaryEntry[] } | null;
+      /** The ones the owner hid, for the *Hidden (n)* section and nothing else; absent is none. Plan 261002c § 2. */
+      hidden?: readonly GlossaryEntry[];
+    }
+  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never; hidden?: never };
 
 interface Props {
   access: GlossaryAccess;
@@ -252,7 +265,20 @@ export function GlossaryPanel({
   const gate = chosenGate ?? PRIORITY_GATE;
   const order = effectiveSort(all, sort);
   const shown = glossary ? sortEntries(all, order, gate) : [];
-  const orphanedLookup = keptWithoutEntry(owner, all);
+  const hidden = access.hidden ?? [];
+  /* Against the raw list, hidden included: a dig that finished on an entry
+     the reader has since hidden is not an answer whose term left the glossary. */
+  const orphanedLookup = keptWithoutEntry(owner, owner?.glossary?.entries ?? all);
+  /* Why the last Hide or Unhide pressed here did not go through. The read's
+     `error` is about the list, and this is about one press, so it is the
+     panel's own — drawn in the same place, the band's error line. */
+  const [hideFailed, setHideFailed] = useState<string | null>(null);
+  const setHidden = owner
+    ? (id: string, hide: boolean) => {
+        setHideFailed(null);
+        owner.setHidden(id, hide).catch((err: unknown) => setHideFailed((err as Error).message));
+      }
+    : null;
   /* A label rather than a control: it is provenance, not a warning. The
      glossary already made this exact choice once — "a label instead of a
      warning triangle" — and the reason holds. src/web/WrittenForYou.tsx.
@@ -399,6 +425,7 @@ export function GlossaryPanel({
       )}
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {hideFailed && <p className="gloss-error">{hideFailed}</p>}
 
       {orphanedLookup && (
         <p className="gloss-quiet">
@@ -541,9 +568,19 @@ export function GlossaryPanel({
                     if (first) onJump(first);
                   }}
                   onJump={onJump}
+                  /* Owner only: a visitor has no hide, and no button. */
+                  onHide={setHidden && (() => setHidden(entry.id, true))}
+                  hiding={owner?.hiding.has(entry.id) ?? false}
                 />
               ))}
             </ol>
+            {setHidden && hidden.length > 0 && (
+              <HiddenTerms
+                entries={hidden}
+                hiding={owner?.hiding ?? NOTHING_PENDING}
+                onUnhide={(id) => setHidden(id, false)}
+              />
+            )}
           </div>
         </>
       )}
@@ -1196,6 +1233,8 @@ function Term({
   lookFailed,
   onSelect,
   onJump,
+  onHide,
+  hiding,
 }: {
   entry: GlossaryEntry;
   selected: boolean;
@@ -1233,7 +1272,7 @@ function Term({
    */
   occurrencesFitTheArticle: boolean;
   /** `null` for a visitor: there is no button, because there is nothing to spend. */
-  look: ((id: string) => Promise<void>) | null;
+  look: ((id: string) => Promise<unknown>) | null;
   /** A lookup is running for *this* term. */
   looking: boolean;
   /** A lookup is running for some term — one at a time, so every button waits. */
@@ -1243,6 +1282,14 @@ function Term({
   lookFailed: string | null;
   onSelect(): void;
   onJump(id: BlockId): void;
+  /**
+   * Hide this term from the owner's own view of the article — `null` for a
+   * visitor, and then there is no button. Greg, 2026-10-02 (spya-yqfzkm): *"or
+   * just show a trashcan icon"*. Plan 261002c § 2.
+   */
+  onHide: (() => void) | null;
+  /** The hide is on its way, so the button waits. */
+  hiding: boolean;
 }) {
   const scores = rowScores(entry, showScore);
   const prose = entryProse(entry);
@@ -1278,7 +1325,7 @@ function Term({
 
   return (
     <li
-      className={`gloss-term${selected ? " on" : ""}`}
+      className={`gloss-term${selected ? " on" : ""}${onHide ? " has-hide" : ""}`}
       /* Which entry this row is, for the one reader that has to find it from
          outside the panel: G from a paragraph puts the focus here (TermJump.tsx). */
       data-term-id={entry.id}
@@ -1327,6 +1374,26 @@ function Term({
             provenance work rather than a badge underneath it. */}
         {!selected && <span className="gloss-gloss">{prose.lead}</span>}
       </button>
+
+      {/* **A sibling of the row's button, never inside it** — a button in a
+          button is invalid HTML, and the press would open the row as well as
+          hiding it (GPT Sol's plan review, finding 2). The row is a grid, so
+          this sits at its right-hand edge. "Only for you", because the other
+          reading — delete it for everyone, a public article included — is the
+          one Greg weighed and did not choose. */}
+      {onHide && (
+        <Tooltip content="Hide — only for you" placement="left">
+          <button
+            type="button"
+            className="gloss-hide"
+            aria-label="Hide — only for you"
+            disabled={hiding}
+            onClick={onHide}
+          >
+            <Trash2 size={13} />
+          </button>
+        </Tooltip>
+      )}
 
       {selected && (
         <div className="gloss-open">
@@ -1713,6 +1780,62 @@ function AskATerm({
  * one day, and a lookup from a month ago is a different object from one from a
  * minute ago.
  */
+/**
+ * *Dig deeper*'s two titles, **shared with the hover card's button**
+ * (ProseHoverCard.tsx § `TermCard`, plan 261002c § 3), so the band and the card
+ * cannot give one disabled button two explanations.
+ */
+export const DIG_DEEPER_UNQUOTED =
+  "Dig deeper starts from a passage of the article, and this term is named rather than quoted anywhere in it.";
+export const DIG_DEEPER_SAYS =
+  "Searches the web and asks a stronger model about this one thing. It takes longer than the first answer.";
+
+/**
+ * **The terms the owner hid, and the way back** — a collapsed *Hidden (n)* at
+ * the foot of the list, only when there are any. Greg marked it LOW PRIORITY
+ * (spya-yqfzkm: *"perhaps there'd be a thing in the Glossary mode to
+ * see/review/unhide Hidden items?"*), but without it a hide is for ever, and a
+ * mis-tap on a phone has no undo. Plan 261002c § 2.
+ *
+ * Names only: a hidden term is one the reader said they do not need, so its
+ * definition is not drawn here either. `details` because it is a disclosure
+ * and the browser already knows how to be one, keyboard included.
+ */
+function HiddenTerms({
+  entries,
+  hiding,
+  onUnhide,
+}: {
+  entries: readonly GlossaryEntry[];
+  hiding: ReadonlySet<string>;
+  onUnhide(id: string): void;
+}) {
+  return (
+    <details className="gloss-hidden">
+      <summary>Hidden ({entries.length})</summary>
+      <ul>
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <span className="gloss-hidden-name">{entry.name}</span>
+            <button
+              type="button"
+              className="gloss-btn"
+              disabled={hiding.has(entry.id)}
+              onClick={() => onUnhide(entry.id)}
+            >
+              <Eye size={12} />
+              Unhide
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** No hide on its way — the panel's fallback when there is no owner to ask. */
+const NOTHING_PENDING: ReadonlySet<string> = new Set();
+
 export function Looked({
   entry,
   look,
@@ -1723,7 +1846,7 @@ export function Looked({
   failed,
 }: {
   entry: GlossaryEntry;
-  look: ((id: string) => Promise<void>) | null;
+  look: ((id: string) => Promise<unknown>) | null;
   looking: boolean;
   busy: boolean;
   /**
@@ -1793,11 +1916,7 @@ export function Looked({
              call somebody pays for, and a panel that fires five because five
              rows were clicked spends money on a mis-click. */
           disabled={busy || unquoted}
-          title={
-            unquoted
-              ? "Dig deeper starts from a passage of the article, and this term is named rather than quoted anywhere in it."
-              : "Searches the web and asks a stronger model about this one thing. It takes longer than the first answer."
-          }
+          title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
           onClick={() => void look(entry.id)}
         >
           {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}

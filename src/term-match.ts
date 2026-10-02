@@ -51,6 +51,24 @@ const AFTER = "(?![\\p{L}\\p{N}])";
  */
 const SUFFIX = "(?:['’]s|s)?";
 
+/**
+ * Between two words of a form, a space and a hyphen are the same thing.
+ *
+ * spya-n04d5p: an entry named *Delayed win-shift task* found one block of six,
+ * because the paper writes *delayed-win-shift task* everywhere else. Neither the
+ * model nor the author is wrong; they hyphenate differently, and the reader
+ * means the same phrase. So any run of whitespace, `-`, U+2010 (hyphen) or
+ * U+2011 (non-breaking hyphen) *inside* a form matches any run of the same.
+ *
+ * **Not the en dash**, which is the range dash (*1990–2000*, *pages 3–7*), and
+ * **never a hyphen against nothing** (*e-mail* against *email*), which would be
+ * matching inside words. Only interior runs: a hyphen at the very edge of a form
+ * is the form's own text. The honest cost, as with `SUFFIX`: *co-op* now finds
+ * *co op*. Rare, and the harmless direction.
+ */
+const SEPARATOR = "[\\s\\-\\u2010\\u2011]+";
+const INTERIOR_SEPARATOR = /(?<=\S)[\s\-\u2010\u2011]+(?=\S)/gu;
+
 /** So that a term containing `.` or `(` is matched as text rather than as a pattern. */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -66,17 +84,30 @@ function escapeRegExp(value: string): string {
  * JavaScript's alternation takes the first branch that matches, not the
  * longest, so this ordering is the whole of that behaviour and not a tidy-up.
  *
- * Whitespace inside a form matches any run of whitespace, because the text a
+ * Whitespace or a hyphen inside a form matches any run of either (see
+ * `SEPARATOR`). The whitespace half is there because the text a
  * block carries has been through `extractText` (src/blocks.ts) and a line break
  * in the original HTML is a single space there — but the model was given the
  * same text, so this mostly guards against the model normalising differently
  * from us.
  */
 export function termPattern(forms: readonly string[]): RegExp | null {
-  const cleaned = [...new Set(forms.map((f) => f.trim()).filter((f) => f.length > 0))];
+  /* Each interior separator run becomes one space BEFORE the dedup and the
+     length sort, because all of them compile to the same `SEPARATOR`: sorting
+     on the raw text would put `alpha----beta` ahead of `alpha beta gamma`, and
+     the shorter phrase would win the match (GPT Sol, plan review 261002c). */
+  const cleaned = [
+    ...new Set(
+      forms.map((f) => f.trim().replace(INTERIOR_SEPARATOR, " ")).filter((f) => f.length > 0),
+    ),
+  ];
   if (cleaned.length === 0) return null;
   cleaned.sort((a, b) => b.length - a.length);
-  const body = cleaned.map((f) => escapeRegExp(f).replace(/\s+/g, "\\s+")).join("|");
+  /* Escaping leaves spaces alone, so the canonical spaces can be found after
+     it; the replacement is a pattern, so it must not be escaped. */
+  const body = cleaned
+    .map((f) => escapeRegExp(f).replace(INTERIOR_SEPARATOR, () => SEPARATOR))
+    .join("|");
   return new RegExp(`${BEFORE}(?:${body})${SUFFIX}${AFTER}`, "giu");
 }
 

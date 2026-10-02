@@ -53,7 +53,7 @@
     // recursive: with a non-recursive entry glob, a nested eval was *in* the
     // project with no entry pattern reaching it, which is knip's definition of
     // an unused file. That reported four live, documented research CLIs
-    // (hierarchy-structure/blind.ts, hierarchy-structure/verify-costs.ts,
+    // (structure-whole-document/blind.ts, structure-whole-document/verify-costs.ts,
     // sketch/run.ts, sketch/svg.ts) as dead — four of knip's own findings being
     // knip's own config. This step is meant to become a gate the day its
     // findings reach zero, so a false positive here is not cosmetic: it is four

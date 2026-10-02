@@ -41,7 +41,7 @@ const REFUSED: StepName[] = [
   "fetch",
   "extract",
   "blocks",
-  "hierarchy",
+  "structure",
   "labels",
   "assets",
   "illustrated",

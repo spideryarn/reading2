@@ -242,13 +242,13 @@ const ATTEMPTS = 2;
  *
  * - **Somebody was waiting on it.** Extract took **394 s** of the Kuhn paper's
  *   19 m 41 s end-to-end run — a third of the wall clock, second only to
- *   hierarchy. "The deadline is met" is not the same as "this is fast enough",
+ *   the structure step. "The deadline is met" is not the same as "this is fast enough",
  *   and the reader watching the progress bar cares about the second one.
  * - **It cost a whole lease window.** Extract finishing at 394 s left 308 s on
- *   the claim, short of `STEP_BUDGET_MS.hierarchy`, so the job handed back and
+ *   the claim, short of `STEP_BUDGET_MS.structure`, so the job handed back and
  *   waited for a fresh window before it could start the table of contents. The
  *   width was buying a hand-back. **It still hands back** — 248 s leaves ~450 s
- *   against a 700 s budget — because `hierarchy` measured 658–778 s and no width
+ *   against a 700 s budget — because `structure` measured 658–778 s and no width
  *   here makes that fit beside anything. What this buys is the *first* window
  *   ending sooner, not one window instead of two.
  *

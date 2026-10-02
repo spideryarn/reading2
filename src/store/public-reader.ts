@@ -49,6 +49,7 @@ import type { Assets } from "../assets.js";
 import { storedAssetFor } from "../asset-delivery.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, comments, revisionBlocks, searchRuns } from "../db/schema.js";
+import { relocateEntries } from "../glossary-occurrences.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
@@ -809,7 +810,17 @@ export const pgPublicReader: PublicArticleReader = {
         tree,
         arc: found.revision.arc,
         assets: found.revision.assets,
-        glossary: found.revision.glossary,
+        /* Matched again against these blocks, as the owner's `loadGlossary`
+           does — a visitor has no *Find more* to bring a stored list up to
+           date, and the underlines search only the blocks it names.
+           src/glossary-occurrences.ts, plan 261002c. */
+        glossary: found.revision.glossary && {
+          ...found.revision.glossary,
+          entries: relocateEntries(
+            found.revision.glossary.entries,
+            rows.map((row) => ({ id: row.blockId, text: row.text })),
+          ),
+        },
         ideas: found.revision.ideas,
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,

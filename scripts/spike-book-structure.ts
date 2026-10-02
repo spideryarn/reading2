@@ -1,7 +1,7 @@
 /**
  * **Throwaway spike for docs/plans/260904d-deepen-fat-sections.md stage 1.**
  *
- * The structure call only — no labels. The question is "what do a book's
+ * The whole-document call only — no labels. The question is "what do a book's
  * sections look like", and the label pass is a batched second stage that costs
  * many times more and answers nothing about it.
  *
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
   const started = Date.now();
   let chars = 0;
   let last = 0;
-  const call = streamMessage("hierarchy", params, { power: "standard" });
+  const call = streamMessage("structure", params, { power: "standard" });
   call.onText((delta) => {
     chars += delta.length;
     const now = Date.now();

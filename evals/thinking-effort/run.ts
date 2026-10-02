@@ -9,7 +9,7 @@
  *   npx tsx evals/thinking-effort/run.ts --export-only --out <dir>      # free: write the corpus, spend nothing
  *
  * With no `--slug`, the eight articles in arms.ts; with no `--arm`, `base-a`,
- * `base-b`, `low-a`, `low-b` (arms.ts says why two of each). Hierarchy is not
+ * `base-b`, `low-a`, `low-b` (arms.ts says why two of each). Structure is not
  * here: it is the `smart-off` arms of evals/structure-whole-document/, pointed at
  * the `corpus/` directory this harness writes (its README says how). Blind
  * judging materials come from lineup.ts.
@@ -563,7 +563,7 @@ async function openOwnedArticle(
 
 /**
  * Write what was read, so the run's input is on disk beside its output and the
- * Hierarchy harness can be pointed at the same bytes: `blocks.json` in the
+ * structure-whole-document harness can be pointed at the same bytes: `blocks.json` in the
  * shape evals/structure-whole-document/run.ts reads, the published `tree.json`
  * (its `incumbent-disk`), and `meta.json`.
  */
@@ -1208,9 +1208,9 @@ async function writeReadme(
     "",
     `Total, model calls: ${money(sumOrNull(rows.map((r) => r.costUsd)))}; plates: ${rows.some((r) => r.plates === "drawn") ? money(sumOrNull(rows.map((r) => r.platesUsd ?? null))) : "none drawn"}.`,
     "",
-    "## Hierarchy",
+    "## Structure",
     "",
-    "Hierarchy runs through evals/structure-whole-document/, not here, pointed at this run's corpus:",
+    "Structure runs through evals/structure-whole-document/, not here, pointed at this run's corpus:",
     "",
     "```",
     `npm run eval:structure-whole-document -- --arm incumbent --arm incumbent-repeat --arm smart-off --arm smart-off-repeat ${slugs

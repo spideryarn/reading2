@@ -1139,6 +1139,13 @@ const GLOSSARY_READ: GlossaryRead = {
   reload: async () => {},
   refresh: async () => {},
   patchEntry: () => {},
+  look: async () => false,
+  looking: null,
+  lookFailed: null,
+  lookDraft: null,
+  lookKept: null,
+  setHidden: async () => {},
+  hiding: new Set<string>(),
 };
 let glossaryRead: GlossaryRead = GLOSSARY_READ;
 const opened: string[] = [];

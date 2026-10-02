@@ -88,7 +88,7 @@ export interface CallStats {
    * which calls were concurrent, how long the gap before the next wave was.
    *
    * Optional because a run.json written before 2026-09-04 has no notion of
-   * waves at all — see evals/README.md § hierarchy-structure.
+   * waves at all — see evals/README.md § structure-whole-document.
    */
   wave?: number;
   /**

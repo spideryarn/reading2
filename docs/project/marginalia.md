@@ -21,11 +21,10 @@ read. A visitor's lists come in their payload.
 The column keeps no copy of these lists: it reads them every time it opens, and while it is open
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
-`useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations is the
-exception: the band and the Reader share one read, so it is fresh whenever the band is, but a run
-that finishes after the reader has left the Citations band reaches neither the margin nor the prose
-marks until the band is reopened or the page reloaded — the gap Glossary and Quotes share, named in
-`src/web/useCitations.ts` § An always-mounted read is not an always-fresh read. Greg had asked for missing modes to be run when Marginalia opens, if a later
+`useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations comes
+through the Reader's shared read instead, which listens the same way, so an announced Citations
+completion after the reader has left its band reaches the margin too (as do Glossary's and Quotes'
+reads, for the prose marks). Greg had asked for missing modes to be run when Marginalia opens, if a later
 one would otherwise be missed; it would not be, so it is not
 ([interface-vision.md § Tensions](interface-vision.md#tensions-from-the-feedback-so-far),
 [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md),

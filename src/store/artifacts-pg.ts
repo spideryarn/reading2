@@ -42,7 +42,7 @@
  * 1. **`blocks` has one home, not two.** On disk `output/<slug>.blocks.json`
  *    (stage 3) and `data/<slug>/blocks.json` (stage 4) are separate files, and
  *    stage 4's copy exists so the tree and its blocks are a guaranteed pair.
- *    Here both `(blocks, blocks)` and `(hierarchy, blocks)` are the same
+ *    Here both `(blocks, blocks)` and `(structure, blocks)` are the same
  *    `revision_blocks` rows, which cannot disagree.
  * 2. **`extractedHtml` and `stampedHtml` have two homes, not one.** On disk
  *    they are one path written twice, so stage 3 destroys stage 2's output and
@@ -593,13 +593,13 @@ async function runRowFor(
  * apart — and `beginDraftIn` copies the step runs forward too, in the same
  * transaction, so a coherent revision stays coherent.
  *
- * ## `hierarchy` has no special case, and an earlier version of the plan said it did
+ * ## `structure` has no special case, and an earlier version of the plan said it did
  *
- * The rule was going to be: for `hierarchy`, compare the row's `input_hash` against
+ * The rule was going to be: for `structure`, compare the row's `input_hash` against
  * the stored blocks. It is wrong twice. It is a freshness rule, in the one
- * function that must not have one. And it re-runs `hierarchy` whenever stage 3 has
+ * function that must not have one. And it re-runs `structure` whenever stage 3 has
  * run since — which moves the tree's boundaries, which silently drops every
- * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `hierarchy` stamp was withdrawn to avoid,
+ * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `structure` stamp was withdrawn to avoid,
  * reached by a different door. GPT Sol, 2026-08-28;
  * docs/plans/260828b-artifacts-pg-has-sol.md.
  *
@@ -1210,7 +1210,7 @@ async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): 
  *
  * ## The one stamp field the caller must supply that no `stamp()` produces
  *
- * `hierarchy` has no `PipelineStep.stamp`, and it must still be written with an
+ * `structure` has no `PipelineStep.stamp`, and it must still be written with an
  * `inputHash` of `hashBlocks(blocks)` — because `reasonsNotToPublish` compares
  * that column against the stored blocks and refuses the publication when they
  * differ. Having no expected stamp and recording no input are different things.
@@ -1250,7 +1250,7 @@ export async function writeArtefacts(
    * **What it is for.** It is what makes the `parts.labels` rule below a *rule*
    * rather than a habit living inside one step's `run`. The next writer of this
    * column is the deepening wave (docs/plans/260904d-deepen-fat-sections.md),
-   * which re-cuts the tree *without* running `hierarchy` — and would otherwise
+   * which re-cuts the tree *without* running `structure` — and would otherwise
    * have to remember to invalidate the labels its new boundaries had just
    * falsified. A label written to tell a paragraph apart from the wrong set of
    * neighbours is wrong in the one way stage 4b exists to prevent
@@ -1285,12 +1285,12 @@ export async function writeArtefacts(
    * (src/labels.ts § `structureHash`). GPT Sol's F2 on stage 2a, 2026-09-06.
    *
    * **Both writers already satisfy it**, which is why this closes a hole rather
-   * than changing behaviour: `hierarchy` stamps `structureHash(structure)` beside
+   * than changing behaviour: `structure` stamps `structureHash(structure)` beside
    * `mergeLabels(structure, {})`, the `labels` step stamps the same hash (through
    * `generateLabels`) beside `mergeLabels(structure, run.file.labels)`, and
    * `mergeLabels` touches `navLabel` alone — which `structureHash` does not hash.
    * Pinned as a property in tests/labels-batching.test.ts, end to end on the
-   * `hierarchy` writer in tests/structure-step-write-guard.test.ts, and here in
+   * `structure` writer in tests/structure-step-write-guard.test.ts, and here in
    * tests/labels-receipt-invalidation.test.ts.
    *
    * **Only of a `CompletedLabelsFile`.** A pending manifest makes no claim to be
@@ -1362,7 +1362,7 @@ export async function writeArtefacts(
    * ## The three arms
    *
    * - **`batches === null`** — a `PendingLabelsFile` (src/labels.ts): the empty
-   *   manifest `hierarchy` writes now that the labels are their own step. The
+   *   manifest `structure` writes now that the labels are their own step. The
    *   status becomes `pending`, **and this revision's `labels` receipt is
    *   deleted.**
    * - **a real `batches`** — a run happened, so `ready`.
@@ -1376,7 +1376,7 @@ export async function writeArtefacts(
    * `beginDraftIn` (src/store/pg-revisions.ts) copies **every**
    * `revision_step_runs` row forward into a new draft. So a *second* ingest of
    * an article that already has labels begins holding a `labels = done`
-   * receipt, and then `hierarchy` overwrites the labels column underneath it.
+   * receipt, and then `structure` overwrites the labels column underneath it.
    * Either the carried row's `input_hash` disagrees with the fresh manifest's
    * `sourceHash` and `stampForStep` **throws** — inside `stepIsDone`, before
    * `runStep`'s catch, so it escapes as a 409 and leaves the claim to recovery —
@@ -1392,7 +1392,7 @@ export async function writeArtefacts(
    * manifest; a pending manifest always invalidates. `StepStamp` has four fixed
    * fields with no room for a `structureHash`, and it does not need one.
    *
-   * `parts.labels` rather than `step === "hierarchy"`, so the rule follows the
+   * `parts.labels` rather than `step === "structure"`, so the rule follows the
    * artefact rather than whoever wrote it. `copyArtefacts` goes through here
    * too, and a copied manifest is judged by the same question as any other.
    * ⟨Fable's arbitration, 2026-09-06:

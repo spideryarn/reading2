@@ -38,7 +38,7 @@
     "validate-tree": "tsx src/validate-tree.ts",
     "structure:flatten": "tsx src/structure-flatten.ts",
     "test:watch": "vitest",
-    "structure": "tsx scripts/stage.ts hierarchy",
+    "structure": "tsx scripts/stage.ts structure",
     "labels": "tsx scripts/stage.ts labels",
     "eval:pdf-read": "tsx src/pdf-read.ts",
     "eval:structure-labels": "tsx evals/structure-labels.ts",

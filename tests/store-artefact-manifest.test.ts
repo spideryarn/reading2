@@ -28,7 +28,7 @@
  *
  * - **A pipeline artefact** → a whole-artefact JSONB column on
  *   `article_revisions`, plus an entry in the `revision_step_runs` CHECK **if
- *   it is a `StepName`** (`labels.json` is not — it is one of `hierarchy`'s outputs).
+ *   it is a `StepName`** (`labels.json` is not — it is one of `structure`'s outputs).
  * - **Reader state** → its own table keyed `(article_id, …)` with an
  *   `owner_id`, and **never** on a revision: a revision-keyed blob is deleted
  *   by re-extraction, which is the exact failure the identity split exists to
@@ -206,7 +206,7 @@ const HOMES: Record<string, string> = {
   "meta.json": "article_revisions.{title,byline,site_name,lang,excerpt,note,final_url,fetched_at}",
   "blocks.json": "revision_blocks (+ block_identities)",
   "tree.json": "article_revisions.tree",
-  "labels.json": "article_revisions.labels — a `hierarchy` output, NOT a step of its own",
+  "labels.json": "article_revisions.labels — a `structure` output, NOT a step of its own",
   /* The manifest is the column. The image bytes are content-addressed objects
      in the `sources` bucket and get no row of their own — an image is not the
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
@@ -223,7 +223,7 @@ const HOMES: Record<string, string> = {
      Reclamation is answered too: `sweepPgCheckpoints` on `last_used_at`,
      `scripts/checkpoints-sweep.ts`, src/store/checkpoints.ts § Retention. There
      is deliberately no delete on success. */
-  "labels-progress.json": "checkpoints (namespace 'hierarchy-labels')",
+  "labels-progress.json": "checkpoints (namespace 'structure-labels')",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
@@ -276,6 +276,7 @@ const HOMES: Record<string, string> = {
   "citation-finds.json": "citation_finds",
   "citation-investigations.json": "citation_investigations",
   "reading-time.json": "reading_time",
+  "glossary-hidden.json": "glossary_hidden_entries",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
      own. There is exactly one row per article and it is per-owner state on a
@@ -407,10 +408,10 @@ const RETIRED_FILE_REPRESENTATIONS: Record<string, Unexampled> = {
      `RETIRED_DIRECTORY_REPRESENTATIONS`, for the one reason that it is a
      directory and has no `HOMES` key to be exempted from. */
   "labels-progress.json": {
-    why: "the label run's checkpoint is rows in `checkpoints` (namespace 'hierarchy-labels'); nothing writes the file any more, so no corpus example can ever exist",
+    why: "the label run's checkpoint is rows in `checkpoints` (namespace 'structure-labels'); nothing writes the file any more, so no corpus example can ever exist",
     evidence: {
       file: "tests/checkpoints-durable-resume.test.ts",
-      contains: "hierarchy-labels",
+      contains: "structure-labels",
     },
   },
 };
@@ -443,7 +444,7 @@ const RETIRED_DIRECTORY_REPRESENTATIONS: Record<string, Unexampled> = {
      That decision was reversed and the list was never told. `src/db/schema.ts`
      § checkpoints names **both** checkpoint forms as the table's Postgres home,
      and `src/store/checkpoints.ts`'s namespace is a closed set containing
-     exactly `hierarchy-labels` and `pdf-chunk`. ⟨Sol⟩, 2026-08-31, on a review of
+     exactly `structure-labels` and `pdf-chunk`. ⟨Sol⟩, 2026-08-31, on a review of
      `labels-progress.json`: PDF chunks and label checkpoints are in the same
      state, and either both are exempt or neither is. They are now classified
      together, one list apart only because one is a file and one is a directory.
@@ -531,6 +532,14 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "reading_time",
+    },
+  },
+  /* And again: a sentinel `glossary_hidden_entries` row (plan 261002c § 2). */
+  "glossary-hidden.json": {
+    why: "no committed article carries a hidden glossary entry; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "glossary_hidden_entries",
     },
   },
 };

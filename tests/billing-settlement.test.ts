@@ -335,7 +335,7 @@ interface Fixture {
  * Every `done` case below settles through `settleJob` with nothing having run —
  * case 5 of src/store/pg-session.ts, the all-skipped claim — and that door
  * publishes the carry-forward draft. So the publication is real: the gate reads
- * blocks, tree, and the `hierarchy` run row's stamp, and a fixture missing any
+ * blocks, tree, and the `structure` run row's stamp, and a fixture missing any
  * of them fails at the last statement of the settlement rather than here.
  */
 async function publishArticle(slug: string): Promise<Fixture> {
@@ -383,7 +383,7 @@ async function publishArticle(slug: string): Promise<Fixture> {
   for (const name of ["fetch", "extract", "blocks"] as StepName[]) await stepRun(begun.revisionId, name);
   /* The one run row that has to carry a real hash: the publication gate compares
      it with `hashBlocks` of the stored blocks and refuses when they differ. */
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   await stepRun(begun.revisionId, "arc");
 
   await publishRevision({ slug, revisionId: begun.revisionId });

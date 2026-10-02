@@ -129,7 +129,7 @@ export interface ArmSpec {
   questionRule: QuestionRule;
   /**
    * Everything about this arm's request that differs from production's, listed
-   * rather than implied — the discipline `hierarchy-structure`'s `waves` arm
+   * rather than implied — the discipline `structure-whole-document`'s `waves` arm
    * keeps. The two shared entries are on every arm and say why the whole eval
    * is a bakeoff.
    */

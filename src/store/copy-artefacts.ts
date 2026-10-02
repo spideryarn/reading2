@@ -82,7 +82,7 @@ async function stampOrEmpty(store: ArtifactSource, slug: string, step: StepName)
  *
  * **Steps in pipeline order, and a step with nothing is skipped rather than
  * written empty.** Order matters because the destination may derive one
- * artefact's validity from another's — `blocks` before `hierarchy`, above all — and
+ * artefact's validity from another's — `blocks` before `structure`, above all — and
  * writing an empty part set would record a step as having run when it has not.
  *
  * Returns the steps it actually copied, so a caller can assert on the set. A
@@ -119,7 +119,7 @@ export async function copyArtefacts(
      * **A pending manifest means the `labels` step has not run, so there is
      * nothing of it to copy.**
      *
-     * `hierarchy` and `labels` write the same two artefacts, and a source that
+     * `structure` and `labels` write the same two artefacts, and a source that
      * holds them holds them once — the fixture reader lists one `tree.json` and
      * one `labels.json` under both steps
      * (tests/helpers/fixture-artefacts.ts § LAYOUT), which is honest, because on
@@ -139,7 +139,7 @@ export async function copyArtefacts(
      * stage 2a introduced, any future source can hold it, and taking `labels`
      * out of the helper's layout would have hidden it from the copier instead of
      * teaching the copier to carry it. Skipping is the honest answer — the
-     * pending manifest still travels, as part of `hierarchy`, where it correctly
+     * pending manifest still travels, as part of `structure`, where it correctly
      * sets `nav_label_status = 'pending'` and deletes the destination's receipt.
      * GPT Sol's F1 on stage 2a, 2026-09-06;
      * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.

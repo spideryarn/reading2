@@ -1932,7 +1932,7 @@ for (const adapter of ADAPTERS) {
         },
         { name: "extract", label: "Reading the article", status: "running", startedAt },
         { name: "blocks", label: "Splitting it up", status: "pending" },
-        { name: "hierarchy", label: "Building the hierarchy", status: "skipped" },
+        { name: "structure", label: "Building the structure", status: "skipped" },
       ];
       const bystanders = [mixed[0], mixed[2], mixed[3]].map((step) => structuredClone(step));
 
@@ -1949,7 +1949,7 @@ for (const adapter of ADAPTERS) {
         "fetch",
         "extract",
         "blocks",
-        "hierarchy",
+        "structure",
       ]);
       expect([after?.steps[0], after?.steps[2], after?.steps[3]]).toEqual(bystanders);
       expect(after?.steps[1]?.status).toBe("error");

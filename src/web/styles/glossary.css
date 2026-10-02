@@ -347,6 +347,55 @@
 .gloss-term-btn:hover { background: var(--surface-raised); }
 .gloss-term-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
 
+/* **The owner's row is a grid**, so the Hide button can sit beside the row's
+   button rather than inside it (a button in a button is invalid, and the press
+   would open the row too). The open entry spans both columns. Plan 261002c § 2. */
+.gloss-term.has-hide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.gloss-term.has-hide > .gloss-open { grid-column: 1 / -1; }
+/* `.srch-icon`'s quiet icon button: faint until pointed at, ink on hover. No
+   red: it hides, for you, rather than deletes — and `--destructive` is defined
+   nowhere in this app anyway (dock.css says so). It is the trash can Greg asked
+   for, and it should not shout from every row. */
+.gloss-hide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin: 0.3rem 0.35rem 0 0;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.gloss-hide:hover { background: var(--surface-raised); color: var(--ink); }
+.gloss-hide:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.gloss-hide:disabled { opacity: 0.45; cursor: default; }
+
+/* *Hidden (n)* at the foot of the list — collapsed, quiet, names only. */
+.gloss-hidden {
+  margin: 0.4rem 0.7rem 0.6rem;
+  color: var(--ink-faint);
+  font-size: 0.86rem;
+}
+.gloss-hidden > summary { cursor: pointer; padding: 0.25rem 0; }
+.gloss-hidden > summary:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-hidden ul { margin: 0.2rem 0 0; padding: 0; list-style: none; }
+.gloss-hidden li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--rule);
+}
+.gloss-hidden-name { min-width: 0; overflow-wrap: break-word; color: var(--ink-soft); }
+
 .gloss-term-head {
   display: flex;
   align-items: baseline;

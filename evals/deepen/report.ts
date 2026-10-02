@@ -940,7 +940,7 @@ export interface StepClock {
    * It used to mean only "stats are present", which is a weaker fact than it
    * reads as. When a wave exhausts its redraws, `generateStructure` catches the
    * failure, writes a records file with `failed: true`, falls back to wave 1 and
-   * completes the `hierarchy` step — so three failed waves all carried stats, a
+   * completes the `structure` step — so three failed waves all carried stats, a
    * `done` status and a clock, and question 5 printed "ran at once and finished
    * inside" over three measurements of the FALLBACK path. Named positively so
    * that the thing asserted is the thing the name says. ⟨GPT Sol, DPN-03-R.⟩
@@ -1010,7 +1010,7 @@ export function peakConcurrency(
  * ⟨GPT Sol, confirming the argument, 2026-09-05.⟩
  *
  * This one is bounded by the **shortest** job, which is the fact that
- * matters: the load articles' `hierarchy` is far shorter than a book's
+ * matters: the load articles' `structure` is far shorter than a book's
  * 658-778 s, so it says how much of the book's step was really contended rather
  * than letting an instant of overlap stand in for the whole of it.
  *
@@ -1190,10 +1190,10 @@ export function budgetReport(opts: {
           `and the peak concurrency was ${peak}. This is an absence, not a pass — read the ` +
           "findings before quoting any number in this block."
         : overBudget.length === 0
-        ? `All ${completed.length} hierarchy step(s) ran at once (peak ${peak}) and finished ` +
-          `inside STEP_BUDGET_MS.hierarchy (${Math.round(opts.budgetMs / 1000)}s) and the ` +
+        ? `All ${completed.length} structure step(s) ran at once (peak ${peak}) and finished ` +
+          `inside STEP_BUDGET_MS.structure (${Math.round(opts.budgetMs / 1000)}s) and the ` +
           `${Math.round(opts.deadlineMs / 1000)}s self-abort deadline.`
-        : `${overBudget.length} hierarchy step(s) ran past STEP_BUDGET_MS.hierarchy ` +
+        : `${overBudget.length} structure step(s) ran past STEP_BUDGET_MS.structure ` +
           `(${Math.round(opts.budgetMs / 1000)}s) with ${peak} in flight at once. A step past ` +
           `${Math.round(opts.deadlineMs / 1000)}s is one the claimant puts down mid-article; what ` +
           "makes that survivable is the checkpoint rows, which `withheld` counts.",
@@ -1303,7 +1303,7 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * And the mirror of it: on a **repeat**, the structure call must not have been
  * re-bought, because a resumed wave 1 is what holds the seed constant. The
  * ledger is what says so — a re-bought structure call on a book is a
- * `job: "hierarchy"` row carrying the whole book's input tokens, which is an
+ * `job: "structure"` row carrying the whole book's input tokens, which is an
  * order of magnitude more than the wave's own.
  *
  * **`structure` is which of those two this pass is**, and getting it wrong
@@ -1316,14 +1316,14 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * evals/results/hierarchy-waves-2026-09-04/2701-h.tree.json § usage.⟩
  *
  * On a `"bought"` pass the same arithmetic is still worth doing, pointed the
- * other way and non-fatally: an ingest whose `hierarchy` bill shows *no*
+ * other way and non-fatally: an ingest whose `structure` bill shows *no*
  * whole-document call resumed a structure checkpoint from somewhere, which is
  * worth knowing and is not a reason to distrust the numbers.
  */
 export function checkRepeatBoughtItsWave(opts: {
   label: string;
   stats: DeepenStats;
-  /** Input tokens on `job: "hierarchy"` rows for this job, out of the ledger. */
+  /** Input tokens on `job: "structure"` rows for this job, out of the ledger. */
   ledgerStructureInputTokens: number;
   /**
    * A structure call re-bought on this article would carry at least this many
@@ -1357,7 +1357,7 @@ export function checkRepeatBoughtItsWave(opts: {
       fatal: true,
       message:
         `"${opts.label}" billed ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens ` +
-        `under job "hierarchy" and the wave accounts for ${waveTokens.toLocaleString()} of them. ` +
+        `under job "structure" and the wave accounts for ${waveTokens.toLocaleString()} of them. ` +
         `The difference is at least one whole-document structure call (${opts.wholeDocumentInputTokensFloor.toLocaleString()} ` +
         "tokens), so the seed was re-bought rather than resumed and this repeat was asked about a " +
         "different tree.",
@@ -1369,7 +1369,7 @@ export function checkRepeatBoughtItsWave(opts: {
       fatal: false,
       message:
         `"${opts.label}" is the ingest, which buys the whole-document structure call — and its ` +
-        `"hierarchy" bill is ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens, ` +
+        `"structure" bill is ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens, ` +
         `only ${beyondTheWave.toLocaleString()} of them beyond the wave's own ` +
         `${waveTokens.toLocaleString()}, under the ${opts.wholeDocumentInputTokensFloor.toLocaleString()}-token ` +
         "floor a structure call on this document would carry. Something resumed a structure " +
@@ -1587,7 +1587,7 @@ export function checkDriving(
   jobs: readonly DrivenJob[],
   opts: {
     /**
-     * The step phase D is measured on — `"hierarchy"` on the paid path,
+     * The step phase D is measured on — `"structure"` on the paid path,
      * `"blocks"` under `--dry-run`. Its windows are what the concurrency is
      * taken over, because the *whole-job* windows overlap even when the steps
      * run one after another: all promises are alive while the jobs without slots

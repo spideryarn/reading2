@@ -192,7 +192,7 @@ beforeAll(async () => {
     tweets: threadFor("tweets/5", articleWithIdsFingerprint(BLOCKS, TREE, CITED_META)),
   });
   for (const name of ["fetch", "extract", "blocks"] as StepName[]) await step(name);
-  await step("hierarchy", hashBlocks(BLOCKS));
+  await step("structure", hashBlocks(BLOCKS));
   await publishRevision({ slug: SLUG, revisionId });
 }, 60_000);
 

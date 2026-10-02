@@ -749,7 +749,7 @@ describe("mergeLabels", () => {
    * **The property both writers of the `tree` column rest on**, and since
    * 2026-09-07 the one `writeArtefacts` refuses a write over.
    *
-   * `hierarchy` stamps `structureHash(structure)` into its manifest and hands
+   * `structure` stamps `structureHash(structure)` into its manifest and hands
    * back `mergeLabels(structure, {})`; the `labels` step stamps the same hash
    * (through `generateLabels` — pinned above at *records the manifest that lets
    * a stale complete set be spotted*) and hands back
@@ -1341,7 +1341,7 @@ describe("generateLabels, resuming", () => {
     const batches = planBatches(tree, blocks);
     for (const batch of batches) {
       const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
-      await store.write("test", "hierarchy-labels", fingerprint, {
+      await store.write("test", "structure-labels", fingerprint, {
         fingerprint,
         labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
         record: {

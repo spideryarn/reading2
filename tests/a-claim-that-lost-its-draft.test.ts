@@ -207,8 +207,8 @@ function articleSteps(slug: string, seed: string) {
         meta: { slug, title: "A fixture article" },
       }),
       blocks: returningStep("blocks", { blocks: { blocks }, stampedHtml: html }),
-      hierarchy: returningStep(
-        "hierarchy",
+      structure: returningStep(
+        "structure",
         { tree: treeFor(slug, blocks), labels: labelsFor(slug, blocks), blocks: { blocks } },
         { inputHash: hashBlocks(blocks) },
       ),
@@ -216,7 +216,7 @@ function articleSteps(slug: string, seed: string) {
   };
 }
 
-const INGEST: StepName[] = ["extract", "blocks", "hierarchy"];
+const INGEST: StepName[] = ["extract", "blocks", "structure"];
 
 async function queueJob(slug: string, names: StepName[]): Promise<Job> {
   const wanted: Job = {
