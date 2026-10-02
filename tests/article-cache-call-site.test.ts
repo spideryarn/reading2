@@ -11,10 +11,12 @@
  *
  * So this file asks the only question that would have gone red on `24335207`:
  * **run a two-mode job through the real walk, and see what `StepContext.cacheArticle`
- * each step is actually handed.** Both must be `true`. `tweets` and `faq` share
- * an effort, renderer, and absence of an output schema, so the entry one writes
- * is the entry the other reads.
- * (The pair was `arc` and `tweets` until `tweets/5` moved tweets to `ids`.)
+ * each step is actually handed.** When this test was written both had to be
+ * `true`: `tweets` and `faq` then shared an effort, renderer, and absence of an
+ * output schema, so the entry one wrote was the entry the other read. They now
+ * send different schemas, and the replacement tripwire below proves no distinct
+ * article stages currently share all three cache dimensions.
+ * (The original pair was `arc` and `tweets` until `tweets/5` moved tweets to `ids`.)
  *
  * docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md
  *
@@ -283,7 +285,7 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
     expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
   }, 30_000);
 
-  it("marks neither Glossary nor Quotes now that only Quotes sends a schema", async () => {
+  it("marks neither Glossary nor Quotes now that their schemas differ", async () => {
     await walk(["glossary", "quotes"]);
     expect(seen.map((s) => s.step)).toEqual(["glossary", "quotes"]);
     expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);

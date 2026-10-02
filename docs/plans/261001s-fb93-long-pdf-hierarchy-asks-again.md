@@ -59,9 +59,10 @@ falls back to the previous child's end + 1 (the existing rule), and is dropped i
 `droppedChildren` if there is no usable fallback either (also the existing rule). The child after it
 cannot borrow an end it never stated, so it uses its own start or is dropped by the same rule.
 `recordBoundaryFaults` measures only the claims that were made. It is counted in a new
-`BuildReport.rangelessChildren` list, carried to `HierarchyRun`, the pipeline's success log and the
-CLI line beside `droppedChildren` — a repair nobody is told about is the bug it repaired
-([silent-success.md](../reusable/silent-success.md)).
+`BuildReport.rangelessChildren` list. It was initially carried to `HierarchyRun` and the pipeline's
+success log. `toc/11` then required every child start and derived every range before this builder,
+so the live count became permanently zero and that production telemetry was retired; the report
+field remains for legacy and direct ranged-builder inputs.
 
 Rovelli attempt 1 would then have built (unless something later in that answer was also wrong —
 unknowable, since the answer is gone).
@@ -87,7 +88,7 @@ supplement, invariants — the same four the checkpoint gate uses), make the sam
 - **Not if the signal has aborted.**
 - The reader sees it on the progress line ("the first table of contents did not hold together;
   asking again"), and `HierarchyRun` gets `structureCalls: 1 | 2` beside `structureResumed`, logged
-  at zero-or-more like every other count.
+  at every value like every other count.
 
 The re-asked answer goes through the same checkpoint write, so a later window resumes it.
 

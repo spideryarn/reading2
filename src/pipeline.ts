@@ -2772,9 +2772,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              anything at all — nothing about the tiling refuses an answer now.
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
-          /* Children the answer gave no range at all, derived rather than
-             refused (src/hierarchy.ts § `BuildReport.rangelessChildren`). */
-          rangelessChildren: run.rangelessChildren,
           droppedHeadings: run.droppedHeadings,
           /* **Socratic questions written but not kept.** Nothing on screen
              distinguishes a question the model chose not to write from one

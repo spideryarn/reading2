@@ -37,6 +37,31 @@ describe("toc/11's structured starts-only answer", () => {
     });
   });
 
+  it("requires chapters under the root, and leaves a chapter's sections optional as measured", () => {
+    expect(STRUCTURE_OUTPUT_SCHEMA).toMatchObject({
+      properties: {
+        root: {
+          required: expect.arrayContaining(["children"]),
+          properties: { children: { type: "array", minItems: 1 } },
+        },
+      },
+    });
+    const chapter = (
+      STRUCTURE_OUTPUT_SCHEMA as unknown as {
+        properties: {
+          root: {
+            properties: {
+              children: { items: { required: readonly string[]; properties: { children: Record<string, unknown> } } };
+            };
+          };
+        };
+      }
+    ).properties.root.properties.children.items;
+    /* 184 of 882 measured toc/11 chapters had no sections (261001s § Stage 2). */
+    expect(chapter.required).not.toContain("children");
+    expect(chapter.properties.children).not.toHaveProperty("minItems");
+  });
+
   it("parses and builds a starts-only answer through production's converter", () => {
     const report = emptyReport();
     const { root } = parseStructureAnswer(
@@ -51,12 +76,26 @@ describe("toc/11's structured starts-only answer", () => {
               gist: "The first part begins the account.",
               question: "First — how does the account begin?",
               start: blocks[0]!.id,
+              children: [
+                {
+                  title: "Opening section",
+                  gist: "The opening section begins the account.",
+                  start: blocks[0]!.id,
+                },
+              ],
             },
             {
               title: "Second",
               gist: "The second part finishes the account.",
               question: "Second — how does the account finish?",
               start: blocks[2]!.id,
+              children: [
+                {
+                  title: "Closing section",
+                  gist: "The closing section finishes the account.",
+                  start: blocks[2]!.id,
+                },
+              ],
             },
           ],
         },

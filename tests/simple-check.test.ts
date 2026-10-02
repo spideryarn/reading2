@@ -115,14 +115,27 @@ describe("the request the checker sends", () => {
             verdicts: {
               type: "array",
               items: {
-                type: "object",
-                additionalProperties: false,
-                required: ["verdict"],
-                properties: {
-                  n: { type: "integer" },
-                  verdict: { type: "string", enum: ["ok", "contradicts"] },
-                  why: { type: "string" },
-                },
+                anyOf: [
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["n", "verdict"],
+                    properties: {
+                      n: { type: "integer" },
+                      verdict: { type: "string", enum: ["ok"] },
+                    },
+                  },
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["n", "verdict", "why"],
+                    properties: {
+                      n: { type: "integer" },
+                      verdict: { type: "string", enum: ["contradicts"] },
+                      why: { type: "string" },
+                    },
+                  },
+                ],
               },
             },
           },

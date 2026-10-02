@@ -1,6 +1,7 @@
-# A structure answer that writes code to correct an id — and structured outputs for every JSON call
+# A structure answer that writes code to correct an id — and structured outputs where JSON calls fit
 
-**Status:** plan, revision 3. It folds in GPT Sol's two read-only reviews
+**Status:** complete. The plan reached revision 3 before building and folds in GPT Sol's two
+read-only reviews
 ([r1](261001s-reviews/plan-review-sol-r1.md) "rethink", [r2](261001s-reviews/plan-review-sol-r2.md)
 "revise before building"), the Overseer's evidence on Sketch and Ideas, and Greg's two follow-ups.
 Greg, to the Overseer, 2026-10-01 ~23:00:
@@ -82,14 +83,14 @@ schema (r3 H2; [prompt-caching.md](../project/prompt-caching.md)). Anthropic's c
 guidance also warns that structured outputs at low or medium effort can skip thinking, and suggests
 a line asking the model to think the problem through first (r3 H3).
 
-**What a schema guarantees, and what it does not.** It guarantees syntax and shape: no
-`.replace(…)`, no stray value, every required field present. It does not guarantee that an id is
-right. Under a schema, a model that has started a wrong id can no longer write a correction, so it
-has to finish the string. The result is an invented id, which `index.get` refuses (a loud failure,
-and a whole failed article in Structure), or a wrong real id, which nothing can detect. **So every
-id-resolution check stays exactly as it is.** And no schema may constrain an id field with an
-`enum` of the article's ids: that would force a mistyped prefix to finish as *some* real id, which
-is exactly a wrong id let through silently.
+**What a schema guarantees, and what it does not.** On a completed, non-refusal answer it guarantees
+syntax and shape: no `.replace(…)`, no stray value, every required field present. It does not
+guarantee that an id is right. Under a schema, a model that has started a wrong id can no longer
+write a correction, so it has to finish the string. The result is an invented id, which `index.get`
+refuses (a loud failure, and a whole failed article in Structure), or a wrong real id, which nothing
+can detect. **So every id-resolution check stays exactly as it is.** And no schema may constrain an
+id field with an `enum` of the article's ids: that would force a mistyped prefix to finish as *some*
+real id, which is exactly a wrong id let through silently.
 
 ## Root cause
 
@@ -117,7 +118,7 @@ turns a sampling accident into a failed step.
 | **Starts-only Structure** | **Taken, together with the schema.** Under a schema, an end that would have been corrected in-band becomes an invented id instead, and the whole article fails. Removing the end removes five of the six occasions. src/hierarchy-expand.ts already works this way. |
 | Parser repair (evaluate `.replace`) | **Dropped** (r1 F2, F3): as a default it would let a tweet's invented text through, and the evidence shows that a correction is sometimes a change of mind or a no-op. |
 | Labels or indices instead of ids | **Rejected**: a dense namespace turns a typo into a different real block, silently. |
-| One automatic re-draw on `MalformedJson` | **Not built.** A schema should make `MalformedJson` impossible except on a refusal or a truncation, and neither of those is a re-draw case. If stage 2 or 3 measures a residual, it comes back as its own stage with r2 G4 and G5 as its contract: return per-attempt usage, never checkpoint the first raw answer, an admission rule against `deadlineAt`, and observed size-dependent costs (a 142-page structure call is about $2 and 508 s, not $0.15). |
+| One automatic re-draw after a fresh Structure answer fails conversion | **Built separately by fb93 and merged in stage 2.** It covers a completed answer that parses but fails `treeFrom`, as well as malformed JSON, and asks at most once more when the deadline leaves room. A refusal, truncation or abort is not re-asked. Usage includes both attempts and only the successful raw answer can reach the checkpoint write. |
 | A prompt line saying "never write code" | Not done: a schema enforces what a line would only ask. |
 
 **What the safety claim is, stated narrowly** (r2 G2): no parser repair creates or accepts a
@@ -276,8 +277,8 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
 ### Stage 4 — the rule, the postmortem, the hand-off
 
 - **The rule, in one home.** That is docs/project/ai-gateway.md or prompting-guide.md, whichever
-  owns how we call a model; the other signposts it. Every call that expects JSON uses a strict
-  schema through the adapter, and:
+  owns how we call a model; the other signposts it. Every compatible call that expects response JSON
+  uses a strict schema through the adapter, every exception is named, and:
   - no `enum` of ids;
   - ids are still resolved;
   - recursion is unrolled;
@@ -297,7 +298,8 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
 - Every JSON call is either on a schema or named with its reason. The rule is written in one home,
   and the mode.md line is proposed.
 - Ideas' lower-effort re-test is reported, with no production change.
-- No lenient parse anywhere. Ids are still resolved, and there is no `enum` of ids.
+- No code-expression repair was added. Parsers may retain compatibility with older stored answers,
+  but the live prompt and schema agree; ids are still resolved, and there is no `enum` of ids.
 - Each stage is committed and pushed to `dev` as it lands.
 
 ## Ledger
@@ -374,7 +376,7 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
 - **Stage 2 measured: both gates pass.**
   - **Validity** (`evals/results/paperwork/structure-parse/toc11-*`, spend recorded): **0 parse
     failures in 70 answers** (against 2 in 70 for `toc/10` in stage 0), 70 of 70 trees built, 0
-    dropped children, 0 refusals on invented starts. About $8.40 for the 70 calls. One shape
+    dropped children, 0 refusals on invented starts. About $8.45 for the 70 calls. One shape
     change: on `analog-cognition` (4 `h1`, 15 `h2`) the depth-1 count went from a mean of 8.7 to
     14.8, often putting every `h2` at depth 1. The other three articles moved 8.9 → 10.7 at most.
   - **Quality**, the pre-registered thinking-effort rule
@@ -395,7 +397,9 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
 - **Stage 3b part 1 (Ideas, Sketch, Quotes) built by Sol and reviewed, with one fix round.** The
   first Ideas schema changed its prompt (reasoning made optional for introduced ideas). That
   followed from Claude's brief ("encode what the parser accepts"), which was the wrong rule. **The
-  rule now: a schema encodes the contract the prompt already states, and no prompt text changes.**
+  rule now: a schema encodes every part of the live answer shape the provider can express, without
+  adding variants only because the parser accepts them. The parser may remain tolerant of old
+  answers; semantic prompt instructions do not change.**
   A test now ties each stage's `ARTICLE_OUTPUT_FORMAT` row to the request it really sends.
   Measured:
   - **Quotes**: 12 of 12 valid (`evals/results/quotes-spread-2026-10-02T00-43-13*`).
@@ -405,7 +409,8 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
     no-schema's mean U against the schema was 1.63 (Sol) and 2.19 (Opus), so it did not beat the
     schema. Sketch thinks almost nothing at `low` in either arm, so the schema changes little
     there.
-  - **Ideas under the schema: 48 of 48 valid at `high`, `medium` and `low`**, against the research
+  - **Ideas under the schema: 16 of 16 valid at each of `high`, `medium` and `low` (48 of 48
+    total)**, against the research
     doc's 1 in 16 malformed at `high` and 10 in 16 at `medium` and at `low`. The quality panels
     for `medium` and `low` against `high` follow below.
 - **Stage 3b part 2 (Arc, Tweets, Glossary, Timeline, Quiz, FAQ, Cross-references, Simple,
@@ -438,19 +443,20 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
       `STAGE_EFFORT` and `ARTICLE_RENDERER`. The compiler already forces it, because it is a total
       record over `ArticleStage`.
 - **Ideas' lower-effort re-test, under the schema (Greg's question).** JSON is no longer the
-  problem: 48 of 48 draws were valid at every effort. Quality is the problem:
+  problem: 16 of 16 draws were valid at each effort, 48 of 48 total. Quality is the problem:
   - **`medium`: possible loss.** Mean U 1.69 from Sol, 1.13 from Opus. About 40 % cheaper and
     twice as fast.
-  - **`low`: clear loss.** Mean U 1.44 from Sol, 0.88 from Opus. At `low` it thinks 8–105 tokens,
-    in effect not at all.
+  - **`low`: clear loss.** Mean U 1.44 from Sol, 0.88 from Opus. Across the 16 recorded draws it
+    thinks 0–172 tokens (38 on average), in effect not at all.
 
   So Ideas stays at `high`, and production effort is unchanged. Judging is in
   `evals/results/thinking-effort-261001s-ideas-schema/judging/ideas-high-v-medium/` and
   `…/judging/ideas/` (low).
 - **Stage 3b part 3 (Skim; a chat-wire adapter; Simple's checker, cited-paper passages, Debate
-  synthesis and Referee mirror), built by Sol and reviewed.** No prompt text changed. Simple's
-  checker gained the finish and refusal checks it lacked before its parse. Claude checked the
-  checker's verdict enum and the adapter.
+  synthesis and Referee mirror), built by Sol and reviewed.** No semantic prompt instruction
+  changed; Debate synthesis's answer-format wording stopped asking for a code fence, to match the
+  raw JSON its schema emits. Simple's checker gained the finish and refusal checks it lacked before
+  its parse. Claude checked the checker's verdict enum and the adapter.
   - **Deferred, with the reason for each:**
     - **Labels:** its answer is tuples, and a schema cannot express them, so it needs a change of
       answer shape and a quality check. It already re-asks on a malformed pair (260924a).
@@ -464,3 +470,48 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
     - **Chat-tool and Realtime tool arguments:** these are function-call JSON, not response JSON.
     - **The six existing chat-wire strict users:** already strict. A move to the shared adapter is
       cosmetic.
+- **Final cross-family review (GPT, 2026-10-02): four code findings fixed, plus factual docs.**
+  - **P1 `261001s-F1`:** the shared chat adapter accepted optional object properties, which OpenAI's
+    strict structured-output subset refuses. A new preflight validator now requires every declared
+    property at every object node and Simple's conditional `why` is represented by two fully
+    required `anyOf` variants. The adapter test went red first; after the guard, Simple's request
+    test also went red until its schema was corrected.
+  - **P1 `261001s-F2`:** Structure's supposed three-level schema allowed an empty or absent child
+    list at the root and chapter levels, so a completed answer could satisfy the schema without
+    doing the prompt's three-level job. Sol made a non-empty list required at both levels.
+    **Claude kept the root half and reverted the chapter half.** In the 70 measured `toc/11`
+    answers, no root lacked chapters, but **184 of 882 chapters had no sections** (130 of them on
+    `analog-cognition`). Requiring sections would force the model to invent them for short
+    chapters, an unmeasured change to a shape that had just passed its quality panel. The shape
+    test now pins both halves. The checkpoint and re-ask fixtures still exercise a schema-valid
+    `toc/11` answer.
+  - **P2 `261001s-F3`:** Tweets' live schema admitted the legacy bare-string row that only its
+    stored-answer parser needs, letting a new post arrive without source block ids. Its contract
+    test went red first; the live schema now permits only `{text, blocks}` while the parser remains
+    backwards-compatible.
+  - **P3 `261001s-F4`:** `rangelessChildren` had become permanent zero production telemetry:
+    `toc/11` requires starts and derives ranges before the ranged builder. Its public run field and
+    log were removed after a re-ask test went red; `BuildReport` keeps the field for direct and
+    legacy ranged-builder callers.
+  - The cache tripwire is sound: it enumerates every ordered distinct pair, and
+    `sameOutputFormat` is symmetric as well. Temporarily assigning FAQ Tweets' schema made
+    `tests/article-cache-group.test.ts` fail with both `tweets+faq` and `faq+tweets`; the mutation
+    was restored. The production-walk version could not start in this sandbox because Postgres and
+    Docker are inaccessible.
+  - The re-ask remains inside `treeFrom`'s failure boundary: a fresh parse-success/conversion
+    failure is asked once more, the second raw replaces the first, and checkpointing occurs only
+    after the successful conversion. Refusal, truncation and abort stay outside it. The first-start
+    range check in `src/start-ranges.ts` is correctly before the pin. The whole-document checkpoint
+    includes `toc/11` and the schema-bearing wire request; expansion checkpoints carry
+    `toc/11+expand/7`.
+  - Documentation was reconciled with code and committed results: compatible response-JSON calls
+    rather than every JSON-producing mechanism; live schema versus legacy parser tolerance; the
+    merged re-ask; retired rangeless telemetry; Structure spend `$8.45`; and Ideas `low` thinking
+    at 0–172 tokens (38 average).
+  - Focused verification: 15 files, 353 tests green; the loader-equivalent typecheck covered all
+    2,648 source files; the production build completed; touched-file lint exited 0 with one
+    pre-existing warning and three pre-existing complexity notices. `npm test` and the test phase
+    of `npm run check` could not start their suites because this sandbox cannot reach Postgres or
+    Docker. The literal `npm run typecheck` and `npm run check` entry points also hit the sandbox's
+    `tsx` IPC `listen EPERM`; `node --import tsx scripts/typecheck.ts` is the equivalent typecheck
+    that passed.

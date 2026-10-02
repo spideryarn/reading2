@@ -279,7 +279,8 @@ contract, and it wants its own plan and postmortem. **It should not be lost**: i
 a failed ingest at a few per cent of articles. Raised with Greg in the feedback note and the
 hand-off. **Picked up and fixed** by
 [261001s](261001s-structure-answer-writes-code-to-correct-an-id.md): structured outputs for every
-JSON call, and Structure on `toc/11` (starts only). Postmortem
+compatible response-JSON call, named exceptions for the rest, and Structure on `toc/11` (starts
+only). Postmortem
 [261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
 
 **One thing the measurement did not see.** A peer's work that landed the same evening

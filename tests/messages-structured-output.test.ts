@@ -274,4 +274,14 @@ describe("the chat-wire structured-output adapter", () => {
       ),
     ).toThrow(/additionalProperties.*false/);
   });
+
+  it("refuses optional object properties that OpenAI strict schemas reject", () => {
+    expect(() =>
+      withChatJsonSchema(
+        { model: "openai/gpt-5.6-luna" },
+        "optional_answer",
+        objectSchema({ answer: stringSchema, note: stringSchema }, ["answer"]),
+      ),
+    ).toThrow(/OpenAI.*all properties.*required/i);
+  });
 });

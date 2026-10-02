@@ -260,7 +260,7 @@ export const SYSTEM = replacePromptBlock(
 );
 
 const stringSchema = { type: "string" } as const;
-const arrayOf = (items: Readonly<Record<string, unknown>>) => ({ type: "array", items }) as const;
+const nonEmptyArrayOf = (items: Readonly<Record<string, unknown>>) => ({ type: "array", items, minItems: 1 }) as const;
 const objectSchema = (
   properties: Readonly<Record<string, unknown>>,
   required: readonly string[],
@@ -283,7 +283,12 @@ const depth1Schema = objectSchema(
     question: stringSchema,
     start: stringSchema,
     sourceHeading: stringSchema,
-    children: arrayOf(depth2Schema),
+    /* **Optional, unlike the root's.** A chapter with no sections is an answer
+       the model gives often — 184 of 882 chapters across the 70 measured
+       `toc/11` answers (261001s § Stage 2) — and `buildTree` handles it. Requiring
+       sections here would force the model to invent them for short chapters, an
+       unmeasured change to a shape that passed its quality panel. */
+    children: { type: "array", items: depth2Schema },
   },
   ["title", "gist", "question", "start"],
 );
@@ -297,9 +302,9 @@ export const STRUCTURE_OUTPUT_SCHEMA = objectSchema(
         gist: stringSchema,
         question: stringSchema,
         sourceHeading: stringSchema,
-        children: arrayOf(depth1Schema),
+        children: nonEmptyArrayOf(depth1Schema),
       },
-      ["title", "gist", "question"],
+      ["title", "gist", "question", "children"],
     ),
   },
   ["root"],
@@ -1118,8 +1123,12 @@ export interface BuildReport {
    * Its own figure for the reason `collapsedRungs` has one: it is not a boundary
    * that moved by a measurable amount, so as a `PartitionRepair` it would be a
    * repair of no size. It cost a 1,041-block book its whole tree on 2026-10-01
-   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md). Normally empty,
-   * and reported at zero.
+   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
+   *
+   * This now belongs only to callers that feed the ranged builder directly.
+   * `toc/11` requires every child start and `modelNodeFromStarts` derives every
+   * range before this builder runs, so a live whole-document answer cannot add
+   * an entry here.
    */
   rangelessChildren: string[];
   /**
@@ -2354,8 +2363,6 @@ export interface HierarchyRun {
    * has quietly become the common case doubles the stage's bill and its wait.
    */
   structureCalls: 0 | 1 | 2;
-  /** Children that stated no range and were derived — `BuildReport.rangelessChildren`. */
-  rangelessChildren: number;
   /**
    * **What the deepening wave did**, or `null` where it was not run at all —
    * which is every reader today, because the flag is off
@@ -3211,7 +3218,6 @@ export async function generateHierarchy(opts: {
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
-    rangelessChildren: built.rangelessChildren.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,

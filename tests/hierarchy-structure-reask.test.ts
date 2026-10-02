@@ -100,12 +100,27 @@ const BLOCKS: Block[] = [
   { id: "spya-rsk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
 ];
 
-/* `toc/11` answers: starts only, the root has none (261001s). */
+/* A schema-valid `toc/11` answer: starts only, with all three promised levels. */
 const SOUND = JSON.stringify({
   root: {
     title: "The whole piece",
-    gist: "One node over the whole piece, which is a shape buildTree accepts.",
+    gist: "The whole piece has one part.",
     question: "The whole piece — what does it say?",
+    children: [
+      {
+        title: "The part",
+        gist: "The part covers the whole piece.",
+        question: "The part — what does it say?",
+        start: BLOCKS[0]!.id,
+        children: [
+          {
+            title: "The section",
+            gist: "The section covers the whole piece in detail.",
+            start: BLOCKS[0]!.id,
+          },
+        ],
+      },
+    ],
   },
 });
 /** Broken three characters from the end, the way the book's second answer was. */
@@ -116,7 +131,15 @@ const INVENTED = JSON.stringify({
     title: "The whole piece",
     gist: "A gist.",
     question: "The whole piece — what does it say?",
-    children: [{ title: "Part", gist: "A gist.", question: "Part — what?", start: "spya-zzz999" }],
+    children: [
+      {
+        title: "Part",
+        gist: "A gist.",
+        question: "Part — what?",
+        start: "spya-zzz999",
+        children: [{ title: "Section", gist: "A section gist.", start: "spya-zzz999" }],
+      },
+    ],
   },
 });
 
@@ -172,6 +195,7 @@ describe("a structure answer that cannot become a tree", () => {
     const result = await run({ checkpoints });
     expect(structureCalls).toBe(2);
     expect(result.structureCalls).toBe(2);
+    expect(result).not.toHaveProperty("rangelessChildren");
     expect(result.parts.tree.nodes[result.parts.tree.rootId]?.title).toBe("The whole piece");
     // The answer that built is the one kept, so the next window resumes it.
     expect([...checkpoints.entries.values()]).toEqual([expect.objectContaining({ answer: SOUND })]);

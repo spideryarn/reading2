@@ -114,12 +114,27 @@ const BLOCKS: Block[] = [
   { id: "spya-chk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
 ];
 
-/** One node over every block: the smallest tree `buildTree` accepts. */
+/** A schema-valid `toc/11` answer over every block. */
 const SOUND = JSON.stringify({
   root: {
     title: "The whole piece",
-    gist: "One node over the whole piece, which is a shape buildTree accepts.",
+    gist: "The whole piece has one part.",
     question: "Whole piece — what does it claim?",
+    children: [
+      {
+        title: "The part",
+        gist: "The part covers the whole piece.",
+        question: "The part — what does it claim?",
+        start: BLOCKS[0]!.id,
+        children: [
+          {
+            title: "The section",
+            gist: "The section covers the whole piece in detail.",
+            start: BLOCKS[0]!.id,
+          },
+        ],
+      },
+    ],
   },
 });
 

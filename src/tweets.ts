@@ -412,13 +412,13 @@ const tweetObjectSchema = {
   additionalProperties: false,
 } as const;
 
-/** The current object row plus the deliberately accepted legacy string row. */
+/** The object row the current prompt requires; the parser below remains tolerant of stored legacy rows. */
 export const TWEETS_OUTPUT_SCHEMA = {
   type: "object",
   properties: {
     tweets: {
       type: "array",
-      items: { anyOf: [{ type: "string" }, tweetObjectSchema] },
+      items: tweetObjectSchema,
     },
   },
   required: ["tweets"],

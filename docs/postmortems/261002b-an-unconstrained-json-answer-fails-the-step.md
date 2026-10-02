@@ -65,13 +65,14 @@ boundary to stop at: a parser that repaired values would have had to guess what 
 
 ## The fix that is right for the long term — and the one that was nearly built
 
-**Built:** structured outputs. Anthropic's `output_config.format` takes a strict JSON schema, and
-decoding is constrained to it, so `.replace(…)`, a stray value or a missing field cannot be
-written. It works on our route (OpenRouter's Messages wire), with streaming and with adaptive
-thinking. Every article stage and most other JSON calls now go through one validator
-(`src/messages-structured-output.ts`) that refuses, at module load, anything Anthropic would reject
-with a 400. Structure also stopped asking for ends (`toc/11`, starts only), so the hardest id is no
-longer requested at all.
+**Built:** structured outputs. Anthropic's `output_config.format` takes a strict JSON schema, and on
+a completed, non-refusal answer decoding is constrained to it, so `.replace(…)`, a stray value or a
+missing field cannot be written. It works on our route (OpenRouter's Messages wire), with streaming
+and with adaptive thinking. Every article stage and most other JSON calls now go through one
+validator (`src/messages-structured-output.ts`) that refuses the documented subset violations this
+code relies on, when the schema or request is built and before they become a paid request; the
+provider remains the final authority. Structure also stopped asking for ends (`toc/11`, starts
+only), so the hardest id is no longer requested at all.
 
 Measured, on fresh answers, before and after:
 
@@ -102,9 +103,10 @@ is a property of this prompt at this effort, not a guarantee.
 
 ## What would have caught it, ranked by ease against value
 
-1. **Every call that expects JSON sends a schema through the shared adapter.** It costs a schema
-   constant per stage, and a test per stage that the request carries it. Done for the article
-   stages and the simple chat calls; the rule is written down for new ones
+1. **Every compatible call that expects response JSON sends a schema through the shared adapter;
+   every exception is named.** It costs a schema constant per stage, and a test per stage that the
+   request carries it. Done for the article stages and the simple chat calls; the rule is written
+   down for new ones
    ([prompting-guide.md § What the model writes back](../project/prompting-guide.md#what-the-model-writes-back)).
 2. **Keep the raw answer of any failed parse in an eval.** The `.replace` shape was only seen
    because 261001p's harness kept the raw text of answers it could not parse. A harness that

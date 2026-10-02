@@ -25,6 +25,7 @@ import {
   overLimit,
   suggestedLength,
   TARGET,
+  TWEETS_OUTPUT_SCHEMA,
   TWEETS_SYSTEM,
 } from "../src/tweets.js";
 import { articleFingerprint } from "../src/source-hash.js";
@@ -184,6 +185,20 @@ describe("buildThread", () => {
     // summary of the article. The tree root's gist already says the whole
     // piece in one sentence, and the library card already uses it.
     expect(buildThread({ tweets: ["a"] }, opts)).not.toHaveProperty("summary");
+  });
+});
+
+describe("the live answer contract", () => {
+  it("requires every generated post to carry its source blocks", () => {
+    expect(TWEETS_OUTPUT_SCHEMA.properties.tweets.items).toEqual({
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        blocks: { type: "array", items: { type: "string" } },
+      },
+      required: ["text", "blocks"],
+      additionalProperties: false,
+    });
   });
 });
 

@@ -125,7 +125,7 @@ describe("hoisting the structure prompt's three values", () => {
    */
   it("mints one stable key for the toc/11 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"))).toBe(
-      "0bf46b9127e2d27c",
+      "2aa7d4a737bab61b",
     );
   });
 });
