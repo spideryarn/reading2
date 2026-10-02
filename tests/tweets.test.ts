@@ -188,6 +188,12 @@ describe("buildThread", () => {
   });
 });
 
+/**
+ * **No mutation involving the store: this block has no store in it.** It pins
+ * the JSON schema a new Tweets answer is decoded against (plan 261001s): every
+ * post carries its source blocks, while the parser above stays tolerant of the
+ * legacy string rows already stored.
+ */
 describe("the live answer contract", () => {
   it("requires every generated post to carry its source blocks", () => {
     expect(TWEETS_OUTPUT_SCHEMA.properties.tweets.items).toEqual({

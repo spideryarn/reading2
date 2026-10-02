@@ -784,11 +784,21 @@ function cacheGroupOf(step: string | null): string | null {
  * matcher would call two of those a loss when paying for them is a documented
  * choice about latency. Money going missing is the signal; bookkeeping is not.
  */
-export function checkBatchedDraw(rows: readonly AiCallRow[], phase: DrawPhase): Finding[] {
+export function checkBatchedDraw(
+  rows: readonly AiCallRow[],
+  phase: DrawPhase,
+  /**
+   * Which cache group a step is in — the live tables by default. A parameter
+   * because since plan 261001s no two article stages share a group (each sends
+   * its own output schema), so the tests that prove the reader/writer
+   * arithmetic have to supply a pair the live tables no longer contain.
+   */
+  groupOf: (step: string | null) => string | null = cacheGroupOf,
+): Finding[] {
   if (phase !== "batched" || rows.length === 0) return [];
   const findings: Finding[] = [];
 
-  const inGroups = rows.filter((r) => cacheGroupOf(r.stepName) !== null);
+  const inGroups = rows.filter((r) => groupOf(r.stepName) !== null);
   if (inGroups.length === 0) return [];
 
   for (const row of inGroups) {
@@ -808,7 +818,7 @@ export function checkBatchedDraw(rows: readonly AiCallRow[], phase: DrawPhase): 
   const priced = inGroups as (AiCallRow & { cacheWriteTokens: number; cacheReadTokens: number })[];
   const byGroup = new Map<string, typeof priced>();
   for (const r of priced) {
-    const key = cacheGroupOf(r.stepName) as string;
+    const key = groupOf(r.stepName) as string;
     const bucket = byGroup.get(key);
     if (bucket) bucket.push(r);
     else byGroup.set(key, [r]);
