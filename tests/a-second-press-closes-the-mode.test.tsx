@@ -196,6 +196,16 @@ enableHistorySync();
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const proto = window.HTMLDialogElement?.prototype;
+  if (proto) {
+    proto.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    proto.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    };
+  }
   who.set({ id: "second-press-owner", email: "owner@example.com" });
   experimentalSince = null;
   resetExperimental();
@@ -210,6 +220,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -297,16 +308,57 @@ async function pressMarginalia(): Promise<void> {
   await settle();
 }
 
+async function command(label: string): Promise<void> {
+  const button = host.querySelector<HTMLButtonElement>(".dock-commands");
+  expect(button, "the bar must draw Commands").not.toBeNull();
+  await act(async () => button?.click());
+  const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+  expect(input, "the command bar must open").not.toBeNull();
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  await act(async () => {
+    setter?.call(input, label);
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+  });
+  await settle();
+}
+
 describe("a second press on the band you are in closes it", () => {
   it("Summary pressed while Summary is open goes to Plain, and Back reopens it", async () => {
     await open("?mode=summary");
     expect(band("Summary"), "the band opened").not.toBeNull();
     await press(MODE_LABEL.summary);
     expect(modeInUrl()).toBe("plain");
+    expect(new URLSearchParams(location.search).has("mode"), "Plain is the absent default").toBe(
+      false,
+    );
     expect(band("Summary"), "the band closed").toBeNull();
     await act(async () => history.back());
     await until(() => modeInUrl() === "summary");
     expect(band("Summary"), "Back reopens it").not.toBeNull();
+  });
+
+  it("the command bar names a destination instead of toggling it", async () => {
+    await open("?mode=summary&margin=1");
+    const pushed = vi.spyOn(history, "pushState");
+    await command(MODE_LABEL.summary);
+    expect(modeInUrl()).toBe("summary");
+    expect(band("Summary"), "choosing the open band must leave it open").not.toBeNull();
+    expect(
+      pushed,
+      "choosing the current band added an empty history step",
+    ).not.toHaveBeenCalled();
+
+    await command(MODE_LABEL.marginalia);
+    expect(marginInUrl(), "choosing the open Marginalia column must leave it open").toBe(true);
+    expect(
+      pushed,
+      "choosing the open Marginalia column added an empty history step",
+    ).not.toHaveBeenCalled();
   });
 
   it("closing the band leaves the notes on", async () => {
@@ -341,6 +393,9 @@ describe("Plain closes both columns", () => {
     await open("?mode=summary&margin=1");
     await press(MODE_LABEL.plain);
     expect(modeInUrl()).toBe("plain");
+    expect(new URLSearchParams(location.search).has("mode"), "Plain is the absent default").toBe(
+      false,
+    );
     expect(marginInUrl()).toBe(false);
     await act(async () => history.back());
     await until(() => modeInUrl() === "summary");
@@ -352,6 +407,13 @@ describe("Plain closes both columns", () => {
     await press(MODE_LABEL.plain);
     await until(() => !marginInUrl());
     expect(modeInUrl()).toBe("plain");
+  });
+
+  it("already in Plain with no notes, it adds no empty history step", async () => {
+    await open();
+    const pushed = vi.spyOn(history, "pushState");
+    await press(MODE_LABEL.plain);
+    expect(pushed).not.toHaveBeenCalled();
   });
 
   it("Marginalia's own button still toggles only the notes", async () => {
@@ -380,5 +442,23 @@ describe("the bar is three frames: Plain, the bands, Marginalia", () => {
     /* A frame's edge separates Plain and Marginalia; no run line beside them. */
     expect(frames[1]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
     expect(frames[2]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
+    expect(
+      [...(frames[1]?.querySelectorAll("button.dock-group-start") ?? [])].map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+      "the lines between the surviving band runs moved or disappeared",
+    ).toEqual([MODE_LABEL.skim, MODE_LABEL.search]);
+
+    /* Coarse-pointer growth is weighted by the controls actually drawn, at
+       both levels. A fixed outer weight was the plan review's P2-1. */
+    const modes = host.querySelector<HTMLElement>(".dock-modes");
+    expect(modes?.style.getPropertyValue("--dock-mode-count")).toBe(
+      String(modes?.querySelectorAll("button").length),
+    );
+    for (const frame of frames) {
+      expect((frame as HTMLElement).style.getPropertyValue("--dock-frame-count")).toBe(
+        String(frame.querySelectorAll("button").length),
+      );
+    }
   });
 });
