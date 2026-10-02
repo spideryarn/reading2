@@ -38,6 +38,7 @@ import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
 import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
+import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
@@ -536,23 +537,31 @@ function OwnedReader({
   const readingTime = useReadingTime(slug, words, experimental.on);
 
   return (
-    <Reader
-      slug={slug}
-      article={article}
-      capability={{
-        kind: "owner",
-        comments,
-        chatAnchors,
-        glossary,
-        quotes,
-        citations,
-        quiz,
-        crossrefs,
-        arc,
-        readingTime,
-      }}
-      onRenamed={onRenamed}
-    />
+    <>
+      <Reader
+        slug={slug}
+        article={article}
+        capability={{
+          kind: "owner",
+          comments,
+          chatAnchors,
+          glossary,
+          quotes,
+          citations,
+          quiz,
+          crossrefs,
+          arc,
+          readingTime,
+        }}
+        onRenamed={onRenamed}
+      />
+      {/* **"Why are you reading this?", asked once** after a silent import —
+          Greg, 2026-10-01, spya-hbqezu; plan 261001s § Stage 3. Owner-only by
+          being here, which is the point (Sol's item 5): it reads and writes
+          the reader's purpose. Without the add page's mark it renders nothing
+          and asks the server nothing. Keyed so another article peeks afresh. */}
+      <PurposePrompt key={slug} slug={slug} />
+    </>
   );
 }
 

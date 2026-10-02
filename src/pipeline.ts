@@ -2719,6 +2719,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              anything at all — nothing about the tiling refuses an answer now.
              src/hierarchy.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
+          /* Children the answer gave no range at all, derived rather than
+             refused (src/hierarchy.ts § `BuildReport.rangelessChildren`). */
+          rangelessChildren: run.rangelessChildren,
           droppedHeadings: run.droppedHeadings,
           /* **Socratic questions written but not kept.** Nothing on screen
              distinguishes a question the model chose not to write from one
@@ -2747,6 +2750,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              only way to tell is to infer it from a token count, which is what
              evals/deepen/ was reduced to doing. */
           structureResumed: run.structureResumed,
+          /* 2 is an answer that did not become a tree, asked for again —
+             src/hierarchy.ts § the re-ask. Logged at 1 too, so a rate can be read. */
+          structureCalls: run.structureCalls,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
              (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight

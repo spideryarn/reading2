@@ -119,6 +119,21 @@ describe("one save at a time", () => {
     expect(get().state.kind).toBe("dirty");
   });
 
+  it("corrects an older write when the draft has returned to the loaded value", async () => {
+    act(() => get().setDraft("one"));
+    act(() => get().commit());
+    act(() => get().setDraft("Stored"));
+    expect(get().state.kind).toBe("clean");
+    expect(get().inFlight).toBe(true);
+    act(() => get().commit());
+    await act(async () => sent[0]?.ok("one"));
+    expect(sent.map((s) => s.text)).toEqual(["one", "Stored"]);
+    expect(get().inFlight).toBe(true);
+    await act(async () => sent[1]?.ok("Stored"));
+    expect(get().state.kind).toBe("saved");
+    expect(get().inFlight).toBe(false);
+  });
+
   it("sends the queued text even when the first save failed", async () => {
     act(() => get().setDraft("one"));
     act(() => get().commit());

@@ -55,6 +55,7 @@ function emptyReport(): BuildReport {
   return {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
