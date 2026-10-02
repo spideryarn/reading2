@@ -52,6 +52,12 @@ const SHARED = new Set([
      `types.js` and nothing else. Plan 261001a, stages 5 and 6. */
   "registry-work.js",
   "ids.js", // minting and validating block ids
+  /* Whether a section title is the author's heading kept (`sameHeading`), and
+     the heading tree's own preamble title — the pipeline checks the claim with
+     it and the client voices the title with it (src/web/tree.ts §
+     `titleVoice`), so the two cannot disagree about an apostrophe. Imports
+     nothing. Plan 261002f § 3. */
+  "heading-text.js",
   "urls.js", // the http(s) allowlist, used by the server and the panel
   "reading-time.js",
   /* The five questions the machinery may ask about a block, and the word count

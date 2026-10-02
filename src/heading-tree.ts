@@ -61,6 +61,7 @@
  */
 
 import { isStructural } from "./block-policy.js";
+import { PREAMBLE_TITLE } from "./heading-text.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
@@ -92,8 +93,8 @@ export interface HeadingTreeResult {
 export const HEADING_TREE_VERSION = "headings/1";
 export const HEADING_TREE_GENERATOR = "deterministic-headings";
 
-/** The title a preamble part wears — the one node this arm has no author text for. */
-export const PREAMBLE_TITLE = "Before the first heading";
+/* `PREAMBLE_TITLE` lives in src/heading-text.ts, so the browser can tell it is ours. */
+export { PREAMBLE_TITLE };
 
 /**
  * A segment whose non-heading prose is under this many words is a stub — a

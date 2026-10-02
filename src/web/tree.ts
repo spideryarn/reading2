@@ -16,8 +16,7 @@
 import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
 import { withoutOwnNumber } from "./heading-number.js";
-import { PREAMBLE_TITLE } from "../heading-tree.js";
-import { sameHeading } from "../tree-invariants.js";
+import { PREAMBLE_TITLE, sameHeading } from "../heading-text.js";
 import type { Voice } from "./voice.js";
 
 export interface Cell {
