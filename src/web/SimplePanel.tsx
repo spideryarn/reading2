@@ -23,9 +23,10 @@
  * descriptions - they waste space."* Each pill's card says it now, and
  * docs/project/mode.md has the rule.
  */
+import { Fragment } from "react";
 import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { BlockId, SimpleLevel, SimpleParagraph } from "../types.js";
+import { type BlockId, type SimpleLevel, type SimpleParagraph, usableSentences } from "../types.js";
 import type { PublicSimpleSummary } from "../public-types.js";
 import type { UseSimple } from "./useSimple.js";
 import { BlockRef } from "./BlockRef.js";
@@ -153,11 +154,43 @@ export function SimplePanel({
   );
 }
 
-/** One paragraph, as text, and then its doors. */
+/**
+ * One paragraph, as text, and then its doors.
+ *
+ * **A sentence that names its passage is a block link** (plan 261002e, Greg's
+ * SPIDERYARN-READING2-8V): `BlockRef` with the sentence as its words, so it gets
+ * the one shared card, a press that jumps, and the band's on-screen wash
+ * (on-screen.ts § `onScreenLinkCss`) with nothing of its own. `.simple-sentence`
+ * makes it read as prose rather than as an id chip. A sentence that names none
+ * is plain text. Only `usableSentences` decides whether there are sentences to
+ * draw — the same question a visitor's payload was built with — and a paragraph
+ * without them draws exactly as before.
+ */
 function Paragraph({ paragraph, onJump }: { paragraph: SimpleParagraph; onJump(id: BlockId): void }) {
+  const sentences = usableSentences(paragraph);
   return (
     <div className="simple-para">
-      <p className="simple-text">{paragraph.text}</p>
+      {sentences ? (
+        <p className="simple-text">
+          {sentences.map((s, i) => (
+            /* Keyed on position: the list is the paragraph's, fixed, and two
+               sentences may say the same words. */
+            // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list, never reordered
+            <Fragment key={i}>
+              {i > 0 && " "}
+              {s.id === null ? (
+                <span>{s.text}</span>
+              ) : (
+                <BlockRef id={s.id} onJump={onJump} className="simple-sentence">
+                  {s.text}
+                </BlockRef>
+              )}
+            </Fragment>
+          ))}
+        </p>
+      ) : (
+        <p className="simple-text">{paragraph.text}</p>
+      )}
       <div className="simple-refs">
         {paragraph.ids.map((id) => (
           <BlockRef key={id} id={id} onJump={onJump} />

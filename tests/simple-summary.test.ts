@@ -37,7 +37,7 @@ import {
   SIMPLE_CHECK_SYSTEM,
   SIMPLE_CHECK_VERSION,
 } from "../src/simple-check.js";
-import { isUsableSimpleSummary } from "../src/types.js";
+import { isUsableSimpleSummary, usableSentences } from "../src/types.js";
 import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -204,7 +204,14 @@ const NOTE = block("spya-eeeeee", "Funding: a grant.", { treatment: "supplement"
 const BLOCKS = [INTRO, WHY, RESULT, METHOD, NOTE];
 const EVIDENCE = BLOCKS.filter((b) => b.treatment !== "supplement");
 
-const para = (text: string, ...ids: string[]) => ({ text, ids });
+/**
+ * A paragraph that is one unlinked sentence — both the model's answer (whose
+ * `text` the reader ignores: it is derived from the sentences) and what is
+ * stored from it, so a case can compare the two directly.
+ */
+const para = (text: string, ...ids: string[]) => ({ text, ids, sentences: [{ text, id: null as string | null }] });
+/** One sentence of an answer. */
+const sentence = (text: string, id: unknown = null) => ({ text, id });
 
 /** A good Fuller level, for the cases that are about Simple. */
 const FULLER = [
@@ -248,9 +255,9 @@ describe("buildSimpleSummary", () => {
       para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
     ]);
     expect(out.levels.simple).toEqual([
-      { text: "It asks whether a model can read.", ids: [INTRO.id] },
-      { text: "It matters because most knowledge is written.", ids: [WHY.id] },
-      { text: "It read 38% faster, in this sample.", ids: [RESULT.id, METHOD.id] },
+      para("It asks whether a model can read.", INTRO.id),
+      para("It matters because most knowledge is written.", WHY.id),
+      para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
     ]);
     expect(out.levels.fuller).toEqual(FULLER);
     expect(out.version).toBe(SIMPLE_VERSION);
@@ -315,7 +322,7 @@ describe("buildSimpleSummary", () => {
   it("drops and counts an unknown id, a supplement's id and a non-string id", () => {
     const dropped = emptyDropped();
     const out = build(
-      [para("One.", "spya-zzzzzz", INTRO.id), { text: "Two.", ids: [NOTE.id, 42, WHY.id] }],
+      [para("One.", "spya-zzzzzz", INTRO.id), { ids: [NOTE.id, 42, WHY.id], sentences: [sentence("Two.")] }],
       dropped,
     );
     expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
@@ -339,7 +346,7 @@ describe("buildSimpleSummary", () => {
       [
         para("About.", INTRO.id),
         para("Why it matters, resting on nothing.", "spya-zzzzzz"),
-        { text: "No ids at all." },
+        { sentences: [sentence("No ids at all.")] },
         para("Key idea.", RESULT.id),
       ],
       dropped,
@@ -363,6 +370,180 @@ describe("buildSimpleSummary", () => {
       /Only 1 of the model's 2 "simple" paragraphs.*1 with no usable passage/,
     );
     expect(() => build([])).toThrow(/Only 0 of the model's 0/);
+  });
+});
+
+/* ------------------------------------------- sentences (plan 261002e) -- */
+
+describe("sentences that point at their passage (plan 261002e)", () => {
+  it("keeps each sentence's id and derives the paragraph's text from the sentences", () => {
+    const out = build([
+      {
+        ids: [INTRO.id, RESULT.id],
+        sentences: [
+          sentence("  It asks whether a model can read. ", INTRO.id),
+          sentence("That is the question.", null),
+          sentence("It read 38% faster.", RESULT.id),
+        ],
+      },
+      para("It matters because most knowledge is written.", WHY.id),
+    ]);
+    expect(out.levels.simple[0]).toEqual({
+      text: "It asks whether a model can read. That is the question. It read 38% faster.",
+      ids: [INTRO.id, RESULT.id],
+      sentences: [
+        { text: "It asks whether a model can read.", id: INTRO.id },
+        { text: "That is the question.", id: null },
+        { text: "It read 38% faster.", id: RESULT.id },
+      ],
+    });
+    /* What is written is what the shared accessor will show. */
+    expect(usableSentences(out.levels.simple[0]!)).toEqual(out.levels.simple[0]!.sentences);
+  });
+
+  it("ignores any text the model put on the paragraph itself — the guard reads the sentences' words", () => {
+    const out = build([
+      { text: "Something else entirely.", ids: [INTRO.id], sentences: [sentence("It asks.", INTRO.id)] },
+      para("Why.", WHY.id),
+    ]);
+    expect(out.levels.simple[0]?.text).toBe("It asks.");
+  });
+
+  it("nulls and counts a sentence id its paragraph did not keep, and never adds it to the paragraph's ids", () => {
+    const dropped = emptyDropped();
+    const out = build(
+      [
+        {
+          ids: [INTRO.id, WHY.id, RESULT.id, METHOD.id],
+          sentences: [
+            /* Real body evidence, but another paragraph's. */
+            sentence("One.", "spya-zzzzzz"),
+            /* Past the cap of three, so not this paragraph's. */
+            sentence("Two.", METHOD.id),
+            /* A supplement: never sent. */
+            sentence("Three.", NOTE.id),
+            sentence("Four.", 42),
+            sentence("Five.", WHY.id),
+          ],
+        },
+        { ids: [WHY.id], sentences: [sentence("Six.", INTRO.id)] },
+      ],
+      dropped,
+    );
+    expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id, WHY.id, RESULT.id], [WHY.id]]);
+    expect(out.levels.simple.map((p) => p.sentences)).toEqual([
+      [
+        { text: "One.", id: null },
+        { text: "Two.", id: null },
+        { text: "Three.", id: null },
+        { text: "Four.", id: null },
+        { text: "Five.", id: WHY.id },
+      ],
+      [{ text: "Six.", id: null }],
+    ]);
+    expect(dropped.sentenceIds).toBe(5);
+    expect(out.levels.simple.map((p) => p.text)).toEqual(["One. Two. Three. Four. Five.", "Six."]);
+  });
+
+  it("leaves out an empty or malformed sentence, and drops a paragraph with no sentence that has words", () => {
+    const dropped = emptyDropped();
+    const out = build(
+      [
+        { ids: [INTRO.id], sentences: [sentence("  "), "a string", { id: INTRO.id }, sentence("About.", INTRO.id)] },
+        { ids: [RESULT.id], sentences: [sentence(" ", RESULT.id)] },
+        { ids: [RESULT.id] },
+        para("Why.", WHY.id),
+      ],
+      dropped,
+    );
+    expect(out.levels.simple.map((p) => p.text)).toEqual(["About.", "Why."]);
+    expect(out.levels.simple[0]?.sentences).toEqual([{ text: "About.", id: INTRO.id }]);
+    /* The second paragraph's empty sentence is not counted: an empty
+       paragraph's tally never was. */
+    expect(dropped.emptySentences).toBe(3);
+    expect(dropped.empty).toBe(2);
+  });
+
+  it("states the answer shape in the schema: sentences with a required, nullable id and no enum", () => {
+    const paragraph = SIMPLE_SUMMARY_OUTPUT_SCHEMA.properties.paragraphs.items;
+    expect(paragraph.required).toEqual(["ids", "sentences"]);
+    expect(Object.keys(paragraph.properties)).toEqual(["ids", "sentences"]);
+    const one = paragraph.properties.sentences.items;
+    expect(one.required).toEqual(["text", "id"]);
+    expect(one.properties.id).toEqual({ type: ["string", "null"] });
+    expect(one.additionalProperties).toBe(false);
+  });
+
+  it("asks for the sentences and their ids in every level's prompt", () => {
+    for (const system of Object.values(SIMPLE_SYSTEMS)) {
+      expect(system).toContain("Then write the paragraph as its sentences");
+      expect(system).toContain("A sentence never names an id its paragraph did not list.");
+      expect(system).toContain('{"text": "...", "id": null}');
+      expect(system).not.toContain('{"text": "...", "ids"');
+    }
+  });
+
+  it("budgets for a sentence's JSON as well as its words", () => {
+    const maxParagraphs = Math.max(...Object.values(SIMPLE_LIMITS).map((l) => l.maxParagraphs));
+    /* Two ids' and four sentences' JSON a paragraph at the very least, on top of the old budget. */
+    expect(ANSWER_TOKENS).toBeGreaterThanOrEqual(1_200 + maxParagraphs * (3 * 10 + 4 * 15));
+  });
+});
+
+/* ------------------------------------- the shared accessor (Sol F2) -- */
+
+describe("usableSentences — the one accessor the owner's panel and the visitor's payload share", () => {
+  const P = {
+    text: "It asks. It answers.",
+    ids: [INTRO.id, RESULT.id],
+    sentences: [
+      { text: "It asks.", id: INTRO.id },
+      { text: "It answers.", id: null },
+    ],
+  };
+
+  it("returns the sentences when they are the paragraph's text exactly", () => {
+    expect(usableSentences(P)).toEqual(P.sentences);
+    /* Fresh, trimmed objects — nothing else a stored entry had rides along. */
+    const padded = { ...P, sentences: [{ text: " It asks.", id: INTRO.id, extra: 1 }, { text: "It answers. ", id: null }] };
+    expect(usableSentences(padded)).toEqual(P.sentences);
+  });
+
+  it("answers none for a paragraph stored before sentences — a simple/2 row without them still reads", () => {
+    const { sentences: _none, ...old } = P;
+    expect(usableSentences(old)).toBeNull();
+    const stored = build([
+      { text: "It asks whether a model can read.", ids: [INTRO.id] },
+      { text: "It read faster.", ids: [RESULT.id] },
+    ].map((p) => ({ ...p, sentences: [sentence(p.text)] })));
+    const legacy = {
+      ...stored,
+      levels: Object.fromEntries(
+        Object.entries(stored.levels).map(([level, ps]) => [level, ps.map(({ text, ids }) => ({ text, ids }))]),
+      ),
+    };
+    expect(isUsableSimpleSummary(legacy)).toBe(true);
+    expect(whyUnusable("simple", legacy)).toBeNull();
+  });
+
+  it.each([
+    ["an empty list", []],
+    ["not a list", { 0: { text: "It asks.", id: null } }],
+    ["words that differ from the text", [{ text: "It asks.", id: null }, { text: "It replies.", id: null }]],
+    ["words that join differently", [{ text: "It asks.It answers.", id: null }]],
+    ["a sentence missing", [{ text: "It asks.", id: null }]],
+    ["an entry that is not an object", ["It asks.", { text: "It answers.", id: null }]],
+    ["an entry with no text", [{ id: null }, { text: "It asks. It answers.", id: null }]],
+    ["an empty sentence", [{ text: " ", id: null }, { text: "It asks. It answers.", id: null }]],
+    ["an id that is not a string or null", [{ text: "It asks.", id: 7 }, { text: "It answers.", id: null }]],
+    ["a missing id", [{ text: "It asks." }, { text: "It answers.", id: null }]],
+    ["an id this paragraph does not cite", [{ text: "It asks.", id: WHY.id }, { text: "It answers.", id: null }]],
+  ])("answers none for %s, and the summary around it still reads", (_label, sentences) => {
+    const paragraph = { ...P, sentences };
+    expect(usableSentences(paragraph)).toBeNull();
+    const stored = build([para("It asks.", INTRO.id), para("Why.", WHY.id)]);
+    const withBad = { ...stored, levels: { ...stored.levels, simple: [paragraph, ...stored.levels.simple.slice(1)] } };
+    expect(isUsableSimpleSummary(withBad)).toBe(true);
   });
 });
 
