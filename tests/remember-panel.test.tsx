@@ -5,15 +5,12 @@
  * Remember reuses chat's `Composer` rather than copying it, so almost nothing
  * here is about Remember specifically — the Escape ladder, the auto-resize and
  * the key-propagation stop are chat's and are tested by chat's own files. What
- * is new is a taller box, a labelled microphone, and a stance `<select>`, and
- * only the last of those can be got wrong in a way that changes an answer.
- *
- * The rule the tests below exist for: **the picker governs a new turn and
- * nothing else.** A retry re-asks a stored question, so it must be asked the
- * way it was asked — see `withRetry` in src/chat.ts and GPT Sol's review of the
- * built code, finding 4. Getting that wrong is silent: the reader presses a
- * button labelled "answer again" and the answer comes back in a different
- * voice, with nothing on screen saying why.
+ * is new is a taller box and a labelled microphone. Until 2026-10-02 there was
+ * a stance `<select>` too; Recall is one voice now
+ * (docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
+ * and the tests below check that nothing of the picker is left — including
+ * the tag an old answer carried, which would name an instruction nobody can
+ * give any more.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -51,14 +48,12 @@ let root: Root;
 
 const sent: { question: string }[] = [];
 
-function paint(thread: ChatThread, kind: "chat" | "remember" = "remember", stance: RememberStance = "balanced") {
+function paint(thread: ChatThread, kind: "chat" | "remember" = "remember") {
   act(() => {
     root.render(
       createElement(ChatPanel, {
         slug: "a-piece",
         kind,
-        stance,
-        onStance: () => {},
         loaded: true,
         loadFailed: false,
         threads: [thread],
@@ -98,7 +93,7 @@ afterEach(() => {
   host.remove();
 });
 
-describe("the Remember composer is chat's, with three differences", () => {
+describe("the Remember composer is chat's, with two differences", () => {
   it("gives a Remember turn a box you can put a paragraph in", () => {
     paint(rememberThread());
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
@@ -112,37 +107,12 @@ describe("the Remember composer is chat's, with three differences", () => {
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
   });
 
-  it("offers the four stances in Remember, and none in chat", () => {
+  it("offers no stance picker, in Remember or in chat", () => {
     paint(rememberThread());
-    const options = [...host.querySelectorAll(".chat-stance option")].map((o) => o.getAttribute("value"));
-    expect(options).toEqual(["balanced", "respond", "socratic", "signposts"]);
-
+    expect(host.querySelector(".chat-stance")).toBeNull();
+    expect(host.querySelector("select")).toBeNull();
     paint({ ...rememberThread(), kind: "chat" }, "chat");
     expect(host.querySelector(".chat-stance")).toBeNull();
-  });
-
-  it("describes the stance picker itself on hover and focus", async () => {
-    paint(rememberThread());
-    const select = host.querySelector<HTMLSelectElement>(".chat-stance select");
-    expect(select).toBeTruthy();
-
-    await act(async () => {
-      select?.dispatchEvent(new MouseEvent("mouseenter"));
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    });
-    let card = document.querySelector<HTMLElement>('[role="tooltip"]');
-    expect(card?.textContent).toContain("Balanced");
-    expect(card?.textContent).toContain("Signposts");
-    expect(select?.getAttribute("aria-describedby")).toBe(card?.id);
-
-    await act(async () => {
-      select?.dispatchEvent(new MouseEvent("mouseleave"));
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      select?.focus();
-    });
-    card = document.querySelector<HTMLElement>('[role="tooltip"]');
-    expect(card?.textContent).toContain('a direct question or "just tell me" gets a plain answer');
-    expect(select?.getAttribute("aria-describedby")).toBe(card?.id);
   });
 
   it("labels the microphone in Remember and not in chat", () => {
@@ -159,22 +129,13 @@ describe("the Remember composer is chat's, with three differences", () => {
   });
 });
 
-describe("an answer says which stance produced it", () => {
-  it("tags a socratic answer", () => {
+describe("an old answer's stance is not shown", () => {
+  /* Rows written before 2026-10-02 keep their stored stance. A tag naming it
+     would describe an instruction the reader can no longer give. */
+  it("does not tag an old socratic answer", () => {
     paint(rememberThread("socratic"));
-    expect(host.querySelector(".chat-stance-tag")?.textContent).toBe("socratic");
-  });
-
-  it("does not tag the default, which most answers are", () => {
-    /* A tag on nearly every row distinguishes nothing. Same call the thread
-       list's Remember tag makes. */
-    paint(rememberThread("balanced"));
     expect(host.querySelector(".chat-stance-tag")).toBeNull();
-  });
-
-  it("does not tag a chat answer, which has no stance at all", () => {
-    paint({ ...rememberThread(), kind: "chat" }, "chat");
-    expect(host.querySelector(".chat-stance-tag")).toBeNull();
+    expect(host.textContent).not.toContain("socratic");
   });
 });
 
@@ -183,8 +144,6 @@ function props(over: Record<string, unknown>) {
   return {
     slug: "a-piece",
     kind: "remember" as const,
-    stance: "balanced" as const,
-    onStance: () => {},
     loaded: true,
     loadFailed: false,
     threads: [] as ChatThread[],

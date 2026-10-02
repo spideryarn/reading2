@@ -430,6 +430,13 @@ async function preflight(): Promise<string> {
           ? `release notes: release ${notes.pending.release}, ${notes.pending.entries.length} entries, up to ${notes.described.slice(0, 8)}`
           : "release notes: nothing pending, and nothing a reader would see since the last release",
       );
+      if (notes.late.length > 0) {
+        const shown = notes.late.slice(0, 5).map((s) => s.slice(0, 8)).join(" ");
+        info(
+          `${notes.late.length} release commit(s) after ${notes.described.slice(0, 8)} are not in these notes ` +
+            `(${shown}${notes.late.length > 5 ? " …" : ""}) — the next release's notes describe them (261002h)`,
+        );
+      }
     }
 
     /* And the deploy this one replaces is recorded — `servingUnrecorded`. */

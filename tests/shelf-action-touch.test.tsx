@@ -120,9 +120,25 @@ function control(name: string): HTMLElement {
  * `defaultPrevented` — "did this tap navigate" has no other observable in
  * jsdom.
  */
-function press(el: Element, pointerType: "touch" | "mouse" | null): MouseEvent {
-  const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+function press(el: Element, pointerType: "touch" | "pen" | "mouse" | null): MouseEvent {
+  /* Real pointer clicks carry a non-zero detail; keyboard activation does not.
+     `press(..., null)` is the keyboard/synthetic case below. */
+  const ev = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+    detail: pointerType ? 1 : 0,
+  });
   if (pointerType !== null) Object.defineProperty(ev, "pointerType", { value: pointerType });
+  act(() => {
+    el.dispatchEvent(ev);
+  });
+  return ev;
+}
+
+/** The part of a real press iOS still reports honestly before its click says mouse. */
+function pointerDown(el: Element, pointerType: "touch" | "pen" | "mouse"): MouseEvent {
+  const ev = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+  Object.defineProperty(ev, "pointerType", { value: pointerType });
   act(() => {
     el.dispatchEvent(ev);
   });
@@ -407,5 +423,123 @@ describe("a mouse", () => {
       });
     }
     expect(openTriggers()).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------- the card's row, for a finger -- */
+
+/**
+ * **On the card, where the row is drawn for a finger, a tap presses** — since
+ * 2026-10-02. Greg, on an iPad: *"save me a click."* `fingerRow` is the card's
+ * prop (ShelfEntry.tsx § `Actions`), and the row is drawn for a finger only
+ * where `any-pointer: coarse` matches, so that is what the press asks. The
+ * table keeps the reveal above — it never draws this row for a finger — and so
+ * does a pen on a machine with no finger. Plan 261002i.
+ */
+describe("a finger on the card's row", () => {
+  const coarse = (matches: boolean) =>
+    vi.stubGlobal(
+      "matchMedia",
+      (q: string) => ({ matches: matches && q === "(any-pointer: coarse)", media: q }) as MediaQueryList,
+    );
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderCard(entry: LibraryEntry): void {
+    act(() => {
+      root.render(createElement(Actions, { entry, shelf, onEdit, fingerRow: true }));
+    });
+  }
+
+  it("presses on the first tap where there is a finger", () => {
+    coarse(true);
+    renderCard(FETCHED);
+    press(control("Archive"), "touch");
+    expect(shelf.archive, "a finger's tap on the card's row did not press").toHaveBeenCalledTimes(1);
+    press(control("Edit title"), "touch");
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  /* What an iPad really sends: `pointerdown` says touch, then WebKit bug 282988
+     makes the click say `mouse`. Floating UI sees the first event too; the
+     synthetic mouseenter is the compatibility event that must not leave a
+     hover card behind after the direct press. */
+  it("presses on the first iOS tap without leaving a card open", async () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const copy = control("Copy link");
+    pointerDown(copy, "touch");
+    copy.dispatchEvent(new MouseEvent("mouseenter"));
+    press(copy, "mouse");
+    const archive = control("Archive");
+    pointerDown(archive, "touch");
+    press(archive, "mouse");
+    expect(shelf.archive).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(openTriggers(), "a card opened on a direct press").toHaveLength(0);
+  });
+
+  it("does not mistake a real mouse for a finger on a touchscreen computer", async () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const fetches = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetches);
+    const rerun = control("Re-fetch");
+    pointerDown(rerun, "mouse");
+    press(rerun, "mouse");
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(
+      fetches,
+      "a mouse was changed from press to reveal on a hybrid device",
+    ).toHaveBeenCalledTimes(1);
+    expect(openTriggers()).toHaveLength(0);
+  });
+
+  it("reveals Re-fetch before it queues anything, even when the click says mouse", async () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const fetches = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetches);
+    pointerDown(control("Re-fetch"), "touch");
+    press(control("Re-fetch"), "mouse");
+    expect(fetches, "one unlabelled tap queued a rebuild").not.toHaveBeenCalled();
+    expect(openCardHead()).toBe("Re-fetch and rebuild");
+    expect(openCardText()).toContain("Tap again");
+    pointerDown(control("Re-fetch"), "touch");
+    press(control("Re-fetch"), "mouse");
+    /* `rerun` reaches `fetch` after an await inside `fetchOk`. */
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetches).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains an unavailable control rather than doing nothing", () => {
+    coarse(true);
+    renderCard(NO_URL);
+    pointerDown(control("Open the original"), "touch");
+    press(control("Open the original"), "mouse");
+    expect(openTriggers(), "an unavailable control's tap said nothing").toHaveLength(1);
+    expect(openCardText(), "an unavailable control invited a refused second press").not.toContain(
+      "Tap again",
+    );
+  });
+
+  it("follows the link on the first tap", () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const ev = press(control("Open the original"), "touch");
+    expect(ev.defaultPrevented, "the first tap was stopped from navigating").toBe(false);
+  });
+
+  it("still reveals first for a pen where there is no finger", () => {
+    coarse(false);
+    renderCard(FETCHED);
+    press(control("Archive"), "pen");
+    expect(shelf.archive, "the reveal was lost where the device has no finger").not.toHaveBeenCalled();
+    expect(openCardHead()).toBe("Archive");
   });
 });

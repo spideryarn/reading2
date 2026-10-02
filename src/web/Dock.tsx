@@ -1956,7 +1956,7 @@ export function Dock({
             <h2>{own ? TITLES[panel].own : TITLES[panel].visitor}</h2>
             <button
               type="button"
-              className="dock-close"
+              className="dock-close close-x"
               /* Where focus lands when the drawer opens — § the drawer takes
                  focus, and gives it back. */
               ref={closeRef}

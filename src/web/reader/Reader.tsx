@@ -906,7 +906,7 @@ export function Reader({
         /* **Only a chat may be opened here, and that is not a tidy-up.**
            `?thread=` survives leaving the mode, so a pasted
            `?mode=toc&thread=<a Remember thread>` used to mount this dialog over
-           a Remember conversation — chat's UI, chat's composer, no stance picker, and the
+           a Remember conversation — chat's UI and composer rather than Remember's, and the
            next question answered with chat's prompt. Nothing on screen would
            have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
            exists for; a Remember thread with no matching summary simply opens
@@ -2112,7 +2112,7 @@ export function Reader({
            It was written when one `ConversationBand` was mounted by two modes
            — `{(mode === "chat" || mode === "review") && <ConversationBand
            key={mode} …/>}`, commit 2dd63119 — where it is what stopped Remember
-           inheriting chat's open conversation, focus nonce and stance. Remember
+           inheriting chat's open conversation and focus nonce. Remember
            has had a wrapper of its own since, so this arm renders for one mode
            and `mode` is the constant `"chat"`; the arms return different
            top-level types, so React discards the outgoing subtree with or

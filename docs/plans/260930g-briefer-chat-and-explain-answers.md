@@ -93,7 +93,7 @@ not a success:** if any arm has one, I report the count, and compare word averag
 it — the inclusive one from `report`, the exclusive one by a short script over the arm's JSON, kept
 with the results. (On the retry, neither baseline arm had one.)
 
-**Remember** — [`evals/remember-stances.ts`](../../evals/remember-stances.ts): eight readers × four
+**Remember** — [`evals/remember-stances.ts`](../../evals/remember-recall.ts): eight readers × four
 stances, tools off, words per answer printed on each answer's heading. Every run writes the same
 `evals/results/remember-stances.md`, so each is copied to its own name straight after it finishes —
 `remember-stances.260930g-before-1.md`, `-before-2.md`, `-after.md`. (Two runs overlapped, so

@@ -1,0 +1,261 @@
+{
+  "arm": "high-none-fb9pb1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "source-spya-f550ta",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:16.342Z",
+  "bodyWords": 10003,
+  "bodyBlocks": 97,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "2488a426e2cd8696",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 19861,
+  "costUsd": 0.2141808,
+  "tokens": {
+    "input": 12348,
+    "output": 3369,
+    "reasoning": 1295
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 159,
+  "fullerWords": 221,
+  "briefWords": 112,
+  "paragraphs": [
+    {
+      "text": "Ball lightning is a glowing ball sometimes seen during thunderstorms, usually lasting a few seconds, and nobody has fully explained it. This review gathers 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+      "ids": [
+        "spya-v4ps0c",
+        "spya-wtg508"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is a glowing ball sometimes seen during thunderstorms, usually lasting a few seconds, and nobody has fully explained it.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "This review gathers 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "The article says ball lightning is very hard to catch with cameras or instruments. One search of about 12,000 night-sky photos found only two likely cases. So careful reports from trained people seem one of the best ways to learn about it.",
+      "ids": [
+        "spya-f0dmn4",
+        "spya-wtg508"
+      ],
+      "sentences": [
+        {
+          "text": "The article says ball lightning is very hard to catch with cameras or instruments.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "One search of about 12,000 night-sky photos found only two likely cases.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "So careful reports from trained people seem one of the best ways to learn about it.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "Reported balls ranged from 1.5 cm to 15 m across, with most under 20 cm. Sightings lasted from 1.5 to 180 seconds, most under 3 seconds. The cases vary so much that some are hard to fit into one model, so there may be several types.",
+      "ids": [
+        "spya-hrcct6",
+        "spya-rjs9xh",
+        "spya-p9uvh9"
+      ],
+      "sentences": [
+        {
+          "text": "Reported balls ranged from 1.5 cm to 15 m across, with most under 20 cm.",
+          "id": "spya-hrcct6"
+        },
+        {
+          "text": "Sightings lasted from 1.5 to 180 seconds, most under 3 seconds.",
+          "id": "spya-rjs9xh"
+        },
+        {
+          "text": "The cases vary so much that some are hard to fit into one model, so there may be several types.",
+          "id": "spya-p9uvh9"
+        }
+      ]
+    },
+    {
+      "text": "The author concludes that well-documented cases can encourage fieldwork and help test theories. Cases with physical traces, plus phone and webcam videos, could build a database for checking ideas about ball lightning.",
+      "ids": [
+        "spya-jybqrk",
+        "spya-zz7g2q"
+      ],
+      "sentences": [
+        {
+          "text": "The author concludes that well-documented cases can encourage fieldwork and help test theories.",
+          "id": "spya-jybqrk"
+        },
+        {
+          "text": "Cases with physical traces, plus phone and webcam videos, could build a database for checking ideas about ball lightning.",
+          "id": "spya-zz7g2q"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "Ball lightning is a glowing ball of light that people report seeing, usually in thunderstorms, which lasts a few seconds and then vanishes. This article is a historical review of 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+      "ids": [
+        "spya-wtg508",
+        "spya-v4ps0c"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is a glowing ball of light that people report seeing, usually in thunderstorms, which lasts a few seconds and then vanishes.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "This article is a historical review of 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "There are thousands of eyewitness reports but few instrument records, and scientists still do not agree on what causes it. Catching it on camera is rare: one search of about 12,000 sky photographs found only two likely events. So the author argues that careful reports from trained observers are especially worth collecting.",
+      "ids": [
+        "spya-wtg508",
+        "spya-f0dmn4"
+      ],
+      "sentences": [
+        {
+          "text": "There are thousands of eyewitness reports but few instrument records, and scientists still do not agree on what causes it.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "Catching it on camera is rare: one search of about 12,000 sky photographs found only two likely events.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "So the author argues that careful reports from trained observers are especially worth collecting.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "In this sample, 73 % of sightings happened during thunderstorms, and 41 % of witnesses saw a lightning stroke at the same moment. Reported sizes ranged from 1.5 cm to 15 m, mostly under 20 cm. Sightings lasted from 1.5 to 180 seconds, with a typical middle value of about 4 seconds.",
+      "ids": [
+        "spya-mj9yck",
+        "spya-hrcct6",
+        "spya-rjs9xh"
+      ],
+      "sentences": [
+        {
+          "text": "In this sample, 73 % of sightings happened during thunderstorms, and 41 % of witnesses saw a lightning stroke at the same moment.",
+          "id": "spya-mj9yck"
+        },
+        {
+          "text": "Reported sizes ranged from 1.5 cm to 15 m, mostly under 20 cm.",
+          "id": "spya-hrcct6"
+        },
+        {
+          "text": "Sightings lasted from 1.5 to 180 seconds, with a typical middle value of about 4 seconds.",
+          "id": "spya-rjs9xh"
+        }
+      ]
+    },
+    {
+      "text": "Even this small group of trained witnesses described very different sizes, durations and situations. Some cases are hard to fit into one explanation, which has led some researchers to suggest there may be several types of ball lightning.",
+      "ids": [
+        "spya-p9uvh9"
+      ],
+      "sentences": [
+        {
+          "text": "Even this small group of trained witnesses described very different sizes, durations and situations.",
+          "id": "spya-p9uvh9"
+        },
+        {
+          "text": "Some cases are hard to fit into one explanation, which has led some researchers to suggest there may be several types of ball lightning.",
+          "id": "spya-p9uvh9"
+        }
+      ]
+    },
+    {
+      "text": "The author concludes that well-documented cases can encourage field research and help test theories. Cases with physical evidence, plus videos from mobile phones and webcams, could build a database for judging ball lightning theories.",
+      "ids": [
+        "spya-jybqrk",
+        "spya-zz7g2q"
+      ],
+      "sentences": [
+        {
+          "text": "The author concludes that well-documented cases can encourage field research and help test theories.",
+          "id": "spya-jybqrk"
+        },
+        {
+          "text": "Cases with physical evidence, plus videos from mobile phones and webcams, could build a database for judging ball lightning theories.",
+          "id": "spya-zz7g2q"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "Ball lightning is a glowing ball of light, often seen in thunderstorms, that lasts a few seconds. Scientists still cannot explain it, and it is rarely caught on camera. This article gathers sightings made by scientists and other trained observers, such as weather watchers.",
+      "ids": [
+        "spya-wtg508",
+        "spya-v4ps0c"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is a glowing ball of light, often seen in thunderstorms, that lasts a few seconds.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "Scientists still cannot explain it, and it is rarely caught on camera.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "This article gathers sightings made by scientists and other trained observers, such as weather watchers.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "Because ball lightning appears at random, careful reports from skilled watchers are among the best evidence available. The author collects 41 cases from eight countries, from 1868 to 2020. The balls varied widely in size and in how long they lasted, so there may be more than one kind. The author concludes that well-recorded cases can guide future study and help test ideas about what ball lightning is.",
+      "ids": [
+        "spya-f0dmn4",
+        "spya-wtg508",
+        "spya-p9uvh9"
+      ],
+      "sentences": [
+        {
+          "text": "Because ball lightning appears at random, careful reports from skilled watchers are among the best evidence available.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "The author collects 41 cases from eight countries, from 1868 to 2020.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "The balls varied widely in size and in how long they lasted, so there may be more than one kind.",
+          "id": "spya-p9uvh9"
+        },
+        {
+          "text": "The author concludes that well-recorded cases can guide future study and help test ideas about what ball lightning is.",
+          "id": "spya-wtg508"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

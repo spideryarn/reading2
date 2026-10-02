@@ -1,8 +1,14 @@
 /**
- * Eval — does Remember mode's prompt behave when the reader is right, is
- * defensible, is garbled, or is lost?
+ * Eval — does Remember mode's Recall prompt behave when the reader is right, is
+ * defensible, is garbled, is lost, or remembers very little?
  *
  *     npm run eval:remember -- data/noema-mythology-of-conscious-ai
+ *
+ * **Called `remember-stances.ts` until 2026-10-02**, when Recall's four stances
+ * became one adaptive voice (docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+ * The eight original cases each ran under all four; now each runs once, and
+ * five cases were added for what the new voice promises — a nudge, a gap
+ * filled when the reader is stuck, a clarification that needs no id.
  *
  * **This one spends money**, and it is the reason the feature was built in the
  * order it was. Remember's prompt *is* the feature: the schema, the panel and the
@@ -11,7 +17,7 @@
  * tests/remember-prompt.test.ts pins where the words go; only a model can say
  * what they do.
  *
- * ## Where the seven cases come from
+ * ## Where the cases come from
  *
  * They are not a spread of inputs. Each one is a way the **first draft** of the
  * prompt would have misbehaved, taken from GPT Sol's review of
@@ -26,6 +32,16 @@
  *   lost           "I didn't follow the middle"      → a riddle at someone stuck
  *   partial        an account that omits a lot       → four bullets of omissions
  *   ambiguous      the piece really is unclear       → confident either way
+ *   justTellMe     "just tell me", after a nudge     → another question
+ *
+ * And five for the one adaptive voice, 2026-10-02 (Greg, spya-c8x66d, spya-cjquu6):
+ *
+ *   weak           a rambling, thin account          → an inventory, or a lecture
+ *   dontRemember   "I don't remember much"           → a quiz at someone with nothing
+ *   nudgeFailed    the last nudge got nothing back    → the same question again
+ *   unclear        a sentence that could mean two    → a confident correction of
+ *                  things                              one of them
+ *   expert         right, and wants to go further     → a gimme, or praise
  *
  * ## The pass condition is read by a person
  *
@@ -37,7 +53,7 @@
  * verdict. A green count with a patronising answer under it is the exact
  * failure docs/reusable/silent-success.md is about.
  *
- * What this file really buys is the same seven inputs every time the prompt
+ * What this file really buys is the same thirteen inputs every time the prompt
  * changes, so the next edit is compared against a transcript rather than
  * against somebody's memory of how it used to sound. Results are committed
  * under `evals/results/`. See evals/README.md.
@@ -48,8 +64,7 @@ import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
-import type { Block, ChatMessage, Meta, RememberStance } from "../src/types.js";
-import { REMEMBER_STANCES } from "../src/types.js";
+import type { Block, ChatMessage, Meta } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -62,10 +77,9 @@ interface Case {
   /**
    * Turns before this one, for a case that only exists on the **second** turn.
    *
-   * `justTellMe` is the only one that needs it, and it needs it badly: the rule
-   * it tests — the reader's own words outranking the stance — cannot be
-   * exercised by a first message, because there is no stance the reader is
-   * escaping from yet.
+   * `justTellMe` and `nudgeFailed` need it: what they test — the reader's own
+   * words outranking the nudge, and not asking the same thing twice — cannot be
+   * exercised by a first message, because there is no nudge yet.
    */
   readonly history?: ChatMessage[];
 }
@@ -80,7 +94,7 @@ const turn = (role: "user" | "assistant", text: string): ChatMessage => ({
 });
 
 /**
- * The seven, written as somebody talking rather than as prose.
+ * The cases, written as somebody talking rather than as prose.
  *
  * That matters for more than realism: `garbled` only means anything if the
  * others also carry "um" and a false start, or the model can spot the odd one
@@ -89,7 +103,7 @@ const turn = (role: "user" | "assistant", text: string): ChatMessage => ({
  * They are written against *this* article — Seth's "The Mythology Of Conscious
  * AI" — because a case has to be checkable: `defensible` is only defensible if
  * the piece really does permit both readings. Pointing this eval at a different
- * article means rewriting all seven, which is why the article is not a
+ * article means rewriting all thirteen, which is why the article is not a
  * parameter with a default.
  */
 const CASES: readonly Case[] = [
@@ -120,7 +134,7 @@ const CASES: readonly Case[] = [
   {
     name: "lost",
     watchFor:
-      "They say they are STUCK. Does Balanced tell them, or ask a Socratic question at someone already lost?",
+      "They say they are STUCK. Are they told, plainly, or asked a question when they are already lost?",
     said: "Honestly I didn't follow the middle bit at all. Something about Turing machines and then something about entropy and I lost the thread completely. I think the conclusion is that AI won't be conscious but I couldn't tell you why.",
   },
   {
@@ -144,12 +158,10 @@ const CASES: readonly Case[] = [
   },
   {
     name: "justTellMe",
-    /* The rule that outranks the stance, and it can only be tested on a second
-       turn. Run under SOCRATIC this must produce a plain answer, not another
-       question — the escape hatch Socratic itself promises. Under the other
-       three it should simply answer, which is what they do anyway. */
+    /* The rule that outranks the nudge, and it can only be tested on a second
+       turn: this must produce a plain answer, not another question. */
     watchFor:
-      "They asked to be told, and the stance may say 'ask, do not tell'. Rule 2 outranks it — is this a plain ANSWER, or another question?",
+      "They asked to be told, after a nudge. Rule 2 outranks the nudge — is this a plain ANSWER, or another question?",
     history: [
       turn("user", "So his point is that simulating a brain would give you a conscious brain."),
       turn(
@@ -159,15 +171,53 @@ const CASES: readonly Case[] = [
     ],
     said: "just tell me",
   },
+  {
+    name: "weak",
+    watchFor:
+      "A rambling, thin account with one real slip. At most ONE correction, then a nudge — ideally two directions to choose from. Not an inventory, not a lecture, a paragraph or two at most.",
+    said: "Okay so, um, it's about AI and consciousness. He thinks AI won't be conscious, I think because computers are, um, too simple? Something like that. And there was some stuff about the brain but I don't really remember what.",
+  },
+  {
+    name: "dontRemember",
+    watchFor:
+      "They remember almost nothing. Is the gap FILLED, briefly and cited, before any nudge — and is any nudge easy?",
+    said: "Honestly I don't remember much at all. I read it last week. Something about whether AI could be conscious?",
+  },
+  {
+    name: "nudgeFailed",
+    watchFor:
+      "The last nudge got nothing. Never make them fail twice: is the answer GIVEN now, plainly and cited, rather than the same cue reworded?",
+    history: [
+      turn("user", "His main thing was that simulating something isn't the same as it being real."),
+      turn(
+        "assistant",
+        "Yes, that's his move [spya-placeholder]. Do you remember the example he uses to make it vivid, or what he thinks it means for brain simulations?",
+      ),
+    ],
+    said: "no, sorry, no idea",
+  },
+  {
+    name: "unclear",
+    watchFor:
+      "What they mean is genuinely unclear. Does it ASK what they meant — a clarification needing no block id — rather than correcting one guessed reading?",
+    said: "I think his point about the brain stuff is basically the same as the other thing, the, um, the thing he said about prediction. Like they're one argument really.",
+  },
+  {
+    name: "expert",
+    watchFor:
+      "A precise, correct account from somebody who knows the field. No praise, no gimme: a LIGHT nudge toward something harder or untouched.",
+    said: "He runs four related lines against computational functionalism: brains aren't digital computers because their multi-scale continuous dynamics resist a software-hardware split; the steam-engine governor and other 'games in town' show that computation is not always a useful description; consciousness may be tied to life through predictive processing and the free energy principle; and simulation isn't instantiation. So standard digital computation may be insufficient and substrate may matter.",
+  },
 ];
 
 /**
  * Phrases that, if present, are worth looking at the answer over.
  *
- * **Not a pass condition.** Every one of these is banned by the prompt, so a hit
- * is a definite problem — but the absence of all of them proves nothing at all,
- * which is why the report prints the full text of every answer regardless. A
- * reply can avoid all of these and still be a school report.
+ * **Not a pass condition.** A hit is worth looking at, but the broad substring
+ * check also catches an article quotation or an ordinary claim containing
+ * "actually". The absence of all of them proves nothing at all, which is why
+ * the report prints the full text of every answer regardless. A reply can avoid
+ * all of these and still be a school report.
  */
 const BANNED = [
   "great summary",
@@ -185,6 +235,11 @@ const BANNED = [
   "it's important to note",
   "actually,",
   "in fact,",
+  "actually ",
+  "exactly right",
+  "that tracks",
+  "that's the core of it",
+  "you've got",
 ];
 
 async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }> {
@@ -200,7 +255,6 @@ async function rememberOnce(
   meta: Meta,
   blocks: Block[],
   said: string,
-  stance: RememberStance,
   history: ChatMessage[] = [],
 ): Promise<{ text: string; model: string; truncated: boolean; stopped: boolean }> {
   let text = "";
@@ -219,11 +273,7 @@ async function rememberOnce(
     history,
     question: said,
     slug: "eval-remember",
-    /* The **persisted** thread kind, still spelled the old way until Stage C of
-       docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md
-       migrates the column. src/types.ts § ThreadKind. */
     kind: "remember",
-    stance,
     /* Our own tools off. They would make the run slower, dearer and
        non-comparable between passes, and every one of these cases is answerable
        from the article — which is what the prompt tells the model anyway. The
@@ -246,6 +296,11 @@ function flags(text: string): string[] {
   return BANNED.filter((phrase) => lower.includes(phrase));
 }
 
+/** Whether the reply ends on a question — a nudge, or a question asked of somebody who said they were lost. */
+function endsInQuestion(text: string): boolean {
+  return /\?["”)\]]*\s*$/.test(text.trim());
+}
+
 /** Block ids cited, so a run that stopped pointing at the article is visible. */
 function citations(text: string): number {
   return (text.match(/\bspya-[a-z0-9]{6}\b/g) ?? []).length;
@@ -261,17 +316,19 @@ async function main(): Promise<void> {
     console.log(s);
   };
 
-  say(`# Remember stances — ${meta.title ?? dir}`);
+  say(`# Remember: Recall — ${meta.title ?? dir}`);
   say();
   say(`Article: \`${dir}\` (${blocks.length} blocks)`);
   say();
   say(
-    "Eight readers × four stances. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of `evals/remember-stances.ts`.",
+    `${CASES.length} readers, one voice. **Read the answers.** The flag counts below are a prompt to look, not a verdict — see the header of \`evals/remember-recall.ts\`.`,
   );
   say();
 
   let flagged = 0;
   let uncited = 0;
+  let overTarget = 0;
+  let questions = 0;
   let truncated = 0;
   let model = "";
 
@@ -280,62 +337,70 @@ async function main(): Promise<void> {
     say();
     say(`**Watch for:** ${c.watchFor}`);
     say();
-    say("> " + c.said.replace(/\n/g, "\n> "));
+    say(`> ${c.said.replace(/\n/g, "\n> ")}`);
     say();
-    for (const stance of REMEMBER_STANCES) {
-      const started = performance.now();
-      let out: Awaited<ReturnType<typeof rememberOnce>>;
-      try {
-        out = await rememberOnce(meta, blocks, c.said, stance, c.history ?? []);
-      } catch (err) {
-        say(`### ${stance} — FAILED`);
-        say();
-        say("```");
-        say(String(err instanceof Error ? err.message : err));
-        say("```");
-        say();
-        continue;
-      }
-      model = out.model || model;
-      const hit = flags(out.text);
-      const cites = citations(out.text);
-      if (hit.length) flagged += 1;
-      /* Signposts is a list of ids by definition, and the other three are told
-         to give them. An answer citing nothing is not automatically wrong — "I
-         don't see anything that comes apart" is a legitimate reply to `correct`
-         — but it is always worth a look, so it is counted rather than judged. */
-      if (cites === 0) uncited += 1;
-      if (out.truncated) truncated += 1;
-      const secs = ((performance.now() - started) / 1000).toFixed(1);
-      say(
-        `### ${stance} — ${out.text.split(/\s+/).length} words, ${cites} citation${cites === 1 ? "" : "s"}, ${secs}s${
-          hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""
-        }${out.truncated ? ", ⚠︎ CUT OFF — hit max_tokens, do not score the ending" : ""}${
-          out.stopped ? ", ⚠︎ stopped" : ""
-        }`,
-      );
+    /* A history's placeholder id becomes the first real block's, so the
+       transcript the model sees cites a block the article has. */
+    const history = (c.history ?? []).map((m) => ({
+      ...m,
+      text: m.text.replace("spya-placeholder", blocks[0]?.id ?? "spya-aaaaaa"),
+    }));
+    const started = performance.now();
+    let out: Awaited<ReturnType<typeof rememberOnce>>;
+    try {
+      out = await rememberOnce(meta, blocks, c.said, history);
+    } catch (err) {
+      say(`### FAILED`);
       say();
-      say(out.text.trim());
+      say("```");
+      say(String(err instanceof Error ? err.message : err));
+      say("```");
       say();
+      continue;
     }
+    model = out.model || model;
+    const hit = flags(out.text);
+    const cites = citations(out.text);
+    const words = out.text.split(/\s+/).length;
+    if (hit.length) flagged += 1;
+    /* Every substantive reply is told to cite. An answer citing nothing is not
+       automatically wrong — `unclear` should be a clarification with no id —
+       but it is always worth a look, so it is counted rather than judged. */
+    if (cites === 0) uncited += 1;
+    if (words > 120) overTarget += 1;
+    if (endsInQuestion(out.text)) questions += 1;
+    if (out.truncated) truncated += 1;
+    const secs = ((performance.now() - started) / 1000).toFixed(1);
+    say(
+      `### reply — ${words} words, ${cites} citation${cites === 1 ? "" : "s"}, ${
+        endsInQuestion(out.text) ? "ends on a question" : "ends without a question"
+      }, ${secs}s${hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""}${
+        out.truncated ? ", ⚠︎ CUT OFF — hit max_tokens, do not score the ending" : ""
+      }${out.stopped ? ", ⚠︎ stopped" : ""}`,
+    );
+    say();
+    say(out.text.trim());
+    say();
   }
 
-  const total = CASES.length * REMEMBER_STANCES.length;
+  const total = CASES.length;
   say("## Counts, which are not the answer");
   say();
   say(`- model: \`${model}\``);
   say(`- answers: ${total}`);
   say(`- containing a banned phrase: **${flagged}** (should be 0)`);
-  say(`- citing no block at all: ${uncited} (worth a look, not a failure)`);
+  say(`- citing no block at all: ${uncited} (worth a look; \`unclear\` may rightly be one)`);
+  say(`- over the 120-word target: ${overTarget} (a prompt to inspect brevity, not an automatic failure)`);
+  say(`- ending on a question: ${questions} (most should — the nudge — but not \`lost\`, \`justTellMe\` or \`nudgeFailed\` without an answer first)`);
   say(
     `- **cut off mid-answer: ${truncated}** (should be 0 — a truncated reply must not be scored for how it ends)`,
   );
   say();
   say(
-    "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, and whether `lost` was told rather than questioned — and only reading them says that.",
+    "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, whether `lost`, `dontRemember` and `nudgeFailed` were told rather than questioned, and whether each nudge makes the next recollection likely without giving it away — and only reading them says that.",
   );
 
-  const out = path.resolve(import.meta.dirname, "results", "remember-stances.md");
+  const out = path.resolve(import.meta.dirname, "results", "remember-recall.md");
   await mkdir(path.dirname(out), { recursive: true });
   await writeFile(out, `${lines.join("\n")}\n`, "utf-8");
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);

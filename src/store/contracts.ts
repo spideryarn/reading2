@@ -81,7 +81,6 @@ import type {
   LibraryTermsResponse,
   LibraryHit,
   ListOptions,
-  RememberStance,
   SearchKind,
   SearchRun,
   ShelfState,
@@ -999,22 +998,12 @@ export interface ChatStore {
        */
       kind?: ThreadKind;
       /**
-       * How much a Remember answer should say — written onto the **pending**
-       * reply, in the same write as the question.
-       *
-       * `retry` and `edit` below take no stance, deliberately: theirs comes
-       * from the answer they are replacing. See `ChatMessage.stance`.
-       */
-      stance?: RememberStance;
-      /**
        * The reader pressed the "?" rather than typing — written onto the
        * **user** message, in the same write as the pending reply.
        *
-       * The mirror of `stance` above it, and it is a different rule rather than
-       * the same one: `retry` and `edit` take no stance because theirs comes
-       * from the answer they are replacing, and they take no `help` because
-       * theirs comes from the **question** they are re-asking, which is the row
-       * `withRetry` and `withEdit` already hand back. See `ChatMessage.help`.
+       * `retry` and `edit` take no `help` because theirs comes from the
+       * **question** they are re-asking, which is the row `withRetry` and
+       * `withEdit` already hand back. See `ChatMessage.help`.
        */
       help?: true;
     },

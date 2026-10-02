@@ -659,7 +659,7 @@ export function ChatDialog({
     <button
       ref={closeRef}
       type="button"
-      className="chat-dialog-close"
+      className="chat-dialog-close close-x"
       onClick={onClose}
       title="Close (Esc)"
       aria-label="Close"
@@ -778,9 +778,8 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
-            /* Always a chat. This dialog is what a selection in the prose opens, and a
-             Remember turn cannot be anchored to one — so there is no stance picker
-             here and never should be. */
+            /* Always a chat. This dialog is what a selection in the prose opens,
+               and a Remember turn cannot be anchored to one. */
           kind="chat"
         />
         ) : loadFailed ? (

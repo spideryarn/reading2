@@ -93,13 +93,24 @@
 .annotate-head-actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  /* px, and 8: Close's finger target reaches 4px past its box
+     (styles/close.css), and less than that between them hands Copy's taps to
+     Close. */
+  gap: 8px;
 }
 
 /* 24px is WCAG 2.2's minimum target, and the pair used to measure 19.8px with
    2.4px between them — close enough that the spacing exception does not save
-   them either. The icons stay at 15px; the box around them grew. */
-.annotate-close,
+   them either. The icons stay at 15px; the box around them grew. Close is
+   bigger again since 2026-10-02 — 32px, with every other modal's cross, in
+   styles/close.css § .close-x — so only its colour is here. */
+.annotate-close {
+  align-self: center;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
 .annotate-copy {
   display: inline-flex;
   align-items: center;
@@ -390,17 +401,11 @@
    `.chat-dialog-delete` below, which already paints destructive on hover, so
    this rule went with the markup rather than being left for the next reader to
    prove is dead (design-css-overview.md makes that the rule). */
+/* The size is styles/close.css § .close-x. */
 .chat-dialog-close {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 0 0 auto;
   background: none;
   border: none;
-  padding: 0.1rem 0.2rem;
-  line-height: 1;
   font: inherit;
-  font-size: 0.81rem;
   color: var(--ink-faint);
   cursor: pointer;
 }

@@ -1,0 +1,294 @@
+{
+  "arm": "high-about-fb9pa1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple-prompt/5",
+  "sourceSha256": "e5ccff348d97e8bb668d4774a9e72abf6516d93448f9ed18a0e6fd5e44bb197a",
+  "at": "2026-10-02T19:43:57.874Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "2b6dfdb3acd015cc3c4a3cec2d03a6da8ee3bec2d0f8854f9cb84d524115683c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 23261,
+  "costUsd": 0.2145632,
+  "tokens": {
+    "input": 14852,
+    "output": 4571,
+    "reasoning": 2373
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 191,
+  "fullerWords": 260,
+  "briefWords": 86,
+  "paragraphs": [
+    {
+      "text": "This review explains a method called partial information decomposition (PID) and shows how it reveals the way neurons combine their inputs. Mutual information and transfer entropy show how much information flows between neurons, but not how separate streams interact. PID splits what several inputs tell us about a target neuron into redundant, unique, and synergistic parts. Synergy is information carried only by the joint pattern of inputs, never by any single one.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-s0db2g"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains a method called partial information decomposition (PID) and shows how it reveals the way neurons combine their inputs.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Mutual information and transfer entropy show how much information flows between neurons, but not how separate streams interact.",
+          "id": "spya-s0db2g"
+        },
+        {
+          "text": "PID splits what several inputs tell us about a target neuron into redundant, unique, and synergistic parts.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Synergy is information carried only by the joint pattern of inputs, never by any single one.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "The authors call discovering how brains process information a grand challenge of neuroscience. New tools now record hundreds or thousands of neurons at once, so the bottleneck has shifted to analysis methods.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call discovering how brains process information a grand challenge of neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "New tools now record hundreds or thousands of neurons at once, so the bottleneck has shifted to analysis methods.",
+          "id": "spya-s9kmxa"
+        }
+      ]
+    },
+    {
+      "text": "In cultured slices of mouse cortex, a densely linked core of neurons, the rich club, held under 40% of neurons but about 88% of all synergy. Groups with more links between the two input neurons showed more synergy. In monkeys, activity was mostly synergistic, but redundancy rose sharply during reaching movements.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "In cultured slices of mouse cortex, a densely linked core of neurons, the rich club, held under 40% of neurons but about 88% of all synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Groups with more links between the two input neurons showed more synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "In monkeys, activity was mostly synergistic, but redundancy rose sharply during reaching movements.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons seem to respond to particular input patterns, not just to the total input. One limit is scale: with six input neurons, PID yields 7,828,354 distinct pieces, most hard to interpret.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-aby2dp"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons seem to respond to particular input patterns, not just to the total input.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "One limit is scale: with six input neurons, PID yields 7,828,354 distinct pieces, most hard to interpret.",
+          "id": "spya-aby2dp"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This review shows how multivariate information theory can be used to study how groups of neurons process information. Its focus is partial information decomposition (PID), and it pairs a beginner-friendly introduction with the authors' own recent experiments.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review shows how multivariate information theory can be used to study how groups of neurons process information.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Its focus is partial information decomposition (PID), and it pairs a beginner-friendly introduction with the authors' own recent experiments.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors call discovering how brains process information a grand challenge of neuroscience. New recording tools now capture hundreds or thousands of neurons at once, but turning that flood of data into insight needed better analysis. Transfer entropy, a measure of how much one neuron's past predicts another's future, tracks information flow but not how input streams combine.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-s0db2g"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call discovering how brains process information a grand challenge of neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "New recording tools now capture hundreds or thousands of neurons at once, but turning that flood of data into insight needed better analysis.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "Transfer entropy, a measure of how much one neuron's past predicts another's future, tracks information flow but not how input streams combine.",
+          "id": "spya-s0db2g"
+        }
+      ]
+    },
+    {
+      "text": "PID splits what two input neurons tell us about a target into three parts. Redundant information is carried by either input, unique information by only one, and synergistic information only by both inputs together. The authors treat synergy as a sign of real computation, though no single agreed way of measuring redundancy exists yet.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury",
+        "spya-rc76qn"
+      ],
+      "sentences": [
+        {
+          "text": "PID splits what two input neurons tell us about a target into three parts.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Redundant information is carried by either input, unique information by only one, and synergistic information only by both inputs together.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "The authors treat synergy as a sign of real computation, though no single agreed way of measuring redundancy exists yet.",
+          "id": "spya-rc76qn"
+        }
+      ]
+    },
+    {
+      "text": "In mouse cortex cultures, groups of tightly linked hub neurons, called rich clubs, had 2.7 times the synergy of other groups. Fewer than 40% of neurons were in the rich club, yet its groups held about 88% of network-wide synergy. Links between the two input neurons also raised synergy. In monkeys, redundancy rose sharply during movement, perhaps to send reliable signals to muscles.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "In mouse cortex cultures, groups of tightly linked hub neurons, called rich clubs, had 2.7 times the synergy of other groups.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Fewer than 40% of neurons were in the rich club, yet its groups held about 88% of network-wide synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Links between the two input neurons also raised synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "In monkeys, redundancy rose sharply during movement, perhaps to send reliable signals to muscles.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons do not seem to simply add up their inputs; they also respond to particular patterns. How much they do depends on their place in the network and on the animal's behavior. PID reveals statistical patterns, though, not the biological mechanisms behind them.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons do not seem to simply add up their inputs; they also respond to particular patterns.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "How much they do depends on their place in the network and on the animal's behavior.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "PID reveals statistical patterns, though, not the biological mechanisms behind them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review explains a math tool for studying how brain cells combine information arriving from several other cells. How real brain circuits process information is one of the most basic open questions in neuroscience.",
+      "ids": [
+        "spya-xn9j9k"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains a math tool for studying how brain cells combine information arriving from several other cells.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "How real brain circuits process information is one of the most basic open questions in neuroscience.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "The key idea is synergy: information found only in several inputs taken together, not in any one. Studies in mouse brain tissue and in monkeys found synergy is common, and highest among the best-connected cells. So brain cells appear not to just add up their inputs; they also respond to input patterns.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "The key idea is synergy: information found only in several inputs taken together, not in any one.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Studies in mouse brain tissue and in monkeys found synergy is common, and highest among the best-connected cells.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "So brain cells appear not to just add up their inputs; they also respond to input patterns.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

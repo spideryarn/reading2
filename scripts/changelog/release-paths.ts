@@ -111,6 +111,12 @@ export interface NotesAt {
   gap: string | null;
   pending: PendingRelease | null;
   described: string;
+  /**
+   * Release commits the candidate ships after `described` that its notes let
+   * through — they roll to the next release's notes (`changelogGap`). Empty
+   * whenever `gap` is set.
+   */
+  late: string[];
   /** Every deployment the commit's history records — what the serving-deploy check asks. */
   recordedDeploymentIds: string[];
 }
@@ -138,12 +144,14 @@ export function notesAt(sha: string, cwd: string): NotesAt {
     problems: [...history.problems, ...parsed.problems, ...historyProblems],
     described,
     describedInCandidate: inCandidate,
+    pendingPresent: parsed.pending !== null,
     uncovered,
   });
   return {
     gap,
     pending: parsed.pending,
     described,
+    late: gap === null ? uncovered : [],
     recordedDeploymentIds: history.versions.map((v) => v.deployment_id),
   };
 }

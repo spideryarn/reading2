@@ -317,13 +317,33 @@ describe("Summary's plain-words slider", () => {
       input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("pointerup", { bubbles: true }));
     });
     const armedOnce = pendingActivation(SLUG, "simple");
     expect(armedOnce).not.toBeNull();
+    act(() => {
+      input.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    expect(pendingActivation(SLUG, "simple")).toBe(armedOnce);
     act(() => input.click());
     expect(pendingActivation(SLUG, "simple")).toBe(armedOnce);
     expect(changes).toEqual(["fuller"]);
+  });
+
+  it("arms a drag that is cancelled before the pointer comes up (touch)", () => {
+    /* GPT Sol's plan review of 261002h, P1: a touch drag the browser takes
+       back for scrolling ends in pointercancel, not pointerup. The level has
+       already moved, so the press must already be armed, or the band sits on
+       Brief with an idle "Write it" — Greg's 9P. */
+    const changes = mountSummaryControls("simple");
+    const input = slider();
+    act(() => {
+      input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "0");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("pointercancel", { bubbles: true }));
+    });
+    expect(armed("simple")).toBe(true);
+    expect(changes).toEqual(["brief"]);
   });
 
   it("arms a fresh press when clicked on the level already showing", () => {

@@ -969,9 +969,10 @@
    with a phone would be confirming or overturning it, not re-deriving it.
 
    `:not([hidden])` earns its place here for a second reason beyond matching the
-   textarea half. Three rules hold a select under 1rem — `.chat-live-mic select`
-   and `.chat-stance select` (mode-band.css) and `.place-pick select`
-   (dialogs.css) — and each is (0,1,1). A bare `:root select` is **also**
+   textarea half. Rules hold a select under 1rem — `.chat-live-mic select`
+   (mode-band.css) and `.place-pick select` (dialogs.css); `.chat-stance select`
+   was a third until Remember's stance picker went on 2026-10-02, and the
+   measurements below were taken on it — and each is (0,1,1). A bare `:root select` is **also**
    (0,1,1): a tie, settled only by narrow-window.css being imported after both
    files, which is exactly the source-order dependence that made this rule ship
    applying to nothing twice. The attribute selector takes it to (0,2,1) and

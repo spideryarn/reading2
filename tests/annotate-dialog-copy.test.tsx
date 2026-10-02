@@ -341,11 +341,21 @@ describe("the header's targets", () => {
   const css = readerCss();
 
   it("gives Copy and Close 24px in each direction, at every root size", () => {
-    const rule = /\.annotate-close,\s*\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];
-    expect(rule, "the shared .annotate-close/.annotate-copy rule").toBeTruthy();
+    /* Close has been the shared `.close-x` since 2026-10-02 (styles/close.css,
+       plan 261002i), so the two are read from their two rules. */
+    const copy = /\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];
+    expect(copy, "the .annotate-copy rule").toBeTruthy();
     for (const prop of ["min-width", "min-height"]) {
-      const value = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1]?.trim();
-      expect(value, `${prop} on the header buttons`).toBeTruthy();
+      const value = new RegExp(`${prop}:\\s*([^;]+);`).exec(copy ?? "")?.[1]?.trim();
+      expect(value, `${prop} on Copy`).toBeTruthy();
+      expect(value).not.toMatch(/rem/);
+      expect(Number.parseFloat(value ?? "0")).toBeGreaterThanOrEqual(24);
+    }
+    const close = /\.close-x\s*\{([^}]*)\}/.exec(css)?.[1];
+    expect(close, "the shared .close-x rule").toBeTruthy();
+    for (const prop of ["width", "height"]) {
+      const value = new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`).exec(close ?? "")?.[1]?.trim();
+      expect(value, `${prop} on Close`).toBeTruthy();
       expect(value).not.toMatch(/rem/);
       expect(Number.parseFloat(value ?? "0")).toBeGreaterThanOrEqual(24);
     }

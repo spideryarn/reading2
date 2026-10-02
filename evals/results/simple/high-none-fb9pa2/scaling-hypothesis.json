@@ -1,0 +1,300 @@
+{
+  "arm": "high-none-fb9pa2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/5",
+  "sourceSha256": "e5ccff348d97e8bb668d4774a9e72abf6516d93448f9ed18a0e6fd5e44bb197a",
+  "at": "2026-10-02T19:45:04.523Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "2b6dfdb3acd015cc3c4a3cec2d03a6da8ee3bec2d0f8854f9cb84d524115683c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 30663,
+  "costUsd": 0.1291174,
+  "tokens": {
+    "input": 19119,
+    "output": 4803,
+    "reasoning": 2512
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 200,
+  "fullerWords": 256,
+  "briefWords": 91,
+  "paragraphs": [
+    {
+      "text": "This long essay by Gwern is about GPT-3, a huge AI program that OpenAI released in May 2020. It was trained only to guess the next word across a vast pile of Internet text. Gwern uses it to argue for the \"scaling hypothesis\": the idea that just making AI bigger, with more data and computing, makes it smarter.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "This long essay by Gwern is about GPT-3, a huge AI program that OpenAI released in May 2020.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "It was trained only to guess the next word across a vast pile of Internet text.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Gwern uses it to argue for the \"scaling hypothesis\": the idea that just making AI bigger, with more data and computing, makes it smarter.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 was 117 times bigger than GPT-2, and its gains kept coming as forecast instead of leveling off. It also showed meta-learning, meaning it could pick up new tasks from a few examples, though nobody designed it to. Gwern says it was cheap by government or business budgets, so much larger models are possible.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 was 117 times bigger than GPT-2, and its gains kept coming as forecast instead of leveling off.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "It also showed meta-learning, meaning it could pick up new tasks from a few examples, though nobody designed it to.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Gwern says it was cheap by government or business budgets, so much larger models are possible.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": problems that defeat small networks often vanish in big ones. To predict human writing very well, a model must learn the logic and world knowledge hidden in it. The last, hardest bits of accuracy may demand the most intelligence.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-h74fhr",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "A key idea is the \"blessings of scale\": problems that defeat small networks often vanish in big ones.",
+          "id": "spya-sfkxh8"
+        },
+        {
+          "text": "To predict human writing very well, a model must learn the logic and world knowledge hidden in it.",
+          "id": "spya-h74fhr"
+        },
+        {
+          "text": "The last, hardest bits of accuracy may demand the most intelligence.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "Gwern admits he once doubted the scaling hypothesis, but says it looks more plausible every year. He argues most AI experts predicted wrongly and rarely admit it. Depending on investment and computing growth, he expects the 2020s to be \"quite interesting.\"",
+      "ids": [
+        "spya-emqjaa",
+        "spya-m9r8zx",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern admits he once doubted the scaling hypothesis, but says it looks more plausible every year.",
+          "id": "spya-emqjaa"
+        },
+        {
+          "text": "He argues most AI experts predicted wrongly and rarely admit it.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "Depending on investment and computing growth, he expects the 2020s to be \"quite interesting.\"",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Gwern about GPT-3, a text-predicting neural network that OpenAI announced in May 2020. A neural network is a program that learns patterns from examples. The essay uses GPT-3 to argue for the \"scaling hypothesis\": simple networks keep getting smarter when given more data and computing power.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Gwern about GPT-3, a text-predicting neural network that OpenAI announced in May 2020.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "A neural network is a program that learns patterns from examples.",
+          "id": null
+        },
+        {
+          "text": "The essay uses GPT-3 to argue for the \"scaling hypothesis\": simple networks keep getting smarter when given more data and computing power.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 was over ten times larger than any earlier network, yet its gains did not level off as many expected. It also showed meta-learning: picking up a new task from a few examples in its prompt, with no special training. Gwern stresses that GPT-3 was cheap by government or business budgets, so much bigger models could be built.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 was over ten times larger than any earlier network, yet its gains did not level off as many expected.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It also showed meta-learning: picking up a new task from a few examples in its prompt, with no special training.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Gwern stresses that GPT-3 was cheap by government or business budgets, so much bigger models could be built.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "The \"blessings of scale\" means that, for these networks, hard problems get easier as everything grows larger. His guess at why: a big network holds countless small sub-models, and enough varied data makes the ones that truly generalize beat the memorizers. The \"pretraining thesis\" adds that predicting text perfectly needs real understanding, so the last, hardest errors to remove matter most.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "The \"blessings of scale\" means that, for these networks, hard problems get easier as everything grows larger.",
+          "id": "spya-sfkxh8"
+        },
+        {
+          "text": "His guess at why: a big network holds countless small sub-models, and enough varied data makes the ones that truly generalize beat the memorizers.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "The \"pretraining thesis\" adds that predicting text perfectly needs real understanding, so the last, hardest errors to remove matter most.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "Gwern argues that respected experts predicted failure and rarely admit being wrong. He thinks Google's labs did not believe in scaling, while OpenAI bet on it. An appendix argues that agency, meaning goal-seeking behaviour, may emerge even in models trained without human data.",
+      "ids": [
+        "spya-m9r8zx",
+        "spya-scr8jb",
+        "spya-mkbrjp"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern argues that respected experts predicted failure and rarely admit being wrong.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "He thinks Google's labs did not believe in scaling, while OpenAI bet on it.",
+          "id": "spya-scr8jb"
+        },
+        {
+          "text": "An appendix argues that agency, meaning goal-seeking behaviour, may emerge even in models trained without human data.",
+          "id": "spya-mkbrjp"
+        }
+      ]
+    },
+    {
+      "text": "Once skeptical himself, Gwern concludes the scaling hypothesis has only looked more plausible every year since 2010. Depending on investment and compute growth, he asks whether the 2020s bring a \"sigmoid\", where progress levels off, or a \"singularity\", where it runs away.",
+      "ids": [
+        "spya-emqjaa",
+        "spya-suzdvz"
+      ],
+      "sentences": [
+        {
+          "text": "Once skeptical himself, Gwern concludes the scaling hypothesis has only looked more plausible every year since 2010.",
+          "id": "spya-emqjaa"
+        },
+        {
+          "text": "Depending on investment and compute growth, he asks whether the 2020s bring a \"sigmoid\", where progress levels off, or a \"singularity\", where it runs away.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay looks at GPT-3, a huge computer program that learned from text on the internet. It asks what GPT-3's success tells us about how to build smarter machines. The author says it matters because GPT-3 could pick up new tasks from just a few examples.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This essay looks at GPT-3, a huge computer program that learned from text on the internet.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It asks what GPT-3's success tells us about how to build smarter machines.",
+          "id": "spya-suzdvz"
+        },
+        {
+          "text": "The author says it matters because GPT-3 could pick up new tasks from just a few examples.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "The key idea is the scaling hypothesis: simple learning programs keep getting smarter when made bigger. That means more computer power and more data, not clever new designs. The author concludes this idea now looks right, and that most experts failed to see it coming.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-sfkxh8",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "The key idea is the scaling hypothesis: simple learning programs keep getting smarter when made bigger.",
+          "id": "spya-m3gtj6"
+        },
+        {
+          "text": "That means more computer power and more data, not clever new designs.",
+          "id": "spya-sfkxh8"
+        },
+        {
+          "text": "The author concludes this idea now looks right, and that most experts failed to see it coming.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -217,6 +217,11 @@ function readVersion(raw: unknown, release: number, where: string): DeployVersio
   if (previous !== null && !(typeof previous === "string" && SHA.test(previous))) {
     return `${where}: previous_sha is neither null nor a sha`;
   }
+  /* Absent on lines before 2026-10-02, where `sha` was the deployed commit. */
+  const deployed = raw.deployed_sha ?? null;
+  if (deployed !== null && !(typeof deployed === "string" && SHA.test(deployed))) {
+    return `${where}: deployed_sha is neither absent nor a sha`;
+  }
 
   const changelog = readChangelog(raw);
 
@@ -229,6 +234,7 @@ function readVersion(raw: unknown, release: number, where: string): DeployVersio
     release,
     deploymentId,
     sha,
+    deployedSha: typeof deployed === "string" ? deployed : sha,
     previousSha: typeof previous === "string" ? previous : null,
     commitCount,
     /* **Quiet is a claim, and it is only made when it can be made.** Not

@@ -1,0 +1,1199 @@
+diff --git a/docs/plans/261002i-ipad-touch-targets-plan-review-sol.md b/docs/plans/261002i-ipad-touch-targets-plan-review-sol.md
+new file mode 100644
+index 000000000..1e1060ffc
+--- /dev/null
++++ b/docs/plans/261002i-ipad-touch-targets-plan-review-sol.md
+@@ -0,0 +1,31 @@
++No P0 findings. I found two likely regressions and five smaller issues.
++
++1. **P1 — Unavailable actions become silent on the wide touch card.**  
++   On a coarse-pointer card, [`pressCapture`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/ShelfEntry.tsx:860) bypasses reveal for every action, without consulting the existing `commits` value in [`ActionTip`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/ShelfEntry.tsx:1400). An unavailable [`IconButton`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/IconButton.tsx:98) then swallows the click. The result is a faded icon that does nothing and never explains why—the exact case the existing test calls out at [`shelf-action-touch.test.tsx:215`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/tests/shelf-action-touch.test.tsx:215).  
++   **Fix:** propagate `commits` as a data attribute and preserve reveal-on-first-tap when it is false; direct-commit only enabled actions. Add a `fingerRow + coarse + NO_URL` test.
++
++2. **P1 — The enlarged Annotate close target overlaps Copy.**  
++   The close target extends 6px in every direction at [`close.css:44`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/styles/close.css:44), but the two buttons have only `0.15rem` between them at [`dialogs.css:93`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/styles/dialogs.css:93). Because Copy precedes Close in the DOM at [`AnnotateDialog.tsx:253`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/AnnotateDialog.tsx:253), their hit areas overlap by roughly 4px and the later Close target can steal taps from Copy. This also affects mouse hit-testing on hybrid devices because the media query is `any-pointer`.  
++   **Fix:** make the gap at least 6px—preferably 8px—or give Close a physical 44px box here. Add a browser hit-test between the two controls; the current size test cannot catch overlap.
++
++3. **P2 — The re-fetch safety claim understates the behavioral change.**  
++   The plan says re-fetch is “also one tap in the menu today” at [`plan:62`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md:62). From a closed card it is currently two taps: open the trigger at [`ShelfEntry.tsx:1214`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/ShelfEntry.tsx:1214), then select re-fetch. The change makes an unlabelled icon immediately queue paid work.  
++   **Fix:** state the real two-to-one-tap trade-off. Either deliberately accept it, or keep re-fetch reveal-first/menu-only while letting reversible and free actions commit directly.
++
++4. **P2 — The tests do not reproduce the WebKit event the implementation is designed around.**  
++   The new direct-path tests at [`shelf-action-touch.test.tsx:437`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/tests/shelf-action-touch.test.tsx:437) send a `touch` click, whereas the cited iOS bug produces a click whose `pointerType` is `mouse`. They also do not assert that a tooltip remains closed after the compatibility mouse-event sequence.  
++   **Fix:** under `matchMedia("(any-pointer: coarse)")`, test a `mouse`-typed click, the unavailable-action case, and pointer-enter/mouse-enter/click followed by the tooltip delay. The implementation’s controlled tooltip does use `mouseOnly` at [`Tooltip.tsx:263`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/Tooltip.tsx:263), which Floating UI documents as ignoring touch and pen, so I found no definite stuck-tooltip bug—just a missing regression check. [Floating UI documentation](https://floating-ui.com/docs/usehover)
++
++5. **P2 — One panel-header cross was missed.**  
++   Chat’s open-conversation header still has a small X at [`ChatPanel.tsx:524`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/ChatPanel.tsx:524), sized to `1.4rem` by [`mode-band.css:293`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/styles/mode-band.css:293). It navigates back to “All conversations” rather than closing the whole band, but visually it is exactly a panel-header close cross.  
++   **Fix:** preferably use an `ArrowLeft` with a finger-sized button, which states its real meaning. If it remains an X, give it the shared close geometry through a dedicated class; adding `close-x` beside `chat-icon` alone will not work because the later `.chat-icon` dimensions win.
++
++6. **P2 — `scrollbar-color` shipped in Safari 26.2, not iPadOS 26 generally.**  
++   Both [`mode-band.css:29`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/styles/mode-band.css:29) and [`plan:91`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md:91) infer shipping from the August 2025 WebKit landing. Bug 258461 does specifically implement the thumb colour for iOS’s overlay indicator, but Apple lists `scrollbar-color` as new in Safari 26.2. [WebKit bug 258461](https://bugs.webkit.org/show_bug.cgi?id=258461), [Safari 26.2 release notes](https://webkit.org/blog/17640/webkit-features-for-safari-26-2/)  
++   **Fix:** say “Safari/iPadOS 26.2” and confirm Greg’s installed version. For 26.0/26.1, this remains only progressive enhancement and the proposed fade fallback is still needed. On desktop the declaration should not move layout because `scrollbar-width` is untouched; it only recolours inherited band scrollbars.
++
++7. **P3 — The stated reason for `fingerRow` is backwards.**  
++   The plan says a query not matching outside a container is why the prop is needed at [`plan:49`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md:49), repeated at [`ShelfEntry.tsx:755`](/home/greg/code/spideryarn2/.claude/worktrees/fb9e-9f-9g-ipad-touch-targets/src/web/ShelfEntry.tsx:755). Non-matching is precisely how the table can retain the base menu presentation.  
++   **Fix:** either say the prop exists to make `pressCapture`’s card-only behavior explicit, or use a named container (`tw:@container/shelf-card`) with base coarse-pointer menu styles and card-only `@min-[28rem]/shelf-card` overrides. I compiled that named syntax successfully under the installed Tailwind 4.3.3.
++
++The existing Tailwind classes also compile and order correctly: the coarse-pointer/container variants nest as intended, the descendant variants resize both controls and SVGs, and the table retains its menu. Apart from the Annotate overlap, I found no positioning, overflow-clipping, or focus-ring regression from `.close-x`. The focused shelf/close test set passed: 79 tests across five files. No files were edited.
+\ No newline at end of file
+diff --git a/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md b/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md
+new file mode 100644
+index 000000000..bd95cb017
+--- /dev/null
++++ b/docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md
+@@ -0,0 +1,141 @@
++# 261002i — iPad touch targets: shelf card actions on the bottom row, bigger close crosses, a visible band scrollbar
++
++Five admin reports from Greg's iPad, one session (queue item qi-ppaw8fvj). His words are in the
++feedback note, `docs/user-feedback/261002_*-ipad-touch-targets.md`; the short version:
++
++> Make the triple dot menu for items in my shelf a bit more visible. It's very small on my iPad in
++> portrait mode. — 9E, spya-d7ftwk
++
++> … we could move the opened, you know, three days ago to the bottom left, and then we could put the
++> icons in the bottom right, so they'd all be on that same bottom row … save me a click. And we could
++> keep the three dots menu just in case things are really, really narrow or whatever. — 9F,
++> spya-n3zujy
++
++> Can you make the little cross to close a comment a little bit larger? I kept missing it on my iPad.
++> And if there are any other similar to the modals or panels, apply it to them as well. — 9G,
++> spya-gvcmx2
++
++> Oops, there IS a scroll bar in summary mode on my iPad. It's just very hard to see. — spya-af6hy8
++> (after spya-f602m6)
++
++— Greg, 2026-10-01 and 2026-10-02
++
++Prior-work check (feedback-reports.md § The run, step 3): nothing on dev, in `docs/plans/` or
++`docs/user-feedback/` covers these; no running session holds this ground. qi-djn8h9bn (rich tooltips
++that open on a tap) waits on this one and is not built here.
++
++## What is there now
++
++- **Shelf card.** Title row: title, then `Actions` at the right. Bottom row: words · comments ·
++  the sort's note pushed right with `ml-auto`. Wherever `any-pointer: coarse` matches, `Actions`
++  draws no icon row at all and a 40px "⋯" (`ShelfActionsMenu`, an 18px muted glyph with no border)
++  opens the five as words — 260915b, because on iOS 18.2+ a finger's click reports `mouse` and the
++  row's reveal-then-commit could not work, and because five unlabelled glyphs read as decoration.
++  The list is one column, so an iPad-portrait card is ~700px wide: room to spare.
++- **Close crosses.** Each is its own rule. The comment card's `.cmt-close` is a 15px glyph with
++  `0 0.15rem` padding — about 20 × 15px of target. `.annotate-close` and `.chat-dialog-close` are
++  the same shape; `.fb-close`, `.dock-close`, `.lightbox-close` are 26–28px boxes.
++- **Band scrollbar.** Nothing in the app sets `scrollbar-color`. iOS draws its own overlay
++  indicator, thin and only while scrolling; on the band's dark `--panel` it is barely there.
++
++## The change
++
++### 1. The shelf card's actions move to the bottom row (9F, card only)
++
++- `ShelfCard`: `Actions` leaves the title row and goes to the end of the bottom row, `ml-auto`. The
++  note loses its `ml-auto` and sits beside the word count and comments — Greg's own layout. The
++  title gets the full width. **Same for every pointer**, so there is one card layout, not two; on a
++  mouse the row is still hover-revealed, it is just at the bottom right now.
++- The card is a CSS container (`tw:@container`). `Actions` takes a new prop, `fingerRow`, which only
++  the card passes:
++  - **card, finger, container ≥ 28rem** (iPad, either orientation): the icon row is drawn,
++    opaque, with **40px** icons (the house finger number, narrow-windows.md § What a control owes a
++    finger); the "⋯" is not.
++  - **card, finger, container < 28rem** (a phone): unchanged — the "⋯".
++  - **table** (`RowActions`): unchanged — the "⋯" for any finger. A prop rather than the query
++    alone because the press changes too and must be the card's alone, and so the table's classes
++    stay exactly what they were.
++  - **no finger**: unchanged — the 28px hover-revealed row.
++- **A finger's tap on the row presses the button — for the free, undoable ones.** The row's
++  reveal-then-commit is already dead on iOS (the click says `mouse`, so it commits), and Greg asked
++  to save the click. So where the row is drawn for a finger (`any-pointer: coarse` matches at the
++  time of the click), `pressCapture` stops reading the click's `pointerType` and lets the device
++  decide: Edit, Open, Copy, Archive and Put back press on the first tap (Archive's Undo strip is its
++  confirmation, as in the menu). **Two kinds still reveal first** (Sol's plan review, P1 and P2):
++  an *unavailable* control, which would otherwise be a faded icon that refuses the tap and never
++  says why; and **Re-fetch**, which queues paid work and was two taps from a closed "⋯" — one
++  unlabelled tap is not the same trade. The reveal stays as it was for a pen on a machine with no
++  touchscreen.
++- **Why `any-pointer` for the 40px and not `pointer`**, which touch.md asks of a size rule: this is
++  not chrome grown for a hybrid laptop's benefit, it is the row taking the "⋯"'s place, and the
++  "⋯" it replaces is already chosen by `any-pointer`. Whoever gets the row instead of the menu
++  gets it finger-sized.
++
++### 2. The "⋯" is easier to see (9E)
++
++It stays where it is needed (phones, the table) and moves with the row to the bottom right of the
++card. Glyph 18 → 22px, the foreground colour rather than muted, and a `rule-strong` border so it
++reads as a button and not a stray mark. Still 40px.
++
++### 3. One close cross (9G)
++
++A new `src/web/styles/close.css`, imported straight after `shell.css` so every component rule after
++it still wins on order, defines `.close-x`: a **32px** box, the glyph drawn at **18px** whatever
++it, centred; and under `(any-pointer: coarse)` an invisible `::after` that
++extends the target to **40px** (4px a side) without growing the header it sits in. Anything beside
++a close needs 4px of gap: Annotate's Copy sat 2.4px from Close, so their targets would have
++overlapped and Close would have taken Copy's taps (Sol, P1) — that gap is 8px now. That last part asks
++`any-pointer` because it paints nothing — the rationing argument in touch.md is about visible
++chrome. Each modal/panel close gets the class, and its own rule loses the width, height and
++padding it set, keeping colour, border and position:
++`.cmt-close`, `.annotate-close`, `.chat-dialog-close`, `.fb-close`, `.dock-close`,
++`.lightbox-close`, `.ref-how-close`. Small dismiss chips on banners and hints (toasts, the install
++hint, the return chip) are not panels and are left for the next report.
++
++### 4. The band's scrollbar shows (spya-f602m6, spya-af6hy8)
++
++`.mode-band { scrollbar-color: <a light grey thumb> transparent }`. The property is inherited, so
++every scroller in every band gets it. WebKit taught iOS to paint the overlay indicator in the thumb
++colour (bug 258461, landed 2025-08; Apple lists `scrollbar-color` as new in **Safari 26.2**, so
++iPadOS 26.2 and later); before that it is ignored and nothing changes.
++On a desktop with classic scrollbars the band's bar takes the same colour; `scrollbar-width` is not
++touched, so no width moves and narrow-windows.md's rules about room under a scrollbar are untouched.
++
++## The simpler option passed over
++
++Leaving the card layout alone and only enlarging the "⋯" would answer 9E and not 9F, which is the
++one with the click Greg wants back. Making the row show on every finger regardless of width would
++answer 9F and break the phone, where five 40px icons and the meta line do not fit. Per-close size
++edits in seven stylesheets would work but leave seven numbers to drift; one class is fewer parts.
++
++## Deferred, named
++
++- Banner and toast dismiss crosses (not panels).
++- Chat's open-conversation header ✕ (`ChatPanel.tsx`, `.chat-icon`, 1.4rem). Sol found it: it
++  looks like a panel close but goes back to *All conversations*, beside a Delete. Sol's suggestion
++  is an arrow that says what it does, which is a product call for Greg rather than a size change.
++- A custom, always-visible scroll indicator for iOS before 26 — `scrollbar-color` is the cheap
++  version; if Greg's iPad does not show it, the next step is a fade at the band's bottom edge.
++- Tooltip cards opening on a tap (qi-djn8h9bn, queued separately).
++
++## Plan review
++
++GPT Sol, read-only, 2026-10-02 (`261002i-…-plan-review-sol.md` beside this plan): no P0; two P1s
++(silent unavailable controls on a direct press; Annotate's Copy/Close overlap) and the Re-fetch
++trade-off, all fixed as above; the Safari version corrected to 26.2; the prop's stated reason
++corrected; the WebKit `mouse`-typed click and the unavailable and Re-fetch cases added to
++`tests/shelf-action-touch.test.tsx`. Chat's header ✕ deferred, above. Sol confirmed the Tailwind
++variants compile and nest as intended and found no stuck-tooltip bug (`mouseOnly` ignores touch).
++
++## Checks
++
++- `npm test`, `npm run typecheck`; existing shelf tests (`shelf-actions-menu`,
++  `shelf-actions-visible-to-a-finger-in-chrome`) updated for the card's new switch and kept for the
++  table.
++- A test that the card draws the row and not the menu when `fingerRow` and the built CSS carry the
++  container-plus-coarse rule (the class strings in the built stylesheet, since jsdom has no layout).
++- Browser, Sonnet subagent, Playwright Chrome with `hasTouch` at 820 × 1180 and 390 × 844, plus a
++  mouse at 1280: row vs menu, one tap archives, close crosses measured, band `scrollbar-color`
++  computed.
++- What cannot be checked here: the iOS overlay indicator's colour — Playwright's WebKit on Linux has
++  no iOS scroll indicator. Greg's iPad is the check, and the note says so.
+diff --git a/docs/project/controls.md b/docs/project/controls.md
+index 155fa5799..d09a31806 100644
+--- a/docs/project/controls.md
++++ b/docs/project/controls.md
+@@ -136,6 +136,8 @@ list page now agree, and agreeing is the whole of it:
+ | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
+ | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
+ | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
++| every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |
++| the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-10`) | `rounded-md` |
+ 
+ **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
+ [`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger
+@@ -143,6 +145,13 @@ list page now agree, and agreeing is the whole of it:
+ utility classes; reach for the token when a hand-rolled control has to agree with the 36px row, and
+ add its siblings when a second row needs one.
+ 
++**The close cross is the second control with its size in one place**:
++[`styles/close.css`](../../src/web/styles/close.css), imported straight after `shell.css` so each
++component's own rule wins on everything *but* size — and so those rules must not set a width, a
++height or a padding, which [`tests/close-cross.test.ts`](../../tests/close-cross.test.ts) checks
++for each of the seven. In px, because the app supports a 12px root.
++([261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md))
++
+ The chip is stated as a **height**, not as padding, in `chipClass` in
+ [`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in
+ the same row agree with a text one without anybody redoing the arithmetic when an icon changes. It
+diff --git a/docs/project/touch.md b/docs/project/touch.md
+index e99359634..b09cc2535 100644
+--- a/docs/project/touch.md
++++ b/docs/project/touch.md
+@@ -158,6 +158,15 @@ no hover has to let the first press mean *show me* or the reader commits blind.
+   reports correctly, and opens a finger's menu at the click: Radix's trigger would open it at the
+   press, under the finger, at the start of a scroll.
+ 
++  **Since 2026-10-02 a finger meets the row again on a card wide enough for it** — Greg, on an
++  iPad in portrait: *"save me a click. And we could keep the three dots menu just in case things
++  are really, really narrow."* The row moved to the card's bottom row, and where there is a finger
++  a card at least 28rem across (a container query, so the shelf's column decides, not the window)
++  draws it at 40px and opaque; a narrower card, and the table, keep the "⋯". There a tap
++  **presses**: the reveal was already dead on an iPad, and the icons are the explanation Greg chose.
++  The "⋯" itself got a border and a bigger, brighter glyph (*"a bit more visible"*).
++  [261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md).
++
+ ## Why the prose is untouched
+ 
+ This is the load-bearing decision, and it came out of the research rather than out of caution.
+diff --git a/src/web/AnnotateDialog.tsx b/src/web/AnnotateDialog.tsx
+index 96bba6875..5e920a76d 100644
+--- a/src/web/AnnotateDialog.tsx
++++ b/src/web/AnnotateDialog.tsx
+@@ -256,7 +256,7 @@ export function AnnotateDialog({
+           />
+           <button
+             type="button"
+-            className="annotate-close"
++            className="annotate-close close-x"
+             onClick={onCancel}
+             title="Close (Esc)"
+             aria-label="Close"
+diff --git a/src/web/ChatDialog.tsx b/src/web/ChatDialog.tsx
+index a8afe6c78..567c79e8e 100644
+--- a/src/web/ChatDialog.tsx
++++ b/src/web/ChatDialog.tsx
+@@ -659,7 +659,7 @@ export function ChatDialog({
+     <button
+       ref={closeRef}
+       type="button"
+-      className="chat-dialog-close"
++      className="chat-dialog-close close-x"
+       onClick={onClose}
+       title="Close (Esc)"
+       aria-label="Close"
+diff --git a/src/web/CommentDialog.tsx b/src/web/CommentDialog.tsx
+index 33c042efc..1925de9e4 100644
+--- a/src/web/CommentDialog.tsx
++++ b/src/web/CommentDialog.tsx
+@@ -345,7 +345,7 @@ export function CommentDialog({
+         )}
+         <button
+           type="button"
+-          className="cmt-close"
++          className="cmt-close close-x"
+           /* Where focus lands when the dialog opens — § the dialog takes focus,
+              and gives it back. */
+           ref={closeRef}
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index d9cbcf2c5..d2959b4fc 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1929,7 +1929,7 @@ export function Dock({
+             <h2>{own ? TITLES[panel].own : TITLES[panel].visitor}</h2>
+             <button
+               type="button"
+-              className="dock-close"
++              className="dock-close close-x"
+               /* Where focus lands when the drawer opens — § the drawer takes
+                  focus, and gives it back. */
+               ref={closeRef}
+diff --git a/src/web/FeedbackDialog.tsx b/src/web/FeedbackDialog.tsx
+index 91f3ee0c9..f9c228e3f 100644
+--- a/src/web/FeedbackDialog.tsx
++++ b/src/web/FeedbackDialog.tsx
+@@ -1044,7 +1044,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props)
+       >
+         <div className="fb-head">
+           <h2 className="fb-title">Feedback</h2>
+-          <button type="button" className="fb-close" onClick={onClose} aria-label="Close">
++          <button type="button" className="fb-close close-x" onClick={onClose} aria-label="Close">
+             <X size={16} />
+           </button>
+         </div>
+diff --git a/src/web/Lightbox.tsx b/src/web/Lightbox.tsx
+index 95e8ff59d..22b79bb43 100644
+--- a/src/web/Lightbox.tsx
++++ b/src/web/Lightbox.tsx
+@@ -132,7 +132,7 @@ export function Lightbox({ figure, onClose, onJump }: Props) {
+       }}
+     >
+       <div className="lightbox-panel">
+-        <button type="button" className="lightbox-close" onClick={onClose} aria-label="Close">
++        <button type="button" className="lightbox-close close-x" onClick={onClose} aria-label="Close">
+           <X size={16} strokeWidth={1.75} />
+         </button>
+         {/* `.prose` so a table keeps the article's own table styling rather
+diff --git a/src/web/RefereeCard.tsx b/src/web/RefereeCard.tsx
+index c342f8f90..cba3a82be 100644
+--- a/src/web/RefereeCard.tsx
++++ b/src/web/RefereeCard.tsx
+@@ -204,7 +204,7 @@ export function RefereeHowCard({ onClose }: { onClose(): void }) {
+             offered two identical-sounding × buttons with different powers. */}
+         <button
+           type="button"
+-          className="ref-how-close"
++          className="ref-how-close close-x"
+           aria-label="Hide this explanation"
+           onClick={onClose}
+         >
+diff --git a/src/web/ShelfEntry.tsx b/src/web/ShelfEntry.tsx
+index 46f714233..e1386edc4 100644
+--- a/src/web/ShelfEntry.tsx
++++ b/src/web/ShelfEntry.tsx
+@@ -208,7 +208,10 @@ export function ShelfCard({
+   ).filter(Boolean) as string[];
+ 
+   return (
+-    <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
++    /* `@container`: the card's own width decides whether a finger gets the
++       icons or the "⋯" (`Actions` § `fingerRow`), because the shelf's column,
++       not the window, is what has to fit them. */
++    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+       <div className="tw:flex tw:items-start tw:gap-3">
+         {editing ? (
+           <TitleEditor
+@@ -245,15 +248,6 @@ export function ShelfCard({
+             </Link>
+           </h2>
+         )}
+-
+-        {!editing && (
+-          <Actions
+-            entry={entry}
+-            shelf={shelf}
+-            onEdit={() => shelf.beginRename(entry.slug)}
+-            archivedShown={archivedShown}
+-          />
+-        )}
+       </div>
+ 
+       <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+@@ -315,13 +309,21 @@ export function ShelfCard({
+         </div>
+       )}
+ 
+-      {/* **Wraps, and the note keeps its `ml-auto` when it does.** The row is
+-          three things of unpredictable width — a word count, a question count,
+-          and a note that is whatever the current sort makes it ("opened 3 weeks
+-          ago", "added 26 Aug 2026") — and in a narrow window the last of them
+-          is the one that gets squeezed. `gap-y-1` so a wrapped second line does
+-          not touch the gist above it. */}
+-      <p className="tw:mt-3 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
++      {/* **The facts on the left, the actions on the right, one row.** Greg,
++          2026-10-01, on an iPad: *"we could move the opened, you know, three
++          days ago to the bottom left, and then we could put the icons in the
++          bottom right, so they'd all be on that same bottom row."* The actions
++          were beside the title until then; the title has the card's whole
++          width now. The note — whatever the current sort makes it ("opened 3
++          weeks ago", "added 26 Aug 2026") — sits with the word count rather
++          than out on the right.
++
++          **Wraps, and the actions keep their `ml-auto` when they do**, so on a
++          card too narrow for one line they go to the right of a line of their
++          own. `gap-y-1` so a wrapped second line does not touch the gist above
++          it. A `<div>` and not the `<p>` it was, because the actions are
++          `<div>`s. Plan 261002i. */}
++      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+         {!minimal && (
+           <span className="tw:inline-flex tw:items-center tw:gap-1.5">
+             <FileText size={13} />
+@@ -358,12 +360,23 @@ export function ShelfCard({
+           <button
+             type="button"
+             aria-label={`${note} — details of ${entry.title}`}
+-            className="tw:relative tw:ml-auto tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
++            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+           >
+             {note}
+           </button>
+         </Tooltip>
+-      </p>
++        {!editing && (
++          <div className="tw:ml-auto tw:flex tw:items-center">
++            <Actions
++              entry={entry}
++              shelf={shelf}
++              onEdit={() => shelf.beginRename(entry.slug)}
++              archivedShown={archivedShown}
++              fingerRow
++            />
++          </div>
++        )}
++      </div>
+     </article>
+   );
+ }
+@@ -728,10 +741,33 @@ export function Actions({
+   onEdit,
+   inTooltipGroup = false,
+   archivedShown = false,
++  fingerRow = false,
+ }: {
+   entry: LibraryEntry;
+   shelf: Shelf;
+   onEdit: () => void;
++  /**
++   * **Draw the icons for a finger too, when the card is wide enough.** Greg,
++   * 2026-10-01, on an iPad in portrait: the "⋯" was *"just a tiny bit more
++   * cumbersome … save me a click. And we could keep the three dots menu just in
++   * case things are really, really narrow."*
++   *
++   * True on the card only. There, wherever there is a finger, the row is drawn
++   * at 40px — the house number for a thumb, narrow-windows.md § What a control
++   * owes a finger — once the card's container is at least 28rem across (an
++   * iPad either way up), and the "⋯" below that (a phone). The query is a
++   * container query against `ShelfCard`'s `@container`. A prop, not the query
++   * alone, because the press changes too (`pressCapture` commits on this row)
++   * and that has to be the card's alone — and because it keeps the table's
++   * classes exactly what they were, rather than leaning on a query that
++   * happens not to match where there is no container.
++   *
++   * `any-pointer` for the 40px, where touch.md asks a size rule for `pointer`:
++   * this is the row taking the "⋯"'s place, and the "⋯" is chosen by
++   * `any-pointer`, so whoever gets the row instead gets it finger-sized.
++   * Plan 261002i.
++   */
++  fingerRow?: boolean;
+   /** `?archived=1` — which of Archive's two cards is true. */
+   archivedShown?: boolean;
+   /**
+@@ -815,9 +851,30 @@ export function Actions({
+          the one row where the card is the point — and Floating UI treats `pen`
+          as mouse-like, so its own hover would not have opened the card either.
+          GPT Sol, 2026-09-05. */
+-      const finger =
+-        (e.nativeEvent as PointerEvent).pointerType === "touch" ||
+-        (e.nativeEvent as PointerEvent).pointerType === "pen";
++      /* **Where the row is drawn for a finger** (`fingerRow` on a device with
++         one, since 2026-10-02) the click's `pointerType` is not asked at all —
++         on an iPad it says `mouse` (WebKit bug 282988, above) — and the
++         device decides instead. There a tap **presses** a control that is free
++         and undoable — Edit, Open, Copy, Archive, Put back — because Greg asked
++         for the click back and the icons are the explanation he chose. Two
++         kinds still **reveal first**, so every tap there is treated as a
++         finger's:
++         - **an unavailable control**, whose button refuses its own click — a
++           press would be a faded icon doing nothing and never saying why;
++         - **Re-fetch**, the one action that queues paid work, which from a
++           closed "⋯" was two taps and must not become one unlabelled one.
++         GPT Sol's plan review, 2026-10-02. A pen on a machine with no finger
++         is `any-pointer: fine`, never gets here, and keeps the gesture as it
++         was. Plan 261002i. */
++      const fingerSurface =
++        fingerRow &&
++        typeof window.matchMedia === "function" &&
++        window.matchMedia("(any-pointer: coarse)").matches;
++      const finger = fingerSurface
++        ? id === "rerun" ||
++          (e.target as Element).closest("[data-action]")?.getAttribute("data-commits") !== "true"
++        : (e.nativeEvent as PointerEvent).pointerType === "touch" ||
++          (e.nativeEvent as PointerEvent).pointerType === "pen";
+       /* `armed?.id !== id` rather than `armed === null`, so a finger moving
+          along the row re-reveals rather than firing at whatever it lands on —
+          the row can be read by walking it. Spine.tsx § `bandPress`. */
+@@ -839,7 +896,7 @@ export function Actions({
+          the press it was explaining goes through. GPT Sol, 2026-09-05. */
+       setArmed((prev) => (prev?.byTouch ? null : prev));
+     },
+-    [armed],
++    [armed, fingerRow],
+   );
+ 
+   return (
+@@ -867,7 +924,13 @@ export function Actions({
+        tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx,
+        docs/plans/260915b-shelf-actions-reachable-on-touch.md. */}
+     <div
+-      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
++      className={
++        fingerRow
++          ? /* The card: a finger gets this row, finger-sized, where the card
++               is 28rem or wider, and the "⋯" below that — `fingerRow`. */
++            "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:gap-1 tw:any-pointer-coarse:opacity-100 tw:any-pointer-coarse:[&_:is(a,button)]:size-10 tw:any-pointer-coarse:[&_svg]:size-[18px] tw:any-pointer-coarse:@max-[28rem]:hidden"
++          : "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
++      }
+       onClickCapture={pressCapture}
+     >
+       <RowGroup joined={inTooltipGroup}>
+@@ -1002,7 +1065,7 @@ export function Actions({
+         )}
+       </RowGroup>
+     </div>
+-    <ShelfActionsMenu entry={entry} actions={actions} />
++    <ShelfActionsMenu entry={entry} actions={actions} fingerRow={fingerRow} />
+     </>
+   );
+ }
+@@ -1088,7 +1151,16 @@ const ITEM =
+  * "copy link address" survive on a touchscreen laptop, where a mouse meets this
+  * menu too. GPT Sol, 2026-09-15.
+  */
+-function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: ShelfActions }) {
++function ShelfActionsMenu({
++  entry,
++  actions,
++  fingerRow,
++}: {
++  entry: LibraryEntry;
++  actions: ShelfActions;
++  /** The card, where the "⋯" is only for a card narrower than 28rem — `Actions` § `fingerRow`. */
++  fingerRow: boolean;
++}) {
+   const { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit } = actions;
+   const [open, setOpen] = useState(false);
+ 
+@@ -1136,7 +1208,13 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
+     /* `relative`, so the trigger sits above the card's stretched title link and
+        a tap on it is not a tap on the article. `hidden` unless there is a
+        finger — the other half of the switch in `Actions`. */
+-    <div className="tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:flex">
++    <div
++      className={
++        fingerRow
++          ? "tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:@max-[28rem]:flex"
++          : "tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:flex"
++      }
++    >
+       <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+         <DropdownMenu.Trigger
+           /* Required, not decoration: the menu is portalled away from its card,
+@@ -1161,9 +1239,14 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
+             fingerPress.current = null;
+             if (press && e.detail !== 0) setOpen(!press.wasOpen);
+           }}
+-          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:text-foreground"
++          /* **Drawn as a button, not a stray mark** — Greg, 2026-10-01, on an
++             iPad: *"Make the triple dot menu for items in my shelf a bit more
++             visible. It's very small."* A 22px glyph in the foreground colour
++             inside the strong rule, where it was an 18px muted one with no
++             edge. Still 40px. Plan 261002i. */
++          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-rule-strong tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:border-highlight/60 tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:border-highlight/60"
+         >
+-          <Ellipsis size={18} aria-hidden="true" />
++          <Ellipsis size={22} aria-hidden="true" />
+         </DropdownMenu.Trigger>
+         <DropdownMenu.Portal>
+           <DropdownMenu.Content
+@@ -1302,10 +1385,12 @@ function actionAt(target: EventTarget | null): ActionKey | null {
+ /**
+  * One card, in the placement the whole row shares.
+  *
+- * `bottom`, because the row sits at the top right of a card and in a table cell
+- * on a dense row — above it is the window edge or the row before, and below it
+- * is this article's own body, which is the thing the reader is least surprised
+- * to have covered for a moment.
++ * `bottom`, because the row sat at the top right of a card and sits in a table
++ * cell on a dense row — above it is the window edge or the row before, and
++ * below it is this article's own body, which is the thing the reader is least
++ * surprised to have covered for a moment. On the card it is at the bottom right
++ * since 2026-10-02 (plan 261002i), where below is the next card; the card still
++ * goes there, and `keepSide` stops it being thrown onto the buttons.
+  *
+  * **Controlled, and that is the risky part.** The card has to survive a tap and
+  * outlive the `mouseleave` a tap synthesises, which needs an owner of "which
+@@ -1370,7 +1455,9 @@ function ActionTip({
+           wrapper element, because the row is a flex line of 28px squares and an
+           extra box in it would have to be given a layout of its own; `Tooltip`
+           clones this again for its ref and handlers, and props survive both. */}
+-      {cloneElement(children, { "data-action": id })}
++      {/* `data-commits` too, so `pressCapture` can tell an unavailable control
++          from one that would act — plan 261002i. */}
++      {cloneElement(children, { "data-action": id, "data-commits": String(commits) })}
+     </Tooltip>
+   );
+ }
+diff --git a/src/web/styles.css b/src/web/styles.css
+index 2bbbd571a..4b10d39de 100644
+--- a/src/web/styles.css
++++ b/src/web/styles.css
+@@ -28,6 +28,7 @@
+ 
+ @import "./styles/tokens.css";
+ @import "./styles/shell.css";
++@import "./styles/close.css";
+ @import "./styles/crumbs.css";
+ @import "./styles/table.css";
+ @import "./styles/prose.css";
+diff --git a/src/web/styles/annotations.css b/src/web/styles/annotations.css
+index 471815219..4cdd119ed 100644
+--- a/src/web/styles/annotations.css
++++ b/src/web/styles/annotations.css
+@@ -968,13 +968,11 @@ td.text.has-hit[data-hues="8"] {
+   text-transform: uppercase;
+   color: var(--ink-faint);
+ }
++/* Its size is styles/close.css § .close-x, with every other modal's cross. */
+ .cmt-close {
+-  display: inline-flex;
+-  align-items: center;
++  align-self: center;
+   background: none;
+   border: none;
+-  padding: 0 0.15rem;
+-  line-height: 1;
+   color: var(--ink-faint);
+   cursor: pointer;
+ }
+diff --git a/src/web/styles/close.css b/src/web/styles/close.css
+new file mode 100644
+index 000000000..a926a7ec1
+--- /dev/null
++++ b/src/web/styles/close.css
+@@ -0,0 +1,54 @@
++/* **One close cross for every modal and panel** — the comment card, the
++   annotate box, the chat dialog, Feedback, the Dock's drawer, the figure
++   lightbox, Referee's explanation. Greg, 2026-10-01, on an iPad: *"Can you make
++   the little cross to close a comment a little bit larger? I kept missing it …
++   if there are any other similar to the modals or panels, apply it to them as
++   well."* The comment card's was a 15px glyph with 2px of padding: about
++   20 × 15px of target.
++
++   **The size lives here and nowhere else.** Imported straight after shell.css,
++   so each component's own rule — colour, border, radius, margin, which side of
++   its header it sits on — comes later and wins on order; those rules no longer
++   set a width, a height or a padding, and that is the whole contract. A close
++   button that sets its own size again is a second number to drift.
++
++   **The glyph is drawn at 18px whatever the JSX asked for**: CSS beats the
++   `width`/`height` attributes lucide writes, so `<X size={13} />` and
++   `<X size={16} />` stop being two different crosses.
++
++   **On a device with a finger the target is 40px and the box is still 32** —
++   40px being the house number for a thumb — and the `::after` that makes it
++   is invisible, so it costs the header nothing. **It reaches 4px past the box
++   on every side, so whatever sits beside a close needs at least 4px of gap or
++   the cross steals its taps** (`.annotate-head-actions`, where Copy sat 2.4px
++   away until GPT Sol's plan review). That is why it
++   asks `any-pointer` rather than the `pointer` touch.md asks of a size rule —
++   the rationing argument there is about chrome you can see, and an iPad with a
++   keyboard attached reports `pointer: fine` while its reader taps the glass
++   (narrow-windows.md § What a control owes a finger).
++   docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md. */
++.close-x {
++  position: relative;
++  flex: none;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  /* px, not rem: the app supports a 12px root, where 2rem is 24px.
++     tests/annotate-dialog-copy.test.tsx § the header's targets has the trap. */
++  width: 32px;
++  height: 32px;
++  padding: 0;
++  line-height: 1;
++  border-radius: 6px;
++}
++.close-x > svg {
++  width: 18px;
++  height: 18px;
++}
++@media (any-pointer: coarse) {
++  .close-x::after {
++    content: "";
++    position: absolute;
++    inset: -4px;
++  }
++}
+diff --git a/src/web/styles/dialogs.css b/src/web/styles/dialogs.css
+index bbc8879de..b14816481 100644
+--- a/src/web/styles/dialogs.css
++++ b/src/web/styles/dialogs.css
+@@ -93,13 +93,24 @@
+ .annotate-head-actions {
+   display: inline-flex;
+   align-items: center;
+-  gap: 0.15rem;
++  /* px, and 8: Close's finger target reaches 4px past its box
++     (styles/close.css), and less than that between them hands Copy's taps to
++     Close. */
++  gap: 8px;
+ }
+ 
+ /* 24px is WCAG 2.2's minimum target, and the pair used to measure 19.8px with
+    2.4px between them — close enough that the spacing exception does not save
+-   them either. The icons stay at 15px; the box around them grew. */
+-.annotate-close,
++   them either. The icons stay at 15px; the box around them grew. Close is
++   bigger again since 2026-10-02 — 32px, with every other modal's cross, in
++   styles/close.css § .close-x — so only its colour is here. */
++.annotate-close {
++  align-self: center;
++  border: 0;
++  background: none;
++  color: var(--ink-faint);
++  cursor: pointer;
++}
+ .annotate-copy {
+   display: inline-flex;
+   align-items: center;
+@@ -390,17 +401,11 @@
+    `.chat-dialog-delete` below, which already paints destructive on hover, so
+    this rule went with the markup rather than being left for the next reader to
+    prove is dead (design-css-overview.md makes that the rule). */
++/* The size is styles/close.css § .close-x. */
+ .chat-dialog-close {
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 0.25rem;
+-  flex: 0 0 auto;
+   background: none;
+   border: none;
+-  padding: 0.1rem 0.2rem;
+-  line-height: 1;
+   font: inherit;
+-  font-size: 0.81rem;
+   color: var(--ink-faint);
+   cursor: pointer;
+ }
+diff --git a/src/web/styles/dock.css b/src/web/styles/dock.css
+index 0469a97b2..e5c99fc04 100644
+--- a/src/web/styles/dock.css
++++ b/src/web/styles/dock.css
+@@ -745,14 +745,8 @@
+   outline-offset: -2px;
+ }
+ 
++/* The size is styles/close.css § .close-x; the round outline is this one's own. */
+ .dock-close {
+-  flex: none;
+-  display: inline-flex;
+-  align-items: center;
+-  justify-content: center;
+-  width: 1.6rem;
+-  height: 1.6rem;
+-  padding: 0;
+   border: 1px solid var(--rule-strong);
+   border-radius: 999px;
+   background: transparent;
+diff --git a/src/web/styles/feedback.css b/src/web/styles/feedback.css
+index 4fd8fcc11..a28ef71c1 100644
+--- a/src/web/styles/feedback.css
++++ b/src/web/styles/feedback.css
+@@ -252,14 +252,9 @@
+   font-weight: 600;
+   letter-spacing: -0.01em;
+ }
++/* The size is styles/close.css § .close-x. */
+ .fb-close {
+   align-self: flex-start;
+-  display: inline-flex;
+-  align-items: center;
+-  justify-content: center;
+-  width: 1.6rem;
+-  height: 1.6rem;
+-  padding: 0;
+   border: 1px solid transparent;
+   border-radius: 6px;
+   background: none;
+diff --git a/src/web/styles/lightbox.css b/src/web/styles/lightbox.css
+index 35840f273..c265302b8 100644
+--- a/src/web/styles/lightbox.css
++++ b/src/web/styles/lightbox.css
+@@ -89,13 +89,8 @@
+    cover the one thing the reader opened it to see. */
+ .lightbox-close {
+   align-self: flex-end;
+-  display: inline-flex;
+-  align-items: center;
+-  justify-content: center;
+-  width: 1.75rem;
+-  height: 1.75rem;
+   margin-bottom: 0.4rem;
+-  padding: 0;
++  /* The size is styles/close.css § .close-x. */
+   border: 1px solid transparent;
+   border-radius: 6px;
+   background: none;
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index 27058ded2..e83ba8818 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -26,6 +26,16 @@
+    here. Each panel keeps a class of its own — `chat`, `gloss` — for whatever
+    only it needs. */
+ .mode-band {
++  /* **A scrollbar you can see on an iPad.** Greg, 2026-10-02, in Summary:
++     *"there IS a scroll bar in summary mode on my iPad. It's just very hard to
++     see."* iOS draws its own thin overlay indicator, and on `--panel` it was
++     close to invisible. Since Safari 26.2 (iPadOS 26.2) WebKit paints that
++     indicator in `scrollbar-color`'s thumb (WebKit bug 258461); earlier
++     versions ignore this line. **Inherited**, so every scroller in every band gets it from
++     here. Only the colour: `scrollbar-width` is untouched, so no scrollbar
++     takes or gives back any width (narrow-windows.md). On a desktop with
++     classic scrollbars the band's bar takes the same grey. Plan 261002i. */
++  scrollbar-color: var(--ink-faint) transparent;
+   position: fixed;
+   /* Left of the spine's right edge, right of nothing — the band starts exactly
+      where the spine ends, so the two read as one rail of chrome. */
+diff --git a/src/web/styles/referee.css b/src/web/styles/referee.css
+index 60593618e..750d850e1 100644
+--- a/src/web/styles/referee.css
++++ b/src/web/styles/referee.css
+@@ -342,14 +342,12 @@
+   font-weight: 600;
+   color: var(--ink);
+ }
++/* The size is styles/close.css § .close-x. */
+ .ref-how-close {
+-  flex: none;
+-  padding: 0;
+   border: none;
+   background: none;
+   color: var(--ink-faint);
+   cursor: pointer;
+-  line-height: 1;
+ }
+ .ref-how-close:hover { color: var(--ink); }
+ .ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+diff --git a/tests/annotate-dialog-copy.test.tsx b/tests/annotate-dialog-copy.test.tsx
+index a57b54297..540587775 100644
+--- a/tests/annotate-dialog-copy.test.tsx
++++ b/tests/annotate-dialog-copy.test.tsx
+@@ -341,11 +341,21 @@ describe("the header's targets", () => {
+   const css = readerCss();
+ 
+   it("gives Copy and Close 24px in each direction, at every root size", () => {
+-    const rule = /\.annotate-close,\s*\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];
+-    expect(rule, "the shared .annotate-close/.annotate-copy rule").toBeTruthy();
++    /* Close has been the shared `.close-x` since 2026-10-02 (styles/close.css,
++       plan 261002i), so the two are read from their two rules. */
++    const copy = /\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];
++    expect(copy, "the .annotate-copy rule").toBeTruthy();
+     for (const prop of ["min-width", "min-height"]) {
+-      const value = new RegExp(`${prop}:\\s*([^;]+);`).exec(rule ?? "")?.[1]?.trim();
+-      expect(value, `${prop} on the header buttons`).toBeTruthy();
++      const value = new RegExp(`${prop}:\\s*([^;]+);`).exec(copy ?? "")?.[1]?.trim();
++      expect(value, `${prop} on Copy`).toBeTruthy();
++      expect(value).not.toMatch(/rem/);
++      expect(Number.parseFloat(value ?? "0")).toBeGreaterThanOrEqual(24);
++    }
++    const close = /\.close-x\s*\{([^}]*)\}/.exec(css)?.[1];
++    expect(close, "the shared .close-x rule").toBeTruthy();
++    for (const prop of ["width", "height"]) {
++      const value = new RegExp(`(?:^|[\\s;])${prop}:\\s*([^;]+);`).exec(close ?? "")?.[1]?.trim();
++      expect(value, `${prop} on Close`).toBeTruthy();
+       expect(value).not.toMatch(/rem/);
+       expect(Number.parseFloat(value ?? "0")).toBeGreaterThanOrEqual(24);
+     }
+diff --git a/tests/close-cross.test.ts b/tests/close-cross.test.ts
+new file mode 100644
+index 000000000..c39b8f30c
+--- /dev/null
++++ b/tests/close-cross.test.ts
+@@ -0,0 +1,76 @@
++/**
++ * **Every modal's and panel's close cross is one size, and the size is in one
++ * place** — styles/close.css § `.close-x`. Greg, 2026-10-01, on an iPad: the
++ * comment card's cross was about 20 × 15px and he kept missing it.
++ * docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md.
++ *
++ * Two ways for that to quietly undo itself, one assertion each: a close that
++ * loses the class (it goes back to whatever its own rule says), and a
++ * component rule that sets a size again (it loads after close.css, so on equal
++ * specificity it wins and the shared size silently stops applying to it).
++ */
++import { readFileSync } from "node:fs";
++import { describe, expect, it } from "vitest";
++import { readerCss } from "./helpers/stylesheets.js";
++
++/** The closes Greg's "modals or panels" covers: component file, its own class. */
++const CLOSES: ReadonlyArray<readonly [string, string]> = [
++  ["CommentDialog.tsx", "cmt-close"],
++  ["AnnotateDialog.tsx", "annotate-close"],
++  ["ChatDialog.tsx", "chat-dialog-close"],
++  ["FeedbackDialog.tsx", "fb-close"],
++  ["Lightbox.tsx", "lightbox-close"],
++  ["Dock.tsx", "dock-close"],
++  ["RefereeCard.tsx", "ref-how-close"],
++];
++
++/* Comments out, or the one above a rule becomes part of its selector. */
++const css = readerCss().replace(/\/\*[\s\S]*?\*\//g, "");
++
++/** Every declaration block whose selector list names `.cls` (not `.cls:hover`). */
++function rulesFor(cls: string): string[] {
++  const out: string[] = [];
++  const re = /([^{}]+)\{([^}]*)\}/g;
++  for (let m = re.exec(css); m; m = re.exec(css)) {
++    const selectors = (m[1] ?? "").split(",").map((s) => s.trim());
++    if (selectors.includes(`.${cls}`)) out.push(m[2] ?? "");
++  }
++  return out;
++}
++
++describe("the close cross", () => {
++  it("is 32px, in px, with an 18px glyph", () => {
++    const [rule] = rulesFor("close-x");
++    expect(rule, "the .close-x rule").toBeTruthy();
++    expect(rule).toMatch(/(?:^|[\s;])width:\s*32px;/);
++    expect(rule).toMatch(/(?:^|[\s;])height:\s*32px;/);
++    expect(css).toMatch(/\.close-x > svg\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;/);
++  });
++
++  it("reaches 40px under a finger without growing the box", () => {
++    expect(css).toMatch(
++      /@media \(any-pointer: coarse\)\s*\{\s*\.close-x::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*-4px;/,
++    );
++  });
++
++  /* The target reaches 4px past the box, so a neighbour closer than that loses
++     taps to it. Annotate's Copy is the one close with a button right beside it. */
++  it("leaves Annotate's Copy enough room that Close cannot take its taps", () => {
++    const gap = /\.annotate-head-actions\s*\{[^}]*gap:\s*([^;]+);/.exec(css)?.[1]?.trim() ?? "";
++    expect(gap).toMatch(/px$/);
++    expect(Number.parseFloat(gap)).toBeGreaterThanOrEqual(4);
++  });
++
++  for (const [file, cls] of CLOSES) {
++    it(`${cls} wears it and sets no size of its own`, () => {
++      const src = readFileSync(new URL(`../src/web/${file}`, import.meta.url), "utf8");
++      expect(src).toContain(`className="${cls} close-x"`);
++      const own = rulesFor(cls);
++      expect(own.length, `a rule for .${cls}`).toBeGreaterThan(0);
++      for (const body of own) {
++        expect(body).not.toMatch(/(?:^|[\s;])(?:min-|max-)?(?:width|height)\s*:/);
++        expect(body).not.toMatch(/(?:^|[\s;])padding(?:-[a-z]+)?\s*:/);
++      }
++    });
++  }
++});
+diff --git a/tests/shelf-action-touch.test.tsx b/tests/shelf-action-touch.test.tsx
+index 914ff9c8e..28795eab1 100644
+--- a/tests/shelf-action-touch.test.tsx
++++ b/tests/shelf-action-touch.test.tsx
+@@ -409,3 +409,86 @@ describe("a mouse", () => {
+     expect(openTriggers()).toHaveLength(0);
+   });
+ });
++
++/* ------------------------------------------- the card's row, for a finger -- */
++
++/**
++ * **On the card, where the row is drawn for a finger, a tap presses** — since
++ * 2026-10-02. Greg, on an iPad: *"save me a click."* `fingerRow` is the card's
++ * prop (ShelfEntry.tsx § `Actions`), and the row is drawn for a finger only
++ * where `any-pointer: coarse` matches, so that is what the press asks. The
++ * table keeps the reveal above — it never draws this row for a finger — and so
++ * does a pen on a machine with no finger. Plan 261002i.
++ */
++describe("a finger on the card's row", () => {
++  const coarse = (matches: boolean) =>
++    vi.stubGlobal(
++      "matchMedia",
++      (q: string) => ({ matches: matches && q === "(any-pointer: coarse)", media: q }) as MediaQueryList,
++    );
++  afterEach(() => vi.unstubAllGlobals());
++
++  function renderCard(entry: LibraryEntry): void {
++    act(() => {
++      root.render(createElement(Actions, { entry, shelf, onEdit, fingerRow: true }));
++    });
++  }
++
++  it("presses on the first tap where there is a finger", () => {
++    coarse(true);
++    renderCard(FETCHED);
++    press(control("Archive"), "touch");
++    expect(shelf.archive, "a finger's tap on the card's row did not press").toHaveBeenCalledTimes(1);
++    press(control("Edit title"), "touch");
++    expect(onEdit).toHaveBeenCalledTimes(1);
++  });
++
++  /* What an iPad really sends: WebKit bug 282988 makes a finger's click say
++     `mouse`. The device decides here, not the click. */
++  it("presses on the first tap when the click says mouse, as iOS's does", () => {
++    coarse(true);
++    renderCard(FETCHED);
++    press(control("Copy link"), "mouse");
++    press(control("Archive"), "mouse");
++    expect(shelf.archive).toHaveBeenCalledTimes(1);
++    expect(openTriggers(), "a card opened on a direct press").toHaveLength(0);
++  });
++
++  it("reveals Re-fetch before it queues anything, even when the click says mouse", async () => {
++    coarse(true);
++    renderCard(FETCHED);
++    const fetches = vi.fn(async () => new Response("{}", { status: 200 }));
++    vi.stubGlobal("fetch", fetches);
++    press(control("Re-fetch"), "mouse");
++    expect(fetches, "one unlabelled tap queued a rebuild").not.toHaveBeenCalled();
++    expect(openCardHead()).toBe("Re-fetch and rebuild");
++    press(control("Re-fetch"), "mouse");
++    /* `rerun` reaches `fetch` after an await inside `fetchOk`. */
++    await act(async () => {
++      await new Promise((r) => setTimeout(r, 0));
++    });
++    expect(fetches).toHaveBeenCalledTimes(1);
++  });
++
++  it("explains an unavailable control rather than doing nothing", () => {
++    coarse(true);
++    renderCard(NO_URL);
++    press(control("Open the original"), "mouse");
++    expect(openTriggers(), "an unavailable control's tap said nothing").toHaveLength(1);
++  });
++
++  it("follows the link on the first tap", () => {
++    coarse(true);
++    renderCard(FETCHED);
++    const ev = press(control("Open the original"), "touch");
++    expect(ev.defaultPrevented, "the first tap was stopped from navigating").toBe(false);
++  });
++
++  it("still reveals first for a pen where there is no finger", () => {
++    coarse(false);
++    renderCard(FETCHED);
++    press(control("Archive"), "touch");
++    expect(shelf.archive, "the reveal was lost where the device has no finger").not.toHaveBeenCalled();
++    expect(openCardHead()).toBe("Archive");
++  });
++});
+diff --git a/tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx b/tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx
+index 29f8ed9ef..ead370ef3 100644
+--- a/tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx
++++ b/tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx
+@@ -51,7 +51,7 @@ import { describe, expect, it } from "vitest";
+ 
+ import { chromePath } from "../scripts/browser-sign-in.js";
+ import type { LibraryEntry } from "../src/types.js";
+-import { ShelfCard, type Shelf } from "../src/web/ShelfEntry.js";
++import { Actions, ShelfCard, type Shelf } from "../src/web/ShelfEntry.js";
+ import { EditableTitle, type ArticleRename } from "../src/web/TitleEditor.js";
+ 
+ const chrome = (() => {
+@@ -81,11 +81,23 @@ const ENTRY: LibraryEntry = {
+ const SHELF = { renaming: null } as unknown as Shelf;
+ const RENAME = { editing: false, overridden: false } as unknown as ArticleRename;
+ 
++/*
++ * **Three places the five are drawn, since 2026-10-02** (plan 261002i): a card
++ * as wide as an iPad's shelf, a card as narrow as a phone's, and the table's
++ * row, which is `Actions` without `fingerRow`. The widths are the card's own,
++ * because the switch is a container query on the card.
++ */
+ const MARKUP = renderToStaticMarkup(
+   <div>
+-    <div id="card">
++    <div id="card" style={{ width: "760px" }}>
++      <ShelfCard entry={ENTRY} shelf={SHELF} note="" />
++    </div>
++    <div id="narrow" style={{ width: "340px" }}>
+       <ShelfCard entry={ENTRY} shelf={SHELF} note="" />
+     </div>
++    <div id="table">
++      <Actions entry={ENTRY} shelf={SHELF} onEdit={() => {}} inTooltipGroup />
++    </div>
+     <div id="heading">
+       <EditableTitle rename={RENAME} title="A piece">
+         <h1>A piece</h1>
+@@ -110,7 +122,9 @@ async function stylesheet(): Promise<string> {
+   const entry = resolve("src/web/tailwind.css");
+   const compiler = await compile(readFileSync(entry, "utf8"), loader(dirname(entry)));
+   const classes = [...MARKUP.matchAll(/class="([^"]*)"/g)].flatMap((m) =>
+-    (m[1] ?? "").replace(/&#x27;/g, "'").split(/\s+/),
++    /* `&amp;` last, so an escaped `&#x27;` is not unescaped twice. The row's
++       `[&_svg]` classes are the first here with an `&` in them. */
++    (m[1] ?? "").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").split(/\s+/),
+   );
+   return compiler.build([...new Set(classes)].filter(Boolean));
+ }
+@@ -123,9 +137,19 @@ const DEVICES = {
+     "primaryPointerType=4,availablePointerTypes=6,primaryHoverType=2,availableHoverTypes=3",
+ } as const;
+ 
++interface Place {
++  rowShown: boolean;
++  menuShown: boolean;
++  /** The rendered width of the row's first button, in CSS px — 0 when not drawn. */
++  button: number;
++}
++
+ interface Seen {
+   /** The effective opacity of the row of five — every ancestor's multiplied in. */
+   row: number;
++  /** The phone-width card and the table's row, asked the same three questions. */
++  narrow: Place;
++  table: Place;
+   /**
+    * Whether the row of five is laid out at all. `display: none`, on itself or
+    * any ancestor, leaves an element with no client rects — which is the one
+@@ -136,6 +160,8 @@ interface Seen {
+   menuShown: boolean;
+   /** The same, of the pencil beside an article page's heading. */
+   pencil: number;
++  /** The wide card's first button's width. */
++  button: number;
+   /** The row again, with the (fake, mouse) pointer resting on the card. */
+   rowHovered: number;
+ }
+@@ -160,13 +186,28 @@ async function look(device: keyof typeof DEVICES): Promise<Seen> {
+           return o;
+         };
+         const shown = (el: Element | null): boolean => (el?.getClientRects().length ?? 0) > 0;
+-        const first = document.querySelector("#card [data-action]");
+-        let row = first?.parentElement ?? null;
+-        while (row && row.querySelectorAll("[data-action]").length < 5) row = row.parentElement;
++        const rowIn = (id: string) => {
++          let row = document.querySelector(`#${id} [data-action]`)?.parentElement ?? null;
++          while (row && row.querySelectorAll("[data-action]").length < 5) row = row.parentElement;
++          return row;
++        };
++        const place = (id: string) => {
++          const row = rowIn(id);
++          const button = row?.querySelector("button, a");
++          return {
++            rowShown: shown(row),
++            menuShown: shown(document.querySelector(`#${id} button[aria-label^="Actions for"]`)),
++            button: shown(row) ? (button?.getBoundingClientRect().width ?? 0) : 0,
++          };
++        };
++        const card = place("card");
+         return {
+-          row: visible(row),
+-          rowShown: shown(row),
+-          menuShown: shown(document.querySelector('#card button[aria-label^="Actions for"]')),
++          row: visible(rowIn("card")),
++          rowShown: card.rowShown,
++          menuShown: card.menuShown,
++          button: card.button,
++          narrow: place("narrow"),
++          table: place("table"),
+           pencil: visible(document.querySelector('#heading button[aria-label="Edit title"]')),
+         };
+       });
+@@ -200,22 +241,44 @@ describe.skipIf(chrome === null)("the shelf's actions, in a browser that evaluat
+     expect(seen.row, "the row showed at rest on a desktop").toBe(0);
+     expect(seen.pencil, "the pencil showed at rest on a desktop").toBe(0);
+     expect(seen.rowHovered, "pointing at the card did not reveal the row").toBe(1);
++    expect(seen.button, "a mouse's row is not the 28px row").toBe(28);
++    expect(seen.narrow.menuShown, "a desktop's narrow card drew the ⋯").toBe(false);
++    expect(seen.table.menuShown, "a desktop's table drew the ⋯").toBe(false);
+   });
+ 
+-  it("are a ⋯ menu, there at rest, for a finger on a tablet", { timeout: 60_000 }, async () => {
++  /*
++   * **Since 2026-10-02 a wide card gives a finger the row** — at rest, opaque,
++   * 40px a button — and keeps the "⋯" for a phone-width card and for the
++   * table. Greg, on an iPad: *"save me a click. And we could keep the three
++   * dots menu just in case things are really, really narrow."* Plan 261002i.
++   */
++  it("are the row of five, finger-sized, for a finger on a wide card", { timeout: 60_000 }, async () => {
+     const seen = await look("finger");
+-    expect(seen.menuShown, "a tablet showed no ⋯").toBe(true);
+-    expect(seen.rowShown, "a tablet was still drawn the unlabelled row").toBe(false);
++    expect(seen.rowShown, "a tablet-width card hid the row from a finger").toBe(true);
++    expect(seen.menuShown, "a tablet-width card drew the ⋯ as well as the row").toBe(false);
++    expect(seen.row, "the row was not opaque at rest for a finger").toBe(1);
++    expect(seen.button, "the row's buttons are not finger-sized").toBe(40);
+     expect(seen.pencil).toBe(1);
+   });
+ 
++  it("are a ⋯ menu for a finger on a phone-width card, and in the table", { timeout: 60_000 }, async () => {
++    const seen = await look("finger");
++    expect(seen.narrow.menuShown, "a phone-width card showed no ⋯").toBe(true);
++    expect(seen.narrow.rowShown, "a phone-width card was drawn the row").toBe(false);
++    expect(seen.table.menuShown, "the table showed no ⋯ to a finger").toBe(true);
++    expect(seen.table.rowShown, "the table was drawn the row for a finger").toBe(false);
++  });
++
+   it(
+-    "are a ⋯ menu for a finger on a machine whose primary pointer is a mouse",
++    "follow the same switch for a finger on a machine whose primary pointer is a mouse",
+     { timeout: 60_000 },
+     async () => {
+       const seen = await look("finger and mouse");
+-      expect(seen.menuShown, "a touchscreen laptop showed no ⋯ to its finger").toBe(true);
+-      expect(seen.rowShown, "a touchscreen laptop was still drawn the unlabelled row").toBe(false);
++      expect(seen.rowShown, "a touchscreen laptop's wide card hid the row").toBe(true);
++      expect(seen.menuShown, "a touchscreen laptop's wide card drew the ⋯ too").toBe(false);
++      expect(seen.narrow.menuShown, "a touchscreen laptop's narrow card showed no ⋯").toBe(true);
++      expect(seen.table.menuShown, "a touchscreen laptop's table showed no ⋯").toBe(true);
++      expect(seen.table.rowShown, "a touchscreen laptop's table drew the row").toBe(false);
+       expect(seen.pencil, "a touchscreen laptop showed no pencil beside the title").toBe(1);
+     },
+   );

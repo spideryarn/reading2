@@ -40,7 +40,6 @@ import type {
   ChatAnchor,
   ChatMessage,
   ChatThread,
-  RememberStance,
   ThreadKind,
   ToolRun,
 } from "../types.js";
@@ -140,18 +139,6 @@ export interface SendOptions {
    * having. The server refuses one sent with either.
    */
   kind?: ThreadKind;
-  /**
-   * How much this answer should say — Remember turns only, and the reader's
-   * current picker.
-   *
-   * Also absent from `retry` and `edit`, and that one is not symmetry: a retry
-   * re-asks a **stored** question, so it must be asked the way it was asked.
-   * `withRetry` on the server carries the stance over from the answer it is
-   * replacing; `withEdit` takes it from the answer being replaced. If this rode
-   * along instead, moving the picker and then pressing retry would silently
-   * rewrite the instruction attached to a stored turn.
-   */
-  stance?: RememberStance;
   /**
    * **The reader pressed the "?" beside a paragraph rather than typing this.**
    *
@@ -655,7 +642,7 @@ export function useChat(slug: string): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, kind, stance, help, sourceCommentId, visible } = opts;
+      const { onThreadId, anchor, kind, help, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -685,13 +672,6 @@ export function useChat(slug: string): ChatApi {
         text: "",
         createdAt: now,
         status: "pending",
-        /* The optimistic row's own copy. The server writes the authoritative
-           one onto its pending row in the same write as the question, but the
-           client does not read that back until the next load — so without this
-           the stance tag on an answer appeared only after a reload, which is
-           precisely the state a reader is never in while they are watching the
-           answer arrive. Found in a browser pass, 2026-08-28. */
-        ...(stance ? { stance } : {}),
       };
       controller.startTurn(
         {
@@ -758,7 +738,6 @@ export function useChat(slug: string): ChatApi {
                kind; naming one member is the shape that does not.
                tests/chat-kind-reaches-the-server.test.tsx. */
             ...(kind && kind !== "chat" ? { kind } : {}),
-            ...(stance ? { stance } : {}),
             /* Sent only when it is true, which is the only value there is. The
                route refuses `false` outright rather than reading it as absent,
                so this must never write one. */
@@ -776,9 +755,6 @@ export function useChat(slug: string): ChatApi {
   const retry = useCallback(
     (threadId: string, messageId: string) => {
       const now = new Date().toISOString();
-      const replaced = controller.threads
-        .find((t) => t.id === threadId)
-        ?.messages.find((m) => m.id === messageId);
       /* Blanked field by field, for the same reason `retryTurn` rebuilds the
          stored row rather than spreading it: `citations`, `searches`, `tools`
          and the old `error` all belong to the answer being replaced, and any
@@ -796,14 +772,6 @@ export function useChat(slug: string): ChatApi {
         text: "",
         createdAt: now,
         status: "pending",
-        /* **The one field carried across**, mirroring `withRetry` on the server
-           exactly — see the note there. Everything else belongs to the attempt
-           being replaced; this is the instruction that produced it, and a retry
-           re-asks the same question the same way.
-           Without it the row loses its stance for as long as the tab lives,
-           which then seeds the picker with `balanced` and makes the *next* turn
-           quietly change voice. GPT Sol's review of the built code, finding 2. */
-        ...(replaced?.stance ? { stance: replaced.stance } : {}),
       };
       controller.startTurn({
         type: "turn.started",
@@ -855,7 +823,6 @@ export function useChat(slug: string): ChatApi {
       const expectedTailId = thread?.messages.at(-1)?.id;
       const index = thread?.messages.findIndex((m) => m.id === messageId) ?? -1;
       const target = index < 0 ? undefined : thread?.messages[index];
-      const replaced = index < 0 ? undefined : thread?.messages[index + 1];
       controller.startTurn({
         type: "turn.started",
         op: {
@@ -870,14 +837,6 @@ export function useChat(slug: string): ChatApi {
             text: "",
             createdAt: now,
             status: "pending",
-            /* From the answer being **replaced** — the row under the question —
-               not from the tail of the thread, mirroring `withEdit` on the
-               server. An edit discards later turns whose stances may differ, so
-               taking the last one would answer a rewritten early question in the
-               voice of a turn that no longer exists. */
-            ...(replaced?.role === "assistant" && replaced.stance
-              ? { stance: replaced.stance }
-              : {}),
           },
           /* The rewritten question and the discard of everything under it are
              both **drawn**, and that is the payoff the whole projection was
