@@ -76,7 +76,7 @@ const queued: string[] = [];
 afterEach(async () => {
   /* **Jobs first, and by SQL rather than through `forgetJob`.**
      `jobs.upload_id` is a foreign key into `uploads`, so an upload cannot go
-     while a job names it — and `pgJobStore.forget` only deletes a **terminal**
+     while a job names it — and `pgJobStore.forget` only hides a **terminal**
      job. Every job here is left `queued`, on purpose (`VERCEL=1` stops the
      pump), so the polite route cannot clean up after these. Only ids this
      file's own responses named. It went through the filesystem queue until

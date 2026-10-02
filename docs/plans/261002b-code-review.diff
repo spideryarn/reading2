@@ -1,0 +1,413 @@
+diff --git a/docs/plans/261002b-greg-answers-citations-cap-import-report-summary-on-add.md b/docs/plans/261002b-greg-answers-citations-cap-import-report-summary-on-add.md
+new file mode 100644
+index 000000000..c3b7dd1ad
+--- /dev/null
++++ b/docs/plans/261002b-greg-answers-citations-cap-import-report-summary-on-add.md
+@@ -0,0 +1,49 @@
++# 261002b — Greg's three answers of 2026-10-02
++
++Three questions the Overseer put to Greg, each answered *"yes"*, each a small change.
++
++## 1. Q-citations-daily-cap — Citations' all-readers fuse goes from $20 to $50 a day
++
++Citations' *Dig deeper* runs on Opus with a forced web search, about $0.30 a press measured, and
++its global daily fuse was sized at 25 presses × the $0.80 worst-case budget = $20. So $20 a day
++bought about 25 presses across every reader. The fuse is in code, not an environment variable:
++`INVESTIGATE_RATE_POLICY.daily.globalFills` in `src/citation-investigate.ts`, now **62**
++(62 × $0.80 = $49.60). The per-reader figures (20 a day, 8 an hour, one at a time) are unchanged.
++
++Test: `tests/citation-investigate.test.ts` pins 62, and checks the ceiling is at most $50 **and**
++within one press of it, so a fuse quietly left low fails too. Watched red before the change.
++
++## 2. Q-import-report-details — the report stays private; Dismiss keeps the job record
++
++Greg kept the failed-import *Report this* free of the source URL, file name and error message (a
++pasted URL can carry an access token). The report already carried the job id
++(`src/web/import-report.ts`), but **Dismiss deleted the job row**, so a report filed and then
++dismissed named nothing.
++
++Now Dismiss (`DELETE /api/jobs/:id` → `store.forget`) stamps a new nullable column
++`jobs.dismissed_at` instead, and the store's `list` and `get` skip a stamped row. To the reader
++nothing changes: the card goes, the poll and Retry 404 as before, and a second Dismiss answers 404
++as a second delete did. The row stays until `trimFinished` retires it with the other finished jobs
++(fifty per reader).
++
++**The simpler option passed over:** leave the delete and accept that a dismissed job's id traces
++nothing — the slug and timestamps already in the report would still find the article. Rejected
++because Greg's answer made the id the way back, and a dismissed failure is exactly the one a reader
++reports.
++
++**What else reads `jobs`** (shelf delete, revisions, billing reservations, minimal-paper): every one
++of them already handles a terminal row that has not been trimmed, and a dismissed row is just that,
++so none needed a change. A dismissed row still holds one of the fifty retention slots, as it would
++have had the reader never pressed Dismiss.
++
++No route serves anything new; nothing serves the uploaded file back by job id.
++
++Test: `tests/store-jobs-parity.test.ts` § *keeps the record of a forgotten job* — red against the
++delete (the row was gone), green after. Migration `drizzle/20261002100053_job_dismissed_at.sql`,
++additive.
++
++## 3. Q-summary-on-add — already built
++
++Summary joined the *Generate the main modes* set in 3a9e040f4 (plan 261002a), with its test in
++`tests/auto-modes.test.tsx`. It queues the `simple` step, which writes all three plain-words levels
++(Brief, Simple, Fuller), all or none. Only `docs/project/summaries.md` gained a sentence saying so.
+diff --git a/docs/project/citations.md b/docs/project/citations.md
+index f2bf7cda7..bb48e6962 100644
+--- a/docs/project/citations.md
++++ b/docs/project/citations.md
+@@ -469,7 +469,8 @@ glossary and comments share, so a press here is never charged twice and a dig ru
+ not refuse this one. The figures are `INVESTIGATE_RATE_POLICY` in
+ [`citation-investigate.ts`](../../src/citation-investigate.ts): one at a time, a per-reader hourly
+ and daily count, and a global daily fuse sized so that fuse × `INVESTIGATE_PRESS_BUDGET_USD` (a
+-press's worst case, now on Opus with the search) stays under a $20-a-day ceiling. The comment on
++press's worst case, now on Opus with the search) stays under a $50-a-day ceiling — $20 until Greg raised it on 2026-10-02, when it bought only about 25
++presses a day for everyone. The comment on
+ that constant carries the arithmetic and says which figures are estimated and which measured. The
+ lease covers every deadline in a press — the forced search, the quick check, the registry and the
+ paper's 25 seconds, the passages call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
+diff --git a/docs/project/feedback.md b/docs/project/feedback.md
+index 2923914e9..b956f28b9 100644
+--- a/docs/project/feedback.md
++++ b/docs/project/feedback.md
+@@ -457,6 +457,17 @@ them twice, in opposite directions:
+   half of what the buffer is for. Held at both ends, so neither trusts the other.
+ - **Never the `console`.** Greg's request said "contents of web browser errors/logs/console", and
+   taken literally that is a leak — see below.
++- **A failed import's *Report this* pre-fills ids and times, and never the address, the file name
++  or the error.** The words are `importProblemReport` in
++  [`src/web/import-report.ts`](../../src/web/import-report.ts): the job id, the slug, the status,
++  the failed step's name, the failure kind and the timestamps. A pasted URL can carry an access
++  token, a file name is the reader's own words, and an error sentence is open-ended, so none of them
++  fits a clause above just because it sits in the box. Greg kept it that way on 2026-10-02
++  (Q-import-report-details, *"yes"*), with the job id as the way back: **Dismiss no longer deletes
++  the job record** — it stamps `jobs.dismissed_at` and the reader stops seeing it
++  ([ingest-queue.md § The routes](ingest-queue.md)) — so the id in a report still names a row we
++  can read in the database, until the usual fifty-finished-jobs trim retires it. Nothing serves the
++  uploaded file back by that id.
+ 
+ ## The tick-box, and what is behind it
+ 
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 968bf3e89..fee2634d3 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -2052,11 +2052,19 @@ derivation so the two agree by construction rather than by trust.
+   GET    /api/uploads/:id      what became of one upload
+   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
+   GET    /api/jobs/:id         one job — what the poll reads
+-  DELETE /api/jobs/:id         forget a finished job's record (artefacts untouched)
++  DELETE /api/jobs/:id         hide a finished job from its reader (Dismiss); the row stays
+   POST   /api/jobs/:id/cancel
+   POST   /api/jobs/:id/retry   → 202, a NEW job with the same steps
+ ```
+ 
++**Dismiss hides a job; it does not delete it**, since 2026-10-02. `DELETE /api/jobs/:id` stamps
++`jobs.dismissed_at`, and the store's `list` and `get` skip a stamped row, so to the reader — the
++card, the poll, Retry — the job is gone exactly as when the row was deleted. The row stays because
++a failed import's *Report this* carries the job id and nothing that might be private
++([feedback.md § The one rule](feedback.md)), and an id whose record Dismiss had deleted traced
++nothing. `trimFinished` still retires a dismissed job with the other finished ones. Greg,
++Q-import-report-details.
++
+ `POST /api/jobs` answers **202**, not 200: the work has been accepted and has not been done, and the
+ body is a receipt to poll. Retry creates a new job rather than mutating the old one — what went
+ wrong the first time is worth keeping, and overwriting it would erase the only evidence at exactly
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index 3e2b8d185..bcab552c1 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -94,7 +94,9 @@ the paragraphs.
+   [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
+   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
+   with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
+-  main modes* box includes Summary for the same reason. A visitor on a public article gets the
++  main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
++  Q-summary-on-add), and it writes what the press writes: all three plain-words levels — Brief,
++  Simple and Fuller, all or none — through the `simple` step. A visitor on a public article gets the
+   stored paragraphs off the payload, or a line saying none has been made.
+ - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
+   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
+diff --git a/drizzle/20261002100053_job_dismissed_at.sql b/drizzle/20261002100053_job_dismissed_at.sql
+new file mode 100644
+index 000000000..2d2271da3
+--- /dev/null
++++ b/drizzle/20261002100053_job_dismissed_at.sql
+@@ -0,0 +1,5 @@
++-- Dismiss keeps the job record: it stamps dismissed_at instead of deleting the
++-- row, so the job id a failed import's Report this carries still traces
++-- something. Additive and nullable; code that predates it ignores the column.
++-- Greg, 2026-10-02 (Q-import-report-details). src/db/schema.ts § jobs.dismissedAt.
++ALTER TABLE "spideryarn"."jobs" ADD COLUMN "dismissed_at" timestamp with time zone;
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index 238633062..225bdc1bb 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -806,6 +806,13 @@
+       "when": 1790894879320,
+       "tag": "20261001224759_skim",
+       "breakpoints": true
++    },
++    {
++      "idx": 115,
++      "version": "7",
++      "when": 1790935253093,
++      "tag": "20261002100053_job_dismissed_at",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/src/citation-investigate.ts b/src/citation-investigate.ts
+index 5e044de96..15669e4c1 100644
+--- a/src/citation-investigate.ts
++++ b/src/citation-investigate.ts
+@@ -224,12 +224,14 @@ export const INVESTIGATE_PRESS_BUDGET_USD = 0.8;
+ 
+ /**
+  * **The allowance.** A reader gets 20 a day, 8 an hour, one at a time. The
+- * global fuse keeps every reader together at $20 a day: 25 ×
+- * `INVESTIGATE_PRESS_BUDGET_USD` is 25 × $0.80 = $20. It was 50 × $0.395 ≈
+- * $19.75 on Sonnet, and 55 × $0.345 before the paper was read. So since Dig
+- * deeper a reader's own 20 a day against a fuse of 25 a day means two busy
+- * readers can use the day up for everyone. That is the $20 ceiling doing its
+- * job, and the ceiling is Greg's to move. The lease is every deadline in a
++ * global fuse keeps every reader together at $50 a day: 62 ×
++ * `INVESTIGATE_PRESS_BUDGET_USD` is 62 × $0.80 = $49.60. Greg raised the
++ * ceiling from $20 on 2026-10-02 (Q-citations-daily-cap, "yes"): at $20 the
++ * fuse was 25, which on Opus with the forced search bought only about 25
++ * presses for everyone. Before that it was 50 × $0.395 ≈ $19.75 on Sonnet,
++ * and 55 × $0.345 before the paper was read. A reader's own 20 a day against
++ * a fuse of 62 means about three busy readers can use the day up for
++ * everyone; the ceiling is Greg's to move. The lease is every deadline in a
+  * press plus a margin, so a process that dies mid-press frees its slot soon
+  * after.
+  */
+@@ -250,8 +252,8 @@ export const INVESTIGATE_RATE_POLICY: RatePolicy = {
+     PASSAGES_TIMEOUT_MS +
+     INVESTIGATE_TIMEOUT_MS +
+     30_000,
+-  /* 25 × $0.80, twice the one measured cold press on a long article, is $20. */
+-  daily: { fills: 20, globalFills: 25, windowMs: 24 * 60 * 60 * 1000 },
++  /* 62 × $0.80, twice the one measured cold press on a long article, is $49.60. */
++  daily: { fills: 20, globalFills: 62, windowMs: 24 * 60 * 60 * 1000 },
+ };
+ 
+ function httpError(status: number, message: string): Error {
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 29b1b2a73..310693390 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -2175,6 +2175,19 @@ export const jobs = spideryarn.table(
+      */
+     failureKind: text("failure_kind"),
+ 
++    /**
++     * **When the reader pressed Dismiss on this job's card**, or null.
++     *
++     * Dismiss used to delete the row. Since 2026-10-02 it stamps this instead
++     * and the reader's `list` and `get` skip a stamped row, so to the reader
++     * it is gone exactly as before. The row stays because a failed import's
++     * *Report this* names the job by id and nothing else — no URL, filename or
++     * error, which may be private (Greg, Q-import-report-details) — and an id
++     * whose record Dismiss deleted traces nothing. `trimFinished` still
++     * retires it with the rest, so it is kept for as long as any finished job.
++     */
++    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
++
+     /**
+      * The upload this job's document came off, when it came off a reader's disk.
+      *
+diff --git a/src/dig-deeper.ts b/src/dig-deeper.ts
+index 6d148e9e8..dc42c2537 100644
+--- a/src/dig-deeper.ts
++++ b/src/dig-deeper.ts
+@@ -124,7 +124,7 @@ const MAX_QUERY_CHARS = 200;
+  * $0.047 for a press that reads it. The cold press scales with the article, so
+  * a 100k-token paper is about $0.60. The fuse is 100 of those, about $60 a day
+  * at the very worst, and $5–25 for presses that are mostly warm. Investigate's
+- * fuse is $20 a day; this one is looser because one button here replaces two
++ * fuse is $50 a day (since 2026-10-02); this one is looser because one button here replaces two
+  * that had no limit at all, and the ceiling is Greg's to move.
+  *
+  * Two at once rather than Investigate's one, because a reader may reasonably
+diff --git a/src/jobs.ts b/src/jobs.ts
+index c24b6c52c..f8ca80b99 100644
+--- a/src/jobs.ts
++++ b/src/jobs.ts
+@@ -4444,14 +4444,10 @@ export function forceForRetry(steps: JobStep[]): StepName[] {
+ }
+ 
+ /**
+- * Forget a finished job. Its artefacts are untouched; only the record goes.
+- *
+- * The unlink waits for whatever is still writing this job. Terminal status
+- * lands in the live map before its `persist` completes, so a poll can show
+- * `done` and the reader can dismiss it while the rename is still in flight —
+- * and an unlink that got there first would be undone by it, the forgotten job
+- * reappearing at the next restart. Tombstoning as well as waiting, because a
+- * write queued behind the delete would do the same thing.
++ * Forget a finished job — Dismiss on its card. Its artefacts are untouched, and
++ * since 2026-10-02 so is its record: the store hides it from the reader rather
++ * than deleting it, so the job id a failed import's *Report this* carries still
++ * traces something (src/store/pg-jobs.ts § `forget`).
+  */
+ export async function forgetJob(id: string): Promise<boolean> {
+   // `false` for somebody else's, as for a missing one — and the store is what
+diff --git a/src/store/jobs.ts b/src/store/jobs.ts
+index 3df55731e..f4866d266 100644
+--- a/src/store/jobs.ts
++++ b/src/store/jobs.ts
+@@ -846,7 +846,10 @@ export interface JobStore {
+    */
+   requestCancel(id: string, owner: OwnerId): Promise<Job | undefined>;
+ 
+-  /** Forget one job. Refuses while it is queued or running. */
++  /**
++   * Forget one job: hide it from `list` and `get` for good, keeping the row.
++   * Refuses while it is queued or running, and for one already forgotten.
++   */
+   forget(id: string, owner: OwnerId): Promise<boolean>;
+ 
+   /**
+diff --git a/src/store/pg-jobs.ts b/src/store/pg-jobs.ts
+index 76fd5f8f7..72501bad1 100644
+--- a/src/store/pg-jobs.ts
++++ b/src/store/pg-jobs.ts
+@@ -1073,7 +1073,8 @@ const rawPgJobStore: JobStore = {
+     const rows = await db
+       .select()
+       .from(jobs)
+-      .where(eq(jobs.ownerId, owner))
++      /* A dismissed job is gone as far as the reader can tell — `forget`. */
++      .where(and(eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
+       .orderBy(desc(jobs.createdAt), desc(jobs.id));
+     return rows.map(toJob);
+   },
+@@ -1083,7 +1084,7 @@ const rawPgJobStore: JobStore = {
+     const [row] = await db
+       .select()
+       .from(jobs)
+-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
++      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
+       .limit(1);
+     return row ? toJob(row) : undefined;
+   },
+@@ -2054,11 +2055,27 @@ const rawPgJobStore: JobStore = {
+     }, READ_COMMITTED);
+   },
+ 
++  /**
++   * **Stamps, never deletes**, since 2026-10-02: `list` and `get` skip a
++   * stamped row, so the reader sees what a delete showed them, and the record
++   * stays for the job id a failed import's *Report this* carries
++   * (src/db/schema.ts § `jobs.dismissedAt`). `trimFinished` retires it later
++   * with every other finished job. Already stamped answers `false`, as a
++   * second delete did.
++   */
+   async forget(id: string, owner: OwnerId): Promise<boolean> {
+     const db = getDb();
+     const gone = await db
+-      .delete(jobs)
+-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, TERMINAL)))
++      .update(jobs)
++      .set({ dismissedAt: sql`now()` })
++      .where(
++        and(
++          eq(jobs.id, id),
++          eq(jobs.ownerId, owner),
++          inArray(jobs.status, TERMINAL),
++          isNull(jobs.dismissedAt),
++        ),
++      )
+       .returning({ id: jobs.id });
+     return gone.length === 1;
+   },
+diff --git a/src/web/import-report.ts b/src/web/import-report.ts
+index c2d15219e..93494fe85 100644
+--- a/src/web/import-report.ts
++++ b/src/web/import-report.ts
+@@ -13,12 +13,13 @@
+  * rule: a pre-typed value is not "something the reader typed into this dialog"
+  * just because it sits in the box. A URL can carry a private token, a filename
+  * is the reader's own words, and an error sentence is open-ended. The card
+- * still shows all three; this does not carry them. Whether it may is Greg's
+- * call, written up in the plan rather than built.
++ * still shows all three; this does not carry them. Greg kept it so on
++ * 2026-10-02 (Q-import-report-details, "yes").
+  *
+- * The price of ids alone: Dismiss forgets the job record (`DELETE
+- * /api/jobs/:id`), so a report filed and then dismissed names a job we no
+- * longer have. The slug and the times are what survive that.
++ * **The job id is the way back**, and Dismiss keeps it working: since the same
++ * day `DELETE /api/jobs/:id` stamps `jobs.dismissed_at` rather than deleting
++ * the row (src/store/pg-jobs.ts § `forget`), so a report filed and then
++ * dismissed still names a record we can read.
+  */
+ import type { Job } from "../types.js";
+ 
+diff --git a/tests/citation-investigate.test.ts b/tests/citation-investigate.test.ts
+index 85e5adaa7..94b5cb167 100644
+--- a/tests/citation-investigate.test.ts
++++ b/tests/citation-investigate.test.ts
+@@ -666,20 +666,24 @@ describe("refusals before anything is spent", () => {
+     expect(h.runs).toHaveLength(0);
+   });
+ 
+-  it("sets the allowance: one at a time, 8 an hour, 20 a day, 25 for everyone (plan 261001p stage 2)", () => {
++  it("sets the allowance: one at a time, 8 an hour, 20 a day, 62 for everyone (Greg, 2026-10-02)", () => {
+     expect(INVESTIGATE_RATE_POLICY).toMatchObject({
+       concurrency: 1,
+       fills: 8,
+       windowMs: 60 * 60 * 1000,
+-      daily: { fills: 20, globalFills: 25, windowMs: 24 * 60 * 60 * 1000 },
++      daily: { fills: 20, globalFills: 62, windowMs: 24 * 60 * 60 * 1000 },
+     });
+   });
+ 
+-  it("keeps every reader together within $20 a day, at twice a measured cold press on Opus", () => {
++  it("keeps every reader together within $50 a day, and uses most of it, at twice a measured cold press on Opus", () => {
+     /* One measured cold press on a ~42k-token article, ≈ $0.42 from its token
+        counts; the budget is about twice that. */
+     expect(INVESTIGATE_PRESS_BUDGET_USD).toBeGreaterThanOrEqual(2 * 0.4);
+-    expect((INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD).toBeLessThanOrEqual(20);
++    const ceiling = (INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD;
++    expect(ceiling).toBeLessThanOrEqual(50);
++    /* Greg raised it from $20 on 2026-10-02 because $20 bought about 25
++       presses; a fuse left far below $50 would undo that silently. */
++    expect(ceiling).toBeGreaterThan(50 - INVESTIGATE_PRESS_BUDGET_USD);
+   });
+ 
+   it("leases the slot for every deadline in a press — the search, the lookup, the paper, its passages, the reading — plus the margin (Sol P-5, F8)", () => {
+diff --git a/tests/store-jobs-parity.test.ts b/tests/store-jobs-parity.test.ts
+index 414ae654f..2c09b76a8 100644
+--- a/tests/store-jobs-parity.test.ts
++++ b/tests/store-jobs-parity.test.ts
+@@ -2056,6 +2056,26 @@ for (const adapter of ADAPTERS) {
+       expect(await store.get(job.id, OWNER)).toBeUndefined();
+     });
+ 
++    /* Greg, 2026-10-02 (Q-import-report-details): a failed import's *Report
++       this* names the job by id and nothing else, so Dismiss must not take the
++       record that id points at. The reader stops seeing it; we can still read it. */
++    it("keeps the record of a forgotten job, out of the reader's sight", async () => {
++      const job = aJob();
++      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
++      const attempt = mintAttempt();
++      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
++      await store.finish(job.id, attempt, { status: "error", steps: job.steps, error: "x" });
++      expect(await store.forget(job.id, OWNER)).toBe(true);
++
++      expect(await store.get(job.id, OWNER)).toBeUndefined();
++      expect((await store.list(OWNER)).map((j) => j.id)).not.toContain(job.id);
++      const [row] = await getDb().select().from(jobs).where(eq(jobs.id, job.id));
++      expect(row?.status).toBe("error");
++      expect(row?.dismissedAt).toBeInstanceOf(Date);
++      // Forgotten once: a second Dismiss finds nothing, as it did when it deleted.
++      expect(await store.forget(job.id, OWNER)).toBe(false);
++    });
++
+     /* ------------------------------------------------------------ retention --
+ 
+        **The only cases here whose scope is the whole owner**, which is why
