@@ -1249,13 +1249,25 @@ describe("off the reading view", () => {
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
   });
 
-  it("arms nothing when a visitor presses a mode on the bar", () => {
+  it("arms nothing when the reading view's visitor drawer presses a mode on the bar", () => {
     /* A visitor's band mounts no `useAutoRun` to claim the token, so it would
        wait, and a reader seen as a visitor for a moment (a private read that
        returned 401) could later claim it as the owner and spend on arrival.
-       GPT Sol's plan review of 261002a, P1. */
+       The real Reader signals that footing through `drawer.visitor`, not the
+       standalone prop used by public non-reading pages. GPT Sol's plan review
+       of 261002a, P1. */
     const onMode = vi.fn();
-    reading({ visitor: true, onMode });
+    reading({
+      drawer: {
+        visitor: true,
+        comments: [],
+        paragraphs: new Map(),
+        panel: null,
+        onPanel: () => {},
+        onOpenComment: () => {},
+      },
+      onMode,
+    });
     for (const mode of ["glossary", "summary"] as const) {
       const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
         (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],

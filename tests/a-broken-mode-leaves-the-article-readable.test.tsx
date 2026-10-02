@@ -1788,6 +1788,24 @@ describe("a press that met any broken band is retired", () => {
     expect(jobPosts()).toEqual([]);
   });
 
+  /* The top-level Summary press began arming `simple` on 2026-10-02. This is
+     deliberately separate from the slider case below: removing Summary's old
+     `bandTarget` special case is safe only if the new fixed MODE_TARGET row is
+     also the boundary's answer for the bar press. */
+  it("summary: the bar's press, when the plain-words view throws under the real useSimple", async () => {
+    who.set(OWNER_A);
+    notBuilt = "/api/simple/";
+    await open();
+    trace.length = 0;
+
+    probe.throwAt = "OwnerSimple";
+    await press(MODE_LABEL.summary);
+
+    containedInside("summary");
+    expect(activation.pendingActivation(SLUG, "simple"), "the Summary press survived").toBeNull();
+    expect(jobPosts()).toEqual([]);
+  });
+
   /* Summary's plain-words slider (plans 260930i, 261001b): `bandTarget` must
      answer `simple` for every level — Fuller here, the one Sol's plan review
      found missing (P1-3) — or the boundary retires nothing and the token

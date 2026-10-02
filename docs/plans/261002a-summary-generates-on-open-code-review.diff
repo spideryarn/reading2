@@ -1,0 +1,452 @@
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index c9870d56d..cf0a15515 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -102,8 +102,17 @@ Then the residue, which is why this page exists:
+ - **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
+   [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
+   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
+-- **Opening it for the first time starts it.** A mode the reader opens with nothing in it generates
+-  it, rather than offering a button and waiting — so a new artefact-backed mode wants a name in
++- **Opening it for the first time starts it — always.** A mode the reader opens with nothing in it
++  generates it, rather than offering a button and waiting, and so does each of its sub-modes:
++
++  > opening a mode should always trigger generation if it hasn't happened already.
++  >
++  > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
++  > [261002a](../plans/261002a-summary-generates-on-open.md))
++
++  The only modes that open without generating are the ones with nothing to fill until the reader
++  has typed or written something (Search, Chat, Referee's Criteria, Remember's Recall). So a new
++  artefact-backed mode wants a name in
+   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
+   with the **unforced** verb. The traps, and the one mode deliberately left out, are
+   [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
+@@ -255,7 +264,7 @@ So `description` is the mode in one fragment — it is also what the command bar
+ the name, which is why it stays short — and `how` is the half a press would not have told them. For
+ the current modes that is almost always one of three things: **it reads something already built**
+ (Structure), **its content is a model pass over the article, written once and
+-stored** (Summary's plain-words levels, which a press on the bar does not yet start, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
++stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
+ or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
+ for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
+ or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index d71031480..3e2b8d185 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -85,15 +85,17 @@ the paragraphs.
+   call for all three was measured and is far slower. Below the cache floor they run together, as
+   before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
+   streaming question for Greg.
+-- **The door rule.** Opening Summary spends nothing — the Summary button arms nothing
+-  ([mode.md](mode.md), `useAutoRun`), and arriving on `?summary=` — a link, Back, a restored view —
+-  reads what is stored. With nothing stored the owner sees an empty state with **Write it**; choosing
+-  a level on the slider with nothing stored runs the `simple` job. A visitor on a public article gets
+-  the stored paragraphs off the payload, or a line saying none has been made. **This is new as a
+-  cost**: while the outline was the default, Summary showed something free on every article; now an
+-  article nobody has pressed for opens empty. Whether opening should start the run is the open
+-  question in [261001p](../plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md)
+-  § Deferred.
++- **The door rule.** Pressing Summary — the bar button, or any of its command-bar rows — writes the
++  plain-words levels when none are stored, and shows the job's progress; with them stored it only
++  reads them (since 2026-10-02, Greg's 7T:
++  > When I open any of the Summary submodes, if they haven't already been generated, automatically
++  > kick off the generation.
++
++  [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
++  Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
++  with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
++  main modes* box includes Summary for the same reason. A visitor on a public article gets the
++  stored paragraphs off the payload, or a line saying none has been made.
+ - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
+   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
+   [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
+@@ -209,9 +211,6 @@ already hidden — real money spent generating text nobody could see.
+ - **No evidence it helps.** The same criticism the previous version earned, and repeating their
+   mistake would mean never asking. [Q6](open-questions.md) is where "how would we know we are failing
+   at this" lives.
+-- **Whether opening Summary should write it** — or ingest should — now that there is nothing free to
+-  show first. [261001p](../plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md)
+-  § Deferred, and the Overseer's queue.
+ - **Simple can collapse two terms that the paper keeps distinct.** On the PID paper it calls the
+   recurrent connections, which raise synergy, "feedback loops", borrowing the paper's term for the
+   different kind that lowers it. This happened in 6 of 18 outputs across six fresh unchanged-prompt,
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 758d3c77b..08fc1c229 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1501,12 +1501,19 @@ function useMetadataChord(enabled: boolean, href: string): void {
+  * press). Arming first would make the bar a cheaper door than the link beside
+  * it, under a Commands card that says it opens a mode *exactly as pressing
+  * that button here does*. docs/plans/260930a-….
++ *
++ * **A visitor's press arms nothing either** (`arms` false). Their band mounts
++ * no `useAutoRun` to claim a token, so it would wait — and a reader drawn as a
++ * visitor for a moment (a private read that came back 401) could claim it later
++ * as the owner and spend on what was only an arrival. GPT Sol's plan review of
++ * docs/plans/261002a-summary-generates-on-open.md, P1.
+  */
+ function useActivateMode(
+   slug: string,
+   search: string,
+   diagram: DiagramKind,
+   onMode: Props["onMode"],
++  arms: boolean,
+ ): (next: Mode) => void {
+   return useCallback(
+     (next: Mode) => {
+@@ -1514,10 +1521,10 @@ function useActivateMode(
+         navigate(modeLinkHref(slug, search, next));
+         return;
+       }
+-      armActivationForMode(slug, next, { diagram });
++      if (arms) armActivationForMode(slug, next, { diagram });
+       onMode(next);
+     },
+-    [slug, search, diagram, onMode],
++    [slug, search, diagram, onMode, arms],
+   );
+ }
+ 
+@@ -1540,6 +1547,7 @@ function useActivateSubMode(
+   slug: string,
+   search: string,
+   onMode: Props["onMode"],
++  arms: boolean,
+ ): (sub: SubMode) => void {
+   return useCallback(
+     (sub: SubMode) => {
+@@ -1547,10 +1555,10 @@ function useActivateSubMode(
+         navigate(readHref(slug, withSubMode(search, sub), "article"));
+         return;
+       }
+-      armActivationForSubMode(slug, sub);
++      if (arms) armActivationForSubMode(slug, sub);
+       onMode(sub.mode, sub);
+     },
+-    [slug, search, onMode],
++    [slug, search, onMode, arms],
+   );
+ }
+ 
+@@ -1695,8 +1703,8 @@ export function Dock({
+   /* **Opening a mode**, and it is one callback rather than two calls made
+      twice — `useActivateMode` above holds the whole of the reasoning, which
+      is the reason it is a named thing at all. */
+-  const activateMode = useActivateMode(slug, search, diagram, onMode);
+-  const activateSubMode = useActivateSubMode(slug, search, onMode);
++  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor);
++  const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
+ 
+   /* **How much of itself the bar spells out is measured, not guessed** — the
+      row is asked whether it overflows and drops labels until it does not. It
+diff --git a/src/web/SimplePanel.tsx b/src/web/SimplePanel.tsx
+index f0a437ebb..8a51605a3 100644
+--- a/src/web/SimplePanel.tsx
++++ b/src/web/SimplePanel.tsx
+@@ -110,7 +110,10 @@ export function SimplePanel({
+       {owner?.status === "loading" && <p className="summ-quiet">Looking for the plain-words version…</p>}
+       {owner?.status === "none" && (
+         <div className="gloss-empty">
+-          <p>{SIMPLE_NONE_OWNER}</p>
++          {/* Not while a run is under way: opening Summary starts one since
++              2026-10-02 (docs/plans/261002a-summary-generates-on-open.md), and
++              "nobody has asked" beside its progress reads as a contradiction. */}
++          {!(owner.job || owner.starting) && <p>{SIMPLE_NONE_OWNER}</p>}
+           <p className="gloss-hint">
+             All three levels are written together, usually in under half a minute. Written once and kept —
+             you will not be asked again unless the article changes.
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index c76c43b7d..33b7c3e39 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -238,6 +238,18 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+      first (`precededBy`, src/web/useSkim.ts): the press is for this
+      mode's artefact, and the token is keyed on it. */
+   skim: { kind: "fixed", target: "skim" },
++  /* **One job writes all three plain-words levels**, so whichever level the
++     band opens on, the press arms `simple` — as the band's own slider and the
++     command bar's three rows do one level down (SummaryMode.tsx §
++     `SummaryControls`). Until 2026-10-01 Summary opened on the tree's gists,
++     which were free; that outline went
++     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
++     until 2026-10-02 the press then armed nothing and the band waited on its
++     "Write it". Greg: *"When I open any of the Summary submodes, if they
++     haven't already been generated, automatically kick off the generation."*
++     (7T, docs/plans/261002a-summary-generates-on-open.md). "Write it" stays,
++     for an arrival, which arms nothing here as for every mode. */
++  summary: { kind: "fixed", target: "simple" },
+   tweets: {
+     kind: "arrival",
+     target: "tweets",
+@@ -262,20 +274,6 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+     kind: "none",
+     reason: "reads the tree, the arc and any ideas already made; it never starts a job",
+   },
+-  /* **Opens on a plain-words level and spends nothing.** Until 2026-10-01 it
+-     opened on the tree's gists, which were free; that outline went
+-     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
+-     what is left is an artefact. The press still arms nothing: an article with
+-     no plain-words version shows the empty state's "Write it", and the band's
+-     plain-words controls and the command bar's three rows arm `simple` for
+-     themselves one level down, as Remember's Quiz chip does. Whether opening
+-     Summary should start the run is a product question still open (Overseer
+-     queue fb7t-7v). */
+-  summary: {
+-    kind: "none",
+-    reason: "opens on a plain-words level and shows \"Write it\" if there is none; its controls and the command bar's rows arm themselves",
+-  },
+-
+   /* Nothing exists to fill until the reader has typed. */
+   search: { kind: "none", reason: "stores nothing until the reader types a query" },
+   chat: { kind: "none", reason: "stores nothing until the reader asks something" },
+@@ -663,11 +661,6 @@ export function bandTarget(
+ ): AutoRunTarget | null {
+   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
+   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
+-  /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
+-     one job writes all levels, so Fuller arms `simple` too. Sol's plan review
+-     of 261001b, P1-3. Every Summary band is a plain-words level since the
+-     outline went on 2026-10-01, so it does not depend on `?summary=`. */
+-  if (mode === "summary") return "simple";
+   const decision = MODE_TARGET[mode];
+   switch (decision.kind) {
+     case "fixed":
+diff --git a/src/web/auto-modes.ts b/src/web/auto-modes.ts
+index 5fc73f540..1150ff262 100644
+--- a/src/web/auto-modes.ts
++++ b/src/web/auto-modes.ts
+@@ -18,9 +18,10 @@
+  *
+  * **Derived, never listed**: every mode not behind the experimental switch
+  * (`MODE_CATALOG[mode].experimental`), mapped to the step it makes
+- * (`modeStep`, src/web/activation.ts). Structure and Summary make nothing —
+- * they read the tree the import already built — and Plain, Chat and Search wait
+- * on the reader. A mode moved in or out of the switch changes this with no
++ * (`modeStep`, src/web/activation.ts). Structure makes nothing — it reads the
++ * tree the import already built — and Plain, Chat and Search wait on the
++ * reader. Summary is in since 2026-10-02, when its press began writing the
++ * plain-words levels (docs/plans/261002a-summary-generates-on-open.md). A mode moved in or out of the switch changes this with no
+  * second edit; tests/auto-modes.test.tsx pins today's answer so the change is
+  * seen.
+  *
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index b636c3355..d18bc3a26 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -69,7 +69,7 @@ export const REMEMBERED = [
+   "spine", // the bird's-eye rail
+   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
+   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
+-  "summary", // which of three plain-words levels — only a slider gesture spends
++  "summary", // which of three plain-words levels — only a press spends, never arrival
+   "structure", // fisheye or expanded — nothing to generate either way
+   "diagram", // which of the five pictures
+   "dx", // drift's sideways axis
+diff --git a/src/web/useSimple.ts b/src/web/useSimple.ts
+index d8e18bf9a..8c73963ca 100644
+--- a/src/web/useSimple.ts
++++ b/src/web/useSimple.ts
+@@ -123,7 +123,8 @@ export function useSimple(slug: string): UseSimple {
+     await queue.start({ force: true });
+   }, [queue]);
+ 
+-  /* A press on the Summary slider or either end button, never arrival, spends. */
++  /* A press — Summary on the bar, its command-bar rows, the slider or either
++     end button — spends; arrival never does. */
+   useAutoRun(slug, "simple", status, ensure, reload);
+ 
+   return {
+diff --git a/tests/a-broken-mode-leaves-the-article-readable.test.tsx b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+index 104869a10..6db0c5ec7 100644
+--- a/tests/a-broken-mode-leaves-the-article-readable.test.tsx
++++ b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+@@ -1639,10 +1639,12 @@ describe("a throw inside any band leaves the article", () => {
+   });
+ 
+   /**
+-   * **Each mode gets a boundary of its own.** Summary arms nothing, so a press
+-   * on it cannot reset a broken boundary the way a fresh token does — only
+-   * `key={mode}` at the call site stands between a broken Quotes and a Summary
+-   * band that says "Summary is not working" when nothing in Summary threw.
++   * **Each mode gets a boundary of its own.** Structure arms nothing, so a
++   * press on it cannot reset a broken boundary the way a fresh token does —
++   * only `key={mode}` at the call site stands between a broken Quotes and a
++   * Structure band that says "Structure is not working" when nothing in it
++   * threw. (It was Summary until 2026-10-02, when Summary's press began arming
++   * its run — docs/plans/261002a-summary-generates-on-open.md.)
+    */
+   it("does not follow the reader into another mode", async () => {
+     who.set(OWNER_A);
+@@ -1650,10 +1652,10 @@ describe("a throw inside any band leaves the article", () => {
+     await open("?mode=quotes");
+     containedInside("quotes");
+ 
+-    await press(MODE_LABEL.summary);
+-    expect(modeInUrl()).toBe("summary");
++    await press(MODE_LABEL.structure);
++    expect(modeInUrl()).toBe("structure");
+     expect(text(), "the broken band followed the reader").not.toContain("[mode-render]");
+-    expect(host.querySelector('.mode-band[aria-label="Summary"]'), "no Summary band").not.toBeNull();
++    expect(host.querySelector('.mode-band[aria-label="Structure"]'), "no Structure band").not.toBeNull();
+   });
+ 
+   it("does not reset a visitor's broken Sketch for a diagram parameter it ignores", async () => {
+diff --git a/tests/auto-modes.test.tsx b/tests/auto-modes.test.tsx
+index 5556a98bd..4ff20e804 100644
+--- a/tests/auto-modes.test.tsx
++++ b/tests/auto-modes.test.tsx
+@@ -89,12 +89,12 @@ const postingOrder = (): StepName[][] => {
+ const { AddPage } = await import("../src/web/AddPage.js");
+ 
+ describe("which steps the box queues", () => {
+-  it("is the five main modes that make something, and the cross-references, in STEP_ORDER", () => {
++  it("is the six main modes that make something, and the cross-references, in STEP_ORDER", () => {
+     /* If this changes, a mode moved in or out of the experimental switch, or
+        started or stopped making something. That may be right — then change
+        this line, and the price in the plan. `crossrefs` is no mode: it is
+        added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3. */
+-    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "skim", "crossrefs"]);
++    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
+   });
+ 
+   it("puts Skim after Quotes and Ideas, which it reads", () => {
+@@ -111,7 +111,7 @@ describe("which steps the box queues", () => {
+   });
+ 
+   it("names them to the reader", () => {
+-    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas and Skim");
++    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas, Summary and Skim");
+     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
+   });
+ });
+@@ -133,6 +133,7 @@ describe("queueAutoModes", () => {
+       ["glossary"],
+       ["quotes"],
+       ["ideas"],
++      ["simple"],
+       ["quotes", "ideas", "skim"],
+       ["crossrefs"],
+     ]);
+@@ -156,9 +157,9 @@ describe("queueAutoModes", () => {
+       return null;
+     };
+     await queueAutoModes(run, "an-article");
+-    expect(answered).toHaveLength(6);
+-    /* The four modes that read nothing, and `crossrefs`, which reads nothing either. */
+-    expect(skimPostedAfter, "Skim was posted before the other five had answered").toBe(5);
++    expect(answered).toHaveLength(7);
++    /* The five modes that read nothing, and `crossrefs`, which reads nothing either. */
++    expect(skimPostedAfter, "Skim was posted before the other six had answered").toBe(6);
+   });
+ 
+   it("carries on past one that throws", async () => {
+@@ -168,7 +169,7 @@ describe("queueAutoModes", () => {
+       if (request.steps[0] === "glossary") throw new Error("network");
+       return null;
+     }, "an-article");
+-    expect(started).toHaveLength(6);
++    expect(started).toHaveLength(7);
+   });
+ });
+ 
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index 9018ed24f..b2a0dee9b 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -575,7 +575,9 @@ const GENERATES: Record<Mode, boolean> = {
+   /* Views of one already-built tree, in either of Structure's faces, so
+      nothing to fill. */
+   structure: false,
+-  summary: false,
++  /* Since 2026-10-02 the press writes the plain-words levels when there are
++     none (Greg, 7T; docs/plans/261002a-summary-generates-on-open.md). */
++  summary: true,
+   search: false,
+   chat: false,
+   referee: false,
+@@ -1247,6 +1249,25 @@ describe("off the reading view", () => {
+     expect(pendingActivation("a-piece", "glossary")).toBeNull();
+   });
+ 
++  it("arms nothing when a visitor presses a mode on the bar", () => {
++    /* A visitor's band mounts no `useAutoRun` to claim the token, so it would
++       wait, and a reader seen as a visitor for a moment (a private read that
++       returned 401) could later claim it as the owner and spend on arrival.
++       GPT Sol's plan review of 261002a, P1. */
++    const onMode = vi.fn();
++    reading({ visitor: true, onMode });
++    for (const mode of ["glossary", "summary"] as const) {
++      const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
++        (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],
++      );
++      expect(button, `${mode}: a bar button`).toBeDefined();
++      act(() => button?.click());
++      expect(onMode).toHaveBeenCalledWith(mode);
++    }
++    expect(pendingActivation("a-piece", "glossary")).toBeNull();
++    expect(pendingActivation("a-piece", "simple")).toBeNull();
++  });
++
+   it("still navigates a page row", () => {
+     metadataPage();
+     openBar();
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index 4ff16a82a..706e59a61 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -1174,12 +1174,10 @@ const SPENDS: Record<Mode, Spend> = {
+   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
+   /* The same tree again, in linked columns or one nested list. */
+   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
+-  /* The plain-words levels are an artefact, but the bar's press arms nothing:
+-     the band opens on its empty state, and its plain-words controls arm
+-     `simple` one level down (activation.ts § MODE_TARGET.summary; plan
+-     261001p). Whether opening should start the run is an open product question
+-     (fb7t-7v). */
+-  summary: { kind: "none", why: "opens on a plain-words level; its controls arm the run" },
++  /* The three plain-words levels, which one job writes. Until 2026-10-02 the
++     press armed nothing and the band waited on "Write it"; Greg asked that
++     opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
++  summary: { kind: "posts", steps: ["simple"] },
+   /* The tree's questions, the arc and the ideas already made — read, never
+      generated. A press that started the Ideas job here would be the bug. */
+   marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
+diff --git a/tests/last-view.test.ts b/tests/last-view.test.ts
+index 5d7e20515..e09886028 100644
+--- a/tests/last-view.test.ts
++++ b/tests/last-view.test.ts
+@@ -48,9 +48,10 @@ describe("rememberableSearch", () => {
+     expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
+   });
+ 
+-  it("keeps Summary's sub-mode, which only a press on its chip can spend on", () => {
++  it("keeps Summary's sub-mode, which only a press can spend on", () => {
+     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
+-       is armed by the slider's press (SummaryMode.tsx), never by arrival — so
++       is armed by a press — the bar's Summary, or the slider (SummaryMode.tsx) —
++       never by arrival — so
+        it is a place you were, like `?at=`. Plan 260930i. */
+     expect(rememberableSearch("?mode=summary&summary=simple")).toBe("?mode=summary&summary=simple");
+     expect(hasArticleState("?summary=simple")).toBe(true);
+diff --git a/tests/simple-panel.test.tsx b/tests/simple-panel.test.tsx
+index 655f60473..43221381b 100644
+--- a/tests/simple-panel.test.tsx
++++ b/tests/simple-panel.test.tsx
+@@ -306,6 +306,15 @@ describe("the Simple view", () => {
+     expect(text()).toContain(WHAT);
+   });
+ 
++  it("does not say nobody has asked while the press's own run is starting", async () => {
++    /* Since 2026-10-02 opening Summary starts the run (plan 261002a), so the
++       empty state is drawn with a job under way; "Nobody has asked" beside
++       "Writing it in plain words" read as a contradiction in the browser check. */
++    await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
++    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
++    expect(text()).toContain("All three levels are written together");
++  });
++
+   it("offers to write it when there is none, and shows why a run failed", async () => {
+     await draw({ kind: "owner", owner: owner({ status: "none", simple: null }) });
+     expect(text()).toContain(SIMPLE_NONE_OWNER);

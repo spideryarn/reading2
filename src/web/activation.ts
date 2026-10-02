@@ -6,7 +6,8 @@
  * The controls include artefact-backed mode buttons in the bar and the
  * sub-mode controls for Diagram, Remember, Referee and Summary (including
  * their command-bar rows). Several gestures may arm the same target: Summary's
- * slider, its end buttons and its three command rows all arm `simple`.
+ * bar button, slider, end buttons and four command rows (the mode and its three
+ * levels) all arm `simple`.
  * The bar's Tweets link armed a token from 2026-09-06 to 2026-09-15, when the
  * thread page began writing on arrival instead — it is a path rather than
  * query state, so the reason below does not reach it

@@ -1336,6 +1336,25 @@ for (const trigger of TRIGGERS) {
   });
 }
 
+/* Summary's row changed from `none` to `fixed/simple` in 261002a. Phase A
+   proves the new press writes a missing artefact; this is the other half of
+   the product rule, through both real doors: the token is consumed without a
+   POST when those plain-words levels are already stored. */
+describe("a stored Summary costs nothing to open", () => {
+  for (const trigger of TRIGGERS) {
+    it(`from the ${trigger.name}`, async () => {
+      fixtures = "populated";
+      await open("", { strict: false });
+
+      await trigger.press("summary");
+
+      expect(modeInUrl()).toBe("summary");
+      expect(posts, "the stored Summary was written again").toEqual([]);
+      expect(stillPending(), "the stored Summary left its press armed").toEqual([]);
+    });
+  }
+});
+
 /* ============================================================== phase B ====
 
    Artefacts populated. What each mode's controller actually drew. */

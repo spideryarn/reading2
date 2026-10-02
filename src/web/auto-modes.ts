@@ -18,12 +18,13 @@
  *
  * **Derived, never listed**: every mode not behind the experimental switch
  * (`MODE_CATALOG[mode].experimental`), mapped to the step it makes
- * (`modeStep`, src/web/activation.ts). Structure makes nothing — it reads the
- * tree the import already built — and Plain, Chat and Search wait on the
- * reader. Summary is in since 2026-10-02, when its press began writing the
- * plain-words levels (docs/plans/261002a-summary-generates-on-open.md). A mode moved in or out of the switch changes this with no
- * second edit; tests/auto-modes.test.tsx pins today's answer so the change is
- * seen.
+ * (`modeStep`, src/web/activation.ts). Structure and Plain make nothing — one
+ * reads the tree the import already built, the other is the article — while
+ * Chat and Search wait on the reader. Summary is in since 2026-10-02, when its
+ * press began writing the plain-words levels
+ * (docs/plans/261002a-summary-generates-on-open.md). A mode
+ * moved in or out of the switch changes this with no second edit;
+ * tests/auto-modes.test.tsx pins today's answer so the change is seen.
  *
  * ## One job per mode
  *

@@ -110,8 +110,9 @@ Then the residue, which is why this page exists:
   > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
   > [261002a](../plans/261002a-summary-generates-on-open.md))
 
-  The only modes that open without generating are the ones with nothing to fill until the reader
-  has typed or written something (Search, Chat, Referee's Criteria, Remember's Recall). So a new
+  Modes with nothing to generate (Plain, Structure and Marginalia) open without a run. So do
+  surfaces that need the reader's words first (Search, Chat, Referee's Criteria and Mirror,
+  Remember's Recall). So a new
   artefact-backed mode wants a name in
   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
   with the **unforced** verb. The traps, and the one mode deliberately left out, are
