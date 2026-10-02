@@ -2888,6 +2888,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
+  /* Tutorial is dictated too, so it shares Remember's long cap rather than
+     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
+  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
   /* **Chat only.** Remember's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -2904,11 +2907,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   const beginKind = !wantsRetry && !wantsEdit
     ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
     : undefined;
-  const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
-      askingRemember
+      longInput
         ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );

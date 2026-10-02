@@ -3365,7 +3365,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial')`),
     /**
      * **One Remember thread per article.** Remember is its own single
      * conversation, not a list. On `article_id` alone: an article has one owner
@@ -3382,6 +3382,14 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_remember")
       .on(t.articleId)
       .where(sql`${t.kind} = 'remember'`),
+    /**
+     * **One Tutorial thread per article**, for the same reason and with the
+     * same fallback (`targetOf`). No fold was needed when it was added: no
+     * Tutorial thread existed before the index. docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
+     */
+    uniqueIndex("chat_threads_one_tutorial")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'tutorial'`),
   ],
 );
 

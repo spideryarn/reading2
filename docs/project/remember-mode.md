@@ -2,7 +2,7 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
+**Built 2026-08-27, and named *Remember* since 2026-09-01; Recall, Tutorial and Quiz since 2026-10-02** — the rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they remember of the article, and the model corrects briefly where their account
 and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
@@ -55,10 +55,17 @@ The plan, the reasoning and the cross-family review:
 [vision.md § Anti-goals](vision.md#anti-goals) names *"a chatbot with the article stuffed in the
 context window"*, and [260826a-chat-mode.md § Say the awkward thing
 first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first) is a long apology for building one anyway.
-Remember needs no such apology, and the reason is structural rather than a promise: **the reader has to
+Recall needs no such apology, and the reason is structural rather than a promise: **the reader has to
 have read the piece before they can use it at all.** There is nothing to say otherwise, and the
 output is a set of paragraphs to go back to. vision.md's *recall* entry is the nearest thing already
 written down; this is that idea with the direction reversed, the reader supplying the answer first.
+
+**Tutorial is the exception, and Greg made it** (§ Tutorial, the third sub-mode): a reader who has
+not read the piece may start there. What keeps it on the right side of the anti-goal is a rule
+rather than a structure — every piece it teaches is a short quotation or close paraphrase with its
+block id, and the reader is sent into that passage rather than told the piece instead of it. That is
+a promise the prompt makes and the eval checks, which is weaker than Recall's, and it is the thing to
+watch.
 
 ## One adaptive voice
 
@@ -190,6 +197,58 @@ verdict**: the latest run's six hits are all the word *actually* in a quotation 
 article rather than a verdict on the reader. A green count with a patronising answer under it is the failure
 [silent-success.md](../reusable/silent-success.md) is about, so the report prints every answer in
 full and the pass condition is a person reading them.
+
+## Tutorial, the third sub-mode
+
+**Built 2026-10-02**, from Greg's report `spya-j0scgz`:
+
+> I guess what I want to do is alternate like you providing a brief summary and then asking me to
+> say it back in my own words. … maybe it's more of a tutorial. Let's call it tutorial. … your
+> responses should be fairly brief because we want this to be a quick back and forth. … Take into
+> account anything from the user profile or the why are you reading this information. … lots of
+> small increments is probably better than big, slow increments.
+
+The chips read **Recall · Tutorial · Quiz** (`?remember=tutorial`). Where Recall is closest to
+testing — the reader brings what they have — Tutorial is closest to teaching: each turn is a brief
+reaction, **one** small cited piece of the article, and **one** task (say it back, explain why, give
+an example, apply it, push back), climbing as the reader succeeds and stepping down when they do
+not. Every few turns it reaches back to an earlier point. A reader who has not read the piece is
+started from zero with a question they can answer without it; an expert with a narrow reason for
+reading is taken straight to it. The research is
+[261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md); the prompt is
+`TUTORIAL_SYSTEM` in [`src/converse.ts`](../../src/converse.ts), sharing Recall's spoken-input and
+citing sections by interpolation.
+
+**Why a reader who has not read it is allowed.** § Why this one is not the anti-goal rests on
+Remember being unusable without reading, and Tutorial is not. Greg decided the case himself —
+*"it may be that the user says nothing. I haven't read it yet"* — so Tutorial is built as **guided
+reading**: every piece it teaches is a short quotation or close paraphrase with its block id,
+sent back into the article, never a summary standing in for it.
+
+**The machinery is Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
+(`chat_threads_one_tutorial`, beside Remember's index; `SINGLE_THREAD_KINDS` in
+[`src/types.ts`](../../src/types.ts) is the one list `targetOf` and `ConversationBand` read). Same
+band, same panel, same tall dictation box, Start over, Remember's long length cap, chat's job and
+model. **No Live yet**: Greg named voice as the ideal home and also said Live *"doesn't work very
+well at the moment"*, so the band passes no Live controls and `SpokenKind` stays `chat | remember`.
+The empty state asks the opening question, so the reader speaks first and the model never writes an
+unprompted turn.
+
+**Eval**: [`evals/remember-tutorial.ts`](../../evals/remember-tutorial.ts) — three scripted readers
+(has not read it, remembers some, an expert with a profile and a narrow goal), five turns each,
+read in full. Five runs (`evals/results/remember-tutorial.261002i-run-1.md` … `-run-4.md`, then
+`remember-tutorial.md`). The substance was right from the first: the reader who had not read it was
+started from zero and asked a prediction, a stuck reader got a simpler explanation with a concrete
+example, the expert was taken straight to the argument they named and asked where it was weak.
+What needed work was length and links — 8 of 15 turns over 120 words at first, one expert turn of
+208, and the opening turn of every reader citing nothing. A 100-word target with a 140 ceiling,
+"harder questions, not longer turns" for experts, a reach-back by the fourth reply, and a one-line
+reminder in the final user message (the recency lever chat's length line uses) brought run 4 to all
+fifteen under 140 words and thirteen of fifteen cited. A browser pass then caught the not-read
+reader's opening paraphrase with no link, so the start rule now names the opening claim's block id
+and the reminder covers paraphrase too: run 5 had every opening turn linked, fourteen of fifteen
+cited, and none over 112 words. Still imperfect: "that's exactly" survives as an opener twice, and
+one opening turn asked a two-part question.
 
 ## A Remember conversation IS a chat thread
 

@@ -1,0 +1,1164 @@
+diff --git a/docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md b/docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md
+index 897f2b755..23e8affb6 100644
+--- a/docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md
++++ b/docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md
+@@ -144,6 +144,18 @@ inflation; a way out every turn.
+ expert with a narrow goal and a profile), five turns each with scripted reader replies, read in
+ full.
+ 
++**Landed** (stage 3, as 3a–3c in one commit): `tutorial` in `ThreadKind`/`THREAD_KINDS`, a shared
++`SINGLE_THREAD_KINDS`/`isSingleThreadKind`; the CHECK widened and `chat_threads_one_tutorial`
++(drizzle/20261002214711_tutorial_thread_kind.sql, generated, applied locally); `targetOf`
++generalised; `TUTORIAL_SYSTEM` with Recall's spoken-input and citing sections extracted into shared
++constants; `readItFor` exhaustive; Remember's long cap for Tutorial; export and the seed helper keep
++every known kind (Candidates was being exported as a chat too). Client: `REMEMBER_VIEWS` is
++recall · tutorial · quiz, the chip, `subModeParams` per view, `ConversationBand` keyed on the
++single-thread set, no Live props for Tutorial, its own invitation, placeholder and label. Help,
++Features and the mode catalog mention it. Tests: tests/tutorial-kind.test.ts,
++tests/store-export-thread-kind.test.ts (seen red against the old ternary), route and band cases.
++Eval: evals/remember-tutorial.ts, two runs — remember-mode.md § Tutorial has what they showed.
++
+ *Passed over:* Tutorial as a stance inside the Remember thread. One transcript would then hold two
+ kinds of conversation with different rules, and switching chip would show the other's turns.
+ 
+diff --git a/docs/project/remember-mode.md b/docs/project/remember-mode.md
+index 73e104c99..b4391c6f6 100644
+--- a/docs/project/remember-mode.md
++++ b/docs/project/remember-mode.md
+@@ -2,7 +2,7 @@
+ 
+ Up: [reading-view-overview.md](reading-view-overview.md)
+ 
+-**Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
++**Built 2026-08-27, and named *Remember* since 2026-09-01; Recall, Tutorial and Quiz since 2026-10-02** — the rename and its reasoning are in
+ [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
+ types — about what they remember of the article, and the model corrects briefly where their account
+ and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
+@@ -191,6 +191,51 @@ article rather than a verdict on the reader. A green count with a patronising an
+ [silent-success.md](../reusable/silent-success.md) is about, so the report prints every answer in
+ full and the pass condition is a person reading them.
+ 
++## Tutorial, the third sub-mode
++
++**Built 2026-10-02**, from Greg's report `spya-j0scgz`:
++
++> I guess what I want to do is alternate like you providing a brief summary and then asking me to
++> say it back in my own words. … maybe it's more of a tutorial. Let's call it tutorial. … your
++> responses should be fairly brief because we want this to be a quick back and forth. … Take into
++> account anything from the user profile or the why are you reading this information. … lots of
++> small increments is probably better than big, slow increments.
++
++The chips read **Recall · Tutorial · Quiz** (`?remember=tutorial`). Where Recall is closest to
++testing — the reader brings what they have — Tutorial is closest to teaching: each turn is a brief
++reaction, **one** small cited piece of the article, and **one** task (say it back, explain why, give
++an example, apply it, push back), climbing as the reader succeeds and stepping down when they do
++not. Every few turns it reaches back to an earlier point. A reader who has not read the piece is
++started from zero with a question they can answer without it; an expert with a narrow reason for
++reading is taken straight to it. The research is
++[261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md); the prompt is
++`TUTORIAL_SYSTEM` in [`src/converse.ts`](../../src/converse.ts), sharing Recall's spoken-input and
++citing sections by interpolation.
++
++**Why a reader who has not read it is allowed.** § Why this one is not the anti-goal rests on
++Remember being unusable without reading, and Tutorial is not. Greg decided the case himself —
++*"it may be that the user says nothing. I haven't read it yet"* — so Tutorial is built as **guided
++reading**: every piece it teaches is a short quotation with its block id, sent back into the
++article, never a summary standing in for it.
++
++**The machinery is Recall's.** A fourth `ThreadKind`, `tutorial`, one per article
++(`chat_threads_one_tutorial`, beside Remember's index; `SINGLE_THREAD_KINDS` in
++[`src/types.ts`](../../src/types.ts) is the one list `targetOf` and `ConversationBand` read). Same
++band, same panel, same tall dictation box, Start over, Remember's long length cap, chat's job and
++model. **No Live yet**: Greg named voice as the ideal home and also said Live *"doesn't work very
++well at the moment"*, so the band passes no Live controls and `SpokenKind` stays `chat | remember`.
++The empty state asks the opening question, so the reader speaks first and the model never writes an
++unprompted turn.
++
++**Eval**: [`evals/remember-tutorial.ts`](../../evals/remember-tutorial.ts) — three scripted readers
++(has not read it, remembers some, an expert with a profile and a narrow goal), five turns each,
++read in full. The first run's substance was right and its turns too long (8 of 15 over 120 words,
++one expert turn 208); after a 100-word target with a 140 ceiling, "harder questions, not longer
++turns" for experts, and an explicit reach-back by the fourth reply, 13 of 15 were under 140 and the
++`remembers` reader was brought back to the half of their first answer the tutor had not yet taught.
++Mild faults left: an opening "Good —" or "exactly", and one quotation whose id came a sentence
++later. Results: `evals/results/remember-tutorial.261002i-run-1.md`, `remember-tutorial.md`.
++
+ ## A Remember conversation IS a chat thread
+ 
+ Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of
+diff --git a/drizzle/meta/_journal.json b/drizzle/meta/_journal.json
+index e9f265282..52059123f 100644
+--- a/drizzle/meta/_journal.json
++++ b/drizzle/meta/_journal.json
+@@ -855,6 +855,13 @@
+       "when": 1790961041994,
+       "tag": "20261002171041_feedback_shipped_emails",
+       "breakpoints": true
++    },
++    {
++      "idx": 122,
++      "version": "7",
++      "when": 1790977631923,
++      "tag": "20261002214711_tutorial_thread_kind",
++      "breakpoints": true
+     }
+   ]
+ }
+\ No newline at end of file
+diff --git a/package.json b/package.json
+index 45b580ab5..f7eb2b3e8 100644
+--- a/package.json
++++ b/package.json
+@@ -71,6 +71,7 @@
+     "eval:caching": "tsx evals/prompt-caching.ts",
+     "eval:reorder": "tsx evals/reorder-quality.ts",
+     "eval:remember": "tsx evals/remember-recall.ts",
++    "eval:tutorial": "tsx evals/remember-tutorial.ts",
+     "eval:quiz": "tsx evals/quiz.ts",
+     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
+     "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
+diff --git a/src/chat.ts b/src/chat.ts
+index f808059df..0fd9895b0 100644
+--- a/src/chat.ts
++++ b/src/chat.ts
+@@ -35,7 +35,7 @@ import type {
+   ThreadKind,
+   ToolRun,
+ } from "./types.js";
+-import { isThreadKind } from "./types.js";
++import { isSingleThreadKind, isThreadKind } from "./types.js";
+ import { isSpideryarnId, mintUniqueId } from "./ids.js";
+ import { errorFields, log } from "./log.js";
+ import { parseJsonFrom } from "./parse-json.js";
+@@ -155,8 +155,10 @@ function targetOf(
+   kind: ThreadKind | undefined,
+ ): ChatThread | undefined {
+   const named = threads.find((t) => t.id === threadId);
+-  if (named || kind !== "remember") return named;
+-  return threads.find((t) => t.kind === "remember");
++  /* Every single-thread kind, not only Remember: Tutorial is one per article
++     too (`SINGLE_THREAD_KINDS`, src/types.ts). */
++  if (named || !isSingleThreadKind(kind)) return named;
++  return threads.find((t) => t.kind === kind);
+ }
+ 
+ /* There is deliberately no `createThread` here.
+diff --git a/src/converse.ts b/src/converse.ts
+index 1b1358923..94f859f61 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -522,6 +522,55 @@ ${plainWords("explain")}
+ 
+ ${PROFILE_RULES}`;
+ 
++/**
++ * **How dictated input reads, shared by Recall and Tutorial.** Both expect the
++ * reader to talk rather than type (the composer leads with the microphone), so
++ * both need telling that a garbled word is the transcript, not the reader.
++ * One copy, interpolated, so the two cannot drift.
++ */
++const SPOKEN_INPUT = `MOST OF THIS WAS SPOKEN, NOT WRITTEN
++
++Expect the shape of speech: false starts, repetition, "um", a sentence that
++changes direction halfway, a transcriber's mis-hearing of a technical word.
++Read past all of it to what they meant. NEVER comment on how they expressed
++themselves, and never treat a garbled word as a misunderstanding — if a word
++looks wrong for the sentence it is in, it is far more likely the transcript than
++the reader.`;
++
++/**
++ * **The citing rules, shared by Recall and Tutorial**: cite the block, never
++ * invent an id, quote in quotation marks with the id straight after. Recall's
++ * first eval run is why the quotation-mark sentence exists — it pasted article
++ * sentences into its own prose unmarked and uncited. Interpolated into both
++ * prompts, so a fix to one is a fix to both.
++ */
++const CITING_RULES = `CITING THE ARTICLE — THE ONE RULE THAT MATTERS
++
++Every block of the article has an id like spya-k3m9qt. When you say what the
++article says, CITE THE BLOCK IT IS IN, in square brackets, at the end of the
++sentence: "He rejects substrate independence [spya-k3m9qt]."
++
++- Cite ids that appear in the article below. NEVER invent one, and never guess
++  at one you half-remember — a wrong id sends the reader to the wrong paragraph,
++  which is worse than no id at all.
++- Cite the block that actually carries the claim, not the one near it.
++- Two or three ids in one bracket is fine: [spya-k3m9qt spya-p7w2dn].
++- Your own reasoning carries no block id. Do not decorate it with one.
++
++And beyond citing: QUOTE. The article's own words are what let the reader see
++the difference for themselves instead of taking your word for it — and the quote
++is also the check on you, because a correction you cannot quote is one you should
++not be making. Keep the author's distinctive vocabulary rather than flattening
++it into your own; those are the words the reader will meet again on the page.
++
++EVERY QUOTATION CARRIES THE ID OF THE BLOCK IT CAME FROM. A quoted sentence with
++no id is the one case where citing matters most and is easiest to forget: you
++have just told the reader the exact words to go and look at, and then not said
++where they are. Put the article's words inside double quotation marks — never
++run them into your own sentence unmarked — and put the id straight after the
++closing mark: "A simulated rainstorm leaves nobody wet" [spya-k3m9qt]. Quote a
++phrase or a sentence, not a paragraph.`;
++
+ /**
+  * The system prompt for **Remember** mode, where the reader has said what they
+  * took from the article and wants to know where it holds up.
+@@ -585,14 +634,7 @@ points into the article, and usually ends with one nudge that makes the next bit
+ of remembering likely to succeed. A pure clarification is the exception: it may
+ be one question with no article pointer.
+ 
+-MOST OF THIS WAS SPOKEN, NOT WRITTEN
+-
+-Expect the shape of speech: false starts, repetition, "um", a sentence that
+-changes direction halfway, a transcriber's mis-hearing of a technical word.
+-Read past all of it to what they meant. NEVER comment on how they expressed
+-themselves, and never treat a garbled word as a misunderstanding — if a word
+-looks wrong for the sentence it is in, it is far more likely the transcript than
+-the reader.
++${SPOKEN_INPUT}
+ 
+ WHAT YOU ARE AND ARE NOT ENTITLED TO SAY
+ 
+@@ -692,32 +734,7 @@ At most ONE correction per reply, in a sentence or two. Often there is none, and
+ that is normal: a reader who is right, who disagrees with the author, or who is
+ stuck between two readings the article permits has nothing to be corrected.
+ 
+-CITING THE ARTICLE — THE ONE RULE THAT MATTERS
+-
+-Every block of the article has an id like spya-k3m9qt. When you say what the
+-article says, CITE THE BLOCK IT IS IN, in square brackets, at the end of the
+-sentence: "He rejects substrate independence [spya-k3m9qt]."
+-
+-- Cite ids that appear in the article below. NEVER invent one, and never guess
+-  at one you half-remember — a wrong id sends the reader to the wrong paragraph,
+-  which is worse than no id at all.
+-- Cite the block that actually carries the claim, not the one near it.
+-- Two or three ids in one bracket is fine: [spya-k3m9qt spya-p7w2dn].
+-- Your own reasoning carries no block id. Do not decorate it with one.
+-
+-And beyond citing: QUOTE. The article's own words are what let the reader see
+-the difference for themselves instead of taking your word for it — and the quote
+-is also the check on you, because a correction you cannot quote is one you should
+-not be making. Keep the author's distinctive vocabulary rather than flattening
+-it into your own; those are the words the reader will meet again on the page.
+-
+-EVERY QUOTATION CARRIES THE ID OF THE BLOCK IT CAME FROM. A quoted sentence with
+-no id is the one case where citing matters most and is easiest to forget: you
+-have just told the reader the exact words to go and look at, and then not said
+-where they are. Put the article's words inside double quotation marks — never
+-run them into your own sentence unmarked — and put the id straight after the
+-closing mark: "A simulated rainstorm leaves nobody wet" [spya-k3m9qt]. Quote a
+-phrase or a sentence, not a paragraph.
++${CITING_RULES}
+ 
+ EACH REPLY: A CORRECTION IF THERE IS ONE, THEN A NUDGE
+ 
+@@ -843,6 +860,197 @@ ${plainWords("explain")}
+ 
+ ${PROFILE_RULES}`;
+ 
++/**
++ * The system prompt for **Tutorial**, Remember's third sub-mode (Greg,
++ * `spya-j0scgz`, 2026-10-01): short alternating turns in which the model
++ * teaches a little of the piece and the reader says it back, explains it,
++ * applies it or questions it.
++ *
++ * > I guess what I want to do is alternate like you providing a brief summary
++ * > and then asking me to say it back in my own words. … And lots of small
++ * > increments is probably better than big, slow increments.
++ *
++ * Written from docs/research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md:
++ * the turn shape (a brief reaction, one cited piece, one task), the task
++ * climbing Bloom's levels as the reader succeeds, a revisit every few turns,
++ * expertise reversal for an expert with a narrow goal, prediction rather than
++ * recall for somebody who has not read it. It is **guided reading**: every
++ * piece taught is a cited passage the reader is sent into, which is what keeps
++ * it on the right side of vision.md's anti-goal even for a reader who has not
++ * read the piece yet. docs/project/remembering-vision.md.
++ *
++ * Above the cache breakpoint like `REMEMBER_SYSTEM`, so its own cached prefix;
++ * nothing in it varies per turn. The spoken-input and citing rules are
++ * Recall's, interpolated rather than copied.
++ */
++const TUTORIAL_SYSTEM = `You are a reading tutor for one article. You and the reader take short turns: you
++teach a little of the piece, then ask them to do something with it — say it back
++in their own words, explain why, give an example, apply it, or raise a doubt.
++Lots of small steps, each one they can succeed at, so that by the end they hold
++the article's argument in their own words.
++
++This is guided reading, not a replacement for it. Every piece you teach is a
++small, cited part of the article, and you send the reader into that passage
++rather than standing in for it. A reader who goes and reads the paragraph you
++pointed at is the conversation working.
++
++${SPOKEN_INPUT}
++
++HOW TO START
++
++The reader's first message usually answers "what do you remember about it?".
++  · If they say what they remember, start from that: build on the part they
++    have, correct one thing if it needs it, and teach the next piece.
++  · If they have not read it, or remember nothing, start at the beginning, from
++    zero: the piece's main question or claim in a sentence or two, cited, then a
++    question they can answer without having read it — what they would expect,
++    what they already think, why it might matter to them. Do not quiz somebody
++    on a text they have not read.
++  · If they say why they are reading or what they want from it, steer there.
++
++EACH TURN
++
++  1. A brief response to what they just said — at most a sentence. Confirm a
++     specific thing they got ("yes — that's the substrate point"), or fill the
++     gap they left. Never a verdict on how they did.
++  2. ONE small piece of the article — one idea, two or three sentences, in the
++     author's own words where you can, quoted and cited.
++  3. ONE task, at the end, answerable in a sentence or two out loud.
++
++Under 100 words, and never over 140. One idea per turn. At most two short
++quotations — a phrase or a sentence each, never two sentences run together. One
++question per turn, last. If the reader asks a direct question, answer it first,
++plainly and briefly, then carry on.
++
++THE TASKS — CLIMB SLOWLY
++
++Choose the task by how the last one went, not by a fixed order:
++  · Say it back: "How would you put that in your own words?"
++  · Why: "Why do you think he needs that step?"
++  · Example: "Can you think of a case of that from your own field?"
++  · Apply or predict: "So what would that mean for a perfect brain simulation?"
++  · Connect: "How does that fit with the point about time from earlier?"
++  · Doubt: "Where would you push back on that?"
++Start with the easy ones. When they answer well, move up — from saying it back
++towards applying it and questioning it. When they struggle, step down. The
++first one or two tasks should be easy enough that they almost certainly get
++them right.
++
++GOOD QUESTIONS TEACH
++
++A good question carries a piece of the structure in it — "He sets the brain's
++continuous time against the computer's steps. What does that contrast let him
++say about simulation?" teaches that the contrast is there before it asks
++anything. It is answerable from what you have shown them, and it points the
++reader's guess in a direction where it is likely to be right. The reader should
++come away feeling capable, not caught out.
++
++  · ASK ONLY WHAT THE ARTICLE SETTLES, or say plainly that you are asking for
++    their view. Never ask a question whose answer only you know.
++  · NEVER PUT A DISPUTED CONCLUSION INSIDE A QUESTION. "Isn't that circular?"
++    is an assertion wearing a question mark.
++  · NO GIMMES. A question whose answer is in the sentence you just wrote
++    teaches nothing; ask them to use it, not to copy it.
++
++COME BACK TO EARLIER POINTS
++
++Every three or four turns — and by your fourth reply at the latest — reach
++back: ask about something from earlier in the conversation, without
++re-explaining it first — "Before we go on: what was the
++point about substrate independence, in a sentence?" — or ask how the new piece
++connects to an earlier one. A point they fumbled comes back sooner. Do not
++announce that you are doing this.
++
++WHEN THEY ARE STUCK
++
++"I don't know", "I'm lost", a guess that is a long way off, or a very short
++reply after a hard question: stop asking. Explain the piece again more simply,
++with a concrete example, cited — and then ask something much smaller, or simply
++whether that makes sense. Never ask the same question twice in other words.
++Never make them fail twice.
++
++When they get something wrong, say what holds of what they said, then what the
++article says instead, quoted and cited. Never "wrong", never "not quite".
++
++ADAPT TO WHO THEY ARE
++
++If the request carries a description of the reader and why they are reading
++this piece, it changes the whole conversation:
++  · A newcomer to the field gets plain words, a definition the first time a term
++    appears, concrete examples, and small steps.
++  · An expert gets no basics. Go to the passages their question is about and
++    ask the harder questions — what the argument needs, where it is weakest,
++    how it bears on what they know. Harder questions, not longer turns: an
++    expert's turn is as short as anyone's.
++  · A reader after one particular thing gets that thing first. Do not tour the
++    whole article on the way to it.
++Without a description, pitch it at an intelligent reader new to the topic, and
++adjust from how they answer.
++
++TONE
++
++Talk like a good one-to-one tutor who likes the piece: warm, brief, curious, on
++their side.
++
++- NO PRAISE and no quality adjectives — not "great answer", "excellent",
++  "exactly right", "perfect". A specific confirmation of a claim ("yes, that's
++  his point about time") is enough, and on an easy success silence is fine.
++- Never imply anything is obvious or something they should have known.
++- Banned phrases: "actually", "in fact", "not quite", "close, but", "great
++  question", "you seem to think", "you may have missed", "it's important to
++  note".
++- Disagreeing with the author is not misunderstanding the author. If they push
++  back, take it seriously and ask what the author would say to it.
++
++WHAT YOU MAY CLAIM
++
++You are teaching THIS article, not the subject. Your reading is not the article.
++  · Everything you teach as the article's comes from the article, quoted or
++    closely paraphrased, and cited. Background the piece assumes may be given
++    briefly, and said to be yours: "the piece doesn't explain this, but…".
++  · Correct a reader only where a sentence of the article contradicts what they
++    said, by itself — quote it. A correction you reason your way to is your view,
++    and is offered as one.
++  · If the article does not settle something, say so rather than assembling an
++    answer that sounds like it came from the piece.
++  · NEVER TELL THEM THE ARTICLE DOESN'T MENTION SOMETHING. Footnotes, captions
++    and side notes may not be in the text you were given.
++  · If what they said is unclear, ask what they meant before teaching against
++    it.
++
++${CITING_RULES}
++
++LENGTH
++
++Short. Under 100 words almost always, never over 140; the whole point is a
++quick back-and-forth. Do not open by agreeing with them ("exactly", "that's the
++heart of it") — start with the article.
++If they ask for a long explanation, give the short version and point them at the
++passage that holds the rest, with its id, and say that Chat is the place to go
++into it at length.
++
++YOUR TOOLS
++
++Stay in the article; the reader is waiting for a short turn, and a tool call
++they wait ten seconds for is worse than none. Reach outside it only when they
++bring in something from elsewhere that bears on the piece, connect it to
++something else they have read (search their library, and name the piece by its
++title), or ask you to.
++
++${NO_UNRUN_TOOL_CLAIMS}
++
++${UNTRUSTED_RESULTS}
++
++FORMAT
++
++Plain prose paragraphs separated by blank lines. No lists, no headings.
++
++${WEB_LINKS}
++
++${plainWords("explain")}
++
++${PROFILE_RULES}`;
++
+ /**
+  * Which system prompt a turn gets, and it is chosen by the **thread's** kind,
+  * never by the request's.
+@@ -856,6 +1064,8 @@ const systemFor = (kind: ThreadKind): string => {
+   switch (kind) {
+     case "remember":
+       return REMEMBER_SYSTEM;
++    case "tutorial":
++      return TUTORIAL_SYSTEM;
+     /* Referee mode's fourth sub-mode. Not the referee's question but an
+        editor's, and the one call in the mode that legitimately sees the byline —
+        to exclude the paper's own authors and for nothing else
+@@ -892,10 +1102,18 @@ const readItFor = (kind: ThreadKind): string => {
+   switch (kind) {
+     case "remember":
+       return "I've read it. Tell me what you took from it.";
++    case "tutorial":
++      return "I've read it. What do you remember about it — or haven't you read it yet?";
+     case "candidates":
+       return "Read it. Shall I start with what reviewing this would take?";
+-    default:
++    case "chat":
+       return "Read it. What would you like to know?";
++    default: {
++      /* Exhaustive, like `systemFor`: a `default` that returned chat's line
++         would greet a fifth kind as a chat with nothing saying so. */
++      const unknown: never = kind;
++      throw new Error(`unknown thread kind: ${String(unknown)}`);
++    }
+   }
+ };
+ 
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 0bca5bfac..5add4ea3e 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -3356,7 +3356,7 @@ export const chatThreads = spideryarn.table(
+       columns: [t.articleId, t.anchorBlockId],
+       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+     }),
+-    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates')`),
++    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial')`),
+     /**
+      * **One Remember thread per article.** Remember is its own single
+      * conversation, not a list. On `article_id` alone: an article has one owner
+@@ -3373,6 +3373,14 @@ export const chatThreads = spideryarn.table(
+     uniqueIndex("chat_threads_one_remember")
+       .on(t.articleId)
+       .where(sql`${t.kind} = 'remember'`),
++    /**
++     * **One Tutorial thread per article**, for the same reason and with the
++     * same fallback (`targetOf`). No fold was needed when it was added: no
++     * Tutorial thread existed before the index. docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md.
++     */
++    uniqueIndex("chat_threads_one_tutorial")
++      .on(t.articleId)
++      .where(sql`${t.kind} = 'tutorial'`),
+   ],
+ );
+ 
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index 7d3f1abd9..22d6c7e0e 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -329,7 +329,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+   remember: {
+     description:
+       "Say what you took from this and find out where it holds up — not saved notes or flashcards",
+-    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use.",
++    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words.",
+     /* `recall` is this mode's own default sub-mode, so the word lands where the
+        reader expects.
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index 99af39ceb..eda73e9be 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -2887,6 +2887,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
+      refuses it before any model call. */
+   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
+   const askingRemember = (storedKind ?? wantedKind) === "remember";
++  /* Tutorial is dictated too, so it shares Remember's long cap rather than
++     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
++  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
+   /* **Chat only.** Remember's prompt tells the model not to guess how far the
+      reader has got, and a screenful is exactly that guess; Candidates sends no
+      position at all. The thread's kind decides, as it does for the cap below. */
+@@ -2903,11 +2906,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
+   const beginKind = !wantsRetry && !wantsEdit
+     ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
+     : undefined;
+-  const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
++  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+   if (typeof question === "string" && question.length > cap) {
+     throw httpError(
+       413,
+-      askingRemember
++      longInput
+         ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
+         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
+     );
+diff --git a/src/store/export.ts b/src/store/export.ts
+index 77eecf09f..66bbc6af1 100644
+--- a/src/store/export.ts
++++ b/src/store/export.ts
+@@ -70,6 +70,7 @@ export { ArticleNotFound };
+ import { ownedByReader } from "./pg.js";
+ import { log } from "../log.js";
+ import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
++import { isThreadKind } from "../types.js";
+ 
+ const logger = log("store");
+ 
+@@ -617,7 +618,10 @@ export async function exportArticle(
+            written since is the one case where the two differ, and it converges
+            the moment anything touches it — the same transitional state `tools`
+            passed through. */
+-        kind: thread.kind === "remember" ? ("remember" as const) : ("chat" as const),
++        /* The stored kind whenever it is one we know — Candidates and Tutorial
++           were exported as chats until 2026-10-02, because this was a
++           Remember-or-chat ternary. GPT Sol's plan review of 261002i. */
++        kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
+         messages: messageRows.map((row) =>
+           compact({
+             id: row.id,
+diff --git a/src/types.ts b/src/types.ts
+index 151b6956e..f30d3096b 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -3520,7 +3520,7 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
+  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
+  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
+  */
+-export type ThreadKind = "chat" | "remember" | "candidates";
++export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
+ 
+ /**
+  * The three, as a value, and the predicate both ends validate with.
+@@ -3535,7 +3535,25 @@ export type ThreadKind = "chat" | "remember" | "candidates";
+  * introduced to prevent. Since both call `isThreadKind`, adding a member is one
+  * edit rather than four.
+  */
+-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
++export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial"];
++
++/**
++ * **The kinds an article has at most one of** — Remember's Recall and Tutorial,
++ * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
++ * and Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
++ * A partial unique index per kind holds it in the database
++ * (`chat_threads_one_remember`, `chat_threads_one_tutorial`); this is the list
++ * `targetOf` in src/chat.ts and `ConversationBand` read, so the two ends agree.
++ *
++ * Single-thread is ONE property. It does not say what a kind is called, what
++ * its empty box says, or whether it offers Live — those are decided per kind.
++ */
++export const SINGLE_THREAD_KINDS = ["remember", "tutorial"] as const satisfies readonly ThreadKind[];
++export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
++
++export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
++  return kind !== undefined && (SINGLE_THREAD_KINDS as readonly string[]).includes(kind);
++}
+ 
+ /**
+  * The most block ids one chat question may say were on screen. A screenful is a
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index c7e17fea7..0a4d7bf8d 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -84,6 +84,7 @@ import type {
+   ThreadKind,
+   ToolRun,
+ } from "../types.js";
++import { isSingleThreadKind } from "../types.js";
+ import { CitedMarkdown } from "./Cited.js";
+ import { ModeSurface } from "./ModeSurface.js";
+ import { PassageLinks } from "./PassageLinks.js";
+@@ -353,7 +354,11 @@ export function ChatPanel({
+   seed,
+ }: Props) {
+   useRenderCount("ChatPanel");
+-  const remember = kind === "remember";
++  /* **Remember's layout, for both of its conversations** — Recall and
++     Tutorial are each one thread per article, dictated into a tall box, with
++     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
++     is words, decided per kind below. */
++  const remember = isSingleThreadKind(kind);
+   const open = threads.find((t) => t.id === threadId) ?? null;
+   // A stopped session retains recovery text. It must never appear in a different thread.
+   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
+@@ -470,7 +475,13 @@ export function ChatPanel({
+       feature={`chat${remember ? " remember" : ""}`}
+       /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
+       mode={remember ? "remember" : "chat"}
+-      label={remember ? "Remember what you took from this article" : "Chat about this article"}
++      label={
++        kind === "tutorial"
++          ? "A tutorial on this article"
++          : remember
++            ? "Remember what you took from this article"
++            : "Chat about this article"
++      }
+       head={
+         <>
+           {/* **Remember's header says Remember**, never the thread's title: there
+@@ -1176,7 +1187,13 @@ export function Conversation({
+         }}
+       >
+         {thread.messages.length === 0 &&
+-          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q)} />)}
++          (kind === "tutorial" ? (
++            <TutorialInvitation />
++          ) : kind === "remember" ? (
++            <RememberInvitation />
++          ) : (
++            <Suggestions onAsk={(q) => onSend(q)} />
++          ))}
+         {thread.messages.map((m, i) => (
+           <Turn
+             key={m.id}
+@@ -1293,6 +1310,28 @@ function RememberInvitation() {
+   );
+ }
+ 
++/**
++ * **Tutorial's empty state asks the opening question**, so the reader speaks
++ * first and the model never writes an unprompted turn. Greg, `spya-j0scgz`:
++ * *"I think it might start with the sort of basic recall question. You know,
++ * what do you remember about the article? But it may be that the user says
++ * nothing. I haven't read it yet."*
++ */
++function TutorialInvitation() {
++  return (
++    <div className="chat-suggest">
++      <p className="chat-empty-hint">
++        What do you remember about this article? Or say you haven't read it yet — either is a fine
++        place to start.
++      </p>
++      <p className="chat-empty-hint">
++        We'll take short turns: a little of the piece at a time, with a link to the passage, and then
++        a question for you to answer in your own words.
++      </p>
++    </div>
++  );
++}
++
+ /**
+  * The opening state of a conversation: a line about what this is for, and five
+  * things worth asking.
+@@ -1977,7 +2016,8 @@ export function Composer({
+      because it outlives this component; this keeps the value because typing
+      into it must not repaint the transcript above. */
+   const [value, setValue] = useState(draft);
+-  const remember = kind === "remember";
++  /* Recall's and Tutorial's box alike: tall, microphone first. */
++  const remember = isSingleThreadKind(kind);
+   /**
+    * **A short band gets a short box.** On a landscape phone the band is about
+    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
+@@ -2127,9 +2167,11 @@ export function Composer({
+         placeholder={
+           busy
+             ? "Waiting for the answer…"
+-            : remember
+-              ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+-              : (placeholder ?? "Ask about this article…")
++            : kind === "tutorial"
++              ? "What do you remember about it? Or say you haven't read it yet."
++              : remember
++                ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
++                : (placeholder ?? "Ask about this article…")
+         }
+         onChange={(e) => {
+           setValue(e.target.value);
+diff --git a/src/web/FeaturesPage.tsx b/src/web/FeaturesPage.tsx
+index aa922eab9..963ca2958 100644
+--- a/src/web/FeaturesPage.tsx
++++ b/src/web/FeaturesPage.tsx
+@@ -307,7 +307,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
+             Type or talk about what you remember of the piece. Short replies correct what comes apart
+             from it, link the passage, and usually nudge you to remember a little more — filling the
+             gap when you are stuck rather than making you fail. Written not to be annoying,
+-            patronising or superior.
++            patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
++            at a time and ask you to put it in your own words.
+           </Portrait>
+           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
+               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which
+diff --git a/src/web/QuizPanel.tsx b/src/web/QuizPanel.tsx
+index c9632cb2b..215ea7179 100644
+--- a/src/web/QuizPanel.tsx
++++ b/src/web/QuizPanel.tsx
+@@ -89,7 +89,7 @@ import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./q
+ import type { Section } from "./position.js";
+ import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
+ import type { Attempt, UseQuiz } from "./useQuiz.js";
+-import type { RememberView } from "./params.js";
++import { REMEMBER_VIEWS, type RememberView } from "./params.js";
+ import { BlockRef } from "./BlockRef.js";
+ import { CitedText } from "./Cited.js";
+ import { DictationButton, DictationStrip } from "./DictationStrip.js";
+@@ -224,7 +224,7 @@ export function RememberSubModeToggle({
+        `legend` this band has no room for, and a `tablist` promises arrow-key
+        navigation that would then have to be written and kept. */
+     <div className="remember-submode">
+-      {(["recall", "quiz"] as const).map((view) => (
++      {REMEMBER_VIEWS.map((view) => (
+         <button
+           key={view}
+           type="button"
+diff --git a/src/web/help/help-modes.tsx b/src/web/help/help-modes.tsx
+index ee808e93d..3a4ae91c4 100644
+--- a/src/web/help/help-modes.tsx
++++ b/src/web/help/help-modes.tsx
+@@ -458,6 +458,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
+             misunderstanding. There is one Recall conversation per article; the bin icon starts it
+             over.
+           </li>
++          <li>
++            <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
++            remember, or that you haven’t read it yet, and each reply teaches one small piece,
++            links the passage, and asks you to put it in your own words, give an example or push back.
++            Now and then it comes back to an earlier point. It takes your profile and your reason for
++            reading into account. Typed or dictated; there is no Live conversation here yet.
++          </li>
+           <li>
+             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered
+             in a sentence or two. Writing them takes about a minute the first time.
+diff --git a/src/web/modes/conversation/ConversationModes.tsx b/src/web/modes/conversation/ConversationModes.tsx
+index 677f60cc9..14d6f41f7 100644
+--- a/src/web/modes/conversation/ConversationModes.tsx
++++ b/src/web/modes/conversation/ConversationModes.tsx
+@@ -22,7 +22,8 @@
+ 
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { useQueryState, useQueryStates } from "nuqs";
+-import type { BlockId, ChatThread, ThreadKind } from "../../../types.js";
++import type { BlockId, ChatThread, SingleThreadKind, ThreadKind } from "../../../types.js";
++import { isSingleThreadKind } from "../../../types.js";
+ import { currentAt, rememberParam, threadParam } from "../../params.js";
+ import { useRenderCount } from "../../perf.js";
+ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
+@@ -154,6 +155,20 @@ export function RememberBand({
+         onArrowKeys={onQuizKeys}
+       />
+     );
++  if (remember === "tutorial")
++    return (
++      <ConversationBand
++        /* Its own key, so Recall and Tutorial never share a mounted band — a
++           focus nonce, a latch or a draft carried across would belong to the
++           other conversation. */
++        key="remember-tutorial"
++        slug={slug}
++        blocks={blocks}
++        onJump={onJump}
++        kind="tutorial"
++        subMode={toggle}
++      />
++    );
+   return (
+     <ConversationBand
+       /* Keyed so that leaving Quiz and coming back starts clean rather than
+@@ -282,10 +297,13 @@ export interface ChatHandoff {
+  * the earliest, then the id — a total order, so every render picks the same.
+  * Pure and exported for that reason.
+  */
+-export function oneRemember(threads: readonly ChatThread[]): ChatThread | null {
++export function oneRemember(
++  threads: readonly ChatThread[],
++  kind: SingleThreadKind = "remember",
++): ChatThread | null {
+   let best: ChatThread | null = null;
+   for (const t of threads) {
+-    if (t.kind !== "remember") continue;
++    if (t.kind !== kind) continue;
+     if (!best || before(t, best)) best = t;
+   }
+   return best;
+@@ -333,6 +351,11 @@ type ConversationVisibilityByKind = {
+     kind: "remember";
+     onScreen?: never;
+   };
++  /** Remember's Tutorial: the same rule as Recall's. */
++  tutorial: {
++    kind: "tutorial";
++    onScreen?: never;
++  };
+ };
+ 
+ type ConversationBandProps = {
+@@ -395,7 +418,10 @@ export function ConversationBand({
+    */
+   const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
+   const [thread, setThread] = useQueryState("thread", threadParam);
+-  const remembering = kind === "remember";
++  /* Recall and Tutorial: each one conversation per article, no list. Named
++     for Remember because that is where both live. */
++  const single = isSingleThreadKind(kind) ? kind : null;
++  const remembering = single !== null;
+   /**
+    * Start over has two ordered waits: Live must finish writing its last spoken
+    * exchange, then the DELETE must finish. While either is true Remember has no
+@@ -410,7 +436,7 @@ export function ConversationBand({
+    * rather than leading it: a chat's id or a stale one in Remember's URL is
+    * simply overruled. GPT Sol's plan review, F6.
+    */
+-  const remembered = useMemo(() => (remembering ? oneRemember(threads) : null), [remembering, threads]);
++  const remembered = useMemo(() => (single ? oneRemember(threads, single) : null), [single, threads]);
+   const theRemember = resetting === "idle" ? remembered : null;
+   /** The open conversation's id: Remember's one, or what `?thread=` says in chat. */
+   const current = remembering ? (theRemember?.id ?? null) : thread;
+@@ -699,8 +725,13 @@ export function ConversationBand({
+       onNew={startNew}
+       /* **Owned above this panel**, which is remounted on every conversation
+          switch — see the note where the hook is called. */
+-      live={live}
+-      onStartLive={(id) => {
++      /* **No Live in Tutorial, yet.** Short alternating turns are ideal spoken,
++         and Greg said so, but also that Live "doesn't work very well at the
++         moment" — so Tutorial is typed or dictated first, and a spoken turn
++         cannot create one (`SpokenKind` in src/chat.ts stays chat | remember).
++         Omitted here rather than refused by the server, so there is no button. */
++      live={kind === "tutorial" ? undefined : live}
++      onStartLive={kind === "tutorial" ? undefined : (id) => {
+         if (resettingNow.current) return;
+         if (!id && kind !== "chat") return;
+         const next = id ?? begin("chat");
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 58e915bfa..413b00b19 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -1237,11 +1237,16 @@ export const refereeParam = createParser<RefereeView>({
+    docs/plans/260831al-review-quiz-sub-mode.md. */
+ 
+ /** Free recall, or the questions the piece asks you back. */
+-export const REMEMBER_VIEWS = ["recall", "quiz"] as const;
++/* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
++   docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
++   Quiz. */
++export const REMEMBER_VIEWS = ["recall", "tutorial", "quiz"] as const;
+ export type RememberView = (typeof REMEMBER_VIEWS)[number];
+ 
+ /**
+- * Which half of Remember is open — `recall` (the default, omitted) or `quiz`.
++ * Which part of Remember is open — `recall` (the default, omitted), `tutorial`
++ * or `quiz`. Tutorial is a conversation like Recall, with its own one thread,
++ * so `?thread=` follows it exactly as it follows Recall; only Quiz clears it.
+  *
+  * **This does not break url-state.md's rule the way `?stance=` would have.** A
+  * stance changes nothing on screen and is therefore component state; a sub-mode
+diff --git a/src/web/sub-modes.ts b/src/web/sub-modes.ts
+index f7ddfe86c..96a5db5cc 100644
+--- a/src/web/sub-modes.ts
++++ b/src/web/sub-modes.ts
+@@ -60,13 +60,18 @@ export interface SubModeWords {
+   readonly experimental: boolean;
+ }
+ 
+-/** Remember's two halves. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
++/** Remember's three parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
+ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = {
+   recall: {
+     label: "Recall",
+     description: "Say what you took from the piece, and find out where it holds up",
+     experimental: false,
+   },
++  tutorial: {
++    label: "Tutorial",
++    description: "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
++    experimental: false,
++  },
+   quiz: {
+     label: "Quiz",
+     description: "The piece asks you questions, and your answers are marked against it",
+@@ -239,9 +244,23 @@ export interface SubModeParams {
+ export function subModeParams(sub: SubMode): SubModeParams {
+   switch (sub.mode) {
+     case "remember":
+-      return sub.view === "quiz"
+-        ? { mode: "remember", remember: "quiz", thread: null }
+-        : { mode: "remember", remember: null };
++      /* Each view by name: Recall is the default and so absent, Quiz clears
++         `thread` (rule 1), and Tutorial keeps it as Recall does — its band
++         overrules a stale one and writes its own. Mapping "not quiz" to Recall
++         was right with two views and silently wrong with three. */
++      const view = sub.view;
++      switch (view) {
++        case "quiz":
++          return { mode: "remember", remember: "quiz", thread: null };
++        case "tutorial":
++          return { mode: "remember", remember: "tutorial" };
++        case "recall":
++          return { mode: "remember", remember: null };
++        default: {
++          const unknown: never = view;
++          throw new Error(`unknown Remember view: ${String(unknown)}`);
++        }
++      }
+     case "diagram":
+       return { mode: "diagram", diagram: sub.view === "sketch" ? null : sub.view };
+     case "referee":
+diff --git a/src/web/useChat.ts b/src/web/useChat.ts
+index 3c6862e1f..d635b6cca 100644
+--- a/src/web/useChat.ts
++++ b/src/web/useChat.ts
+@@ -373,6 +373,7 @@ const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
+   chat: "New chat",
+   remember: "Remembering",
+   candidates: "Finding reviewers",
++  tutorial: "Tutorial",
+ };
+ 
+ export function useChat(slug: string): ChatApi {
+diff --git a/tests/chat-web-links-prompt.test.ts b/tests/chat-web-links-prompt.test.ts
+index 6f4ee9668..d7309d58a 100644
+--- a/tests/chat-web-links-prompt.test.ts
++++ b/tests/chat-web-links-prompt.test.ts
+@@ -22,7 +22,7 @@ const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" }
+ const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
+ 
+ /** The system message a turn of this kind is sent. */
+-const system = (kind: "chat" | "remember"): string => {
++const system = (kind: "chat" | "remember" | "tutorial"): string => {
+   const messages = buildConverseMessages({ meta, blocks, history: [], question: "q", kind });
+   const found = messages.find((m) => m.role === "system");
+   if (!found) throw new Error(`no system message for a ${kind} turn`);
+@@ -30,7 +30,7 @@ const system = (kind: "chat" | "remember"): string => {
+ };
+ 
+ describe("the rule about linking to the web", () => {
+-  it.each(["chat", "remember"] as const)("is in the %s prompt", (kind) => {
++  it.each(["chat", "remember", "tutorial"] as const)("is in the %s prompt", (kind) => {
+     const prompt = system(kind);
+     expect(prompt).toContain("LINKING TO THE WEB");
+     expect(prompt).toContain("NEVER invent a URL");
+@@ -52,6 +52,7 @@ describe("the rule about linking to the web", () => {
+       return prompt.slice(at).split("\n\n").slice(0, 3).join("\n\n");
+     };
+     expect(clip(system("remember"))).toBe(clip(system("chat")));
++    expect(clip(system("tutorial"))).toBe(clip(system("chat")));
+   });
+ 
+   it("shows the shape the parser actually reads", () => {
+diff --git a/tests/helpers/seed-reader-state.ts b/tests/helpers/seed-reader-state.ts
+index 90255bdff..473b6d312 100644
+--- a/tests/helpers/seed-reader-state.ts
++++ b/tests/helpers/seed-reader-state.ts
+@@ -93,6 +93,7 @@ import { isSpideryarnId } from "../../src/ids.js";
+ import { currentOwnerId } from "../../src/owner.js";
+ import { loadRuns } from "../../src/searches.js";
+ import { loadShelf } from "../../src/shelf.js";
++import { isThreadKind } from "../../src/types.js";
+ 
+ /**
+  * Find the article row for `slug`, or say which call was missing.
+@@ -286,7 +287,7 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
+       /* A `chat.json` written before Remember mode has no `kind`, and the column
+          is `not null`. `"chat"` is the default `normaliseKind` applies in
+          src/chat.ts and the one the column declares. */
+-      kind: thread.kind === "remember" ? "remember" : "chat",
++      kind: isThreadKind(thread.kind) ? thread.kind : "chat",
+     });
+     for (const [ordinal, message] of thread.messages.entries()) {
+       await db.insert(chatMessages).values({
+diff --git a/tests/plain-words-wiring.test.ts b/tests/plain-words-wiring.test.ts
+index bc4c3029f..dfd87d496 100644
+--- a/tests/plain-words-wiring.test.ts
++++ b/tests/plain-words-wiring.test.ts
+@@ -62,6 +62,12 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
+     kinds: ["explain"],
+     oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
+   },
++  {
++    name: "Tutorial",
++    text: () => textOf(buildConverseMessages({ ...chatBase, kind: "tutorial" })[0]?.content),
++    kinds: ["explain"],
++    oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
++  },
+   {
+     name: "quiz mark",
+     text: () => textOf(buildMarkMessages({ meta, blocks, question: "Why?", referenceAnswer: "Because.", evidence: [], answer: "Maybe." })[0]?.content),
+diff --git a/tests/remember-own-thread.test.tsx b/tests/remember-own-thread.test.tsx
+index 62261f18e..6c8e98fcc 100644
+--- a/tests/remember-own-thread.test.tsx
++++ b/tests/remember-own-thread.test.tsx
+@@ -100,7 +100,7 @@ const { ConversationBand } = await import("../src/web/modes/conversation/Convers
+ const SLUG = "a-piece";
+ const AT = "2026-09-20T10:00:00.000Z";
+ 
+-function thread(id: string, kind: "chat" | "remember", over: Partial<ChatThread> = {}): ChatThread {
++function thread(id: string, kind: "chat" | "remember" | "tutorial", over: Partial<ChatThread> = {}): ChatThread {
+   return {
+     id,
+     kind,
+@@ -117,6 +117,7 @@ function thread(id: string, kind: "chat" | "remember", over: Partial<ChatThread>
+ 
+ const CHAT = thread("spya-chat01", "chat");
+ const REMEMBER = thread("spya-rem001", "remember");
++const TUTORIAL = thread("spya-tut002", "tutorial");
+ 
+ let host: HTMLDivElement;
+ let root: Root;
+@@ -160,7 +161,7 @@ function param(key: string): string | null {
+   return new URLSearchParams(location.search).get(key);
+ }
+ 
+-async function mount(kind: "chat" | "remember", search: string): Promise<void> {
++async function mount(kind: "chat" | "remember" | "tutorial", search: string): Promise<void> {
+   history.replaceState(null, "", `/a-piece${search}`);
+   await act(async () =>
+     root.render(
+@@ -435,3 +436,37 @@ describe("Start over waits for the server", () => {
+     expect(last()?.error).toMatch(/Couldn't delete/);
+   });
+ });
++
++/* Tutorial, Remember's third sub-mode (plan 261002i): its own single thread,
++   with Recall's lifecycle and none of Live. */
++describe("Tutorial opens its own one conversation", () => {
++  it("opens the stored Tutorial thread, never Recall's or a list", async () => {
++    stored = [CHAT, REMEMBER, TUTORIAL];
++    await mount("tutorial", "?mode=remember&remember=tutorial");
++    expect(last()?.threadId).toBe(TUTORIAL.id);
++    expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
++    for (const props of renders) expect(drawsList(props)).toBe(false);
++  });
++
++  it("is not listed in Recall", async () => {
++    stored = [REMEMBER, TUTORIAL];
++    await mount("remember", "?mode=remember");
++    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
++  });
++
++  it("begins its own conversation when there is none, of its own kind", async () => {
++    stored = [REMEMBER];
++    await mount("tutorial", "?mode=remember&remember=tutorial");
++    const opened = shown();
++    expect(opened).toHaveLength(1);
++    expect(opened[0]?.kind).toBe("tutorial");
++    expect(opened[0]?.id).not.toBe(REMEMBER.id);
++  });
++
++  it("offers no Live conversation", async () => {
++    stored = [TUTORIAL];
++    await mount("tutorial", "?mode=remember&remember=tutorial");
++    expect(last()?.live).toBeUndefined();
++    expect(last()?.onStartLive).toBeUndefined();
++  });
++});
+diff --git a/tests/remember-route.test.ts b/tests/remember-route.test.ts
+index 6f2d18acf..3d9ce6ba8 100644
+--- a/tests/remember-route.test.ts
++++ b/tests/remember-route.test.ts
+@@ -328,6 +328,32 @@ describe("what actually gets stored", () => {
+   });
+ });
+ 
++/* Tutorial, Remember's third sub-mode (plan 261002i): its own kind, stored as
++   itself, dictated so it shares Remember's long cap — and it never had a
++   stance, so a stance on one is refused rather than dropped. */
++describe("a Tutorial turn", () => {
++  it("is stored as a Tutorial thread and takes Remember's long cap", async () => {
++    const long = "so what I remember is ".repeat(300);
++    expect(long.length).toBeGreaterThan(4000);
++    const { status } = await post({ threadId: "spya-t7m2wz", question: long, kind: "tutorial" });
++    expect(status).not.toBe(413);
++    expect(status).not.toBe(400);
++    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "tutorial");
++    expect(thread?.id).toBe("spya-t7m2wz");
++    expect(thread?.messages[0]?.text).toBe(long.trim());
++  });
++
++  it("refuses a stance", async () => {
++    const { status } = await post({
++      threadId: "spya-t7m3wz",
++      question: "I haven't read it",
++      kind: "tutorial",
++      stance: "balanced",
++    });
++    expect(status).toBe(400);
++  });
++});
++
+ /* Report spya-f3b6ab (Greg, 2026-10-01): "I tried editing a previous message in
+    Recall mode, hoping that it would then trigger a response to that modified
+    message, but it didn't." The request the real client sends for an edit —
+diff --git a/tests/remember-url-rules.test.tsx b/tests/remember-url-rules.test.tsx
+index 047b5c239..7384ea11e 100644
+--- a/tests/remember-url-rules.test.tsx
++++ b/tests/remember-url-rules.test.tsx
+@@ -60,8 +60,8 @@ describe("the mode key is `remember`, and `review` is not a mode any more", () =
+ });
+ 
+ describe("the sub-mode parameter is `?remember=`", () => {
+-  it("accepts both halves and nothing else", () => {
+-    expect(REMEMBER_VIEWS).toEqual(["recall", "quiz"]);
++  it("accepts its three views and nothing else", () => {
++    expect(REMEMBER_VIEWS).toEqual(["recall", "tutorial", "quiz"]);
+     for (const view of REMEMBER_VIEWS) expect(rememberParam.parse(view)).toBe(view);
+     expect(rememberParam.parse("review")).toBeNull();
+     expect(rememberParam.parse("")).toBeNull();
+diff --git a/tests/store-migration-registry.ts b/tests/store-migration-registry.ts
+index b02fc0619..1da054207 100644
+--- a/tests/store-migration-registry.ts
++++ b/tests/store-migration-registry.ts
+@@ -3114,6 +3114,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
+   "tests/store-export-raw.test.ts": "private-postgres",
+   "tests/store-export-referee.test.ts": "private-postgres",
+   "tests/store-export-search-kind.test.ts": "private-postgres",
++  "tests/store-export-thread-kind.test.ts": "private-postgres",
+   "tests/store-glossary-delete-pg.test.ts": "private-postgres",
+   "tests/store-glossary-run-kind-pg.test.ts": "private-postgres",
+   "tests/store-job-draft.test.ts": "private-postgres",
