@@ -318,12 +318,19 @@ describe("the quotes' marks", () => {
        the *first saved search's* colour, so `blockHues` would draw a segment in
        a hue no search earned. Only the phrase marks may see them. */
     expect(reader).toMatch(/buildHitMarks\(proseMarked, /);
-    for (const projection of ["blockStrength", "blockHues", "blockMatches"]) {
+    for (const projection of ["blockStrength", "blockHues"]) {
       expect(
         reader,
         `${projection} must read the open mode's slot, never the merged prose list`,
       ).toMatch(new RegExp(`${projection}\\(passages\\)`));
     }
+    /* **The rail's lanes read the open slot less any quote** since 2026-10-02:
+       the quotes have a strip of their own in every mode, so in a lane they
+       would be drawn twice and counted as search matches (passages.ts §
+       `railFound`, plan 261002h). Still the open slot, never the merged list. */
+    expect(reader, "blockMatches must read the open slot, less its quotes").toMatch(
+      /blockMatches\(railFound\(passages\)\)/,
+    );
     /* And the merge itself must not de-duplicate. `Found.key` is unique within
        one result set and nothing promises it across two, so a de-dupe would turn
        an unlikely collision into a silently dropped passage. GPT Sol, 2026-09-08. */
@@ -344,7 +351,12 @@ describe("the quotes' marks", () => {
        there being no effect at all: both values come out of one render, and a
        React commit carries both or neither. So the assertion is that the slot is
        returned whole. */
-    expect(quoteMarks).toMatch(/return useMemo\(\(\) => \(\{ found, openKey \}\), \[found, openKey\]\);/);
+    /* Since 2026-10-02 the same memo also carries what ‹ › step through and
+       the selection (plan 261002h) — still one object, still `found` and
+       `openKey` together. */
+    expect(quoteMarks).toMatch(
+      /return useMemo\(\s*\(\) => \(\{ found, openKey, steppable, selectedId, select \}\),\s*\[found, openKey, steppable, selectedId, select\],\s*\);/,
+    );
     /* **And `Reader` must hand that whole slot to `selectPassages`**, so the
        ring and the marks cannot come from different places. It was a pair of
        ternary chains until 2026-09-06 — `mode === "quotes" ? quoteOpenKey : …`

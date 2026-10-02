@@ -38,7 +38,7 @@
  * full strength over the model's own hedged confidence, and every quote's
  * `slot` is `0`, which is the *first saved search's* colour.
  */
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useQueryState } from "nuqs";
 
 import type { Block, Quote } from "../../types.js";
@@ -55,6 +55,29 @@ import type { PassageSlot } from "./passages.js";
 const NO_QUOTES: Quote[] = [];
 
 /**
+ * The quotes' slot, plus **the quotes a reader can step to and the
+ * selection** — so the band's stepper, ← / → in Quotes mode and the card on a
+ * quote in the prose all step through what the prose outlines (`stepQuote` in
+ * QuotesPanel.tsx). docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md.
+ *
+ * Still a `PassageSlot`, so `selectPassages` can hand it back whole.
+ */
+export interface QuoteMarks extends PassageSlot {
+  /**
+   * **The rows the panel shows, in its order, less any with no mark** — a
+   * quote whose block a re-extraction took away keeps its row (quotes.md §
+   * Every visible quote is marked) but has nowhere to go, so stepping onto it
+   * would select a dead quote, consume the key and move nothing. GPT Sol's plan
+   * review, P1-4.
+   */
+  readonly steppable: readonly Quote[];
+  /** `?quote=`, once the bar has had its say (`hiddenSelection` below). */
+  readonly selectedId: string | null;
+  /** Write `?quote=`. The setter is nuqs', so it is stable. */
+  select(id: string | null): void;
+}
+
+/**
  * The quotes' passage slot: what is marked, and which one is rung.
  *
  * `quotes` is `{ quotes: Quote[] } | null` so that an owner's `QuotesRead` and a
@@ -64,7 +87,7 @@ const NO_QUOTES: Quote[] = [];
 export function useQuoteMarks(
   blocks: Block[],
   quotes: { quotes: Quote[] } | null,
-): PassageSlot {
+): QuoteMarks {
   const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
   const [rank] = useQueryState("rank", rankParam);
   /* Null is "nobody has touched the bar", which `markedQuotes` resolves to
@@ -143,5 +166,15 @@ export function useQuoteMarks(
      slot's marks and ring travel together survives being handed a fresh object
      on every render — and so `Reader`'s downstream memos key on it by identity
      the way they do on every other slot. */
-  return useMemo(() => ({ found, openKey }), [found, openKey]);
+  const steppable = useMemo(() => {
+    const marked = new Set(found.map((f) => f.key));
+    const kept = listed.filter((q) => marked.has(quoteMarkKey(q.id, q.blockId)));
+    return kept.length === listed.length ? listed : kept;
+  }, [found, listed]);
+  const selectedId = selected?.id ?? null;
+  const select = useCallback((id: string | null) => void setQuoteId(id), [setQuoteId]);
+  return useMemo(
+    () => ({ found, openKey, steppable, selectedId, select }),
+    [found, openKey, steppable, selectedId, select],
+  );
 }

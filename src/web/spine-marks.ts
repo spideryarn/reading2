@@ -31,7 +31,7 @@
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
 import type { ReadLevel } from "./reading-time.js";
-import type { BlockMatch, MatchingSearch } from "./search-hits.js";
+import type { BlockMatch, Found, MatchingSearch } from "./search-hits.js";
 
 /** One block's row, in the rail's document-pixel space. */
 export interface Row {
@@ -312,4 +312,65 @@ export function readingRuns(
     prev = r;
   }
   return runs;
+}
+
+/* --------------------------------------------------- the quotes, every mode -- */
+
+/** One stretch of the rail's quote strip — `quoteRailMarks`. */
+export interface QuoteRailMark {
+  key: string;
+  top: number;
+  height: number;
+  /** The strip's alpha: the brightest quote in the block, `quoteAlpha`'s ramp. */
+  alpha: number;
+}
+
+/**
+ * **Where the quotes are, as a strip down the rail's left edge** —
+ * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md.
+ *
+ * > Perhaps show Quotes in the spine (use the same colour we use for their
+ * > outline-border)
+ * >
+ * > — Greg, 2026-09-10 (spya-yd2c47)
+ *
+ * **Not a `SpineMark`, for `OriginMark`'s reason**: a lane is search vocabulary
+ * and lanes are packed, so a quote lane would push every search sideways and be
+ * counted as a "search match" on a band's card. The gutter is the right 10px of
+ * a 12px rail, so the strip takes the left 2px, which nothing packs.
+ *
+ * `byBlock` is a block's brightest quote alpha, keyed by block id — built from
+ * the marks the prose actually draws, so a quote the bar hides, or one whose
+ * block a re-extraction took away, has no strip. A block this page has no row
+ * for is skipped rather than drawn at zero, the rule every mark here keeps.
+ * One mark per block rather than runs: blocks are a few hundred at most, and a
+ * per-block alpha is what lets the fade still say which paragraph matters.
+ */
+export function quoteRailMarks(
+  rows: Map<string, Row>,
+  byBlock: ReadonlyMap<BlockId, number>,
+): QuoteRailMark[] {
+  const out: QuoteRailMark[] = [];
+  for (const [blockId, alpha] of byBlock) {
+    const row = rows.get(blockId);
+    if (!row) continue;
+    out.push({ key: blockId, top: row.top, height: row.height, alpha });
+  }
+  out.sort((a, b) => a.top - b.top);
+  return out;
+}
+
+/**
+ * A block's brightest quote, from the marks the prose draws — `quoteRailMarks`'
+ * input. Anything without a `quoteStroke` is not a quote and is ignored, so
+ * this can be handed any `Found[]` without the rail ever showing a search.
+ */
+export function quoteAlphaByBlock(found: readonly Found[]): Map<BlockId, number> {
+  const out = new Map<BlockId, number>();
+  for (const f of found) {
+    if (!f.quoteStroke) continue;
+    const was = out.get(f.blockId);
+    if (was === undefined || f.quoteStroke.alpha > was) out.set(f.blockId, f.quoteStroke.alpha);
+  }
+  return out;
 }

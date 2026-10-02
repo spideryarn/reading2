@@ -241,6 +241,45 @@
   border-top: 1px solid var(--rule);
 }
 
+/* -------------------------------------------------------- § the stepper ----
+   ‹ 3 of 14 ›, pinned under the list — Greg, 2026-09-11 (spya-mtyquy): "fairly
+   big Previous/Next icon-buttons". Skim's stepper is the model (skim.css §
+   `.skim-arrow`): a size up from the house control, `--control-h-lg`, because
+   in this band it is the main way through. Its own rules rather than Skim's
+   class, so neither band's arrows move when the other's are restyled.
+   QuotesPanel.tsx § `QuoteStepper`. */
+.quotes-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.quotes-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-lg);
+  height: var(--control-h-lg);
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.quotes-arrow:disabled { opacity: 0.4; cursor: default; }
+.quotes-arrow:not(:disabled):hover { border-color: var(--highlight); }
+.quotes-arrow:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-step-at {
+  min-width: 4.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------- § score bars ----
    The model's 0–1 judgments as lengths rather than digits — Greg, 2026-08-31:
    *"Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus

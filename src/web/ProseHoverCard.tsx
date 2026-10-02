@@ -35,6 +35,8 @@ import {
   BookCheck,
   BookMarked,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   CornerDownRight,
   CornerUpLeft,
   ExternalLink,
@@ -42,6 +44,7 @@ import {
   Globe,
   LoaderCircle,
   Plus,
+  Quote as QuoteIcon,
   Search,
   /* The house mark for "a model wrote this" — `SearchPanel`'s meaning search and
      `QuotesPanel` both use it for the same distinction, and using a different
@@ -50,7 +53,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview } from "../types.js";
+import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview, Quote } from "../types.js";
+import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
 /* The same words-per-minute the masthead and the shelf card use. A second
@@ -79,7 +83,15 @@ import {
   verdictText,
   workByLine,
 } from "./CitationsPanel.js";
-import { useHoverCard } from "./useHoverCard.js";
+import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
+
+/**
+ * **How long a pointer rests on a quote before its card opens** — about three
+ * times the ordinary 320ms, because a quote is often a whole paragraph and the
+ * pointer rests in it while the reader reads. A guess to be felt in a browser,
+ * not a measurement. Exported for the test that pins it.
+ */
+export const QUOTE_OPEN_MS = 900;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
 import { worthRetrying } from "../messages.js";
@@ -113,6 +125,13 @@ interface Hit {
    * section for each, exactly as it does for two overlapping terms.
    */
   citeIds: string[];
+  /**
+   * The quotes' mark keys (`quoteMarkKey`) the pointer is inside, filtered
+   * against the listed quotes. Usually none or one: quotes do not overlap (Find
+   * more's taken spans win every overlap, src/quotes.ts), but nothing here
+   * depends on that.
+   */
+  quoteKeys: string[];
   /** The href, already described. Null when the pointer is on a bare term. */
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
@@ -169,6 +188,7 @@ function HoverCard({
   canAddToShelf,
   showInSpideryarn,
   termActions,
+  quotes = null,
 }: {
   entries: GlossaryEntry[];
   /**
@@ -302,6 +322,15 @@ function HoverCard({
    * of the capability (reader-capability.ts), so a visitor has nothing to pass.
    */
   termActions: TermActions | null;
+  /**
+   * **The quotes the prose outlines, and what the card's buttons do with one**
+   * — `QuoteCard`. `null` where there are none to point at; then `read` never
+   * looks for one. A visitor gets it too: the scores and the reason are on the
+   * public list already (src/public-types.ts § `PublicQuotes`), and stepping
+   * and opening Quotes write only the URL. Optional, absent meaning none, so a
+   * surface with no quotes need not know the half exists.
+   */
+  quotes?: QuoteCardSource | null;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   /* The same indexing for the citations, for the same reason: `read` runs on
@@ -345,6 +374,19 @@ function HoverCard({
         ...new Set(citeEls.flatMap((m) => (m.getAttribute("data-cite") ?? "").split(" "))),
       ].filter((id) => byWork.has(id));
 
+      /* **The quote, read upwards only**: a quote is a `mark.hit[data-quote]`,
+         and its `data-hit` lists every hit on that run — a search's keys too —
+         so it is filtered against the listed quotes, which is also what makes a
+         stale or forged key draw nothing. Not downwards from a link: a quote
+         is a passage, and a link inside one is not "on" it.
+         docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2. */
+      const quoteMark = quotes ? el.closest("mark.hit[data-quote]") : null;
+      const quoteKeys = quoteMark
+        ? [...new Set((quoteMark.getAttribute("data-hit") ?? "").split(" "))].filter(
+            (key) => quotes?.byKey.has(key) ?? false,
+          )
+        : [];
+
       const href = anchorEl?.getAttribute("href") ?? null;
       const link = href ? describeLink(href, sourceUrl) : null;
 
@@ -372,15 +414,16 @@ function HoverCard({
          mentions of one destination the reader is actually looking at. */
       const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
 
-      if (note) return { termIds, citeIds, link, anchor, inBlock, href, note, back: false };
+      if (note) return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false };
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
-      if (termIds.length === 0 && citeIds.length === 0 && !link) return null;
-      if (termIds.length === 0 && citeIds.length === 0 && link?.kind === "anchor" && !anchor)
-        return null;
+      const marked = termIds.length > 0 || citeIds.length > 0 || quoteKeys.length > 0;
+      if (!marked && !link) return null;
+      if (!marked && link?.kind === "anchor" && !anchor) return null;
       return {
         termIds,
         citeIds,
+        quoteKeys,
         link,
         anchor,
         inBlock,
@@ -389,7 +432,7 @@ function HoverCard({
         back: !!anchorEl && isBackLink(anchorEl),
       };
     },
-    [byId, byWork, sourceUrl, blockText, notes],
+    [byId, byWork, sourceUrl, blockText, notes, quotes],
   );
 
   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
@@ -412,14 +455,32 @@ function HoverCard({
        BlockLinkCard's — would be two answers to one hover. The xref's card is
        the block preview, and the term keeps its underline and the glossary.
        docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
+    /* **And a quote's outline, since 2026-10-02** — Greg, spya-mtyquy. Pointer
+       and keyboard-focus of a link only: it is not in `tapSelector`, because a
+       quote is the one mark a tap selects its paragraph through
+       (TableView.tsx § `NOT_A_BLOCK_SELECTION`), which is how a finger
+       annotates. `:not(.xref)` for the reason the other two marks have it.
+       docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2. */
     selector:
-      "mark.term:not(.xref), mark.cite:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href]",
+      "mark.term:not(.xref), mark.cite:not(.xref), mark.hit[data-quote]:not(.xref), .prose a[href], a.cited-link, .chat-sources a[href]",
     /* Both containers survive their own re-render, which is the whole
        requirement — see `host`. A chat answer's `<p>` does not, so the
        fallback would leave a card pinned to a detached node as an answer
        streams. */
     host: ".prose, .chat-turn",
     read,
+    /* **A quote and nothing else waits longer** (`QUOTE_OPEN_MS`): it is a
+       passage the reader rests in while reading, not a word they point at to
+       ask. A quote that is also a term, a citation or a link keeps the
+       ordinary rest, because the reader may be asking about those. */
+    openDelay: (hit) =>
+      hit.quoteKeys.length > 0 &&
+      hit.termIds.length === 0 &&
+      hit.citeIds.length === 0 &&
+      !hit.link &&
+      !hit.note
+        ? QUOTE_OPEN_MS
+        : HOVER_DELAY.open,
     /* True here and false for a bare term, and the difference is not a
        preference: an `<a>` is a tab stop already, so a reader moving through
        the prose by keyboard lands on one whether we listen or not, and opening
@@ -553,18 +614,24 @@ function HoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, citeIds, link, anchor, inBlock, href, note, back } = shown.data;
+  const { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
   /* Resolved here rather than carried on `Hit`, as the terms are: `read` runs on
      every hover and the list can be replaced between the hover and the paint. */
   const cited = citeIds.map((id) => byWork.get(id)).filter((w): w is CitedWork => w !== undefined);
-  if (found.length === 0 && cited.length === 0 && !link) return null;
+  /* The same, for the quotes: the list can be replaced (a Find more, a moved
+     bar) between the hover and the paint. */
+  const quoted = quoteKeys
+    .map((key) => quotes?.byKey.get(key))
+    .filter((q): q is Quote => q !== undefined);
+  if (found.length === 0 && cited.length === 0 && quoted.length === 0 && !link) return null;
 
   const label = [
     ...found.map((e) => e.name),
     ...cited.map((w) => w.title),
+    ...quoted.map(() => "quote"),
     note
       ? `note ${note.label}`.trim()
       : link?.kind === "external"
@@ -623,6 +690,11 @@ function HoverCard({
           {cited.map((w) => (
             <CiteCard key={w.id} work={w} showInSpideryarn={showInSpideryarn} />
           ))}
+          {/* The quote half, under the term and the citation and above the
+              link: what the words mean and whom they lean on come first, then
+              why we kept them, then where a link would take you. */}
+          {quotes &&
+            quoted.map((q) => <QuoteCard key={q.id} quote={q} source={quotes} onClose={close} />)}
           {/* The note in full, in place of the link half rather than under it.
               A marker IS a link into this article, so `LinkCard` would happily
               draw it — as "elsewhere in this article" over 260 clipped
@@ -631,7 +703,7 @@ function HoverCard({
           {note && (
             <NoteCard
               note={note}
-              divided={found.length > 0}
+              divided={found.length > 0 || quoted.length > 0}
               onGo={() => {
                 close();
                 onFollowNote(
@@ -653,7 +725,7 @@ function HoverCard({
               facts={facts}
               add={add}
               back={back}
-              divided={found.length > 0}
+              divided={found.length > 0 || quoted.length > 0}
               onJump={(id) => { close(); onJump(id); }}
             />
           )}
@@ -1540,6 +1612,134 @@ function ExternalBody({
         )}
       </p>
     </>
+  );
+}
+
+/**
+ * **What the card knows about the quotes**: the list the prose outlines, and
+ * what pressing does. Built by `Reader` from `useQuoteMarks`, so the card steps
+ * through the very list the band and ← / → do (`stepQuote`).
+ * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2.
+ */
+export interface QuoteCardSource {
+  /** `markedQuotes`' list, in the order the band shows it. */
+  listed: readonly Quote[];
+  /** The same quotes by their mark key (`quoteMarkKey`), which is what `data-hit` holds. */
+  byKey: ReadonlyMap<string, Quote>;
+  /** Quotes is the mode already, so there is nothing to open. */
+  inQuotesMode: boolean;
+  /** Select it (`?quote=`, the ring) and go to its block. */
+  onGo(quote: Quote): void;
+  /** Select it and open Quotes mode on it. */
+  onOpenInQuotes(quote: Quote): void;
+}
+
+/**
+ * **A quote, from the outline the reader is pointing at** — Greg, 2026-09-11
+ * (spya-mtyquy): *"tooltip to show our quantitative scores and perhaps
+ * Previous/Next icon-buttons to jump to the next Quote, and a button to open
+ * Quotes mode"*.
+ *
+ * - **The numbers, printed as well as drawn**: this card is where the band's
+ *   rows send them ("the numbers are in the tooltip", quotes.md). Each raw
+ *   score the quote has, never the `max` composite, which is our arithmetic
+ *   rather than the model's judgment.
+ * - **Why**, the reason the band keeps behind its ⓘ (Greg, 2026-08-31: *"with
+ *   reason as a tooltip"*) — the model's words, so in the model's face.
+ * - **‹ ›** step the band's list, not the page: the rule is `stepQuote`, so a
+ *   reader who chose *most important* walks the important ones. Disabled at
+ *   either end; the card closes on a step, and the reader points at the next.
+ */
+function QuoteCard({
+  quote,
+  source,
+  onClose,
+}: {
+  quote: Quote;
+  source: QuoteCardSource;
+  onClose(): void;
+}) {
+  const at = source.listed.findIndex((q) => q.id === quote.id);
+  const prev = at > 0 ? source.listed[at - 1] : undefined;
+  const next = at >= 0 ? source.listed[at + 1] : undefined;
+  const scores = [
+    ...(quote.importance !== undefined ? [{ key: "importance" as const, value: quote.importance }] : []),
+    ...(quote.striking !== undefined ? [{ key: "striking" as const, value: quote.striking }] : []),
+  ];
+  const go = (q: Quote) => {
+    onClose();
+    source.onGo(q);
+  };
+  return (
+    <div className="prose-card-body prose-card-quote-card">
+      <p className="prose-card-label">
+        <QuoteIcon size={9} />
+        quote
+        {at >= 0 && (
+          <span className="prose-card-quote-at">
+            {at + 1} of {source.listed.length}
+          </span>
+        )}
+      </p>
+      {scores.length > 0 ? (
+        <dl className="prose-card-scores">
+          {scores.map((s) => (
+            <div key={s.key} className="prose-card-score" title={QUOTE_SCORE_LABEL[s.key]}>
+              <dt>{s.key === "importance" ? "Importance" : "Striking"}</dt>
+              <dd>
+                <span className="score-bar" aria-hidden="true">
+                  <span
+                    className={`score-bar-fill ${s.key}`}
+                    style={{ width: `${Math.round(Math.max(0, Math.min(1, s.value)) * 100)}%` }}
+                  />
+                </span>
+                <span className="prose-card-score-n">{s.value.toFixed(2)}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="prose-card-meta">Not scored.</p>
+      )}
+      {quote.reason && (
+        <p className="prose-card-text">
+          <span className={voiceClass("ai")}>{quote.reason}</span>
+        </p>
+      )}
+      <p className="prose-card-foot prose-card-quote-foot">
+        <button
+          type="button"
+          className="prose-card-open prose-card-quote-step"
+          aria-label="Previous quote"
+          disabled={!prev}
+          onClick={() => prev && go(prev)}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          type="button"
+          className="prose-card-open prose-card-quote-step"
+          aria-label="Next quote"
+          disabled={!next}
+          onClick={() => next && go(next)}
+        >
+          <ChevronRight size={14} />
+        </button>
+        {!source.inQuotesMode && (
+          <button
+            type="button"
+            className="prose-card-open"
+            onClick={() => {
+              onClose();
+              source.onOpenInQuotes(quote);
+            }}
+          >
+            <QuoteIcon size={10} />
+            open in Quotes
+          </button>
+        )}
+      </p>
+    </div>
   );
 }
 

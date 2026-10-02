@@ -92,7 +92,7 @@ import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard } from "../ProseHoverCard.js";
+import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import { shownEntries } from "../glossary-shown.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
@@ -100,6 +100,7 @@ import {
   blockMatches,
   blockStrength,
   hitMarks as buildHitMarks,
+  quoteMarkKey,
   type Found,
 } from "../search-hits.js";
 import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
@@ -165,7 +166,9 @@ import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
-import { proseFound, selectPassages } from "./passages.js";
+import { proseFound, railFound, selectPassages } from "./passages.js";
+import { quoteAlphaByBlock } from "../spine-marks.js";
+import { stepQuote } from "../QuotesPanel.js";
 
 /** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
 const NO_PUBLIC_QUOTES: Quote[] = [];
@@ -1276,8 +1279,19 @@ export function Reader({
      Note it is `blockMatches` and not `hitHues`. A literal match has no palette
      slot, so `blockHues` drops it — right for the paragraph bar, which falls
      back to the one fixed search hue, and wrong for the rail, which would then
-     show nothing at all in words mode. search-hits.ts § Why `null` survives. */
-  const hitBlocks = useMemo(() => blockMatches(passages), [passages]);
+     show nothing at all in words mode. search-hits.ts § Why `null` survives.
+
+     **Less any quote** (passages.ts § `railFound`), since 2026-10-02: the
+     quotes have a strip of their own, so in a lane they would be drawn twice,
+     in a search's colour, and counted as search matches. */
+  const hitBlocks = useMemo(() => blockMatches(railFound(passages)), [passages]);
+  /* **The quotes in the rail, in every mode** — their own strip down the left
+     edge (spine-marks.ts § `quoteRailMarks`; Greg, 2026-09-10, spya-yd2c47).
+     From `proseMarked`, what the prose actually outlines, and not from
+     `quotes.found`: Skim's stop can be a quote the bar hides from the band,
+     resolved afresh and outlined all the same (passages.ts § `proseFound`).
+     `quoteAlphaByBlock` keeps only what carries a quote stroke. */
+  const quoteRail = useMemo(() => quoteAlphaByBlock(proseMarked), [proseMarked]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/260825c-bottom-bar.md for why the
@@ -1317,12 +1331,63 @@ export function Reader({
   /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
      is only ever set while `QuizPanel` is mounted. */
   const quizStepKeys = mode === "remember" ? quizKeys : null;
+  /* …and the quotes while Quotes is the mode — Greg, 2026-09-11 (spya-mtyquy):
+     *"use left/right to navigate between quotes"*. `stepQuote` is the band's
+     ‹ › rule too, so the keys can do no more than the buttons; `null` from it
+     (→ on the last) answers "took nothing" and the key goes to the browser.
+     keyboard.md § ← / → in Quotes. */
+  const { steppable: steppableQuotes, selectedId: selectedQuote, select: selectQuote } = quotes;
+  const goToQuote = useCallback(
+    (quote: Quote, jump: (id: BlockId) => void) => {
+      selectQuote(quote.id);
+      jump(quote.blockId);
+    },
+    [selectQuote],
+  );
+  const quoteKeys = useCallback(
+    (dir: -1 | 1) => {
+      const next = stepQuote(steppableQuotes, selectedQuote, dir);
+      if (!next) return false;
+      goToQuote(next, bandJump);
+      return true;
+    },
+    [steppableQuotes, selectedQuote, goToQuote, bandJump],
+  );
+  const quoteStepKeys = mode === "quotes" ? quoteKeys : null;
+  /* **The card on a quote in the prose** (ProseHoverCard.tsx § `QuoteCard`).
+     Its ‹ › walk **down the page**, in document order — `quotes.found` is in the
+     order the reader meets the marks — where the band and the keys walk the
+     band's list. The two agree in the default order and in *prioritised*; under
+     *most important* the band's order is invisible from the prose, and "next"
+     jumping back up the page would be a surprise (GPT Sol's plan review, P2).
+     Only quotes that have a mark, so no step lands on nothing. `jumpTo` and not
+     `bandJump`: the reader is in the prose already. Opening Quotes selects the
+     quote first, so the band opens on its row. */
+  const quoteCard = useMemo<QuoteCardSource | null>(() => {
+    if (steppableQuotes.length === 0) return null;
+    const byKey = new Map(steppableQuotes.map((q) => [quoteMarkKey(q.id, q.blockId), q]));
+    const down = [
+      ...new Set(
+        quotes.found.map((f) => byKey.get(f.key)).filter((q): q is Quote => q !== undefined),
+      ),
+    ];
+    return {
+      listed: down,
+      byKey,
+      inQuotesMode: mode === "quotes",
+      onGo: (quote) => goToQuote(quote, jumpTo),
+      onOpenInQuotes: (quote) => {
+        selectQuote(quote.id);
+        void setMode("quotes");
+      },
+    };
+  }, [steppableQuotes, quotes.found, mode, goToQuote, jumpTo, selectQuote, setMode]);
   useArrowNav(
     nav,
     article.blocks,
     geometry.leafDepth,
     !drawerOpen,
-    skimKeys ?? quizStepKeys,
+    skimKeys ?? quizStepKeys ?? quoteStepKeys,
     /* …and the lowest-level sections while Structure is the mode — the unit
        `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
        keyboard.md § ← / → in Structure. */
@@ -2182,9 +2247,12 @@ export function Reader({
          the panel, its three controls and — for the owner — the job machinery
          that must not be mounted anywhere else. QuotesMode.tsx. */
       case "quotes":
-        if (owner) return <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} />;
+        if (owner)
+          return (
+            <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} steps={steppableQuotes} />
+          );
         return artefacts?.quotes ? (
-          <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} />
+          <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} steps={steppableQuotes} />
         ) : null;
       /* **The owner/visitor pair the ideas and the quotes have, since
          2026-09-04.** It was one branch until then, and the comment here said
@@ -2543,6 +2611,7 @@ export function Reader({
           layoutKey={layoutKey}
           matches={hitBlocks}
           reading={owner?.readingTime.levels}
+          quotes={quoteRail}
           onJump={jumpTo}
         />
       )}
@@ -2990,6 +3059,7 @@ export function Reader({
            both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
            read to pass — the enforcement is that there is nothing here. */
         termActions={glossaryRead}
+        quotes={quoteCard}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

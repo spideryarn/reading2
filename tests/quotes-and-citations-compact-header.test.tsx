@@ -120,6 +120,7 @@ async function mountQuotes(o: QuotesOwner, rank: QuoteRank): Promise<void> {
         bar: null,
         onBar: noop,
         onJump: noop,
+        steps: [],
       }),
     ),
   );
@@ -356,6 +357,7 @@ describe("the states the fold depends on", () => {
           bar: null,
           onBar: noop,
           onJump: noop,
+          steps: [],
         }),
       ),
     );
