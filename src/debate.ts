@@ -132,7 +132,12 @@ import {
 import { stageFailure } from "./job-failure.js";
 import { withChatJsonSchema } from "./messages-structured-output.js";
 import { type ModelPower, modelFor } from "./models.js";
-import { collectSearchEvidence, whereSearchCountCameFrom, type Usage } from "./openrouter-stream.js";
+import {
+  collectSearchEvidence,
+  EXTRACT_SEPARATOR,
+  whereSearchCountCameFrom,
+  type Usage,
+} from "./openrouter-stream.js";
 import { readJsonOrNull } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
 import {
@@ -914,7 +919,7 @@ export function readDirectGroup(
       return { ok: false, reason: "directnessUnverified" };
     }
 
-    const overlap = shingleOverlap(article, excerpt);
+    const overlap = shingleOverlap(article, excerpt, EXTRACT_SEPARATOR);
     /* **The ceiling, before the row is kept.** A mirror is the most convincing
        row on the screen and the least worth showing.
 

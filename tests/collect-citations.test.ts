@@ -264,14 +264,38 @@ describe('collectSearchEvidence with extracts: "all"', () => {
     ]);
   });
 
-  it("does not repeat an extract it already holds, and ignores an empty one", () => {
+  it("does not repeat an extract it already holds, including a later substring, and ignores an empty one", () => {
     expect(
       gatherAll([
-        found("https://a.test", "A", "the same words"),
+        found("https://a.test", "A", "before the same words after"),
         found("https://a.test", "A", "the same words"),
         found("https://a.test", "A", ""),
       ]),
-    ).toStrictEqual([{ url: "https://a.test", title: "A", excerpt: "the same words" }]);
+    ).toStrictEqual([{ url: "https://a.test", title: "A", excerpt: "before the same words after" }]);
+  });
+
+  it("replaces an earlier extract with a later superset instead of spending the cap on duplicate text", () => {
+    const first = "x".repeat(MAX_EVIDENCE_EXCERPT - 1_000);
+    const later = `${first}${"y".repeat(1_000)}`;
+    expect(gatherAll([found("https://a.test", "First", first), found("https://a.test", "Second", later)])).toStrictEqual([
+      { url: "https://a.test", title: "First", excerpt: later },
+    ]);
+  });
+
+  it("replaces a superseded extract after other distinct extracts have already been joined", () => {
+    expect(
+      gatherAll([
+        found("https://a.test", "A", "first distinct extract"),
+        found("https://a.test", "A", "middle words"),
+        found("https://a.test", "A", "before middle words after"),
+      ]),
+    ).toStrictEqual([
+      {
+        url: "https://a.test",
+        title: "A",
+        excerpt: `first distinct extract${EXTRACT_SEPARATOR}before middle words after`,
+      },
+    ]);
   });
 
   it("takes an extract from a later sighting when the first had none", () => {
@@ -286,6 +310,13 @@ describe('collectSearchEvidence with extracts: "all"', () => {
       found("https://a.test", undefined, "y".repeat(500)),
     ]);
     expect(got[0]?.excerpt).toHaveLength(MAX_EVIDENCE_EXCERPT);
+  });
+
+  it("does not spend the last bytes of the cap on a partial or content-free separator", () => {
+    const first = "x".repeat(MAX_EVIDENCE_EXCERPT - EXTRACT_SEPARATOR.length);
+    expect(gatherAll([found("https://a.test", undefined, first), found("https://a.test", undefined, "later")])).toStrictEqual([
+      { url: "https://a.test", excerpt: first },
+    ]);
   });
 
   it("still refuses a URL that is not http(s), however often it appears", () => {

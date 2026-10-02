@@ -201,8 +201,21 @@ export function articleShingles(blockText: ReadonlyMap<string, ArticleBlockText>
  * and inflating the copy test with text nobody wrote is the wrong direction to
  * be wrong in.
  */
-export function shingleOverlap(article: ArticleShingles, extract: string): ShingleOverlap {
-  const extractWindows = shingleWindows(extract);
+export function shingleOverlap(
+  article: ArticleShingles,
+  extract: string,
+  /** A synthetic boundary whose two sides were never adjacent in the source. */
+  boundary?: string,
+): ShingleOverlap {
+  /* Debate may join several search extracts under one cap. The joined string
+     remains the right haystack for coverage and the displayed hit: its marker
+     cannot match article prose. Density is different. Letting a word window
+     cross that marker adds non-matching denominator windows which were on no
+     page; three short extracts made entirely of article text can then stop
+     looking like a copy. Build density's windows inside each real extract. */
+  const extractWindows = boundary
+    ? extract.split(boundary).flatMap((part) => shingleWindows(part))
+    : shingleWindows(extract);
 
   /* **`quoteFinder` rather than `findQuote`, and it is the same matcher.** Both
      loops below ask thousands of questions of a handful of haystacks, and

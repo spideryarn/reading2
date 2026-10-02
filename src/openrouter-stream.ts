@@ -513,12 +513,7 @@ export function collectSearchEvidence(
 ): void {
   const merge =
     opts.extracts === "all"
-      ? (seen: SearchEvidence, c: CitedPage): SearchEvidence => {
-          const more = c.content ?? "";
-          if (more === "" || (seen.excerpt ?? "").includes(more)) return seen;
-          const joined = seen.excerpt === undefined ? more : `${seen.excerpt}${EXTRACT_SEPARATOR}${more}`;
-          return { ...seen, excerpt: joined.slice(0, MAX_EVIDENCE_EXCERPT) };
-        }
+      ? (seen: SearchEvidence, c: CitedPage): SearchEvidence => mergeSearchExtract(seen, c.content ?? "")
       : undefined;
   collectAnnotated(
     annotations,
@@ -543,6 +538,48 @@ export function collectSearchEvidence(
  * prose, and no model copies into a quotation, does.
  */
 export const EXTRACT_SEPARATOR = "\n\n⁂\n\n";
+
+/** Add one later extract without keeping a narrower copy of the same passage. */
+function mergeSearchExtract(seen: SearchEvidence, more: string): SearchEvidence {
+  if (more === "") return seen;
+  const extracts = seen.excerpt === undefined ? [] : seen.excerpt.split(EXTRACT_SEPARATOR);
+  if (extracts.some((held) => held.includes(more))) return seen;
+
+  /* Search engines sometimes return a wider window around an earlier passage.
+     Put the wider one in the narrower one's position and remove every extract
+     it subsumes. Appending would spend the shared cap repeating old text and
+     could still lose the new tail this option exists to recover. */
+  const merged: string[] = [];
+  let inserted = false;
+  for (const held of extracts) {
+    if (!more.includes(held)) {
+      merged.push(held);
+      continue;
+    }
+    if (!inserted) merged.push(more);
+    inserted = true;
+  }
+  if (!inserted) merged.push(more);
+  return { ...seen, excerpt: joinSearchExtracts(merged) };
+}
+
+/** Join extracts under the one cap, but never retain a partial or empty separator. */
+function joinSearchExtracts(extracts: readonly string[]): string {
+  let joined = "";
+  for (const extract of extracts) {
+    if (joined === "") {
+      joined = extract.slice(0, MAX_EVIDENCE_EXCERPT);
+      continue;
+    }
+    const room = MAX_EVIDENCE_EXCERPT - joined.length;
+    /* A separator with no later text protects no boundary. Keeping a partial
+       marker would also stop `shingleOverlap` recognising the synthetic
+       boundary and put invented windows back into its density denominator. */
+    if (room <= EXTRACT_SEPARATOR.length) break;
+    joined += EXTRACT_SEPARATOR + extract.slice(0, room - EXTRACT_SEPARATOR.length);
+  }
+  return joined;
+}
 
 /**
  * The rules both collectors obey, in one place, with only *what to keep* left

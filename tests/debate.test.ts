@@ -35,6 +35,7 @@ import {
   CLAIMS_SYSTEM,
   DEBATE_FENCE,
   DIRECT_SYSTEM,
+  directPrompt,
   distinctSources,
   emptyLosses,
   isSubstantiveQuote,
@@ -54,7 +55,7 @@ import { plainWords } from "../src/plain-words.js";
 import { whyUnusable } from "../src/store/artifacts.js";
 import { findQuote } from "../src/quote-match.js";
 import { kindOfMessage, worthRetrying, DEBATE_SEARCH_DID_NOT_RUN } from "../src/messages.js";
-import type { Block, SearchEvidence } from "../src/types.js";
+import type { Block, Meta, SearchEvidence, Tree } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -212,6 +213,48 @@ describe("a page the search returned twice, with two different extracts", () => 
   it("does not find a quotation stitched across the two extracts", () => {
     expect(locate(twice.get(REPLY)?.excerpt ?? "", "not more feeds. Citation: Notes on my sourdough")).toBeNull();
   });
+});
+
+it("does not let synthetic extract boundaries dilute the copy refusal", () => {
+  const url = "https://example.com/a-mirror";
+  const articleUrl = "https://example.com/the-original";
+  const parts = [
+    "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima",
+    "mango nectarine orange papaya quince raspberry strawberry tangerine vanilla watermelon xigua yellowfruit",
+    "acorn butternut cucumber daikon eggplant fennel garlic habanero iceberg jalapeno kohlrabi leek",
+  ];
+  const copiedBlocks = [block("spya-copy01", parts.join(" "))];
+  const witness = `Read the original article at ${articleUrl} now`;
+  const annotations = [
+    {
+      type: "url_citation" as const,
+      url_citation: { url, title: "A mirror", content: `${witness}\n${parts[0]}` },
+    },
+    ...parts.slice(1).map((content) => ({
+      type: "url_citation" as const,
+      url_citation: { url, title: "A mirror", content },
+    })),
+  ];
+  const group = readDirectGroup(
+    [
+      {
+        url,
+        sourceQuote: "alpha bravo charlie delta echo foxtrot golf hotel",
+        articleReferenceQuote: witness,
+        relation: "unclear",
+        lean: "cannot-tell",
+        applies: "It republishes the article's words.",
+      },
+    ],
+    {
+      admissible: admissibleSources(annotations, articleUrl),
+      article: { url: articleUrl, title: "The original article", byline: "A Writer" },
+      blockText: blockTextById(copiedBlocks),
+    },
+    1,
+  );
+  expect(group.rows).toEqual([]);
+  expect(group.counts.lost.sourceIsCopy).toBe(1);
 });
 
 /* ------------------------------------------------------ the sourdough fixture -- */
@@ -1245,6 +1288,9 @@ describe("what the prompts insist on", () => {
   it("asks pass A for citing work, named by its full title, and both passes to keep an extract's mistakes", () => {
     expect(DIRECT_SYSTEM).toMatch(/cites it and says something about it/);
     expect(DIRECT_SYSTEM).toMatch(/CONTAIN THE TITLE, or the address, in full/);
+    expect(directPrompt({ title: ARTICLE.title } as Meta, { slug: "fallback" } as Tree)).toMatch(
+      /Find work that cites this article and says something about it/,
+    );
     for (const prompt of [DIRECT_SYSTEM, CLAIMS_SYSTEM]) {
       expect(prompt).toMatch(/Copy the extract's own mistakes too/);
     }
