@@ -23,6 +23,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 let releaseAfterResponse: () => void = () => {};
 let responseEnded = false;
 
+const monitoring = vi.hoisted(() => ({
+  flushStarted: false,
+  releaseFlush: (() => {}) as () => void,
+}));
+
+vi.mock("../src/monitoring.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/monitoring.js")>();
+  return {
+    ...actual,
+    flushMonitoring: async () => {
+      monitoring.flushStarted = true;
+      await new Promise<void>((resolve) => {
+        monitoring.releaseFlush = resolve;
+      });
+    },
+  };
+});
+
 vi.mock("../src/routes.js", () => ({
   handleApi: async (_req: IncomingMessage, res: ServerResponse) => {
     res.end("{}");
@@ -81,6 +99,8 @@ describe("handler and the platform's waitUntil", () => {
   beforeEach(() => {
     registered = [];
     responseEnded = false;
+    monitoring.flushStarted = false;
+    monitoring.releaseFlush = () => {};
     /* A method that needs its `this`, so a detached call fails here as it
        might on the platform. `@vercel/functions` calls it as
        `context.waitUntil?.(promise)`, and so must we. */
@@ -97,6 +117,7 @@ describe("handler and the platform's waitUntil", () => {
   afterEach(() => {
     delete contextHolder[VERCEL_REQUEST_CONTEXT];
     releaseAfterResponse();
+    monitoring.releaseFlush();
   });
 
   it("registers work that is still running after the response has ended", async () => {
@@ -105,11 +126,17 @@ describe("handler and the platform's waitUntil", () => {
 
     expect(registered).toHaveLength(1);
     const kept = registered[0] as Promise<unknown>;
+    expect(kept).toBe(done);
     /* The response is out and the instance would be frozen here; the promise
        the platform holds must not have settled yet. */
     expect(await settled(kept)).toBe(false);
 
     releaseAfterResponse();
+    await vi.waitFor(() => expect(monitoring.flushStarted).toBe(true));
+    /* The route's after-response work is done, but the final monitoring flush
+       is part of the exact promise Vercel holds too. */
+    expect(await settled(kept)).toBe(false);
+    monitoring.releaseFlush();
     await done;
     expect(await settled(kept)).toBe(true);
   });
@@ -119,6 +146,8 @@ describe("handler and the platform's waitUntil", () => {
     const done = handler(fakeRequest(), fakeResponse());
     await vi.waitFor(() => expect(responseEnded).toBe(true));
     releaseAfterResponse();
+    await vi.waitFor(() => expect(monitoring.flushStarted).toBe(true));
+    monitoring.releaseFlush();
     await done;
     expect(registered).toHaveLength(0);
   });

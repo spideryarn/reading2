@@ -272,7 +272,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse): Prom
    * Sentry at all. docs/postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md.
    *
    * The whole promise is registered, not the mirror alone, so anything a route
-   * does after `res.end` is covered without that route having to know.
+   * awaits after `res.end` is covered without that route having to know.
    */
   keepAlive(done);
   return done;

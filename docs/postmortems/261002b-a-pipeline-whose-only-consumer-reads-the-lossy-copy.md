@@ -60,8 +60,8 @@ tests, which run on a process that never suspends.
 
 **The measurement was already there.** `scripts/feedback-reporter.ts` (2026-10-01) records "31 of
 231 rows … the acknowledgement mostly never arrives". It was written down as a fact about Sentry
-and not chased. An 86% failure rate in a column built to find stranded reports is the alarm. It was
-read as a property of the thing it measured.
+and not chased. An 86% unconfirmed rate in a column built to reveal mirror failures is the alarm. It
+was read as a property of the thing it measured.
 
 ## The fix
 
@@ -69,7 +69,7 @@ Shipped, and right for the long term:
 
 1. **`handler` registers its own promise with the platform's `waitUntil`** (src/wait-until.ts,
    src/vercel.ts). That covers every after-response job at once: the mirror, its acknowledgement, the
-   Sentry flush for every error event, and whatever a route adds next. It is read the way
+   Sentry flush for every error event, and whatever a route awaits next. It is read the way
    `@vercel/functions` reads it, without the package's 23 transitive dependencies. In production it
    logs a warning once per instance if the context is ever missing, so a moved symbol is loud rather
    than silent.
@@ -77,7 +77,9 @@ Shipped, and right for the long term:
    with the reply already waiting records delivery.
 3. **The sweep reads the table** (`scripts/feedback-unswept.ts`): every production row since a date
    that no note header and no queue item's `source` names, with `--show` to read one report's words.
-   Sentry becomes a convenience again. A lost mirror costs a missing copy, not a lost report.
+   A browser id shared by several owners is always listed, because id-only coverage is then
+   ambiguous. Sentry becomes a convenience again. A lost mirror costs a missing copy, not a lost
+   report.
 
 **Not done: retrying the mirror.** A retry cannot tell "Sentry never got it" from "Sentry got it and
 we never heard". On 2026-10-01 there were 24 rows of the second kind. Sentry does not dedupe feedback
@@ -89,11 +91,12 @@ events, so a retry would file those twice.
    here for feedback (fix 3), and stated in feedback-reports.md § Where the queue lives. This one
    rule would have made fault 1 cost nothing.
 2. **A failure rate in a column built to detect failures is a bug report, not a statistic.**
-   `mirrored_at` existed to find stranded reports and said 86% were stranded. Treat a health column
-   that is mostly red as an incident the first time anybody reads it. This is a habit, and
+   `mirrored_at` existed to reveal stranded reports and said 86% were unconfirmed. Treat a health
+   column that is mostly red as an incident the first time anybody reads it. This is a habit, and
    [silent-success.md](../reusable/silent-success.md) is its home.
-3. **Any work after `res.end` needs `waitUntil`.** This is now structural: the handler registers
-   everything, so a route cannot forget. The comment in src/vercel.ts says why.
+3. **Any work after `res.end` needs `waitUntil`.** This is now structural for work a route awaits:
+   the handler registers the whole chain, so a route cannot forget. The comment in src/vercel.ts
+   says why.
 4. **Measure the mirror after each deploy:** `count(mirrored_at) / count(*)` for rows since the
    deploy. It is the only test of fix 1 that runs on Vercel. Proposed to the Overseer as a post-deploy
    check. **Rejected: a CI test against a real Vercel instance.** Deploys are only from `main`, and

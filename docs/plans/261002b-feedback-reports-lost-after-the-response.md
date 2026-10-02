@@ -53,9 +53,9 @@ class: the measurement was there, and the explanation stopped one step short.
 ### 1. Keep the instance awake until the handler finishes: `waitUntil`
 
 `handler` in src/vercel.ts hands its own promise to the platform's `waitUntil`, and still returns
-it. That one registration covers everything after the response: the feedback mirror, its
-acknowledgement, the Sentry flush, and anything a future route adds. It is better than handing only
-the mirror over, because the flush has exactly the same problem.
+it. That one registration covers everything awaited after the response: the feedback mirror, its
+acknowledgement, the Sentry flush, and anything a future route adds to that promise chain. It is
+better than handing only the mirror over, because the flush has exactly the same problem.
 
 - **How we reach `waitUntil`: the way `@vercel/functions` does, without the package.** The
   package's `waitUntil` is five lines: it reads
@@ -91,8 +91,9 @@ New: `npx tsx scripts/feedback-unswept.ts [--since 30d]`. It reads production `f
 through the same `productionConnection` / `readEnvProd` path as `feedback-reporter.ts`, with the
 same `Target:` line and the same `begin read only … rollback`. It lists every row since `--since`
 whose id is named neither by a `docs/user-feedback/` note's `reports:` header (`readNotes` /
-`parseNoteHeader` from `feedback-endings.ts`) nor in any Overseer queue item's text. For each one it
-prints the id, `created_at`, kind, whether an administrator filed it (`isAdmin`), whether Sentry has
+`parseNoteHeader` from `feedback-endings.ts`) nor in any Overseer queue item's `source`. An id shared
+by several owners is always listed, because id-only coverage cannot say which row it meant. For each
+one it prints the id, `created_at`, kind, whether an administrator filed it (`isAdmin`), whether Sentry has
 it (`mirrored_at` / `sentry_event_id`, said as "Sentry: confirmed" or "Sentry: unconfirmed, search
 `report_id:<id>`"), and the url and slug. **It does not print the body**: the sweep fetches the words
 for a report it is about to act on, as now (`feedback-reporter.ts` for an admin, Sentry or the row
@@ -147,6 +148,11 @@ installs the request context before user code loads.
 - **And one real bug, found from its P2:** call `context.waitUntil(promise)` as a method, as the
   package does. Detaching it loses `this`. The test's fake now needs its `this`.
 
+The code review then closed three more ways this recovery path could lie: report ids are unique only
+per owner, so a shared id is always listed as ambiguous; queue sources match exact id tokens rather
+than six-character prefixes; and `--show` quotes every untrusted line and escapes terminal controls.
+It also refuses calendar dates JavaScript would silently normalise, such as `2026-02-30`.
+
 ## Tests, red first
 
 - `tests/vercel-wait-until.test.ts`: install a fake Vercel request context on `globalThis` and call
@@ -154,10 +160,11 @@ installs the request context before user code loads.
   work done *after* `res.end` has finished. Red on today's handler, which registers nothing.
 - `tests/feedback-mirror.test.ts`, one new case: the ack and the timer due in the same turn, with
   the reply queued first. Assert that `mirrored_at` is written. Red today.
-- `tests/feedback-unswept.test.ts`: the pure `unswept(rows, notes, queueText)` function. A row named
-  by a note is excluded. A row named in queue text is excluded. A row named nowhere is listed. A
-  mirrored row is still listed if nothing covers it (mirroring is not coverage). Plus a parse of
-  `--since`. Red because the module doesn't exist.
+- `tests/feedback-unswept.test.ts`: the pure coverage and `unswept(rows, coveredIds)` functions. A
+  row named by a note is excluded. A row named in a queue item's `source` is excluded. A row named
+  nowhere is listed. A mirrored row is still listed if nothing covers it (mirroring is not
+  coverage). Plus parsing `--since`, the read-only transaction, exact source tokens, shared ids and
+  the untrusted `--show` boundary. Red first on each bug the review found.
 
 ## Stages
 

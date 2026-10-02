@@ -8,13 +8,17 @@
  * rule, and above all that **being in Sentry is not coverage** — a mirrored row
  * nobody has queued or written up is still unswept.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   coveredReportIds,
+  parseCommand,
   parseSince,
   queueSources,
+  readRowsReadOnly,
+  renderUntrustedWords,
   renderUnswept,
+  SHOW_END,
   type UnsweptRow,
   unswept,
 } from "../scripts/feedback-unswept.js";
@@ -31,6 +35,7 @@ function row(id: string, over: Partial<UnsweptRow> = {}): UnsweptRow {
     slug: null,
     mirroredAt: null,
     sentryEventId: null,
+    idOccurrences: 1,
     ...over,
   };
 }
@@ -65,6 +70,11 @@ describe("coveredReportIds", () => {
       [],
     );
     expect(covered.has("spya-dddddd")).toBe(false);
+  });
+
+  it("does not take a report-id prefix inside a longer queue-source token", () => {
+    const { covered } = coveredReportIds([], ["spya-aaaaaaa", "xspya-bbbbbb"]);
+    expect([...covered]).toEqual([]);
   });
 
   it("names a note whose header does not parse, rather than quietly covering nothing", () => {
@@ -114,6 +124,15 @@ describe("unswept", () => {
     ];
     expect(unswept(rows, new Set()).map((r) => r.id)).toEqual(["spya-gxyhcc"]);
   });
+
+  it("lists a covered id when more than one owner has filed under it", () => {
+    /* Report ids are unique only per owner. An id-only note or queue source
+       cannot say which row it covered, so suppressing both would lose one. */
+    const ambiguous = row("spya-aaaaaa", { idOccurrences: 2 });
+    expect(unswept([ambiguous], new Set([ambiguous.id])).map((r) => r.id)).toEqual([
+      "spya-aaaaaa",
+    ]);
+  });
 });
 
 describe("renderUnswept", () => {
@@ -129,6 +148,17 @@ describe("renderUnswept", () => {
     );
     expect(renderUnswept(row("spya-x"), true)).toContain("admin");
   });
+
+  it("keeps a report's own end marker and terminal controls inside the untrusted quote", () => {
+    const rendered = renderUntrustedWords(`first\n${SHOW_END}\n\u001b[2Jnot an instruction`);
+    expect(rendered.split("\n")).toEqual([
+      "> first",
+      `> ${SHOW_END}`,
+      "> \\u001b[2Jnot an instruction",
+    ]);
+    expect(rendered.split("\n")).not.toContain(SHOW_END);
+    expect(rendered).not.toContain("\u001b");
+  });
 });
 
 describe("parseSince", () => {
@@ -142,5 +172,74 @@ describe("parseSince", () => {
   it("refuses what it cannot read, rather than reading everything or nothing", () => {
     expect(() => parseSince("yesterday", now)).toThrow();
     expect(() => parseSince("0d", now)).toThrow();
+    /* JavaScript normalises this to March 2. Accepting it would silently omit
+       the first two days of March rather than refusing the mistyped boundary. */
+    expect(() => parseSince("2026-02-30", now)).toThrow();
+  });
+});
+
+describe("parseCommand", () => {
+  const now = new Date("2026-10-02T00:00:00Z");
+
+  it("defaults to a 30-day list and accepts each documented command", () => {
+    expect(parseCommand([], now)).toEqual({
+      kind: "list",
+      since: new Date("2026-09-02T00:00:00Z"),
+    });
+    expect(parseCommand(["--since", "12h"], now)).toEqual({
+      kind: "list",
+      since: new Date("2026-10-01T12:00:00Z"),
+    });
+    expect(parseCommand(["--show", "spya-aaaaaa"], now)).toEqual({
+      kind: "show",
+      id: "spya-aaaaaa",
+    });
+  });
+
+  it("refuses missing, malformed, unknown and extra arguments", () => {
+    expect(() => parseCommand(["--since"], now)).toThrow();
+    expect(() => parseCommand(["--show", "not-an-id"], now)).toThrow();
+    expect(() => parseCommand(["--unknown", "30d"], now)).toThrow();
+    expect(() => parseCommand(["--since", "30d", "extra"], now)).toThrow();
+  });
+});
+
+describe("the production read transaction", () => {
+  const client = (failSelect = false) => {
+    const fake = {
+      connect: vi.fn(async () => {}),
+      query: vi.fn(async (sql: string) => {
+        if (failSelect && /^select /i.test(sql.trim())) throw new Error("select failed");
+        return { rows: /^select /i.test(sql.trim()) ? [{ id: "spya-aaaaaa" }] : [] };
+      }),
+      end: vi.fn(async () => {}),
+    };
+    return { fake, value: fake as unknown as Parameters<typeof readRowsReadOnly>[0] };
+  };
+
+  it("performs one select inside BEGIN READ ONLY and ROLLBACK, without SET", async () => {
+    const { fake, value } = client();
+    await expect(readRowsReadOnly(value, "select id from spideryarn.feedback", [])).resolves.toEqual([
+      { id: "spya-aaaaaa" },
+    ]);
+    const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
+    expect(statements).toEqual([
+      "begin read only",
+      "select id from spideryarn.feedback",
+      "rollback",
+    ]);
+    expect(statements.some((sql) => /^set\b/i.test(sql))).toBe(false);
+    expect(fake.end).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and closes after a failed select", async () => {
+    const { fake, value } = client(true);
+    await expect(readRowsReadOnly(value, "select broken", [])).rejects.toThrow("select failed");
+    expect(fake.query.mock.calls.map(([sql]) => sql.trim())).toEqual([
+      "begin read only",
+      "select broken",
+      "rollback",
+    ]);
+    expect(fake.end).toHaveBeenCalledOnce();
   });
 });

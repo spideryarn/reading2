@@ -95,8 +95,8 @@
  * promise, and `sendEnvelope` swallows every transport failure and resolves an
  * empty `{}`. So a network failure, a rate limit, a dropped event or a disabled
  * transport all used to leave `mirrored_at` populated with nothing delivered —
- * docs/reusable/silent-success.md, in the one column that finds a stranded
- * report.
+ * docs/reusable/silent-success.md, in the one column that finds an unconfirmed
+ * mirror.
  *
  * Now:
  *
@@ -108,8 +108,9 @@
  *   confirmed*.
  *
  * Which makes `mirror_attempted_at is not null and mirrored_at is null` a
- * trustworthy query for a report Sentry did not take, which is the whole point
- * of having either column.
+ * trustworthy query for a report whose delivery Sentry did not confirm to us.
+ * It is deliberately not a claim that Sentry lacks the report: a 2xx reply can
+ * be lost after the event arrives.
  *
  * The wait happens **after the reader has been answered** — src/routes.ts starts
  * this and awaits it on the far side of `send` — so it costs a warm function and
@@ -403,7 +404,7 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
       const took = status !== undefined && status >= 200 && status < 300;
       if (!took) {
         /* Left as attempted-not-confirmed, which is the true thing to say. The
-           query that finds a stranded report is
+           query that finds an unconfirmed mirror is
            `mirror_attempted_at is not null and mirrored_at is null`, and it only
            means anything because of this branch. */
         logger.warn(
