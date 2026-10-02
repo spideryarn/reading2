@@ -186,11 +186,14 @@ export function acceptability(
   if (!delivered || judged.length === 0) return false;
   const byJudge = new Map<string, Judged[]>();
   for (const j of judged) byJudge.set(j.judge, [...(byJudge.get(j.judge) ?? []), j]);
+  /* The declared rule is two votes from a three-member panel, not unanimity
+     from whatever smaller panel happened to be retained. In particular, a
+     budget trim must not turn two available votes into a certification. */
+  if (byJudge.size < 3) return false;
   const good = [...byJudge.values()].filter(
     (ratings) => (mean(ratings.map((j) => j.s.accuracy)) ?? 0) >= 4 && (mean(ratings.map((j) => j.s.sourcing)) ?? 0) >= 4,
   ).length;
-  /* Fixed before the run: two members of the three-judge panel. A smoke run
-     with one judge can exercise the machinery, but cannot certify an answer. */
+  /* Fixed before the run: two members of the complete three-judge panel. */
   if (good < 2) return false;
   const counts = new Map<string, Set<string>>();
   for (const j of judged) {
@@ -414,14 +417,15 @@ export function renderReport(inp: ReportInputs): { markdown: string; rows: ArmRo
   const complete = inp.missing.length === 0;
   const expectedAnswers = m.answers.length + (m.finalists?.answers.length ?? 0);
   const expectedJudgements = m.judgements.length + (m.finalists?.judgements.length ?? 0);
+  const trimmedJudgements = m.trimmed?.dropped.length ?? 0;
   const lines: string[] = [];
   lines.push(`# Dig deeper answer models — run \`${m.run}\``, "");
   lines.push(
     complete
-      ? `**Complete run**: every manifest answer and judgement is present, current and valid, and every required finalist probe is current (${expectedAnswers} answers, ${expectedJudgements} judgements).`
+      ? `**Complete ${trimmedJudgements ? "trimmed " : ""}run**: every retained manifest answer and judgement is present, current and valid${m.finalists ? ", and every required finalist probe is current" : ""} (${expectedAnswers} answers, ${expectedJudgements} judgements${trimmedJudgements ? `; ${trimmedJudgements} planned judgements deliberately omitted` : ""}).`
       : `**PARTIAL — not a result.** ${inp.missing.length} expected cell(s) missing or stale: ${inp.missing.slice(0, 20).join(", ")}${inp.missing.length > 20 ? ", …" : ""}`,
     "",
-    `Selection: examples ${m.selection.examples.join(", ")}; arms ${m.selection.arms.join(", ")}; ${m.selection.runs} answer run(s), first ${m.selection.judgeRuns ?? m.selection.runs} judged; judges ${m.selection.judges.join(", ")}; re-judge ${m.selection.rejudge ? "on" : "off"}. Commit at manifest: \`${m.commit.slice(0, 12)}\`.`,
+    `Selection: examples ${m.selection.examples.join(", ")}; arms ${m.selection.arms.join(", ")}; ${m.selection.runs} answer run(s), first ${m.selection.judgeRuns ?? m.selection.runs} judged; judges ${m.selection.judges.join(", ")}; re-judge ${m.selection.rejudge ? "on" : "off"}${trimmedJudgements ? `; declared trim removed ${trimmedJudgements} judge calls` : ""}. Commit at manifest: \`${m.commit.slice(0, 12)}\`.`,
     "",
     "Costs use the ledger's billed-spend rule. Ordinary OpenRouter calls are credits from `usage.cost` (cash is about 5.5% more when buying those credits); BYOK calls use the reported upstream inference cost and are billed on that provider's account instead.",
     "",
@@ -450,6 +454,16 @@ export function renderReport(inp: ReportInputs): { markdown: string; rows: ArmRo
     "Shared first-press cost and time are the frozen capture. Shared repeat is a conservative reconstruction, not a second measurement: it removes *Look it up* only where production would skip an assessed lookup and otherwise holds the captured shared calls fixed.",
     "",
   );
+  const judgeRuns = m.selection.judgeRuns ?? m.selection.runs;
+  const reducedPanelPresses = m.selection.examples.flatMap((example) =>
+    Array.from({ length: judgeRuns }, (_, i) => new Set(m.judgements.filter((s) => s.pass === "main" && s.example === example && s.run === i + 1).map((s) => s.judge)).size),
+  ).filter((n) => n < 3).length;
+  if (reducedPanelPresses) {
+    lines.push(
+      `**Reduced panel**: ${reducedPanelPresses} judged press(es) had fewer than three judges. Their scores remain in quality means, but they cannot be certified acceptable under the declared two-of-three rule.`,
+      "",
+    );
+  }
   const check = rows.find((r) => r.replaceRate !== null);
   if (check) lines.push(`**The Opus check** (\`${check.arm}\`): replaced the draft in ${pct(check.replaceRate)} of presses; the check call alone cost ${$(check.checkUsd)} a press on average.`, "");
 
@@ -459,7 +473,7 @@ export function renderReport(inp: ReportInputs): { markdown: string; rows: ArmRo
   if (ob) lines.push(`- **Incumbent generation spread** (opus-b against opus, judged blind side by side): ${n2(ob.primary)} (90% CI ${ob.primaryCi ? `${n2(ob.primaryCi[0])} – ${n2(ob.primaryCi[1])}` : "–"}). This is the spread of one model drawn twice, not a universal floor.`);
   lines.push(`- **Run-to-run spread** (SD across runs of each arm's mean difference from opus): ${rows.filter((r) => r.arm !== ANCHOR_ARM).map((r) => `${r.arm} ${n2(r.runSpread)}`).join(", ")}.`);
   const st = judgeStability(inp);
-  lines.push(`- **Judge stability** (run 1 re-judged with a fresh shuffle): ${st.pairs} pairs, mean |Δ overall| ${n2(st.meanAbs)}, within one point ${pct(st.within1)}.`);
+  lines.push(`- **Judge stability** (retained run-1 re-judgements with a fresh shuffle): ${st.pairs} pairs, mean |Δ overall| ${n2(st.meanAbs)}, within one point ${pct(st.within1)}.`);
   lines.push(`- **Position** (the repeated Opus answer's mean; non-anchor mean vs Opus in the same batch): ${positionBias(inp).map((p) => `${p.position + 1}: Opus ${n2(p.anchorOverall)} (n ${p.anchorN}); ${n2(p.vsAnchor)} vs Opus (n ${p.relativeN})`).join("; ")}.`);
   const disagree = rows.filter((r) => r.primary !== null && r.outsideFamily !== null && (Math.sign(r.primary) !== Math.sign(r.outsideFamily) || Math.abs(r.primary - r.outsideFamily) > 1));
   lines.push(`- **Outside-family sensitivity**: ${disagree.length ? `disagrees with the all-judge mean for ${disagree.map((r) => r.arm).join(", ")}` : "agrees with the all-judge mean for every arm"}.`, "");

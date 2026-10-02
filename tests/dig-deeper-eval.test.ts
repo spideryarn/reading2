@@ -37,7 +37,8 @@ import {
 import { BudgetHalted, BudgetRefused, openBudget, paidStep, requestChars, upperBoundUsd } from "../evals/dig-deeper/budget.js";
 import { type Capture, productionExplainRequest } from "../evals/dig-deeper/capture.js";
 import { decodeScores, JUDGE_SYSTEM, judgeArticlePart, judgeRequest, judgementIsComplete, pointerOf, readJudgement } from "../evals/dig-deeper/judge.js";
-import { expectedSlots } from "../evals/dig-deeper/manifest.js";
+import { assertJudgeRequestFits, judgeById } from "../evals/dig-deeper/judges.js";
+import { expectedSlots, manifestIntegrityIssues, type Manifest } from "../evals/dig-deeper/manifest.js";
 import { orderForCache } from "../evals/dig-deeper/preflight.js";
 import { acceptability, bootstrapByExample, cacheStateOf, citationRepeatSkipsLookup, frontier, judgeStability, positionBias, probeResultFor, reconstructCold } from "../evals/dig-deeper/report.js";
 import { EXAMPLES, type Example, exampleById } from "../evals/dig-deeper/examples.js";
@@ -215,6 +216,33 @@ describe("the blind batches", () => {
     const slots = expectedSlots(sel, "opus", "261001s");
     expect(new Set(slots.answers.map((s) => s.run))).toEqual(new Set([1, 2, 3]));
     expect(new Set(slots.judgements.filter((s) => s.pass === "main").map((s) => s.run))).toEqual(new Set([1, 2]));
+  });
+
+  it("refuses a judge request that exceeds the replacement judge's context", () => {
+    expect(judgeById("grok").contextTokens).toBe(500_000);
+    expect(() => assertJudgeRequestFits("grok", { model: "x-ai/grok-4.7", max_tokens: 8_000, messages: [{ role: "user", content: "x".repeat(2_000_000) }] })).toThrow(/context window/);
+    expect(() => assertJudgeRequestFits("grok", { model: "x-ai/grok-4.7", max_tokens: 8_000, messages: [{ role: "user", content: "small" }] })).not.toThrow();
+  });
+
+  it("calls a matrix complete only when every omission is declared by the trim", () => {
+    const planned = expectedSlots(sel, "opus", "261001s");
+    const removed = planned.judgements[0];
+    if (!removed) throw new Error("the fixture has no judgement to remove");
+    const removedGroup = planned.judgements.filter(
+      (s) => s.pass === removed.pass && s.example === removed.example && s.run === removed.run && s.judge === removed.judge,
+    );
+    const removedSlots = new Set(removedGroup.map((s) => s.slot));
+    const manifest = {
+      run: "test",
+      createdAt: "now",
+      commit: "abc",
+      selection: sel,
+      captures: { from: "test", sha256: {} },
+      answers: planned.answers,
+      judgements: planned.judgements.filter((s) => !removedSlots.has(s.slot)),
+    } satisfies Manifest;
+    expect(manifestIntegrityIssues(manifest, "opus", "261001s")).toContain(`undeclared missing judgement ${removed.slot}`);
+    expect(manifestIntegrityIssues({ ...manifest, trimmed: { at: "now", why: "budget", dropped: [...removedSlots] } }, "opus", "261001s")).toEqual([]);
   });
 
   it("tries the shortest article first while keeping same-article examples together", () => {
@@ -514,7 +542,8 @@ describe("the report's predeclared statistics", () => {
 
   it("never calls one judge acceptable under the declared two-of-three rule", () => {
     expect(acceptability([score("opus")], true)).toBe(false);
-    expect(acceptability([score("opus"), score("sol")], true)).toBe(true);
+    expect(acceptability([score("opus"), score("sol")], true)).toBe(false);
+    expect(acceptability([score("opus"), score("sol"), score("grok")], true)).toBe(true);
   });
 
   it("counts a judge once when the anchor appears in several batches", () => {
@@ -526,8 +555,8 @@ describe("the report's predeclared statistics", () => {
       ...score(judge),
       s: { ...score(judge).s, errors: [{ error, evidence: `outside knowledge: ${error}` }] },
     });
-    expect(acceptability([withOutsideError("opus", "wrong date"), withOutsideError("sol", "wrong affiliation")], true)).toBe(true);
-    expect(acceptability([withOutsideError("opus", "Wrong date."), withOutsideError("sol", "wrong   date")], true)).toBe(false);
+    expect(acceptability([withOutsideError("opus", "wrong date"), withOutsideError("sol", "wrong affiliation"), score("grok")], true)).toBe(true);
+    expect(acceptability([withOutsideError("opus", "Wrong date."), withOutsideError("sol", "wrong   date"), score("grok")], true)).toBe(false);
     expect(pointerOf("[OWN 2] contradicts it")).toEqual({ kind: "source", ref: "[own:2]" });
   });
 

@@ -1,6 +1,7 @@
 # 261001s — which model should write a *Dig deeper* answer? A quality-and-cost eval
 
-Status: **stage 2 built and smoke-run; stage 3 not started** — Sol's plan review
+Status: **run; result corrected after the numbers review** (§ Result; § What running changed). No
+production change — the model is Greg's call. Sol's plan review
 ([261001s-…-plan-review-sol.md](261001s-dig-deeper-answer-model-eval-plan-review-sol.md)): *build
 after fixes*; all nine findings taken, two of them reshaped (§ What the plan review changed). Owner:
 the session in worktree `dig-deeper-eval`, dispatched by the Overseer from [Q-dig-deeper-eval].
@@ -404,6 +405,100 @@ Stage 2, 2026-10-01. Each is the closest sound option to what the plan said, and
 - **Position bias uses the repeated control rather than a changing answer mix.** The report groups
   the Opus answer's own score by its position, and each non-anchor answer's score minus Opus in the
   same batch by that answer's position. A raw mean over all arms would confound order with quality.
+
+## What running changed
+
+- **The Kuhn PDF is judged whole.** Sol's pre-spend review (F13) had compacted any article over
+  200k tokens into a gold-grounded packet, on the premise of a 262k window. The original judges
+  were listed at 1M or more, so the article-only packet threshold became 600k and the test pinning
+  it was seen red at 200k. Grok 4.7's replacement window is 500k, which still takes this run's
+  ~231k-token request whole; `assertJudgeRequestFits` now checks each complete request against its
+  actual judge's window before any future call, rather than relying on that historical threshold.
+- **Kimi K3 could not be an answer arm or a judge.** It delivered 3 of 18 answers: every Kuhn
+  request (~255k tokens) came back HTTP 429 across two separate sessions, and most other requests
+  ran past explain's two-minute deadline. Those count as non-delivery, as they would for a reader.
+  Nine first-session 429s (six Kimi, three DeepSeek on Kuhn) were set aside as `*.busy429` and
+  re-bought once; DeepSeek then delivered, Kimi did not.
+- **Grok 4.7 replaced Kimi as the third-family judge** (`evals/dig-deeper/judges.ts`, its own file
+  because `arms.ts` is in every answer cell's key). Grok **did not cache the article prefix**: each
+  Kuhn judge call re-read ~231k tokens at ~$1.05 (only 1,152 input tokens were reported as cached),
+  and Opus wrote its Kuhn prefix twice because the judge's system prompt differs by entry point.
+- **The judging matrix was trimmed to fit the budget**, recorded in the run's `manifest.json`
+  (`trimmed`): Grok does not judge `kuhn-sapolsky` (two judges there), and the re-judge pass covers
+  `feynman-millikan` and `kuhn-challenge` only (57 pairs). 120 of the 162 planned judge cells.
+- **The run's cap was raised three times** — $37 → $38.60 → $38.70 — each time because a warm
+  Opus Kuhn call (~$0.13 real) reserves its uncached bound (~$5.65). The auto-mode classifier then
+  refused further waiting as a safety bypass; the Overseer took it to Greg, who allowed the run to
+  finish under a hard **$50** ceiling for the whole eval. No cap was raised after that.
+- **The production-shaped finalist run was not run** — it does not fit under the run's cap, and
+  it is offered to Greg as a follow-up (~$7). The forced-search probe ran in the smoke only (Luna,
+  DeepSeek: both forced a search).
+
+**Budget-accounting total**: $37.5094 on run `main` (capture $0.14 included) + $1.2292 of smoke
+runs = **$38.7386**, rounded to **$38.74**. Of that, $0.7320 is the deliberately conservative
+upper bound recorded for ten timed-out calls whose providers reported no cost, so $38.74 is the
+number consumed against the cap, not an exact provider bill.
+
+## Result
+
+The eval's own report is promoted to
+[evals/results/dig-deeper/2026-10-02-main-report.md](../../evals/results/dig-deeper/2026-10-02-main-report.md);
+Sol's review of these numbers and this conclusion (F22–F28, all fixed, *stands after my fixes*) is
+[261001s-…-results-review-sol.md](261001s-dig-deeper-answer-model-eval-results-review-sol.md).
+
+Run `main`, 2026-10-02: 216 answers (12 arms × 6 examples × 3 draws), 120 retained blind judge
+calls by Opus, GPT-6.1 Sol and Grok 4.7, every cell in the declared trimmed manifest present. The
+trim omitted 42 originally planned calls: the re-judge covers only two examples, and
+`kuhn-sapolsky` has only Opus and Sol. Quality is each answer's overall score (1–10) minus the Opus
+answer's in the same batch, so **0 = as good as Opus**. Cost is per press, warm
+("repeat"), and includes the shared search step (~$0.024 average); first press is the cold write of
+the article, averaged over the six examples, and dominated by the 255k-token Kuhn PDF.
+
+| arm | delivered | acceptable | quality vs Opus | by the Grok judge | words | repeat press | first press | reader waits |
+|---|---|---|---|---|---|---|---|---|
+| **Opus 5.5** (today) | 18/18 | 8/12 | 0 | 0 | 337 | $0.085 | $0.74 | 19 s |
+| Opus again (control) | 18/18 | 8/12 | −0.06 | −0.10 | 330 | — | — | — |
+| **GPT-6.1 Sol** | 18/18 | **10/12** | −0.47 (all) / −1.23 (outside OpenAI) | −0.60 | 204 | **$0.036** | $0.25 | **12 s** |
+| Luna + Opus check | 18/18 | 8/12 | −0.29 | −0.50 | 245 | $0.084 | $0.75 | 33 s |
+| Grok 4.7 | 18/18 | 8/12 | −0.74 | (own family) | 235 | $0.136 | $0.38 | 46 s |
+| Sonnet 5.5 | 18/18 | 6/12 | −1.24 | −1.70 | 270 | $0.065 | $0.38 | 14 s |
+| DeepSeek V4.1 Flash | 17/18 | 3/12 | −1.23 | −1.00 | 350 | $0.028 | $0.03 | 41 s |
+| Luna alone | 18/18 | 7/12 | −2.21 | −2.50 | 129 | $0.025 | $0.04 | 13 s |
+| Sonnet 5 (the old set-up) | 18/18 | 1/12 | −2.38 | −1.90 | 329 | $0.063 | $0.38 | 7 s |
+| Gemini 3.8 Flash | 18/18 | 2/12 | −2.79 | −2.40 | 214 | $0.037 | $0.10 | 15 s |
+| GLM-5.3 | **8/18** | 2/12 | −1.35 | −1.00 | 290 | $0.071 | $0.05 | 71 s |
+| Kimi K3 | **3/18** | 0/12 | −1.33 | −1.00 | 326 | — | — | — |
+
+What it says, in plain words:
+
+- **Opus has the highest quality point estimate**, but this six-example run does not establish that
+  it is best. Luna + check's 90% interval (−0.64 to +0.17) and Sol's (−1.06 to +0.06) both include
+  Opus; the second Opus draw is −0.06 with a −0.31 to +0.36 interval. The control therefore
+  measures generation spread; it does not show that judges can reliably separate Opus from the
+  closest alternatives.
+- **GPT-6.1 Sol has the strongest acceptability result.** All ten presses with the full panel were
+  acceptable. Both available judges also accepted each of the two `kuhn-sapolsky` presses, but the
+  missing Grok vote means the predeclared rule cannot certify them: the report correctly says
+  **10/12**, and no arm is certified on all twelve. Sol costs about **58% less per warm press** and
+  waits **7 seconds less** than Opus. It is shorter (204 words to Opus's 337) and scores lower on
+  depth (3.7 to 4.5). How far below Opus it is depends on who judges: Sol's own judge puts it above
+  Opus (+0.92), Opus's judge well below (−1.75), and Grok, an outside-family judge rather than a
+  neutral one, at −0.60. It is weakest on the long PDF's glossary term (−2.0 on
+  `kuhn-challenge`).
+- **"Luna writes, Opus checks" produces no meaningful saving.** Opus rewrote Luna's draft in 83%
+  of presses. The measured warm total was $0.08437 against Opus's $0.08500 (under 1% saved), while
+  its cold press cost slightly more ($0.748 vs $0.743) and the reader waits for both (33 s).
+- **Kimi K3 and GLM-5.3 are not usable on this route and two-minute deadline**: they mostly failed
+  to deliver at all.
+- **Everything cheaper than Sol is clearly worse** (DeepSeek, Luna, Gemini Flash), and Sonnet 5 —
+  the set-up before 261001p — is near the bottom.
+
+Caveats: six examples; the arms answered without their own web tool, and the production-shaped
+check of the finalists was not run; first-press cost averages over two 255k-token presses and is far
+lower on an ordinary article. Judge-family effects are large and asymmetric: the Sol judge reverses
+Sol's comparison with Opus (+0.92 versus −1.23 outside OpenAI), the Grok judge scores Grok at −0.50
+versus −0.83 outside xAI, and the Opus judge puts every non-anchor arm below Opus. Grok is the third
+family and is outside Sol's family, but **"neutral judge" overstates what the design establishes**.
 
 ## Simpler options passed over
 

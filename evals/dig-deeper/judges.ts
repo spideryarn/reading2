@@ -19,16 +19,34 @@
  * unused, because editing that file would re-key the answers; this file is
  * the one everything imports.
  */
+import type { AiRequestBody } from "../../src/ai-call.js";
+import { estimateTokens } from "../../src/article-prompt.js";
 import { MODELS } from "./arms.js";
 
-export const JUDGES: readonly { id: string; model: string }[] = [
-  { id: "opus", model: MODELS.opus },
-  { id: "sol", model: MODELS.sol },
-  { id: "grok", model: MODELS.grok },
+export interface Judge {
+  id: string;
+  model: string;
+  contextTokens: number;
+}
+
+export const JUDGES: readonly Judge[] = [
+  { id: "opus", model: MODELS.opus, contextTokens: 1_000_000 },
+  { id: "sol", model: MODELS.sol, contextTokens: 1_050_000 },
+  { id: "grok", model: MODELS.grok, contextTokens: 500_000 },
 ];
 
-export function judgeById(id: string): { id: string; model: string } {
+export function judgeById(id: string): Judge {
   const j = JUDGES.find((x) => x.id === id);
   if (!j) throw new Error(`no judge "${id}" — known: ${JUDGES.map((x) => x.id).join(", ")}`);
   return j;
+}
+
+/** Refuse locally before a replacement judge is sent more context than its listing permits. */
+export function assertJudgeRequestFits(id: string, request: AiRequestBody): void {
+  const judge = judgeById(id);
+  const output = typeof request.max_tokens === "number" ? request.max_tokens : 0;
+  const estimated = estimateTokens(JSON.stringify(request)) + output;
+  if (estimated > judge.contextTokens) {
+    throw new Error(`${id}: estimated ${estimated} tokens exceeds its ${judge.contextTokens}-token context window`);
+  }
 }

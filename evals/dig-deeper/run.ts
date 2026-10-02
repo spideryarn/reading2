@@ -36,7 +36,7 @@ import { isMain } from "../../src/is-main.js";
 import type { Block, Meta } from "../../src/types.js";
 import { type AnswerCell, answerCell, answerKey, cellRequests, probeForcedSearch, type CellInputs, totalReportedWebSearches } from "./answer.js";
 import { ANCHOR_ARM, ARMS, armById, lastPartText, modelMatches } from "./arms.js";
-import { JUDGES, judgeById } from "./judges.js";
+import { assertJudgeRequestFits, JUDGES, judgeById } from "./judges.js";
 import { type Budget, BudgetHalted, BudgetRefused, type Ledger, openBudget, paidStep, recordUsd } from "./budget.js";
 import { articleSha, type Capture, captureExample, sha256, type SharedCall } from "./capture.js";
 import { EXAMPLES, type Example, exampleById } from "./examples.js";
@@ -46,6 +46,7 @@ import {
   completeness,
   currentCell,
   expectedSlots,
+  manifestIntegrityIssues,
   type JudgeSlot,
   judgeSlots,
   type Manifest,
@@ -451,6 +452,7 @@ function judgePlan(run: string, slot: JudgeSlot, captures: Map<string, Capture>,
     lastPart,
     answers,
   });
+  assertJudgeRequestFits(slot.judge, request);
   return { kind: "judge", key: judgeKey(request, order, JUDGE_SOURCE()), order, labels, answers, armRequest: req, lastPart };
 }
 
@@ -622,6 +624,7 @@ export function report(f: Flags): void {
     return plan.kind === "waiting" ? null : plan.key;
   });
   const missing = [...ansMissing.missing, ...ansMissing.stale, ...finMissing.missing, ...finMissing.stale, ...jMissing.missing, ...jMissing.stale];
+  missing.push(...manifestIntegrityIssues(m, ANCHOR_ARM, SEED).map((issue) => `manifest (${issue})`));
   for (const s of judgeAll) {
     const cell = judgements.get(s.slot);
     if (cell && !judgementIsComplete(cell)) missing.push(`${s.slot} (failed: ${cell.failure ?? "no scores"})`);
@@ -635,8 +638,13 @@ export function report(f: Flags): void {
   }
   const { markdown, complete } = renderReport({ manifest: m, answers, judgements, captures, missing, ...(probeResults ? { probe: probeResults } : {}) });
   const budgetFile = path.join(runDir(f.run), "budget.json");
-  const spent = fs.existsSync(budgetFile) ? (JSON.parse(fs.readFileSync(budgetFile, "utf8")) as { spentUsd: number; halted: string | null }) : null;
-  const tail = spent ? `\nSpent on this run (budget.json): $${spent.spentUsd.toFixed(4)}${spent.halted ? ` — HALTED: ${spent.halted}` : ""}.\n` : "";
+  const spent = fs.existsSync(budgetFile)
+    ? (JSON.parse(fs.readFileSync(budgetFile, "utf8")) as { spentUsd: number; halted: string | null; settled?: Array<{ usd: number; note?: string }> })
+    : null;
+  const boundedUsd = spent?.settled?.filter((s) => s.note?.includes("upper bound")).reduce((n, s) => n + s.usd, 0) ?? 0;
+  const tail = spent
+    ? `\nBudget-accounted on this run (budget.json): $${spent.spentUsd.toFixed(4)}${boundedUsd ? `, including $${boundedUsd.toFixed(4)} of conservative upper bounds for calls with no reported cost` : ""}${spent.halted ? ` — HALTED: ${spent.halted}` : ""}.\n`
+    : "";
   fs.writeFileSync(path.join(runDir(f.run), "report.md"), markdown + tail);
   if (complete && !m.completedAt) {
     m.completedAt = new Date().toISOString();

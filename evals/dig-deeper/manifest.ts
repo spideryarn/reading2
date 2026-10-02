@@ -107,6 +107,10 @@ export interface Manifest {
   captures: { from: string; sha256: Record<string, string> };
   answers: AnswerSlot[];
   judgements: JudgeSlot[];
+  /** A deliberate reduction from `expectedSlots(selection)`, made before the
+   * retained cells were bought. The report verifies that this list explains
+   * every omitted judgement; editing the matrix alone cannot look complete. */
+  trimmed?: { at: string; why: string; dropped: string[] };
   /** The production-shaped finalist run, added by `finalists` before it spends. */
   finalists?: { arms: string[]; answers: AnswerSlot[]; judgements: JudgeSlot[] };
   completedAt?: string;
@@ -177,6 +181,74 @@ export function expectedSlots(sel: Selection, anchor: string, seedBase: string):
     }
   }
   return { answers, judgements };
+}
+
+const duplicateValues = (xs: readonly string[]) => [...new Set(xs.filter((x, i) => xs.indexOf(x) !== i))];
+
+function answerIntegrityIssues(actual: readonly AnswerSlot[], planned: readonly AnswerSlot[]): string[] {
+  const issues = duplicateValues(actual.map((s) => s.slot)).map((slot) => `duplicate answer ${slot}`);
+  const expectedBySlot = new Map(planned.map((s) => [s.slot, s]));
+  const actualBySlot = new Map(actual.map((s) => [s.slot, s]));
+  for (const [slot, expected] of expectedBySlot) {
+    const found = actualBySlot.get(slot);
+    if (!found) issues.push(`missing answer ${slot}`);
+    else if (hashOf(found) !== hashOf(expected)) issues.push(`changed answer slot ${slot}`);
+  }
+  for (const slot of actualBySlot.keys()) if (!expectedBySlot.has(slot)) issues.push(`unexpected answer ${slot}`);
+  return issues;
+}
+
+function judgementSlotIssues(actual: readonly JudgeSlot[], planned: readonly JudgeSlot[], dropped: readonly string[], anchor: string): string[] {
+  const issues = duplicateValues(actual.map((s) => s.slot)).map((slot) => `duplicate judgement ${slot}`);
+  issues.push(...duplicateValues(dropped).map((slot) => `duplicate trimmed judgement ${slot}`));
+  const expectedBySlot = new Map(planned.map((s) => [s.slot, s]));
+  const actualBySlot = new Map(actual.map((s) => [s.slot, s]));
+  const droppedSet = new Set(dropped);
+  for (const [slot, found] of actualBySlot) {
+    if (!expectedBySlot.has(slot)) issues.push(`unexpected judgement ${slot}`);
+    if (found.order.length !== found.labels.length || new Set(found.order).size !== found.order.length || new Set(found.labels).size !== found.labels.length || !found.order.includes(anchor)) {
+      issues.push(`invalid judgement batch ${slot}`);
+    }
+    if (droppedSet.has(slot)) issues.push(`judgement both retained and trimmed ${slot}`);
+  }
+  for (const slot of droppedSet) if (!expectedBySlot.has(slot)) issues.push(`unknown trimmed judgement ${slot}`);
+  for (const slot of expectedBySlot.keys()) if (!actualBySlot.has(slot) && !droppedSet.has(slot)) issues.push(`undeclared missing judgement ${slot}`);
+  return issues;
+}
+
+function judgementGroupIssues(actual: readonly JudgeSlot[], planned: readonly JudgeSlot[], arms: readonly string[], anchor: string): string[] {
+  const group = (s: JudgeSlot) => `${s.pass}|${s.example}|${s.run}|${s.judge}`;
+  const plannedGroups = new Map<string, JudgeSlot[]>();
+  const actualGroups = new Map<string, JudgeSlot[]>();
+  for (const s of planned) plannedGroups.set(group(s), [...(plannedGroups.get(group(s)) ?? []), s]);
+  for (const s of actual) actualGroups.set(group(s), [...(actualGroups.get(group(s)) ?? []), s]);
+  const wanted = arms.filter((arm) => arm !== anchor).sort().join("\0");
+  const issues: string[] = [];
+  for (const [key, expected] of plannedGroups) {
+    const found = actualGroups.get(key) ?? [];
+    if (found.length > 0 && found.length !== expected.length) issues.push(`partly retained judgement group ${key}`);
+    if (found.length === expected.length) {
+      const members = found.flatMap((s) => s.order.filter((arm) => arm !== anchor)).sort().join("\0");
+      if (members !== wanted) issues.push(`incomplete arm coverage in judgement group ${key}`);
+    }
+  }
+  return issues;
+}
+
+/**
+ * Check the manifest against the matrix its selection declares. Judgements
+ * may be omitted only when every omitted slot is named in `trimmed.dropped`;
+ * answers are never trimmable. This keeps "complete" meaningful after a
+ * deliberate mid-run budget cut.
+ */
+export function manifestIntegrityIssues(m: Manifest, anchor: string, seedBase: string): string[] {
+  const planned = expectedSlots(m.selection, anchor, seedBase);
+  const dropped = m.trimmed?.dropped ?? [];
+  return [
+    ...answerIntegrityIssues(m.answers, planned.answers),
+    ...judgementSlotIssues(m.judgements, planned.judgements, dropped, anchor),
+    ...judgementGroupIssues(m.judgements, planned.judgements, m.selection.arms, anchor),
+  ];
 }
 
 /* ----------------------------------------------------------- the files -- */
