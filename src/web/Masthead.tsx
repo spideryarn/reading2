@@ -113,7 +113,7 @@ interface Props {
    * fail is worse than no button because pressing it is how you find out —
    * the same rule Delete follows on the metadata page. 2026-08-28.
    */
-  onRenamed?: (OnRenamed) | undefined;
+  onRenamed?: OnRenamed | undefined;
   /** The owner's one archive controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
 }

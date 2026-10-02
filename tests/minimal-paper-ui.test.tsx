@@ -315,6 +315,16 @@ describe("the reading address of a paper not read through yet", () => {
     expect(calls, "opening the paper started something").toEqual([]);
   });
 
+  it("draws a renamed unread paper's title in the reader's face", () => {
+    render(
+      createElement(UnreadPaperPage, {
+        paper: { ...PAPER, title: "What I call this paper", titleOverridden: true },
+        onRead: () => {},
+      }),
+    );
+    expect(container.querySelector("h1")?.classList.contains("voice-reader")).toBe(true);
+  });
+
   it("links a DOI only when it is one, and offers no file for a web page", () => {
     expect(doiHref("not a doi")).toBeNull();
     expect(doiHref("javascript:alert(1)")).toBeNull();

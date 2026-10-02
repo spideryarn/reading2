@@ -200,11 +200,14 @@ export function useArticleRename(
 ): ArticleRename {
   const [editing, setEditing] = useState(false);
   /* What the last write here answered, which is newer than the payload's
-     `known`; `undefined` until one answers. The hint and the title's voice read
-     the pair, so a reader looking at their own rename is told so from the
-     start, not only after a second rename. */
-  const [written, setWritten] = useState<boolean | undefined>(undefined);
-  const overridden = written ?? known;
+     `known`; `null` until one answers. The hint and the title's voice read the
+     pair, so a reader looking at their own rename is told so from the start,
+     not only after a second rename. */
+  const [written, setWritten] = useState<{ slug: string; overridden: boolean } | null>(null);
+  /* The hook is reusable outside ArticlePage's keyed owner branch. Keep the
+     answer beside the article it describes so a rerender for another slug
+     cannot inherit the first one's provenance while no second write has run. */
+  const overridden = written?.slug === slug ? written.overridden : known;
   const [error, setError] = useState<string | null>(null);
   /**
    * Which write is the current one.
@@ -240,7 +243,7 @@ export function useArticleRename(
         .then((r) => readJson<{ entry: LibraryEntry }>(r))
         .then(({ entry }) => {
           if (seq.current !== mine) return;
-          setWritten(Boolean(entry.titleOverridden));
+          setWritten({ slug, overridden: Boolean(entry.titleOverridden) });
           /* **The slug goes back with the title.** This resolves after the
              component that owns it may have gone: the reader renames one
              article, navigates, and the answer lands with a page about a

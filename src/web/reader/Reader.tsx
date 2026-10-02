@@ -234,7 +234,7 @@ export function Reader({
    * have, so the button could only ever fail, and a button that can only fail is
    * worse than no button because pressing it is how you find out.
    */
-  onRenamed?: (OnRenamed) | undefined;
+  onRenamed?: OnRenamed | undefined;
   /** The owner's controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
 }) {

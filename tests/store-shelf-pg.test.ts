@@ -543,6 +543,29 @@ describe("the Postgres shelf and library search", () => {
       expect((await mine(RARE))[0]?.titleOverridden).toBe(false);
     });
 
+    it("treats an empty stored override as absent everywhere", async () => {
+      const db = getDb();
+      /* The PATCH normalises empty input to NULL, but the column predates that
+         invariant and has no CHECK. A legacy/manual empty value must not make
+         search alone return a blank title and call it the reader's words. */
+      await db.update(articles).set({ titleOverride: "" }).where(eq(articles.id, ARTICLE_ID));
+      try {
+        const entry = (await pgArticleReader.listArticles()).find((e) => e.slug === SLUG);
+        expect(entry?.title).toBe("The Current Title");
+        expect(entry?.titleOverridden).toBeUndefined();
+
+        const article = await pgArticleReader.loadArticle(SLUG);
+        expect(article.meta.title).toBe("The Current Title");
+        expect(article.titleOverridden).toBe(false);
+
+        const hit = (await mine(RARE))[0];
+        expect(hit?.title).toBe("The Current Title");
+        expect(hit?.titleOverridden).toBe(false);
+      } finally {
+        await db.update(articles).set({ titleOverride: null }).where(eq(articles.id, ARTICLE_ID));
+      }
+    });
+
     it("applies both fields in one write", async () => {
       const entry = await pgShelfStore.patch(SLUG, { title: "Both", archived: true });
       expect(entry.title).toBe("Both");

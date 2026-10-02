@@ -527,6 +527,21 @@ describe("the title's voice", () => {
     expect(host.textContent).toContain("restore “The Barn Owl”");
   });
 
+  it("does not carry one article's written flag into the next article", async () => {
+    mount("The Barn Owl", "first-article");
+    act(() => pencil().click());
+    type("My owl title");
+    submit();
+    await act(async () => {});
+
+    /* Deliberately re-use the same Masthead instance. ArticlePage normally
+       keys its owner branch by slug, but the hook itself takes `slug` and must
+       not make a second article depend on that parent implementation detail. */
+    mount("The Snowy Owl", "second-article");
+    act(() => pencil().click());
+    expect(host.textContent).toContain("restore “The Snowy Owl”");
+  });
+
   it("draws the metadata page's title from the same flag", async () => {
     apiFetch.mockResolvedValue(
       new Response(

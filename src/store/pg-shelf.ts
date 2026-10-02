@@ -633,10 +633,12 @@ const rawPgLibrarySearch: LibrarySearch = {
     const rows = await db
       .select({
         slug: articles.slug,
-        title: sql<string>`coalesce(${articles.titleOverride}, ${articleRevisions.title}, ${articles.slug})`,
+        title: sql<string>`coalesce(nullif(${articles.titleOverride}, ''), ${articleRevisions.title}, ${articles.slug})`,
         /* The first rung of that `coalesce`, so the flag cannot disagree with
-           the title it describes. */
-        titleOverridden: sql<boolean>`${articles.titleOverride} is not null`,
+           the title it describes. Empty is absent here just as `titleFor` and
+           `shelfFrom` treat it: normal writes store NULL, but the column has no
+           CHECK and can contain an older/manual empty value. */
+        titleOverridden: sql<boolean>`nullif(${articles.titleOverride}, '') is not null`,
         blockId: revisionBlocks.blockId,
         text: revisionBlocks.text,
         rank,
