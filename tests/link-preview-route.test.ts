@@ -148,7 +148,7 @@ const { handleApi } = await import("../src/routes.js");
  * came from PDFs and the rest are plain — so the links this suite is about have
  * to be written in. `articleLinks` parses `block.html`, which is what this
  * rewrites; `scratchArticleInPg` mirrors `blocks.json` into its `output/` twin
- * and re-stamps the hierarchy, so the published revision really does contain
+ * and re-stamps the `structure` step, so the published revision really does contain
  * them.
  */
 async function withLinks(dir: string): Promise<void> {

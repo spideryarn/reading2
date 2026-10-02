@@ -307,7 +307,7 @@ async function publishR1(slug: string): Promise<Fixture> {
   }
   /* The one run row that has to carry a real hash: the publication gate compares
      it with `hashBlocks` of the stored blocks and refuses when they differ. */
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   await stepRun(begun.revisionId, "arc");
 
   await publishRevision({ slug, revisionId: begun.revisionId });
@@ -562,7 +562,7 @@ describe("a claim where every step skips and the publication does not happen", (
        `/Refusing to publish/` until 2026-09-03, on the reasoning that the
        refusal's message is ours and therefore the better thing to show. It is
        ours and it is developer copy: the reasons name block hashes and end with
-       *"re-run hierarchy"*, addressed to somebody who cannot run anything. It
+       *"re-run structure"*, addressed to somebody who cannot run anything. It
        was the last raw diagnostic on a reader-facing field after the stage 2
        seam closed (docs/project/copy.md § The seam between the two audiences),
        and the reasons are on the log line now.
@@ -578,7 +578,7 @@ describe("a claim where every step skips and the publication does not happen", (
     expect(
       advanced?.job.error,
       "the refusal's internal reasons reached the reader",
-    ).not.toMatch(/Refusing to publish|re-run hierarchy/);
+    ).not.toMatch(/Refusing to publish|re-run structure/);
 
     /* The row, because the answer above is in memory and the next request reads
        this. `draft_revision_id` cleared is what stops `sweepAbandonedDrafts`
@@ -589,7 +589,7 @@ describe("a claim where every step skips and the publication does not happen", (
     /* The persisted half, said separately: the band renders `job.error` off the
        row on the next request, so a leak that only reached the row would be
        invisible to the in-memory assertion above. */
-    expect(row?.error).not.toMatch(/Refusing to publish|re-run hierarchy/);
+    expect(row?.error).not.toMatch(/Refusing to publish|re-run structure/);
     expect(row?.draftRevisionId, "the draft pointer is still held").toBeNull();
 
     /* The draft is disposed of the same way a last-step refusal disposes of it:

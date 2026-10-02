@@ -30,7 +30,7 @@ import { armByName, effortOf } from "../evals/structure-whole-document/arms.js";
 import { PRODUCTION_EFFORT } from "../src/structure.js";
 import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 
-describe("the hierarchy-structure eval's incumbent", () => {
+describe("the structure-whole-document eval's incumbent", () => {
   it("thinks as hard as production does", () => {
     const arm = armByName("incumbent");
     if (arm.kind !== "one-call") throw new Error("the incumbent arm is a one-call arm");

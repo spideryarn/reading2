@@ -147,7 +147,7 @@ export const EXPAND_PROMPT_VERSION = "expand/7";
 export const EXPANSION_PROMPT_STAMP = `${PROMPT_VERSION}+${EXPAND_PROMPT_VERSION}`;
 
 /**
- * **How hard a scoped call thinks, and it is the structure call's value by
+ * **How hard a scoped call thinks, and it is the whole-document call's value by
  * decision rather than by coincidence.**
  *
  * Read off `PRODUCTION_EFFORT` rather than typed in again: the eval harness
@@ -567,7 +567,7 @@ export interface ExpansionRequest {
    *
    * This is the value a checkpoint fingerprint hashes, the way
    * `canonicalWholeDocumentRequest` hashes `wholeDocumentRequest().params`: run it
-   * through `messagesWireBody("hierarchy", params)` and the digest covers the
+   * through `messagesWireBody("structure", params)` and the digest covers the
    * model, the routing, `max_tokens`, the effort, both prompts, the frozen
    * outline, every ancestor chain and every block of every slice — because all
    * of that is inside these bytes. Stage 4b builds the digest; this is the
@@ -608,7 +608,7 @@ export function expectedChildren(
 
 /** Is the shared prefix long enough for the model to take it? See `estimatedCacheable`. */
 export function expansionPrefixIsCacheable(outline: string, power: ModelPower): boolean {
-  return !underCacheFloor(EXPAND_SYSTEM + outline, modelFor("hierarchy", power));
+  return !underCacheFloor(EXPAND_SYSTEM + outline, modelFor("structure", power));
 }
 
 /**
@@ -1296,7 +1296,7 @@ export function recordCandidate(opts: {
     authoredHeadings: bodyHeadingsIn(node, blocks, index),
     retries: opts.retries ?? 0,
     fanOut: opts.fanOut ?? null,
-    model: modelFor("hierarchy", opts.power),
+    model: modelFor("structure", opts.power),
     effort: EXPAND_EFFORT,
     promptVersion: EXPANSION_PROMPT_STAMP,
   };

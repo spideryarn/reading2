@@ -1646,7 +1646,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
       expect(sharing.personalised).not.toContain("ideas");
       expect(sharing.personalised).not.toContain("tweets");
       /* And never a step that has no model call to personalise. */
-      for (const step of ["fetch", "extract", "blocks", "hierarchy", "arc"]) {
+      for (const step of ["fetch", "extract", "blocks", "structure", "arc"]) {
         expect(sharing.personalised, step).not.toContain(step);
       }
     } finally {

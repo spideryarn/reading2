@@ -85,7 +85,7 @@ import { costStore } from "./store/ai-calls.js";
  * `quiz` — were deleted on 2026-09-01: re-running one stage against one article
  * is a job (`{ slug, steps, force }`), and a second way to do it was a second
  * thing to keep in step. docs/plans/260831b-finish-the-database-move.md §
- * sub-stage I. `hierarchy` and `labels` followed on 2026-09-05, by the two
+ * sub-stage I. `structure` and `labels` followed on 2026-09-05, by the two
  * routes described above.
  *
  * `await`ed by the caller rather than `void`ed, so flushing the ledger and any

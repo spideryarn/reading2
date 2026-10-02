@@ -177,7 +177,7 @@ async function recordOne(usage: Record<string, unknown> = {}) {
   const t = stubTransport(cannedStream(usage));
   try {
     const { report } = await collectSpend(async () => {
-      await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
+      await streamMessage("structure", A_BODY, { power: "standard" }).finalMessage();
     });
     expect(report.calls).toHaveLength(1);
     return report.calls[0]!;
@@ -202,7 +202,7 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const seen: string[] = [];
-      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+      const call = streamMessage("structure", A_BODY, { power: "standard" });
       call.onStart(() => seen.push("start"));
       call.onText((delta) => seen.push(`text:${delta}`));
       await call.finalMessage();
@@ -215,7 +215,7 @@ describe("streamMessage — the recording lifecycle", () => {
   it("does not let a throwing start listener break the SDK stream", async () => {
     const t = stubTransport(cannedStream());
     try {
-      const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+      const call = streamMessage("structure", A_BODY, { power: "standard" });
       call.onStart(() => {
         throw new Error("listener exploded");
       });
@@ -231,12 +231,12 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        const call = streamMessage("hierarchy", A_BODY, { power: "standard" });
+        const call = streamMessage("structure", A_BODY, { power: "standard" });
         await call.finalMessage();
       });
 
       expect(report.calls).toHaveLength(1);
-      expect(report.calls[0]?.job).toBe("hierarchy");
+      expect(report.calls[0]?.job).toBe("structure");
       expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 21_523_500 });
       expect(report.calls[0]?.outcome).toBe("ok");
       expect(report.calls[0]?.upstream).toBe("Claude Platform on AWS");
@@ -256,7 +256,7 @@ describe("streamMessage — the recording lifecycle", () => {
        article is fine, and the cache is never read again. */
     const t = stubTransport(cannedStream());
     try {
-      await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
+      await streamMessage("structure", A_BODY, { power: "standard" }).finalMessage();
       expect(t.seenRequests).toHaveLength(1);
       expect(t.seenRequests[0]?.body.provider).toEqual({
         order: ["anthropic"],
@@ -276,12 +276,12 @@ describe("streamMessage — the recording lifecycle", () => {
        `modelFor()` what it *would* return — never what was sent. */
     const t = stubTransport(cannedStream());
     try {
-      for (const task of ["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
+      for (const task of ["structure", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const) {
         await streamMessage(task, { max_tokens: 16, messages: A_BODY.messages }, { power: "standard" }).finalMessage();
       }
       const sent = t.seenRequests.map((r) => r.body.model);
       expect(sent).toEqual(sent.map((_, i) => modelFor(
-        (["hierarchy", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!, "standard",
+        (["structure", "arc", "labels", "quotes", "glossary", "ideas", "tweets"] as const)[i]!, "standard",
       )));
       /* And specifically: the prefixed spelling, never the artefact stamp. */
       for (const m of sent) {
@@ -306,14 +306,14 @@ describe("streamMessage — the recording lifecycle", () => {
        which is what the overwrite-after-spread is for. */
     const t = stubTransport(cannedStream());
     try {
-      await streamMessage("hierarchy", {
+      await streamMessage("structure", {
         ...A_BODY,
         provider: { order: ["something-else"] },
         model: "openai/gpt-4o",
       } as unknown as typeof A_BODY, { power: "standard" }).finalMessage();
       const sent = t.seenRequests[0]?.body;
       expect((sent?.provider as { order?: string[] })?.order).toEqual(["anthropic"]);
-      expect(sent?.model).toBe(modelFor("hierarchy", "standard"));
+      expect(sent?.model).toBe(modelFor("structure", "standard"));
     } finally {
       t.restore();
     }
@@ -426,11 +426,11 @@ describe("streamMessage — the recording lifecycle", () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
-        await streamMessage("hierarchy", A_BODY, { power: "standard" }).finalMessage();
+        await streamMessage("structure", A_BODY, { power: "standard" }).finalMessage();
         await streamMessage("arc", A_BODY, { power: "standard" }).finalMessage();
       });
       expect(t.seenRequests).toHaveLength(2);
-      expect(report.calls.map((c) => c.job)).toEqual(["hierarchy", "arc"]);
+      expect(report.calls.map((c) => c.job)).toEqual(["structure", "arc"]);
     } finally {
       t.restore();
     }

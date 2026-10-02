@@ -350,8 +350,8 @@ describe("an error that declared its reader sentence", () => {
  * explicit exception: `PublishRefused`'s own message went straight onto the
  * field. That message is ours, which is what made the exception look safe, and
  * it reads *"Refusing to publish "<slug>": the tree was built from different
- * blocks (hierarchy ran against `<hash>`, these blocks are `<hash>`) — re-run
- * hierarchy"*. Being ours and being fit to show a reader are different things.
+ * blocks (structure ran against `<hash>`, these blocks are `<hash>`) — re-run
+ * structure"*. Being ours and being fit to show a reader are different things.
  *
  * GPT Sol found it by looking for *writers of the field* rather than for
  * throwers, which is the same lesson `MODEL_REFUSED` records as **grep the
@@ -374,7 +374,7 @@ describe("a publication that was refused", () => {
        kind that has something to prove here — the sentence below has to be the
        door's, not the refusal's, whichever kind the refusal claims. */
     const refusal = new PublishRefused(slug, "permanent", [
-      "the tree was built from different blocks (hierarchy ran against abc123, these blocks are def456) — re-run hierarchy",
+      "the tree was built from different blocks (structure ran against abc123, these blocks are def456) — re-run structure",
     ]);
 
     /* **Into the store, not through `enqueue`.** `enqueue` starts the local
@@ -455,7 +455,7 @@ describe("a publication that was refused", () => {
       ["on disk", (await persisted(queued.id)).error],
     ] as const) {
       expect(message, `the refusal's reasons reached the reader ${where}`).not.toMatch(
-        /Refusing to publish|re-run hierarchy|abc123|def456/,
+        /Refusing to publish|re-run structure|abc123|def456/,
       );
       /* And it says something — the publication door's own sentence, so this
          cannot pass by the field being empty. */
@@ -559,7 +559,7 @@ describe("a run the reader stopped", () => {
  * stopped it.**
  *
  * Found in a browser run on 2026-09-04, not by any test: a 144-page PDF's
- * hierarchy step hit the 740 s deadline at 742.8 s and the card said *"You
+ * structure step hit the 740 s deadline at 742.8 s and the card said *"You
  * stopped this before it finished."* Nobody had pressed anything.
  *
  * The cause is one line. The claimant's self-deadline **aborts the same

@@ -385,7 +385,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "catches one thing the pair could not — a `PATHS` entry no step produces was invisible to " +
       "a comparison of the two. So `cover the same (step, kind) pairs` was deleted rather than " +
       "relocated. The file also gained two cases ported from `tests/step-context-paths.test.ts` " +
-      "as that file died: the artefact counts each of `extract` and `hierarchy` declares, and " +
+      "as that file died: the artefact counts each of `extract` and `structure` declares, and " +
       "`stepIsDone` over an empty store.",
   },
 
@@ -844,7 +844,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["import-only"],
     evidence: "static-only",
     reason:
-      "The pure arithmetic of the hierarchy cascade — the stopping rule, the batch packing and " +
+      "The pure arithmetic of the structure cascade — the stopping rule, the batch packing and " +
       "the starts-only range derivation. Every function under test is a function of an article " +
       "and a recipe, with no model, no network and no store; it reaches a condemned module only " +
       "because `src/structure.ts` imports the app to reach `generateStructure`. Nothing here " +
@@ -1487,7 +1487,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
      that a step must declare every artefact it writes: in Postgres that is
      `produces`, and `tests/store-artefacts-pg.test.ts` is where it would go"*.
      That is exactly where it went — § `has both of extract's and all three of
-     hierarchy's`, with the block's `stepIsDone`-over-an-empty-store case beside
+     structure's`, with the block's `stepIsDone`-over-an-empty-store case beside
      it. The three path assertions died with `STEPS[…].outputs`, which had no
      caller in `src/` after `src/api.ts` went and was being kept alive by this
      file alone. */
@@ -1764,7 +1764,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "no ledger row.",
   },
   /* **`tests/two-servers-one-queue.test.ts` stood here until stage G's `jobs`
-     group, 2026-09-05.** It reproduced the eleven concurrent `hierarchy` runs of
+     group, 2026-09-05.** It reproduced the eleven concurrent `structure` runs of
      2026-08-30 (docs/postmortems/260902c-the-truncation-retry-cost-storm.md)
      with `vi.resetModules()` and two imports, because the filesystem fence was a
      variable in one module's memory and a dev-server restart made a second copy.
@@ -2609,6 +2609,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 261001m: the Remember fold migration, run statement by statement inside a
      transaction it always rolls back. `pgReady`, its own two articles. */
   "tests/remember-one-thread-migration.test.ts": "private-postgres",
+  /* 261002b: a job row written under a retired step name reads back under the new one. */
+  "tests/retired-step-names.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
   /* 261001m: gift vouchers. `pgReady`, its own seeded owners minted per run,
      and the Auth lookup replaced — nothing reaches GoTrue, so the private

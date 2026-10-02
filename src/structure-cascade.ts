@@ -1,12 +1,12 @@
 /**
- * **The hierarchy cascade's arithmetic** — when a node still needs splitting,
+ * **The structure step's cascade arithmetic** — when a node still needs splitting,
  * how many parents one call may carry, and how one answer's starts become
  * ranges. No model, no network, no I/O: everything here is a pure function of
  * an article and a recipe.
  *
  * ## Why this is its own file, and why it is pure
  *
- * Stage 4's structure call is one whole-document model call: 163–320 seconds
+ * Stage 4's whole-document call is one model call: 163–320 seconds
  * and about 88% of the ingest wait, a hard refusal past 1,976 blocks, and
  * exactly three internal levels whatever the article's length. The cascade
  * replaces it with a breadth-first wave of smaller calls —

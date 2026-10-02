@@ -162,7 +162,7 @@ describe("the committed fixture corpus", () => {
     /* **The precondition every Postgres suite in the repo inherits, checked
        once, over the whole corpus.**
 
-       `publishRevision` refuses a draft whose `hierarchy` step ran against
+       `publishRevision` refuses a draft whose `structure` step ran against
        blocks it cannot prove it saw: it compares `hashBlocks(revision blocks)`
        against the step's `input_hash`, which on the filesystem path comes from
        `labels.json`'s `sourceHash` (`STAMP_SOURCE`, src/store/artifacts.ts).

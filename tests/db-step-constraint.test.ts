@@ -36,6 +36,7 @@ import { STEP_ORDER } from "../src/pipeline.js";
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
 const SKIM_MIGRATION = path.join(DRIZZLE, "20261001224759_skim.sql");
+const STRUCTURE_MIGRATION = path.join(DRIZZLE, "20261002140803_structure_step.sql");
 
 /**
  * Every `.sql` migration, in the order it runs — **journal order, which is the
@@ -131,6 +132,20 @@ describe("the revision_step_runs step constraint", () => {
 });
 
 describe("the migration that last set it", () => {
+  it("keeps the structure drain guard stable until its rewrites commit", () => {
+    const sql = readFileSync(STRUCTURE_MIGRATION, "utf-8").replace(/--[^\n]*/g, "");
+    // NOWAIT on all three tables also avoids holding jobs while waiting for a
+    // worker transaction that has already locked a checkpoint or step-run row.
+    const lock = sql.search(
+      /LOCK TABLE "spideryarn"\."jobs",\s*"spideryarn"\."checkpoints",\s*"spideryarn"\."revision_step_runs"\s+IN ACCESS EXCLUSIVE MODE NOWAIT/i,
+    );
+    const guard = sql.indexOf("SELECT count(*) INTO live");
+    const drop = sql.indexOf('DROP CONSTRAINT "checkpoints_namespace"');
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeGreaterThan(lock);
+    expect(drop).toBeGreaterThan(guard);
+  });
+
   it("drops the constraint before adding it, because Postgres has no ALTER for a check", () => {
     const found = declaredSteps() as { file: string };
     const sql = readFileSync(path.join(DRIZZLE, found.file), "utf-8");

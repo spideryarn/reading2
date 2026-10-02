@@ -323,11 +323,11 @@ async function artefactsOf(slug: string, names: readonly StepName[]) {
         }
         parts[kind] = value;
       }
-      /* **The stamp as well as the parts**, and `hierarchy` is where leaving it
+      /* **The stamp as well as the parts**, and `structure` is where leaving it
          out bites. `publishRevisionIn` refuses a revision whose tree was built
          from different blocks, comparing `hashBlocks(blocks)` against the
-         `hierarchy` run's `input_hash` — so a product with no stamp publishes
-         as *"hierarchy ran against unstamped"* and ends the job `error`, one
+         `structure` run's `input_hash` — so a product with no stamp publishes
+         as *"structure ran against unstamped"* and ends the job `error`, one
          step after the thing the case is about. The corpus article's own stamp
          is the right one by construction, since these are its own artefacts. */
       const stamp = await reads.stampFor(slug, name);
@@ -821,7 +821,7 @@ describe("one claim walks the whole job", () => {
     /**
      * **The deliberate handoff, and the only one left.** The self-abort bounds
      * the whole claim rather than each step, so a walk that has spent most of
-     * its deadline must not start a `hierarchy`: it would be killed four fifths of the
+     * its deadline must not start a `structure`: it would be killed four fifths of the
      * way through the one step nobody can afford to repeat, and the job would
      * end `error` with a live lease. Handed back, the job is `queued`, intact,
      * and the next request continues.
@@ -832,12 +832,12 @@ describe("one claim walks the whole job", () => {
      * budget check that runs before it.
      */
     vi.useFakeTimers({ toFake: ["Date"] });
-    const names: StepName[] = ["fetch", "hierarchy"];
+    const names: StepName[] = ["fetch", "structure"];
     const { ran, job, parts } = await fixture("test-walk-budget", names, {
       fetch: () => {
-        /* Long enough that `hierarchy`'s budget no longer fits inside what is left of
+        /* Long enough that `structure`'s budget no longer fits inside what is left of
            the claim, and short enough that the claim itself has not lapsed. */
-        vi.setSystemTime(new Date(Date.now() + LEASE_MS - STEP_BUDGET_MS.hierarchy));
+        vi.setSystemTime(new Date(Date.now() + LEASE_MS - STEP_BUDGET_MS.structure));
       },
     });
 
@@ -856,7 +856,7 @@ describe("one claim walks the whole job", () => {
     const second = await advanceAsOwner(job.id, parts);
     expect(second?.done).toBe(true);
     expect(second?.job.status).toBe("done");
-    expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "hierarchy"]);
+    expect(ran.names, "and it picked up at the step that had not run").toEqual(["fetch", "structure"]);
   });
 
   /*

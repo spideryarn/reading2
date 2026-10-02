@@ -17,7 +17,7 @@
  *
  * ## The three things a stalled import needs to say
  *
- * A spinner beside "Building the hierarchy" is the same picture at four
+ * A spinner beside "Building the structure" is the same picture at four
  * seconds and at forty minutes. So: **how long it has been going**, taken from
  * the step's own clock; **whether that is normal**, but only for the steps that
  * have actually been timed on that same clock (src/job-state.ts § `STEP_TIMING`
@@ -124,8 +124,8 @@ const BASE = {
 
 function running(over: Partial<JobStep> = {}): JobStep {
   return {
-    name: "hierarchy",
-    label: "Building the hierarchy",
+    name: "structure",
+    label: "Building the structure",
     status: "running",
     startedAt: ago(134_000),
     detail: "18k characters of tree so far",
@@ -164,13 +164,13 @@ function row(label: string): HTMLLIElement | undefined {
  * Sol put it — pinned *"neither order, nor adjacency, nor even the same row"*:
  * it would have stayed green with the duration printed under the wrong step, or
  * before the label, or in the job sentence at the bottom. The plan asked for
- * `Building the hierarchy · 2m 14s · 18k characters of tree so far`, so that is
+ * `Building the structure · 2m 14s · 18k characters of tree so far`, so that is
  * what is asserted.
  */
 it("says how long the running step has been going, beside what it is doing", () => {
   card(job());
-  expect(row("Building the hierarchy")?.textContent).toMatch(
-    /^Building the hierarchy\s*·\s*2m 14s\s*·\s*18k characters of tree so far$/,
+  expect(row("Building the structure")?.textContent).toMatch(
+    /^Building the structure\s*·\s*2m 14s\s*·\s*18k characters of tree so far$/,
   );
 });
 
@@ -186,10 +186,10 @@ it("says how long the running step has been going, beside what it is doing", () 
  */
 it("keeps counting after the first paint", () => {
   card(job());
-  expect(row("Building the hierarchy")?.textContent).toContain("2m 14s");
+  expect(row("Building the structure")?.textContent).toContain("2m 14s");
 
   act(() => void vi.advanceTimersByTime(31_000));
-  expect(row("Building the hierarchy")?.textContent, "the clock stopped at the first render").toContain(
+  expect(row("Building the structure")?.textContent, "the clock stopped at the first render").toContain(
     "2m 45s",
   );
 });
@@ -256,7 +256,7 @@ it("only counts the step the reader is waiting on", () => {
  *
  * `sketch` has been: thirteen successful runs, 121–199s, and the one real
  * ingest step and its one model call are the same 159s. `fetch` has not, and
- * neither — since 2026-09-01 — has `hierarchy`, whose "six runs, median 409s"
+ * neither — since 2026-09-01 — has `structure`, whose "six runs, median 409s"
  * turned out to be five failures measured off the model-call log. Inventing a
  * reassurance is docs/reusable/silent-success.md with a number on it.
  * src/job-state.ts § `STEP_TIMING`.
@@ -284,11 +284,11 @@ it("says a step usually takes minutes only where that was measured", () => {
     "This step usually takes about a minute.",
   );
 
-  /* `hierarchy` is the one that lost its sentence, and it is the case worth
+  /* `structure` is the one that lost its sentence, and it is the case worth
      naming: it still has a threshold of its own, argued from evidence, and
      still says nothing about how long it takes. */
   card(job());
-  expect(row("Building the hierarchy")).toBeDefined();
+  expect(row("Building the structure")).toBeDefined();
   expect(host.textContent, "promised a duration off one successful run").not.toContain(
     "This step usually takes about a minute.",
   );
@@ -326,7 +326,7 @@ it("offers the way out when a step has gone past what it usually takes", () => {
  * is for it. GPT Sol, 2026-09-01.
  */
 it("does not call a step unusual when nothing measured what usual is", () => {
-  card(job({ steps: [running({ startedAt: ago(20 * 60_000) })] })); // `hierarchy`
+  card(job({ steps: [running({ startedAt: ago(20 * 60_000) })] })); // `structure`
   expect(host.textContent).toContain(RUNNING_A_WHILE);
   expect(host.textContent, "claimed to know what an unmeasured step usually takes").not.toContain(
     TAKING_LONGER,

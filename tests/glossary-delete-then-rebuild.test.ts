@@ -336,7 +336,7 @@ async function publishArticleWithAGlossary(slug: string): Promise<Fixture> {
   for (const name of ["fetch", "extract", "blocks"] as StepName[]) {
     await stepRun(begun.revisionId, name);
   }
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   /* The row that makes the published glossary count as *produced* rather than
      merely present. Without it `hasArtefacts` is false from the start and move
      1 would run the step, which is the opposite of the baseline. */

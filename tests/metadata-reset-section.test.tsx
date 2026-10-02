@@ -78,7 +78,7 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 
 const SLUG = "a-piece";
 const RESET_URL = `/api/article/${SLUG}/reset`;
-const IMPORT_STEPS: StepName[] = ["fetch", "extract", "blocks", "hierarchy", "labels", "assets"];
+const IMPORT_STEPS: StepName[] = ["fetch", "extract", "blocks", "structure", "labels", "assets"];
 
 const ARTICLE: Article = {
   highPowerSince: null,
@@ -188,7 +188,7 @@ function resetJob(
     id,
     ownerId: "owner" as Job["ownerId"],
     slug: SLUG,
-    steps: ["fetch", "extract", "blocks", "hierarchy", "assets"].map((name) => ({
+    steps: ["fetch", "extract", "blocks", "structure", "assets"].map((name) => ({
       name: name as StepName,
       label: `Doing ${name}`,
       status: "pending" as const,

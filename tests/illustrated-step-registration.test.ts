@@ -637,13 +637,13 @@ describe("running the step again", () => {
        in memory and the copy of `example/` is never written to, so a disk read
        here would be a constant — it would say "the article has not moved" no
        matter what the case did, which is the control passing by construction. */
-    const before = JSON.stringify(await store.read(SLUG, "hierarchy", "blocks"));
+    const before = JSON.stringify(await store.read(SLUG, "structure", "blocks"));
 
     writeSketch(sketchFixture("Three arguments, one conclusion"));
 
     expect(await stepIsDone(STEPS.illustrated, ctxFor(), store)).toBe(false);
     expect(
-      JSON.stringify(await store.read(SLUG, "hierarchy", "blocks")),
+      JSON.stringify(await store.read(SLUG, "structure", "blocks")),
       "the article must not have moved, or this test proves nothing",
     ).toBe(before);
   });
@@ -661,12 +661,12 @@ describe("running the step again", () => {
        and it needs no putting back, because `beforeEach` builds a fresh store
        off the untouched copy of `example/`. The `finally` that restored
        `blocks.json` went with the disk. */
-    const file = await store.read(SLUG, "hierarchy", "blocks");
+    const file = await store.read(SLUG, "structure", "blocks");
     const first = file?.blocks?.[0];
     if (!first) throw new Error("the fixture has no blocks");
     const before = first.text;
     first.text = `${first.text} — and one more sentence the illustrator never saw.`;
-    store.plant(SLUG, "hierarchy", "blocks", file);
+    store.plant(SLUG, "structure", "blocks", file);
 
     /* **The positive control, and this case is worth nothing without it.** The
        assertion below is `true`, and an article that never moved also answers
@@ -679,7 +679,7 @@ describe("running the step again", () => {
        The sibling case above needs the mirror image of this — *the article must
        NOT have moved* — for exactly the same reason. */
     expect(
-      (await store.read(SLUG, "hierarchy", "blocks"))?.blocks?.[0]?.text,
+      (await store.read(SLUG, "structure", "blocks"))?.blocks?.[0]?.text,
       "the article must really have moved in the store, or this case asserts nothing",
     ).not.toBe(before);
 

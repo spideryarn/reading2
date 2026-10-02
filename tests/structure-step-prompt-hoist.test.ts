@@ -23,7 +23,7 @@
  * own pin: an expectation derived from the thing it checks agrees with every
  * value of it.
  *
- * The key covers the model too, and `MODEL_ENV_VAR.hierarchy` is `null`
+ * The key covers the model too, and `MODEL_ENV_VAR.structure` is `null`
  * (src/models.ts) — there is no environment override for this task, so the pin is
  * deterministic rather than merely usually right.
  */
