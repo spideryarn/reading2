@@ -283,8 +283,8 @@ once, in [`src/web/rerun-commands.ts`](../../src/web/rerun-commands.ts), which M
 **Five more of Metadata's controls have rows, typed-only like *Run again*** (the empty list keeps
 the Metadata row as their stand-in), and none of them spends. Three go to a section —
 *High-powered AI* (`opus`, `stronger model`; to *AI processing*, where its switch is first, never
-throwing the switch, whose own copy states its price), *AI processing*, and *Access & sharing*
-(`share`, `publish`, `private`; to the card, which asks before anything goes public) — the way an
+throwing the switch, whose own copy states its price), *AI processing*, and *Share this article*
+(`share`, `publish`, `private`; to the *Access & sharing* card, which asks before anything goes public, and above the shared shelf for `share`) — the way an
 accepted run lands there: a step to Metadata from the reading view, the section added in place on
 Metadata. Not *Export*, which the action below owns, and not *What it cost*, which is an
 administrator's. *Archive this article* — *Put this article back* over an archived one, the label

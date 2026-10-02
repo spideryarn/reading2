@@ -73,7 +73,7 @@ export interface SectionRow {
  * is second for each. And `<verb> <name>` is every *Run again* row's
  * (rerun-commands.ts), so nothing here is a verb and a mode's name. `public` on
  * its own stays the shared shelf's, the app-wide page that carries it as a
- * name; *Access & sharing* answers `make public` and is listed under it.
+ * name; *Share this article* answers `make public` and is listed under it.
  */
 export const SECTION_ROWS: readonly SectionRow[] = [
   {
@@ -117,13 +117,23 @@ export const SECTION_ROWS: readonly SectionRow[] = [
   {
     id: "access-sharing",
     section: "access-sharing",
-    label: "Access & sharing",
+    /* **Named for the verb, not the section heading**, since the browser check
+       of 2026-10-02: as *Access & sharing* it matched `share` only by alias,
+       and the shared shelf's *Shared articles* — a label prefix — took the top
+       row and the Enter, on an article page, where `share` means this article.
+       As a label prefix too it ties, and the article's rows come first in the
+       list, so they win the tie (command-match.ts § `rankCommands`). The
+       section's own name stays an alias. Metadata's *Share…* button goes to
+       the same card for the same reason. */
+    label: "Share this article",
     /* The card asks before anything goes public, which is why this is a place
        and not an action: there is no share dialog, on purpose (plan § What
        exists), and a keyboard Enter is not where that question gets skipped. */
-    description: "Who can read this article, and making it public or private again.",
+    description: "Access & sharing: who can read it, and making it public or private again.",
     aliases: [
-      "share",
+      "access & sharing",
+      "access and sharing",
+      "access",
       "sharing",
       "publish",
       "unpublish",

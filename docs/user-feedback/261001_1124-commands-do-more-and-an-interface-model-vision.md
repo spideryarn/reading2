@@ -41,7 +41,7 @@ production row), sent from Tweets on `jco-2005-01-libre-spya-hk9cc7`; Overseer q
 - **The bar re-runs any mode.** Type *rerun glossary*, *redo quotes* or *simple summary again*, and Enter
   starts the run and takes you to Metadata › AI processing, where it shows. It does not open the
   mode, because opening an empty mode could start a second paid run.
-- **Metadata from the bar:** *High-powered AI*, *AI processing* and *Access & sharing* open that
+- **Metadata from the bar:** *High-powered AI*, *AI processing* and *Share this article* open that
   section of the Metadata page. *Archive this article* (or *Put this article back*) and *Export this article*
   do the thing.
 - **Commands that take words:** *find X*, or *do they talk about X?*, opens Search on those words.

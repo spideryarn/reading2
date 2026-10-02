@@ -214,3 +214,33 @@ usable "unsure" signal. A few cents, its own declared bypass beside `shelf-topic
 ## Progress
 
 - 2026-10-02: plan written; Sol's plan review (F1–F10) folded in, stages re-cut A–D.
+- **Stage A landed** (ad2249afc, Sol's fixes 2b1b339e8): `src/web/rerun-commands.ts`, the async
+  `ActionOutcome`, `typedOnly`, one *Run again* row per step landing in Metadata › AI processing,
+  `?section=` (`useRevealOnArrival` in PageContents.tsx), and `parseFindQuery`. Sol's code review
+  [F11–F16](261002c-commands-do-more-stage-a-code-review-sol.md): encoded query keys could override
+  the new `mode`/`section` (fixed, byte-preserving removal in router.ts); a late section consumed
+  before its listener existed (fixed, listener in the layout phase); the 15 s give-up removed (the
+  observer lives until success or unmount); an exhaustive outcome switch; a refusal after Escape
+  reopens the bar. **An accepted run still navigates after Escape**, deliberately: the paid run has
+  begun and the Metadata row is its acknowledgement.
+- **Stage D landed** (6f88653b0): Jev picked the right command 94% of the time (Sonnet 97%), 0.3 s
+  against 2.1 s; all four of its mistakes had confidence ≤ 0.70. A threshold of 0.8 is a starting
+  point read off a small hand-made set, not a measured one.
+  [261002c-jev-picks-a-command.md](../investigations/261002c-jev-picks-a-command.md). Spend $0.46.
+- **Stage C landed** with the vision doc's corrections from Sol's F17–F19 (the bar is no longer
+  "free" now that rows `generate`; the eval's list included the planned rows).
+- **Stage B landed** (92f5c1bf4, Sol's fix 8935f4a01): `src/web/article-commands.ts`,
+  `src/web/export-download.ts` (the busy guard per slug, shared with Metadata's button), section rows
+  through `goToSection`, Archive through `useArchive.set`, which now returns an `ArchiveResult`. All
+  five rows typed-only. `share` and `download` came off the Metadata row so the direct rows win.
+  Sol's one finding (F20): the reverse of Archive is called *Put back* everywhere else, so the row is
+  *Put this article back*.
+- **Browser check** (Playwright, system Chrome, 1280 and 390 px, a local article; shots
+  `261002c-shot-*.png`): all six behaviours passed — the typed *Run again* row and its landing with
+  the job running, `find`, the section rows, Archive and Put back, Export's ZIP, and the empty list
+  and `No command matches.` unchanged. **One finding, fixed**: `share` put *Shared articles* first,
+  because the article's row was *Access & sharing* and matched by alias only. It is now *Share this
+  article*, which ties on a label prefix and wins on list order. That overrides one half of a
+  sibling's same-day test (plan 261002c-metadata-search-aliases), which kept `share` on the shelf
+  only because the article row then reached it by alias; `public` stays the shelf's. Two cosmetic
+  notes at 390 px are not this work's: AI processing's heading wraps and its status line truncates.

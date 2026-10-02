@@ -20,6 +20,7 @@
  *  - **Neither is offered without a shelf row to act on** — the fixture, or a
  *    Dock nobody handed one — because the request could only 404.
  */
+import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -176,7 +177,7 @@ async function settle(): Promise<void> {
 const NEW_ROWS = [
   "High-powered AI",
   "AI processing",
-  "Access & sharing",
+  "Share this article",
   "Archive this article",
   "Put this article back",
   "Export this article",
@@ -207,11 +208,19 @@ describe("a section row", () => {
     expect(requests.filter((r) => !r.startsWith("GET /api/jobs"))).toEqual([]);
   });
 
-  it("names Access & sharing for `share`, the sharing card's own section", () => {
+  it("puts this article's sharing first for `share`, above the shared shelf (browser check, 261002c)", () => {
+    reading();
+    openBar();
+    type("share");
+    expect(listed()[0]).toBe("Share this article");
+    expect(listed()).toContain(PUBLIC_SHELF_LABEL);
+  });
+
+  it("names Share this article for `share`, the sharing card's own section", () => {
     reading();
     openBar();
     type("publish");
-    expect(listed()[0]).toBe("Access & sharing");
+    expect(listed()[0]).toBe("Share this article");
     press("Enter");
     expect(location.search).toBe("?at=spya-k3m9qt&section=access-sharing");
   });

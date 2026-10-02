@@ -47,7 +47,7 @@ describe("the section rows", () => {
     expect(SECTION_ROWS.map((row) => row.label)).toEqual([
       "High-powered AI",
       "AI processing",
-      "Access & sharing",
+      "Share this article",
     ]);
   });
 
@@ -58,7 +58,7 @@ describe("the section rows", () => {
     /* High-powered AI has no section of its own: its switch is the first thing
        in AI processing (high-powered-ai.md). */
     expect(SECTION_ROWS.find((r) => r.label === "High-powered AI")?.section).toBe("ai-processing");
-    expect(SECTION_ROWS.find((r) => r.label === "Access & sharing")?.section).toBe("access-sharing");
+    expect(SECTION_ROWS.find((r) => r.label === "Share this article")?.section).toBe("access-sharing");
   });
 
   it("answer to the words a reader would use for a stronger model", () => {
@@ -76,11 +76,11 @@ describe("the section rows", () => {
 
   it("answer to the words for sharing, without taking `public` from the shared shelf", () => {
     for (const query of ["access", "share", "sharing", "publish", "private", "make public"]) {
-      expect(first(query), query).toBe("Access & sharing");
+      expect(first(query), query).toBe("Share this article");
     }
     /* Still listed for `public`, below anything that has the word as a name or
        a nickname of its own (the shared-articles page, in the real bar). */
-    expect(labels(rankCommands("public", list(false)))).toContain("Access & sharing");
+    expect(labels(rankCommands("public", list(false)))).toContain("Share this article");
   });
 
   it("answer to AI processing by name, and leave every compound re-run phrase to its row", () => {
