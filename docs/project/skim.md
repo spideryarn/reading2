@@ -24,9 +24,6 @@ A grep for `trajector` outside the historical folders should find only these, ea
 - **`RETIRED_MODES`: `trajectory → skim`**, beside `outline`/`hierarchy → structure`, so a bookmarked,
   shared or remembered `?mode=trajectory` opens Skim. Feedback from a tab loaded before the rename
   is normalised the same way (and its `job.step`, by a step alias), rather than refused.
-- **The prompt version tag `trajectory/7`**, until the prompt next changes (then `skim/8`). It is
-  persisted in every stored route and in `revision_step_runs.prompt_version`, and the two must agree,
-  so respelling it alone would mark every route out of date for no change in the prompt.
 - **The input-hash namespace `"trajectory-input\n"`** in `skimInputHash`. Changing it changes every
   hash, so every stored route would read stale.
 - **The cost ledger.** `ai_calls` is append-only, so its historical rows keep `purpose` /
@@ -125,7 +122,7 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   in the row when there are no Quotes.
 
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
-`trajectory/7`:
+written under `trajectory/7` and unchanged in `skim/8` (whose request adds a strict JSON schema):
 
 - **The route sees the Ideas and the outline.** The call is also given the article's Ideas
   (`I1…`, name and statement) and its top-level sections (title, gist where there is one), fenced

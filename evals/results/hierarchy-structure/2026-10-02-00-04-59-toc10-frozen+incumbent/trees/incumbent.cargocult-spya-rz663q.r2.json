@@ -1,0 +1,1110 @@
+{
+  "version": "toc/11",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0009",
+        "n0029",
+        "n0042",
+        "n0059",
+        "n0068",
+        "n0083"
+      ],
+      "range": [
+        "spya-arxt8r",
+        "spya-ndyj3t"
+      ],
+      "title": "Cargo Cult Science",
+      "gist": "Science that copies the form of real science but skips rigorous self-doubt looks right yet never actually works.",
+      "question": "Cargo Cult Science — what separates real science from its hollow imitation?",
+      "sourceHeading": "Cargo Cult Science"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007"
+      ],
+      "range": [
+        "spya-arxt8r",
+        "spya-wv9g0v"
+      ],
+      "title": "Opening Remarks",
+      "gist": "A commencement speech introduces its subject: why fields that mimic science's outward form can still fail to produce real, working results.",
+      "question": "Cargo Cult Science — what is this talk actually about? (a thesis statement)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-arxt8r",
+        "spya-f6b5fs"
+      ],
+      "title": "Title and author",
+      "gist": "The talk's title, reading time, and speaker."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-arxt8r",
+        "spya-arxt8r"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hwqz3q",
+        "spya-hwqz3q"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-f6b5fs",
+        "spya-f6b5fs"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008"
+      ],
+      "range": [
+        "spya-wv9g0v",
+        "spya-wv9g0v"
+      ],
+      "title": "Opening thesis",
+      "gist": "The talk promises remarks on science, pseudoscience, and how to avoid fooling yourself, delivered as Caltech's 1974 commencement address."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-wv9g0v",
+        "spya-wv9g0v"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0010",
+        "n0012",
+        "n0015",
+        "n0017",
+        "n0019",
+        "n0023",
+        "n0025",
+        "n0027"
+      ],
+      "range": [
+        "spya-ddrr9m",
+        "spya-fd2muf"
+      ],
+      "title": "Hunting for Pseudoscience",
+      "gist": "Feynman surveys mysticism, ESP, education, and criminal justice, finding fields that look scientific yet never improve, which he names Cargo Cult Science.",
+      "question": "pseudoscience — what do mysticism, education, and crime policy share that marks them as fake science? (several examples)"
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0011"
+      ],
+      "range": [
+        "spya-ddrr9m",
+        "spya-ddrr9m"
+      ],
+      "title": "Scientific method emerges",
+      "gist": "Medieval superstitions gave way to science once people learned to test an idea by trying it and discarding it if it failed to work."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-ddrr9m",
+        "spya-ddrr9m"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-bcgpc3",
+        "spya-q4502k"
+      ],
+      "title": "Modern mysticism investigated",
+      "gist": "Feynman investigates UFOs, isolation tanks, and Esalen's mystic culture, becoming overwhelmed by how much unproven belief still thrives in a supposedly scientific age."
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-bcgpc3",
+        "spya-bcgpc3"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-q4502k",
+        "spya-q4502k"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0016"
+      ],
+      "range": [
+        "spya-xm9a87",
+        "spya-xm9a87"
+      ],
+      "title": "Massage session anecdote",
+      "gist": "A bathhouse anecdote about a man pretending to locate the pituitary gland through foot massage mocks pseudoscientific jargon dressed up as expertise."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-xm9a87",
+        "spya-xm9a87"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0018"
+      ],
+      "range": [
+        "spya-mmhbvn",
+        "spya-mmhbvn"
+      ],
+      "title": "Uri Geller demonstration",
+      "gist": "Feynman attends a demonstration by Uri Geller, supposedly able to bend keys and read minds, but witnesses no effect under any tested condition."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-mmhbvn",
+        "spya-mmhbvn"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0020",
+        "n0021",
+        "n0022"
+      ],
+      "range": [
+        "spya-aww976",
+        "spya-g2cwvy"
+      ],
+      "title": "Failures in education and crime policy",
+      "gist": "Reading scores and crime rates fail to improve despite elaborate theories, suggesting these fields resemble witch-doctor remedies dressed as science."
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [],
+      "range": [
+        "spya-aww976",
+        "spya-aww976"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [],
+      "range": [
+        "spya-re4634",
+        "spya-re4634"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [],
+      "range": [
+        "spya-g2cwvy",
+        "spya-g2cwvy"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0024"
+      ],
+      "range": [
+        "spya-wc4h5s",
+        "spya-wc4h5s"
+      ],
+      "title": "Cocktail party test",
+      "gist": "Feynman proposes a joking rule: if a topic can be discussed endlessly at a party without seeming like shop talk, nobody really understands it."
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-wc4h5s",
+        "spya-wc4h5s"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0026"
+      ],
+      "range": [
+        "spya-ankp3d",
+        "spya-ankp3d"
+      ],
+      "title": "Psychotherapy studies",
+      "gist": "Using his cocktail-party test, Feynman adds psychotherapy's effectiveness to his growing list of widely believed but poorly tested subjects."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-ankp3d",
+        "spya-ankp3d"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0028"
+      ],
+      "range": [
+        "spya-fd2muf",
+        "spya-fd2muf"
+      ],
+      "title": "Cargo Cult Science named",
+      "gist": "Feynman compares these pseudosciences to Pacific islanders who rebuild runways and control towers hoping planes will land, calling such empty imitation Cargo Cult Science."
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-fd2muf",
+        "spya-fd2muf"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0030",
+        "n0032",
+        "n0034",
+        "n0036",
+        "n0038",
+        "n0040"
+      ],
+      "range": [
+        "spya-afgs74",
+        "spya-rub3a2"
+      ],
+      "title": "The Principle of Scientific Integrity",
+      "gist": "Real science demands leaning over backward to report every flaw and contrary fact, not merely the evidence that favors your own theory.",
+      "question": "scientific integrity — what exactly must a scientist disclose to be honest? (a definition with examples)"
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0031"
+      ],
+      "range": [
+        "spya-afgs74",
+        "spya-afgs74"
+      ],
+      "title": "Reporting all relevant details",
+      "gist": "Feynman defines the missing ingredient in cargo cult science as a leaning-over-backward honesty: reporting everything that might invalidate your own result."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-afgs74",
+        "spya-afgs74"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0033"
+      ],
+      "range": [
+        "spya-rxj5wa",
+        "spya-rxj5wa"
+      ],
+      "title": "Disclosing disagreeing facts",
+      "gist": "A theory must be presented alongside every fact that disagrees with it, and its fit must be tested against data beyond what inspired it."
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-rxj5wa",
+        "spya-rxj5wa"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0035"
+      ],
+      "range": [
+        "spya-qpwryx",
+        "spya-qpwryx"
+      ],
+      "title": "Summary of integrity idea",
+      "gist": "The goal is giving others all the information needed to judge your work's value, not only the evidence pointing one direction."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-qpwryx",
+        "spya-qpwryx"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0037"
+      ],
+      "range": [
+        "spya-bpyx8n",
+        "spya-bpyx8n"
+      ],
+      "title": "Contrast with advertising",
+      "gist": "An oil advertisement's technically true claim that it doesn't soak through food misleads by implication, showing scientific integrity requires more than avoiding outright lies."
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0036",
+      "children": [],
+      "range": [
+        "spya-bpyx8n",
+        "spya-bpyx8n"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0039"
+      ],
+      "range": [
+        "spya-az6z7k",
+        "spya-az6z7k"
+      ],
+      "title": "Truth will out",
+      "gist": "Because other experimenters and nature itself will eventually reveal errors, a scientist's reputation depends on having been careful and honest from the start."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-az6z7k",
+        "spya-az6z7k"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 2,
+      "parent": "n0029",
+      "children": [
+        "n0041"
+      ],
+      "range": [
+        "spya-rub3a2",
+        "spya-rub3a2"
+      ],
+      "title": "Difficulty of the subject",
+      "gist": "Some fields are simply hard to study scientifically, but Feynman insists that difficulty alone does not explain why their methods keep failing."
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-rub3a2",
+        "spya-rub3a2"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0043",
+        "n0045",
+        "n0047",
+        "n0049",
+        "n0051",
+        "n0053",
+        "n0055",
+        "n0057"
+      ],
+      "range": [
+        "spya-s9msxy",
+        "spya-s05sub"
+      ],
+      "title": "Lessons in Self-Deception",
+      "gist": "Historical and political examples—from Millikan's drifting measurements to selective publication—show how bias creeps in unless inconvenient results get reported too.",
+      "question": "self-deception — how do scientists and advisors quietly let bias shape what gets published? (several case examples)"
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0044"
+      ],
+      "range": [
+        "spya-s9msxy",
+        "spya-s9msxy"
+      ],
+      "title": "Millikan's electron charge drift",
+      "gist": "Millikan's early measurement of the electron's charge was slightly wrong, and later values crept upward slowly instead of jumping straight to the correct number."
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0043",
+      "children": [],
+      "range": [
+        "spya-s9msxy",
+        "spya-s9msxy"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0046"
+      ],
+      "range": [
+        "spya-uj9v2h",
+        "spya-uj9v2h"
+      ],
+      "title": "Why errors went unnoticed",
+      "gist": "Scientists unconsciously hunted harder for flaws in results that strayed far from Millikan's number, letting a wrong value persist long after better data existed."
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-uj9v2h",
+        "spya-uj9v2h"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0048"
+      ],
+      "range": [
+        "spya-bvx2u8",
+        "spya-bvx2u8"
+      ],
+      "title": "Lesson learned, still untaught",
+      "gist": "This history of self-deception is never formally taught in any course, leaving students to absorb scientific integrity only by informal example."
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0047",
+      "children": [],
+      "range": [
+        "spya-bvx2u8",
+        "spya-bvx2u8"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0050"
+      ],
+      "range": [
+        "spya-ed9mzv",
+        "spya-ed9mzv"
+      ],
+      "title": "First principle: don't fool yourself",
+      "gist": "The foremost rule of scientific integrity is guarding against fooling yourself first, since that is easier than any other kind of dishonesty to fall into."
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-ed9mzv",
+        "spya-ed9mzv"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0052"
+      ],
+      "range": [
+        "spya-c46yyu",
+        "spya-c46yyu"
+      ],
+      "title": "Integrity toward laymen",
+      "gist": "Feynman extends scientific honesty beyond fellow scientists, arguing researchers also owe ordinary people a truthful account of their work when speaking publicly."
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-c46yyu",
+        "spya-c46yyu"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0054"
+      ],
+      "range": [
+        "spya-mjty2q",
+        "spya-mjty2q"
+      ],
+      "title": "Cosmologist's dishonest justification",
+      "gist": "A colleague wanted to invent practical applications for his astronomy research just to secure funding, which Feynman condemns as a failure of honesty toward the public."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-mjty2q",
+        "spya-mjty2q"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0056"
+      ],
+      "range": [
+        "spya-jk7mj4",
+        "spya-jk7mj4"
+      ],
+      "title": "Publish regardless of outcome",
+      "gist": "Results must be published whichever way they come out, since selectively publishing favorable findings—as cigarette companies do—distorts the truth for the audience."
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0055",
+      "children": [],
+      "range": [
+        "spya-jk7mj4",
+        "spya-jk7mj4"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [
+        "n0058"
+      ],
+      "range": [
+        "spya-s05sub",
+        "spya-s05sub"
+      ],
+      "title": "Scientific advice to politicians",
+      "gist": "Advice to politicians is not truly scientific if unfavorable findings are suppressed while convenient ones are publicized, turning expertise into a tool of persuasion."
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-s05sub",
+        "spya-s05sub"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0060",
+        "n0062",
+        "n0064",
+        "n0066"
+      ],
+      "range": [
+        "spya-w9nnq6",
+        "spya-m95kqm"
+      ],
+      "title": "Failures to Replicate",
+      "gist": "A psychology student and a physics lab both skip repeating a baseline experiment before changing conditions, a shortcut that quietly undermines scientific conclusions.",
+      "question": "replication — why does skipping a baseline experiment ruin a result's reliability? (two case studies)"
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 2,
+      "parent": "n0059",
+      "children": [
+        "n0061"
+      ],
+      "range": [
+        "spya-w9nnq6",
+        "spya-w9nnq6"
+      ],
+      "title": "Rat experiment proposal at Cornell",
+      "gist": "A psychology student wanted to test whether rats would still behave the same way under new conditions, without first repeating the original experiment herself."
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-w9nnq6",
+        "spya-w9nnq6"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 2,
+      "parent": "n0059",
+      "children": [
+        "n0063"
+      ],
+      "range": [
+        "spya-tf8rj2",
+        "spya-tf8rj2"
+      ],
+      "title": "Need to replicate baseline first",
+      "gist": "Feynman advises the student to first reproduce the original result under the old conditions, so she can be sure any later change is truly responsible for a difference."
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-tf8rj2",
+        "spya-tf8rj2"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0059",
+      "children": [
+        "n0065"
+      ],
+      "range": [
+        "spya-v0xcd7",
+        "spya-v0xcd7"
+      ],
+      "title": "Professor blocks replication",
+      "gist": "Her professor forbade repeating the earlier experiment as wasted time, reflecting a 1930s norm against replication in psychology research."
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-v0xcd7",
+        "spya-v0xcd7"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 2,
+      "parent": "n0059",
+      "children": [
+        "n0067"
+      ],
+      "range": [
+        "spya-m95kqm",
+        "spya-m95kqm"
+      ],
+      "title": "Accelerator experiment shortcut",
+      "gist": "A physicist at a major accelerator reused mismatched old data instead of rerunning a comparison experiment, pressured by limited machine time and a push for new results."
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0066",
+      "children": [],
+      "range": [
+        "spya-m95kqm",
+        "spya-m95kqm"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0069",
+        "n0071",
+        "n0073",
+        "n0075",
+        "n0077",
+        "n0079",
+        "n0081"
+      ],
+      "range": [
+        "spya-fvenms",
+        "spya-g203mu"
+      ],
+      "title": "Young's Rat Experiment",
+      "gist": "One meticulous rat study uncovers the true cues animals use, yet later researchers ignore it, the same neglect that lets unrepeatable ESP claims persist.",
+      "question": "Young's experiment — why does careful work get ignored while sloppy science persists? (a case study and a counterexample)"
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0070"
+      ],
+      "range": [
+        "spya-fvenms",
+        "spya-fvenms"
+      ],
+      "title": "Young's door experiment",
+      "gist": "In 1937, Young tried training rats to choose a specific door in a corridor, but they kept returning to wherever food had been before instead."
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0069",
+      "children": [],
+      "range": [
+        "spya-fvenms",
+        "spya-fvenms"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0072"
+      ],
+      "range": [
+        "spya-rndcqw",
+        "spya-rndcqw"
+      ],
+      "title": "Eliminating sensory clues",
+      "gist": "Young systematically ruled out visual texture, smell, and lighting as the cues rats used to recognize the correct door, yet the rats still succeeded."
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-rndcqw",
+        "spya-rndcqw"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0074"
+      ],
+      "range": [
+        "spya-npdc6n",
+        "spya-npdc6n"
+      ],
+      "title": "Sound in the floor",
+      "gist": "Young discovered rats were detecting floor sound, which he eliminated only by running the corridor over sand, finally forcing true learning of the task."
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-npdc6n",
+        "spya-npdc6n"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0076"
+      ],
+      "range": [
+        "spya-yzzxkw",
+        "spya-yzzxkw"
+      ],
+      "title": "An exemplary experiment",
+      "gist": "Young's painstaking elimination of every possible clue makes his study a model for how to control conditions properly in any rat-running experiment."
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0075",
+      "children": [],
+      "range": [
+        "spya-yzzxkw",
+        "spya-yzzxkw"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0078"
+      ],
+      "range": [
+        "spya-wye8g6",
+        "spya-wye8g6"
+      ],
+      "title": "Ignored by later researchers",
+      "gist": "Despite its rigor, Young's work and his sand-corridor method were never cited by later rat researchers, who kept making the same uncontrolled mistakes."
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-wye8g6",
+        "spya-wye8g6"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0080"
+      ],
+      "range": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ],
+      "title": "Rhine's shrinking ESP effects",
+      "gist": "As parapsychologists refine their techniques under criticism, the measured ESP effects shrink toward nothing, yet researchers still resist demanding a repeatable experiment."
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 2,
+      "parent": "n0068",
+      "children": [
+        "n0082"
+      ],
+      "range": [
+        "spya-g203mu",
+        "spya-g203mu"
+      ],
+      "title": "Parapsychology institute's policy",
+      "gist": "A retiring parapsychology director advised training only students who already get positive results, a policy that teaches getting an answer rather than doing honest science."
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-g203mu",
+        "spya-g203mu"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0084"
+      ],
+      "range": [
+        "spya-ndyj3t",
+        "spya-ndyj3t"
+      ],
+      "title": "Closing Wish",
+      "gist": "Feynman closes by wishing graduates the freedom to keep scientific integrity despite institutional or financial pressure to abandon it.",
+      "question": "closing wish — what does Feynman hope for the graduates? (a benediction)"
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 2,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-ndyj3t",
+        "spya-ndyj3t"
+      ],
+      "title": ""
+    }
+  }
+}

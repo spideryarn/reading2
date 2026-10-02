@@ -1,0 +1,327 @@
+{
+  "mode": "sketch",
+  "rank": {
+    "meanU": 1.625,
+    "verdict": "no visible loss",
+    "articles": [
+      {
+        "slug": "replication-crisis-spya-hrjamq",
+        "u": 4,
+        "q": {
+          "no-schema-b": 0,
+          "no-schema-a": -1,
+          "base-a": -2,
+          "base-b": -3
+        }
+      },
+      {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "u": 0,
+        "q": {
+          "base-b": 0,
+          "base-a": -1,
+          "no-schema-a": -2,
+          "no-schema-b": -3
+        }
+      },
+      {
+        "slug": "noema-mythology-of-conscious-ai",
+        "u": 2,
+        "q": {
+          "base-a": 0,
+          "no-schema-b": -1,
+          "no-schema-a": -1,
+          "base-b": -2
+        }
+      },
+      {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "u": 0,
+        "q": {
+          "base-a": 0,
+          "base-b": -1,
+          "no-schema-b": -2,
+          "no-schema-a": -3
+        }
+      },
+      {
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "u": 4,
+        "q": {
+          "no-schema-b": 0,
+          "no-schema-a": -1,
+          "base-b": -2,
+          "base-a": -3
+        }
+      },
+      {
+        "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+        "u": 1,
+        "q": {
+          "base-a": 0,
+          "no-schema-a": -1,
+          "base-b": -2,
+          "no-schema-b": -3
+        }
+      },
+      {
+        "slug": "spider-silk-spya-ge30uz",
+        "u": 2,
+        "q": {
+          "no-schema-b": 0,
+          "base-a": -1,
+          "base-b": -2,
+          "no-schema-a": -3
+        }
+      },
+      {
+        "slug": "cargocult-spya-rz663q",
+        "u": 0,
+        "q": {
+          "base-a": 0,
+          "base-b": -1,
+          "no-schema-a": -2,
+          "no-schema-b": -3
+        }
+      }
+    ]
+  },
+  "score": {
+    "meanU": 2.1875,
+    "verdict": "no visible loss",
+    "articles": [
+      {
+        "slug": "replication-crisis-spya-hrjamq",
+        "u": 4,
+        "q": {
+          "no-schema-a": 19,
+          "base-a": 18,
+          "base-b": 16,
+          "no-schema-b": 23
+        }
+      },
+      {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "u": 1.5,
+        "q": {
+          "no-schema-b": 19,
+          "base-b": 22,
+          "base-a": 17,
+          "no-schema-a": 17
+        }
+      },
+      {
+        "slug": "noema-mythology-of-conscious-ai",
+        "u": 4,
+        "q": {
+          "no-schema-b": 19,
+          "base-b": 16,
+          "no-schema-a": 18,
+          "base-a": 17
+        }
+      },
+      {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "u": 0,
+        "q": {
+          "base-b": 21,
+          "no-schema-a": 5,
+          "base-a": 19,
+          "no-schema-b": 17
+        }
+      },
+      {
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "u": 3,
+        "q": {
+          "base-b": 21,
+          "no-schema-b": 22,
+          "base-a": 19,
+          "no-schema-a": 20
+        }
+      },
+      {
+        "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+        "u": 2,
+        "q": {
+          "no-schema-b": 17,
+          "base-b": 21,
+          "base-a": 21,
+          "no-schema-a": 22
+        }
+      },
+      {
+        "slug": "spider-silk-spya-ge30uz",
+        "u": 1.5,
+        "q": {
+          "base-a": 18,
+          "no-schema-a": 5,
+          "no-schema-b": 18,
+          "base-b": 17
+        }
+      },
+      {
+        "slug": "cargocult-spya-rz663q",
+        "u": 1.5,
+        "q": {
+          "no-schema-a": 18,
+          "base-b": 16,
+          "base-a": 19,
+          "no-schema-b": 16
+        }
+      }
+    ]
+  },
+  "combined": "no visible loss",
+  "savings": {
+    "perArticle": [
+      {
+        "slug": "replication-crisis-spya-hrjamq",
+        "chars": 149817,
+        "base": {
+          "thinking": 257,
+          "output": 3931,
+          "usd": 0.125148,
+          "latency": 36.3865
+        },
+        "candidate": {
+          "thinking": 1791,
+          "output": 5865,
+          "usd": 0.13992,
+          "latency": 49.542
+        },
+        "thinkingReduction": -5.968871595330739
+      },
+      {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "chars": 56536,
+        "base": {
+          "thinking": 134.5,
+          "output": 4263.5,
+          "usd": 0.101691,
+          "latency": 35.687
+        },
+        "candidate": {
+          "thinking": 64.5,
+          "output": 4333,
+          "usd": 0.097818,
+          "latency": 34.676
+        },
+        "thinkingReduction": 0.5204460966542751
+      },
+      {
+        "slug": "noema-mythology-of-conscious-ai",
+        "chars": 52573,
+        "base": {
+          "thinking": 134,
+          "output": 4629,
+          "usd": 0.10194,
+          "latency": 37.292500000000004
+        },
+        "candidate": {
+          "thinking": 133,
+          "output": 5010.5,
+          "usd": 0.101187,
+          "latency": 39.423500000000004
+        },
+        "thinkingReduction": 0.007462686567164201
+      },
+      {
+        "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+        "chars": 46808,
+        "base": {
+          "thinking": 841,
+          "output": 5141,
+          "usd": 0.11030999999999999,
+          "latency": 45.2645
+        },
+        "candidate": {
+          "thinking": 211.5,
+          "output": 4376.5,
+          "usd": 0.098097,
+          "latency": 41.316
+        },
+        "thinkingReduction": 0.7485136741973841
+      },
+      {
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "chars": 45461,
+        "base": {
+          "thinking": 723.5,
+          "output": 5247.5,
+          "usd": 0.105917,
+          "latency": 44.802499999999995
+        },
+        "candidate": {
+          "thinking": 1418.5,
+          "output": 5378.5,
+          "usd": 0.102659,
+          "latency": 47.174499999999995
+        },
+        "thinkingReduction": -0.9606081548030407
+      },
+      {
+        "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+        "chars": 34272,
+        "base": {
+          "thinking": 99.5,
+          "output": 4384.5,
+          "usd": 0.087437,
+          "latency": 40.396
+        },
+        "candidate": {
+          "thinking": 52.5,
+          "output": 3641,
+          "usd": 0.075434,
+          "latency": 28.6075
+        },
+        "thinkingReduction": 0.4723618090452262
+      },
+      {
+        "slug": "spider-silk-spya-ge30uz",
+        "chars": 62920,
+        "base": {
+          "thinking": 81.5,
+          "output": 3490,
+          "usd": 0.083898,
+          "latency": 29.781
+        },
+        "candidate": {
+          "thinking": 72.5,
+          "output": 2668.5,
+          "usd": 0.07111500000000001,
+          "latency": 23.7605
+        },
+        "thinkingReduction": 0.11042944785276076
+      },
+      {
+        "slug": "cargocult-spya-rz663q",
+        "chars": 21195,
+        "base": {
+          "thinking": 68,
+          "output": 5364.5,
+          "usd": 0.087119,
+          "latency": 41.3515
+        },
+        "candidate": {
+          "thinking": 150.5,
+          "output": 4548.5,
+          "usd": 0.074391,
+          "latency": 38.5575
+        },
+        "thinkingReduction": -1.2132352941176472
+      }
+    ],
+    "medianTypicalThinkingReduction": 0.11042944785276076,
+    "invalid": [
+      "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected no-schema-a",
+      "spider-silk-spya-ge30uz no-schema-a"
+    ]
+  },
+  "gatesPass": {
+    "literal": false,
+    "compared": false,
+    "invalidCandidate": 2,
+    "invalidBase": 0
+  }
+}

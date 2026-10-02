@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "mode": "sketch",
+  "promptVersion": "sketch/4",
+  "model": "anthropic/claude-sonnet-5",
+  "power": "standard",
+  "productionEffort": "low",
+  "arms": {
+    "base-a": {
+      "override": null,
+      "expectedOnWire": "low"
+    },
+    "base-b": {
+      "override": null,
+      "expectedOnWire": "low"
+    },
+    "low-a": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "low-b": {
+      "override": "low",
+      "expectedOnWire": "low"
+    },
+    "medium-a": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    },
+    "medium-b": {
+      "override": "medium",
+      "expectedOnWire": "medium"
+    },
+    "no-schema-a": {
+      "override": null,
+      "expectedOnWire": "low"
+    },
+    "no-schema-b": {
+      "override": null,
+      "expectedOnWire": "low"
+    }
+  },
+  "cacheArticle": false,
+  "profile": null
+}

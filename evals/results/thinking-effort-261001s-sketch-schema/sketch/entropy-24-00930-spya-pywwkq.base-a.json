@@ -1,0 +1,684 @@
+{
+  "version": "sketch/4",
+  "title": "chain with two expansions",
+  "caption": "The piece runs as one long chain from problem to method to evidence to open questions, with two dense stretches—building the PID framework, and testing it empirically—each worth opening up.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 80,
+          "text": "Brains process information, but how?",
+          "size": "sm",
+          "sub": "old limits: data & tools now easing",
+          "block": "spya-yb735k"
+        },
+        {
+          "kind": "node",
+          "id": "track",
+          "shape": "box",
+          "x": 260,
+          "y": 150,
+          "w": 240,
+          "h": 80,
+          "text": "Mutual information & transfer entropy track flow between neurons",
+          "size": "sm",
+          "block": "spya-ygkzd8"
+        },
+        {
+          "kind": "node",
+          "id": "limits",
+          "shape": "note",
+          "x": 260,
+          "y": 270,
+          "w": 240,
+          "h": 70,
+          "text": "But flow alone can't show how inputs are combined",
+          "size": "sm",
+          "block": "spya-dhy39x"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 370,
+          "w": 680,
+          "h": 280,
+          "style": "band",
+          "label": "BUILDING PARTIAL INFORMATION DECOMPOSITION (PID)",
+          "tone": 1,
+          "muted": true
+        },
+        {
+          "kind": "node",
+          "id": "basic",
+          "shape": "diamond",
+          "x": 80,
+          "y": 420,
+          "w": 190,
+          "h": 90,
+          "text": "Whole ≠ sum of parts: synergy or redundancy?",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-u0wm5e",
+          "opens": "inside-pid"
+        },
+        {
+          "kind": "node",
+          "id": "twoparent",
+          "shape": "hex",
+          "x": 300,
+          "y": 420,
+          "w": 180,
+          "h": 90,
+          "text": "Two-parent case: redundant, unique, synergistic atoms",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-y7wdb7"
+        },
+        {
+          "kind": "node",
+          "id": "lattice",
+          "shape": "hex",
+          "x": 510,
+          "y": 420,
+          "w": 180,
+          "h": 90,
+          "text": "General lattice needs a chosen redundancy measure",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-k378fv"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 690,
+          "w": 680,
+          "h": 330,
+          "style": "band",
+          "label": "PID IN ACTION: EVIDENCE FROM CORTICAL DATA AND BEHAVING ANIMALS",
+          "tone": 2,
+          "muted": true
+        },
+        {
+          "kind": "node",
+          "id": "setup",
+          "shape": "box",
+          "x": 80,
+          "y": 740,
+          "w": 190,
+          "h": 80,
+          "text": "Cortical cultures: synergy tracks feedforward flow",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-cc282b",
+          "opens": "inside-evidence"
+        },
+        {
+          "kind": "node",
+          "id": "richclub",
+          "shape": "box",
+          "x": 300,
+          "y": 740,
+          "w": 190,
+          "h": 80,
+          "text": "Rich-club neurons hold most of the synergy",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-e3ghxj"
+        },
+        {
+          "kind": "node",
+          "id": "primate",
+          "shape": "box",
+          "x": 510,
+          "y": 740,
+          "w": 180,
+          "h": 80,
+          "text": "In behaving macaques, synergy shifts with task",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-aqcngt"
+        },
+        {
+          "kind": "node",
+          "id": "caveats",
+          "shape": "note",
+          "x": 300,
+          "y": 850,
+          "w": 190,
+          "h": 80,
+          "text": "Caveats: bivariate estimates, cultures not live brains",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-vjzxxm"
+        },
+        {
+          "kind": "node",
+          "id": "practical",
+          "shape": "box",
+          "x": 260,
+          "y": 1050,
+          "w": 240,
+          "h": 70,
+          "text": "Practical limits: data type, sample size, tools, scaling",
+          "size": "sm",
+          "block": "spya-kmgwhs"
+        },
+        {
+          "kind": "node",
+          "id": "future",
+          "shape": "box",
+          "x": 40,
+          "y": 1050,
+          "w": 190,
+          "h": 70,
+          "text": "Future: local, time-resolved & multi-target PID",
+          "size": "sm",
+          "block": "spya-zz5xxs"
+        },
+        {
+          "kind": "node",
+          "id": "summary",
+          "shape": "ellipse",
+          "x": 510,
+          "y": 1050,
+          "w": 190,
+          "h": 70,
+          "text": "Synergy shows neurons read patterns, not sums",
+          "size": "sm",
+          "block": "spya-rc5z33"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "track",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "track",
+          "to": "limits",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "limits",
+          "to": "basic",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "basic",
+          "to": "twoparent",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "twoparent",
+          "to": "lattice",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lattice",
+          "to": "setup",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "setup",
+          "to": "richclub",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "richclub",
+          "to": "primate",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "primate",
+          "to": "caveats",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "caveats",
+          "to": "practical",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "practical",
+          "to": "future",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "practical",
+          "to": "summary",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain down the page: the need for better tools leads to the PID framework, which is then applied to real neural data, then qualified and extended."
+    },
+    {
+      "id": "inside-pid",
+      "title": "Building PID",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "puzzle",
+          "shape": "diamond",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 90,
+          "text": "Joint info ≠ sum of individual contributions",
+          "size": "sm",
+          "block": "spya-h5dz45"
+        },
+        {
+          "kind": "node",
+          "id": "synred",
+          "shape": "box",
+          "x": 280,
+          "y": 160,
+          "w": 220,
+          "h": 80,
+          "text": "Excess = synergy; shortfall = redundancy",
+          "size": "sm",
+          "block": "spya-e94ury"
+        },
+        {
+          "kind": "node",
+          "id": "figure1",
+          "shape": "note",
+          "x": 540,
+          "y": 160,
+          "w": 180,
+          "h": 80,
+          "text": "Venn diagram of redundant, unique, synergistic parts",
+          "size": "xs",
+          "block": "spya-pjdgu6"
+        },
+        {
+          "kind": "node",
+          "id": "twop",
+          "shape": "hex",
+          "x": 280,
+          "y": 280,
+          "w": 220,
+          "h": 90,
+          "text": "Two parents: four unknowns, three equations",
+          "size": "sm",
+          "block": "spya-q2b0e5"
+        },
+        {
+          "kind": "node",
+          "id": "underdet",
+          "shape": "note",
+          "x": 540,
+          "y": 280,
+          "w": 180,
+          "h": 90,
+          "text": "System is underdetermined without a redundancy definition",
+          "size": "xs",
+          "block": "spya-bgsd4n"
+        },
+        {
+          "kind": "node",
+          "id": "manyparents",
+          "shape": "box",
+          "x": 280,
+          "y": 400,
+          "w": 220,
+          "h": 80,
+          "text": "With 3+ parents, atoms multiply fast",
+          "size": "sm",
+          "block": "spya-q9gytb"
+        },
+        {
+          "kind": "node",
+          "id": "powerset",
+          "shape": "box",
+          "x": 280,
+          "y": 500,
+          "w": 220,
+          "h": 80,
+          "text": "Sources form a lattice of non-redundant combinations",
+          "size": "sm",
+          "block": "spya-pvavq4"
+        },
+        {
+          "kind": "node",
+          "id": "mobius",
+          "shape": "hex",
+          "x": 280,
+          "y": 610,
+          "w": 220,
+          "h": 90,
+          "text": "Möbius inversion extracts each atom's unique value",
+          "size": "sm",
+          "block": "spya-m37w5y"
+        },
+        {
+          "kind": "node",
+          "id": "redmeasure",
+          "shape": "box",
+          "x": 280,
+          "y": 720,
+          "w": 220,
+          "h": 40,
+          "text": "No single accepted redundancy measure — choice depends on context",
+          "size": "sm",
+          "block": "spya-d2quz5"
+        },
+        {
+          "kind": "edge",
+          "from": "puzzle",
+          "to": "synred",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "synred",
+          "to": "figure1",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "synred",
+          "to": "twop",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "twop",
+          "to": "underdet",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "twop",
+          "to": "manyparents",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "manyparents",
+          "to": "powerset",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "powerset",
+          "to": "mobius",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mobius",
+          "to": "redmeasure",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of concepts: from the basic puzzle that totals don't add up, through the two-source toy case, to the full lattice that needs a chosen redundancy rule."
+    },
+    {
+      "id": "inside-evidence",
+      "title": "PID in Action",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "cultures",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 80,
+          "text": "512-channel recordings of cortical cultures",
+          "size": "sm",
+          "block": "spya-sw5ukx"
+        },
+        {
+          "kind": "node",
+          "id": "ffcorr",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 210,
+          "h": 80,
+          "text": "Synergy tracks feedforward transfer entropy",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-kqkb58"
+        },
+        {
+          "kind": "node",
+          "id": "richclub2",
+          "shape": "box",
+          "x": 290,
+          "y": 160,
+          "w": 210,
+          "h": 80,
+          "text": "Rich-club triads hold ~88% of network synergy",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-fud8q3"
+        },
+        {
+          "kind": "node",
+          "id": "recurrent",
+          "shape": "box",
+          "x": 520,
+          "y": 160,
+          "w": 210,
+          "h": 80,
+          "text": "More recurrent connections, more synergy",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-sd9fzd"
+        },
+        {
+          "kind": "node",
+          "id": "convergence",
+          "shape": "box",
+          "x": 175,
+          "y": 280,
+          "w": 210,
+          "h": 90,
+          "text": "Synergy rises then falls as source correlation grows",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-hkhpex"
+        },
+        {
+          "kind": "node",
+          "id": "timescale",
+          "shape": "note",
+          "x": 410,
+          "y": 280,
+          "w": 210,
+          "h": 90,
+          "text": "At long timescales, redundancy dominates instead",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-cs9fdy"
+        },
+        {
+          "kind": "node",
+          "id": "conclusion1",
+          "shape": "box",
+          "x": 280,
+          "y": 400,
+          "w": 220,
+          "h": 80,
+          "text": "Computation concentrates in densely-linked, correlated cores",
+          "size": "sm",
+          "block": "spya-akxt70"
+        },
+        {
+          "kind": "node",
+          "id": "caveats2",
+          "shape": "note",
+          "x": 280,
+          "y": 500,
+          "w": 220,
+          "h": 80,
+          "text": "Caveats: bivariate TE bias; cultures ≠ live behaving brains",
+          "size": "sm",
+          "block": "spya-j4cy9j"
+        },
+        {
+          "kind": "node",
+          "id": "primates2",
+          "shape": "box",
+          "x": 280,
+          "y": 610,
+          "w": 220,
+          "h": 90,
+          "text": "Macaques: synergy drops, redundancy rises during motor execution",
+          "size": "sm",
+          "block": "spya-t8fayf"
+        },
+        {
+          "kind": "edge",
+          "from": "cultures",
+          "to": "ffcorr",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cultures",
+          "to": "richclub2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cultures",
+          "to": "recurrent",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ffcorr",
+          "to": "conclusion1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "richclub2",
+          "to": "conclusion1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "recurrent",
+          "to": "conclusion1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "convergence",
+          "to": "conclusion1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "timescale",
+          "to": "conclusion1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "conclusion1",
+          "to": "caveats2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "caveats2",
+          "to": "primates2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Several independent empirical findings converge on one picture: synergy concentrates where connections and correlations are strongest, and shifts with behavior."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+  "profileHash": null
+}

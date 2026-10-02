@@ -224,7 +224,7 @@ function headTheFingerprintDescribes(
 
 describe("an article with no metadata", () => {
   it("ideas: hashes the absent metadata, and still sends a head", async () => {
-    const { generateIdeas } = await import("../src/ideas.js");
+    const { generateIdeas, IDEAS_OUTPUT_SCHEMA } = await import("../src/ideas.js");
     const block = quotable(withoutMeta.blocks);
     answer = JSON.stringify({
       ideas: [
@@ -249,10 +249,14 @@ describe("an article with no metadata", () => {
        that had stopped sending a head would pass the line above, and so would
        one that had grown a `BY:` line out of nothing. */
     expect(headSent()).toBe(headTheFingerprintDescribes(withoutMeta, articleWithIdsFingerprint));
+    expect((JSON.parse(sent[0]!) as { output_config: unknown }).output_config).toEqual({
+      effort: "high",
+      format: { type: "json_schema", schema: IDEAS_OUTPUT_SCHEMA },
+    });
   });
 
   it("sketch: hashes the absent metadata, and still sends a head", async () => {
-    const { generateSketch } = await import("../src/sketch.js");
+    const { generateSketch, SKETCH_OUTPUT_SCHEMA } = await import("../src/sketch.js");
     /* Three nodes is `MIN_OVERVIEW_NODES`, all of them linked to a real block,
        stacked down the page in article order and not touching — the smallest
        picture `accept` will let through. Anything less and the stage throws
@@ -293,6 +297,21 @@ describe("an article with no metadata", () => {
        `tree.slug` — they agree on this fixture, so this only says the field was
        stamped at all. src/sketch.ts says why the two are not the same claim. */
     expect(run.sketch.slug).toBe(withoutMeta.slug);
+    expect((JSON.parse(sent[0]!) as { output_config: unknown }).output_config).toEqual({
+      effort: "low",
+      format: { type: "json_schema", schema: SKETCH_OUTPUT_SCHEMA },
+    });
+
+    await generateSketch({
+      power: "standard",
+      article: withoutMeta,
+      outputSchema: "omit-for-eval",
+    });
+    const shipping = JSON.parse(sent[0]!) as { output_config: { format?: unknown } };
+    const frozen = JSON.parse(sent[1]!) as { output_config: { format?: unknown } };
+    delete shipping.output_config.format;
+    expect(frozen, "the no-schema eval arm may differ only by output_config.format").toEqual(shipping);
+    expect(frozen.output_config).toEqual({ effort: "low" });
   });
 
   it("timeline: hashes the absent metadata with ITS fingerprint, and still sends a head", async () => {

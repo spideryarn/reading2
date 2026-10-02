@@ -1,0 +1,152 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "spider-silk-spya-ge30uz",
+  "sourceHash": "e1b739438681beb3.e79e41a4b4b6b689.5a9dbcf7548ed3c5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-td63fh",
+      "name": "Strength, stiffness, and toughness are separate properties",
+      "provenance": "assumed",
+      "statement": "A material can be strong, stiff, or tough, and these are independent measures—a material excelling in one need not excel in the others.",
+      "whyYouNeedIt": "Without distinguishing these, comparisons like 'silk is stronger than steel but tougher than both' read as contradictory rather than as three separate axes being compared.",
+      "occurrences": [
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "reasoning": "Only coherent if strength and toughness are understood as distinct, non-equivalent properties.",
+          "start": 48
+        },
+        {
+          "blockId": "spya-n5mzfc",
+          "quote": "An illustration of the differences between toughness, stiffness and strength",
+          "reasoning": "Explicitly flags these as distinct concepts needing separate illustration.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-dq9b7q",
+          "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.",
+          "reasoning": "Treats stiffness as separate from strength, assuming reader tracks the distinction.",
+          "start": 96
+        }
+      ]
+    },
+    {
+      "id": "spya-g8c6r9",
+      "name": "Replicating a process is harder than replicating a material",
+      "provenance": "assumed",
+      "statement": "Even if you can manufacture a protein chemically identical to natural silk protein, without reproducing the physical spinning conditions it was shaped by, you will not get a fibre with the same properties.",
+      "whyYouNeedIt": "This is why the article treats 'feedstock' and 'production conditions' as two separate unsolved problems rather than one—copying the molecule is not copying the silk.",
+      "occurrences": [
+        {
+          "blockId": "spya-wgee6t",
+          "quote": "These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions (the funnel, valve, tapering duct, and spigot). Few strategies have produced silk that can efficiently be synthesised into fibres.",
+          "reasoning": "Explicitly separates feedstock from spinning conditions as two distinct hurdles.",
+          "start": 82
+        },
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "reasoning": "Shows that simplified feedstock alone, without matching native spinning, yields inferior fibre.",
+          "start": 573
+        }
+      ]
+    },
+    {
+      "id": "spya-pnsgj7",
+      "name": "Hard crystals plus stretchy matrix equals toughness",
+      "provenance": "introduced",
+      "statement": "Spider silk's strength and stretchiness come from stiff crystal-like regions embedded in a softer, more flexible matrix, and it is the combination—not either part alone—that produces a fibre that is both strong and able to absorb energy before snapping.",
+      "occurrences": [
+        {
+          "blockId": "spya-p263u9",
+          "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.",
+          "reasoning": "States directly that the mix of hard and soft regions, not either alone, produces the fibre's properties.",
+          "start": 491
+        },
+        {
+          "blockId": "spya-ns50b2",
+          "quote": "He suggested crystallites embedded in an amorphous matrix interlinked with hydrogen bonds.",
+          "reasoning": "Describes the structural model underlying this combined-properties claim.",
+          "start": 58
+        }
+      ]
+    },
+    {
+      "id": "spya-h7j5us",
+      "name": "Silk's properties are matched to its job",
+      "provenance": "introduced",
+      "statement": "Different silk types are each tuned mechanically and chemically to the specific task they perform, whether capturing prey, protecting eggs, or providing a lifeline.",
+      "occurrences": [
+        {
+          "blockId": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function.",
+          "reasoning": "States the function-property matching directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-m3rk4n",
+          "quote": "Capture-spiral (flagelliform) silk Capturing lines. Sticky, stretchy, and tough.",
+          "reasoning": "Shows specific property set tied to specific ecological use.",
+          "start": 151
+        },
+        {
+          "blockId": "spya-bgtqr0",
+          "quote": "Some types of fibres are used for structural support, others for protective structures. Some can absorb energy effectively, whereas others transmit vibration efficiently.",
+          "reasoning": "Lays out the range of property-to-use pairings.",
+          "start": 216
+        }
+      ]
+    },
+    {
+      "id": "spya-w7dn8j",
+      "name": "Pulling, not pushing, shapes the fibre",
+      "provenance": "introduced",
+      "statement": "Spider silk is drawn out by an external pulling force rather than extruded by internal pressure, and this pulling itself—through shear, chemical, and alignment changes along the duct—is what converts the liquid protein into a solid fibre.",
+      "whyYouNeedIt": "Without grasping that the pulling force itself does the structuring work, the detailed duct anatomy and phase-transition description reads as arbitrary plumbing rather than an engineered process.",
+      "occurrences": [
+        {
+          "blockId": "spya-g2gw42",
+          "quote": "Silk production is a pultrusion,[42] similar to extrusion, with the subtlety that the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir.",
+          "reasoning": "States the pulling mechanism as the defining difference.",
+          "start": 299
+        },
+        {
+          "blockId": "spya-ba6knb",
+          "quote": "the unspun silk is under constant elongational shear stress, an important factor in fibre formation",
+          "reasoning": "Ties the pulling-induced stress directly to fibre formation.",
+          "start": 267
+        },
+        {
+          "blockId": "spya-m78y5s",
+          "quote": "This allows the silk to flow through the duct as a liquid while maintaining molecular order.",
+          "reasoning": "Depends on understanding that the pulling process, not static conditions, maintains order during flow.",
+          "start": 227
+        }
+      ]
+    },
+    {
+      "id": "spya-czet58",
+      "name": "Liquid crystal ordering enables controlled solidification",
+      "provenance": "introduced",
+      "statement": "Before it solidifies, the silk protein exists in a liquid-crystal-like state, allowing it to flow like a liquid while its molecules stay partly aligned, so that it can later lock into an ordered solid fibre rather than solidifying randomly.",
+      "occurrences": [
+        {
+          "blockId": "spya-m78y5s",
+          "quote": "Throughout the process the silk appears to have a nematic texture,[63] in a manner similar to a liquid crystal",
+          "reasoning": "States the liquid-crystal-like state directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-ba6knb",
+          "quote": "the shear stress and the ion and pH changes induce the liquid silk dope to undergo a phase transition and condense into a solid protein fibre with high molecular organisation",
+          "reasoning": "Describes how this ordered liquid state converts into an organized solid.",
+          "start": 515
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:25:30.302Z",
+  "elapsedMs": 23498
+}

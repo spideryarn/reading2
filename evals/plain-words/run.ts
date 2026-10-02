@@ -377,7 +377,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         const { params } = structureRequest(body);
         const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
         const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-        const { root } = parseStructureAnswer(raw); // production's own parse, not a copy of it
+        const { root } = parseStructureAnswer(raw, body); // production's own parse and starts converter
         return flatten(root, 0, []);
       };
       const glossary = async (): Promise<Entry[]> => {

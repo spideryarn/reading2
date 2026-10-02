@@ -1,0 +1,3695 @@
+{
+  "version": "toc/11",
+  "generator": "claude-sonnet-5",
+  "slug": "spider-silk-spya-ge30uz",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0013",
+        "n0052",
+        "n0058",
+        "n0070",
+        "n0096",
+        "n0135",
+        "n0140",
+        "n0153",
+        "n0167"
+      ],
+      "range": [
+        "spya-kpceg4",
+        "spya-jkpqa8"
+      ],
+      "title": "Spider silk",
+      "gist": "Spider silk's layered protein structure makes it remarkably strong and tough, inspiring artificial efforts to recreate it",
+      "question": "Spider silk — why is it stronger and tougher than comparable materials, and can it be made artificially? (several lines of evidence)"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0006",
+        "n0009"
+      ],
+      "range": [
+        "spya-kpceg4",
+        "spya-ybqc4f"
+      ],
+      "title": "Spider silk",
+      "gist": "Spiders produce silk in many types to build webs, trap and wrap prey, protect offspring, and aid movement, courtship, and even feeding.",
+      "question": "Spider silk — what is it and what roles does it serve in a spider's life? (an overview)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005"
+      ],
+      "range": [
+        "spya-kpceg4",
+        "spya-xdnea2"
+      ],
+      "title": "Title and credit",
+      "gist": "The article's title and Wikimedia contributor credit."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-kpceg4",
+        "spya-kpceg4"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-xdnea2",
+        "spya-xdnea2"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0007",
+        "n0008"
+      ],
+      "range": [
+        "spya-sdr9p7",
+        "spya-q97mz3"
+      ],
+      "title": "Illustrations",
+      "gist": "Two images show a spider wrapping prey in silk and a painting of gossamer thread, illustrating silk's long cultural presence."
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0006",
+      "children": [],
+      "range": [
+        "spya-sdr9p7",
+        "spya-sdr9p7"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0006",
+      "children": [],
+      "range": [
+        "spya-q97mz3",
+        "spya-q97mz3"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0010",
+        "n0011",
+        "n0012"
+      ],
+      "range": [
+        "spya-gp4t9x",
+        "spya-ybqc4f"
+      ],
+      "title": "What spider silk is",
+      "gist": "Spiders spin silk for many purposes—trapping prey, signaling mates, suspending themselves, or ballooning through air—varying its thickness and stickiness, and sometimes even eating it as food."
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-gp4t9x",
+        "spya-gp4t9x"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-k8j9fe",
+        "spya-k8j9fe"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-ybqc4f",
+        "spya-ybqc4f"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0014",
+        "n0022",
+        "n0049"
+      ],
+      "range": [
+        "spya-py9zw6",
+        "spya-k8bh7d"
+      ],
+      "title": "Properties",
+      "gist": "Spider silk's layered crystalline-and-amorphous protein structure gives it an unusual mix of strength, stretch, and adhesion that outperforms many engineered materials.",
+      "question": "Properties — why does spider silk combine strength, toughness, and stickiness so effectively? (structural, mechanical, and adhesive evidence)"
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0013",
+      "children": [
+        "n0015",
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021"
+      ],
+      "range": [
+        "spya-py9zw6",
+        "spya-b7usb3"
+      ],
+      "title": "Structural",
+      "gist": "Spider silk's proteins form a block copolymer whose stiff crystalline beta-sheets and stretchy amorphous regions combine to produce its unusual strength and elasticity, as models and imaging confirm.",
+      "sourceHeading": "Structural"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-py9zw6",
+        "spya-py9zw6"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-h6ub2r",
+        "spya-h6ub2r"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-jqdrty",
+        "spya-jqdrty"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-p263u9",
+        "spya-p263u9"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-ns50b2",
+        "spya-ns50b2"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-dadew4",
+        "spya-dadew4"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-b7usb3",
+        "spya-b7usb3"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0013",
+      "children": [
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048"
+      ],
+      "range": [
+        "spya-b0sewq",
+        "spya-ug9bz2"
+      ],
+      "title": "Mechanical",
+      "gist": "Dragline silk combines high tensile strength, elasticity, and low density to achieve exceptional toughness, with measured stiffness, strength, temperature tolerance, and water-triggered shrinkage surpassing many engineered fibres including Kevlar.",
+      "sourceHeading": "Mechanical"
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-b0sewq",
+        "spya-b0sewq"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-xytxuw",
+        "spya-xytxuw"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-nwva2u",
+        "spya-nwva2u"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-n5mzfc",
+        "spya-n5mzfc"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-hv4xng",
+        "spya-hv4xng"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-g7yhg7",
+        "spya-g7yhg7"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-w9q80j",
+        "spya-w9q80j"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-dq9b7q",
+        "spya-dq9b7q"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-yp288p",
+        "spya-yp288p"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-mhe2r5",
+        "spya-mhe2r5"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-hx3r6z",
+        "spya-hx3r6z"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-hng89u",
+        "spya-hng89u"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-m424cj",
+        "spya-m424cj"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-kge0nq",
+        "spya-kge0nq"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-n93h2f",
+        "spya-n93h2f"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-tn085u",
+        "spya-tn085u"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-xk7w4u",
+        "spya-xk7w4u"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-gfykz5",
+        "spya-gfykz5"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-e44v44",
+        "spya-e44v44"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-rrmd0r",
+        "spya-rrmd0r"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-yrtju9",
+        "spya-yrtju9"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-v6hmg4",
+        "spya-v6hmg4"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-egpeqk",
+        "spya-egpeqk"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-qdjb0x",
+        "spya-qdjb0x"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-ran4vw",
+        "spya-ran4vw"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-ug9bz2",
+        "spya-ug9bz2"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0013",
+      "children": [
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-m8z9e7",
+        "spya-k8bh7d"
+      ],
+      "title": "Adhesive",
+      "gist": "Attachment-disc silk is a durable two-compound secretion that polymerises instantly at ambient conditions, acting like a biodegradable glue whose properties are controlled by the spinnerets.",
+      "sourceHeading": "Adhesive"
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-m8z9e7",
+        "spya-m8z9e7"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-k8bh7d",
+        "spya-k8bh7d"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0053",
+        "n0056"
+      ],
+      "range": [
+        "spya-rty5kb",
+        "spya-jyg3uw"
+      ],
+      "title": "Uses",
+      "gist": "A single spider can spin up to seven silk types, each matched to a specific use such as catching prey, reproducing, or escaping danger.",
+      "question": "Uses — how does silk's variety let spiders catch prey, reproduce, and move? (a list of uses)",
+      "sourceHeading": "Uses"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0054",
+        "n0055"
+      ],
+      "range": [
+        "spya-rty5kb",
+        "spya-pn8bvd"
+      ],
+      "title": "Variety of silk uses",
+      "gist": "Each spider can spin up to seven different silk types, unlike insects that make only one, reflecting silk's long evolutionary refinement from simple tube webs to complex orb webs."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-rty5kb",
+        "spya-rty5kb"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-pn8bvd",
+        "spya-pn8bvd"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0057"
+      ],
+      "range": [
+        "spya-jyg3uw",
+        "spya-jyg3uw"
+      ],
+      "title": "Table of uses",
+      "gist": "A table lists specific uses of silk, including prey capture, immobilisation, reproduction, dispersal, feeding, nest-building, guide lines, drop lines, alarm signals, and pheromone trails."
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-jyg3uw",
+        "spya-jyg3uw"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0059",
+        "n0064"
+      ],
+      "range": [
+        "spya-hg7j7e",
+        "spya-m3rk4n"
+      ],
+      "title": "Silk types",
+      "gist": "Different silk glands produce chemically distinct silks, each with properties suited to a particular structural or behavioral role in the web.",
+      "question": "Silk types — how do a spider's different glands create silks suited to specific jobs? (a table of gland-silk-use pairings)",
+      "sourceHeading": "Silk types"
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063"
+      ],
+      "range": [
+        "spya-hg7j7e",
+        "spya-b2yh5y"
+      ],
+      "title": "Overview and diagrams",
+      "gist": "Diagrams identify seven distinct silk types—major and minor ampullate, flagelliform, piriform, tubuliform, aciniform, and aggregate—each suited to a different structural or defensive role."
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-hg7j7e",
+        "spya-hg7j7e"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-gu2z3s",
+        "spya-gu2z3s"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-sxy3ve",
+        "spya-sxy3ve"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-b2yh5y",
+        "spya-b2yh5y"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0058",
+      "children": [
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069"
+      ],
+      "range": [
+        "spya-bgtqr0",
+        "spya-m3rk4n"
+      ],
+      "title": "Glands and silk types",
+      "gist": "Each silk type is produced by a dedicated gland and matched to a specific job, from dragline strength to sticky capture threads to stiff protective egg-sac silk."
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-bgtqr0",
+        "spya-bgtqr0"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-nprqdc",
+        "spya-nprqdc"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-nn5s8z",
+        "spya-nn5s8z"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-j7tbnj",
+        "spya-j7tbnj"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-m3rk4n",
+        "spya-m3rk4n"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0071",
+        "n0076"
+      ],
+      "range": [
+        "spya-g3h8qq",
+        "spya-chp75n"
+      ],
+      "title": "Synthesis and fibre spinning",
+      "gist": "Silk fibre is pulled rather than extruded, formed inside a tapering duct where pH, water removal, and shear force convert liquid protein into solid fibre.",
+      "question": "Spinning — how does a spider turn liquid silk protein into a solid fibre without external machinery? (a gland-by-gland account)",
+      "sourceHeading": "Synthesis and fibre spinning"
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 2,
+      "parent": "n0070",
+      "children": [
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075"
+      ],
+      "range": [
+        "spya-g3h8qq",
+        "spya-g2gw42"
+      ],
+      "title": "Spinning process",
+      "gist": "Unlike continuously grown plant fibres, silk is pulled on demand from a liquid precursor stored in glands, a pulling process more akin to pultrusion than true spinning."
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-g3h8qq",
+        "spya-g3h8qq"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-zk3nbd",
+        "spya-zk3nbd"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-mepbwz",
+        "spya-mepbwz"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-g2gw42",
+        "spya-g2gw42"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0070",
+      "children": [
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-hdw7yd",
+        "spya-chp75n"
+      ],
+      "title": "Silk gland",
+      "gist": "The spinning duct tapers through sections—tail, ampulla, funnel, duct, and valve—where shear, acidification, and water removal convert liquid silk dope into an ordered solid fibre.",
+      "sourceHeading": "Silk gland"
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-hdw7yd",
+        "spya-hdw7yd"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-zekc76",
+        "spya-zekc76"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-kdnckt",
+        "spya-kdnckt"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-ke28n6",
+        "spya-ke28n6"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-zscvdm",
+        "spya-zscvdm"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-qm0dt0",
+        "spya-qm0dt0"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-f29a84",
+        "spya-f29a84"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-jezt06",
+        "spya-jezt06"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-nwa2n4",
+        "spya-nwa2n4"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-ba6knb",
+        "spya-ba6knb"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-s5073r",
+        "spya-s5073r"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-m78y5s",
+        "spya-m78y5s"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-zrcs7h",
+        "spya-zrcs7h"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-f0f0t3",
+        "spya-f0f0t3"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-pxm7jq",
+        "spya-pxm7jq"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-ax3bk5",
+        "spya-ax3bk5"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-gerwju",
+        "spya-gerwju"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-pq4exy",
+        "spya-pq4exy"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0076",
+      "children": [],
+      "range": [
+        "spya-chp75n",
+        "spya-chp75n"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0097",
+        "n0101",
+        "n0105",
+        "n0119",
+        "n0122"
+      ],
+      "range": [
+        "spya-d7d7m8",
+        "spya-n7yuqt"
+      ],
+      "title": "Artificial synthesis",
+      "gist": "Replicating spider silk artificially requires both producing its unspun protein feedstock and mimicking the spinning geometry that turns it into fibre.",
+      "question": "Artificial synthesis — why has it proven so hard to manufacture silk fibres that match natural spider silk? (several approaches compared)",
+      "sourceHeading": "Artificial synthesis"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0098",
+        "n0099",
+        "n0100"
+      ],
+      "range": [
+        "spya-d7d7m8",
+        "spya-wgee6t"
+      ],
+      "title": "Synthesis task",
+      "gist": "Producing silk fibres artificially requires replicating both the liquid protein feedstock spiders make and the spinning conditions that convert it into solid fibre."
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-d7d7m8",
+        "spya-d7d7m8"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-qvku6g",
+        "spya-qvku6g"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-wgee6t",
+        "spya-wgee6t"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0102",
+        "n0103",
+        "n0104"
+      ],
+      "range": [
+        "spya-rw0wtg",
+        "spya-gjan3e"
+      ],
+      "title": "Feedstock",
+      "gist": "Replicating silk's long, complex protein requires extracting or engineering suitable source organisms—spiders, silkworms, bacteria, goats, or plants—each yielding fibres with different strength and stretch.",
+      "sourceHeading": "Feedstock"
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-rw0wtg",
+        "spya-rw0wtg"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-w7zvnj",
+        "spya-w7zvnj"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0101",
+      "children": [],
+      "range": [
+        "spya-gjan3e",
+        "spya-gjan3e"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0106",
+        "n0107",
+        "n0108",
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118"
+      ],
+      "range": [
+        "spya-x4bwhf",
+        "spya-gvzjvw"
+      ],
+      "title": "Geometry",
+      "gist": "Because artificial feedstock lacks a natural duct, researchers use needles, superhydrophobic surfaces, sheet self-assembly, microfluidics, or electrospinning to coax protein solutions into usable fibres.",
+      "sourceHeading": "Geometry"
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-x4bwhf",
+        "spya-x4bwhf"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-up6vkg",
+        "spya-up6vkg"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-b5v80j",
+        "spya-b5v80j"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-y4ay23",
+        "spya-y4ay23"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-ke5guk",
+        "spya-ke5guk"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-csguu3",
+        "spya-csguu3"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-f4xfcf",
+        "spya-f4xfcf"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-uyhde6",
+        "spya-uyhde6"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-gdkc7j",
+        "spya-gdkc7j"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-wzxnex",
+        "spya-wzxnex"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-qbrkma",
+        "spya-qbrkma"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-xns669",
+        "spya-xns669"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0105",
+      "children": [],
+      "range": [
+        "spya-gvzjvw",
+        "spya-gvzjvw"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-r4r9au",
+        "spya-kp0n2d"
+      ],
+      "title": "Other shapes",
+      "gist": "Beyond ordinary fibres, silk proteins can self-assemble into capsules, sheets, nanowires, and flexible membranes used for drug delivery, wound healing, and engineered tissue applications.",
+      "sourceHeading": "Other shapes"
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-r4r9au",
+        "spya-r4r9au"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-kp0n2d",
+        "spya-kp0n2d"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130",
+        "n0131",
+        "n0132",
+        "n0133",
+        "n0134"
+      ],
+      "range": [
+        "spya-j7hems",
+        "spya-n7yuqt"
+      ],
+      "title": "Synthetic spider silk",
+      "gist": "Genetic engineering of bacteria, yeast, plants, and silkworms has produced spider silk-like proteins, spun by wet-spinning into fibres that remain weaker and simpler than natural dragline silk.",
+      "sourceHeading": "Synthetic spider silk"
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-j7hems",
+        "spya-j7hems"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-s0va30",
+        "spya-s0va30"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-jzcepa",
+        "spya-jzcepa"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-zfzzhm",
+        "spya-zfzzhm"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-f399m7",
+        "spya-f399m7"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-m88aty",
+        "spya-m88aty"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-m99ub7",
+        "spya-m99ub7"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-jewbut",
+        "spya-jewbut"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-kd0yna",
+        "spya-kd0yna"
+      ],
+      "title": ""
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-brz8bx",
+        "spya-brz8bx"
+      ],
+      "title": ""
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-vranhw",
+        "spya-vranhw"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-n7yuqt",
+        "spya-n7yuqt"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0136",
+        "n0138"
+      ],
+      "range": [
+        "spya-jvxbb8",
+        "spya-aju2vt"
+      ],
+      "title": "Research",
+      "gist": "Decades of studies have progressively mapped spider silk's chemistry, structure, and mechanics, building the foundation for synthetic replication efforts.",
+      "question": "Research — which studies established what we now know about spider silk's structure and properties? (a table of key papers)",
+      "sourceHeading": "Research"
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 2,
+      "parent": "n0135",
+      "children": [
+        "n0137"
+      ],
+      "range": [
+        "spya-jvxbb8",
+        "spya-jvxbb8"
+      ],
+      "title": "Research heading",
+      "gist": "The research heading introducing a table of landmark studies."
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0136",
+      "children": [],
+      "range": [
+        "spya-jvxbb8",
+        "spya-jvxbb8"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 2,
+      "parent": "n0135",
+      "children": [
+        "n0139"
+      ],
+      "range": [
+        "spya-aju2vt",
+        "spya-aju2vt"
+      ],
+      "title": "Significant papers table",
+      "gist": "A table lists landmark papers from 1960 to 2006 covering spider silk's chemical composition, gene sequence, mechanical properties, structure, and synthetic spinning, noting each study's key contribution."
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0138",
+      "children": [],
+      "range": [
+        "spya-aju2vt",
+        "spya-aju2vt"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0141",
+        "n0146",
+        "n0149"
+      ],
+      "range": [
+        "spya-chy97m",
+        "spya-dd2zvs"
+      ],
+      "title": "Human uses",
+      "gist": "Humans have long tried to harvest spider silk for textiles and now apply it in medicine, optics, and scientific instruments.",
+      "question": "Human uses — how has spider silk moved from historical curiosity to modern scientific and medical application? (several applications)",
+      "sourceHeading": "Human uses"
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 2,
+      "parent": "n0140",
+      "children": [
+        "n0142",
+        "n0143",
+        "n0144",
+        "n0145"
+      ],
+      "range": [
+        "spya-chy97m",
+        "spya-n7xhsh"
+      ],
+      "title": "Early silk fabric production",
+      "gist": "Historical attempts to weave spider silk into cloth date to 1709, but harvesting silk at scale remains so difficult that only one large textile, made from a million spiders, has ever been produced."
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-chy97m",
+        "spya-chy97m"
+      ],
+      "title": ""
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-edzgna",
+        "spya-edzgna"
+      ],
+      "title": ""
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-jj2arg",
+        "spya-jj2arg"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0141",
+      "children": [],
+      "range": [
+        "spya-n7xhsh",
+        "spya-n7xhsh"
+      ],
+      "title": ""
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 2,
+      "parent": "n0140",
+      "children": [
+        "n0147",
+        "n0148"
+      ],
+      "range": [
+        "spya-ce0yqp",
+        "spya-va4h3w"
+      ],
+      "title": "Medicine",
+      "gist": "Traditional Carpathian wound dressings used tube-web silk for its apparent antiseptic, vitamin-K-rich clotting properties, and modern research has tested spider silk for nerve regeneration.",
+      "sourceHeading": "Medicine"
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-ce0yqp",
+        "spya-ce0yqp"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0146",
+      "children": [],
+      "range": [
+        "spya-va4h3w",
+        "spya-va4h3w"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 2,
+      "parent": "n0140",
+      "children": [
+        "n0150",
+        "n0151",
+        "n0152"
+      ],
+      "range": [
+        "spya-vr82sv",
+        "spya-dd2zvs"
+      ],
+      "title": "Science and technology",
+      "gist": "Spider silk's fineness and elasticity have suited it to optical crosshairs, diffraction experiments, biolenses, and even suspending fusion targets during laser ignition without introducing contaminating x-rays.",
+      "sourceHeading": "Science and technology"
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0149",
+      "children": [],
+      "range": [
+        "spya-vr82sv",
+        "spya-vr82sv"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0149",
+      "children": [],
+      "range": [
+        "spya-ujk7yy",
+        "spya-ujk7yy"
+      ],
+      "title": ""
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0149",
+      "children": [],
+      "range": [
+        "spya-dd2zvs",
+        "spya-dd2zvs"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0154",
+        "n0156",
+        "n0163"
+      ],
+      "range": [
+        "spya-jdybu5",
+        "spya-k662zp"
+      ],
+      "title": "Back matter",
+      "gist": "Citations, external links, and related topics."
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 2,
+      "parent": "n0153",
+      "children": [
+        "n0155"
+      ],
+      "range": [
+        "spya-jdybu5",
+        "spya-jdybu5"
+      ],
+      "title": "References",
+      "gist": "The article's reference citations.",
+      "sourceHeading": "References"
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-jdybu5",
+        "spya-jdybu5"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 2,
+      "parent": "n0153",
+      "children": [
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160",
+        "n0161",
+        "n0162"
+      ],
+      "range": [
+        "spya-r0xhe2",
+        "spya-at7xxd"
+      ],
+      "title": "External links",
+      "gist": "Links to external videos and articles about spider silk.",
+      "sourceHeading": "External links"
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-r0xhe2",
+        "spya-r0xhe2"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-ax65q8",
+        "spya-ax65q8"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-z0ntp7",
+        "spya-z0ntp7"
+      ],
+      "title": ""
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-b06mp5",
+        "spya-b06mp5"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-decjub",
+        "spya-decjub"
+      ],
+      "title": ""
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-at7xxd",
+        "spya-at7xxd"
+      ],
+      "title": ""
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 2,
+      "parent": "n0153",
+      "children": [
+        "n0164",
+        "n0165",
+        "n0166"
+      ],
+      "range": [
+        "spya-jbe0fq",
+        "spya-k662zp"
+      ],
+      "title": "See also",
+      "gist": "Links to related Wikipedia articles.",
+      "sourceHeading": "See also"
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-jbe0fq",
+        "spya-jbe0fq"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-nnz9p7",
+        "spya-nnz9p7"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-k662zp",
+        "spya-k662zp"
+      ],
+      "title": ""
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0168",
+        "n0169",
+        "n0170",
+        "n0171",
+        "n0172",
+        "n0173",
+        "n0174",
+        "n0175",
+        "n0176",
+        "n0177",
+        "n0178",
+        "n0179",
+        "n0180",
+        "n0181",
+        "n0182",
+        "n0183",
+        "n0184",
+        "n0185",
+        "n0186",
+        "n0187",
+        "n0188",
+        "n0189",
+        "n0190",
+        "n0191",
+        "n0192",
+        "n0193",
+        "n0194",
+        "n0195",
+        "n0196",
+        "n0197",
+        "n0198",
+        "n0199",
+        "n0200",
+        "n0201",
+        "n0202",
+        "n0203",
+        "n0204",
+        "n0205",
+        "n0206",
+        "n0207",
+        "n0208",
+        "n0209",
+        "n0210",
+        "n0211",
+        "n0212",
+        "n0213",
+        "n0214",
+        "n0215",
+        "n0216",
+        "n0217",
+        "n0218",
+        "n0219",
+        "n0220",
+        "n0221",
+        "n0222",
+        "n0223",
+        "n0224",
+        "n0225",
+        "n0226",
+        "n0227",
+        "n0228",
+        "n0229",
+        "n0230",
+        "n0231",
+        "n0232",
+        "n0233",
+        "n0234",
+        "n0235",
+        "n0236",
+        "n0237",
+        "n0238",
+        "n0239",
+        "n0240",
+        "n0241",
+        "n0242",
+        "n0243",
+        "n0244",
+        "n0245",
+        "n0246",
+        "n0247",
+        "n0248",
+        "n0249",
+        "n0250",
+        "n0251",
+        "n0252",
+        "n0253",
+        "n0254",
+        "n0255",
+        "n0256",
+        "n0257",
+        "n0258",
+        "n0259",
+        "n0260",
+        "n0261",
+        "n0262",
+        "n0263",
+        "n0264",
+        "n0265",
+        "n0266",
+        "n0267",
+        "n0268",
+        "n0269",
+        "n0270",
+        "n0271",
+        "n0272",
+        "n0273",
+        "n0274",
+        "n0275",
+        "n0276",
+        "n0277",
+        "n0278",
+        "n0279",
+        "n0280",
+        "n0281",
+        "n0282",
+        "n0283",
+        "n0284",
+        "n0285",
+        "n0286",
+        "n0287",
+        "n0288",
+        "n0289",
+        "n0290",
+        "n0291",
+        "n0292",
+        "n0293",
+        "n0294",
+        "n0295",
+        "n0296",
+        "n0297",
+        "n0298",
+        "n0299"
+      ],
+      "range": [
+        "spya-ewbjvg",
+        "spya-jkpqa8"
+      ],
+      "title": "Notes",
+      "treatment": "supplement"
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ewbjvg",
+        "spya-ewbjvg"
+      ],
+      "title": ""
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-k8p9ty",
+        "spya-k8p9ty"
+      ],
+      "title": ""
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-qbdbme",
+        "spya-qbdbme"
+      ],
+      "title": ""
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-zndb6a",
+        "spya-zndb6a"
+      ],
+      "title": ""
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dxhfmg",
+        "spya-dxhfmg"
+      ],
+      "title": ""
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-vqagrh",
+        "spya-vqagrh"
+      ],
+      "title": ""
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-j5j7qn",
+        "spya-j5j7qn"
+      ],
+      "title": ""
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ap5vxs",
+        "spya-ap5vxs"
+      ],
+      "title": ""
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-t720j9",
+        "spya-t720j9"
+      ],
+      "title": ""
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-gsfzc2",
+        "spya-gsfzc2"
+      ],
+      "title": ""
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-mae6cv",
+        "spya-mae6cv"
+      ],
+      "title": ""
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-r2nz27",
+        "spya-r2nz27"
+      ],
+      "title": ""
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-bcrasv",
+        "spya-bcrasv"
+      ],
+      "title": ""
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dctncn",
+        "spya-dctncn"
+      ],
+      "title": ""
+    },
+    "n0182": {
+      "id": "n0182",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ee022u",
+        "spya-ee022u"
+      ],
+      "title": ""
+    },
+    "n0183": {
+      "id": "n0183",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-x500gp",
+        "spya-x500gp"
+      ],
+      "title": ""
+    },
+    "n0184": {
+      "id": "n0184",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xxufbm",
+        "spya-xxufbm"
+      ],
+      "title": ""
+    },
+    "n0185": {
+      "id": "n0185",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-q24jp7",
+        "spya-q24jp7"
+      ],
+      "title": ""
+    },
+    "n0186": {
+      "id": "n0186",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-bc367n",
+        "spya-bc367n"
+      ],
+      "title": ""
+    },
+    "n0187": {
+      "id": "n0187",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-j5h03y",
+        "spya-j5h03y"
+      ],
+      "title": ""
+    },
+    "n0188": {
+      "id": "n0188",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-qe0yfn",
+        "spya-qe0yfn"
+      ],
+      "title": ""
+    },
+    "n0189": {
+      "id": "n0189",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-enr4tq",
+        "spya-enr4tq"
+      ],
+      "title": ""
+    },
+    "n0190": {
+      "id": "n0190",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-z8n9cd",
+        "spya-z8n9cd"
+      ],
+      "title": ""
+    },
+    "n0191": {
+      "id": "n0191",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xr94sv",
+        "spya-xr94sv"
+      ],
+      "title": ""
+    },
+    "n0192": {
+      "id": "n0192",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dtke48",
+        "spya-dtke48"
+      ],
+      "title": ""
+    },
+    "n0193": {
+      "id": "n0193",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-cg62av",
+        "spya-cg62av"
+      ],
+      "title": ""
+    },
+    "n0194": {
+      "id": "n0194",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ptanyd",
+        "spya-ptanyd"
+      ],
+      "title": ""
+    },
+    "n0195": {
+      "id": "n0195",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-yg0d45",
+        "spya-yg0d45"
+      ],
+      "title": ""
+    },
+    "n0196": {
+      "id": "n0196",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xypzc6",
+        "spya-xypzc6"
+      ],
+      "title": ""
+    },
+    "n0197": {
+      "id": "n0197",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-enq69j",
+        "spya-enq69j"
+      ],
+      "title": ""
+    },
+    "n0198": {
+      "id": "n0198",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ztqfmf",
+        "spya-ztqfmf"
+      ],
+      "title": ""
+    },
+    "n0199": {
+      "id": "n0199",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-m0m5mc",
+        "spya-m0m5mc"
+      ],
+      "title": ""
+    },
+    "n0200": {
+      "id": "n0200",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-tvt4my",
+        "spya-tvt4my"
+      ],
+      "title": ""
+    },
+    "n0201": {
+      "id": "n0201",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-gj9e6q",
+        "spya-gj9e6q"
+      ],
+      "title": ""
+    },
+    "n0202": {
+      "id": "n0202",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-fd8y4m",
+        "spya-fd8y4m"
+      ],
+      "title": ""
+    },
+    "n0203": {
+      "id": "n0203",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xb0673",
+        "spya-xb0673"
+      ],
+      "title": ""
+    },
+    "n0204": {
+      "id": "n0204",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-quxr9m",
+        "spya-quxr9m"
+      ],
+      "title": ""
+    },
+    "n0205": {
+      "id": "n0205",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-twucsc",
+        "spya-twucsc"
+      ],
+      "title": ""
+    },
+    "n0206": {
+      "id": "n0206",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-r6k923",
+        "spya-r6k923"
+      ],
+      "title": ""
+    },
+    "n0207": {
+      "id": "n0207",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dw58y7",
+        "spya-dw58y7"
+      ],
+      "title": ""
+    },
+    "n0208": {
+      "id": "n0208",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-w6s2yn",
+        "spya-w6s2yn"
+      ],
+      "title": ""
+    },
+    "n0209": {
+      "id": "n0209",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-uk4ek9",
+        "spya-uk4ek9"
+      ],
+      "title": ""
+    },
+    "n0210": {
+      "id": "n0210",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-u40z25",
+        "spya-u40z25"
+      ],
+      "title": ""
+    },
+    "n0211": {
+      "id": "n0211",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-pn6u5n",
+        "spya-pn6u5n"
+      ],
+      "title": ""
+    },
+    "n0212": {
+      "id": "n0212",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-h07n2y",
+        "spya-h07n2y"
+      ],
+      "title": ""
+    },
+    "n0213": {
+      "id": "n0213",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-yx5qy3",
+        "spya-yx5qy3"
+      ],
+      "title": ""
+    },
+    "n0214": {
+      "id": "n0214",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-hrx4ea",
+        "spya-hrx4ea"
+      ],
+      "title": ""
+    },
+    "n0215": {
+      "id": "n0215",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-n3tst0",
+        "spya-n3tst0"
+      ],
+      "title": ""
+    },
+    "n0216": {
+      "id": "n0216",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-m2xw74",
+        "spya-m2xw74"
+      ],
+      "title": ""
+    },
+    "n0217": {
+      "id": "n0217",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-vw6pux",
+        "spya-vw6pux"
+      ],
+      "title": ""
+    },
+    "n0218": {
+      "id": "n0218",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wpkkp4",
+        "spya-wpkkp4"
+      ],
+      "title": ""
+    },
+    "n0219": {
+      "id": "n0219",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wtmzjc",
+        "spya-wtmzjc"
+      ],
+      "title": ""
+    },
+    "n0220": {
+      "id": "n0220",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-s9byrn",
+        "spya-s9byrn"
+      ],
+      "title": ""
+    },
+    "n0221": {
+      "id": "n0221",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ays7zb",
+        "spya-ays7zb"
+      ],
+      "title": ""
+    },
+    "n0222": {
+      "id": "n0222",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-s7u52y",
+        "spya-s7u52y"
+      ],
+      "title": ""
+    },
+    "n0223": {
+      "id": "n0223",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-nhzr8q",
+        "spya-nhzr8q"
+      ],
+      "title": ""
+    },
+    "n0224": {
+      "id": "n0224",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-yahh05",
+        "spya-yahh05"
+      ],
+      "title": ""
+    },
+    "n0225": {
+      "id": "n0225",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ud3aau",
+        "spya-ud3aau"
+      ],
+      "title": ""
+    },
+    "n0226": {
+      "id": "n0226",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-p7tavm",
+        "spya-p7tavm"
+      ],
+      "title": ""
+    },
+    "n0227": {
+      "id": "n0227",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-rxsb04",
+        "spya-rxsb04"
+      ],
+      "title": ""
+    },
+    "n0228": {
+      "id": "n0228",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-zzvzjd",
+        "spya-zzvzjd"
+      ],
+      "title": ""
+    },
+    "n0229": {
+      "id": "n0229",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-bwt2eg",
+        "spya-bwt2eg"
+      ],
+      "title": ""
+    },
+    "n0230": {
+      "id": "n0230",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-aagqsd",
+        "spya-aagqsd"
+      ],
+      "title": ""
+    },
+    "n0231": {
+      "id": "n0231",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-a3bmzx",
+        "spya-a3bmzx"
+      ],
+      "title": ""
+    },
+    "n0232": {
+      "id": "n0232",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-tm4umb",
+        "spya-tm4umb"
+      ],
+      "title": ""
+    },
+    "n0233": {
+      "id": "n0233",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-up47ep",
+        "spya-up47ep"
+      ],
+      "title": ""
+    },
+    "n0234": {
+      "id": "n0234",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-tjv2g8",
+        "spya-tjv2g8"
+      ],
+      "title": ""
+    },
+    "n0235": {
+      "id": "n0235",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-qvk052",
+        "spya-qvk052"
+      ],
+      "title": ""
+    },
+    "n0236": {
+      "id": "n0236",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-nr9dr5",
+        "spya-nr9dr5"
+      ],
+      "title": ""
+    },
+    "n0237": {
+      "id": "n0237",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ckktqp",
+        "spya-ckktqp"
+      ],
+      "title": ""
+    },
+    "n0238": {
+      "id": "n0238",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-tfcs5h",
+        "spya-tfcs5h"
+      ],
+      "title": ""
+    },
+    "n0239": {
+      "id": "n0239",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-k0vqbm",
+        "spya-k0vqbm"
+      ],
+      "title": ""
+    },
+    "n0240": {
+      "id": "n0240",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-c36scy",
+        "spya-c36scy"
+      ],
+      "title": ""
+    },
+    "n0241": {
+      "id": "n0241",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-vbywrv",
+        "spya-vbywrv"
+      ],
+      "title": ""
+    },
+    "n0242": {
+      "id": "n0242",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wvpzqt",
+        "spya-wvpzqt"
+      ],
+      "title": ""
+    },
+    "n0243": {
+      "id": "n0243",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wb52ef",
+        "spya-wb52ef"
+      ],
+      "title": ""
+    },
+    "n0244": {
+      "id": "n0244",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-zq4kbf",
+        "spya-zq4kbf"
+      ],
+      "title": ""
+    },
+    "n0245": {
+      "id": "n0245",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-nqr8k0",
+        "spya-nqr8k0"
+      ],
+      "title": ""
+    },
+    "n0246": {
+      "id": "n0246",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-yv35vd",
+        "spya-yv35vd"
+      ],
+      "title": ""
+    },
+    "n0247": {
+      "id": "n0247",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-eaw3p5",
+        "spya-eaw3p5"
+      ],
+      "title": ""
+    },
+    "n0248": {
+      "id": "n0248",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-whm6jm",
+        "spya-whm6jm"
+      ],
+      "title": ""
+    },
+    "n0249": {
+      "id": "n0249",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-adgq8x",
+        "spya-adgq8x"
+      ],
+      "title": ""
+    },
+    "n0250": {
+      "id": "n0250",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-z87rbz",
+        "spya-z87rbz"
+      ],
+      "title": ""
+    },
+    "n0251": {
+      "id": "n0251",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ufc2c2",
+        "spya-ufc2c2"
+      ],
+      "title": ""
+    },
+    "n0252": {
+      "id": "n0252",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-zkcxta",
+        "spya-zkcxta"
+      ],
+      "title": ""
+    },
+    "n0253": {
+      "id": "n0253",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dvzhk4",
+        "spya-dvzhk4"
+      ],
+      "title": ""
+    },
+    "n0254": {
+      "id": "n0254",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-jd62rh",
+        "spya-jd62rh"
+      ],
+      "title": ""
+    },
+    "n0255": {
+      "id": "n0255",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ehswwd",
+        "spya-ehswwd"
+      ],
+      "title": ""
+    },
+    "n0256": {
+      "id": "n0256",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-cgx6dq",
+        "spya-cgx6dq"
+      ],
+      "title": ""
+    },
+    "n0257": {
+      "id": "n0257",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ar5cy8",
+        "spya-ar5cy8"
+      ],
+      "title": ""
+    },
+    "n0258": {
+      "id": "n0258",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-mfnxwf",
+        "spya-mfnxwf"
+      ],
+      "title": ""
+    },
+    "n0259": {
+      "id": "n0259",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-hwx56u",
+        "spya-hwx56u"
+      ],
+      "title": ""
+    },
+    "n0260": {
+      "id": "n0260",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-gvb6jf",
+        "spya-gvb6jf"
+      ],
+      "title": ""
+    },
+    "n0261": {
+      "id": "n0261",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-p8dr9y",
+        "spya-p8dr9y"
+      ],
+      "title": ""
+    },
+    "n0262": {
+      "id": "n0262",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wz5kty",
+        "spya-wz5kty"
+      ],
+      "title": ""
+    },
+    "n0263": {
+      "id": "n0263",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-r83267",
+        "spya-r83267"
+      ],
+      "title": ""
+    },
+    "n0264": {
+      "id": "n0264",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-zdr4ec",
+        "spya-zdr4ec"
+      ],
+      "title": ""
+    },
+    "n0265": {
+      "id": "n0265",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-caj7fr",
+        "spya-caj7fr"
+      ],
+      "title": ""
+    },
+    "n0266": {
+      "id": "n0266",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-v5g0bj",
+        "spya-v5g0bj"
+      ],
+      "title": ""
+    },
+    "n0267": {
+      "id": "n0267",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-w9hp6k",
+        "spya-w9hp6k"
+      ],
+      "title": ""
+    },
+    "n0268": {
+      "id": "n0268",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-etrazb",
+        "spya-etrazb"
+      ],
+      "title": ""
+    },
+    "n0269": {
+      "id": "n0269",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-b66c3f",
+        "spya-b66c3f"
+      ],
+      "title": ""
+    },
+    "n0270": {
+      "id": "n0270",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-kw7mps",
+        "spya-kw7mps"
+      ],
+      "title": ""
+    },
+    "n0271": {
+      "id": "n0271",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xaykck",
+        "spya-xaykck"
+      ],
+      "title": ""
+    },
+    "n0272": {
+      "id": "n0272",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-vja3bu",
+        "spya-vja3bu"
+      ],
+      "title": ""
+    },
+    "n0273": {
+      "id": "n0273",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-h696bd",
+        "spya-h696bd"
+      ],
+      "title": ""
+    },
+    "n0274": {
+      "id": "n0274",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xc3gf3",
+        "spya-xc3gf3"
+      ],
+      "title": ""
+    },
+    "n0275": {
+      "id": "n0275",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-em552x",
+        "spya-em552x"
+      ],
+      "title": ""
+    },
+    "n0276": {
+      "id": "n0276",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-n7z0xd",
+        "spya-n7z0xd"
+      ],
+      "title": ""
+    },
+    "n0277": {
+      "id": "n0277",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-vzy884",
+        "spya-vzy884"
+      ],
+      "title": ""
+    },
+    "n0278": {
+      "id": "n0278",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-k3uthp",
+        "spya-k3uthp"
+      ],
+      "title": ""
+    },
+    "n0279": {
+      "id": "n0279",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dub6zy",
+        "spya-dub6zy"
+      ],
+      "title": ""
+    },
+    "n0280": {
+      "id": "n0280",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xbtezs",
+        "spya-xbtezs"
+      ],
+      "title": ""
+    },
+    "n0281": {
+      "id": "n0281",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-kn87rn",
+        "spya-kn87rn"
+      ],
+      "title": ""
+    },
+    "n0282": {
+      "id": "n0282",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-e4j0kk",
+        "spya-e4j0kk"
+      ],
+      "title": ""
+    },
+    "n0283": {
+      "id": "n0283",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-nf2r58",
+        "spya-nf2r58"
+      ],
+      "title": ""
+    },
+    "n0284": {
+      "id": "n0284",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-jcsdb6",
+        "spya-jcsdb6"
+      ],
+      "title": ""
+    },
+    "n0285": {
+      "id": "n0285",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-bszyey",
+        "spya-bszyey"
+      ],
+      "title": ""
+    },
+    "n0286": {
+      "id": "n0286",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-k3jdyt",
+        "spya-k3jdyt"
+      ],
+      "title": ""
+    },
+    "n0287": {
+      "id": "n0287",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-w26840",
+        "spya-w26840"
+      ],
+      "title": ""
+    },
+    "n0288": {
+      "id": "n0288",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-w8md8c",
+        "spya-w8md8c"
+      ],
+      "title": ""
+    },
+    "n0289": {
+      "id": "n0289",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dqpunr",
+        "spya-dqpunr"
+      ],
+      "title": ""
+    },
+    "n0290": {
+      "id": "n0290",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-b8zpzg",
+        "spya-b8zpzg"
+      ],
+      "title": ""
+    },
+    "n0291": {
+      "id": "n0291",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-v76z42",
+        "spya-v76z42"
+      ],
+      "title": ""
+    },
+    "n0292": {
+      "id": "n0292",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-h0ndft",
+        "spya-h0ndft"
+      ],
+      "title": ""
+    },
+    "n0293": {
+      "id": "n0293",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-wp3bb2",
+        "spya-wp3bb2"
+      ],
+      "title": ""
+    },
+    "n0294": {
+      "id": "n0294",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-udm9eb",
+        "spya-udm9eb"
+      ],
+      "title": ""
+    },
+    "n0295": {
+      "id": "n0295",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-dmfu04",
+        "spya-dmfu04"
+      ],
+      "title": ""
+    },
+    "n0296": {
+      "id": "n0296",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-ysh4vq",
+        "spya-ysh4vq"
+      ],
+      "title": ""
+    },
+    "n0297": {
+      "id": "n0297",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-xb528y",
+        "spya-xb528y"
+      ],
+      "title": ""
+    },
+    "n0298": {
+      "id": "n0298",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-kgvh5w",
+        "spya-kgvh5w"
+      ],
+      "title": ""
+    },
+    "n0299": {
+      "id": "n0299",
+      "depth": 2,
+      "parent": "n0167",
+      "children": [],
+      "range": [
+        "spya-jkpqa8",
+        "spya-jkpqa8"
+      ],
+      "title": ""
+    }
+  }
+}

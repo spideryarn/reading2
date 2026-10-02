@@ -5,6 +5,7 @@ import {
   MAX_OPTIONAL_PARAMETERS,
   MAX_UNION_PARAMETERS,
   validateAnthropicJsonSchema,
+  withChatJsonSchema,
   withMessagesJsonSchema,
 } from "../src/messages-structured-output.js";
 
@@ -237,5 +238,50 @@ describe("the Messages-wire structured-output adapter", () => {
       "standard",
     );
     expect(wire.output_config).toEqual({ format: { type: "json_schema", schema } });
+  });
+});
+
+describe("the chat-wire structured-output adapter", () => {
+  const schema = objectSchema({ answer: stringSchema });
+
+  it("builds the strict named response format without changing the request", () => {
+    const body = withChatJsonSchema(
+      {
+        model: "anthropic/claude-sonnet-5",
+        max_tokens: 16,
+        messages: [{ role: "user", content: "irrelevant" }],
+      },
+      "short_answer",
+      schema,
+    );
+    expect(body).toEqual({
+      model: "anthropic/claude-sonnet-5",
+      max_tokens: 16,
+      messages: [{ role: "user", content: "irrelevant" }],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "short_answer", strict: true, schema },
+      },
+    });
+  });
+
+  it("runs the same validator before building the response format", () => {
+    expect(() =>
+      withChatJsonSchema(
+        { model: "anthropic/claude-sonnet-5" },
+        "open_object",
+        { type: "object", properties: {} },
+      ),
+    ).toThrow(/additionalProperties.*false/);
+  });
+
+  it("refuses optional object properties that OpenAI strict schemas reject", () => {
+    expect(() =>
+      withChatJsonSchema(
+        { model: "openai/gpt-5.6-luna" },
+        "optional_answer",
+        objectSchema({ answer: stringSchema, note: stringSchema }, ["answer"]),
+      ),
+    ).toThrow(/OpenAI.*all properties.*required/i);
   });
 });

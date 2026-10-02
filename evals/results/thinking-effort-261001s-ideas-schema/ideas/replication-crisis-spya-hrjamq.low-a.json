@@ -1,0 +1,175 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-qekxnv",
+      "name": "Statistical significance is not proof of truth",
+      "provenance": "assumed",
+      "statement": "A p-value below a threshold only bounds the chance of a false positive if the null hypothesis were true; it does not tell you the probability that the finding is actually real.",
+      "whyYouNeedIt": "Without this, the entire discussion of why 'significant' findings fail to replicate makes no sense—readers would assume significance already guarantees truth.",
+      "occurrences": [
+        {
+          "blockId": "spya-bnzb3f",
+          "quote": "This is usually stated as \"the null hypothesis is rejected at significance level\"",
+          "reasoning": "States the mechanical rule for rejecting null hypotheses without clarifying that this is not equivalent to establishing truth, relying on the reader to already separate the two.",
+          "start": 163
+        },
+        {
+          "blockId": "spya-pknetn",
+          "quote": "it does not imply the alternative hypothesis \"ESP exists\"",
+          "reasoning": "Only makes sense if the reader already distinguishes rejecting the null from confirming a specific alternative.",
+          "start": 150
+        }
+      ]
+    },
+    {
+      "id": "spya-vj7w57",
+      "name": "Incentives can select for bad science without fraud",
+      "provenance": "assumed",
+      "statement": "A reward system that pays off for publishable results rather than for being right will, over time and across many labs, evolve toward high rates of false or exaggerated findings even if every individual researcher acts in good faith.",
+      "whyYouNeedIt": "Without this, the repeated invocation of 'publish or perish' and career incentives as drivers of the crisis would seem like an accusation of individual dishonesty rather than a structural, evolutionary outcome.",
+      "occurrences": [
+        {
+          "blockId": "spya-ftd2ng",
+          "quote": "Under certain parameter settings, the population of labs converge to maximum productivity even at the price of very high false positive rates.",
+          "reasoning": "Shows a selection dynamic producing bad science without any single actor behaving badly, which the surrounding discussion of incentives assumes but doesn't spell out as a general principle.",
+          "start": 702
+        }
+      ]
+    },
+    {
+      "id": "spya-h3tgy0",
+      "name": "Effect sizes shrink on replication because of selection, not decline",
+      "provenance": "introduced",
+      "statement": "Replicated effects are typically smaller than original ones mainly because the original published estimate was selected for being large enough to pass a significance threshold, not because the underlying phenomenon weakened.",
+      "occurrences": [
+        {
+          "blockId": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude.",
+          "reasoning": "Reports the empirical shrinkage pattern.",
+          "start": 427
+        }
+      ]
+    },
+    {
+      "id": "spya-s2r7v2",
+      "name": "Citation success is decoupled from correctness",
+      "provenance": "introduced",
+      "statement": "Papers that turn out not to replicate are often cited more, not less, than solid work, because surprising or interesting claims attract attention regardless of their eventual validity.",
+      "occurrences": [
+        {
+          "blockId": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "reasoning": "States the finding directly.",
+          "start": 77
+        }
+      ]
+    },
+    {
+      "id": "spya-a52zqu",
+      "name": "Publication bias distorts the visible literature",
+      "provenance": "introduced",
+      "statement": "Because journals and researchers favor positive, novel results, the published record systematically overrepresents true and false positives alike while hiding null results, making the literature look more reliable than it is.",
+      "occurrences": [
+        {
+          "blockId": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\", where negative results remain unpublished.",
+          "reasoning": "States the mechanism directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-f76az5",
+          "quote": "a high proportion of false positives in the published literature can explain why many findings are nonreproducible",
+          "reasoning": "Links the bias to nonreplicability.",
+          "start": 266
+        }
+      ]
+    },
+    {
+      "id": "spya-vnkhg0",
+      "name": "Low statistical power mathematically caps replication rates",
+      "provenance": "introduced",
+      "statement": "The probability that a published significant result will replicate is tied directly to the statistical power of the original study, so low power alone can explain widespread replication failure regardless of whether the original finding was true.",
+      "occurrences": [
+        {
+          "blockId": "spya-x7d5t5",
+          "quote": "Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.",
+          "reasoning": "Directly states the mathematical link between power and replication probability.",
+          "start": 174
+        },
+        {
+          "blockId": "spya-zvfgme",
+          "quote": "implying that a positive result would replicate with probability less than 10%, regardless of whether the positive result was a true positive or a false positive",
+          "reasoning": "Applies the power-replication link to real data showing systemic low power.",
+          "start": 443
+        }
+      ]
+    },
+    {
+      "id": "spya-a34uk3",
+      "name": "Researcher degrees of freedom inflate false positives",
+      "provenance": "introduced",
+      "statement": "When researchers have many unconstrained choices in collecting, analyzing, and reporting data, the true rate of false positives across all possible analyses is much higher than the nominal significance level suggests, even without intentional fraud.",
+      "occurrences": [
+        {
+          "blockId": "spya-umu7gf",
+          "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\"",
+          "reasoning": "States the core mechanism explicitly.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-qsad7n",
+          "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%",
+          "reasoning": "Quantifies the effect of this flexibility on false positive rates.",
+          "start": 128
+        }
+      ]
+    },
+    {
+      "id": "spya-gz77xk",
+      "name": "Heterogeneity means there may be no single true effect to replicate",
+      "provenance": "introduced",
+      "statement": "Many studied effects vary genuinely across populations, contexts, and conditions, so a 'failed' replication can reflect real variation in the phenomenon rather than error in either study.",
+      "occurrences": [
+        {
+          "blockId": "spya-ddw4ya",
+          "quote": "This variation can be due to differences in experimental methods, populations, cohorts, and statistical methods between replication studies.",
+          "reasoning": "States the idea directly.",
+          "start": 364
+        },
+        {
+          "blockId": "spya-x02d6v",
+          "quote": "if replication is defined by a subsequent study finding a sufficiently similar effect size to the original, replication success is not likely even if replications have very large sample sizes",
+          "reasoning": "Draws out the consequence that heterogeneity itself, not poor method, can doom replication.",
+          "start": 546
+        }
+      ]
+    },
+    {
+      "id": "spya-r5hhqy",
+      "name": "Base-rate of true hypotheses governs the false discovery rate",
+      "provenance": "introduced",
+      "statement": "Even with a fixed false-positive rate and reasonable statistical power, if most tested hypotheses are false to begin with, a large share of all 'significant' results will still be false positives—an outcome fully consistent with careful science rather than evidence of sloppiness.",
+      "occurrences": [
+        {
+          "blockId": "spya-dzsa7e",
+          "quote": "a possible reason for the low rates of replicability in certain scientific fields is that a majority of tested hypotheses are false a priori",
+          "reasoning": "States the core claim explicitly.",
+          "start": 41
+        },
+        {
+          "blockId": "spya-esjk29",
+          "quote": "if the prior probability of the null hypothesis is , and the study found a positive result, then the posterior probability for is",
+          "reasoning": "Demonstrates the Bayesian calculation underlying the idea.",
+          "start": 13
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T00:45:28.106Z",
+  "elapsedMs": 30096
+}

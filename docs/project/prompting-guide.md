@@ -124,6 +124,41 @@ have each cost a paid call or shown a reader something wrong, and each is writte
 happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts) §
 `parseJsonAnswer`.
 
+- **Every compatible call that expects response JSON back sends a strict schema; every exception is
+  named.** A model writing JSON cannot take
+  back a token, so when it decides something it wrote is wrong it patches it in place — as code
+  (`"spya-zhzzzz".replace("zhzzzz","jcpyd5")`), a stray value, or a repeated field — and the strict
+  parser fails the whole step. On a completed, non-refusal answer, a schema makes those shapes
+  impossible to write. Use the shared
+  adapter and validator in [`src/messages-structured-output.ts`](../../src/messages-structured-output.ts)
+  (`withMessagesJsonSchema` on the Messages wire, the chat adapter beside it), never a hand-written
+  `output_config` or `response_format`. Six rules come with it:
+  - **The schema states every part of the live answer shape that the provider's subset can
+    express.** Do not add an answer variant merely because the parser accepts it: a parser may stay
+    more tolerant for old stored answers without widening what the live decoder may produce. Limits
+    the schema language cannot state, and semantic checks such as resolving an id, stay in code.
+    Adding a schema changes no semantic instruction, though answer-format wording may need to stop
+    asking for a code fence or another shape the schema does not emit.
+  - **No `enum` of the article's block ids on an id field**, ever (`assertNoBlockIdEnums`): it would
+    force a mistyped prefix to finish as *some* real id, a wrong id let through silently. Ids are
+    still resolved against the article after the parse, exactly as before — a schema makes the
+    syntax right, not the id.
+  - **No recursion**: Anthropic refuses a self-referencing `$ref`. Unroll to the depth the prompt
+    asks for (Structure's three levels).
+  - **The chat adapter validates OpenAI's stricter subset too**: its root is an object and every
+    declared object property is required. Represent an optional value as a required nullable field,
+    or as fully required object variants under `anyOf`.
+  - **The schema is part of the cache key**: an article stage's row in `ARTICLE_OUTPUT_FORMAT`
+    (src/pipeline.ts) names the same constant, and `tests/article-cache-output-format.test.ts`
+    checks the request agrees.
+  - **At `low` effort, check the call still thinks.** Under a schema, adaptive thinking can drop to
+    nothing; Structure did on some articles and still passed its quality panel, but that was
+    measured, not assumed.
+
+  Where a call does not fit yet (streaming partial JSON to the reader, web search on the same
+  call, tool arguments) the reason is in
+  [261001s § Stage 3a](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md).
+  [261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
 - **The JSON is somewhere in the answer, not the whole of it.** Models wrap their JSON in prose or a
   fence despite being told not to. The shared parser now *extracts but refuses to choose*: exactly
   one candidate document, or it throws. Taking "the first JSON in the response" would accept

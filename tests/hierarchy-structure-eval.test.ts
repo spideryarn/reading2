@@ -348,11 +348,12 @@ describe("parseStructureResponse", () => {
       root: {
         title: "The Whole Piece",
         gist: "One sentence carrying the whole shape of the argument.",
-        range: [blocks[0]!.id, blocks.at(-1)!.id],
-        children: ranges.map(([lo, hi], i) => ({
+        question: "Whole piece — how does the argument fit together?",
+        children: ranges.map(([lo], i) => ({
           title: `Part ${i + 1}`,
           gist: `Part ${i + 1} makes its own distinct claim here.`,
-          range: [blocks[lo]!.id, blocks[hi]!.id],
+          question: `Part ${i + 1} — what distinct claim does it make?`,
+          start: blocks[lo]!.id,
         })),
       },
     });
@@ -405,17 +406,19 @@ describe("parseStructureResponse", () => {
       root: {
         title: "The whole thing",
         gist: "One sentence about the argument.",
-        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        question: "Whole thing — what does it argue?",
         children: [
           {
             title: "Part 1",
             gist: "Part 1 makes its own distinct claim here.",
-            range: [blocks[0]!.id, blocks[2]!.id],
+            question: "Part 1 — what claim does it make?",
+            start: blocks[0]!.id,
           },
           {
             title: "Part 2",
             gist: "Part 2 makes its own distinct claim here.",
-            range: ["spya-zzzzzz", blocks[5]!.id],
+            question: "Part 2 — what claim does it make?",
+            start: "spya-zzzzzz",
           },
         ],
       },
@@ -1050,10 +1053,12 @@ describe("buildHeadingTree", () => {
     // The JSON half must be machine-valid on its own; the prose half sits above it.
     const jsonStart = proposal.indexOf("{");
     const parsed = JSON.parse(proposal.slice(jsonStart)) as {
-      root: { range: [string, string]; children?: { sourceHeading?: string }[] };
+      root: { start?: string; range?: unknown; children?: { start: string; sourceHeading?: string }[] };
     };
-    expect(parsed.root.range).toEqual([blocks[0]!.id, blocks[5]!.id]);
+    expect(parsed.root.start).toBeUndefined();
+    expect(parsed.root.range).toBeUndefined();
     expect(parsed.root.children).toHaveLength(3);
+    expect(parsed.root.children![0]!.start).toBe(blocks[0]!.id);
     expect(parsed.root.children![0]!.sourceHeading).toBe("Section A");
   });
 

@@ -1,0 +1,19 @@
+{"caption":"A spine running from the spider's natural silk (what it is, how it's used, how it's made) down into humanity's attempts to copy it, ending in applications — a chain with a fork in the middle between natural uses and natural production.","title":"Spine with a fork","scenes":[
+{"id":"overview","title":"Spider Silk: overview","caption":"One chain running top to bottom: what silk is, what makes it work, what spiders do with it and how they make it, then how humans try to copy that, and what they do with the copy.","height":1080,"items":[
+{"kind":"node","id":"intro","shape":"ellipse","x":280,"y":30,"w":200,"h":70,"text":"Spiders spin silk","sub":"for prey, safety, mating","size":"md","block":"spya-gp4t9x"},
+{"kind":"node","id":"props","shape":"hex","x":280,"y":140,"w":200,"h":80,"text":"Structure gives it strength & stretch","sub":"crystal sheets + elastic matrix","size":"md","tone":1,"block":"spya-py9zw6"},
+{"kind":"node","id":"mech","shape":"box","x":60,"y":260,"w":200,"h":70,"text":"Tougher than Kevlar, stretchier than steel","size":"sm","tone":1,"block":"spya-b0sewq"},
+{"kind":"node","id":"adh","shape":"box","x":500,"y":260,"w":200,"h":70,"text":"Attachment discs set instantly, like glue","size":"sm","tone":1,"block":"spya-m8z9e7"},
+{"kind":"node","id":"uses","shape":"box","x":280,"y":370,"w":200,"h":80,"text":"One spider, up to 7 silk types","sub":"webs, wraps, cocoons, ballooning","size":"md","tone":2,"block":"spya-rty5kb"},
+{"kind":"node","id":"types","shape":"box","x":60,"y":480,"w":200,"h":70,"text":"Each gland makes one job's silk","sub":"dragline, capture-spiral, egg-silk…","size":"sm","tone":2,"block":"spya-hg7j7e"},
+{"kind":"node","id":"gland","shape":"hex","x":280,"y":590,"w":200,"h":80,"text":"Pulled, not pushed, from the gland","sub":"liquid protein turns solid as it's drawn out","size":"md","block":"spya-g3h8qq"},
+{"kind":"node","id":"artsyn","shape":"diamond","x":280,"y":710,"w":220,"h":90,"text":"Can humans copy this?","size":"md","tone":3,"block":"spya-d7d7m8"},
+{"kind":"node","id":"feed","shape":"box","x":60,"y":840,"w":200,"h":70,"text":"Borrowed proteins from bacteria, goats, silkworms","size":"sm","tone":3,"block":"spya-rw0wtg"},
+{"kind":"node","id":"geo","shape":"box","x":500,"y":840,"w":200,"h":70,"text":"Needles, microfluidics mimic the duct","size":"sm","tone":3,"block":"spya-x4bwhf"},
+{"kind":"node","id":"synsilk","shape":"box","x":280,"y":940,"w":220,"h":70,"text":"Fibres thicker, weaker than the real thing","size":"sm","tone":3,"block":"spya-j7hems"},
+{"kind":"node","id":"human","shape":"box","x":280,"y":1040-30,"w":220,"h":70,"text":"","size":"sm"}
+]},
+{"id":"overview2","title":"placeholder","caption":"placeholder","height":100,"items":[]}
+]}
+
+(Correcting structure below properly.)

@@ -137,6 +137,11 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { findQuote } from "./quote-match.js";
 import {
   articleWithIdsFingerprint,
@@ -188,8 +193,11 @@ import type {
  * bump would mark every stored quiz outdated — the no-profile ones for nothing.
  * The profile is not in the stamp either (see the header), so a reader picks up
  * the new rules at *Write them again*.
+ *
+ * `quiz/6`, 2026-10-02: the request gained `QUIZ_OUTPUT_SCHEMA`; the prompt
+ * text is unchanged.
  */
-export const PROMPT_VERSION = "quiz/5";
+export const PROMPT_VERSION = "quiz/6";
 
 /**
  * The most questions one batch may carry into the artefact.
@@ -976,6 +984,40 @@ function parseJson(raw: string): { questions?: unknown } {
   return parseJsonAnswer<{ questions?: unknown }>(raw, "the model's answer");
 }
 
+const quizStringSchema = { type: "string" } as const;
+const quizEvidenceSchema = {
+  type: "object",
+  properties: { blockId: quizStringSchema, quote: quizStringSchema },
+  required: ["blockId", "quote"],
+  additionalProperties: false,
+} as const;
+
+/** The question shape in `QUIZ_SYSTEM`; only `premise` may be omitted. */
+export const QUIZ_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          premise: quizStringSchema,
+          question: quizStringSchema,
+          referenceAnswer: quizStringSchema,
+          evidence: { type: "array", items: quizEvidenceSchema },
+        },
+        required: ["question", "referenceAnswer", "evidence"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["questions"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(QUIZ_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(QUIZ_OUTPUT_SCHEMA, ["blockId"]);
+
 /**
  * The answer budget, in tokens.
  *
@@ -1057,7 +1099,7 @@ export async function generateQuiz(opts: {
   try {
     const call = streamMessage(
       "quiz",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("quiz") },
@@ -1080,7 +1122,7 @@ export async function generateQuiz(opts: {
           ...(opts.profile ? [{ type: "text" as const, text: QUIZ_READER_RULES }] : []),
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, profile: opts.profile ?? null }) }],
-      },
+      }, QUIZ_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

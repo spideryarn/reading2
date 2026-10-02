@@ -1,0 +1,639 @@
+{
+  "version": "sketch/4",
+  "title": "Crisis diagnosed, then addressed",
+  "caption": "The piece is a chain: concepts set up, a crisis is named, evidence piles up across fields, two clusters of causes are diagnosed, then responses and reforms follow in turn — a funnel-then-chain shape ending in broader rethinking.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Replication crisis: overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "concepts",
+          "shape": "box",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 80,
+          "text": "Defining replication & the statistics behind it",
+          "size": "md",
+          "detail": "Reproducibility, effect size, power, p-values.",
+          "block": "spya-kv0w8d"
+        },
+        {
+          "kind": "node",
+          "id": "origins",
+          "shape": "box",
+          "x": 280,
+          "y": 150,
+          "w": 220,
+          "h": 70,
+          "text": "Early-2010s failures name 'the crisis'",
+          "size": "md",
+          "block": "spya-yru28f",
+          "opens": "inside-origins"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 260,
+          "w": 712,
+          "h": 220,
+          "style": "band",
+          "label": "EVIDENCE ACROSS FIELDS",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "psych",
+          "shape": "box",
+          "x": 48,
+          "y": 300,
+          "w": 150,
+          "h": 70,
+          "text": "Psychology: 36-50% replicate",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-bha57y"
+        },
+        {
+          "kind": "node",
+          "id": "medcancer",
+          "shape": "box",
+          "x": 220,
+          "y": 300,
+          "w": 150,
+          "h": 70,
+          "text": "Cancer biology: as low as 11%",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-esjmns"
+        },
+        {
+          "kind": "node",
+          "id": "otherfields",
+          "shape": "box",
+          "x": 392,
+          "y": 300,
+          "w": 150,
+          "h": 70,
+          "text": "Economics, nutrition, water science shaky too",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-acfh3t"
+        },
+        {
+          "kind": "node",
+          "id": "llm",
+          "shape": "box",
+          "x": 564,
+          "y": 300,
+          "w": 150,
+          "h": 70,
+          "text": "LLM research: new reproducibility hazards",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-ypznph"
+        },
+        {
+          "kind": "node",
+          "id": "surveys",
+          "shape": "box",
+          "x": 220,
+          "y": 400,
+          "w": 300,
+          "h": 60,
+          "text": "Surveys: most scientists fail to reproduce others' work",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-fuynra"
+        },
+        {
+          "kind": "node",
+          "id": "causes",
+          "shape": "diamond",
+          "x": 280,
+          "y": 520,
+          "w": 220,
+          "h": 100,
+          "text": "Why so much fails to replicate?",
+          "size": "md",
+          "block": "spya-sy87zk"
+        },
+        {
+          "kind": "node",
+          "id": "pubsystem",
+          "shape": "hex",
+          "x": 100,
+          "y": 660,
+          "w": 200,
+          "h": 80,
+          "text": "Publication system rewards flash over rigor",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-d040tg"
+        },
+        {
+          "kind": "node",
+          "id": "statpractice",
+          "shape": "hex",
+          "x": 460,
+          "y": 660,
+          "w": 200,
+          "h": 80,
+          "text": "Weak power, p-hacking, shaky statistics",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bfx638",
+          "opens": "inside-statistics"
+        },
+        {
+          "kind": "node",
+          "id": "perception",
+          "shape": "box",
+          "x": 280,
+          "y": 790,
+          "w": 220,
+          "h": 70,
+          "text": "Public trust & academic backlash",
+          "size": "md",
+          "block": "spya-qht6nk"
+        },
+        {
+          "kind": "node",
+          "id": "reform",
+          "shape": "box",
+          "x": 280,
+          "y": 900,
+          "w": 220,
+          "h": 70,
+          "text": "Reforms: preregistration, result-blind review, smaller p-values",
+          "size": "md",
+          "block": "spya-h32yv9"
+        },
+        {
+          "kind": "node",
+          "id": "broader",
+          "shape": "box",
+          "x": 280,
+          "y": 1010,
+          "w": 220,
+          "h": 90,
+          "text": "Broader change: triangulation, new theories, open science",
+          "size": "md",
+          "block": "spya-hc3p7c"
+        },
+        {
+          "kind": "edge",
+          "from": "concepts",
+          "to": "origins",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "surveys",
+          "to": "causes",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "causes",
+          "to": "pubsystem",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "causes",
+          "to": "statpractice",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "pubsystem",
+          "to": "perception",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "statpractice",
+          "to": "perception",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "perception",
+          "to": "reform",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "reform",
+          "to": "broader",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Down the page follows the article's own order: define terms, name the crisis, show the evidence, diagnose two clusters of causes, then trace the responses and reforms that followed."
+    },
+    {
+      "id": "inside-origins",
+      "title": "How the crisis got its name",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "priming",
+          "shape": "box",
+          "x": 40,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Social priming studies fail to replicate",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-t3scy3"
+        },
+        {
+          "kind": "node",
+          "id": "esp",
+          "shape": "box",
+          "x": 280,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Bem's ESP studies debunked",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-vux5b3"
+        },
+        {
+          "kind": "node",
+          "id": "biomed",
+          "shape": "box",
+          "x": 520,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Amgen/Bayer: 11-20% of cancer findings replicate",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-yj72uc"
+        },
+        {
+          "kind": "node",
+          "id": "phack",
+          "shape": "box",
+          "x": 280,
+          "y": 150,
+          "w": 200,
+          "h": 70,
+          "text": "P-hacking studies expose common bad practice",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-t3us9w"
+        },
+        {
+          "kind": "node",
+          "id": "named",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 260,
+          "w": 220,
+          "h": 80,
+          "text": "'Crisis of confidence' declared",
+          "size": "md",
+          "block": "spya-dg8j93"
+        },
+        {
+          "kind": "node",
+          "id": "older",
+          "shape": "note",
+          "x": 40,
+          "y": 380,
+          "w": 280,
+          "h": 80,
+          "text": "Concerns actually go back to the 1960s-90s",
+          "size": "sm",
+          "block": "spya-z3zj97"
+        },
+        {
+          "kind": "node",
+          "id": "spellman",
+          "shape": "box",
+          "x": 380,
+          "y": 380,
+          "w": 300,
+          "h": 80,
+          "text": "Spellman: tech & a bigger field turned old worries into full crisis",
+          "size": "sm",
+          "block": "spya-ytj90k"
+        },
+        {
+          "kind": "node",
+          "id": "power",
+          "shape": "box",
+          "x": 200,
+          "y": 500,
+          "w": 360,
+          "h": 80,
+          "text": "Chronic low statistical power noted since 1962, ignored for 50 years",
+          "size": "sm",
+          "block": "spya-u3tg84"
+        },
+        {
+          "kind": "edge",
+          "from": "priming",
+          "to": "named",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "esp",
+          "to": "named",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "biomed",
+          "to": "named",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "phack",
+          "to": "named",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "named",
+          "to": "older",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "named",
+          "to": "spellman",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spellman",
+          "to": "power",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "older",
+          "to": "power",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain: several independent replication failures accumulated in the early 2010s, which together prompted declarations of crisis, even though concerns had simmered for decades beforehand."
+    },
+    {
+      "id": "inside-statistics",
+      "title": "Statistical and practice causes",
+      "height": 820,
+      "items": [
+        {
+          "kind": "node",
+          "id": "qrp",
+          "shape": "box",
+          "x": 40,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Questionable research practices inflate false positives",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bfx638"
+        },
+        {
+          "kind": "node",
+          "id": "lowpower",
+          "shape": "box",
+          "x": 280,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Low power (~20-35%) across fields",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-p7pun6"
+        },
+        {
+          "kind": "node",
+          "id": "posbias",
+          "shape": "box",
+          "x": 520,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Underpowered studies inflate effect sizes",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-nqwfh4"
+        },
+        {
+          "kind": "node",
+          "id": "meta",
+          "shape": "box",
+          "x": 40,
+          "y": 160,
+          "w": 200,
+          "h": 80,
+          "text": "Meta-analysis has its own flaws",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-z2xbqp"
+        },
+        {
+          "kind": "node",
+          "id": "forking",
+          "shape": "box",
+          "x": 280,
+          "y": 160,
+          "w": 200,
+          "h": 80,
+          "text": "Forking paths & optional stopping p-hack results",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-qsad7n"
+        },
+        {
+          "kind": "node",
+          "id": "heterog",
+          "shape": "box",
+          "x": 520,
+          "y": 160,
+          "w": 200,
+          "h": 80,
+          "text": "Statistical heterogeneity: effects genuinely vary",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-ngbkx2"
+        },
+        {
+          "kind": "node",
+          "id": "context",
+          "shape": "box",
+          "x": 160,
+          "y": 280,
+          "w": 200,
+          "h": 80,
+          "text": "Context sensitivity & hidden moderators",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-z4db8z"
+        },
+        {
+          "kind": "node",
+          "id": "bayes",
+          "shape": "box",
+          "x": 400,
+          "y": 280,
+          "w": 200,
+          "h": 80,
+          "text": "Bayesian view: p<0.05 implies low replication odds",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-pytr5c"
+        },
+        {
+          "kind": "node",
+          "id": "nhst",
+          "shape": "box",
+          "x": 280,
+          "y": 400,
+          "w": 240,
+          "h": 90,
+          "text": "Null hypothesis testing poorly suited to soft sciences",
+          "size": "md",
+          "tone": 2,
+          "block": "spya-h9wzrk"
+        },
+        {
+          "kind": "node",
+          "id": "unreplicable",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 540,
+          "w": 240,
+          "h": 80,
+          "text": "Many published effects do not actually replicate",
+          "size": "md"
+        },
+        {
+          "kind": "edge",
+          "from": "qrp",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "lowpower",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "posbias",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "meta",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "forking",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "heterog",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "context",
+          "to": "unreplicable",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bayes",
+          "to": "nhst",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "nhst",
+          "to": "unreplicable",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A converge: several independent statistical weaknesses — low power, biased effect sizes, meta-analysis flaws, forking paths, heterogeneity, context sensitivity, and misread p-values — all push toward the same outcome, findings that fail to replicate."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null
+}

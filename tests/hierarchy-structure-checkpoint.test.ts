@@ -103,6 +103,7 @@ const {
 } = await import("../src/hierarchy.js");
 const { modelFor } = await import("../src/models.js");
 const { MESSAGES_PROVIDER, messagesWireBody } = await import("../src/messages-stream.js");
+const { toc10FrozenRequest } = await import("../evals/hierarchy-structure/toc10-frozen.js");
 const { isStructural } = await import("../src/block-policy.js");
 const { hashBlocks } = await import("../src/source-hash.js");
 const { blocksArtefact } = await import("../src/blocks.js");
@@ -113,12 +114,27 @@ const BLOCKS: Block[] = [
   { id: "spya-chk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
 ];
 
-/** One node over every block: the smallest tree `buildTree` accepts. */
+/** A schema-valid `toc/11` answer over every block. */
 const SOUND = JSON.stringify({
   root: {
     title: "The whole piece",
-    gist: "One node over the whole piece, which is a shape buildTree accepts.",
-    range: ["spya-chk001", "spya-chk003"],
+    gist: "The whole piece has one part.",
+    question: "Whole piece — what does it claim?",
+    children: [
+      {
+        title: "The part",
+        gist: "The part covers the whole piece.",
+        question: "The part — what does it claim?",
+        start: BLOCKS[0]!.id,
+        children: [
+          {
+            title: "The section",
+            gist: "The section covers the whole piece in detail.",
+            start: BLOCKS[0]!.id,
+          },
+        ],
+      },
+    ],
   },
 });
 
@@ -217,6 +233,36 @@ describe("the structure checkpoint's key", () => {
 });
 
 describe("generateHierarchy and the structure checkpoint", () => {
+  it("does not resume a toc/10 ranged checkpoint under toc/11", async () => {
+    const checkpoints = memoryCheckpoints();
+    const toc10Key = structureKey({
+      promptVersion: "toc/10",
+      request: messagesWireBody("hierarchy", toc10FrozenRequest(BLOCKS).params, "standard"),
+    });
+    await checkpoints.write("structure-checkpoint", "hierarchy-structure", toc10Key, {
+      fingerprint: toc10Key,
+      answer: JSON.stringify({
+        root: {
+          title: "Old ranged answer",
+          gist: "This answer belongs to toc ten.",
+          question: "Old answer — why must it miss?",
+          range: [BLOCKS[0]!.id, BLOCKS.at(-1)!.id],
+        },
+      }),
+    });
+
+    const run = await generateHierarchy({
+      power: "standard",
+      blocks: BLOCKS,
+      slug: "structure-checkpoint",
+      checkpoints,
+    });
+    expect(structureCalls).toBe(1);
+    expect(run.structureResumed).toBe(false);
+    expect(checkpoints.entries.has(`hierarchy-structure:${toc10Key}`)).toBe(true);
+    expect(checkpoints.entries.size).toBe(2);
+  });
+
   it("makes the call once and reuses the answer on the next run", async () => {
     const checkpoints = memoryCheckpoints();
     const first = await generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
@@ -295,7 +341,7 @@ describe("generateHierarchy and the structure checkpoint", () => {
        would replay a tree that can never be published. */
     const checkpoints = memoryCheckpoints();
     modelAnswer = JSON.stringify({
-      root: { title: "No gist here", range: ["spya-chk001", "spya-chk003"] },
+      root: { title: "No gist here", question: "Whole — what does it claim?" },
     });
     await expect(
       generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
@@ -319,7 +365,12 @@ describe("generateHierarchy and the structure checkpoint", () => {
        one. */
     const checkpoints = memoryCheckpoints();
     modelAnswer = JSON.stringify({
-      root: { title: "Bad", gist: "Names a block that is not there.", range: ["spya-nope01", "spya-chk003"] },
+      root: {
+        title: "Bad",
+        gist: "Names a block that is not there.",
+        question: "Bad — where did it begin?",
+        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+      },
     });
     await expect(
       generateHierarchy({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
@@ -347,11 +398,16 @@ describe("generateHierarchy and the structure checkpoint", () => {
     /* Parses, builds, and the invariants refuse it: an internal node with no
        gist has nothing to render at its own zoom level. */
     ["survives the parse and fails the invariants", JSON.stringify({
-      root: { title: "No gist here", range: ["spya-chk001", "spya-chk003"] },
+      root: { title: "No gist here", question: "Whole — what does it claim?" },
     })],
     /* Parses, and `buildTree` throws on a block id the article does not have. */
     ["survives the parse and fails to build", JSON.stringify({
-      root: { title: "Bad", gist: "Names a block that is not there.", range: ["spya-nope01", "spya-chk003"] },
+      root: {
+        title: "Bad",
+        gist: "Names a block that is not there.",
+        question: "Bad — where did it begin?",
+        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+      },
     })],
   ];
 
