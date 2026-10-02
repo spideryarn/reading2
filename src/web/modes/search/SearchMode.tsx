@@ -37,7 +37,13 @@ import { assignSlots } from "../../hit-colours.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
-import { SearchPanel, type TypingControls } from "../../SearchPanel.js";
+import { SearchPanel } from "../../SearchPanel.js";
+import {
+  type BandTyping,
+  searchDraftFor,
+  type SearchDraft,
+  useHandoff,
+} from "../../search-draft.js";
 import {
   IDLE,
   PAUSE_MS,
@@ -142,6 +148,8 @@ export function SearchBand({
   useEffect(() => {
     typing.end();
   }, [panel.matcher, typing]);
+  const draft = searchDraftFor(slug);
+  useBarHandoff(draft, panel.matcher, typing, () => onOpenHit(null));
 
   return (
     <SearchPanel
@@ -152,6 +160,7 @@ export function SearchBand({
         loadError,
         error,
         typing,
+        draft,
         onAsk: (criterion, kind, sourceId) => {
           const question = criterion.trim();
           // Flesh out ends only the session belonging to that quick row.
@@ -190,6 +199,53 @@ export function SearchBand({
 }
 
 /**
+ * **The band's half of the bar's quick-search box** (plan 261002h stage 3,
+ * src/web/DockQuickSearch.tsx). Two jobs, both through the shared draft:
+ *
+ * - **While on *quick*, the band's typing session is registered**, so the
+ *   bar's keystrokes, Enter, focus and blur reach the very session the
+ *   panel's box drives. One session, one row, whichever box is typed in.
+ * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
+ *   this band was closed or on another matcher. Not on *quick* yet: switch,
+ *   replacing the history entry the mode's own press just pushed so one Back
+ *   still leaves Search mode, and take it on the next pass. On *quick*: ask
+ *   with the draft as it is now, which is the latest the reader typed.
+ *
+ * Declared after the matcher-switch effect in `SearchBand`, so a switch's
+ * `end` runs before the handoff starts the new session, not after it.
+ */
+function useBarHandoff(
+  draft: SearchDraft,
+  matcher: Matcher,
+  typing: BandTyping,
+  clearOpenHit: () => void,
+): void {
+  const [, setMatch] = useQueryState("match", matchParam);
+  const handoff = useHandoff(draft);
+  useEffect(
+    () => (matcher === "quick" ? draft.registerBand(typing) : undefined),
+    [draft, matcher, typing],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `clearOpenHit` is a fresh closure each render and only clears a selection.
+  useEffect(() => {
+    if (handoff === null) return;
+    if (matcher !== "quick") {
+      void setMatch("quick", { history: "replace" });
+      clearOpenHit();
+      return;
+    }
+    const taken = draft.take();
+    const text = draft.text();
+    if (taken === "pause") {
+      typing.edit(text);
+      typing.pause();
+    } else if (taken === "enter" && text.trim() !== "") {
+      typing.flush(text);
+    }
+  }, [handoff, matcher, draft, typing, setMatch]);
+}
+
+/**
  * **The timers and effects around `stepQuickSession`** — the pure rules live
  * in src/web/quick-session.ts, and this is the only place they meet a clock.
  *
@@ -209,7 +265,7 @@ function useTypingSession({
   /** Ask a new quick search, returning its id — or `null` if it was refused. */
   start(words: string): string | null;
   revise(id: string, words: string): void;
-}): TypingControls & {
+}): BandTyping & {
   renamed(from: string, to: string): void;
   rowGone(id: string): void;
 } {
@@ -249,6 +305,13 @@ function useTypingSession({
       flush(text: string) {
         clearTimeout(pauseTimer);
         dispatch({ type: "flush", loaded: latest.current.loaded, text });
+      },
+      /* The pause already happened, in the bar's box (plan 261002h stage 3):
+         ask now rather than wait another 600 ms. */
+      pause() {
+        clearTimeout(pauseTimer);
+        pauseTimer = undefined;
+        dispatch({ type: "pause", loaded: latest.current.loaded });
       },
       end: () => dispatch({ type: "end" }),
       /* Blurred for longer than a pause ends it (Opus): somebody who searched,

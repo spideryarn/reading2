@@ -116,6 +116,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
+import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -166,6 +167,13 @@ export type SearchAccess =
        * mounts the panel on its own gets.
        */
       typing?: TypingControls;
+      /**
+       * **The draft this box shares with the bar's box** (plan 261002h stage
+       * 3, src/web/search-draft.ts). Absent — a test mounting the panel on its
+       * own — the box gets a private draft of the same shape, so there is one
+       * code path either way.
+       */
+      draft?: SearchDraft;
       /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
       loaded: boolean;
       /**
@@ -291,9 +299,22 @@ export function SearchPanel({
    * changed — which is the shape of the bug this component used to carry, where
    * a criterion arriving from a fetch overwrote what the reader was typing. A
    * click is not a race; an effect watching a value is.
+   *
+   * **Since plan 261002h stage 3 it lives in a store shared with the bar's
+   * box** (src/web/search-draft.ts), because Search mode closing takes this
+   * component with it and the bar's box needs the words to outlive that. The
+   * rule above is unchanged: only a reader's edit or ↺ writes it.
    */
-  const [draft, setDraft] = useState("");
+  const [ownDraft] = useState(createSearchDraft);
+  const store = own?.draft ?? ownDraft;
+  const draft = useDraftText(store);
+  const setDraft = store.set;
   const box = useRef<HTMLInputElement>(null);
+  /* Sol F2: opened from the bar's box, the panel leaves focus where the reader
+     is typing. Read once, at mount, which is the only moment it matters. */
+  const [quietMount] = useState(() => store.barFocused());
+  /* The ⚡ in the bar focuses this box inside its own tap, when it is here. */
+  useEffect(() => store.registerBox(() => box.current?.focus()), [store]);
 
   /** Put a saved question back in the box, ready to be edited into the next one. */
   function reuse(criterion: string) {
@@ -351,6 +372,7 @@ export function SearchPanel({
           loaded={loaded}
           onAsk={own.onAsk}
           typing={own.typing}
+          quietMount={quietMount}
         />
       )}
 
@@ -501,9 +523,11 @@ const Box = forwardRef<
     onAsk(criterion: string, kind: SearchKind): void;
     /** Search-as-you-type, for quick only — see `TypingControls`. */
     typing: TypingControls | undefined;
+    /** Do not take focus on mount: the bar's box has it (Sol F2). */
+    quietMount: boolean;
   }
 >(function Box(
-  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing },
+  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount },
   ref,
 ) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
@@ -521,8 +545,15 @@ const Box = forwardRef<
      it is handled there rather than here because it must depend on *how* the
      matcher was switched: a pointer click means "I want to type now", and a
      keyboard press inside the radio group means "I am still using this group".
-     Same distinction, and the same `e.detail` test, as Dock.tsx § DockModes. */
-  useEffect(() => box.current?.focus(), []);
+     Same distinction, and the same `e.detail` test, as Dock.tsx § DockModes.
+
+     **Except when the bar's box opened the mode** (plan 261002h, Sol F2): the
+     reader is mid-word down there, and pulling focus up here would put the
+     rest of their question somewhere they are not looking. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on mount only, as above — `quietMount` is read once.
+  useEffect(() => {
+    if (!quietMount) box.current?.focus();
+  }, []);
 
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;

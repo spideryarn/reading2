@@ -313,3 +313,34 @@ connection close are reported as before. All six findings were reproduced red be
 74 tests in the four requested files and two additional mocked-route cases pass, as do 110
 adjacent panel/parallel-search/hit-resolution cases. PostgreSQL integration tests were not run.
 Cross-tab deletion remains outside this fix: an absent-id revision can still create a row.
+
+**Sol C7, fixed before stage 3.** A revision `withRun` does not apply now always mints a **new**
+id, never the absent one it named: a session's first ask is sent without `revises`, so an absent
+id means the row was deleted elsewhere, and minting under it brought it back. Chosen over a route
+error because the client already follows a `begin` that answers under another id (`useSearch` §
+follow, and the session's `renamed`), so the stale tab simply carries on as a fresh row and the
+other tab's delete stands — no new client handling. Red first in `tests/searches.test.ts`; a pg
+store case and a `useSearch` follow case added beside it.
+
+**Stage 3 (the bar control), landed.** `src/web/search-draft.ts` is one store per article
+(`useSyncExternalStore`) carrying the draft and three messages: a **handoff** (`pause`, `enter`,
+`quick`) for when the band cannot hear the bar, the band's **typing controls** (registered while
+the band is on *quick*), and the panel box's **focus** (registered by the panel, so the ⚡ can
+focus it inside the tap). `SearchPanel`'s draft moved onto it (a private store when the panel is
+mounted alone, so one code path); its autofocus is skipped when the bar's box has focus (Sol F2).
+`SearchBand` registers its session and takes a handoff in `useBarHandoff`, switching `?match=` to
+quick with a *replace* first when it is on another matcher, so one Back still leaves the mode.
+`useTypingSession` gained `pause()` — ask now, the pause having happened in the bar.
+`src/web/DockQuickSearch.tsx` runs `stepQuickSession` itself only while the band is not
+listening (the same rule, not a copy), hands off on the first qualifying pause or Enter, and
+otherwise drives the band's session directly; a pause still pending when the box blurs is
+dropped rather than opening Search mode behind the reader. Both shapes are always in the DOM and
+`styles/dock-quick-search.css` picks one by rung, width, `pointer: coarse`, or
+`.dock-qs--bolt` (Search mode open, box unfocused). `Dock.tsx` gained one element, the
+`hasQuickSearch` gate (reading view, owner drawer, `onMode`), and a `qs` term in
+`fitSignature`; the term cannot see the box keeping its width while focused in Search mode,
+which only ever narrows the row later, so the cost is a label dropped with room to spare. `/`
+lives in `DockQuickSearch`, so it exists only where the control does. **Not shown by any test:**
+whether iOS raises the keyboard when the ⚡ opens Search mode from closed — the panel's box
+mounts a render after the tap, so a second tap may be needed; accepted, and for the browser
+check to observe on a real device if one is to hand.

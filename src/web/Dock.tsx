@@ -274,6 +274,7 @@ import { isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
+import { DockQuickSearch } from "./DockQuickSearch.js";
 
 /**
  * **The experimental-features switch, as the bar sees it.**
@@ -1296,6 +1297,16 @@ export function fitSignature(
    * the reason `active` below is in the string, for the second axis.
    */
   margin = false,
+  /**
+   * **Whether the quick-search control is drawn** (plan 261002h,
+   * DockQuickSearch.tsx) — a 14rem box at rung 0 is the widest thing in the
+   * row. Which of its box and its ⚡ shows follows the rung (CSS) and `mode`
+   * (already here). The one thing this string cannot see is the box keeping
+   * its width while it has focus in Search mode; that only ever makes the row
+   * narrower when focus leaves, so the cost is a label dropped with room to
+   * spare until the next measure, never an overflow.
+   */
+  quickSearch = false,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
   const modes = visible.map((m) => m.mode).join(",");
@@ -1340,7 +1351,22 @@ export function fitSignature(
   const active = mode ?? "";
   return `${modes}|${shape}|${active}|${drawer ? "drawer" : "link"}|${count}|${
     variant ?? "none"
-  }|${feedback ? "fb" : "no-fb"}|${margin ? "margin" : "no-margin"}`;
+  }|${feedback ? "fb" : "no-fb"}|${margin ? "margin" : "no-margin"}|${quickSearch ? "qs" : "no-qs"}`;
+}
+
+/**
+ * **Does this bar get the quick-search control?** Only where `SearchBand` —
+ * the owner's band, which can ask — would answer it (plan 261002h, Sol F8): the
+ * reading view (`onMode`, so a band to open) of an article whose drawer is the
+ * owner's arm. A visitor's band is read-only, and the metadata page has no
+ * band at all. Reader.tsx § `case "search"` makes the same owner/visitor cut.
+ */
+export function hasQuickSearch(
+  view: Props["view"],
+  own: unknown,
+  onMode: Props["onMode"],
+): boolean {
+  return view === "article" && own !== null && onMode !== undefined;
 }
 
 /**
@@ -1757,6 +1783,7 @@ export function Dock({
       toggle,
       feedback,
       margin,
+      hasQuickSearch(view, own, onMode),
     ),
   );
 
@@ -2106,6 +2133,17 @@ export function Dock({
           />
         ) : (
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
+        )}
+
+        {/* **Quick search, from anywhere** (plan 261002h): a box, or a ⚡ where
+            a box does not fit or is not wanted — DockQuickSearch.tsx. In the
+            bar's slack, between the modes and the article's other views. */}
+        {hasQuickSearch(view, own, onMode) && (
+          <DockQuickSearch
+            slug={slug}
+            searching={mode === "search"}
+            onOpen={() => activateMode("search")}
+          />
         )}
 
         {/* **The three that are not modes, in one group**, so that running
