@@ -1,5 +1,7 @@
 # Simple — a plain-words orientation, as a sub-mode of Summary
 
+Research write-up: [docs/research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md](../research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md).
+
 A second sub-mode of Summary mode: a few short paragraphs, in everyday words, saying what the piece
 is about, why it matters and what its key ideas are, each paragraph with a door back to the passages
 it came from. Generated on demand, kept, cached on a content hash like the other stages.

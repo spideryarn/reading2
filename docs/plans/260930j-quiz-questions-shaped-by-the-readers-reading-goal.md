@@ -1,5 +1,7 @@
 # Quiz questions shaped by the reader's reading goal
 
+Research write-up: [docs/research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
+
 Status: shipped on `dev` 2026-09-30, not deployed. Sentry SPIDERYARN-READING2-6Q, from Greg (admin, verified by account id).
 Note: [260930_2200](../user-feedback/260930_2200-quiz-shaped-by-your-reading-goal.md).
 

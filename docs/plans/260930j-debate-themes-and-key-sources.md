@@ -1,5 +1,7 @@
 # Debate: the themes the sources share, and the key sources
 
+Research write-up: [docs/research/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md](../research/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md).
+
 Status: **built and on `dev`; plan and code reviewed by GPT Sol.** Report SPIDERYARN-READING2-6M, from Greg's own
 account, 2026-09-30.
 

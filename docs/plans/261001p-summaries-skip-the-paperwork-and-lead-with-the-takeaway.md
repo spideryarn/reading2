@@ -1,5 +1,7 @@
 # Summaries skip the paperwork and lead with the takeaway, and Brief gets shorter
 
+Research write-up: [docs/research/261002g-summaries-skip-the-paperwork-prompt-eval.md](../research/261002g-summaries-skip-the-paperwork-prompt-eval.md).
+
 For two suggestions from Greg (admin; `scripts/feedback-reporter.ts` exited 0 on both), both sent
 from `jco-2005-01-libre-spya-hk9cc7`, a 2005 *Journal of Clinical Oncology* paper on tamoxifen
 resistance:
