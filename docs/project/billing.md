@@ -960,7 +960,7 @@ the route still knows what was asked for.
 table again with it in mind. `publishRevisionIn` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts))
 queues a `{ steps: ["labels"] }` job inside the publication's own transaction whenever the revision
 reaches the shelf with `nav_label_status = 'pending'` —
-[hierarchy.md § Two passes](hierarchy.md#two-passes). It spends nothing, and **by omission
+[structure-step.md § Two passes](structure-step.md#two-passes). It spends nothing, and **by omission
 rather than by a guard**: `enqueueSuccessorIn` ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts))
 has no `ingestEventId` and no parameter for one, so `settleReservation`'s first line —
 `if (!ingestEventId) return` — makes every ending of it a no-op. There are exactly two ways to

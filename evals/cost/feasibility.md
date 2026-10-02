@@ -228,7 +228,7 @@ job status as a broken harness.
 
 ## What a competent implementer builds from this
 
-`evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts`:
+`evals/cost/run.ts`, modelled on `evals/structure-whole-document/run.ts`:
 
 1. `loadEnvLocal()`; assert local `DATABASE_URL` and `STORE === "postgres"`; print `Target:`.
 2. Wrap everything in `withLedger("eval", …)` (`src/cli-ledger.ts:86`) so any call the runner makes

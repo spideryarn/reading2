@@ -86,7 +86,7 @@ const forced = (name: StepName, status: JobStep["status"]): JobStep => ({
  * and `cascadeForce` turns it into a force flag on every step of the job — which
  * is why all five carry one here.
  */
-const REFRESH_THAT_DIED_AT_HIERARCHY: JobStep[] = [
+const REFRESH_THAT_DIED_AT_STRUCTURE: JobStep[] = [
   forced("fetch", "done"),
   forced("extract", "done"),
   forced("blocks", "done"),
@@ -106,7 +106,7 @@ describe("a retry after a failed forced refresh", () => {
    * see. The retry has to acquire the article again.
    */
   it("re-forces the steps whose work went with the discarded draft", () => {
-    expect(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)).toEqual([
+    expect(forceForRetry(REFRESH_THAT_DIED_AT_STRUCTURE)).toEqual([
       "fetch",
       "extract",
       "blocks",
@@ -115,7 +115,7 @@ describe("a retry after a failed forced refresh", () => {
     ]);
     /* The half that matters most, said on its own so a partial fix cannot pass:
        the retry must go back to the *front* of what was forced. */
-    expect(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)[0]).toBe("fetch");
+    expect(forceForRetry(REFRESH_THAT_DIED_AT_STRUCTURE)[0]).toBe("fetch");
   });
 
   /* --------------------------------------------------------------- 2 -- */
@@ -130,8 +130,8 @@ describe("a retry after a failed forced refresh", () => {
    * forcing nothing at all while every test of the first function passed.
    */
   it("makes the new job re-run every step the refresh had asked for", () => {
-    const names = REFRESH_THAT_DIED_AT_HIERARCHY.map((s) => s.name);
-    const forcedAgain = cascadeForce(names, new Set(forceForRetry(REFRESH_THAT_DIED_AT_HIERARCHY)));
+    const names = REFRESH_THAT_DIED_AT_STRUCTURE.map((s) => s.name);
+    const forcedAgain = cascadeForce(names, new Set(forceForRetry(REFRESH_THAT_DIED_AT_STRUCTURE)));
     expect([...forcedAgain]).toEqual(["fetch", "extract", "blocks", "hierarchy", "assets"]);
   });
 
@@ -204,7 +204,7 @@ describe("a retry after a failed forced refresh", () => {
    * over the whole set is what the retry actually asks for.
    */
   it("keeps a `tweets` the reader named, which the cascade cannot put back", () => {
-    const refresh = [...REFRESH_THAT_DIED_AT_HIERARCHY, forced("tweets", "pending")];
+    const refresh = [...REFRESH_THAT_DIED_AT_STRUCTURE, forced("tweets", "pending")];
     const names = refresh.map((s) => s.name);
 
     expect(

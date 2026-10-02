@@ -46,7 +46,7 @@
 import { describe, expect, it } from "vitest";
 
 import { splitIntoBlocks } from "../src/blocks.js";
-import { type BuildReport, type ModelNode, buildTree } from "../src/hierarchy.js";
+import { type BuildReport, type ModelNode, buildTree } from "../src/structure.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { planBatches } from "../src/labels.js";
 import { checkTree } from "../src/tree-invariants.js";

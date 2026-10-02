@@ -7,7 +7,7 @@
  *
  * [`src/cli-ledger.ts`](../src/cli-ledger.ts) says what this is for:
  *
- * > **Run a CLI command with the ledger open**, so that `npm run hierarchy` is money
+ * > **Run a CLI command with the ledger open**, so that `npm run structure` is money
  * > that appears in `npm run cost` rather than money that vanishes.
  *
  * Eight npm scripts started a module that spent money when this was written —
@@ -138,7 +138,7 @@
  *   that list in both directions, so a second one cannot arrive quietly.
  * - **`stageCli itself opens the ledger`** checks one function in one file. It
  *   is what the migrated CLIs stopped saying for themselves. Nothing in the tree
- *   carries the *old* tail any more — `src/hierarchy.ts` was the last, and its
+ *   carries the *old* tail any more — `src/structure.ts` was the last, and its
  *   entrypoint went on 2026-09-05 — so that idiom survives here only in the
  *   fixtures, deliberately: the detector still has to refuse it, and a rule that
  *   stopped understanding a shape would be a rule that passed it.
@@ -179,11 +179,11 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
  * docs/project/ingest-queue.md § The pipeline is a list, not a function;
  * docs/plans/260831b-finish-the-database-move.md § sub-stage I.
  *
- * **And it became one on 2026-09-05.** `src/hierarchy.ts` and `src/labels.ts`
+ * **And it became one on 2026-09-05.** `src/structure.ts` and `src/labels.ts`
  * lost their `main()`s in stage E of
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
  * They wrote artefacts by hand to paths off `process.cwd()`, which under
- * Postgres are files nothing reads; `npm run hierarchy -- <slug> [--force]` is
+ * Postgres are files nothing reads; `npm run structure -- <slug> [--force]` is
  * `scripts/stage.ts` now, driving the queue, and `npm run labels` is gone
  * entirely (there is no `labels` step, and re-labelling is `hierarchy --force`).
  *
@@ -1462,7 +1462,7 @@ describe("the listed stage CLIs open the ledger", () => {
      * so every mutation below is asserted to match exactly once and to change
      * the file.
      *
-     * **One file, and it used to be three.** `src/hierarchy.ts` carried the old
+     * **One file, and it used to be three.** `src/structure.ts` carried the old
      * guard-and-`withLedger` pair and `src/labels.ts` the new
      * `await stageCli(import.meta.url, main)`; both entrypoints went on
      * 2026-09-05 with the commands that started them (see `PAID_CLIS`). Holding
@@ -1822,7 +1822,7 @@ describe("stageCli itself opens the ledger", () => {
         'src/cli-ledger.ts — stageCli() does not open withLedger with the "cli" scope',
       ],
       [
-        /* The same bypass Greg reproduced by hand on `src/hierarchy.ts`, one level
+        /* The same bypass Greg reproduced by hand on `src/structure.ts`, one level
            down: the ledger opens around nothing and the stage runs after it has
            closed. Here it would do that to every CLI at once. */
         "the wrapper handed an empty function, with main chained onto it",

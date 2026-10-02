@@ -70,7 +70,7 @@ An earlier draft of this plan claimed the structure prompt bounds the tree to ~9
 however long the article is, making the ceiling a pure artefact. **GPT Sol returned DO-NOT-SHIP on
 that and was right; the claim is recorded here because building on it would have cost a stage.**
 
-`estimateHierarchyTokens` ([`src/hierarchy.ts`](../../src/hierarchy.ts)) charges one internal node per
+`estimateHierarchyTokens` ([`src/hierarchy.ts`](../../src/structure.ts)) charges one internal node per
 **four blocks**:
 
 ```ts
@@ -584,7 +584,7 @@ rather than on the number 1,976 or on an asymptotic claim a corpus cannot suppor
 **Done when:** Kuhn's estimate fits one response with margin *and* leaves more than the measured
 thinking ✓; the adversarial test passes ✓; the new estimate is ≥ 1.25× actual on every tree in the
 corpus ✓ (worst 2.46×); the stale sentence in
-[hierarchy.md § Longer pieces](../project/hierarchy.md#long-articles) and the false *"1.5x–2.3x"*
+[hierarchy.md § Longer pieces](../project/structure-step.md#long-articles) and the false *"1.5x–2.3x"*
 claim on the function are both replaced with the measured range ✓.
 
 #### What landed, and the thing the plan had not worked out
@@ -876,8 +876,8 @@ others; the estimator is re-checked against trees generated under the new prompt
 
 ### Stage 8a — the heading snap, built and measured ⟨2026-09-04⟩
 
-Lever 1 only. `snapStartsToHeadings` in [`src/hierarchy.ts`](../../src/hierarchy.ts), documented at
-[hierarchy.md § A section that starts one block below its own heading](../project/hierarchy.md#heading-snap).
+Lever 1 only. `snapStartsToHeadings` in [`src/hierarchy.ts`](../../src/structure.ts), documented at
+[hierarchy.md § A section that starts one block below its own heading](../project/structure-step.md#heading-snap).
 `SYSTEM` is untouched — the wire request is byte-identical — and `PROMPT_VERSION` goes to `toc/4`
 anyway, because the structure *checkpoint* is keyed on it and the same answer now builds a different
 tree. Lever 2, the depth/fan-out re-scope, is stage 8b and is deliberately not in this.
@@ -957,7 +957,7 @@ identically with the snap off and on.)
    own heading. Immaterial, and it is stage 8b's problem, but it means the snap cannot be sold as
    improving span.
 
-**Not in scope and worth a note:** [`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) fixes
+**Not in scope and worth a note:** [`src/hierarchy-cascade.ts`](../../src/structure-cascade.ts) fixes
 each wave's ranges *before* the next call, and tells its caller to hand the final `buildTree` a fresh
 report because "there is nothing left for it to mend". The snap is now something left to mend.
 Nothing wires that module into the pipeline or the evals today, so it is a note for whoever does.

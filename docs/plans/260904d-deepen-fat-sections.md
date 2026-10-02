@@ -33,7 +33,7 @@ frontier, not a depth — which the adaptive version needs more, not less.
 Granularity zoom promises that every level is a compression of the level below it, so a reader can
 step down one rung at a time. Today the ladder has a fixed number of rungs: the structure prompt
 says *"Go 3 levels deep: root (depth 0), chapters (depth 1), sections (depth 2)"*, and
-[`buildTree`](../../src/hierarchy.ts) grows one leaf per block underneath. Root → chapters →
+[`buildTree`](../../src/structure.ts) grows one leaf per block underneath. Root → chapters →
 sections → paragraphs, on every article, whatever its length.
 
 Where a section came back holding 26 paragraphs and 1,754 words, the reader's next step down from
@@ -178,7 +178,7 @@ the words. It cannot be left to the model: the whole finding above is that the m
 headings-versus-stride collision differently on different runs.
 
 **Two headings is how it was measured, and not the rule.** The rule already existed, in
-[`shouldExpand`](../../src/hierarchy-cascade.ts) as `hasUnresolvedHeading`, and it is strictly
+[`shouldExpand`](../../src/structure-cascade.ts) as `hasUnresolvedHeading`, and it is strictly
 broader: *any* authored body heading in the node's range that no boundary already starts on. It
 subsumes the two-heading case and also settles three things the count does not mention — the node's
 own first block counts as resolved (a node created *from* a heading begins on one, and calling that
@@ -229,7 +229,7 @@ its argument did not give. Thirty-nine of Darwin's sections are **nine paragraph
 each** — heavy, and genuinely indivisible, because the block is the atom. No tree can offer a rung
 finer than the paragraph there. The rung the reader gets is the one that already exists: the
 `navLabel` on each paragraph, which
-[hierarchy.md § Entry length grows with depth](../project/hierarchy.md#granularity) says is 6–20
+[hierarchy.md § Entry length grows with depth](../project/structure-step.md#granularity) says is 6–20
 words and exists precisely to tell same-topic siblings apart. **If Darwin reads badly it is a
 question about when the Para column opens, not about how deep the tree goes** — and that is a much
 cheaper thing to fix than a model call.
@@ -240,7 +240,7 @@ This is the breadth-first cascade that
 [260904c](260904c-hierarchy-structure-in-waves.md) planned and paused, plus the self-assessment. The
 pure core — `shouldExpand`, `planExpansionBatches`, `normaliseExpansion`, `assertCascadeComplete`,
 `finaliseCascade` — is already written, tested and reviewed in
-[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts), and until now called by nothing.
+[`src/hierarchy-cascade.ts`](../../src/structure-cascade.ts), and until now called by nothing.
 
 What changed is the argument for it. 260904c argued latency and the length ceiling, and both of those
 weakened: the ceiling moved to 2,889 blocks when the estimator was re-rated, and a book's structure
@@ -450,7 +450,7 @@ subdivision prompt must ask for gists.
 
 ## The machinery already exists
 
-[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) — 1,275 lines, pure, 38 tests, reviewed
+[`src/hierarchy-cascade.ts`](../../src/structure-cascade.ts) — 1,275 lines, pure, 38 tests, reviewed
 twice, and until now **called by nothing**. It was built for 260904c and this plan is what finally
 calls it, seeded from wave 1 rather than from the root:
 
@@ -468,7 +468,7 @@ calls it, seeded from wave 1 rather than from the root:
 **What it does not have, and stage 3 adds** — three things, in the order they matter:
 
 1. **The heading snap.** `planChildRanges` calls `snapStartsToHeadings`
-   ([`src/hierarchy.ts:1205`](../../src/hierarchy.ts)); `normaliseExpansion` does not. Until they
+   ([`src/hierarchy.ts:1205`](../../src/structure.ts)); `normaliseExpansion` does not. Until they
    share one rule, a scoped call reads a slice the finished tree will not give its parent — the
    blocker in [§ What the second review changed](#blocker-derived-ranges).
 2. **A refusal instead of a clamp** for a start naming a block outside its parent.
@@ -493,7 +493,7 @@ The first draft of this plan said "deepen the `ModelNode` between `parseJson` an
 source.⟩ `buildTree` does not accept the model's ranges, it **derives** them: `planChildRanges` pins
 the first child to its parent's start, clamps later starts back inside, snaps a section onto its own
 heading and computes every end, and `visit` then passes the *derived* range down to the child rather
-than the child's own ([`src/hierarchy.ts:1570`](../../src/hierarchy.ts)). So a deepening call handed
+than the child's own ([`src/hierarchy.ts:1570`](../../src/structure.ts)). So a deepening call handed
 the raw proposal could be shown section `[20…40]` while the finished tree gives that node `[18…47]`.
 The tree tiles, covers every block and passes every invariant — and its new titles and gists describe
 **prose the call never saw**. Not theoretical: Moby-Dick's structure answer needed 55 boundary
@@ -530,7 +530,7 @@ agree on every range — which is also the test that says the second build is id
 
 **Before `generateLabels`, necessarily.** `labels.json` stamps `structureHash(tree)`, so a tree
 deepened after the labels were written would be stale at birth and nothing would say so
-([hierarchy.md § Two passes](../project/hierarchy.md#two-passes)).
+([hierarchy.md § Two passes](../project/structure-step.md#two-passes)).
 
 ### What a deepening call is shown
 
@@ -557,7 +557,7 @@ right, but the rewrite does not completely close either original blocker."*⟩ B
 ### Still blocking 1 — waves 2 and beyond do not see the ranges the final tree will use either <a id="blocker-derived-ranges"></a>
 
 `proposalFromTree` fixes the seed layer, and that half is right. But `planChildRanges` calls
-`snapStartsToHeadings` before deriving its ranges ([`src/hierarchy.ts:1205`](../../src/hierarchy.ts))
+`snapStartsToHeadings` before deriving its ranges ([`src/hierarchy.ts:1205`](../../src/structure.ts))
 and `normaliseExpansion` **has no such call** — confirmed by grep, and Sol reproduced the divergence:
 normalisation produced `[0–1], [2–4]`, and rebuilding moved them to `[0–0], [1–4]` because the second
 child named the heading at block 1. So a wave-3 call reads a slice the finished tree will not give
@@ -908,7 +908,7 @@ none survives, and no tree's leaf layer changes. ⟨Re-run independently, 2026-0
 
 **And it moves a baseline this plan leans on.** Faults recorded against a rung that is then discarded
 go with it, so `repairedRanges` and `repairedBlocks` now read materially lower: on the 3,000-case
-fuzz in [`tests/hierarchy-repairs.test.ts`](../../tests/hierarchy-repairs.test.ts) the repaired rate
+fuzz in [`tests/hierarchy-repairs.test.ts`](../../tests/structure-step-repairs.test.ts) the repaired rate
 fell from ~37% to ~17%, with ~29% now reporting a collapse instead. `silent` stayed at 0, so nothing
 is derived unreported. But the plan names `repairedBlocks` as the trigger for a future re-ask, and
 **that trigger's numbers are not comparable across this change** — whoever calibrates it must take
@@ -1043,9 +1043,9 @@ Whoever adds this namespace would have been reading that line for the rule.
 
 #### What stage 4 landed <a id="stage-4-landed"></a>
 
-Two new modules — [`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) (prompt, request
+Two new modules — [`src/hierarchy-expand.ts`](../../src/structure-expand.ts) (prompt, request
 assembly, strict parse, instrumentation) and
-[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts) (namespace, canonical request, entry gate,
+[`src/hierarchy-deepen.ts`](../../src/structure-deepen.ts) (namespace, canonical request, entry gate,
 executor seam, `runExpansionWave`) — plus the key minter hoisted into `src/source-hash.ts` as
 `checkpointKey`, the redraw cap, one migration and three test files. Still called by nothing.
 
@@ -1476,7 +1476,7 @@ the version of the hole it had been shown and left the version it had not.**
   a redraw buys a second answer. The sentence claiming otherwise was an overclaim and is gone.
 - **The records file is published atomically.** Phase D reads one directory from three jobs at once
   and could parse a sibling's file mid-write, fail, and mark the wrong job fatal
-  ([hierarchy.md](../project/hierarchy.md#deepening)). The reader also filters by slug on the
+  ([hierarchy.md](../project/structure-step.md#deepening)). The reader also filters by slug on the
   filename before opening anything.
 - **The run's own errors stopped replacing each other.** `reportRun` runs whether or not the phases
   finished, so a throw from the reporting used to replace whatever had actually killed the run; both
@@ -1774,7 +1774,7 @@ above is in question.
 
 ##### The stated rationale does not hold, though the rule may still
 
-[`shouldExpand`](../../src/hierarchy-cascade.ts) (`src/hierarchy-cascade.ts:607`) justifies its
+[`shouldExpand`](../../src/structure-cascade.ts) (`src/hierarchy-cascade.ts:607`) justifies its
 heading clause like this:
 
 > A node of eight blocks containing two of the author's own headings would stop, and its leaves would
@@ -1782,7 +1782,7 @@ heading clause like this:
 >
 > — `src/hierarchy-cascade.ts:596-600`
 
-But [`buildTree`](../../src/hierarchy.ts)'s own contract is that *"Every block gets exactly one leaf"*
+But [`buildTree`](../../src/structure.ts)'s own contract is that *"Every block gets exactly one leaf"*
 (`src/hierarchy.ts:1539`). A leaf **is** one block, so a leaf cannot span a heading, whatever the node
 above it does. What forcing the node open actually buys is a **spine row that begins on the heading** —
 the finest *titled* row respecting the author's boundary rather than merging across it. That is

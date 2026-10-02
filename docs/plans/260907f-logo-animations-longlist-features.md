@@ -440,7 +440,7 @@ it is heavy.
 
 ## 14. Splits Into Parts
 
-**From:** [hierarchy.md](../project/hierarchy.md) and
+**From:** [hierarchy.md](../project/structure-step.md) and
 [granularity-zoom.md § The tree](../project/granularity-zoom.md#the-tree).
 
 **What the reader sees.** A single rule runs the full width beneath the word. It breaks cleanly into

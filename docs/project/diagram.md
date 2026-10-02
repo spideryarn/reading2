@@ -1665,7 +1665,7 @@ made by different hands within an hour. See the section above.
   [§ There were eight](#there-were-eight-and-five-are-gone). The spine still is.
 - **Collapse state is not in the URL.** Everything else about the view is
   ([url-state.md](url-state.md)), and this is the exception: node ids are
-  positional and a re-run of `npm run hierarchy` renumbers them
+  positional and a re-run of `npm run structure` renumbers them
   ([block-ids.md](block-ids.md)), so a pasted link would open the wrong sections
   on an article that had been re-ingested. A link that is quietly wrong is worse
   than a link that carries less.

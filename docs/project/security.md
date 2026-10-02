@@ -485,7 +485,7 @@ is not available on most machines and a security guard whose test skips is not a
 Worth its own heading, because it is the same trap one level up and it nearly shipped.
 
 Stage 3 stamps the file it writes, `output/<slug>.blocks.json`. **The file the server opens is
-`data/<slug>/blocks.json`, and that one is written by stage 4** ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
+`data/<slug>/blocks.json`, and that one is written by stage 4** ([`src/structure.ts`](../../src/structure.ts)),
 from scratch, as a plain `{ blocks }`. So the stamp was written, correctly, into a file the read seam
 never touches — and every article in the library read back as stale.
 

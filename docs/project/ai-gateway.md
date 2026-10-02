@@ -81,7 +81,7 @@ fail without saying so.
 
 ## What it replaced
 
-Until that day there were two vendors. The seven pipeline stages — [`hierarchy`](../../src/hierarchy.ts),
+Until that day there were two vendors. The seven pipeline stages — [`hierarchy`](../../src/structure.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
 [`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
@@ -416,7 +416,7 @@ only a cross-check. Model `anthropic/claude-sonnet-5` at `PRODUCTION_EFFORT` `lo
 Three things that table is worth reading carefully for.
 
 - **The tree is ONE model call**, whatever the article's size — 96 blocks and 330 blocks each cost
-  exactly one. Both runs recorded `structureResumed: false`, so neither was a cached zero.
+  exactly one. Both runs recorded `wholeDocumentResumed: false`, so neither was a cached zero.
 - **`labels` is the bigger half on a long article and the reader does not wait for it.** It is
   deliberately not in `DEFAULT_INGEST_STEPS` — it was 79.5–92% of the old combined step's wall clock
   — so the money between pasting a URL and being able to read is the hierarchy row alone:
@@ -690,7 +690,7 @@ eight. The stage commands go through the queue
 `runStep` opens a `scopeKind: "job_step"` collector per step — so a stage driven from a terminal is
 scoped by the same thing that scopes it when a reader presses Add, and a CLI that *also* wrapped the
 run in `withLedger("cli", …)` would put one purchase in two scopes. Verified on the local database
-after the move: every call from `npm run ingest`, `npm run hierarchy` and the rest landed as
+after the move: every call from `npm run ingest`, `npm run structure` and the rest landed as
 `job_step` with a job id and a slug, and none as `cli`.
 
 `withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via

@@ -1305,7 +1305,7 @@ batches into a book then costs one batch rather than eight, and these are the ex
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
 and three named for the `hierarchy` step — `hierarchy-structure` (the one whole-document
 call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
-[`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)) and `hierarchy-labels` (the nav-label
+[`src/structure-deepen.ts`](../../src/structure-deepen.ts)) and `hierarchy-labels` (the nav-label
 batches). They are separate because they are separate questions with separate prices: a run that
 dies in the labels must not buy the tree again.
 
@@ -1322,7 +1322,7 @@ have been a `warn` nobody reads and a bill that goes up.
 **There is no `delete`**, deliberately, and nothing needs one. A row is replaced by writing over it,
 and the one caller that has to ignore what is stored — a repeat measuring whether the deepening
 verdict is stable — skips the *read* instead, for the articles it names:
-`SPIDERYARN_DEEPEN_REASK`, in [hierarchy.md § the deepening wave](hierarchy.md#deepening). It is a
+`SPIDERYARN_DEEPEN_REASK`, in [structure-step.md § the deepening wave](structure-step.md#deepening). It is a
 list of slugs rather than a boolean, because a boolean read on every wave spends money on every
 article a worker later picks up.
 

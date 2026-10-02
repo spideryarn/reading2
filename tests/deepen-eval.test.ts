@@ -27,8 +27,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { CandidateRecord } from "../src/hierarchy-expand.js";
-import type { DeepenStats } from "../src/hierarchy-deepen.js";
+import type { CandidateRecord } from "../src/structure-expand.js";
+import type { DeepenStats } from "../src/structure-deepen.js";
 import {
   abandonStep,
   ABANDONED_MARKER,
@@ -81,7 +81,7 @@ import {
   yesRates,
   formatDriving,
 } from "../evals/deepen/report.js";
-import { REASK_ENV } from "../src/hierarchy-deepen.js";
+import { REASK_ENV } from "../src/structure-deepen.js";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -359,8 +359,8 @@ describe("checking that a repeat bought its own wave", () => {
       checkRepeatBoughtItsWave({
         label: "B repeat 2",
         stats: stats({ targets: 5, calls: 5, resumed: 0 }),
-        ledgerHierarchyInputTokens: 5_200,
-        structureInputTokensFloor: 50_000,
+        ledgerStructureInputTokens: 5_200,
+        wholeDocumentInputTokensFloor: 50_000,
         structure: "resumed",
       }),
     ).toEqual([]);
@@ -371,8 +371,8 @@ describe("checking that a repeat bought its own wave", () => {
     const found = checkRepeatBoughtItsWave({
       label: "B repeat 2",
       stats: stats({ targets: 5, calls: 0, resumed: 5 }),
-      ledgerHierarchyInputTokens: 0,
-      structureInputTokensFloor: 50_000,
+      ledgerStructureInputTokens: 0,
+      wholeDocumentInputTokensFloor: 50_000,
       structure: "resumed",
     });
     expect(found.map((f) => f.kind)).toEqual(["wave-not-rebought"]);
@@ -385,8 +385,8 @@ describe("checking that a repeat bought its own wave", () => {
     const found = checkRepeatBoughtItsWave({
       label: "B repeat 2",
       stats: stats({ targets: 5, calls: 5 }),
-      ledgerHierarchyInputTokens: 5_000 + 900_000,
-      structureInputTokensFloor: 50_000,
+      ledgerStructureInputTokens: 5_000 + 900_000,
+      wholeDocumentInputTokensFloor: 50_000,
       structure: "resumed",
     });
     expect(found.map((f) => f.kind)).toEqual(["structure-rebought"]);
@@ -409,8 +409,8 @@ describe("checking that a repeat bought its own wave", () => {
     const found = checkRepeatBoughtItsWave({
       label: "A book ingest, deepening on (repeat 1)",
       stats: stats({ targets: 12, calls: 12 }),
-      ledgerHierarchyInputTokens: MOBY_STRUCTURE_INPUT_TOKENS + 5_000,
-      structureInputTokensFloor: MOBY_STRUCTURE_FLOOR,
+      ledgerStructureInputTokens: MOBY_STRUCTURE_INPUT_TOKENS + 5_000,
+      wholeDocumentInputTokensFloor: MOBY_STRUCTURE_FLOOR,
       structure: "bought",
     });
     expect(found.filter((f) => f.kind === "structure-rebought")).toEqual([]);
@@ -424,8 +424,8 @@ describe("checking that a repeat bought its own wave", () => {
     const found = checkRepeatBoughtItsWave({
       label: "A book ingest",
       stats: stats({ targets: 12, calls: 12 }),
-      ledgerHierarchyInputTokens: 5_100,
-      structureInputTokensFloor: MOBY_STRUCTURE_FLOOR,
+      ledgerStructureInputTokens: 5_100,
+      wholeDocumentInputTokensFloor: MOBY_STRUCTURE_FLOOR,
       structure: "bought",
     });
     expect(found).toHaveLength(1);
@@ -439,8 +439,8 @@ describe("checking that a repeat bought its own wave", () => {
     const found = checkRepeatBoughtItsWave({
       label: "B repeat 2",
       stats: stats({ targets: 12, calls: 12 }),
-      ledgerHierarchyInputTokens: MOBY_STRUCTURE_INPUT_TOKENS + 5_000,
-      structureInputTokensFloor: MOBY_STRUCTURE_FLOOR,
+      ledgerStructureInputTokens: MOBY_STRUCTURE_INPUT_TOKENS + 5_000,
+      wholeDocumentInputTokensFloor: MOBY_STRUCTURE_FLOOR,
       structure: "resumed",
     });
     expect(found.map((f) => f.kind)).toEqual(["structure-rebought"]);
@@ -452,8 +452,8 @@ describe("checking that a repeat bought its own wave", () => {
       checkRepeatBoughtItsWave({
         label: "C flag on",
         stats: stats({ targets: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } } as Partial<DeepenStats>),
-        ledgerHierarchyInputTokens: 0,
-        structureInputTokensFloor: 50_000,
+        ledgerStructureInputTokens: 0,
+        wholeDocumentInputTokensFloor: 50_000,
         structure: "resumed",
       }),
     ).toEqual([]);
@@ -724,7 +724,7 @@ describe("the budget report", () => {
   /**
    * **DPN-03-R — the case that gets past `status` AND past "stats exist".**
    *
-   * A wave that exhausts its redraws throws `DeepenFailed`; `generateHierarchy`
+   * A wave that exhausts its redraws throws `DeepenFailed`; `generateStructure`
    * catches it, writes a records file with `failed: true`, falls back to the
    * wave-1 tree, generates labels and **completes the `hierarchy` step**. So all
    * three phase-D steps are `done`, all three carry a real clock, all three
@@ -1163,9 +1163,9 @@ describe("the fate three measured jobs share", () => {
    *
    * Stopping before the next *claim* does not stop the next paid *call*: one
    * claim runs the whole `hierarchy` step, and that step buys a structure call,
-   * an expansion wave and a whole pass of labels. `generateHierarchy` catches a
+   * an expansion wave and a whole pass of labels. `generateStructure` catches a
    * failed wave and falls straight through to `generateLabels` regardless
-   * (src/hierarchy.ts § the `deepenFailed` catch), so after question 5 is known
+   * (src/structure.ts § the `deepenFailed` catch), so after question 5 is known
    * unanswerable a sibling could still *begin* an entire label pass.
    *
    * The fate therefore carries a signal as well as a reason. It is combined into
@@ -1576,9 +1576,9 @@ describe("the estimate", () => {
   it("adds up what it says it will buy, and carries the provenance of every figure", () => {
     const e = estimate({
       bookIngestDeepened: 1,
-      bookHierarchyRepeat: 3,
+      bookStructureRepeat: 3,
       articleIngestDeepened: 3,
-      articleHierarchyResumed: 1,
+      articleStructureResumed: 1,
     });
     expect(e.totalUsd).toBeCloseTo(8.4 + 3 * 7.4 + 3 * 3.4 + 0.1);
     expect(e.rows.every((r) => r.basis.length > 0)).toBe(true);
@@ -1601,9 +1601,9 @@ describe("the estimate", () => {
   it("names the two figures as an estimate and an exposure, and denies being a bound", () => {
     const e = estimate({
       bookIngestDeepened: 1,
-      bookHierarchyRepeat: 3,
+      bookStructureRepeat: 3,
       articleIngestDeepened: 3,
-      articleHierarchyResumed: 1,
+      articleStructureResumed: 1,
     });
     /* Three re-asking passes, three windows each: two more purchases apiece. */
     expect(e.worstCaseUsd).toBeCloseTo(e.totalUsd + 3 * 7.4 * 2);
@@ -1622,9 +1622,9 @@ describe("the estimate", () => {
   it("has no requeue exposure where there are no re-asking passes", () => {
     const e = estimate({
       bookIngestDeepened: 1,
-      bookHierarchyRepeat: 0,
+      bookStructureRepeat: 0,
       articleIngestDeepened: 0,
-      articleHierarchyResumed: 0,
+      articleStructureResumed: 0,
     });
     expect(e.worstCaseUsd).toBeCloseTo(e.totalUsd);
   });
@@ -1632,9 +1632,9 @@ describe("the estimate", () => {
   it("drops the rows this run will not buy, rather than printing them at zero", () => {
     const e = estimate({
       bookIngestDeepened: 1,
-      bookHierarchyRepeat: 0,
+      bookStructureRepeat: 0,
       articleIngestDeepened: 0,
-      articleHierarchyResumed: 0,
+      articleStructureResumed: 0,
     });
     expect(e.rows).toHaveLength(1);
     expect(e.totalUsd).toBeCloseTo(8.4);
@@ -1872,11 +1872,11 @@ describe("the step plans, checked against the queue's rule before anything is en
     ...over,
   });
   /** The real rule's shape, as a stand-in a test can hand a wrong list to. */
-  const noBlocksWithoutHierarchy = (steps: readonly string[]): string | undefined =>
+  const noBlocksWithoutStructure = (steps: readonly string[]): string | undefined =>
     steps.includes("blocks") && !steps.includes("hierarchy") ? "blocks needs hierarchy" : undefined;
 
   it("passes lists the queue would take", () => {
-    expect(() => assertStepPlansRunnable(plans(), noBlocksWithoutHierarchy)).not.toThrow();
+    expect(() => assertStepPlansRunnable(plans(), noBlocksWithoutStructure)).not.toThrow();
     expect(() =>
       assertStepPlansRunnable(
         plans({
@@ -1884,7 +1884,7 @@ describe("the step plans, checked against the queue's rule before anything is en
           rerun: ["hierarchy"],
           force: ["hierarchy"],
         }),
-        noBlocksWithoutHierarchy,
+        noBlocksWithoutStructure,
       ),
     ).not.toThrow();
   });
@@ -1894,7 +1894,7 @@ describe("the step plans, checked against the queue's rule before anything is en
     expect(() =>
       assertStepPlansRunnable(
         plans({ ingest: ["fetch", "extract", "blocks"], rerun: ["blocks"], force: ["blocks"] }),
-        noBlocksWithoutHierarchy,
+        noBlocksWithoutStructure,
       ),
     ).toThrow(/`ingest` step list \[fetch, extract, blocks\]/);
   });
@@ -1903,13 +1903,13 @@ describe("the step plans, checked against the queue's rule before anything is en
      repair looks like. */
   it("refuses a single bad list among the good ones", () => {
     expect(() =>
-      assertStepPlansRunnable(plans({ rerun: ["blocks"] }), noBlocksWithoutHierarchy),
+      assertStepPlansRunnable(plans({ rerun: ["blocks"] }), noBlocksWithoutStructure),
     ).toThrow(/`rerun` step list \[blocks\]/);
   });
 
   it("ignores an empty list rather than asking about nothing", () => {
     expect(() =>
-      assertStepPlansRunnable(plans({ force: [] }), noBlocksWithoutHierarchy),
+      assertStepPlansRunnable(plans({ force: [] }), noBlocksWithoutStructure),
     ).not.toThrow();
   });
 });
@@ -1923,7 +1923,7 @@ describe("the step plans, checked against the queue's rule before anything is en
  * A sibling's half-written file therefore rejected the whole read, which
  * `driveJob` turns into a fatal finding against **the asking job** and leaves its
  * own `recordsFiles` empty. Two fixes, and both are wanted: the writer publishes
- * atomically (`src/hierarchy-deepen.ts § saveDeepenRecords`), and the reader
+ * atomically (`src/structure-deepen.ts § saveDeepenRecords`), and the reader
  * filters on the filename before it opens anything.
  */
 describe("reading one job's records out of a shared directory", () => {

@@ -48,7 +48,7 @@ intermittent, and the burst/quiet pattern is the clue.
 The calls **overlap in wall clock**: `spya-zf0bgj`'s eleven started 17:48:10 → 17:53:23 and the first
 did not finish until 17:53:27. A serial retry chain cannot produce that. Neither can the Anthropic
 SDK, constructed with `maxRetries: 0` in [`src/messages-stream.ts`](../../src/messages-stream.ts) —
-*"one record, one call"* — nor [`src/hierarchy.ts`](../../src/hierarchy.ts), which has no loop around
+*"one record, one call"* — nor [`src/hierarchy.ts`](../../src/structure.ts), which has no loop around
 its single `streamMessage`.
 
 `runId` is minted once per `collectSpend()` ([`src/ai-spend.ts`](../../src/ai-spend.ts)) and

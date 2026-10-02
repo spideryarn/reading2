@@ -126,7 +126,7 @@ function head(meta: Meta, identity: ArticleIdentity): string {
  * It lives in the article rather than in each prompt so that every prompt that
  * is shown ids, including one written next year, is told in the same breath,
  * and a prompt that is shown none (the glossary, the arc) is not. The
- * hierarchy prompts render their own numbered blocks (src/hierarchy-prompt.ts)
+ * hierarchy prompts render their own numbered blocks (src/structure-prompt.ts)
  * and are not told yet. No hierarchy leak has been seen. It was to ride on the
  * next bump, and `toc/10` (plan 261001p) passed it by on purpose: that bump was
  * measured as one change, and this note's first line ("Each block below starts

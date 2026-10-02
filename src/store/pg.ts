@@ -201,7 +201,7 @@ import type {
   Visibility,
 } from "../types.js";
 import { isUsableSimpleSummary } from "../types.js";
-import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
+import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
 import { CitationsListNotFound } from "./citations-list-not-found.js";
@@ -2934,7 +2934,7 @@ const rawPgArticleReader: ArticleReader = {
       switch (step) {
         case "hierarchy": {
           /* No tree and no blocks are this function's own preconditions, not
-             `hierarchyCurrency`'s: it answers "is this run the one that
+             `structureCurrency`'s: it answers "is this run the one that
              describes these blocks", which is not a question you can ask when
              there are none. */
           if (!revision.tree || !blocksHash) return false;
@@ -2948,7 +2948,7 @@ const rawPgArticleReader: ArticleReader = {
              still required by the caller below as well, which is belt and
              braces rather than duplication: this arm is the only one of the
              fifteen that could answer it, and every other arm relies on it. */
-          return hierarchyCurrency(byStep.get("hierarchy"), blocksHash).current;
+          return structureCurrency(byStep.get("hierarchy"), blocksHash).current;
         }
         /**
          * **Asked of the run row, like `hierarchy` above and unlike everything

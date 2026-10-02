@@ -32,7 +32,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
-  two) · `hierarchy.md` ·
+  two) · `structure-step.md` ·
   `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
@@ -178,7 +178,7 @@ the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
 
 ## The one contract that matters
 
-Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Hierarchy, summaries,
+Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Structure, summaries,
 scroll position, highlights, notes, questions — addresses text by that id, never by character offset
 or CSS selector. Ids are minted once and preserved on every later run, so they survive re-extraction.
 
@@ -442,9 +442,9 @@ nothing else has a copy of.
   rather than only the idea. Which steps do, which decide freshness another way, and how:
   [architecture.md § Conventions](docs/project/architecture.md#conventions) — read it before you
   trust a skipped step or add one.
-- **Hierarchy — the deeply-nested table of contents — and the granularity-zoom tree are
+- **Structure — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
-  together. They must not diverge into two trees.
+  together. They must not diverge into two trees. (The step was called `hierarchy` until 2026-10-02.)
 - **Log from the server, `console.log` from the CLI** — the rule is the destination, not the
   function name. Anything in a request path goes through [`src/log.ts`](src/log.ts), and a
   `console.log` there is a bug. Never log anything sensitive or any article prose.

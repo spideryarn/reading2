@@ -155,5 +155,5 @@ file exists to make visible.
 Everything this file listed on 2026-09-06 has been answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
 lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
-[hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),
+[hierarchy.md § A new prompt reaches new articles only](../project/structure-step.md#prompt-versions),
 together with the re-run control that came out of the same answer.

@@ -231,7 +231,7 @@ matching any of V8's wording.
   for the first `{` is now false, and the fix is the reason.
 - [`docs/postmortems/`](../postmortems/): the class named outright, the commit, and what would have
   caught it — ranked by ease and value.
-- [`hierarchy.md`](../project/hierarchy.md) and [`copy.md`](../project/copy.md) if the reader-facing
+- [`hierarchy.md`](../project/structure-step.md) and [`copy.md`](../project/copy.md) if the reader-facing
   behaviour moves.
 
 ## Decided: the failed response is still kept nowhere

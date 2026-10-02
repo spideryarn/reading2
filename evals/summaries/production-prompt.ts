@@ -3,18 +3,18 @@
  *
  * The control arm has to be the current instructions, and there are two ways to
  * get them: type them in here, or read them out of `SYSTEM`. The first is what
- * `evals/hierarchy-structure/arms.ts` did with `effort`, and it drifted — the
+ * `evals/structure-whole-document/arms.ts` did with `effort`, and it drifted — the
  * arm said `"high"` for six weeks after production moved to `"medium"`, so an
  * arm declared *isolated* was answering a question production does not have
  * while reporting itself as the answer to the one it does
- * (`tests/hierarchy-eval-incumbent-parity.test.ts` has the whole story). A
+ * (`tests/structure-step-eval-incumbent-parity.test.ts` has the whole story). A
  * literal here would drift the same way and be harder to notice, because a
  * paragraph of prose looks right at a glance in a way a wrong enum does not.
  *
  * So the blocks are **sliced out of the live `SYSTEM`** at run time, through the
- * exported `structureRequest` — the same function `generateHierarchy` builds its
+ * exported `wholeDocumentRequest` — the same function `generateStructure` builds its
  * request with, so there is no second assembly. Edit the GISTS block in
- * `src/hierarchy.ts` and the incumbent arm changes in the same commit.
+ * `src/structure.ts` and the incumbent arm changes in the same commit.
  *
  * **The slice is by section header at column zero**, and it throws when a header
  * moves. That is the point: a lenient slice returns the empty string, the arm
@@ -30,11 +30,11 @@
  * `bakeoff` — see [`arms.ts`](arms.ts) § `Comparison`.
  */
 
-import { structureRequest } from "../../src/hierarchy.js";
+import { wholeDocumentRequest } from "../../src/structure.js";
 import type { Block } from "../../src/types.js";
 
 /**
- * One block, only so `structureRequest` has something to size a budget from.
+ * One block, only so `wholeDocumentRequest` has something to size a budget from.
  * The system prompt does not depend on it — asserted in
  * `tests/summaries-eval.test.ts` by slicing from two different inputs.
  */
@@ -50,9 +50,9 @@ const ONE_BLOCK: Block[] = [
   } as Block,
 ];
 
-/** The whole of `SYSTEM`, as `generateHierarchy` sends it. */
+/** The whole of `SYSTEM`, as `generateStructure` sends it. */
 export function productionSystem(): string {
-  return structureRequest(ONE_BLOCK).system;
+  return wholeDocumentRequest(ONE_BLOCK).system;
 }
 
 /**
@@ -91,7 +91,7 @@ export function productionQuestions(system = productionSystem()): string {
  * **The instruction the plan diagnoses as the cause**, quoted here so a test can
  * watch for the day it leaves.
  *
- * `src/hierarchy.ts` § SYSTEM, QUESTIONS: *"It is the question this node's text
+ * `src/structure.ts` § SYSTEM, QUESTIONS: *"It is the question this node's text
  * answers and its gist does NOT."* Every variant drops it; the incumbent keeps
  * it. If this sentence disappears from production without this eval being
  * re-run, the control arm is no longer the thing the variants were measured
