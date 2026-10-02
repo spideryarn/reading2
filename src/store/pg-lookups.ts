@@ -31,12 +31,15 @@
 import { asc, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { glossaryLookups } from "../db/schema.js";
+import { articleRevisions, articles, glossaryHiddenEntries, glossaryLookups } from "../db/schema.js";
+import { coversWholly, withAddedEntries } from "../glossary-added.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
+import { mintUniqueId } from "../ids.js";
 import { currentOwnerId } from "../owner.js";
-import type { Citation, GlossaryLookup } from "../types.js";
+import type { AddedTerm, Citation, Glossary, GlossaryLookup } from "../types.js";
 import type { GlossaryLookupStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
 
 function toLookup(row: typeof glossaryLookups.$inferSelect): GlossaryLookup {
@@ -100,6 +103,81 @@ const rawPgGlossaryLookupStore: GlossaryLookupStore = {
         },
       });
     return lookupsFor(articleId);
+  },
+
+  async addTerm(slug, { name, quote, lookup }): Promise<AddedTerm> {
+    return getDb().transaction(async (tx): Promise<AddedTerm> => {
+      const articleId = await articleIdForOwned(slug, tx);
+      /* **The article row, locked, before anything is read.** "Already
+         there" is a read and the insert depends on it, so two tabs adding
+         *attention head* and *attention heads* at once would otherwise both
+         see nothing and both insert — the names differ, so no key would
+         catch it. The second now waits, and then sees the first. */
+      const [locked] = await tx
+        .select({ revisionId: articles.currentRevisionId })
+        .from(articles)
+        .where(eq(articles.id, articleId))
+        .for("update");
+      const revisionId = locked?.revisionId;
+      const [revision] = revisionId
+        ? await tx
+            .select({ glossary: articleRevisions.glossary })
+            .from(articleRevisions)
+            .where(eq(articleRevisions.id, revisionId))
+        : [];
+      const glossary = (revision?.glossary ?? null) as Glossary | null;
+      /* No list, nothing to add to: `loadGlossary` is a 404 without one, so
+         a row written now would be invisible until a glossary exists. */
+      if (!glossary) return { kind: "no-glossary" };
+
+      const rows = await tx
+        .select({ entryId: glossaryLookups.entryId, addedName: glossaryLookups.addedName })
+        .from(glossaryLookups)
+        .where(eq(glossaryLookups.articleId, articleId));
+      const hiddenIds = new Set(
+        (
+          await tx
+            .select({ entryId: glossaryHiddenEntries.entryId })
+            .from(glossaryHiddenEntries)
+            .where(eq(glossaryHiddenEntries.articleId, articleId))
+        ).map((row) => row.entryId),
+      );
+
+      /* The list the reader sees, built the way `loadGlossary` builds it, so
+         "already there" means "already drawn". */
+      const { entries } = withAddedEntries(glossary.entries, rows);
+      const match = entries.find((entry) => coversWholly(entry, quote));
+      if (match) {
+        return { kind: "existing", entryId: match.id, hidden: hiddenIds.has(match.id) };
+      }
+
+      /* **Unique against every id this article has spent**, not just this
+         table's: a collision with an entry in the document would pass this
+         table's key and then attach one explanation and one hide to two
+         entries. `mintUniqueId`, as src/glossary.ts mints. */
+      const taken = new Set<string>([
+        ...glossary.entries.map((entry) => entry.id),
+        ...rows.map((row) => row.entryId),
+        ...hiddenIds,
+      ]);
+      const entryId = mintUniqueId(taken);
+      await tx.insert(glossaryLookups).values({
+        articleId,
+        entryId,
+        ownerId: currentOwnerId(),
+        answer: lookup.answer,
+        citations: lookup.citations,
+        searches: lookup.searches,
+        model: lookup.model,
+        at: new Date(lookup.at),
+        addedName: name,
+      });
+      return { kind: "added", entryId };
+      /* **Read committed, and the lock depends on it**: the waiting add's
+         later statements must see the rows the first one committed. Under
+         repeatable read they would read the snapshot from before the wait
+         and add a second entry. src/store/isolation.ts. */
+    }, READ_COMMITTED);
   },
 };
 

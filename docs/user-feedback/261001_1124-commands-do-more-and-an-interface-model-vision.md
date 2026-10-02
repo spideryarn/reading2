@@ -59,3 +59,9 @@ production row), sent from Tweets on `jco-2005-01-libre-spya-hk9cc7`; Overseer q
 2. **Letting a model act.** The vision proposes that a model may navigate on its own, may only
    *propose* anything that writes or spends (you press Enter), and may never delete or publish. Is
    that the line?
+
+## Greg's answers to the follow-ups (2026-10-02)
+
+Recorded in [chat-llm-help-commands-vision.md § Decided](../project/chat-llm-help-commands-vision.md):
+the line is accepted to start with, the one-run Opus option is held off, dictation in the bar is
+wanted (queued with `fbwh2xys`), and tags are wanted (`fbqmev0s`). Off awaiting-approval.md.

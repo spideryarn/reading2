@@ -293,7 +293,7 @@ describe("the public API's tables", () => {
   }
 
   /**
-   * The six the public surface may name.
+   * The seven the public surface may name.
    *
    * `articles` and `article_revisions` are the work itself; `revision_blocks` is
    * its prose; `block_identities` is the spine those ids hang on.
@@ -342,6 +342,23 @@ describe("the public API's tables", () => {
    * A seventh line needs the same three sentences written about it, or it
    * should not be here.
    *
+   * **`uploadSourceGuesses` is the seventh, on 2026-10-02**, and here are its
+   * three. Greg asked for a banner on every public-readable article naming
+   * where it came from, *"even for uploaded PDFs or HTML"*
+   * (docs/plans/261002g-a-banner-on-every-public-readable-article.md
+   * § Decisions 3), and:
+   *
+   *  - the read is `publicSourceGuessQuery`, which names its columns and
+   *    repeats `publicSlug` in its own `where`;
+   *  - it refuses every row but a `found` one in SQL
+   *    (`PUBLIC_SOURCE_GUESS_WHERE`), and does not select the stored `host`,
+   *    the model's `why`, the claim token or the counts — the DTO derives the
+   *    host from the address it publishes, after `publicSourceUrl`;
+   *  - and the owner's `sourceGuessFor` in src/store/source-guess-row.ts is not
+   *    what serves it.
+   *
+   * tests/public-reads.test.ts reads that SQL.
+   *
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
@@ -353,6 +370,7 @@ describe("the public API's tables", () => {
     "blockIdentities",
     "comments",
     "searchRuns",
+    "uploadSourceGuesses",
   ];
 
   /**

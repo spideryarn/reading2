@@ -372,9 +372,14 @@ export async function resolveAccess(
      **One object, `presentable`, reaches both draws and the fallback** — the
      plan's F10. Were the fallback a separate, unrendered local, an image that
      failed to arrive would put raw TeX back on the page. */
-  /* A visitor's payload never carries a guessed web address — `sourceGuess` is
-     owner-only (src/types.ts § `Article.sourceGuess`) — so the public arm says
-     *nobody has looked* in so many words. */
+  /* **A visitor's guess is the public projection, re-dressed as `found`** —
+     `PublicArticle.sourceGuess` (src/public-types.ts), which crosses only a
+     found guess, already through `publicSourceUrl`. Absent becomes `undefined`,
+     *nobody has looked*, which for a visitor draws nothing: the masthead's
+     `OriginLine` reads a guess only for an owner's upload, and the one place a
+     visitor sees it is the banner (PublicChrome.tsx § `SharedNotice`). Nor
+     does a visitor's guess ever start a search: `useSourceGuess` is mounted
+     only for an owner. Plan 261002g § Decisions 3. */
   const drawn: Article =
     found.kind === "owned"
       ? found.article
@@ -383,7 +388,14 @@ export async function resolveAccess(
            they archived it is not here to strip: `PublicArticle` is an
            allowlist without `archivedAt`, so the masthead draws no Archive
            button for a visitor (plan 261002a). */
-        { ...found.article, sourceGuess: undefined, highPowerSince: null };
+        {
+          ...found.article,
+          sourceGuess:
+            found.article.sourceGuess === undefined
+              ? undefined
+              : { status: "found", ...found.article.sourceGuess },
+          highPowerSince: null,
+        };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
   });

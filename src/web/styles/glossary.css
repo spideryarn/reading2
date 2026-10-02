@@ -414,6 +414,23 @@
   color: var(--ink-faint);
   cursor: help;
 }
+/* A term the reader added themselves (plan 261002f) — provenance in the kind
+   icon's colour, so it reads as a label beside the name, not a badge. */
+.gloss-added {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: help;
+}
+/* What became of an asked term, one line between the quote and the answer. */
+.gloss-ask-added {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+.gloss-ask-added .gloss-btn { margin-left: 0.25rem; }
 /* Pushed right, and monospaced, because a column of numbers you are ordered by
    should line up. Only present when the list IS ordered by them — one number
    under `hardest` or `most central`, two under `prioritised`, none under `first

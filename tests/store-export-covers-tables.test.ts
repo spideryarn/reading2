@@ -487,6 +487,8 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         searches: 0,
         model: "test",
         at: new Date(),
+        /* Set, so the bundle's every-column check sees it (plan 261002f). */
+        addedName: "a term the reader added",
       });
     },
     /* The sentinel goes in `title`: `url` has to be http(s) by CHECK. */

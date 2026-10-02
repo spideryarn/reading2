@@ -244,8 +244,11 @@ describe("an answer that is still arriving", () => {
     const terminals = all.filter((f) => f.name === "done" || f.name === "error");
     expect(terminals.map((f) => f.name)).toEqual(["done"]);
     const done = terminals[0]?.data as AskedTermAnswer;
-    /* The public shape, unchanged — the same four keys the JSON route sent. */
-    expect(Object.keys(done).sort()).toEqual(["blockId", "lookup", "quote", "term"]);
+    /* The four keys the JSON route sent, and since plan 261002f what became of
+       the term — written by the real store, so this is the route's half of
+       tests/glossary-added-term.test.ts. */
+    expect(Object.keys(done).sort()).toEqual(["added", "blockId", "lookup", "quote", "term"]);
+    expect(["added", "existing", "no-glossary"]).toContain(done.added.kind);
     expect(done.quote).toBe(word);
     expect(done.term).toBe(word.toUpperCase());
     expect(done.blockId).toBe(begin?.blockId);

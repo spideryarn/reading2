@@ -70,7 +70,19 @@ function fileFor(slug: string): string {
   return path.join(ROOT, "data", slug, "glossary-lookups.json");
 }
 
+/**
+ * One lookup as the rollback file carries it. `addedName` is absent on an
+ * ordinary model-entry lookup; when present it is what makes this row a term
+ * the reader added, so a fixture restore must not discard it.
+ */
+export interface StoredGlossaryLookup extends GlossaryLookup {
+  addedName?: string;
+}
+
+/** The live store's read shape: answers only; entry names attach elsewhere. */
 export type LookupsByTerm = Record<string, GlossaryLookup>;
+
+type FixtureLookupsByTerm = Record<string, StoredGlossaryLookup>;
 
 /**
  * Every stored lookup for an article, or an empty object.
@@ -85,7 +97,7 @@ export type LookupsByTerm = Record<string, GlossaryLookup>;
  * unparseable file — went with the writer. Postgres holds that rule now: a
  * lookup is one row, and one row cannot take the rest of them with it.
  */
-export async function loadLookups(slug: string): Promise<LookupsByTerm> {
+export async function loadLookups(slug: string): Promise<FixtureLookupsByTerm> {
   /* Before the try, deliberately. A bad slug is a refusal, not an unreadable
      file — and inside the try it would be caught, logged as a read failure and
      turned into "the stored lookups could not be read", which is both wrong and
@@ -95,7 +107,7 @@ export async function loadLookups(slug: string): Promise<LookupsByTerm> {
     /* `parseJsonFrom`, not `JSON.parse`: V8's parse error quotes the first
        characters of what it was handed, and those characters are a model's
        prose about the article. src/parse-json.ts. */
-    const parsed = parseJsonFrom<{ lookups?: LookupsByTerm }>(
+    const parsed = parseJsonFrom<{ lookups?: FixtureLookupsByTerm }>(
       await readFile(fileFor(slug), "utf8"),
       "glossary-lookups.json",
     );

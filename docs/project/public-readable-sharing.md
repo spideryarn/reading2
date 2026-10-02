@@ -113,6 +113,28 @@ been built. **If a label ever lands beside generated text in the visitor's view,
 sentence has to change with it** — it is written as an admission, and an admission left standing
 after the fix is a lie in the other direction.
 
+## The banner on every shared article
+
+> For anything public readable, let's make sure there's a banner at the top that … highlights the
+> URL where it came from … if you're the … IP owner and you don't want this to be public readable,
+> that email … hello at spideryarn.com and we'll take it down. And … that we explicitly use models
+> that don't train on your content, and then point them to the privacy page.
+>
+> — Greg, 2026-09-29
+
+The page above is where an author has to go looking; this is what they see without looking.
+A visitor's `SharedNotice` (`src/web/PublicChrome.tsx`), the box under the masthead, carries three
+more lines: the source, the takedown offer and the training promise. For a shared upload, the source
+is our found guess at its source, which a visitor was never sent before (`PublicArticle.sourceGuess`).
+The plan is
+[261002g](../plans/261002g-a-banner-on-every-public-readable-article.md).
+
+The rule from this doc's top still holds: **the banner points, it does not restate.** It names
+the mailbox and links `/privacy` § If something here is yours for what taking down means. It makes
+the no-training claim with the same hedge, and links `/privacy` for it.
+`tests/shared-notice-banner.test.tsx` holds the training wording to both pages. The banner does not
+ask for evidence, because `/privacy` promises we won't.
+
 ## Where the code is
 
 | File | What's in it |

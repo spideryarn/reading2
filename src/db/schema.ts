@@ -3733,9 +3733,30 @@ export const glossaryLookups = spideryarn.table(
     model: text("model").notNull(),
     /** ISO 8601 on the artefact: an answer is about the web on the day it was asked. */
     at: timestamp("at", { withTimezone: true }).notNull(),
+    /**
+     * **Set when the reader added this term themselves**, from the glossary's
+     * *Look up a term* box, and then it is the term's name: the row is the
+     * whole entry, not an explanation of one in the blob. Null for every
+     * explanation of a model-written entry.
+     *
+     * Here rather than in a table of its own because an added term has
+     * exactly one finished explanation, and this table is already outside
+     * the glossary document (so *Find more* cannot merge it away) and already
+     * absent from the public read (so a shared link does not publish it) —
+     * the three reasons docs/user-feedback/260904_1301 deferred "add it".
+     * `pgGlossaryLookupStore.save`'s upsert sets only the answer columns, so
+     * *Dig deeper again* keeps the name.
+     * docs/plans/261002f-glossary-add-a-looked-up-term.md.
+     */
+    addedName: text("added_name"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
+    /* `MAX_ASKED_TERM` (src/asked-term.ts), the box's own bound. */
+    check(
+      "glossary_lookups_added_name_length",
+      sql`${t.addedName} is null or char_length(${t.addedName}) between 1 and 80`,
+    ),
     check(
       "glossary_lookups_entry_id_format",
       sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,

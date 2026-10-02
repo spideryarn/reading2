@@ -21,13 +21,6 @@ in this directory records which, and the line comes off.
   [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
   [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
 
-- 2026-10-01 · SPIDERYARN-READING2-8D (the report itself shipped; these are its follow-ups) · may
-  one mode be re-run on Opus without switching the whole article to high-powered AI, and if so what
-  does that one run cost a reader? And is *navigate freely, propose anything that writes or spends,
-  never delete or publish from a sentence* the line for a model that acts on commands? ·
-  [261002c § Questions for Greg](../plans/261002c-commands-do-more-and-an-interface-model-vision.md) ·
-  [note](261001_1124-commands-do-more-and-an-interface-model-vision.md)
-
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,

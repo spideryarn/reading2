@@ -243,7 +243,8 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             and directly beneath it we print where it came from, host and path, as a second visible
             link. Both open your page in a new tab, and somebody reading without an account sees
             those links too. Where the address is one we will not republish, we show no source line
-            at all rather than a guess at one.
+            at all rather than altering it. For an uploaded file, where there was no recorded web
+            address, we may instead show a clearly marked guess at a page that matches it.
           </p>
           {/* **"first in the line of facts under the title", not "above
               everything else"**, which is what this said until it was checked

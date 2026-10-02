@@ -113,6 +113,7 @@ const NONE = {
   searches: [],
   sketch: null,
   navLabelStatus: "ready" as const,
+  sourceGuess: null,
 };
 
 /* ------------------------------------------------------------- debate -- */

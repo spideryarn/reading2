@@ -1012,6 +1012,26 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.filter((r) => r.auth !== null)).toEqual([]);
   });
 
+  it("draws a projected upload-source guess without asking the owner-only route", async () => {
+    served = {
+      ...ARTICLE,
+      sourceGuess: {
+        url: "https://arxiv.org/abs/2401.01234",
+        host: "arxiv.org",
+        kind: "canonical",
+        matchedBy: "arxiv",
+      },
+    };
+    await open();
+
+    expect(host.querySelector<HTMLAnchorElement>("a.origin-guess")?.href).toBe(
+      "https://arxiv.org/abs/2401.01234",
+    );
+    expect(trace.map((r) => [r.method, r.url])).toEqual([
+      ["GET", `/api/public/article/${SLUG}`],
+    ]);
+  });
+
   /**
    * The mode bands are where the private hooks live — `useJobs` polls the job
    * list for ever from three of them — so opening one is the press most likely
@@ -2343,6 +2363,11 @@ describe("a signed-out browser on a shared document", () => {
    * docs/plans/261002b-help-page-code-review-sol.md, and the plan review of
    * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
    */
+  /* The tooltip's words are `data-tip`, not `title`, since 220d1723a moved every
+     gutter control to the house card (BlockLinkCard.tsx § `GUTTER_CONTROL`).
+     This test was written against `title` the same afternoon, and the two met
+     at a merge; reading `title` here asked a question nothing answers any more,
+     and a native `title` coming back would be a second tooltip. */
   it("labels the owner's note in the gutter from the visitor's side", async () => {
     await open("");
 
@@ -2351,7 +2376,9 @@ describe("a signed-out browser on a shared document", () => {
     for (const mark of marks) {
       expect(mark.getAttribute("data-tip")).toMatch(/whoever added this article/);
       expect(mark.getAttribute("data-tip")).not.toMatch(/\byour\b/i);
+      expect(mark.getAttribute("aria-label")).toMatch(/whoever added this article/);
       expect(mark.getAttribute("aria-label")).not.toMatch(/\byour\b/i);
+      expect(mark.hasAttribute("title"), "a native tooltip beside the house one").toBe(false);
     }
   });
 
@@ -3421,7 +3448,8 @@ describe("the same address, as the owner", () => {
    * mounted in `OwnedArticle`. Through the real `App`, because the class is
    * "the hook is wired to what draws it", which a unit test of either half
    * cannot see. A visitor on an upload is the no-POST case at the top of this
-   * file: a `PublicArticle` carries neither `filename` nor `sourceGuess`.
+   * file: its public payload carries no `filename`, and a found `sourceGuess`
+   * is already settled rather than a reason to ask the owner-only route.
    */
   it("asks once where an upload lives on the web, and draws the answer", async () => {
     session.user = { id: "owner-1", email: "greg@example.com" };

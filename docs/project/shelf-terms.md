@@ -188,6 +188,15 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
   `aria-pressed`, the same tooltip. The toggle between the views stays in one place, so focus stays
   on it. Chosen over cards and two-line rows from screenshots, plan
   [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.
+- **Each article link in a row has the paper card** on hover and focus — title, authors and site,
+  the gist (or the abstract, for a paper not yet AI-processed), when it was added and last opened,
+  its length (or its not-yet-processed status), any archive and sharing state, and up to six topics
+  it is in, each with its hue, then *+N more*. Greg: *"add rich tooltips … to the paper-links that
+  are matched for each faceted-text-search-pill"* (`spya-f28vqj`). The topics are over every topic
+  the server chose, not only those drawn, so a card does not change as the view narrows. The card
+  itself is reusable and knows nothing about the topics view that supplied them —
+  [tooltips.md § Where the code is](tooltips.md#where-the-code-is), plan
+  [261002f](../plans/261002f-paper-card-on-topic-article-links.md).
 
 ## Colour says which topics are related
 
@@ -257,7 +266,7 @@ while articles are still being read, a topic can be absent from one answer and p
 | the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
 | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
 | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
-| the More-detail rows: swatch, chip, count bar, links | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
+| the More-detail rows: swatch, chip, count bar, links with the paper card | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
 | a topic's colour from the articles it shares with the others | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 

@@ -126,11 +126,12 @@ import type {
   PublicMeta,
   PublicSearchRun,
   PublicSketch,
+  PublicSourceGuess,
   PublicTimeline,
   PublicSkim,
   PublicTweets,
 } from "../public-types.js";
-import { publicCitationUrl, publicSourceUrl } from "../urls.js";
+import { hostOf, publicCitationUrl, publicSourceUrl } from "../urls.js";
 
 /**
  * The masthead.
@@ -1190,6 +1191,14 @@ export function publicArticle(row: {
   sketch: Sketch | null;
   /** Where the paragraph nav labels are — the column, `not null`, so no `| null`. */
   navLabelStatus: NavLabelStatus;
+  /**
+   * A `found` guess at an upload's source, or `null` for none — the columns
+   * `publicSourceGuessQuery` (src/store/public-reader.ts) selects, **not yet
+   * published**: `publicSourceGuess` below is the policy. Required, so a reader
+   * that forgot to ask is a type error rather than a banner that never names an
+   * upload's source.
+   */
+  sourceGuess: SourceGuessRow | null;
 }): PublicArticle {
   const blocks = row.blocks.map(publicBlock);
   const blocksById = new Map(blocks.map((block): [string, PublicBlock] => [block.id, block]));
@@ -1258,5 +1267,37 @@ export function publicArticle(row: {
        searched crosses as `[]`, which is a state rather than a missing
        artefact. See PublicArticle.searches. */
     searches: publicSearches(row.searches),
+    ...optionalSourceGuess(row.sourceGuess),
   };
+}
+
+/** The columns of a `found` `upload_source_guesses` row the public read selects. */
+type SourceGuessRow = {
+  url: string;
+  kind: PublicSourceGuess["kind"];
+  matchedBy: PublicSourceGuess["matchedBy"];
+};
+
+/**
+ * **A guessed source, as a stranger may see it** — plan 261002g § Decisions 3.
+ *
+ * `url` goes through `publicSourceUrl`, the policy the article's own address
+ * gets in `publicMeta`: no credentials, no query, no private host. `host` is
+ * then derived from the URL that survived, never copied from the stored
+ * `host` column, which no constraint ties to `url` (GPT Sol, plan review
+ * P2-1). A refused address publishes nothing at all, as `publicMeta` does.
+ */
+export function publicSourceGuess(row: SourceGuessRow): PublicSourceGuess | null {
+  const url = publicSourceUrl(row.url);
+  if (url === null) return null;
+  const host = hostOf(url);
+  if (host === "") return null;
+  return { url, host, kind: row.kind, matchedBy: row.matchedBy };
+}
+
+/* A conditional spread, because `exactOptionalPropertyTypes` is on and an
+   absent key is what "nothing to say" means here. */
+function optionalSourceGuess(row: SourceGuessRow | null): { sourceGuess?: PublicSourceGuess } {
+  const guess = row === null ? null : publicSourceGuess(row);
+  return guess === null ? {} : { sourceGuess: guess };
 }

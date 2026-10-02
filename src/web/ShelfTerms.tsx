@@ -31,11 +31,12 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
-import type { LibraryTermsResponse } from "../types.js";
+import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
+import type { PaperTopic } from "./PaperCard.js";
 import { libraryTopicsViewParam } from "./params.js";
 import { availableTopics } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
-import { ShelfTermsDetail } from "./ShelfTermsDetail.js";
+import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { topicHueStops } from "./topic-colour.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -172,7 +173,7 @@ export function ShelfTerms({
   selected,
   onToggle,
   onClear,
-  titleOf,
+  entryOf,
   inScope,
   archived,
 }: {
@@ -183,8 +184,12 @@ export function ShelfTerms({
   selected: readonly string[];
   onToggle: (key: string) => void;
   onClear: () => void;
-  /** The title the card shows, or `undefined` for a slug not on the lists loaded. */
-  titleOf: (slug: string) => string | undefined;
+  /**
+   * The shelf entry for a slug, or `undefined` for one not on the lists
+   * loaded: its title for the chips' cards and the detail rows, and the whole
+   * entry for the paper card on a detail row's links.
+   */
+  entryOf: (slug: string) => LibraryEntry | undefined;
   /** Every slug in scope, before search, Unread or topics: the tooltip's "of 38". */
   inScope: ReadonlySet<string>;
   /** Whether the archive is in scope, which the tooltip names. */
@@ -198,6 +203,22 @@ export function ShelfTerms({
      projection tied to that answer, while still calling the hook on the empty
      early-return path below. */
   const hues = useMemo(() => topicHueStops(terms), [terms]);
+  /* Every topic each article is in, for its paper card: over **every** topic
+     the server chose, not only those drawn, in rank order with the hue each
+     already wears — so a card names the same topics however the view is
+     narrowed (plan 261002f). */
+  const topicsBySlug = useMemo(() => {
+    const by = new Map<string, PaperTopic[]>();
+    for (const t of terms) {
+      const topic = { label: t.label, slot: hues.get(t.key) ?? 0 };
+      for (const a of t.articles) {
+        const list = by.get(a.slug);
+        if (list) list.push(topic);
+        else by.set(a.slug, [topic]);
+      }
+    }
+    return by;
+  }, [terms, hues]);
 
   const reading = pending > 0 && (
     <span className="tw:text-xs tw:text-muted-foreground">
@@ -246,8 +267,9 @@ export function ShelfTerms({
   const tipScope: TermTipScope = {
     inScope,
     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
-    titleOf,
+    titleOf: (slug) => entryOf(slug)?.title,
   };
+  const papers: PaperScope = { entryOf, topicsOf: (slug) => topicsBySlug.get(slug) ?? [] };
 
   /* Every child of this row keeps its position in both views — a view's
      absent parts are `false`, not missing — so React keeps the one toggle
@@ -308,6 +330,7 @@ export function ShelfTerms({
           chosen={chosen}
           onToggle={onToggle}
           scope={tipScope}
+          papers={papers}
         />
       )}
     </div>
