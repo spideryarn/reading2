@@ -32,11 +32,13 @@ import { cloneElement, useEffect, useRef, useState, type ReactElement, type Reac
 import {
   FloatingArrow,
   FloatingDelayGroup,
+  FloatingFocusManager,
   FloatingPortal,
   arrow,
   autoUpdate,
   flip,
   offset,
+  safePolygon,
   shift,
   useDelayGroup,
   useDismiss,
@@ -47,6 +49,7 @@ import {
   useMergeRefs,
   useRole,
   useTransitionStyles,
+  type OpenChangeReason,
   type Placement,
 } from "@floating-ui/react";
 
@@ -107,6 +110,46 @@ interface BaseProps {
    * current (plan 260928e). Default `true`.
    */
   enabled?: boolean;
+  /**
+   * **The pointer and the keyboard can get into the card**, for a card that
+   * holds something to press — a link on to Help, a button. Off by default, and
+   * the default is the point: the spine's cards must *not* take hover, or one
+   * that lands under the pointer sits on the band being pointed at and holds
+   * itself open.
+   *
+   * On, it is three things together, and none of them is useful alone:
+   *
+   *  - `.tooltip-anchor.interactive`, so the card takes pointer events at all
+   *    (tooltip.css; the prose card has used the same class since 2026-08-26).
+   *  - a `safePolygon()` corridor as `useHover`'s `handleClose`, so the pointer
+   *    can cross the gap from the trigger to the card — diagonally included —
+   *    without the card closing under it. Leaving any other way closes it as
+   *    before.
+   *  - a non-modal `FloatingFocusManager`, because the card is portalled to the
+   *    end of `<body>` and Tab from the trigger would otherwise skip it
+   *    entirely. Opening never *moves* focus — a card opened by hovering must
+   *    not take the keyboard's place — it only makes the card reachable, and
+   *    the card closes when Tab carries focus out of it.
+   *
+   * And two rules about focus that the library does not make on its own,
+   * both from GPT Sol's plan review (F1, F2) and both in `changeOpen` below:
+   * the pointer leaving does not close a card **the keyboard is inside**,
+   * and Escape from inside one puts focus back on the trigger rather than
+   * dropping it on `<body>` with the link it was on.
+   *
+   * **It is a `dialog`, not a `tooltip`, and it needs a name** — ARIA's tooltip
+   * may not hold anything focusable, and a non-modal dialog is what the W3C's
+   * own tooltip pattern points a card with a link at. So the card is no longer
+   * the trigger's `aria-describedby`; the trigger says it opens a dialog
+   * (`aria-haspopup`, `aria-controls`) and `label` is what that dialog is
+   * announced as. Hence an object rather than a boolean: an interactive card
+   * without a name does not compile.
+   *
+   * WCAG 2.1 § 1.4.13 asks for exactly this of a card with something in it.
+   * Greg chose it per use, 2026-10-02 (docs/project/tooltips.md § A card the
+   * pointer can enter).
+   */
+  interactive?: { label: string } | undefined;
 }
 
 /**
@@ -141,6 +184,7 @@ export function Tooltip({
   keepSide = false,
   className,
   enabled = true,
+  interactive,
   open: controlledOpen,
   onOpenChange,
 }: Props) {
@@ -156,9 +200,41 @@ export function Tooltip({
   }, [disabledWhileOpen, setOpen]);
   const arrowRef = useRef<SVGSVGElement>(null);
 
-  const { refs, floatingStyles, context } = useFloating({
+  /* The two elements, for `changeOpen`, which is handed to `useFloating`
+     before `useFloating` has returned them. Written on every render below. */
+  const placed = useRef<{ reference: Element | null; floating: HTMLElement | null }>({
+    reference: null,
+    floating: null,
+  });
+  /**
+   * **What an interactive card does about focus when something asks it to
+   * close.** A no-op for every other card: `setOpen`, unchanged.
+   *
+   * - **Hover leaving does not close it while focus is inside.** `safePolygon`
+   *   guards the pointer's trip and knows nothing about the keyboard, so
+   *   without this a reader on the card's link who nudges the mouse off the
+   *   trigger loses the link under the focus, and focus falls to `<body>`.
+   * - **Escape from inside puts focus back on the trigger.** The focused link
+   *   is about to unmount; `returnFocus` is off (FocusReach says why), so
+   *   nothing else would. Only for Escape: an outside press is a click that
+   *   is about to put focus where the reader clicked, and Tab out has already
+   *   moved it on.
+   */
+  const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
+    if (interactive && !next) {
+      const { reference, floating } = placed.current;
+      const active = floating?.ownerDocument.activeElement ?? null;
+      if (floating && active && floating.contains(active)) {
+        if (reason === "hover" || reason === "safe-polygon") return;
+        if (reason === "escape-key" && reference instanceof HTMLElement) reference.focus();
+      }
+    }
+    setOpen(next);
+  };
+
+  const { refs, elements, floatingStyles, context } = useFloating({
     open,
-    onOpenChange: setOpen,
+    onOpenChange: changeOpen,
     placement,
     // Reposition on scroll and resize for as long as the tooltip is open. The
     // spine's reference elements are inside a `position: fixed` rail, so they
@@ -178,6 +254,8 @@ export function Tooltip({
       arrow({ element: arrowRef, padding: 8 }),
     ],
   });
+
+  placed.current = { reference: elements.domReference, floating: elements.floating };
 
   // Zero when there is no <TooltipGroup> above us, in which case we want our
   // own delay. A group always supplies an object, which is truthy.
@@ -210,18 +288,17 @@ export function Tooltip({
        * whatever touch behaviour it had.
        */
       mouseOnly: controlled,
-      // Every card here is read, not clicked: the pointer never needs to
-      // travel into one, and a panel that lingered while the pointer crossed
-      // it would sit on top of the thing being pointed at. (A `safePolygon()`
-      // corridor lived here for the context pills, whose tooltips carried
-      // links; the pills are gone — docs/project/column-context.md.)
-      handleClose: null,
+      // Most cards are read, not clicked: the pointer never needs to travel
+      // into one, and a panel that lingered while the pointer crossed it would
+      // sit on top of the thing being pointed at. A card with something to
+      // press asks for the corridor — `interactive` above.
+      handleClose: interactive ? safePolygon() : null,
     }),
     // Keyboard parity: the spine's bands are real buttons, so tabbing through
     // them should show the same detail hovering does.
     useFocus(context, { enabled }),
     useDismiss(context, { enabled }),
-    useRole(context, { role: "tooltip" }),
+    useRole(context, { role: interactive ? "dialog" : "tooltip" }),
   ]);
   const { getReferenceProps, getFloatingProps } = interactions;
 
@@ -280,11 +357,15 @@ export function Tooltip({
       {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
       {isMounted && (
         <FloatingPortal>
+          <FocusReach on={interactive !== undefined} context={context}>
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="tooltip-anchor"
-            {...getFloatingProps()}
+            className={interactive ? "tooltip-anchor interactive" : "tooltip-anchor"}
+            /* The name goes through `getFloatingProps` beside the role `useRole`
+               put there, so the two arrive together — and `undefined` for a
+               plain tooltip, which takes its name from nothing. */
+            {...getFloatingProps({ "aria-label": interactive?.label })}
           >
             <div className={`tooltip${className ? ` ${className}` : ""}`} style={styles}>
               {content}
@@ -308,9 +389,38 @@ export function Tooltip({
               />
             </div>
           </div>
+          </FocusReach>
         </FloatingPortal>
       )}
     </>
+  );
+}
+
+/**
+ * **Tab reaches an interactive card's contents; nothing else changes.**
+ *
+ * `modal={false}` puts focus guards beside the trigger and the card, so Tab
+ * from the trigger lands on the card's first control and Tab past its last
+ * goes on to whatever followed the trigger. `initialFocus={-1}` and
+ * `returnFocus={false}` because the card opens on *hover* too, and a pointer
+ * resting on an (i) must not move the keyboard's place — opening or closing it
+ * leaves focus exactly where it was. `closeOnFocusOut` (the default) is what
+ * closes it once focus has left both.
+ */
+function FocusReach({
+  on,
+  context,
+  children,
+}: {
+  on: boolean;
+  context: Parameters<typeof FloatingFocusManager>[0]["context"];
+  children: ReactElement;
+}) {
+  if (!on) return children;
+  return (
+    <FloatingFocusManager context={context} modal={false} initialFocus={-1} returnFocus={false}>
+      {children}
+    </FloatingFocusManager>
   );
 }
 

@@ -69,6 +69,30 @@ describe("ModeSurface's about", () => {
     expect(card.indexOf(MODE_CATALOG.tweets.how)).toBeLessThan(card.indexOf("12 posts."));
   });
 
+  /* Plan 261002e: the one card in the corner with something to press, and so
+     the one that lets the pointer in. */
+  it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
+    draw(
+      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+        body
+      </ModeSurface>,
+    );
+    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
+    const card = document.querySelector(".band-about-card")!;
+    const link = card.querySelector("a")!;
+    expect(link.textContent).toBe("More in Help →");
+    expect(link.getAttribute("href")).toBe("/help#mode-tweets");
+    expect(card.textContent?.endsWith("More in Help →")).toBe(true);
+    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
+  });
+
+  it("has no link, and stays a card the pointer cannot enter, for a band with no mode", async () => {
+    draw(<ModeSurface label="Tweets" about="What this is.">body</ModeSurface>);
+    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
+    expect(document.querySelector(".band-about-card a")).toBeNull();
+    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(false);
+  });
+
   it("has an (i) from the mode alone, when there is nothing to add yet", () => {
     draw(<ModeSurface label="Tweets" mode="tweets" about={null}>body</ModeSurface>);
     expect(host.querySelector("aside > .band-about")).not.toBeNull();

@@ -58,6 +58,7 @@
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import type { Mode } from "../modes.js";
 import { AboutMode, BandAbout } from "./BandAbout.js";
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 
 /**
  * Everything an `<aside>` takes that this component does not name itself.
@@ -220,7 +221,7 @@ export function ModeSurface({
   return (
     <aside {...rest} ref={ref} className={className} aria-label={label}>
       {hasAbout && (
-        <BandAbout label="About this mode">
+        <BandAbout label="About this mode" help={mode ? helpHref(modeAnchor(mode)) : undefined}>
           {mode && <AboutMode mode={mode} />}
           {extra && about}
         </BandAbout>
