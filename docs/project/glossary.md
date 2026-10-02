@@ -954,30 +954,43 @@ above. [`messages.ts`](../../src/messages.ts) § glossary has the sentences;
 [`tests/glossary-asked-term.test.ts`](../../tests/glossary-asked-term.test.ts) has a case per cause,
 matched on the code and never on the wording.
 
-#### Nothing is stored, and that is deferred rather than forgotten
+#### A finished answer adds the term, for the owner only
 
-**No entry is created. The answer lives in the panel until the reader leaves the article.** The
-reader asked for it to be added to the list, and that half is not implementable as it stands — three
-reasons, in the order they were found:
+Since 2026-10-02 ([plan 261002f](../plans/261002f-glossary-add-a-looked-up-term.md)), **a
+finished answer adds the term to the owner's own glossary**: a new row, labelled *added by you*,
+whose explanation is the answer they just read, and whose underlines appear in the prose. The box
+selects the new row and empties itself, because the answer now lives in the row. An answer that
+stopped part-way adds nothing. If an entry already names the same words, nothing is added and the
+answer says *Already in the glossary* with *Show it*, or *Unhide* if the reader hid that entry. An
+article with no glossary yet adds nothing and says so. Getting rid of an added term is the row's
+ordinary [Hide](#hiding-an-entry).
 
-1. **The glossary is one JSON document**, deliberately: entries are generated wholesale and
-   deduplicated wholesale, so `article_revisions.glossary` holds the lot
-   ([`schema.ts`](../../src/db/schema.ts) § `glossary`). That comment already names the condition —
-   *"if a reader ever edits or annotates one, that is the day this becomes a table"*.
-2. **[Find more terms](#finding-more) recomputes and merges**, so a reader's entry
-   could be merged away by a button two lines further down the same panel.
-3. **A shared article publishes the whole glossary blob**
-   ([`public-reader.ts`](../../src/store/public-reader.ts)), and the public DTO strips only
-   `entry.lookup` and the provenance ([`public-types.ts`](../../src/public-types.ts)) — so **a term
-   the reader added would go out with an already-shared link.** All three verified in the code on
-   2026-09-04; the third is why v1 stores nothing rather than storing carefully.
+It was deferred for a month, for three reasons found on 2026-09-04. Each is answered by **where the
+term is stored**:
 
-Persistence is its own piece of work: an additive `reader_glossary_entries` table keyed by owner,
-article and revision, merged into the owner's response only, and a decision recorded about the public
-projection. Until then the Look up button's tooltip says *"Not added to the list"*, so the answer's
-disappearance reads as the design rather than as a failure. It was a line of its own under the box
-until 2026-09-29, when Greg asked for it to go to save a phone two lines
-([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)).
+| The 2026-09-04 reason | Why it no longer applies |
+|---|---|
+| The glossary is one JSON document, generated and deduplicated wholesale (`article_revisions.glossary`) | An added term is **not in the document**. It is a `glossary_lookups` row with `added_name` set: the name the reader typed, beside the answer that is its explanation. |
+| [Find more terms](#finding-more) recomputes and merges the document | It cannot touch a row outside the document. If a later *Find more* writes an entry that names the same words, the model's entry is drawn and the added one is not, and the reader's answer moves to it if it has none of its own. |
+| A shared article publishes the whole glossary blob ([`public-reader.ts`](../../src/store/public-reader.ts)) | The public read reads only the blob and never `glossary_lookups`. Added terms are attached at the owner's read seam (`loadGlossary`) and **only the owner sees them**, as with hides. The tooltip says so. |
+
+The answer follows a later model entry; a hide does not. The hide is keyed to
+the added entry's id, and carrying it onto a different model entry would leave
+*Unhide* deleting the wrong row.
+
+The pieces: `addTerm` in [`pg-lookups.ts`](../../src/store/pg-lookups.ts) (one transaction that
+locks the article row, so two tabs adding *attention head* and *attention heads* make one entry)
+and [`glossary-added.ts`](../../src/glossary-added.ts), which builds the owner's list for both
+the write's "already there" check and the read. Chat's glossary tool lists an added term by name
+with a note that the reader added it, and not the answer, which can carry web text.
+
+**Every finished look-up adds; there is no separate *Add* button.** The button would have to store
+an answer the server had already sent and forgotten — either trusting the client to send it back,
+or keeping every answer somewhere pending. If adding everything turns out to be noisy, the cheap
+change is a choice made before the call (*Look up* or *Look up and add*), not a pending store.
+
+**Still not built:** publishing an added term with a shared article, which needs a decision about
+the public projection; removing one outright rather than hiding it.
 
 <a id="the-allowance-dig-deeper-has-and-look-up-does-not"></a>
 
@@ -1437,10 +1450,9 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   transport out of `src/explain.ts` into something both callers share — worth doing, not done, and
   the reason it is worth doing is that the prompt is the *only* part of that file a lookup wants to
   differ on.
-- **A term the reader looked up cannot be kept**, which is half of what they asked for —
-  [Looking a term up](#nothing-is-stored-and-that-is-deferred-rather-than-forgotten) has the three
-  reasons and the shape of the table it needs. The sharpest is that the glossary blob is published
-  with a shared article, so this is a projection decision before it is a schema one.
+- **A term the reader added is theirs alone** — a visitor to the shared article does not see it
+  ([A finished answer adds the term](#a-finished-answer-adds-the-term-for-the-owner-only)).
+  Publishing it would be a decision about the public projection, not yet made.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —

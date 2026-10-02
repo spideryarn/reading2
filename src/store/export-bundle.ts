@@ -609,7 +609,7 @@ one thing that will make the rest of these files make sense.
       tree.json            The tree, and the summaries. One nested structure, not two:
                            each node carries its own gist at each level of granularity.
       glossary.json        Terms the article assumes you know, and what they mean here.
-      glossary-lookups.json Web lookups you asked for on a glossary term.
+      glossary-lookups.json Terms you added by looking them up, and web lookups on glossary terms.
       glossary-hidden.json The glossary terms you hid from your own view of the article.
       citation-finds.json  Pages found on the web for cited works you asked about.
       citation-investigations.json
@@ -796,7 +796,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "content/assets.json": "Every image the article referenced: source URL, hash, type, size. Names only.",
   "augmentations/tree.json": "The tree and the summaries — one nested structure, a gist on every node.",
   "augmentations/glossary.json": "Terms the article assumes you know, and what they mean here.",
-  "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
+  "augmentations/glossary-lookups.json":
+    "Terms you added by looking them up, and web lookups on glossary terms.",
   "augmentations/glossary-hidden.json": "The glossary terms you hid from your own view of the article.",
   "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/citation-investigations.json":

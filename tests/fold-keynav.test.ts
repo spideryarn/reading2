@@ -132,3 +132,18 @@ describe("a jump into a folded section", () => {
     expect(isFolded("spya-b2")).toBe(false);
   });
 });
+
+/**
+ * **`measureRow` answers row 0 when no row can**, which its callers assume
+ * (jump-history.ts, ReturnChip.tsx, DiagramPanel's `measuredRow ?? atRow`).
+ * Folding taught `activeSectionIndex` to answer -1 when handed a `skip` and no
+ * eligible row, and that -1 reached DiagramPanel as a real row, so its footer
+ * card described nothing — caught by diagram-panel-hover.test.tsx.
+ */
+describe("measureRow with nothing to measure", () => {
+  it("answers 0 rather than -1 when the page has no article rows", async () => {
+    const { measureRow } = await import("../src/web/keynav.js");
+    document.body.innerHTML = "";
+    expect(measureRow()).toBe(0);
+  });
+});

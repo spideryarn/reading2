@@ -1385,6 +1385,12 @@ async function readGlossary(ctx: ToolContext): Promise<ToolOutcome> {
             e.senseHere ? `  what the author means: ${e.senseHere}` : null,
             e.background ? `  what you need to bring: ${e.background}` : null,
             !e.senseHere && !e.background && e.gloss ? `  ${e.gloss}` : null,
+            /* A term the reader added from *Look up a term* (plan 261002f)
+               has neither half, only the answer they read — which can carry
+               web text, and this tool has never passed a `lookup` through, so
+               it does not start here. The name and the fact are enough for
+               chat to know the reader wanted it. */
+            e.added ? "  (the reader looked this term up and added it themselves)" : null,
           ]
             .filter((l) => l !== null)
             .join("\n"),

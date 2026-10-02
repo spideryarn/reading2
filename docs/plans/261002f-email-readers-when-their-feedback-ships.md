@@ -179,7 +179,8 @@ one should be skipped as an admin's — which is itself the check that the admin
 - **A view of the ledger on `/admin`.** The deploy prints it; the table can be read.
 - **"Declined" and "awaiting" emails** — Greg asked for shipped.
 - **HTML** — this is a short reply and plain text reads as one.
-- **The toast sentence** above.
+- **The toast sentence** above. Declined, Greg, 2026-10-02: *"Let's just surprise them with the
+  email rather than setting the expectation."*
 
 ## Review log
 

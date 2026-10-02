@@ -167,7 +167,14 @@ export function measureRow(): number {
   const held = anchoredRow();
   if (held !== null) return held;
   const { tops, skip } = rowTops();
-  return activeSectionIndex(tops, readingLine(), skip);
+  /* **Row 0 when no row can answer**, which is this function's contract and
+     what its callers assume (jump-history.ts and ReturnChip.tsx say so;
+     DiagramPanel reads `measuredRow ?? atRow` and indexes TermJump's rows).
+     `activeSectionIndex` returns -1 once it is handed a `skip` and finds no
+     eligible row. Here that means no rows on the page: folding always leaves
+     its heading rows visible. The -1 reached DiagramPanel as a real row, so
+     its card described nothing. */
+  return Math.max(0, activeSectionIndex(tops, readingLine(), skip));
 }
 
 /** The anchored arrival's index among the article's rows, or `null`. */

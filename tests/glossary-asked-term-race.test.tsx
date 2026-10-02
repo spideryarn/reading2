@@ -48,6 +48,7 @@ const ANSWER: AskedTermAnswer = {
   term: "attention head",
   blockId: "spya-bbbbbb" as AskedTermAnswer["blockId"],
   quote: "Attention Heads",
+  added: { kind: "no-glossary" },
   lookup: {
     answer: "An answer about attention heads.",
     citations: [],

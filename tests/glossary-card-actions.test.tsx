@@ -289,3 +289,26 @@ describe("the card's owner actions", () => {
     expect(button("Hide")?.disabled).toBe(true);
   });
 });
+
+describe("the card's label on a stored answer", () => {
+  /* Plan 261002f's browser check: an added term's answer, which ran no
+     search, was labelled "checked on the web" on the card while the band
+     said "no web search". */
+  const answered = (searches: number): GlossaryEntry => ({
+    ...TERM,
+    lookup: { answer: "What it is.", citations: [], searches, model: "m", at: "2026-10-02T00:00:00.000Z" },
+  });
+
+  it("says the web only when the model searched it", () => {
+    paint([answered(0)], actionsWith());
+    hover(mark());
+    expect(card()?.textContent).toContain("without a web search");
+    expect(card()?.textContent).not.toContain("checked on the web");
+  });
+
+  it("and says it when it did", () => {
+    paint([answered(2)], actionsWith());
+    hover(mark());
+    expect(card()?.textContent).toContain("checked on the web");
+  });
+});

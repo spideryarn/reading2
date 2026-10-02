@@ -376,6 +376,9 @@ export async function seedGlossaryLookupsFromFiles(slug: string): Promise<number
       searches: lookup.searches,
       model: lookup.model,
       at: new Date(lookup.at),
+      /* Present only for a term added from the glossary's box. Dropping it
+         restores the answer but loses the entry the answer belongs to. */
+      addedName: lookup.addedName ?? null,
     });
   }
   return entries.length;

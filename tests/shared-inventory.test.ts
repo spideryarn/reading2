@@ -323,6 +323,9 @@ describe("the sweep over the modes", () => {
  */
 const WIRE_ROW = {
   meta: "provenance",
+  /* A shared upload's found source guess — the same row's *link back to the
+     original*, for a file (plan 261002g). */
+  sourceGuess: "provenance",
   blocks: "text",
   assets: "pictures",
   /* The tree is two rows, because it is two things the owner recognises: the

@@ -562,6 +562,11 @@ describe("the one query that lists articles for nobody in particular", () => {
            an earlier statement.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
         "publicSearchesQuery",
+        /* Added 2026-10-02, for the same reason again: the join back to
+           `articles` re-applies `publicSlug` to an `upload_source_guesses`
+           read. docs/plans/261002g-a-banner-on-every-public-readable-article.md
+           § Decisions 3; tests/public-reads.test.ts reads its SQL. */
+        "publicSourceGuessQuery",
       ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },

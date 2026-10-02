@@ -33,9 +33,10 @@ import { rowWork } from "../DebatePanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
-import { Tooltip } from "../Tooltip.js";
+import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
 import { type HeadStep, type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
+import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
@@ -54,10 +55,17 @@ const PROVENANCE_TIP = {
  * instead and reports once: the reader loses a note, not the prose. GPT Sol,
  * F3 on the plan.
  */
-export function MarginNotesSlot({ notes }: { notes: readonly MarginaliaNote[] }) {
+export function MarginNotesSlot({
+  notes,
+  viewer,
+}: {
+  notes: readonly MarginaliaNote[];
+  /** Whose comments these are, for their card: the reader's own, or the owner's to a visitor. */
+  viewer: "owner" | "visitor";
+}) {
   return (
     <NoteBoundary>
-      <MarginNotes notes={notes} />
+      <MarginNotes notes={notes} viewer={viewer} />
     </NoteBoundary>
   );
 }
@@ -87,33 +95,47 @@ class NoteBoundary extends Component<{ children: ReactNode }, { broken: boolean 
  * **What a question note is, on hover** — its rule is a bare line beside some
  * blocks and nothing else said so. Greg, 2026-10-01 (SPIDERYARN-READING2-84):
  * *"What are they for? They should ideally have tooltips to explain
- * themselves."* A native `title`, as the gutter's controls use; nothing on a
- * tap yet. Depth 0 is the article's own question (notes.ts).
+ * themselves."* The house card since 261002g (tips.ts). **A button with a card
+ * of its own**, like the idea stamp, rather than the delegated card the shut
+ * lines use: a question has nothing to press, so the card is the only thing a
+ * keyboard or a finger could reach, and the delegated card answers neither
+ * (GPT Sol, plan review). One per part, so the instance each costs is a few.
+ * Depth 0 is the article's own question (notes.ts).
  */
-const QUESTION_TIP = (depth: number): string =>
-  depth === 0
-    ? "The question the whole article answers."
-    : "The question this part of the article answers. Read on to find the answer.";
+function QuestionNote({ depth, text }: { depth: number; text: string }) {
+  const [open, setOpen] = useState(false);
+  const tip = MARG_TIPS[depth === 0 ? "question-article" : "question-part"];
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={setOpen}
+      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+    >
+      <button
+        type="button"
+        className="marg-question"
+        data-depth={depth}
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {text}
+      </button>
+    </Tooltip>
+  );
+}
 
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
-function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
+function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; viewer: "owner" | "visitor" }) {
   useRenderCount("MarginNotes");
   return (
     <div className="marg-note" data-marg-note="">
       {notes.map((note) => {
         switch (note.kind) {
           case "question":
-            return (
-              <p
-                key={`q${note.depth}`}
-                className="marg-question"
-                data-depth={note.depth}
-                title={QUESTION_TIP(note.depth)}
-              >
-                {note.text}
-              </p>
-            );
+            return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
             return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
           case "faq":
@@ -123,7 +145,7 @@ function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
           case "citation":
             return <CitationNote key="citation" items={note.items} />;
           case "comment":
-            return <CommentNote key="comment" items={note.items} />;
+            return <CommentNote key="comment" items={note.items} viewer={viewer} />;
           default: {
             const never: never = note;
             return never;
@@ -149,13 +171,17 @@ function ShutNote({
   stamp,
   tip,
   line,
+  lineVoice,
   children,
 }: {
   kind: string;
   stamp: string;
-  /** What this kind of line is, on hover — every mark explains itself. */
-  tip: string;
+  /** What this kind of line is and where it came from, on hover — every mark
+      explains itself. A key into tips.ts; the delegated card draws it. */
+  tip: MargTipKey;
   line: string;
+  /** Whose words `line` is: the one item's, or ours for a count (fonts.md). */
+  lineVoice: Voice;
   /** The open half; null when there is nothing more to show than the line. */
   children: ReactNode | null;
 }) {
@@ -163,12 +189,13 @@ function ShutNote({
   const panel = useId();
   const label = (
     <span className="marg-shut-label">
-      <span className="marg-stamp">{stamp}</span> <span className="marg-shut-line">{line}</span>
+      <span className="marg-stamp">{stamp}</span>{" "}
+      <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
     </span>
   );
   if (children === null) {
     return (
-      <p className="marg-shut" data-kind={kind} title={tip}>
+      <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
         {label}
       </p>
     );
@@ -178,7 +205,7 @@ function ShutNote({
       <button
         type="button"
         className="marg-shut-button"
-        title={tip}
+        data-marg-tip={tip}
         aria-expanded={open}
         aria-controls={panel}
         onClick={() => setOpen((was) => !was)}
@@ -201,13 +228,17 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
     <ShutNote
       kind="faq"
       stamp="FAQ"
-      tip="A question a careful reader might ask, which this passage answers. From FAQ mode."
+      tip="faq"
       line={only ? only.question.question : plural(items.length, "question", "questions")}
+      lineVoice={only ? "ai" : "ui"}
     >
       {items.map(({ question, quote, morePassages }) => (
         <div key={question.id} className="marg-open-item">
-          {!only && <p className="marg-open-head">{question.question}</p>}
-          <p className="marg-open-quote">Answered here: “{quote}”</p>
+          {!only && <p className={withVoice("marg-open-head", "ai")}>{question.question}</p>}
+          {/* Our words, then the article's. */}
+          <p className="marg-open-quote">
+            Answered here: “<span className="marg-faq-quote">{quote}</span>”
+          </p>
           {morePassages > 0 && (
             <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
           )}
@@ -226,25 +257,30 @@ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
   unclear: "discusses",
 };
 
+/** A page's headline is its own, unless the model read one off it (`titleIsAI`,
+    as the band's `dbt-title-ai`); a page's own words are third party, so ours. */
+const headlineVoice = (row: MarginClaim): Voice => (rowWork(row).titleIsAI ? "ai" : "ui");
+
 function DebateNote({ items }: { items: readonly MarginClaim[] }) {
   const only = items.length === 1 ? items[0] : undefined;
   return (
     <ShutNote
       kind="debate"
       stamp={only ? RELATION_WORD[only.relation] : "Debate"}
-      tip="A page elsewhere on the web that answers a claim made here, and how it bears on it. From Debate mode."
+      tip="debate"
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
+      lineVoice={only ? headlineVoice(only) : "ui"}
     >
       {items.map((row) => (
         <div key={row.id} className="marg-open-item">
           <p className="marg-open-head">
             {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
-            <a href={row.url} target="_blank" rel="noreferrer noopener">
+            <a href={row.url} target="_blank" rel="noreferrer noopener" className={voiceClass(headlineVoice(row))}>
               {rowWork(row).headline}
             </a>
           </p>
           <p className="marg-open-quote">“{row.sourceQuote}”</p>
-          {row.applies && <p>{row.applies}</p>}
+          {row.applies && <p className="marg-debate-applies">{row.applies}</p>}
         </div>
       ))}
     </ShutNote>
@@ -257,8 +293,9 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
     <ShutNote
       kind="citation"
       stamp="Cites"
-      tip="A work the piece cites here for the first time, and why. From Citations mode."
+      tip="citation"
       line={only ? only.title : plural(items.length, "work", "works")}
+      lineVoice="ui"
     >
       {items.map((work) => {
         const by = byLineOf(work);
@@ -266,7 +303,7 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
           <div key={work.id} className="marg-open-item">
             {!only && <p className="marg-open-head">{work.title}</p>}
             {by && <p className="marg-open-by">{by}</p>}
-            <p>{work.why}</p>
+            <p className="marg-cite-why">{work.why}</p>
           </div>
         );
       })}
@@ -276,18 +313,19 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
 
 /** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
     them to the gutter's mark. */
-function CommentNote({ items }: { items: readonly MarginComment[] }) {
+function CommentNote({ items, viewer }: { items: readonly MarginComment[]; viewer: "owner" | "visitor" }) {
   const only = items.length === 1 ? items[0] : undefined;
   return (
     <ShutNote
       kind="comment"
       stamp="Note"
-      tip="A comment on this passage. All of them are in the drawer at the foot of the window."
+      tip={viewer === "owner" ? "comment-own" : "comment-owner"}
       line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
+      lineVoice={only?.body ? "reader" : "ui"}
     >
       {items.map((c) => (
         <div key={c.id} className="marg-open-item">
-          {c.body && <p>{c.body}</p>}
+          {c.body && <p className="marg-cmt-body">{c.body}</p>}
           {c.answer && <p className="marg-open-answer">{c.answer}</p>}
         </div>
       ))}
@@ -314,6 +352,7 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
           <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
           <p className="marg-idea-statement">{note.statement}</p>
           <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
+          <p className="tip-soon-how">{IDEA_ORIGIN}</p>
         </>
       }
     >
@@ -364,7 +403,7 @@ export function MarginaliaHead({
     );
   }
   if (path.length === 0 && arc === null) return null;
-  /* **Orientation, not a summary**: the arc cut at three, the whole of it in a
+  /* **Orientation, not a summary**: the arc cut at four (261002g), the whole of it in a
      card on hover, focus or tap. A head that grew to the arc's full six or
      seven lines dominated the margin it is meant to sit quietly at the top of
      (GPT Astra's design pass, 2026-10-01).
@@ -404,7 +443,12 @@ function PathStep({ title, voice, depth }: { title: string; voice: Voice; depth:
       keepSide
       open={open}
       onOpenChange={setOpen}
-      content={<p className={voiceClass(voice)}>{title}</p>}
+      content={
+        <>
+          <p className={voiceClass(voice)}>{title}</p>
+          <p className="tip-soon-how">{PATH_ORIGIN[voice]}</p>
+        </>
+      }
     >
       <button
         type="button"
@@ -427,7 +471,12 @@ function ArcLine({ arc }: { arc: string }) {
       keepSide
       open={open}
       onOpenChange={setOpen}
-      content={<p className="marg-arc-full">{arc}</p>}
+      content={
+        <>
+          <p className="marg-arc-full">{arc}</p>
+          <p className="tip-soon-how">{ARC_ORIGIN}</p>
+        </>
+      }
     >
       <button
         type="button"

@@ -462,9 +462,10 @@ function OriginLine({
   /**
    * **Where we think an upload came from**, drawn after the *uploaded* words
    * and only there — `GuessedSourceLink`. Read only when `origin` is
-   * `"upload"`, which is already owner-only; the payload a visitor gets carries
-   * none anyway (src/web/article/access.ts), so that is two gates, as for
-   * `SharingMark`.
+   * `"upload"`, which is owner-only. A visitor's payload does carry a found
+   * guess since 2026-10-02, and it is drawn in their banner rather than here
+   * (PublicChrome.tsx § `SharedNotice`, plan 261002g), so `origin` is the gate
+   * that keeps it off a visitor's masthead.
    */
   guess: SourceGuess | undefined;
 }) {
@@ -587,16 +588,24 @@ function OriginLine({
 }
 
 /**
- * **The card on a guessed address**, one per kind — shared by the masthead and
- * the metadata page, so the two cannot come to explain the same link
- * differently. `ControlTip`'s rule holds: the first paragraph is how we found
- * it, the second is what it does not promise.
+ * **The card on a guessed address**, one per kind — shared by the masthead, the
+ * metadata page and a visitor's banner, so the three cannot come to explain the
+ * same link differently. `ControlTip`'s rule holds: the first paragraph is how
+ * we found it, the second is what it does not promise.
+ *
+ * **`viewer` changes whose file it is, and nothing else.** The owner uploaded
+ * it, so it is *your file*; a visitor did not, so it is *the uploaded file*,
+ * and the reason we cannot be sure is that it arrived as a file. Plan 261002g.
  */
-function guessTip(guess: Extract<SourceGuess, { status: "found" }>): {
+function guessTip(
+  guess: Extract<SourceGuess, { status: "found" }>,
+  viewer: GuessViewer,
+): {
   head: string;
   what: string;
   how: string;
 } {
+  const file = viewer === "owner" ? "your file" : "the uploaded file";
   if (guess.kind === "canonical") {
     /* A `canonical` is only ever a verified DOI or arXiv id
        (src/source-guess.ts § `isSamePaper`), so `content` should not reach
@@ -609,16 +618,22 @@ function guessTip(guess: Extract<SourceGuess, { status: "found" }>): {
           : "its page";
     return {
       head: "Our guess at where this came from",
-      what: `We searched the web for your file and found ${page} — the title and identifier match, and the first author or the paper's text confirms it is the same paper.`,
-      how: "You uploaded the file, so we can't be sure it's the original.",
+      what: `We searched the web for ${file} and found ${page} — the title and identifier match, and the first author or the paper's text confirms it is the same paper.`,
+      how:
+        viewer === "owner"
+          ? "You uploaded the file, so we can't be sure it's the original."
+          : "This piece was uploaded as a file rather than added from a web address, so we can't be sure it's the original.",
     };
   }
   return {
-    head: "A page that matches your file",
-    what: "We searched the web and found a page with the same title and text; when your file names a first author, that author matches too.",
+    head: viewer === "owner" ? "A page that matches your file" : "A page that matches this file",
+    what: `We searched the web and found a page with the same title and text; when ${file} names a first author, that author matches too.`,
     how: "It may be a copy rather than the original.",
   };
 }
+
+/** Who is looking at a guessed address — `guessTip` says what it changes. */
+export type GuessViewer = "owner" | "visitor";
 
 /**
  * **A guessed address for an uploaded paper, host first, with a question mark
@@ -641,23 +656,27 @@ function guessTip(guess: Extract<SourceGuess, { status: "found" }>): {
  * is a sink and one test here costs nothing: anything else draws no link.
  *
  * Exported for the metadata page (Metadata.tsx § `Origin`), which draws the
- * same link after its own lead-in.
+ * same link after its own lead-in, and for a visitor's banner
+ * (PublicChrome.tsx § `SharedNotice`), which draws it with `viewer="visitor"`.
  */
 export function GuessedSourceLink({
   guess,
   className,
+  viewer = "owner",
 }: {
   guess: Extract<SourceGuess, { status: "found" }>;
   className: string;
+  /** `"visitor"` from the banner on a shared upload — `guessTip`. */
+  viewer?: GuessViewer;
 }) {
   if (!isWebUrl(guess.url)) return null;
   const parts = addressParts(guess.url);
-  const tip = guessTip(guess);
+  const tip = guessTip(guess, viewer);
   const where = parts?.host ?? guess.host;
   const label =
     guess.kind === "canonical"
       ? `Our guess at the original, at ${where}`
-      : `A page that matches your file, at ${where}`;
+      : `A page that matches ${viewer === "owner" ? "your" : "this"} file, at ${where}`;
   return (
     <Tooltip
       placement="bottom"
@@ -686,7 +705,8 @@ export function GuessedSourceLink({
  *
  * Not in src/urls.ts, which is where every *decision* about a URL lives. This is
  * a decision about type: it exists so the host can be the part that survives a
- * narrow window, and it has one caller.
+ * narrow window. Exported since 2026-10-02 for the visitor's banner, which
+ * draws the same address the same way (PublicChrome.tsx § `SharedNotice`).
  *
  * ## Three things it gets right that the first version did not
  *
@@ -713,7 +733,7 @@ export function GuessedSourceLink({
  * link stays, because a `javascript:` value cannot get this far and the reader
  * is entitled to the way out — only the *printing* goes.
  */
-function addressParts(url: string): { host: string; rest: string } | null {
+export function addressParts(url: string): { host: string; rest: string } | null {
   /* The shared one, so this is not the fourth copy of the `www.` rule the
      header of src/urls.ts asks nobody to write. It returns `""` for anything
      `new URL` refuses, which for an `http(s)` string is the only way its

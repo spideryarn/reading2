@@ -99,6 +99,7 @@ import type {
   TimelineFound,
   ThreadFound,
   ThreadKind,
+  AddedTerm,
 } from "../types.js";
 
 /**
@@ -1437,6 +1438,21 @@ export type SourceGuessOutcome =
 export interface GlossaryLookupStore {
   load(slug: string): Promise<LookupsByTerm>;
   save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm>;
+  /**
+   * **Add a term the reader looked up to their own glossary**, with the answer
+   * they read as its explanation — docs/plans/261002f-glossary-add-a-looked-up-term.md.
+   *
+   * `quote` is the article's own words the term was found as; "already there"
+   * means some entry in the owner's list (the model's or one added before)
+   * names exactly those words, and then nothing is written. One transaction
+   * that locks the article first, so two tabs adding *attention head* and
+   * *attention heads* make one entry, not two. Owner-scoped: a slug the caller
+   * does not own is a 404.
+   */
+  addTerm(
+    slug: string,
+    term: { name: string; quote: string; lookup: GlossaryLookup },
+  ): Promise<AddedTerm>;
 }
 
 /**

@@ -49,6 +49,13 @@
  * `aria-describedby` there, because the sentence is the control's own name,
  * near enough, and would be read twice.
  * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+ *
+ * **And Marginalia's notes** (`MARG_NOTE`, since 2026-10-02): each shut line
+ * and question carries `data-marg-tip`, a key into marginalia/tips.ts, and the
+ * card says what the note is and where it came from — Greg (spya-atv4nx):
+ * *"Make sure all annotations have rich tooltips … explaining their origin"*.
+ * A column of dozens of notes, so the same reason as the gutter.
+ * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
 import {
   FloatingArrow,
@@ -64,6 +71,7 @@ import {
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
+import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
 import type { Section } from "./position.js";
 import { SAFE_ID, spentWords } from "./reading-time.js";
 import { ControlTip, TipNote } from "./Tooltip.js";
@@ -164,9 +172,11 @@ const DELAY = { open: 240, close: 90 } as const;
 const READING_LINE = ".blk-gutter > span.blk-read";
 /** A control in the gutter (BlockGutter.tsx), whose words are its `data-tip`. */
 const GUTTER_CONTROL = ".blk-gutter > button[data-tip], .blk-gutter > a[data-tip]";
-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}`;
-/** The two that are not links, and draw a control's card rather than a passage's preview. */
-const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}`;
+/** A note in Marginalia's column (MarginaliaColumn.tsx), whose card is `MARG_TIPS[data-marg-tip]`. */
+const MARG_NOTE = ".marg-note [data-marg-tip]";
+const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
+/** The ones that are not links, and draw a control's card rather than a passage's preview. */
+const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
 
 /**
  * **`ReadingCard` — what the reading-time line is, and how long you have spent
@@ -241,6 +251,12 @@ function contentFor(
   if (el.matches(GUTTER_CONTROL)) {
     const tip = el.getAttribute("data-tip")?.trim() ?? "";
     return tip === "" ? null : <TipNote>{tip}</TipNote>;
+  }
+  if (el.matches(MARG_NOTE)) {
+    const key = el.getAttribute("data-marg-tip");
+    if (!isMargTipKey(key)) return null;
+    const tip = MARG_TIPS[key];
+    return <ControlTip head={tip.head} what={tip.what} how={tip.how} />;
   }
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off

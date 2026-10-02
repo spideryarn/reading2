@@ -5,8 +5,28 @@ ending: shipped
 # A search box in the glossary, to look a term up
 
 **[SPIDERYARN-READING2-Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-Y)** · reported
-2026-09-04 · *built, cut down — the "add it" half is deferred, and there is a decision below for
-Greg*
+2026-09-04 · *built in two halves: the look-up on 2026-09-04, and "add it to the glossary" on
+2026-10-02 (below)*
+
+## The rest, shipped 2026-10-02
+
+**Ending: Shipped**, on `dev`. Plan
+[261002f](../plans/261002f-glossary-add-a-looked-up-term.md), session
+`fbj5bsp7-glossary-add-looked-up-term`, Overseer queue item `qi-43aa3nac`.
+
+A finished look-up now **adds the term to the owner's own glossary**: a new row labelled *added by
+you*, with the answer as its explanation, selected in the band and underlined in the prose. A term
+the glossary already names is not added again; the answer says *Already in the glossary* with *Show
+it*, or *Unhide* if the reader hid it. Hide works on an added term like any other.
+
+The three reasons below are answered by where it is stored: a `glossary_lookups` row with a new
+`added_name` column, outside the glossary document. So *Find more* cannot merge it away, and the
+public read never sees it. **Only the owner sees terms they add**, as with hides, and the button's
+tooltip says so.
+
+Deferred by name in the plan: publishing an added term with a shared article (a public-projection
+decision), a separate *Add* button if adding every look-up proves noisy, and removing an added term
+outright rather than hiding it. The spelling half stays as decided below: no fuzzy matching.
 
 ## What the reader said
 
@@ -35,7 +55,7 @@ the word a reader wants is as often a lowercase idea as a proper noun, so the ar
 list would miss the commonest case while looking confident. Guessing here is the `-X` postmortem's
 fault in a friendlier tone.
 
-## "Add it to the glossary" is deferred, and this is the one to read
+## "Add it to the glossary" was deferred on 2026-09-04 — answered 2026-10-02, above
 
 Three reasons, each checked in the code rather than taken from the review that raised them:
 

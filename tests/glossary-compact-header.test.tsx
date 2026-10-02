@@ -378,12 +378,13 @@ describe("the head row", () => {
 });
 
 describe("the Look up box", () => {
-  it("has no hint line under it, and the button's tooltip says the answer is not added", async () => {
+  it("has no hint line under it, and the button's tooltip says the term is added privately", async () => {
     await mount(owner(glossary(null, SCORED), {}));
     const ask = host.querySelector(".gloss-ask");
     expect(ask?.textContent).not.toMatch(/Not added to the list/);
     const button = ask?.querySelector<HTMLButtonElement>("button[type=submit]");
-    expect(button?.title).toMatch(/Not added to the list/);
+    expect(button?.title).toMatch(/adds the term to your glossary/);
+    expect(button?.title).toMatch(/Only you see terms you add/);
   });
 });
 

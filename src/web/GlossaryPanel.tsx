@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ExternalLink,
   Eye,
@@ -81,7 +81,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import type { BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -265,6 +265,7 @@ export function GlossaryPanel({
   const gate = chosenGate ?? PRIORITY_GATE;
   const order = effectiveSort(all, sort);
   const shown = glossary ? sortEntries(all, order, gate) : [];
+  const shownIds = new Set(shown.map((entry) => entry.id));
   const hidden = access.hidden ?? [];
   /* Against the raw list, hidden included: a dig that finished on an entry
      the reader has since hidden is not an answer whose term left the glossary. */
@@ -403,7 +404,17 @@ export function GlossaryPanel({
           and the endpoint is owner-only, so for a visitor it is not a control
           they have lost but one that has never applied to them. The band's own
           sentence already says what a shared link does not carry. */}
-      {owner && <AskATerm owner={owner} onJump={onJump} onAskChat={onAskChat} />}
+      {owner && (
+        <AskATerm
+          owner={owner}
+          entries={all}
+          shownIds={shownIds}
+          onTerm={onTerm}
+          onUnhide={setHidden && ((id) => setHidden(id, false))}
+          onJump={onJump}
+          onAskChat={onAskChat}
+        />
+      )}
 
       {/* Sorting is only a question once there is a list, and each option is
           only offered once the model actually returned what it needs — an older
@@ -1341,6 +1352,13 @@ function Term({
               person, a place, a book. GlossaryKindIcon.tsx says why `concept`
               lost its chip on 2026-09-29. */}
           <GlossaryKindIcon kind={entry.kind} />
+          {/* A term the reader added from *Look up a term* (plan 261002f):
+              provenance, so a word, not a warning — and it says who sees it. */}
+          {entry.added && (
+            <span className="gloss-added" title="You looked this up and added it. Only you see it.">
+              added by you
+            </span>
+          )}
           {/* One number under `hardest` or `most central`, both under
               `prioritised`, none in first-use order. Never the product: that is
               our arithmetic, not the model's judgment, and a number the reader
@@ -1573,16 +1591,14 @@ function Term({
  * >
  * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
  *
- * Two things it deliberately does not do, and the button's tooltip says the
- * first one out loud rather than letting the reader find out (a line under the
- * box said it until 2026-09-29, when it went to save a phone two lines):
+ * Two boundaries matter here, and the button's tooltip says the first one out
+ * loud (a line under the box held the old promise until 2026-09-29, when it
+ * moved to save a phone two lines):
  *
- * - **It adds nothing to the list.** The glossary is one JSON document that a
- *   *Find more terms* run rewrites and that a shared link publishes whole, so a
- *   reader-added entry would be merged away by the first and handed to
- *   strangers by the second — src/types.ts § `AskedTermAnswer`. Saying "not
- *   added to the list" in the tooltip is what stops the answer's disappearance
- *   from reading as a bug.
+ * - **An added term is private reader state.** It lives outside the glossary
+ *   document that *Find more terms* rewrites and a shared link publishes, then
+ *   joins the owner's list at the read seam — src/glossary-added.ts. The
+ *   tooltip says both that it is added and that only this reader sees it.
  * - **It does not correct spelling.** The tolerance is `term-match.ts`'s
  *   folding of case, plurals and possessives, and no more. When it finds
  *   nothing there is **no "did you mean…"**: it says which of three things it
@@ -1596,15 +1612,41 @@ function Term({
  */
 function AskATerm({
   owner,
+  entries,
+  shownIds,
+  onTerm,
+  onUnhide,
   onJump,
   onAskChat,
 }: {
   owner: UseGlossary;
+  /** The owner's visible list (hidden entries already out), whatever the threshold. */
+  entries: readonly GlossaryEntry[];
+  /** The ids the band is drawing right now, after the threshold. */
+  shownIds: ReadonlySet<string>;
+  onTerm(id: string | null): void;
+  /** Absent when there is no owner to ask — it never is here, but the panel's type says so. */
+  onUnhide: ((id: string) => void) | null;
   onJump(id: BlockId): void;
   onAskChat?: ((term: string) => void) | undefined;
 }) {
   const [term, setTerm] = useState("");
   const { ask, asking, askDraft, asked, askFailed, askTerm, clearAsked } = owner;
+  const added = asked?.added;
+  const addedId = added?.kind === "added" ? added.entryId : null;
+  const addedHasArrived = addedId !== null && entries.some((entry) => entry.id === addedId);
+
+  /* **Once the added term's row has arrived, the row is the answer**: select
+     it and put the box back to empty, so the same words are not drawn twice
+     — once here and once in the list. Until the re-read lands the answer
+     stays here, and if it never lands (a *Find more* finished in between and
+     now names the term) it stays for good, which is still true. Plan 261002f. */
+  useEffect(() => {
+    if (addedId === null || !addedHasArrived) return;
+    onTerm(addedId);
+    clearAsked();
+    setTerm("");
+  }, [addedId, addedHasArrived, onTerm, clearAsked]);
 
   return (
     <div className="gloss-ask">
@@ -1655,13 +1697,12 @@ function AskATerm({
              never a request that could only fail. Whitespace alone is an empty
              box. */
           disabled={asking || term.trim().length === 0}
-          /* **The deferral lives here now.** It was a line of its own under the
-             box — *"Not added to the list"* — so an answer that never became a
-             row would read as the design rather than a failure. Greg asked for
-             the line to go on 2026-09-29 because it cost a phone two lines of
-             band (`[SPIDERYARN-READING2-4G]`); the answer's own card still
-             appears where the row would have. */
-          title="Finds these words in the article and explains the passage they are in. Not added to the list. One model call."
+          /* **The promise lives here.** It was a line of its own under the box
+             until Greg asked for it to go on 2026-09-29, because it cost a
+             phone two lines of band (`[SPIDERYARN-READING2-4G]`). Since plan
+             261002f the term is added, so the tooltip says so — and says who
+             sees it, because a shared article's visitors do not. */
+          title="Finds these words in the article, explains the passage they are in, and adds the term to your glossary. Only you see terms you add. One model call."
         >
           {asking ? <LoaderCircle size={12} className="cmt-spinner" /> : <TextSearch size={12} />}
           {asking ? "Looking…" : "Look up"}
@@ -1740,11 +1781,60 @@ function AskATerm({
             <strong>{asked.quote}</strong>
             <BlockRef id={asked.blockId} onJump={onJump} />
           </p>
+          <AddedNote added={asked.added} shownIds={shownIds} onTerm={onTerm} onUnhide={onUnhide} />
           <LookupAnswer lookup={asked.lookup} />
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * **What became of the term**, in one line under the answer — plan 261002f.
+ *
+ * *Added* is mostly not seen: the box clears itself once the new row arrives.
+ * *Already in the list* offers the way to it — *Show it* when the band is
+ * drawing it, *Unhide* when the reader hid it, and nothing when the threshold
+ * is keeping it out, since the slider is right there and the sentence is true.
+ */
+function AddedNote({
+  added,
+  shownIds,
+  onTerm,
+  onUnhide,
+}: {
+  added: AddedTerm;
+  shownIds: ReadonlySet<string>;
+  onTerm(id: string | null): void;
+  onUnhide: ((id: string) => void) | null;
+}) {
+  switch (added.kind) {
+    case "added":
+      return <p className="gloss-ask-added">Added to your glossary.</p>;
+    case "no-glossary":
+      return <p className="gloss-ask-added">Not added: this article has no glossary yet.</p>;
+    case "existing": {
+      const id = added.entryId;
+      return (
+        <p className="gloss-ask-added">
+          {added.hidden ? "Already in your hidden terms." : "Already in the glossary."}{" "}
+          {added.hidden && onUnhide ? (
+            <button type="button" className="gloss-btn" onClick={() => onUnhide(id)}>
+              Unhide
+            </button>
+          ) : !added.hidden && shownIds.has(id) ? (
+            <button type="button" className="gloss-btn" onClick={() => onTerm(id)}>
+              Show it
+            </button>
+          ) : null}
+        </p>
+      );
+    }
+    default: {
+      const never: never = added;
+      return never;
+    }
+  }
 }
 
 /**

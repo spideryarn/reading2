@@ -44,9 +44,17 @@
  * worse than no offer.
  */
 import { useState } from "react";
-import { Lock } from "lucide-react";
+import { ExternalLink, Lock } from "lucide-react";
 
 import {
+  BANNER_SOURCE,
+  BANNER_SOURCE_GUESS_CANONICAL,
+  BANNER_SOURCE_GUESS_MATCHING,
+  BANNER_TAKEDOWN_AFTER,
+  BANNER_TAKEDOWN_BEFORE,
+  BANNER_TAKEDOWN_LINK,
+  BANNER_TRAINING,
+  BANNER_TRAINING_LINK,
   CONTINUE_SIGNED_OUT,
   MAKE_AN_ACCOUNT,
   NOT_SHARED,
@@ -64,7 +72,10 @@ import { Link } from "./Link.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { useRenderCount } from "./perf.js";
-import { LOGIN_HREF } from "./router.js";
+import { addressParts, GuessedSourceLink } from "./Masthead.js";
+import { LOGIN_HREF, PRIVACY_HREF, TAKEDOWN_HREF } from "./router.js";
+import { CONTACT_EMAIL } from "../site-text.js";
+import type { SourceGuess } from "../types.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
 
 /**
@@ -125,12 +136,36 @@ export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boole
  *
  * Not dismissible and not a toast: it is what this page *is*, and a control to
  * make it go away would say otherwise.
+ *
+ * **And since 2026-10-02 it is the banner Greg asked for on every
+ * public-readable article** — where the piece came from, that its author can
+ * have it taken down with one email, and that nobody trains a model on it.
+ * docs/plans/261002g-a-banner-on-every-public-readable-article.md. Those lines
+ * are pointers rather than policy: each links to the page that owns the
+ * promise (src/messages.ts § `BANNER_SOURCE`).
+ *
+ * **The source repeats the masthead's origin line, on purpose.** Moving it
+ * here instead would have broken the sharing page's promise that the address
+ * sits directly under the title, and the masthead is the owner's view as much
+ * as the visitor's (GPT Sol, plan review P1-4). The banner is where the three
+ * facts are read together; the origin line is the article's identity.
  */
 export function SharedNotice({
   signedIn,
   sessionUnconfirmed,
+  source,
 }: {
   signedIn: boolean;
+  /**
+   * **Where the piece came from**, or absent to draw no source line at all —
+   * which is what the visitor's details page passes, because its own
+   * `SourceRow` prints the address two lines above (PublicPages.tsx).
+   *
+   * `url` is the published address (`PublicMeta.url` through `webSource`);
+   * `guess` is a shared upload's found guess (`PublicArticle.sourceGuess`,
+   * re-dressed by access.ts), read only when there is no `url`.
+   */
+  source?: { url: string | null; guess: SourceGuess | undefined };
   /**
    * **The owned route answered 401 and the public one answered 200.**
    *
@@ -158,6 +193,24 @@ export function SharedNotice({
        sticky and stays. That split is why there are two of these at all. */
     <div className="shared-notice tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0">{SHARED_WITH_YOU}</p>
+      {source && <BannerSource url={source.url} guess={source.guess} />}
+      <p className="tw:mt-2 tw:mb-0">
+        {BANNER_TAKEDOWN_BEFORE}{" "}
+        <a href={`mailto:${CONTACT_EMAIL}`} className={BANNER_LINK}>
+          {CONTACT_EMAIL}
+        </a>{" "}
+        {BANNER_TAKEDOWN_AFTER}{" "}
+        <Link href={TAKEDOWN_HREF} className={BANNER_LINK}>
+          {BANNER_TAKEDOWN_LINK}
+        </Link>
+      </p>
+      <p className="tw:mt-1 tw:mb-0">
+        {BANNER_TRAINING}{" "}
+        <Link href={PRIVACY_HREF} className={BANNER_LINK}>
+          {BANNER_TRAINING_LINK}
+        </Link>
+        .
+      </p>
       {/* **Beside the statement, not instead of it.** Both sentences are true,
           and the reader arrived for the article rather than for news about
           their session — so the piece is described first and the session
@@ -176,6 +229,46 @@ export function SharedNotice({
           reader hold the same document. GPT Sol, 2026-08-28. */}
       {!signedIn && <SignUp reason="to read your own articles this way" />}
     </div>
+  );
+}
+
+/** The banner's links: the house link colour, underlined on hover, as /privacy draws them. */
+const BANNER_LINK = "tw:text-highlight tw:no-underline tw:hover:underline";
+
+/**
+ * **The banner's source line** — the published address when there is one, a
+ * shared upload's found guess when there is not, and nothing otherwise.
+ *
+ * Drawn with the origin line's own classes and `addressParts`, so the host is
+ * the part that survives a narrow window here too (shell.css § `.origin`).
+ * Nothing is said when there is neither: a visitor's absent address may be one
+ * the policy withheld rather than an upload, so *"uploaded"* is not ours to say
+ * (Masthead.tsx § `OriginLine`).
+ */
+function BannerSource({ url, guess }: { url: string | null; guess: SourceGuess | undefined }) {
+  if (url !== null) {
+    const parts = addressParts(url);
+    return (
+      <p className="origin origin-with-guess tw:mt-2">
+        <span>{BANNER_SOURCE}</span>
+        <a href={url} target="_blank" rel="noreferrer noopener" className="origin-link">
+          <ExternalLink size={13} strokeWidth={1.75} className="origin-icon" />
+          {/* Words rather than the value when it will not parse — the raw
+              string is never printed (Masthead.tsx § `addressParts`). */}
+          <span className="origin-host">{parts ? parts.host : "View the original"}</span>
+          {parts && <span className="origin-path">{parts.rest}</span>}
+        </a>
+      </p>
+    );
+  }
+  if (guess?.status !== "found") return null;
+  return (
+    <p className="origin origin-with-guess tw:mt-2">
+      <span>
+        {guess.kind === "canonical" ? BANNER_SOURCE_GUESS_CANONICAL : BANNER_SOURCE_GUESS_MATCHING}
+      </span>
+      <GuessedSourceLink guess={guess} className="origin-link origin-guess" viewer="visitor" />
+    </p>
   );
 }
 

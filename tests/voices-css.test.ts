@@ -194,7 +194,14 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   faq: [".faq-question"],
   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   tweets: [".tweets-text"],
-  marginalia: [".marg-question", ".marg-idea-name", ".marg-arc"],
+  marginalia: [
+    ".marg-question",
+    ".marg-idea-name",
+    ".marg-arc",
+    ".marg-debate-applies",
+    ".marg-cite-why",
+    ".marg-open-answer",
+  ],
 };
 
 /**
