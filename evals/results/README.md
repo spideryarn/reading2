@@ -180,4 +180,6 @@ changed mid-run are in
 [docs/plans/261001s-dig-deeper-answer-model-eval.md](../../docs/plans/261001s-dig-deeper-answer-model-eval.md)
 § Result. The run itself — captures with web excerpts and library passages, answers, judgements —
 lived under gitignored `output/dig-deeper-runs/` for the same reason as `summaries/` above, and only
-this report is kept.
+this report is kept. When its worktree was removed the run directory was copied, uncommitted, to the
+Hetzner box's primary checkout, `/home/greg/code/spideryarn2/output/dig-deeper-runs/` — the
+production-shaped finalist run, if Greg asks for it, resumes from there (`--run main`).
