@@ -83,9 +83,9 @@ const BLOCKS: Block[] = Array.from({ length: ROWS }, (_, i) => ({
 
 /** Three sections, so that crossing a boundary is observable. */
 const SECTIONS: Section[] = [
-  { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Where it opens" },
-  { row: 12, blockId: block(12), nodeId: "n0002" as NodeId, title: "The middle bit" },
-  { row: 24, blockId: block(24), nodeId: "n0003" as NodeId, title: "How it ends" },
+  { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Where it opens", titleVoice: "ai" },
+  { row: 12, blockId: block(12), nodeId: "n0002" as NodeId, title: "The middle bit", titleVoice: "ai" },
+  { row: 24, blockId: block(24), nodeId: "n0003" as NodeId, title: "How it ends", titleVoice: "ai" },
 ];
 
 /* ------------------------------------------------------- the fake viewport -- */

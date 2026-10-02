@@ -37,7 +37,6 @@ import {
 } from "../marginalia/MarginaliaColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import { useExperimental } from "../useExperimental.js";
-import { useVoiceFaces } from "../useVoiceFaces.js";
 import { shownBehindTheSwitch } from "../experimental-visibility.js";
 import { OnScreenLinksStyle } from "../OnScreenLinksStyle.js";
 import { blocksOnScreenNow } from "../on-screen.js";
@@ -286,7 +285,6 @@ export function Reader({
    * stranger's at zero.
    */
   const experimental = useExperimental();
-  useVoiceFaces(experimental.on);
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -3135,6 +3133,11 @@ export function Reader({
            added later is marked whether or not whoever adds it remembers.
            visitor.ts § markedModes. */
         marked={marked}
+        /* The command bar's Archive and Export (CommandBar.tsx §
+           `CommandBarArticle.shelfRow`). `archive` arrives only from
+           `OwnedArticle`, which exists only for the reader's own article —
+           so its presence is the shelf row's, and a visitor gets neither. */
+        shelfRow={archive === undefined ? undefined : { archive }}
         drawer={
           owner
             ? {

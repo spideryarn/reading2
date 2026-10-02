@@ -26,7 +26,8 @@
  * docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md
  */
 import type { BlockId, NodeId } from "../types.js";
-import { navLabelVoice, type SummaryNode, type TextVoice } from "./tree.js";
+import { navLabelVoice, nodeLabel, titleVoice, type SummaryNode } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 /**
  * How far down each column's ladder we got. Every rung is all-or-nothing within
@@ -139,7 +140,7 @@ export interface StructureCard {
    * of the **current** part and of no other, so for every other part in column A
    * the card is the only preview there is.
    */
-  children: { id: NodeId; text: string; voice: TextVoice }[];
+  children: { id: NodeId; text: string; voice: Voice }[];
   /**
    * How many the cap left off. **Counted after the unnameable ones are
    * dropped**, never before — a child with neither title nor navLabel is not a
@@ -160,11 +161,12 @@ export interface StructureRow {
   /** The line itself. Never empty — a node with no text gets no row at all. */
   text: string;
   /**
-   * Whose words `text` is: a title in this slot is `"ui"`; a navLabel is the
-   * model's, or the author's when the node starts at a heading
-   * (tree.ts § `navLabelVoice`). StructurePanel puts the face on it.
+   * Whose words `text` is: a title is the author's heading kept or the model's
+   * (tree.ts § `titleVoice`); a navLabel is the model's, or the author's when
+   * the node starts at a heading (§ `navLabelVoice`). StructurePanel puts the
+   * face on it with `voiceClass`.
    */
-  voice: TextVoice;
+  voice: Voice;
   /** Where clicking it goes — the row's first block. */
   blockId: BlockId;
   startRow: number;
@@ -210,7 +212,7 @@ export interface StructureProjection {
   columnA: StructureColumn;
   columnB: StructureColumn;
   /** Column B's quiet header: the part its rows are the inside of. */
-  ofPart: { id: NodeId; number: string; text: string } | null;
+  ofPart: { id: NodeId; number: string; text: string; voice: Voice } | null;
   /**
    * How many paragraphs the current section has, when none of them are drawn
    * and the reader would otherwise not know the section is unusually large.
@@ -237,19 +239,11 @@ export interface StructureProjection {
  * a list whose whole promise is "this is the shape of the document".
  *
  * The title is `SummaryNode.title`, the article's own number taken off, because
- * ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q).
+ * ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q). The text and whose
+ * words it is come from one call, tree.ts § `nodeLabel`, so they cannot disagree.
  */
-function rowText(node: SummaryNode): string | null {
-  const title = node.title?.trim();
-  if (title) return title;
-  const nav = node.node.navLabel?.trim();
-  if (nav) return nav;
-  return null;
-}
-
-/** Whose words `rowText` returned — the same order, so the two cannot disagree. */
-function rowVoice(node: SummaryNode): TextVoice {
-  return node.title?.trim() ? "ui" : navLabelVoice(node);
+function rowText(node: SummaryNode): { text: string; voice: Voice } | null {
+  return nodeLabel(node, node.title);
 }
 
 /** Inclusive at both ends: `startRow`/`endRow` are row indices into `blocks`,
@@ -278,8 +272,8 @@ function makeRow(
   focusRow: number,
   gist: string | undefined,
 ): StructureRow | null {
-  const text = rowText(entry);
-  if (text === null) return null;
+  const label = rowText(entry);
+  if (label === null) return null;
   const supplement = entry.supplement === true;
   return {
     id: entry.node.id,
@@ -298,8 +292,8 @@ function makeRow(
      * third.
      */
     number: supplement ? "" : entry.number,
-    text,
-    voice: rowVoice(entry),
+    text: label.text,
+    voice: label.voice,
     blockId: entry.node.range[0],
     startRow: entry.startRow,
     endRow: entry.endRow,
@@ -379,7 +373,7 @@ function cardFor(
         const title = c.title?.trim();
         const nav = allowNavLabels ? c.node.navLabel?.trim() : undefined;
         const text = title || nav || null;
-        const voice: TextVoice = title ? "ui" : navLabelVoice(c);
+        const voice: Voice = title ? titleVoice(c.node) : navLabelVoice(c);
         /* Keyed by the node's own id rather than by its words: two children of
            one node really can read alike — "Introduction" twice, or a repeated
            paragraph navLabel — and in React a duplicate key is a warning plus a
@@ -700,12 +694,13 @@ export function structureProjection({
       currentPart === null
         ? null
         : ((): StructureProjection["ofPart"] => {
-            const text = rowText(currentPart);
-            if (text === null) return null;
+            const label = rowText(currentPart);
+            if (label === null) return null;
             return {
               id: currentPart.node.id,
               number: currentPart.supplement === true ? "" : currentPart.number,
-              text,
+              text: label.text,
+              voice: label.voice,
             };
           })(),
     paragraphTotal,

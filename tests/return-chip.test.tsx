@@ -62,9 +62,9 @@ const BLOCKS: Block[] = Array.from({ length: 30 }, (_, i) => ({
 
 /** Three sections over those thirty blocks, in `buildSections`'s shape. */
 const SECTIONS: Section[] = [
-  { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Where it opens" },
-  { row: 12, blockId: block(12), nodeId: "n0002" as NodeId, title: "The middle bit" },
-  { row: 24, blockId: block(24), nodeId: "n0003" as NodeId, title: "How it ends" },
+  { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Where it opens", titleVoice: "ai" },
+  { row: 12, blockId: block(12), nodeId: "n0002" as NodeId, title: "The middle bit", titleVoice: "ai" },
+  { row: 24, blockId: block(24), nodeId: "n0003" as NodeId, title: "How it ends", titleVoice: "ai" },
 ];
 
 const ROW_OF: ReadonlyMap<BlockId, number> = new Map(BLOCKS.map((b, i) => [b.id, i]));

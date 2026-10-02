@@ -848,6 +848,13 @@
       "when": 1790960562607,
       "tag": "20261002170242_glossary_lookups_added_name",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1790961041994,
+      "tag": "20261002171041_feedback_shipped_emails",
+      "breakpoints": true
     }
   ]
 }

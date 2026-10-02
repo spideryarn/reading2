@@ -22,14 +22,18 @@
  */
 import type { Tree, TreeNode } from "../types.js";
 import { sectionNodesOf } from "../section-path.js";
+import { titleVoice } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 export type WhereRow =
-  | { kind: "node"; key: string; title: string; depth: number; onPath: boolean; here: boolean }
+  | { kind: "node"; key: string; title: string; voice: Voice; depth: number; onPath: boolean; here: boolean }
   | { kind: "more"; key: string; depth: number; count: number };
 
 export interface WhereShape<N> {
   id(node: N): string;
   title(node: N): string;
+  /** Whose words `title(node)` is — the face its row is drawn in (fonts.md). */
+  voice(node: N): Voice;
   /** The node's sub-sections — never its paragraphs. */
   sections(node: N): readonly N[];
 }
@@ -61,10 +65,13 @@ export function whereRows<N>(top: readonly N[], path: readonly string[], shape: 
     for (let i = lo; i <= hi; i++) {
       const node = nodes[i]!;
       const onPath = i === at;
+      const title = shape.title(node).trim();
       rows.push({
         kind: "node",
         key: shape.id(node),
-        title: shape.title(node).trim() || "Untitled section",
+        title: title || "Untitled section",
+        // The stand-in is ours, whoever would have written the title.
+        voice: title ? shape.voice(node) : "ui",
         depth,
         onPath,
         here: onPath && depth === path.length - 1,
@@ -88,6 +95,7 @@ export function treeShape(tree: Tree): WhereShape<TreeNode> {
   return {
     id: (n) => n.id,
     title: (n) => n.title,
+    voice: titleVoice,
     sections: (n) => n.children.map((id) => tree.nodes[id]).filter(isSection),
   };
 }

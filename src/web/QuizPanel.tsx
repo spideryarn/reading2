@@ -98,12 +98,15 @@ import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { IconButton } from "./IconButton.js";
+import { WrittenForYou } from "./WrittenForYou.js";
+import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
 import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
+import { withVoice } from "./voice.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -549,7 +552,30 @@ export function QuizPanel({
    * So: `ensure` where there is nothing, `write` where there is something to
    * replace. The same split, and the same reason, as `useIdeas`.
    */
-  const run = (label: string, verb: () => Promise<void> = owner.write) => (
+  const [readingReplacement, setReadingReplacement] = useState(false);
+  const run = (label: string, verb: () => Promise<void> = owner.write) =>
+    owner.rewriting && !owner.job && !owner.starting && !owner.failed ? (
+      <div>
+        <p className="gloss-quiet">The new questions haven't loaded yet.</p>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={readingReplacement}
+          onClick={() => {
+            setReadingReplacement(true);
+            /* A delayed or failed post-job GET needs another read, never a
+               second paid rewrite — including the stale banner's button. */
+            void owner.refresh().then(
+              () => setReadingReplacement(false),
+              () => setReadingReplacement(false),
+            );
+          }}
+        >
+          Read the new questions
+        </Button>
+      </div>
+    ) : (
     <JobProgress
       job={owner.job}
       /* Between the press and the first poll there is no job yet, and without
@@ -827,6 +853,25 @@ export function QuizPanel({
               stays for the Recall | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
+          {/* Written for your profile, and the Regenerate in its panel — Greg,
+              2026-10-02: *"it needs a "Regenerate for my profile". That's more
+              important, ok to lose answers."* `write` is the forced run *Write
+              them again* makes; the new batch takes the answers with it (the
+              `batchId` effect above), and the panel says so before the press.
+              Owner-only like the band. Plan 261002f. */}
+          {quiz && owner.status === "ready" && (
+            <WrittenForYou
+              written={owner.profiled}
+              changed={owner.profileChanged}
+              slug={owner.slug}
+              regenerate={{
+                run: () => void owner.write(),
+                busy: owner.job !== null || owner.starting || owner.rewriting,
+                refresh: () => owner.refresh(),
+                consequence: "Writes new questions for your profile; your answers so far are cleared.",
+              }}
+            />
+          )}
         </>
       }
       /* No standing *Write them again* under the question any more — Greg,
@@ -835,16 +880,16 @@ export function QuizPanel({
           Quiz row; the stale banner keeps its own button.
           docs/plans/260929b-one-place-to-re-run-ai-processing.md.
 
-          Keep the footer only while a current batch's job is starting,
-          running or failed. Otherwise removing the button also removes the
-          only place this mode can show that progress or failure. Not on a
+          Keep the footer while a current batch's job is starting, running or
+          failed, or its replacement has not loaded. Otherwise removing the
+          button removes the only place to show progress, failure or a read retry. Not on a
           stale batch, whose banner carries the job; an outdated one has no
           banner (plan 260929c), so its job shows here. */
       foot={
         quiz &&
         owner.status === "ready" &&
         !owner.stale &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || owner.rewriting) ? (
           <div className="quiz-rewrite">{run("Write them again")}</div>
         ) : null
       }
@@ -1127,7 +1172,12 @@ function LookAgain({
           const retry = retryOf(row);
           return (
             <li key={row.section.blockId}>
-              <button type="button" className="quiz-look-again-section" onClick={() => onRead(row.section.blockId)}>
+              {/* In the title's voice: the author's heading kept, or the model's (fonts.md). */}
+              <button
+                type="button"
+                className={withVoice("quiz-look-again-section", row.section.titleVoice)}
+                onClick={() => onRead(row.section.blockId)}
+              >
                 {row.section.title}
               </button>
               {retry !== undefined && (

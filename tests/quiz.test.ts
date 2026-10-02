@@ -308,6 +308,7 @@ describe("withOldClientBands", () => {
     quiz: build([raw(1), raw(2, { premise: "Something said before." })]),
     stale: false,
     outdated: false,
+    profileChanged: false,
   });
 
   it("gives every question a band and a value an old ladder can walk", () => {

@@ -181,9 +181,24 @@ describe("layoutNotes", () => {
 
 describe("the head", () => {
   it("names the part and the section the block sits in", () => {
-    expect(headPath(tree, index, "spya-aaaaa3")).toEqual(["Part A", "Section A1"]);
-    expect(headPath(tree, index, "spya-aaaaa5")).toEqual(["Part B"]);
+    expect(headPath(tree, index, "spya-aaaaa3")).toEqual([
+      { title: "Part A", voice: "ai" },
+      { title: "Section A1", voice: "ai" },
+    ]);
+    expect(headPath(tree, index, "spya-aaaaa5")).toEqual([{ title: "Part B", voice: "ai" }]);
     expect(headPath(tree, index, null)).toEqual([]);
+  });
+
+  it("says whose words each title is: the author's heading kept, or the model's", () => {
+    const voiced = {
+      ...tree,
+      nodes: {
+        ...tree.nodes,
+        a: { ...tree.nodes.a, sourceHeading: "Part A" },
+        a1: { ...tree.nodes.a1, sourceHeading: "2.1 Something else" },
+      },
+    } as unknown as Tree;
+    expect(headPath(voiced, index, "spya-aaaaa3").map((s) => s.voice)).toEqual(["author", "ai"]);
   });
 
   it("gives the arc's sentence for the part holding the block", () => {

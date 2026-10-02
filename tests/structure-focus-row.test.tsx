@@ -13,8 +13,8 @@ class NoResizeObserver {
 const A = "spya-aaaaaa";
 const B = "spya-bbbbbb";
 const FIRST = [
-  { row: 0, blockId: A, nodeId: "n0001", title: "First" },
-  { row: 5, blockId: B, nodeId: "n0002", title: "Second" },
+  { row: 0, blockId: A, nodeId: "n0001", title: "First", titleVoice: "ai" },
+  { row: 5, blockId: B, nodeId: "n0002", title: "Second", titleVoice: "ai" },
 ] as Section[];
 const REFLOWED = [FIRST[0] as Section];
 

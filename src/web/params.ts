@@ -36,6 +36,7 @@ import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
+import { searchWithout } from "./router.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
@@ -1695,3 +1696,51 @@ export const libraryTopicsViewParam = createParser<"detail">({
   parse: (v) => (v === "detail" ? v : null),
   serialize: (v) => v,
 }).withOptions({ history: "push" });
+
+/**
+ * **The Metadata sections a link may open** — `?section=ai-processing`.
+ *
+ * Since 2026-10-02, for the command bar's *Run again* rows: a run accepted on
+ * the reading view lands on the Metadata page with its *AI processing* section
+ * opened and flashed, where that step's row shows the run
+ * (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+ *
+ * **A closed list, not any section's id.** A section is otherwise local state
+ * — open or shut is not worth linking to (Metadata.tsx § Section says why) —
+ * so this is an address only for the places something in the app sends a
+ * reader, and each one is a decision. The value is the section's id without
+ * its `sec-` prefix (Metadata.tsx § `sectionId`), which
+ * tests/metadata-section-param.test.tsx holds against the page itself, so a
+ * renamed heading cannot leave a value here that opens nothing. Anything else
+ * parses to `null` and does nothing, as a mangled `?at=` does.
+ *
+ * **`access-sharing` joined it later the same day**, for the bar's *Access &
+ * sharing* row (stage B of the same plan; command bar rows in
+ * src/web/article-commands.ts). That section mounts only once the page knows
+ * there is a shelf row, which is the late arrival `useRevealOnArrival` waits
+ * for rather than consuming the address before it can be carried out.
+ */
+export const METADATA_SECTIONS = ["ai-processing", "access-sharing"] as const;
+export type MetadataSection = (typeof METADATA_SECTIONS)[number];
+
+/**
+ * `replace`: it is an instruction the page carries out once and then takes off
+ * the address (Metadata.tsx § `useSectionOnArrival`), so neither writing it
+ * nor removing it is a step Back should retrace. Never remembered
+ * (last-view.ts), for the same reason.
+ */
+export const sectionParam = createParser<MetadataSection>({
+  parse: (v) => (METADATA_SECTIONS.includes(v as MetadataSection) ? (v as MetadataSection) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
+ * A carried query string with `section=` set to this one — any earlier
+ * `section` pair dropped, everything else kept byte for byte. Textual, for
+ * `carriedSearch`'s reason (router.ts): a round trip through
+ * `URLSearchParams` re-encodes `?crits=a,b` into something nobody can read.
+ */
+export function withSection(search: string, section: MetadataSection): string {
+  const kept = searchWithout(search, "section");
+  return kept ? `${kept}&section=${section}` : `section=${section}`;
+}

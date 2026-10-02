@@ -2479,10 +2479,24 @@ export function scalarInputsQuery(
  * false, and `Tree extends { profileHash?: string | null; version?: string }`
  * is **true**. A rule held up by the absence of a shared field is not a rule.
  */
-export type ProfileCarrying = {
-  [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
-}[keyof ArtifactMap] &
-  StepName;
+export type ProfileCarrying = Exclude<
+  {
+    [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
+  }[keyof ArtifactMap] &
+    StepName,
+  NeverShared
+>;
+
+/**
+ * **Carries a `profileHash`, and is never in a shared link** — so the *make
+ * public* dialog has nothing to say about it. The quiz records its profile for
+ * the owner's badge and Regenerate (plan 261002f), but `PublicArtefacts` has no
+ * quiz and src/store/public-reader.ts never reads the column: telling an owner
+ * "your quiz was written for your profile" before they share would describe
+ * something no visitor receives. One named exception rather than a hand list,
+ * so every *other* artefact gaining the field still fails the compiler here.
+ */
+type NeverShared = "quiz";
 
 function personalisedSteps(revision: {
   tweets: TweetThread | null;

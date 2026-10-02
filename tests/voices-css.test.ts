@@ -1,15 +1,18 @@
 /**
- * **The per-voice faces stay behind their switch, and every class they name
- * still exists.** src/web/styles/voices.css; docs/plans/261001d-typeface-per-voice.md.
+ * **Every class the per-voice faces name still exists, and every page and mode
+ * has said whose words it shows.** src/web/styles/voices.css; docs/project/fonts.md.
  *
- * Two ways that file can go wrong with nothing on screen to say so:
+ * The faces were behind the Experimental switch until 2026-10-02, when Greg
+ * said "Yes they should now be used throughout and always going forwards"
+ * (docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
+ * Ways that file can go wrong with nothing on screen to say so:
  *
- *  1. **A rule without the `:root[data-voices]` guard** restyles every reader,
- *     switch or no switch — Courier summaries for the people who did not ask
- *     for experiments.
- *  2. **A class it names is renamed in a component.** The selector then matches
- *     nothing, that element quietly drops back to Geist, and the v1 Greg is
- *     judging is a smaller v1 than the one he was told about.
+ *  1. **A class it names is renamed in a component.** The selector then matches
+ *     nothing and that element quietly drops back to Geist.
+ *  2. **A new page or mode arrives and nobody asks whose words it shows.**
+ *     `VOICES_BY_SURFACE` and `VOICES_BY_MODE` make that a type error.
+ *  3. **The switch path creeps back.** A rule under `:root[data-voices]` would
+ *     match nothing now that nothing sets the attribute.
  *
  * A hand scan rather than a CSS parser, as in styles-entry-is-imports-only:
  * the file is three lists of selectors and a parser to check that is the wrong
@@ -20,6 +23,10 @@ import path from "node:path";
 import { parse as babelParse } from "@babel/parser";
 import { describe, expect, it } from "vitest";
 import type { Mode } from "../src/modes.js";
+import type { ArticleView } from "../src/read-address.js";
+import { gistVoiceOf } from "../src/library-scalars.js";
+import type { Route } from "../src/web/router.js";
+import { type Voice, voiceClass } from "../src/web/voice.js";
 
 const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -175,18 +182,61 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".cnd-affil-name",
   ],
   summary: [".simple-text"],
-  diagram: [".diag-card-gist", ".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
+  diagram: [".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
   ideas: [".ideas-name", ".ideas-reason"],
   remember: [".chat-turn.model", ".quiz-question"],
   quotes: [".quotes-why-card"],
   timeline: [".tl-label"],
   debate: [".dbt-ai", ".dbt-title-ai", ".dbt-thread-gist"],
-  structure: [".struct-gist", ".struct-text-ai", ".tip-kid-ai", ".tip-gist"],
+  /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
+  structure: [".struct-gist", ".voice-ai", ".tip-gist"],
   citations: [".cite-why", ".cite-does", ".prose-card-cite-does-text"],
   faq: [".faq-question"],
   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   tweets: [".tweets-text"],
   marginalia: [".marg-question", ".marg-idea-name", ".marg-arc"],
+};
+
+/**
+ * **Every page has been asked whose words it shows** — the same question
+ * `VOICES_BY_MODE` asks of a mode, asked of every address the client draws.
+ * Keyed by `Route["kind"]` (src/web/router.ts), with an article's address
+ * split by `ArticleView`, so **a new page is a type error** until somebody
+ * lists the voice classes it renders (any voice), or says why it has none.
+ * The reading view's own entry is the article; its modes are `VOICES_BY_MODE`.
+ * docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md § 5.
+ */
+type Surface = Exclude<Route["kind"], "read"> | `read:${ArticleView}`;
+const OURS = "our own page: every word on it is the app's";
+const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> = {
+  "read:article": [".prose", ".voice-author"],
+  /* the one-sentence gist and summary; the title; where you left off; the
+     reader's purpose and profile */
+  "read:metadata": [".voice-ai", ".voice-author", ".voice-reader", ".prof-box-input"],
+  /* the blurb (gist or excerpt), titles, abstracts, search hits, the search box */
+  library: [".voice-ai", ".voice-author", ".voice-reader"],
+  /* titles only: the gist's voice would need a column on `publicLibraryQuery`,
+     a listed defence (security-map.md), so it is left in the app's face */
+  "public-library": [".voice-author"],
+  add: [".voice-reader", ".prof-box-input"],
+  "add-upload": [".voice-reader", ".prof-box-input"],
+  profile: [".prof-box-input", ".prof-interim", ".voice-author"],
+  /* the reading column's specimen is a sample of an article */
+  design: [".prose"],
+  login: { none: "a sign-in form: an email address is a credential, not something said" },
+  admin: { none: "an administrator's tables; other readers' words there are left in the app's face" },
+  privacy: { none: OURS },
+  features: { none: OURS },
+  "public-sharing": { none: OURS },
+  pricing: { none: OURS },
+  contact: { none: OURS },
+  /* An agent drafts each entry at deploy time, but the page is the app talking
+     about itself, as /help is, so it is ours (changelog.md). */
+  changelog: { none: OURS },
+  help: { none: OURS },
+  opensource: { none: OURS },
+  callback: { none: "a redirect; it draws no text" },
+  "not-found": { none: OURS },
 };
 
 /** Split a selector list without splitting commas inside :is(), :not(), or attributes. */
@@ -207,40 +257,68 @@ function selectorBranches(selector: string): string[] {
   return branches;
 }
 
-/** The branches inside a rule's `:root[data-voices] :is(…)`, each as written. */
+/** The branches inside a rule's `:root :is(…)`, each as written. */
 function innerBranches(selector: string): string[] {
-  const m = /^:root\[data-voices\]\s+:is\(([\s\S]*)\)(?:::placeholder)?$/.exec(selector);
+  const m = /^:root\s+:is\(([\s\S]*)\)(?:::placeholder)?$/.exec(selector);
   if (!m) throw new Error(`not a guarded :is() rule: ${selector.slice(0, 60)}`);
   return selectorBranches(m[1]!).map((b) => b.replace(/\s+/g, " "));
 }
 
 describe("voices.css", () => {
   it("finds rules to check", () => {
-    expect(selectors.length).toBe(4); // author, AI, reader, and reader placeholders
+    expect(selectors.length).toBe(5); // author, AI, reader, reader placeholders, and voice-ui
     expect(classes.length).toBeGreaterThan(40);
   });
 
-  it("guards every rule with :root[data-voices]", () => {
-    for (const selector of selectors) {
-      for (const branch of selectorBranches(selector)) {
-        expect(branch, selector).toMatch(/^:root\[data-voices\]\s/);
-      }
-    }
+  /* `:root` is part of each rule's specificity, not a switch: without it some
+     rules would only tie with the ones they override (voices.css § header). */
+  it("writes every rule as :root :is(…), for everyone", () => {
+    for (const selector of selectors) innerBranches(selector);
   });
 
-  it("guards the UI-face corrections that live beside their inherited rules", () => {
+  it("leaves no trace of the Experimental switch that used to gate the faces", () => {
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(tsx?|css)$/.test(e.name) && readFileSync(p, "utf8").includes("data-voices")) {
+          hits.push(p);
+        }
+      }
+    };
+    walk("src");
+    walk("styles");
+    expect(hits).toEqual([]);
+  });
+
+  it("keeps the UI-face corrections that live beside their inherited rules", () => {
     expect(selectorsUsingIn("src/web/styles/mode-band.css", "--font-ui", ".chat-stance-tag")).toEqual([
-      ":root[data-voices] .chat-stance-tag",
+      ":root .chat-stance-tag",
     ]);
     for (const file of ["src/web/styles/annotations.css", "src/web/styles/dock.css"]) {
       expect(selectorsUsingIn(file, "--font-ui", ".passage-whole"), file).toEqual([
-        `:root[data-voices] .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
+        `:root .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
       ]);
     }
   });
 
+  /* `voiceClass` builds these four in TypeScript, so the className scan below
+     cannot see them; check them against the function instead, both ways. */
+  it("has a rule for exactly the classes voiceClass returns, each in its own voice", () => {
+    const voices: Voice[] = ["author", "ai", "reader", "ui"];
+    const built = voices.map(voiceClass);
+    expect(classes.filter((c) => c.startsWith("voice-")).sort()).toEqual([...built].sort());
+    expect(innerBranches(selectorUsing("--font-author"))).toContain(".voice-author");
+    expect(innerBranches(selectorUsing("--font-ai"))).toContain(".voice-ai");
+    expect(innerBranches(selectorUsing("--font-reader"))).toContain(".voice-reader");
+    const ui = selectors.find((sel) => /^:root\s+:is\(\s*\.voice-ui\s*\)$/.test(sel));
+    expect(ui, "a rule for .voice-ui alone").toBeDefined();
+  });
+
   it("names only classes some component still renders", () => {
     const missing = classes.filter((c) => {
+      if (c.startsWith("voice-")) return false; // voiceClass's; checked above
       const t = TEMPLATED[c];
       if (t) {
         return !(
@@ -304,8 +382,7 @@ describe("voices.css", () => {
       ".ideas-quote:not(.ideas-quote-moved)",
       ".tl-quote:not(.tl-quote-moved)",
       ".tl-when-words",
-      ".struct-text-author",
-      ".tip-kid-author",
+      ".voice-author",
     ]) {
       expect(author, selector).toContain(selector);
     }
@@ -379,5 +456,35 @@ describe("voices.css", () => {
       if (Array.isArray(voiced)) expect(voiced.length).toBeGreaterThan(0);
       else expect((voiced as { noModelText: string }).noModelText.trim()).not.toBe("");
     }
+  });
+
+  it("finds every page's voice classes in some voice's rule (VOICES_BY_SURFACE)", () => {
+    const all = selectors.flatMap((sel) => innerBranches(sel));
+    const missing = Object.entries(VOICES_BY_SURFACE).flatMap(([surface, voiced]) =>
+      Array.isArray(voiced) ? voiced.filter((c) => !all.includes(c)).map((c) => `${surface}: ${c}`) : [],
+    );
+    expect(missing).toEqual([]);
+    for (const voiced of Object.values(VOICES_BY_SURFACE)) {
+      if (Array.isArray(voiced)) expect(voiced.length).toBeGreaterThan(0);
+      else expect((voiced as { none: string }).none.trim()).not.toBe("");
+    }
+  });
+});
+
+/**
+ * **Whose words the shelf's blurb is.** `root_gist` is stored as
+ * `gist ?? summary ?? excerpt`, so the blurb that equals the revision's own
+ * excerpt is the author's and any other is a model's (library-scalars.ts §
+ * `gistVoiceOf`). Equality is a read-time heuristic: an AI gist that exactly
+ * copies the excerpt is the known ambiguous case until provenance is stored.
+ */
+describe("gistVoiceOf", () => {
+  it("is the author's when the blurb is the excerpt", () => {
+    expect(gistVoiceOf("The paper's own first lines.", "The paper's own first lines.")).toBe("author");
+  });
+  it("is the model's when it is anything else, or there is no excerpt", () => {
+    expect(gistVoiceOf("A model's one sentence.", "The paper's own first lines.")).toBe("ai");
+    expect(gistVoiceOf("A model's one sentence.", null)).toBe("ai");
+    expect(gistVoiceOf("A model's one sentence.", undefined)).toBe("ai");
   });
 });

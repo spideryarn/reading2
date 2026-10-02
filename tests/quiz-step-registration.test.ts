@@ -84,7 +84,7 @@ import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import type { Quiz } from "../src/types.js";
-import { renderProfile } from "../src/profile.js";
+import { hashProfile, renderProfile } from "../src/profile.js";
 import { QUIZ_READER_RULES, QUIZ_SYSTEM } from "../src/quiz.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -247,7 +247,11 @@ describe("what the store records when the quiz step has run", () => {
     expect(recorded?.promptVersion, "the artefact carries no version").toEqual(expect.any(String));
     expect(recorded?.model, "the artefact carries no generator").toEqual(expect.any(String));
 
-    expect(recorded).toEqual(expected);
+    /* The recorded side also carries `profileHash` since 261002f; the step's
+       stamp declares none, so `sameStamp` never compares it — the "does not
+       make the quiz stale" case below is what holds that. */
+    expect(recorded).toEqual({ ...expected, profileHash: null });
+    expect(expected).not.toHaveProperty("profileHash");
   });
 
   it("spells the three stamp fields the store's way and not the StepStamp way", async () => {
@@ -391,6 +395,13 @@ describe("the reader's reason for reading", () => {
     expect(at).toBe(2);
     expect(params.system[1]?.text).toBe(QUIZ_SYSTEM);
     expect(params.system[at]?.cache_control).toBeUndefined();
+  });
+
+  it("records which profile the questions were written for, and null for none", async () => {
+    /* Plan 261002f: the stamp the badge and its Regenerate read — recorded,
+       never compared by the step (the case below). */
+    expect((await runAndWrite(PROFILE)).profileHash).toBe(hashProfile(PROFILE));
+    expect((await runAndWrite()).profileHash).toBeNull();
   });
 
   it("does not make the quiz stale when it changes — no automatic rewrite", async () => {

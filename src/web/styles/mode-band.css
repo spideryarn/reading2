@@ -1074,9 +1074,9 @@
   color: var(--ink-faint);
 }
 /* Our label for how the reply was asked for, not the model's words: with the
-   voice experiment on it would otherwise inherit the AI face from
+   per-voice faces it would otherwise inherit the AI face from
    `.chat-turn.model` (docs/project/fonts.md). */
-:root[data-voices] .chat-stance-tag { font-family: var(--font-ui); }
+:root .chat-stance-tag { font-family: var(--font-ui); }
 
 /* **A band's (i)** (`BandAbout.tsx`), in the band's top-right corner, put
    there by `ModeSurface`'s `about` for every mode alike — what the mode is,

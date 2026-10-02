@@ -101,6 +101,7 @@ import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 import { layoutViewportWidth } from "./reader/measure.js";
+import { withVoice } from "./voice.js";
 
 export function Library({
   readerId,
@@ -737,7 +738,7 @@ export function Library({
           selected={topics}
           onToggle={toggleTopic}
           onClear={() => pushView(() => void setTopics(null))}
-          titleOf={shelfTopics.titleOf}
+          entryOf={shelfTopics.entryOf}
           inScope={shelfTopics.inScope}
           archived={archivedOn}
         />
@@ -1161,7 +1162,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              tabbed into — and this input suppresses the browser's own ring
              with `outline-none`, so nothing else was drawing one. Same
              treatment on the URL box in AddArticle.tsx. */
-          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
+          className="voice-reader tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
         />
         {value && (
           <button
@@ -1304,12 +1305,15 @@ function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
       className="tw:block tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-3 tw:no-underline tw:hover:border-highlight/60"
     >
       <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
+        {/* No voice: a hit does not say whether the title is a rename. */}
         {hit.title}
         {/* Only ever set with Include archived on. Marked as the card is, so a
             passage that opens an article you archived is not a ghost. */}
         {hit.archived && <ArchivedMark />}
       </span>
-      <span className="tw:mt-1 tw:block tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
+      <span
+        className={withVoice("tw:mt-1 tw:block tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground", "author")}
+      >
         {marked(hit.text, query)}
       </span>
     </Link>

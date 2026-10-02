@@ -27,6 +27,7 @@ import { Pencil, TriangleAlert } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
 import { IconButton } from "./IconButton.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { voiceClass } from "./voice.js";
 
 /**
  * Rename in place.
@@ -54,7 +55,7 @@ export function TitleEditor({
    */
   overridden?: boolean | undefined;
   onDone: (title: string | null | undefined) => void;
-  /** How the input is typeset — each caller sets it in its own face and size. */
+  /** Size and layout classes; the editable words themselves always use the reader face. */
   className?: string | undefined;
 }) {
   const [value, setValue] = useState(title);
@@ -118,8 +119,11 @@ export function TitleEditor({
         // Blur commits rather than cancels: clicking away from a field you have
         // typed into and losing the typing is the more annoying of the two.
         onBlur={(e) => e.currentTarget.form?.requestSubmit()}
-        className={`tw:w-full tw:rounded tw:border tw:border-highlight tw:bg-background tw:px-2 tw:py-1 tw:text-foreground tw:outline-none ${
-          className ?? "tw:font-prose tw:text-xl tw:leading-snug"
+        /* The reader's typing, so the reader's face (voice.ts) — which is why
+           no caller's `className` may carry a `tw:font-*`: a utility outranks
+           the voice class on the same element. */
+        className={`${voiceClass("reader")} tw:w-full tw:rounded tw:border tw:border-highlight tw:bg-background tw:px-2 tw:py-1 tw:text-foreground tw:outline-none ${
+          className ?? "tw:text-xl tw:leading-snug"
         }`}
       />
       <span id={hintId} className="tw:mt-1 tw:block tw:font-sans tw:text-xs tw:text-muted-foreground">
@@ -284,7 +288,7 @@ export function EditableTitle({
    * error is worse than no button, because pressing it is how you find out.
    */
   offer?: boolean | undefined;
-  /** How the input is typeset, so it matches the heading it replaces. */
+  /** Size and line-height for matching the heading; the face remains the reader's. */
   inputClassName?: string | undefined;
   /** The heading. Give it `tw:min-w-0 tw:flex-1` so a long title wraps rather than shoving the pencil off. */
   children: ReactNode;

@@ -67,6 +67,9 @@ const ROUTES = [
   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
   { name: "quotes", url: "/api/quotes/anything", stamp: "quotes" },
+  /* Since 2026-10-02: the quiz records the profile it was written for, so the
+     panel can offer to write it again (plan 261002f). */
+  { name: "quiz", url: "/api/quiz/anything", stamp: "quiz" },
 ] as const;
 
 /** What the store was asked, in the order it was asked. */
@@ -95,7 +98,9 @@ let profileGate = held<string | null>();
 
 /** What a route's loader resolves to when its gate is released. */
 const payloadFor = (stamp: string) => ({
-  [stamp]: STAMP,
+  /* A real question for the quiz route's old-client bridge. An empty array
+     cannot prove the bridge still applies when profileChanged is added. */
+  [stamp]: { ...STAMP, questions: [{ id: "spya-k3m9qt", question: "Why?", referenceAnswer: "Because.", evidence: [] }] },
   stale: false,
   outdated: false,
   profiled: true,
@@ -111,6 +116,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
     loadGlossary: "glossary",
     loadIdeas: "ideas",
     loadQuotes: "quotes",
+    loadQuiz: "quiz",
   } as const;
   const mocked: Record<string, unknown> = {};
   for (const [fn, route] of Object.entries(loaders)) {
@@ -192,6 +198,11 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     /* The same profile string the artefact was written under, so nothing has
        changed — proving the two halves were joined and not merely started. */
     expect(body.profileChanged).toBe(false);
+    if (name === "quiz") {
+      expect((body.quiz as { questions: unknown[] }).questions).toEqual([
+        expect.objectContaining({ band: "easy", value: 3, question: "Why?" }),
+      ]);
+    }
     /* And exactly once each. A "probe" read followed by a real one would
        overlap just as well and do twice the work. Sol's second finding. */
     expect(asked).toEqual([name, "profile"]);
@@ -283,5 +294,32 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
        append an unprofiled pass while retaining this stamp: its badge must say
        "older profile", not "written for you". */
     expect(body.profileChanged).toBe(name === "quotes");
+  });
+
+  it("says the profile changed when the artefact was written for another one", async () => {
+    /* The positive half. Every case above answers `false`, which is also what a
+       route that never computed the field would leave a reader assuming. */
+    const reply = call(url);
+    await settleQueue();
+    gates[name]!.settle(payloadFor(stamp));
+    profileGate.settle("A reader who has since changed their mind.");
+
+    const { status, body } = await reply;
+    expect(status).toBe(200);
+    expect(body.profileChanged).toBe(true);
+  });
+
+  it("does not call a legacy artefact with no profile hash changed", async () => {
+    const reply = call(url);
+    await settleQueue();
+    const payload = payloadFor(stamp);
+    const artefact = payload[stamp];
+    if (!artefact || typeof artefact !== "object") throw new Error("Missing fixture artefact");
+    const { profileHash: _absent, ...legacy } = artefact;
+    gates[name]!.settle({ ...payload, [stamp]: legacy });
+    profileGate.settle("The current reader profile.");
+    const { status, body } = await reply;
+    expect(status).toBe(200);
+    expect(body.profileChanged).toBe(false);
   });
 });

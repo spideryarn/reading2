@@ -42,6 +42,7 @@ import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEn
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
+import { articleTitleVoice, gistVoice, type Voice, voiceClass, withVoice } from "./voice.js";
 
 /* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
    this file is shared with the lazy /admin and /design routes, and importing
@@ -337,7 +338,10 @@ function TitleCell({
   const link = (
     <Link
       href={readHref(entry.slug)}
-      className="tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight"
+      className={withVoice(
+        "tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight",
+        articleTitleVoice(Boolean(entry.titleOverridden)),
+      )}
     >
       {entry.title}
     </Link>
@@ -440,6 +444,8 @@ export interface RowCardFact {
  */
 export interface RowCardFacts {
   gist: string | undefined;
+  /** Whose words `gist` is — voice.ts § `gistVoice`. */
+  gistVoice: Voice;
   facts: RowCardFact[];
 }
 
@@ -530,7 +536,7 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
   if (entry.titleOverridden) facts.push({ label: "Title", value: "renamed by you" });
   if (entry.visibility === "public") facts.push({ label: "Shared", value: SHARING_ON });
 
-  return { gist: entry.gist, facts };
+  return { gist: entry.gist, gistVoice: gistVoice(entry), facts };
 }
 
 /**
@@ -542,7 +548,14 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
 function RowCard({ facts }: { facts: RowCardFacts }) {
   return (
     <>
-      {facts.gist && <p className="tip-gist">{facts.gist}</p>}
+      {/* The model's gist or the article's excerpt. The voice goes on a span:
+          `.tip-gist` is in voices.css's AI list, which would out-rank a voice
+          class on the same element (voice.ts § `voiceClass`). */}
+      {facts.gist && (
+        <p className="tip-gist">
+          <span className={voiceClass(facts.gistVoice)}>{facts.gist}</span>
+        </p>
+      )}
       {facts.facts.length > 0 && (
         <dl className="tip-facts">
           {facts.facts.map(({ label, value }) => (

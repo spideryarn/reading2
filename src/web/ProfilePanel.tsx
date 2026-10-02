@@ -197,6 +197,12 @@ export interface Regenerate {
    * verdict on the profile as it now is. Never spends.
    */
   refresh(): Promise<void>;
+  /**
+   * What pressing it gives up beyond the text itself, said in words beside the
+   * button — Quiz's *"your answers so far are cleared"* (plan 261002f). A line
+   * on the panel rather than a native `title`, which a touch screen never shows.
+   */
+  consequence?: string;
 }
 
 /** One open editor at a time, even when a surface happens to render two badges. */
@@ -592,57 +598,66 @@ function PanelBody({
           empty="You haven't said why you're reading this one."
         />
       )}
-      <div className="prof-panel-actions">
-        {changed && regenerate && (
+      {/* Sticky at the foot of the scrolling panel, so Regenerate and Done are
+          in view on open however long the two boxes are — measured clipped
+          below a 480px panel once the consequence line was added (plan
+          261002f browser check). */}
+      <div className="prof-panel-foot">
+        {changed && regenerate?.consequence && (
+          <p className="prof-panel-consequence">{regenerate.consequence}</p>
+        )}
+        <div className="prof-panel-actions">
+          {changed && regenerate && (
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              /* Held until both boxes are on the server — a run started first
+                 would be written for the old words and stamped as current — and
+                 while the mode already has a job, so a press is never a second
+                 paid call. */
+              disabled={!settled || dictating || refreshing || regenerate.busy}
+              onClick={() => {
+                regenerate.run();
+                onClose();
+              }}
+            >
+              <RefreshCw aria-hidden="true" />
+              {/* One word whatever the state: a job already running may not be
+                  this button's, and the mode's own progress row says what it is. */}
+              Regenerate
+            </Button>
+          )}
+          {refused && (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={about.inFlight || purpose.inFlight || dictating}
+              onClick={() => {
+                /* Explicitly suppress the hooks' unmount flush: the label says
+                   exactly what is being given up, and closing must not retry the
+                   refused write invisibly. */
+                about.abandon();
+                purpose.abandon();
+                onClose();
+              }}
+            >
+              Close without saving
+            </Button>
+          )}
           <Button
             type="button"
             size="xs"
-            variant="outline"
-            /* Held until both boxes are on the server — a run started first
-               would be written for the old words and stamped as current — and
-               while the mode already has a job, so a press is never a second
-               paid call. */
-            disabled={!settled || dictating || refreshing || regenerate.busy}
+            className="prof-panel-done"
+            disabled={closing}
             onClick={() => {
-              regenerate.run();
-              onClose();
+              if (ask(true)) onClose();
             }}
           >
-            <RefreshCw aria-hidden="true" />
-            {/* One word whatever the state: a job already running may not be
-                this button's, and the mode's own progress row says what it is. */}
-            Regenerate
+            Done
           </Button>
-        )}
-        {refused && (
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            disabled={about.inFlight || purpose.inFlight || dictating}
-            onClick={() => {
-              /* Explicitly suppress the hooks' unmount flush: the label says
-                 exactly what is being given up, and closing must not retry the
-                 refused write invisibly. */
-              about.abandon();
-              purpose.abandon();
-              onClose();
-            }}
-          >
-            Close without saving
-          </Button>
-        )}
-        <Button
-          type="button"
-          size="xs"
-          className="prof-panel-done"
-          disabled={closing}
-          onClick={() => {
-            if (ask(true)) onClose();
-          }}
-        >
-          Done
-        </Button>
+        </div>
       </div>
     </>
   );

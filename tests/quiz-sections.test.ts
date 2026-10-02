@@ -31,10 +31,10 @@ const rowOf = new Map(Array.from({ length: 12 }, (_, i) => [bid(i), i] as const)
 
 /** Intro 0–2, Body 3–5, an untitled one 6–8, Close 9–11. */
 const sections: Section[] = [
-  { row: 0, blockId: bid(0), nodeId: "n1", title: "Intro" },
-  { row: 3, blockId: bid(3), nodeId: "n2", title: "Body" },
-  { row: 6, blockId: bid(6), nodeId: "n3", title: "  " },
-  { row: 9, blockId: bid(9), nodeId: "n4", title: "Close" },
+  { row: 0, blockId: bid(0), nodeId: "n1", title: "Intro", titleVoice: "ai" },
+  { row: 3, blockId: bid(3), nodeId: "n2", title: "Body", titleVoice: "ai" },
+  { row: 6, blockId: bid(6), nodeId: "n3", title: "  ", titleVoice: "ai" },
+  { row: 9, blockId: bid(9), nodeId: "n4", title: "Close", titleVoice: "ai" },
 ];
 
 function q(id: string, ...at: number[]): QuizQuestion {
@@ -71,12 +71,13 @@ describe("sectionTally", () => {
 
   it("does not invent containment before the first section, in a supplement, or for a stale id", () => {
     const bounded: Section[] = [
-      { row: 3, blockId: bid(3), nodeId: "body", title: "Body" },
+      { row: 3, blockId: bid(3), nodeId: "body", title: "Body", titleVoice: "ai" },
       {
         row: 9,
         blockId: bid(9),
         nodeId: "notes",
         title: "Notes",
+        titleVoice: "ui",
         supplement: true,
       },
     ];
@@ -89,7 +90,7 @@ describe("sectionTally", () => {
 
 describe("weakSections", () => {
   const row = (title: string, right: number, wrong: number): SectionTally => ({
-    section: { row: 0, blockId: bid(0), nodeId: title, title },
+    section: { row: 0, blockId: bid(0), nodeId: title, title, titleVoice: "ai" },
     questionIds: [],
     right,
     wrong,

@@ -11,10 +11,10 @@
 /* ------------------------------------------------------------------ text --
    The article column. 17px/1.6 and a 65ch measure come from the original app's
    typography research (styles/tokens.css) — 80 chars per line reads ~7% faster
-   but comprehends ~12% worse. The face is Geist, not the Georgia this line said
-   until 2026-09-05: `--font-reading` is `--font-sans` (tokens.css § fonts), and
-   the gutter's `left:` rule three thousand lines down depends on that, because
-   `ch` is measured in the face and weight the length is used at. The measure is applied to
+   but comprehends ~12% worse. `--font-reading` supplies the Geist base; the
+   author voice in styles/voices.css supplies the visible Source Serif face.
+   The gutter's `left:` rule three thousand lines down depends on the active
+   face because `ch` is measured where the length is used. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
    itself and here the text is left-aligned in a table cell.  */
 /* Vertical rhythm. Every gap in this column is a multiple of --block-pad

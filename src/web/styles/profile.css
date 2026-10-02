@@ -588,6 +588,26 @@
   margin-top: 0.5rem;
 }
 .prof-panel-done { margin-left: auto; }
+/* The consequence line and the actions, pinned to the foot of the scrolling
+   panel so Regenerate and Done are on screen when it opens, whatever the boxes
+   hold. The negative bottom margin and matching padding take it over the
+   panel's own 0.6rem bottom padding, so scrolled text does not show beneath it.
+   Plan 261002f: measured clipped at 480px once the consequence line arrived. */
+.prof-panel-foot {
+  position: sticky;
+  bottom: -0.6rem;
+  margin: 0 -0.7rem -0.6rem;
+  padding: 0 0.7rem 0.6rem;
+  background: var(--surface-raised);
+}
+/* What Regenerate gives up, just above it — Quiz's answers (plan 261002f). */
+.prof-panel-consequence {
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
 .prof-panel-text {
   margin: 0.2rem 0 0;
   /* The reader's own prose, in the reading face — it is a paragraph they wrote,

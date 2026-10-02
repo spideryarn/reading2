@@ -64,6 +64,19 @@ vi.mock("../src/web/DictationStrip.js", () => ({
   DictationStrip: () => null,
 }));
 
+/* The badge's own behaviour — the panel, its boxes, Regenerate's guards — is
+   tests/profile-panel.test.tsx's. Here only what Quiz hands it. */
+type BadgeProps = import("../src/web/WrittenForYou.js").ProfileState & {
+  regenerate?: import("../src/web/ProfilePanel.js").Regenerate;
+};
+let badge: BadgeProps | null = null;
+vi.mock("../src/web/WrittenForYou.js", () => ({
+  WrittenForYou: (props: BadgeProps) => {
+    badge = props;
+    return props.written ? createElement("span", { "data-badge": "" }) : null;
+  },
+}));
+
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
 type QuizArrival = import("../src/web/QuizPanel.js").QuizArrival;
 
@@ -138,6 +151,10 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     stalled: false,
     attempt: null,
     answered: new Set<string>(),
+    profiled: false,
+    profileChanged: false,
+    rewriting: false,
+    refresh: async () => {},
     ensure: async () => {},
     write: async () => {},
     cancel: () => {},
@@ -552,6 +569,80 @@ describe("the answer box", () => {
  * `JobProgress` carried a comment claiming the quiz *"watch[es] a job it did
  * not start"*. It starts its own.
  */
+/**
+ * **Written for your profile, and Regenerate** — plan 261002f. Greg, 2026-10-02:
+ * *"it needs a "Regenerate for my profile". That's more important, ok to lose
+ * answers."*
+ */
+describe("the written-for-your-profile badge", () => {
+  beforeEach(() => {
+    badge = null;
+  });
+
+  it("is on the head of a quiz written for a profile, with the forced run behind Regenerate", () => {
+    const wrote: number[] = [];
+    paint(
+      owner({
+        profiled: true,
+        profileChanged: true,
+        write: async () => {
+          wrote.push(1);
+        },
+      }),
+    );
+    expect(host.querySelector("[data-badge]"), "no badge on a profiled quiz").not.toBeNull();
+    expect(badge?.written).toBe(true);
+    expect(badge?.changed).toBe(true);
+    badge?.regenerate?.run();
+    /* `write` is the forced verb — `ensure` would skip a current batch. */
+    expect(wrote).toEqual([1]);
+  });
+
+  it("says before the press that the answers so far go", () => {
+    paint(owner({ profiled: true, profileChanged: true }));
+    expect(badge?.regenerate?.consequence).toMatch(/new questions for your profile/i);
+    expect(badge?.regenerate?.consequence).toMatch(/answers so far are cleared/i);
+  });
+
+  it("holds Regenerate while a quiz job is already starting or running", () => {
+    paint(owner({ profiled: true, profileChanged: true, starting: true }));
+    expect(badge?.regenerate?.busy).toBe(true);
+    paint(owner({ profiled: true, profileChanged: true }));
+    expect(badge?.regenerate?.busy).toBe(false);
+  });
+
+  it("holds Regenerate after the job, until the replacement batch has been read", () => {
+    /* Sol's plan review: `job` is gone before the re-read lands, and a failed
+       re-read keeps the old batch with its old `profileChanged`. */
+    paint(owner({ profiled: true, profileChanged: true, rewriting: true }));
+    expect(badge?.regenerate?.busy).toBe(true);
+  });
+
+  it("offers a read retry after a rewrite's GET fails, without buying another run", async () => {
+    const refresh = vi.fn(async () => {});
+    const write = vi.fn(async () => {});
+    paint(owner({ rewriting: true, error: "Couldn't read the questions.", refresh, write }));
+    expect(buttons("Read the new questions")).toHaveLength(1);
+    press("Read the new questions");
+    await act(async () => {});
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("holds the stale banner's forced run until the replacement has been read too", () => {
+    paint(owner({ stale: true }));
+    expect(buttons("Write them again")).toHaveLength(1);
+    paint(owner({ stale: true, rewriting: true }));
+    expect(buttons("Write them again")).toHaveLength(0);
+    expect(buttons("Read the new questions")).toHaveLength(1);
+  });
+
+  it("is absent on a quiz written with no profile", () => {
+    paint(owner({ profiled: false }));
+    expect(host.querySelector("[data-badge]")).toBeNull();
+  });
+});
+
 describe("the gap between pressing and the job appearing", () => {
   it("takes the button away rather than offering a second press", () => {
     paint(owner({ quiz: null, status: "none", starting: true }));
@@ -1402,8 +1493,8 @@ describe("where to look again", () => {
   /** "Opening" is KNOWN; "Middle" is OTHER and THIRD. */
   const SECTIONS = {
     sections: [
-      { row: 0, blockId: KNOWN as BlockId, nodeId: "n1", title: "Opening" },
-      { row: 1, blockId: OTHER as BlockId, nodeId: "n2", title: "Middle" },
+      { row: 0, blockId: KNOWN as BlockId, nodeId: "n1", title: "Opening", titleVoice: "ai" as const },
+      { row: 1, blockId: OTHER as BlockId, nodeId: "n2", title: "Middle", titleVoice: "ai" as const },
     ],
     rowOf: new Map<BlockId, number>([
       [KNOWN as BlockId, 0],
@@ -1451,6 +1542,8 @@ describe("where to look again", () => {
       (host.querySelector(".quiz-look-again-section") as HTMLElement).click();
     });
     expect(jumped.slice(before)).toEqual([KNOWN]);
+    // In the title's voice — the fixture's titles are the model's (fonts.md).
+    expect(host.querySelector(".quiz-look-again-section")?.classList.contains("voice-ai")).toBe(true);
   });
 
   it("offers the missed question from elsewhere on the path, not while it is open, and goes back to it as a jump", () => {

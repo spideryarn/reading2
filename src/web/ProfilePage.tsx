@@ -63,6 +63,7 @@ import { SettingsSection } from "./SettingsSection.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { useProfile } from "./useProfile.js";
 import { useSlow } from "./useSlow.js";
+import { articleTitleVoice, withVoice } from "./voice.js";
 
 const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
 
@@ -298,7 +299,14 @@ export function ProfilePage() {
                 href={readHref(a.slug)}
                 className="tw:flex tw:items-baseline tw:justify-between tw:gap-4 tw:px-4 tw:py-2.5 tw:text-sm tw:no-underline tw:hover:bg-muted/40"
               >
-                <span className="tw:truncate tw:text-foreground">{a.title}</span>
+                <span
+                  className={withVoice(
+                    "tw:truncate tw:text-foreground",
+                    articleTitleVoice(Boolean(a.titleOverridden)),
+                  )}
+                >
+                  {a.title}
+                </span>
                 <span className="tw:shrink-0 tw:text-xs tw:text-ink-faint">
                   {a.minutes ? `${a.minutes} min` : ""}
                 </span>

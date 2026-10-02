@@ -109,7 +109,13 @@ re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
 they are stable words rather than ids, so no amount of re-ingesting can make
 them quietly wrong.
 
-Those are all `/read/<slug>`. The five below are `/`.
+Those are all `/read/<slug>`. One more is the Metadata page's own, `/read/<slug>/metadata`:
+
+| Param | Meaning | History | Example |
+|---|---|---|---|
+| `section` | which Metadata section to **open, scroll to and flash on arrival** — an instruction, not a place: the page carries it out and then takes it off the address (*replace*), and only once the section has actually been found, so a section still mounting is waited for rather than skipped. A closed list, `METADATA_SECTIONS` in [`params.ts`](../../src/web/params.ts) (`ai-processing` and `access-sharing` today); anything else does nothing. Written by the command bar's *Run again* rows, which land a run here rather than in the mode, and by its section rows (*High-powered AI*, *AI processing*, *Access & sharing*). In `last-view.ts`'s `NEVER_REMEMBERED` — [261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md) | **replace** | `?section=ai-processing` |
+
+The five below are `/`.
 
 ### The library's own five
 

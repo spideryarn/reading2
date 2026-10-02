@@ -9,6 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { MarginaliaHead } from "../src/web/marginalia/MarginaliaColumn.js";
+import type { HeadStep } from "../src/web/marginalia/notes.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,12 +22,14 @@ afterEach(async () => {
   root = null;
 });
 
-function draw(path: string[]): HTMLElement {
+/** Plain titles are the model's; a step passes its own voice. */
+function draw(path: (string | HeadStep)[]): HTMLElement {
+  const steps = path.map((s): HeadStep => (typeof s === "string" ? { title: s, voice: "ai" } : s));
   host = document.createElement("div");
   document.body.append(host);
   const nextRoot = createRoot(host);
   root = nextRoot;
-  act(() => nextRoot.render(<MarginaliaHead room path={path} arc={null} />));
+  act(() => nextRoot.render(<MarginaliaHead room path={steps} arc={null} />));
   return host;
 }
 
@@ -38,6 +41,22 @@ describe("the head's path", () => {
     expect(steps.map((s) => s.getAttribute("data-depth"))).toEqual(["0", "1"]);
     expect(steps[0]?.textContent).toBe(part);
     expect(steps[1]?.textContent).toBe(section);
+  });
+
+  it("draws each title in its voice, and its card too (fonts.md)", async () => {
+    const steps = [
+      ...draw([
+        { title: "Results", voice: "author" },
+        { title: "Why it holds", voice: "ai" },
+      ]).querySelectorAll<HTMLElement>(".marg-path-step"),
+    ];
+    expect(steps.map((s) => s.classList.contains("voice-author"))).toEqual([true, false]);
+    expect(steps.map((s) => s.classList.contains("voice-ai"))).toEqual([false, true]);
+
+    steps[0]?.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => new Promise((go) => setTimeout(go, 300)));
+    const card = document.getElementById(steps[0]?.getAttribute("aria-describedby") ?? "");
+    expect(card?.querySelector("p")?.className ?? card?.className).toContain("voice-author");
   });
 
   it("keeps the join for a screen reader outside the clipped title", () => {

@@ -203,11 +203,11 @@ const MANIFEST = [
      value of writing this list by hand is that a position is a claim somebody
      made, and two sheets cannot both be last. */
   "changelog.css",
-  /* Late, but not for the cascade's sake: every rule is `:root[data-voices]`
-     plus at least one class, which outranks the one-class rules it overrides
-     wherever it sits. Late so that a tie with a stronger rule elsewhere goes
-     its way too. Shares no element with the sheet below. The per-voice faces,
-     behind the Experimental switch — docs/plans/261001d-typeface-per-voice.md. */
+  /* Late, but not for the cascade's sake: every rule is `:root` plus at least
+     one class, which outranks the one-class rules it overrides wherever it
+     sits. Late so that a tie with a stronger rule elsewhere goes its way too.
+     Shares no element with the sheet below. The per-voice faces, for everyone
+     since 2026-10-02 — docs/project/fonts.md. */
   "voices.css",
   /* **Last, and the position is the point.** The wordmark's hover animations
      have to beat `.logo`, `.logo-home` and `.dock-home`, which are set in

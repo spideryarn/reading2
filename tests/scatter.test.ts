@@ -174,6 +174,7 @@ describe("both scatters", () => {
       // The card's second line is the paragraph's own words — a block has no
       // gist, which is the whole reason this picture needs one.
       expect(n.gist ?? "").toContain("Paragraph");
+      expect(n.gistVoice).toBe("author");
       // Colour is never the only carrier: position and topic are in the label.
       expect(n.label ?? "").toMatch(/paragraph \d+ of \d+, topic \d+ of \d+/);
     }

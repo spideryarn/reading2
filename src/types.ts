@@ -1942,8 +1942,20 @@ export interface LibraryEntry {
   sections: number;
   /** How many questions have been asked about it — reader state, not article state. */
   comments: number;
-  /** The whole piece in one sentence: the tree root's gist. */
+  /**
+   * The whole piece in one sentence: the tree root's gist — or, where there is
+   * none, its summary, or the article's own excerpt (src/library-scalars.ts §
+   * the blurb's fallback). So it may be the model's words or the author's.
+   */
   gist?: string;
+  /**
+   * **Whose words `gist` is**, so the shelf can put it in the right face
+   * (docs/project/fonts.md): `author` when it is the excerpt, `ai` when a model
+   * wrote it. Present whenever `gist` is; absent only on a shelf body saved in
+   * the browser before 2026-10-02, which the client reads as unknown and draws
+   * in the app's face (src/web/voice.ts § `gistVoice`).
+   */
+  gistVoice?: "ai" | "author";
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
   /**
@@ -4620,14 +4632,22 @@ export interface Quiz {
   dropped: QuizDropped;
   generatedAt: string;
   elapsedMs: number;
+  /**
+   * `hashProfile` of the rendered profile these were written for, `null` for
+   * none, and **absent on a quiz written before 2026-10-02**, which therefore
+   * shows no badge. Recorded for the owner's *written for your profile* badge
+   * and its Regenerate; **not in the freshness stamp**, so a changed profile
+   * never makes a quiz stale on its own. Not in the *make public* dialog either:
+   * a shared link carries no quiz (`NeverShared`, src/store/pg.ts). Plan 261002f.
+   */
+  profileHash?: string | null;
 }
 
 /**
- * `GET /api/quiz/:slug`. Two staleness facts and no third, exactly as
- * `TimelineResponse` above: the reader profile is **not** in this stage's
- * stamp, so there is no `profileChanged` to report and the route sends no
- * `withProfileChanged`.
- * docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+ * `GET /api/quiz/:slug`. Two staleness facts and, since 2026-10-02, the
+ * reader's: `profileChanged` comes from `withProfileChanged` like Ideas' and
+ * Simple's, and is a label's fact rather than staleness — nothing re-runs on
+ * it. docs/plans/261002f-quiz-regenerate-for-my-profile.md.
  */
 export interface QuizResponse {
   quiz: Quiz;
@@ -4635,14 +4655,12 @@ export interface QuizResponse {
   stale: boolean;
   /** The article is the same and we would write the questions differently now. */
   outdated: boolean;
+  /** Written for a profile the reader has since changed. `ThreadResponse`. */
+  profileChanged: boolean;
 }
 
-/**
- * As `TimelineFound`, and here too it is the *same* type, for the same reason:
- * there is no `profileChanged` for a store adapter to leave out. Named rather
- * than skipped so both adapters agree with their neighbours by shape.
- */
-export type QuizFound = QuizResponse;
+/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
+export type QuizFound = Omit<QuizResponse, "profileChanged">;
 
 /**
  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.

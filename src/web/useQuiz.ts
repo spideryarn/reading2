@@ -210,6 +210,21 @@ export interface UseQuiz {
   attempt: Attempt | null;
   /** Which questions have been marked to a `done` this session. Never persisted. */
   answered: ReadonlySet<QuizQuestionId>;
+  /** These were written for a reader profile — `quiz.profileHash != null`. */
+  profiled: boolean;
+  /** …and the reader's profile has changed since. The server's verdict. */
+  profileChanged: boolean;
+  /**
+   * **A forced run was pressed on the batch still on screen**, and has neither
+   * replaced it nor failed. Covers the gap `job`/`starting` do not: a finished
+   * job leaves `job` before its re-read lands, and a re-read that fails keeps
+   * the old batch *and its old `profileChanged`*, so the badge's Regenerate
+   * would offer a second paid rewrite. A new batch, or a failed or cancelled
+   * job, releases it. GPT Sol's plan review of 261002f.
+   */
+  rewriting: boolean;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   /**
    * **Write the questions if there are none.** The unforced verb — what the
    * automatic run takes, and what the button under the empty state takes, which
@@ -253,6 +268,24 @@ export interface QuizRead {
   quiz: Quiz | null;
   stale: boolean;
   outdated: boolean;
+  /** `UseQuiz.profiled`. */
+  profiled: boolean;
+  /** `UseQuiz.profileChanged`. */
+  profileChanged: boolean;
+  /**
+   * **The batch a forced rewrite was pressed on**, until it is replaced or the
+   * rewrite is known to have ended without replacing it — `UseQuiz.rewriting`.
+   * Held up here rather than in the band because the band unmounts on Recall
+   * or any other mode while the paid job runs on; a hold that died with it
+   * re-offered Regenerate on the old batch (GPT Sol's code review of 261002f,
+   * docs/postmortems/261002f-a-band-local-hold-cannot-protect-a-job-that-outlives-the-band.md).
+   * A successful read of a different batch releases it here.
+   */
+  held: string | null;
+  hold(batchId: string): void;
+  release(): void;
+  /** Successful reads so far — the band's "a read has landed since" clock. */
+  okReads: number;
   error: string | null;
   /** Read again, joining a read in flight. `OrderedRead.reload`. */
   reload(): Promise<void>;
@@ -265,7 +298,17 @@ export function useQuizRead(slug: string): QuizRead {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
+  const [profiled, setProfiled] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
+  const [held, setHeld] = useState<string | null>(null);
+  const [okReads, setOkReads] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  /* A hold is about one article's batch. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new article
+  useEffect(() => {
+    setHeld(null);
+  }, [slug]);
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -284,6 +327,10 @@ export function useQuizRead(slug: string): QuizRead {
         setQuiz(null);
         setStale(false);
         setOutdated(false);
+        setProfiled(false);
+        setProfileChanged(false);
+        setHeld(null);
+        setOkReads((n) => n + 1);
         setError(null);
         setStatus("none");
         return;
@@ -293,6 +340,13 @@ export function useQuizRead(slug: string): QuizRead {
       setQuiz(loaded.quiz);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
+      /* `!= null`, as useIdeas.ts: absent (written before 261002f) and `null`
+         (written for nobody) both mean no badge. */
+      setProfiled(loaded.quiz.profileHash != null);
+      setProfileChanged(loaded.profileChanged);
+      /* The replacement has arrived: nothing left to wait for. */
+      setHeld((h) => (h !== null && h !== loaded.quiz.batchId ? null : h));
+      setOkReads((n) => n + 1);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -322,7 +376,24 @@ export function useQuizRead(slug: string): QuizRead {
     void reload();
   }, [reload]);
 
-  return { status, quiz, stale, outdated, error, reload, refresh };
+  const hold = useCallback((batchId: string) => setHeld(batchId), []);
+  const release = useCallback(() => setHeld(null), []);
+
+  return {
+    status,
+    quiz,
+    stale,
+    outdated,
+    profiled,
+    profileChanged,
+    held,
+    hold,
+    release,
+    okReads,
+    error,
+    reload,
+    refresh,
+  };
 }
 
 /**
@@ -330,7 +401,7 @@ export function useQuizRead(slug: string): QuizRead {
  * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
  */
 export function useQuiz(slug: string, read: QuizRead): UseQuiz {
-  const { status, quiz, stale, outdated, error, reload, refresh } = read;
+  const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
 
@@ -364,7 +435,39 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     await queue.start();
   }, [queue]);
 
+  /* **`rewriting`: the hold lives in the read** (`QuizRead.held`), so it
+     survives this band unmounting while the job runs on. The band's part is
+     releasing it when the rewrite is known to have ended without a new batch:
+
+     - the job failed or was cancelled, as this tab saw it (`failed`);
+     - or the job list is loaded and idle, and a read has landed since it went
+       idle. That read is the server's word: a rewrite that succeeded would
+       have shown a new batch (which the read releases on its own), so one that
+       shows the same batch with no job running ended without replacing it —
+       the case of a job that failed while the band was closed, where `failed`
+       is not known to a fresh mount. A read that has not landed, or failed,
+       keeps the hold: that is the window the hold exists for. */
+  const { held, hold, release, okReads } = read;
+  const rewriting = held !== null && held === batchId && queue.failed === null;
+  useEffect(() => {
+    if (held !== null && queue.failed !== null) release();
+  }, [held, queue.failed, release]);
+  const idle = queue.loaded && queue.job === null && !queue.starting;
+  const readsAtIdle = useRef<number | null>(null);
+  useEffect(() => {
+    if (!idle) {
+      readsAtIdle.current = null;
+      return;
+    }
+    if (readsAtIdle.current === null) {
+      readsAtIdle.current = okReads;
+      return;
+    }
+    if (held !== null && okReads > readsAtIdle.current) release();
+  }, [idle, okReads, held, release]);
+
   const write = useCallback(async () => {
+    if (batchId) hold(batchId);
     await queue.start({
       /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
          offered beside questions that are current, so an unforced run would skip
@@ -376,7 +479,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
          have genuinely been rewritten. */
       force: true,
     });
-  }, [queue]);
+  }, [queue, batchId, hold]);
 
   /* **The reader pressed Quiz and there is nothing there — write the questions.**
      `ensure` and not `write`, for the double-charge reason on the interface; and
@@ -509,6 +612,10 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     stalled: queue.stalled,
     attempt,
     answered,
+    profiled,
+    profileChanged,
+    rewriting,
+    refresh,
     ensure,
     write,
     cancel: queue.cancel,

@@ -56,10 +56,9 @@
 @import "@fontsource-variable/geist/wght.css";
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/geist-mono/wght.css";
-/* The author's and the model's faces, read only by styles/voices.css (the
-   Experimental switch's per-voice faces). An @font-face downloads nothing until
-   a rule uses its family, so a reader with the switch off pays nothing for
-   these. `opsz.css` rather than `wght.css`: the same weight axis plus optical
+/* The author's and the model's faces, read only by styles/voices.css, for every
+   reader since 2026-10-02. An @font-face downloads nothing until a rule uses
+   its family. `opsz.css` rather than `wght.css`: the same weight axis plus optical
    size, so a serif at 14px in a quote card is drawn for 14px. IBM Plex Mono is
    static, so it is four files: 400 and 700, upright and italic (no 500: the dark
    mode's 450 then resolves to 400, as it did for Courier — docs/project/fonts.md). */

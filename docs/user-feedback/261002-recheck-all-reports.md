@@ -69,9 +69,17 @@ Queued (authorised under [feedback-reports.md § Into the Overseer's queue](../p
 Not queued:
 
 - `m0mcqb`: is the iPad battery still draining? One cause was fixed on 2026-09-12. The other
-  measured cost, scroll painting, was named and not built. The answer to the question decides it.
+  measured cost, scroll painting, was named and not built. Greg, 2026-10-02:
+
+  > It's a bit hard to be sure because my iPad's getting quite old. It definitely feels like it
+  > drains a bit faster than I'd like, but it's not as big a problem. So I think if there's a fix
+  > that you can make that looks promising, but won't add too much complexity, then definitely go
+  > for it.
+
+  Queued as session `fbm0mcqb-ipad-scroll-paint`.
 - `ka23h9`: the images that did not import. The code fix is on dev, but re-running the affected
-  articles is a production write, so it is Greg's to approve.
+  articles is a production write. Greg, 2026-10-02: *"No, don't bother. I mostly care about
+  [articles] going forward."* Declined; the fix on dev covers new imports.
 - `a5gzb9`: already on [awaiting-approval.md](awaiting-approval.md).
 - `jk5qxu` and `pexkj4`: small leftovers Greg offered as optional ("better still"), or a collapsed
   box inside a dialog that otherwise shipped.
