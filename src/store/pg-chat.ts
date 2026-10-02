@@ -277,10 +277,9 @@ function messageRow(
     passages: message.passages ?? null,
     interrupted: message.interrupted ?? false,
     editedAt: message.editedAt ? new Date(message.editedAt) : null,
-    /* Written with the row, which for an assistant reply is the **pending**
-       row — see `ChatMessage.stance`. `finish` never touches it: an answer that
-       errored, was stopped, or was swept still has to say which instruction
-       produced it, and the retry of that row has to have something to inherit. */
+    /* Legacy, but still part of the lossless row mapping: imported answers from
+       before Recall became one voice may carry it. New begin/edit/spoken paths
+       construct messages without one, so they write null. */
     stance: message.stance ?? null,
     /* **The write half, and it has to be listed here too.** `toMessage` names it
        on the way out; without this line it is never written in the first place,
@@ -522,6 +521,11 @@ const rawPgChatStore: ChatStore = {
           model: null,
           error: null,
           stopped: false,
+          /* Retrying is a new one-voice attempt. The row id survives, but the
+             legacy instruction on an old answer does not; omitting this field
+             would leave the database carrying a stance that the in-memory
+             `reply` no longer has. */
+          stance: null,
           /* A retry answers the same question afresh, so last attempt's
              pointers are as stale as its tool strip — and an `interrupted`
              carried over would label an answer nobody has interrupted yet. */

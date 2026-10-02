@@ -304,10 +304,10 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <Gallery>
           {/* Greg, 2026-08-27, the review-mode request, rephrased to the reader. */}
           <Portrait shot={SHOTS.remember} title="Remember." mode="remember">
-            Type or talk about what you have taken from the piece, and get a plain, concise
-            response: corrections, misunderstandings, refinements, gaps. Written not to be annoying,
-            patronising or superior — you are earnestly looking to deepen your understanding, and it
-            treats you so.
+            Type or talk about what you remember of the piece. Short replies correct what comes apart
+            from it, link the passage, and usually nudge you to remember a little more — filling the
+            gap when you are stuck rather than making you fail. Written not to be annoying,
+            patronising or superior.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which

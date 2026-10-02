@@ -125,9 +125,12 @@ async function post(body: unknown): Promise<{ status: number; body: string }> {
 
 /** A stored Remember thread, so the "already a different kind" cases have one to hit. */
 async function seedRemember(threadId: string) {
-  await post({ threadId, question: "what I took from it", kind: "remember", stance: "socratic" });
+  await post({ threadId, question: "what I took from it", kind: "remember" });
 }
 
+/* A stance is legacy since 2026-10-02 (one Recall voice): still validated, so
+   a client with a bug hears about it, and accepted on an ordinary Remember send
+   from a tab left open across the deploy — then dropped, never stored. */
 describe("a stance the server does not know is refused, not ignored", () => {
   it("400s an unknown stance", async () => {
     const { status } = await post({
@@ -149,7 +152,7 @@ describe("a stance the server does not know is refused, not ignored", () => {
     for (const s of ["balanced", "respond", "socratic", "signposts"]) expect(body).toContain(s);
   });
 
-  it("accepts all four", async () => {
+  it("accepts all four from a stale tab, and stores none of them", async () => {
     for (const stance of ["balanced", "respond", "socratic", "signposts"]) {
       const { status } = await post({
         threadId: `spya-s${stance.slice(0, 5)}`,
@@ -160,6 +163,28 @@ describe("a stance the server does not know is refused, not ignored", () => {
       // 200: the turn is written and the stream opens before the model is called.
       expect(status, `${stance} was refused`).not.toBe(400);
     }
+    /* One Remember thread per article, so all four landed in the same one. */
+    const remember = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "remember");
+    expect(remember?.messages.length).toBeGreaterThanOrEqual(8);
+    for (const m of remember?.messages ?? []) expect(m).not.toHaveProperty("stance");
+  });
+
+  it("accepts a legacy stance on a kind-less follow-up to a stored Remember thread", async () => {
+    const id = "spya-staee2";
+    await seedRemember(id);
+    const { status } = await post({ threadId: id, question: "and another thing", stance: "socratic" });
+    expect(status).not.toBe(400);
+    const remember = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
+    for (const m of remember?.messages ?? []) expect(m).not.toHaveProperty("stance");
+  });
+
+  it("400s a valid legacy stance on an ordinary Chat send", async () => {
+    const { status } = await post({
+      threadId: "spya-chatst",
+      question: "an ordinary question",
+      stance: "socratic",
+    });
+    expect(status).toBe(400);
   });
 
   it("400s an unknown kind", async () => {
@@ -230,8 +255,8 @@ describe("a thread's kind belongs to the thread", () => {
   });
 
   /* **Refused before anything is read, let alone settled.** A retry's thread
-     already has a kind and its answer already has a stance, so a body carrying
-     either can only be a stale tab — and `settleThread`, which a retry calls,
+     already has a kind, and old clients never sent a stance on retry or edit,
+     so a body carrying either is invalid — and `settleThread`, which a retry calls,
      stops a live answer in that thread. Rejecting after that would abort an
      answer someone was watching in another tab and record it as stopped. */
   it("400s a retry that carries a kind", async () => {
@@ -262,20 +287,13 @@ describe("a thread's kind belongs to the thread", () => {
 });
 
 describe("what actually gets stored", () => {
-  it("writes the kind and the stance on the very first turn", async () => {
+  it("writes the kind on the very first turn", async () => {
     const id = "spya-r8m2wz";
-    await post({ threadId: id, question: "what I took from it", kind: "remember", stance: "signposts" });
+    await post({ threadId: id, question: "what I took from it", kind: "remember" });
     const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
     expect(thread?.kind).toBe("remember");
-    /* **And the answer here has FAILED**, because `fetch` is stubbed to reject
-       — which makes this the sharpest version of the test rather than an
-       inconvenience. The stance was written onto the pending row before the
-       model was called, so it is still there on a row that never produced a
-       word. Write it in `finishTurn` instead and this goes red: every crashed,
-       stopped or swept answer would then have no stance, and the retry of one
-       would have nothing to inherit. */
+    // `fetch` is stubbed to reject, so the answer failed — but it was stored.
     expect(thread?.messages.at(-1)?.status).toBe("error");
-    expect(thread?.messages.at(-1)?.stance).toBe("signposts");
   });
 
   it("stores no stance for an ordinary chat", async () => {
@@ -298,7 +316,6 @@ describe("what actually gets stored", () => {
       threadId: "spya-r9m3wz",
       question: long,
       kind: "remember",
-      stance: "balanced",
     });
     expect(asChat.status).toBe(413);
     expect(asRemember.status).not.toBe(413);
@@ -308,5 +325,35 @@ describe("what actually gets stored", () => {
     const absurd = "x".repeat(20_001);
     const { status } = await post({ threadId: "spya-r9m4wz", question: absurd, kind: "remember" });
     expect(status).toBe(413);
+  });
+});
+
+/* Report spya-f3b6ab (Greg, 2026-10-01): "I tried editing a previous message in
+   Recall mode, hoping that it would then trigger a response to that modified
+   message, but it didn't." The request the real client sends for an edit —
+   tests/remember-edit-asks-again.test.tsx pins its exact shape — must open a
+   stream and start a fresh answer under the rewritten question. */
+describe("an edit in a Remember conversation is answered", () => {
+  it("rewrites the question and begins a new answer under it", async () => {
+    const id = "spya-r7k8wz";
+    await seedRemember(id);
+    const before = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
+    const question = before?.messages[0];
+    const tail = before?.messages.at(-1);
+    expect(question?.role).toBe("user");
+    const { status, body } = await post({
+      threadId: id,
+      edit: question?.id,
+      question: "what I meant to say",
+      at: null,
+      expectedTailId: tail?.id,
+    });
+    expect(status).toBe(200);
+    expect(body).toContain("event: begin");
+    const after = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === id);
+    expect(after?.messages).toHaveLength(2);
+    expect(after?.messages[0]?.text).toBe("what I meant to say");
+    expect(after?.messages[0]?.editedAt).toBeTruthy();
+    expect(after?.messages[1]?.id).not.toBe(tail?.id);
   });
 });

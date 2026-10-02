@@ -34,6 +34,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 ## See also
 
+- [261002c-recall-and-tutorial-pedagogy-for-remember-mode.md](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
+  — retrieval practice, hint ladders, Socratic questions and one-to-one tutoring, for Remember's
+  Recall and Tutorial prompts
+
 - [plans.md](plans.md) · [postmortems.md](postmortems.md) · [tutorials.md](tutorials.md)
 - [open-questions.md](open-questions.md) — the calls nobody has made yet. A research doc is often
   what turns one of those into an answer.

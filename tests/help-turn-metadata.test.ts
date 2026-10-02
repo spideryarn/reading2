@@ -18,8 +18,7 @@
  * "Try again" on an explanation and is silently answered with the ordinary
  * prompt. On the message row there is nothing to refuse: `withRetry` hands back
  * the stored question, `withEdit` spreads it, and the route reads `help` off
- * storage exactly as it already reads `kind` off the thread and `stance` off
- * the pending reply.
+ * storage exactly as it already reads `kind` off the thread.
  *
  * Everything here is pure — no store, no clock, no model. The wire half is
  * tests/chat-help-reaches-the-server.test.tsx and the prompt half is
@@ -54,10 +53,8 @@ describe("withTurn marks the message the reader sent", () => {
 
   it("does NOT write it onto the pending answer", () => {
     const { reply } = withTurn(empty, helpTurn, AT);
-    /* `help` is a fact about what the reader asked for, not about the answer —
-       the mirror image of `stance`, which is written onto the reply and never
-       onto the question. Two flags, opposite rows, and each would be invisible
-       on the other. */
+    /* `help` is a fact about what the reader asked for, not about the answer.
+       Writing it on the other row would be invisible to the prompt path. */
     expect(reply).not.toHaveProperty("help");
   });
 

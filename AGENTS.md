@@ -73,6 +73,7 @@ listed here; the names under each are files in `docs/project/`.
   `live-conversation.md` (talking to the article out loud) ·
   `remember-mode.md` (say what you took from it, and find out) ·
   `quiz.md` (the other half: the article asks, you answer) ·
+  `remembering-vision.md` (where Remember is going, and what its sub-modes share) ·
   `links.md` (hover cards on the article's own hyperlinks) ·
   `cross-references.md` (the article linked to itself, claim to the passage behind it) ·
   `tooltips.md` · `keyboard.md` ·

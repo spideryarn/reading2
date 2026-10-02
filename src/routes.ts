@@ -500,9 +500,9 @@ import {
      413 cannot drift apart. */
   MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
-/* A value, not a type — the one list the stance is validated against, shared
-   with the client's picker so a fifth stance cannot be accepted here and
-   missing from the menu. src/types.ts § REMEMBER_STANCES. */
+/* A value, not a type — the one list a legacy stance is validated against
+   (`streamChat` says why one is still accepted at all).
+   src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
 import type { Article, CommentAnchor, ResetResponse } from "./types.js";
 
@@ -2767,12 +2767,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     visible,
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
-  /* **Validated, never coerced.** An unknown value is a 400 rather than a
-     silent fall back to the default: a client that sends `stance: "socratik"`
-     and gets a 200 has no way to learn that every answer it receives was
-     `balanced`, and neither has the reader. Same reasoning as the `kind` check
-     below, and the same reason `REMEMBER_STANCES` is one exported list rather
-     than a set of string literals written out again here. */
+  /* **A stance is a legacy field: validated, then dropped.** Until 2026-10-02
+     Recall had four stances and the client sent one on every new Remember
+     turn. There is one voice now, and nothing reads a stance — but a tab left
+     open across that deploy still sends one, and it is accepted on exactly the
+     request it used to be sent with (an ordinary Remember send, checked below)
+     so that tab's next turn does not 400. An unknown value is still a 400: a
+     client sending `stance: "socratik"` has a bug, and accepting it quietly is
+     how the bug survives. Kept indefinitely — the check is cheap and a tab can
+     stay open for weeks.
+     docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
   if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
     throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
   }
@@ -2827,16 +2831,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refused rather than ignored — the rule the anchor check below already
      follows, for the same reason.
 
-     Their thread already has a kind, and the answer they are replacing already
-     has a stance: `withRetry` carries it over from the row it blanks, and
-     `withEdit` from the answer being replaced. A stance in one of these bodies
-     could only mean "answer this stored question differently from how it was
-     asked", which is a thing a reader might want and is not what a button
-     labelled "have another go" does. If it arrives it will be an explicit
-     control with its own name. GPT Sol's review of docs/plans/260827ah-review-mode.md,
-     finding 4. */
+     Their thread already has a kind. A stance is legacy (above), and no client
+     ever sent one on a retry or an edit, so refusing it here loses no stale
+     tab. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
-    throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
+    throw httpError(400, "A retry or an edit may not include a kind or legacy stance");
   }
   /* **And neither may claim to be a help press**, for a sharper version of the
      same reason — sharper because here the client would be *right* and still
@@ -2913,11 +2912,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
   }
-  /* **A stance is meaningless on a chat, so it is refused rather than stored.**
-     The check constraint only says "assistant rows only"; without this, a
-     request naming a stance and no kind writes one onto a chat answer, where
-     nothing reads it and the transcript looks right. An invariant the database
-     cannot express is one the route has to. GPT Sol's review, finding 7. */
+  /* **A stance anywhere but a Remember send is refused**, as it always was:
+     the legacy acceptance above covers the one request old tabs sent it on and
+     nothing wider. GPT Sol's review, finding 7. */
   if (stance !== undefined && !askingRemember) {
     throw httpError(400, "A stance only applies in Remember mode");
   }
@@ -3143,14 +3140,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
             ...(beginKind ? { kind: beginKind } : {}),
-            /* Onto the **pending** reply row, inside the same write as the
-               question — see `ChatMessage.stance`. Only meaningful on a Remember turn;
-               `withTurn` writes whatever it is given and the check constraint
-               refuses one on a user row. */
-            ...(stance ? { stance: stance as RememberStance } : {}),
-            /* Onto the **user** row, not the reply — the mirror of `stance` just
-               above. `withTurn` writes it and a CHECK constraint refuses one on
-               an assistant row. */
+            /* No stance: the legacy wire field was validated and dropped
+               above, so neither row receives it. `help`, below, belongs on
+               the user row; `withTurn` puts it there for retries to inherit. */
             ...(help === true ? { help: true as const } : {}),
           });
   });
@@ -3339,15 +3331,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          The quote stays fenced in `anchorSection`: the passage is the article's
          words, and the article is untrusted — docs/project/security.md. */
       anchor: thread.anchor ?? null,
-      /* And the stance from the reply row, for the same reason one step down:
-         `withTurn` wrote the request's, `withRetry` carried over the replaced
-         answer's, `withEdit` took it from the answer it is replacing. Reading
-         it back off the row means all three paths are asked the same question —
-         "what does this pending answer say it is?" — instead of the route
-         re-deriving it three ways. */
-      ...(reply.stance ? { stance: reply.stance } : {}),
       /* **From the stored QUESTION row, never from the request body** — the rule
-         `kind` and `stance` above already follow, applied to the one field the
+         `kind` above already follows, applied to the one field the
          client could have got right and still must not be asked.
 
          All three ways in agree here without arranging it: `withTurn` wrote it

@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { BlockId, ChatThread, RememberStance, ThreadKind } from "../../../types.js";
+import type { BlockId, ChatThread, ThreadKind } from "../../../types.js";
 import { currentAt, rememberParam, threadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
@@ -157,7 +157,7 @@ export function RememberBand({
   return (
     <ConversationBand
       /* Keyed so that leaving Quiz and coming back starts clean rather than
-         carrying the previous visit's focus nonce and stance — the same reason
+         carrying the previous visit's focus nonce — the same reason
          `Reader` keys this component on `mode`. */
       key="remember-recall"
       slug={slug}
@@ -674,27 +674,6 @@ export function ConversationBand({
      said" resolve to where the reader actually is. */
   const at = currentAt();
 
-  /**
-   * The stance the next Remember answer will be asked for.
-   *
-   * **Not in the URL**, for the rule url-state.md keeps: it changes nothing on
-   * screen, only what the next answer is asked for. It belongs to this composer
-   * session rather than to an address somebody can share.
-   *
-   * **Seeded from the last answer in the open conversation**, so a reader who
-   * chose Socratic and comes back tomorrow finds it still on Socratic — the
-   * stance is stored on every answer anyway, for the transcript's sake, so this
-   * memory is free. `picked` is what makes it a seed rather than a leash: once
-   * the reader has touched the control it is theirs, and reopening a thread
-   * does not overrule them mid-session.
-   */
-  const [picked, setPicked] = useState<RememberStance | null>(null);
-  const open = threads.find((t) => t.id === current);
-  const lastStance = [...(open?.messages ?? [])]
-    .reverse()
-    .find((m) => m.role === "assistant" && m.stance)?.stance;
-  const stance: RememberStance = picked ?? lastStance ?? "balanced";
-
   return (
     <ChatPanel
       slug={slug}
@@ -744,7 +723,6 @@ export function ConversationBand({
           onThreadId: (corrected) => void setThread(corrected),
           kind,
           ...(onScreen ? { visible: onScreen() } : {}),
-          ...(kind === "remember" ? { stance } : {}),
         });
         if (id !== current) void setThread(id);
       }}
@@ -763,7 +741,6 @@ export function ConversationBand({
           onThreadId: (corrected) => void setThread(corrected),
           kind,
           ...(onScreen ? { visible: onScreen() } : {}),
-          ...(kind === "remember" ? { stance } : {}),
         });
         void setThread(id);
         setFocusNonce((n) => n + 1);
@@ -813,8 +790,6 @@ export function ConversationBand({
       focusNonce={focusNonce}
       error={error}
       kind={kind}
-      stance={stance}
-      onStance={setPicked}
       subMode={subMode}
     />
   );

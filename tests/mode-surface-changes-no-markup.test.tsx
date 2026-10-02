@@ -696,8 +696,6 @@ async function mountChat(kind: "chat" | "remember"): Promise<void> {
       createElement(ChatPanel, {
         slug: "a-piece",
         kind,
-        stance: "balanced" as const,
-        onStance: () => {},
         loaded: true,
         loadFailed: false,
         threads: [open],
@@ -737,8 +735,6 @@ async function mountChatList(): Promise<void> {
       createElement(ChatPanel, {
         slug: "a-piece",
         kind: "chat" as const,
-        stance: "balanced" as const,
-        onStance: () => {},
         loaded: true,
         loadFailed: false,
         threads: [thread("chat")],

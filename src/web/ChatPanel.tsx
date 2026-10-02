@@ -81,7 +81,6 @@ import type {
   ChatMessage,
   ChatThread,
   Citation,
-  RememberStance,
   ThreadKind,
   ToolRun,
 } from "../types.js";
@@ -230,17 +229,6 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * The stance the next Remember answer will be asked for, and how to change it.
-   *
-   * Above the composer because the composer is keyed by thread id and remounts;
-   * seeded by the band from the last answer in the open conversation, so a
-   * reader who picked Socratic yesterday finds it still on Socratic. Unused in
-   * chat mode. See docs/plans/260827ah-review-mode.md § Where the stance picker's value
-   * lives.
-   */
-  stance: RememberStance;
-  onStance(next: RememberStance): void;
-  /**
    * **The Recall | Quiz control**, when this panel is the Recall half of
    * Remember. Absent in chat mode.
    *
@@ -359,8 +347,6 @@ export function ChatPanel({
   focusNonce,
   error,
   kind,
-  stance,
-  onStance,
   subMode,
   live,
   onStartLive,
@@ -576,11 +562,8 @@ export function ChatPanel({
           onDraft={(text) => drafts.current.set(open.id, text)}
           /* The OPEN conversation's kind, not the mode's. Each mode now lists only
              its own kind (plan 261001m), so the two agree on every path the band
-             takes; reading the thread is still the honest source, because it is
-             the thread whose answers the stance picker would govern. */
+             takes; reading the thread is still the honest source. */
           kind={open.kind}
-          stance={stance}
-          onStance={onStance}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
@@ -684,8 +667,6 @@ export function ChatPanel({
               }}
               placeholder="Ask something new…"
               kind={kind}
-              stance={stance}
-              onStance={onStance}
               live={kind === "chat" ? shownLive : undefined}
               onStartLive={kind === "chat" && onStartLive ? () => {
                 const id = onStartLive(null);
@@ -1045,8 +1026,6 @@ export function Conversation({
   draft,
   onDraft,
   kind,
-  stance,
-  onStance,
   live,
   onStartLive,
 }: {
@@ -1071,13 +1050,9 @@ export function Conversation({
    * **This conversation's** kind — see the call site in `ChatPanel`.
    *
    * Required rather than defaulted, so that a new caller has to decide which it
-   * is rather than silently getting a chat. The stance below is optional
-   * because a chat has none, and `ChatDialog` — which is always a chat —
-   * therefore passes nothing.
+   * is rather than silently getting a chat.
    */
   kind: ThreadKind;
-  stance?: RememberStance;
-  onStance?: ((next: RememberStance) => void) | undefined;
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
@@ -1276,8 +1251,6 @@ export function Conversation({
         draft={draft}
         onDraft={onDraft}
         kind={kind}
-        {...(stance ? { stance } : {})}
-        {...(onStance ? { onStance } : {})}
         {...(live ? { live } : {})}
         {...(onStartLive ? { onStartLive } : {})}
         continuesLive={thread.messages.length > 0}
@@ -1529,20 +1502,6 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {/* **Which stance produced this answer**, on Remember turns only.
-              A Socratic reply and a Respond reply to the same words look very
-              different, and a reader who moved the picker three turns ago has
-              no other way to tell why. It is also the honest label for a retry,
-              which re-asks in the voice the answer was originally asked in
-              rather than in whatever the picker says now.
-              Not on `balanced`: that is the default and most answers are it, so
-              labelling them would put a tag on nearly every turn to distinguish
-              a minority — the same call the thread list's Remember tag makes. */}
-          {message.stance && message.stance !== "balanced" && (
-            <span className="chat-stance-tag" title={`Asked for a ${message.stance} reply`}>
-              {message.stance}
-            </span>
-          )}
           {message.text !== "" && <CopyAnswer text={message.text} />}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
@@ -1812,6 +1771,22 @@ function EditQuestion({
   onCancel(): void;
 }) {
   const [value, setValue] = useState(text);
+  /**
+   * **A press that is refused says so.** While an answer is arriving the edit
+   * cannot go (see the call site), and Enter used to do nothing at all and the
+   * tick merely greyed out — a reader who pressed Enter saw no answer and no
+   * reason. Investigating spya-f3b6ab; the class is in
+   * docs/postmortems/261002g-a-refusal-with-no-voice.md. Cleared when asking
+   * becomes possible again, so the sentence never outlives its cause.
+   */
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (canAsk) setHeld(false);
+  }, [canAsk]);
+  const ask = () => {
+    if (canAsk) onDone(value);
+    else setHeld(true);
+  };
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = box.current;
@@ -1837,10 +1812,15 @@ function EditQuestion({
           if (e.key === "Escape") onCancel();
           if (isSendEnter(e)) {
             e.preventDefault();
-            if (canAsk) onDone(value);
+            ask();
           }
         }}
       />
+      {held && !canAsk && (
+        <p className="chat-discard-warning chat-edit-held" role="status">
+          An answer is still arriving. Ask again once it has finished — your rewrite is kept.
+        </p>
+      )}
       {discards > 0 && (
         <p className="chat-discard-warning">
           Asking again will discard the {discards} message{discards === 1 ? "" : "s"} below.
@@ -1851,8 +1831,10 @@ function EditQuestion({
           type="button"
           className="chat-icon"
           title={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
-          disabled={!canAsk}
-          onClick={() => onDone(value)}
+          /* `aria-disabled`, not `disabled`, so a press still reaches `ask` and
+             can say why it was refused — the composer's Send does the same. */
+          aria-disabled={!canAsk || undefined}
+          onClick={ask}
         >
           <Check size={12} />
         </button>
@@ -1928,45 +1910,6 @@ function Answer({
 }
 
 /**
- * **The card on Remember's *Reply* picker** — what each of the four stances
- * gets you. Greg, 2026-09-29 (`spya-xunuum`): *"In Remember mode, add a tooltip
- * (e.g. on "Reply") to explain the dropdown with the various response types."*
- *
- * Each line is the stance's paragraph in `REMEMBER_SYSTEM` (src/converse.ts),
- * said from the reader's side, and the table in docs/project/remember-mode.md
- * § The four stances. The last line is the one rule nothing on screen hints at:
- * the reader's own words outrank the stance (rule 2 of that prompt), so a
- * Socratic or Signposts reader is never stuck being asked.
- *
- * A native `title` stood here and went with this: two cards on one control.
- * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 1.
- */
-function StanceTip() {
-  return (
-    <>
-      <div className="tip-soon-head">Reply</div>
-      <p>How the next answer is pitched.</p>
-      <p>
-        <strong>Balanced</strong> — answers plainly when your words show you are stuck; asks only
-        when the gap is clear and small.
-      </p>
-      <p>
-        <strong>Respond</strong> — says plainly where your account and the article differ, quoting
-        it.
-      </p>
-      <p>
-        <strong>Socratic</strong> — asks one question, with a hint and a passage to look at.
-      </p>
-      <p>
-        <strong>Signposts</strong> — points to three or four passages worth re-reading, with only a
-        few words about each.
-      </p>
-      <p className="tip-soon-how">Whichever you pick, a direct question or "just tell me" gets a plain answer.</p>
-    </>
-  );
-}
-
-/**
  * The box you type into.
  *
  * Enter sends, Shift-Enter makes a new line — the convention every chat has, so
@@ -1985,8 +1928,6 @@ export function Composer({
   onDraft,
   placeholder,
   kind = "chat",
-  stance = "balanced",
-  onStance,
   live,
   onStartLive,
   continuesLive,
@@ -2017,15 +1958,13 @@ export function Composer({
    * copy would drift; a Remember box that reimplemented the Escape ladder would
    * be a bug nobody found for a month.
    *
-   * What the kind changes is layout and one control: a box six rows tall
-   * instead of one, and a stance `<select>`. Greg, 2026-08-27: *"the input box
+   * What the kind changes is layout: a box six rows tall instead of one, and
+   * the microphone first. (A stance `<select>` sat here too until 2026-10-02,
+   * when Recall became one voice.) Greg, 2026-08-27: *"the input box
    * should be much larger for Review mode, and probably emphasise the
    * microphone UI, because talking will be much less annoying than typing."*
    */
   kind?: ThreadKind;
-  /** The stance the next Remember answer will be asked for. Ignored in chat. */
-  stance?: RememberStance;
-  onStance?: ((next: RememberStance) => void) | undefined;
   /** Optional on surfaces without a live-session owner, such as ChatDialog. */
   live?: LiveApi | undefined;
   /** Begin one. The panel supplies or creates the conversation. */
@@ -2312,38 +2251,6 @@ export function Composer({
           labelled={remember}
           continues={continuesLive}
         />
-      )}
-      {remember && onStance && (
-        /* **A native `<select>`, not a custom radiogroup**, and that is a
-           keyboard decision rather than a lazy one. The dock already owns a
-           roving-tabindex radiogroup for the modes; a second one *inside* the
-           composer would sit where arrow keys are already the caret's, and the
-           article's own ↑/↓ navigation is a third claimant. A select has all of
-           this for free and announces itself correctly. GPT Sol's review of
-           docs/plans/260827ah-review-mode.md.
-
-           Its own `onKeyDown` stop, for the same reason the textarea has one:
-           this form sits inside the reading view, whose keynav listens on the
-           window. */
-        <label className="chat-stance">
-          <span className="chat-stance-label">Reply</span>
-          {/* **The card is on the select, not the label**: `Tooltip` puts its
-              `aria-describedby` on its own child, and the select is the
-              control a screen reader lands on. GPT Sol, plan review. */}
-          <Tooltip placement="top" keepSide className="tip-soon" content={<StanceTip />}>
-            <select
-              value={stance}
-              disabled={busy}
-              onKeyDown={(e) => e.stopPropagation()}
-              onChange={(e) => onStance(e.target.value as RememberStance)}
-            >
-              <option value="balanced">Balanced</option>
-              <option value="respond">Respond</option>
-              <option value="socratic">Socratic</option>
-              <option value="signposts">Signposts</option>
-            </select>
-          </Tooltip>
-        </label>
       )}
       <DictationStrip dictation={dictate.dictation} />
       {live && onStartLive && <LiveStatus

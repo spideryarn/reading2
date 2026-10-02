@@ -86,51 +86,25 @@ describe("a thread is one kind for life", () => {
   });
 });
 
-describe("the stance is written on the pending row, not on the finished one", () => {
-  /* An answer that crashed, errored, was stopped or was swept still has to say
-     which instruction produced the words that did arrive — and a retry of it
-     has to have something to inherit. Writing the stance in `finishTurn` would
-     leave every one of those blank. */
-  it("is on the empty assistant row the moment the turn is stored", () => {
-    const { reply } = withTurn(
-      [],
-      { threadId: "spya-newone", question: "q", kind: "remember", stance: "socratic" },
-      AT,
-    );
+describe("no stance is written or carried any more", () => {
+  /* Recall's four stances became one voice on 2026-10-02
+     (docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+     Older rows keep the stance they were written with — that is legacy data,
+     covered by the fixture and round-trip tests — but nothing new writes one,
+     and a retry or an edit of an old answer must not copy it forward, or the
+     transcript would tag a new answer with an instruction nobody gave. */
+  it("leaves the pending row of a new Remember turn without one", () => {
+    const { reply, user } = withTurn([], { threadId: "spya-newone", question: "q", kind: "remember" }, AT);
     expect(reply.status).toBe("pending");
-    expect(reply.text).toBe("");
-    expect(reply.stance).toBe("socratic");
-  });
-
-  it("never lands on the reader's own message", () => {
-    const { user } = withTurn(
-      [],
-      { threadId: "spya-newone", question: "q", kind: "remember", stance: "respond" },
-      AT,
-    );
-    expect(user).not.toHaveProperty("stance");
-  });
-
-  /* Absent, never `stance: undefined`. `exactOptionalPropertyTypes` is on and
-     the two stores are compared field for field by tests/store-roundtrip. */
-  it("is absent rather than undefined on a chat turn", () => {
-    const { reply } = withTurn([], { threadId: "spya-newone", question: "q" }, AT);
     expect(Object.hasOwn(reply, "stance")).toBe(false);
+    expect(Object.hasOwn(user, "stance")).toBe(false);
   });
-});
 
-describe("a retry re-asks the question the way it was asked", () => {
-  /* Sol's finding 4. `withRetry` rebuilds its reply field by field on purpose,
-     so that `citations`, `tools`, `model` and `error` from the replaced attempt
-     cannot leak into the new one. The stance is the one field that MUST cross
-     that line, because it is not a result of the old answer — it is the
-     instruction that produced it, and "have another go at that" has to mean
-     another go at the same question asked the same way. */
-  it("carries the replaced answer's stance onto the new pending row", () => {
+  it("does not carry an old answer's stance across a retry", () => {
     const threads = [threadWith("remember", ["socratic"])];
     const { reply } = withRetry(threads, "spya-thread", "spya-ans0aa", AT);
-    expect(reply.stance).toBe("socratic");
     expect(reply.status).toBe("pending");
+    expect(Object.hasOwn(reply, "stance")).toBe(false);
   });
 
   it("still drops everything else the old attempt had", () => {
@@ -138,49 +112,32 @@ describe("a retry re-asks the question the way it was asked", () => {
     const target = threads[0]!.messages[1]!;
     Object.assign(target, { model: "some/model", searches: 3, error: "old" });
     const { reply } = withRetry(threads, "spya-thread", "spya-ans0aa", AT);
-    expect(reply.stance).toBe("respond");
+    expect(reply).not.toHaveProperty("stance");
     expect(reply).not.toHaveProperty("model");
     expect(reply).not.toHaveProperty("searches");
     expect(reply).not.toHaveProperty("error");
   });
 
-  it("leaves a chat retry with no stance at all", () => {
-    const threads = [threadWith("chat", [undefined])];
-    const { reply } = withRetry(threads, "spya-thread", "spya-ans0aa", AT);
-    expect(Object.hasOwn(reply, "stance")).toBe(false);
-  });
-});
-
-describe("an edit inherits from the answer it replaces, not from the tail", () => {
-  /* The sharper half of finding 4. Editing question 1 of a three-turn Remember thread
-     discards turns 2 and 3 — which had different stances — and the reader's
-     picker at that moment is seeded from turn 3's. Taking the tail's stance
-     would answer a rewritten early question in the voice of a later turn that
-     no longer exists. */
-  it("takes the stance of the answer under the question being rewritten", () => {
+  it("does not carry an old answer's stance across an edit", () => {
     const threads = [threadWith("remember", ["socratic", "respond", "signposts"])];
     const { reply, discarded } = withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT);
-    expect(reply.stance).toBe("socratic");
-    // and it really did discard the later turns whose stances differed:
+    expect(Object.hasOwn(reply, "stance")).toBe(false);
     // six messages, editing the first leaves five behind it.
     expect(discarded).toBe(5);
   });
 
-  it("does not take the stance of the last answer in the thread", () => {
-    const threads = [threadWith("remember", ["socratic", "respond", "signposts"])];
-    const { reply } = withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT);
-    expect(reply.stance).not.toBe("signposts");
-  });
-
-  it("editing the last question keeps that turn's own stance", () => {
-    const threads = [threadWith("remember", ["socratic", "respond"])];
-    const { reply } = withEdit(threads, "spya-thread", "spya-usr1aa", "rewritten", AT);
-    expect(reply.stance).toBe("respond");
-  });
-
-  it("leaves a chat edit with no stance", () => {
-    const threads = [threadWith("chat", [undefined, undefined])];
-    const { reply } = withEdit(threads, "spya-thread", "spya-usr0aa", "rewritten", AT);
-    expect(Object.hasOwn(reply, "stance")).toBe(false);
+  /* The help flag lives on the QUESTION row and is a different rule: a retry or
+     an edit of a "?" question is still an explanation. Removing the stance must
+     not have taken that with it. */
+  it("still carries the help flag on the question across a retry and an edit", () => {
+    const { threads } = withTurn([], { threadId: "spya-helpme", question: "explain this", help: true }, AT);
+    const thread = threads[0]!;
+    const [question, answer] = thread.messages;
+    expect(question?.help).toBe(true);
+    Object.assign(answer!, { status: "done", text: "an answer" });
+    const retried = withRetry(threads, thread.id, answer!.id, AT);
+    expect(retried.user.help).toBe(true);
+    const edited = withEdit(threads, thread.id, question!.id, "explain this better", AT);
+    expect(edited.user.help).toBe(true);
   });
 });

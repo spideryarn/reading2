@@ -300,9 +300,6 @@ describe("voices.css", () => {
   });
 
   it("keeps the UI-face corrections that live beside their inherited rules", () => {
-    expect(selectorsUsingIn("src/web/styles/mode-band.css", "--font-ui", ".chat-stance-tag")).toEqual([
-      ":root .chat-stance-tag",
-    ]);
     for (const file of ["src/web/styles/annotations.css", "src/web/styles/dock.css"]) {
       expect(selectorsUsingIn(file, "--font-ui", ".passage-whole"), file).toEqual([
         `:root .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,

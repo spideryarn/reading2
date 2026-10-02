@@ -151,7 +151,7 @@ function questionCount(n: number): string {
  *
  * **It opens with Quiz's own sentence, not Remember's catalog words**: the
  * band is Remember's, but `MODE_CATALOG.remember.how` is about Recall ("waits
- * on you … four stances"), which is wrong on this half. So this band does not
+ * on you … nudges you to remember"), which is wrong on this half. So this band does not
  * pass `mode` to `ModeSurface`, and the card leads with the sub-mode's words
  * from `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every
  * state, as `mode` would have made it.

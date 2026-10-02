@@ -80,8 +80,6 @@ function paint(
            box under it is the same box either way — and everything below is
            about the box, so the mode is a fixture rather than a subject. */
         kind: "chat" as const,
-        stance: "balanced" as const,
-        onStance: () => {},
         loaded,
         loadFailed: false,
         threads,
