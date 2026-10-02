@@ -57,7 +57,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   },
   "comment-own": {
     head: "Yours",
-    what: "What you left on this passage, each saying which it is: a Comment (no AI reply), a Comment + AI reply (you also asked the AI), or a Question (you asked the AI with ? or Chat about this).",
+    what: "What you left on this passage, each saying which it is: a Comment (no AI), a Comment + AI (you also asked the AI), or a Question (you asked the AI with ? or Chat about this).",
     how: "Written by you. All of them are in the Comments drawer at the foot of the window.",
   },
   "comment-owner": {

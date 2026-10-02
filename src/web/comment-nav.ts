@@ -197,17 +197,19 @@ export function commentsByBlock(
  * **What happened, not what was wanted.** Read off what is already stored,
  * not a field of its own: *Also ask the AI* links the chat the reader then
  * sends as `threadId`, and a comment from before 2026-08-28 carries the
- * model's explanation in place (`status` other than `none`) — so the label is
- * "+ AI reply", which is true of both, rather than "+ AI chat". A reader who
+ * model's explanation attempt in place (`status` other than `none`) — so the
+ * label is the deliberately broad "+ AI", true whether the AI is answering,
+ * answered, failed, or replied in a chat rather than in place. A reader who
  * ticked the box and closed the chat draft unsent, or whose chat failed before
  * it existed, gets `comment`: that is what they ended up with. Storing the
  * tick itself would be a column, and is deferred in the plan (GPT Sol, P1 on
- * the plan). A `threadId` outlives a deleted conversation, so the label can
- * name a reply that is gone; it is still a reply that happened.
+ * the plan). A `threadId` outlives a deleted conversation, so the label may
+ * name AI involvement whose conversation is gone; it still happened.
  *
  * A visitor's copy carries no `threadId` or `status` (public-types.ts), so an
  * owner's comment reads to them as `comment-ai` only when it carries a legacy
- * answer, and as `comment` otherwise — less than the owner sees, never more.
+ * answer, as `comment` when it has words, and as `bookmark` when it has neither
+ * — less than the owner sees, never more.
  *
  * The question — the gutter's "?" or *Chat about this* — is not a comment at
  * all but an `AskedQuestion`, and `askedQuestions` already leaves out the chats
@@ -231,6 +233,6 @@ export function commentKind(c: {
 export const MARK_KIND_LABEL: Record<MarkKind, string> = {
   bookmark: "Bookmark",
   comment: "Comment",
-  "comment-ai": "Comment + AI reply",
+  "comment-ai": "Comment + AI",
   question: "Question",
 };

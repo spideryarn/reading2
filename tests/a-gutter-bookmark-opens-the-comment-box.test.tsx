@@ -11,7 +11,8 @@
  *
  * 1. the owner presses `.blk-bookmark`: one POST, no quote; then `.cmt-dialog`
  *    is open on that id with the "the AI doesn’t reply" box, and no chat call;
- * 2. a failed store opens nothing and leaves `?note=` unset.
+ * 2. a failed store opens nothing and leaves `?note=` unset; a retry opens it;
+ * 3. a surface the reader opens while the store answers stays in front.
  *
  * Whole app (`App` under `StrictMode`, real nuqs adapter), because the press
  * crosses BlockGutter, Reader and CommentDialog. Harness cut down from
@@ -342,6 +343,50 @@ describe("the gutter's bookmark button", () => {
     expect(host.querySelector(".chat-dialog"), "the chat is still what is open").not.toBeNull();
   });
 
+  it("does not open over a mode band the reader chose while the store was answering", async () => {
+    who.set(OWNER);
+    let release!: () => void;
+    held = new Promise<void>((go) => {
+      release = go;
+    });
+    await open("");
+    await pressBookmark();
+
+    const summary = host.querySelector<HTMLButtonElement>('.dock-modes button[aria-label="Summary"]');
+    expect(summary, "the mode button exists").not.toBeNull();
+    await act(async () => summary?.click());
+    await until(() => param("mode") === "summary");
+    expect(host.querySelector(".mode-band"), "the mode band opened").not.toBeNull();
+
+    await act(async () => release());
+    await settle(12);
+    expect(param("note")).toBeNull();
+    expect(host.querySelector(".cmt-dialog")).toBeNull();
+    expect(param("mode"), "the chosen mode is still open").toBe("summary");
+  });
+
+  it("does not open behind the Comments drawer chosen while the store was answering", async () => {
+    who.set(OWNER);
+    let release!: () => void;
+    held = new Promise<void>((go) => {
+      release = go;
+    });
+    await open("");
+    await pressBookmark();
+
+    const comments = host.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]');
+    expect(comments, "the Comments button exists").not.toBeNull();
+    await act(async () => comments?.click());
+    await until(() => param("panel") === "questions");
+    expect(host.querySelector(".dock-drawer"), "the Comments drawer opened").not.toBeNull();
+
+    await act(async () => release());
+    await settle(12);
+    expect(param("note")).toBeNull();
+    expect(host.querySelector(".cmt-dialog")).toBeNull();
+    expect(host.querySelector(".dock-drawer"), "the drawer is still what is open").not.toBeNull();
+  });
+
   /* GPT Sol, P1 on plan 261002j: the button that opened it is gone, replaced
      by the mark, so closing puts focus on the mark rather than nowhere. */
   it("hands focus to the paragraph's new mark when the dialog closes", async () => {
@@ -367,5 +412,24 @@ describe("the gutter's bookmark button", () => {
     expect(commentPosts().length, "the press did try to store").toBeGreaterThanOrEqual(1);
     expect(host.querySelector(".cmt-dialog")).toBeNull();
     expect(param("note")).toBeNull();
+  });
+
+  it("reuses the failed press on retry, then opens the confirmed bookmark", async () => {
+    who.set(OWNER);
+    storeStatus = 500;
+    await open("");
+    await pressBookmark();
+    expect(host.querySelector(".cmt-dialog"), "the failed press opened a dialog").toBeNull();
+    const firstId = (commentPosts()[0]?.body as { id?: string } | undefined)?.id;
+    expect(firstId, "the failed press sent an id").toBeTruthy();
+
+    storeStatus = 200;
+    await pressBookmark();
+    await until(() => host.querySelector(".cmt-dialog") !== null);
+    const posts = commentPosts();
+    expect(posts).toHaveLength(2);
+    expect((posts[1]?.body as { id?: string } | undefined)?.id, "the retry changed identity").toBe(firstId);
+    expect(param("note")).toBe(firstId);
+    expect(host.querySelector(".cmt-dialog"), "the confirmed retry opened the dialog").not.toBeNull();
   });
 });

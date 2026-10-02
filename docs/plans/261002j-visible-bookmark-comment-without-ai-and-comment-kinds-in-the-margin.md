@@ -37,7 +37,7 @@ built. Overseer queue item qi-ynaan2cf.
   | kind | what it is | how we know |
   |---|---|---|
   | Comment | the reader's words, no AI | a comment with no `threadId` and `status: "none"` |
-  | Comment + AI reply | the AI replied: *Also ask the AI* and the chat sent, or an explanation from before 2026-08-28 | a comment with a `threadId`, or an answer in place |
+  | Comment + AI | the AI was asked: *Also ask the AI* made a chat, or an explanation was attempted before 2026-08-28 | a comment with a `threadId`, an answer, or a legacy status other than `none` |
   | Question | the "?" or *Chat about this*: a conversation, not a comment | an anchored chat no comment points at (`askedQuestions`) |
 
   `askedQuestions` already drops the chats a comment points at, so the three do not overlap.
@@ -58,26 +58,27 @@ built. Overseer queue item qi-ynaan2cf.
    for: the free door and the paid doors say which they are.
 4. **Each comment says its kind** — in the margin and in the Comments drawer, from one function
    (`commentKind` in `comment-nav.ts`) and one label table:
-   - the margin's comment line takes the kind as its stamp: `COMMENT`, `COMMENT + AI REPLY`,
+   - the margin's comment line takes the kind as its stamp: `COMMENT`, `COMMENT + AI`,
      `QUESTION`; several in one block show *"3 comments"* and each opened row has its own stamp;
    - **questions join the margin** (owner only — a visitor's payload has no chats), in the same shut
      line as the comments on that block, opening to *Open the conversation*, which is the drawer's
      own press (`openAskedFromDrawer`);
    - the drawer's comment rows gain the same small label the question rows already have
-     (*Comment*, *Comment + AI reply*; a bare bookmark says *Bookmark*).
+     (*Comment*, *Comment + AI*; a bare bookmark says *Bookmark*).
 
 ```
   gutter                        margin (shut)                 margin (opened)
   ■ ← filled mark               ▸ COMMENT  check this vs §4   ▾ 3 comments
   🔗                                                            COMMENT  check this vs §4
-  💬 Chat with the AI…                                          COMMENT + AI REPLY  why n=12?
+  💬 Chat with the AI…                                          COMMENT + AI  why n=12?
   ?  Ask the AI…                                                QUESTION  "the bound holds"
                                                                   Open the conversation
 ```
 
 A visitor's copy carries no `threadId` or `status` (public-types.ts), so to them an owner's comment
-is *Comment + AI reply* only when it carries a legacy answer, and *Comment* otherwise: less than the
-owner sees, never more.
+is *Comment + AI* only when it carries a legacy answer, *Comment* when it has words, and *Bookmark*
+when it has neither. A wordless modern comment linked to a private chat is therefore left out of the
+visitor's margin like any bare bookmark: the projection reveals less than the owner sees, never more.
 
 ## Simpler options passed over
 
@@ -120,16 +121,21 @@ GPT Sol on this plan (`--sandbox review`) and on the code (`--sandbox workspace-
 [The review](261002j-plan-review-sol.md): no P0, three P1s, all accepted.
 
 1. **Intent or outcome.** Greg asked whether a comment *wanted* an AI reply; the tick-box is never
-   stored, and a reader can tick it and close the chat draft unsent. Taken as **outcome**: the label
-   is *Comment + AI reply* (it was "+ AI chat", which is wrong for a pre-2026-08-28 explanation), and
+   stored, and a reader can tick it and close the chat draft unsent. Taken as **observable AI
+   involvement**: the label is *Comment + AI* (neither "+ AI chat", which is wrong for a legacy
+   explanation, nor "+ AI reply", which is wrong while one is pending or after it failed), and
    `commentKind`'s comment says so. Storing the tick is a column, a route change and a payload
    change for one edge case. **Deferred**, and named for Greg in the feedback note. A wordless
    comment that did ask (*Save & ask* with an empty box) is no longer dropped from the margin: the
    exclusion is now `commentKind === "bookmark"`.
 2. **A slow store opening over something else.** The press keeps a copy of what is open (`?note=`,
-   `?thread=`, the chat draft, the selection box) and its own press number; the answer opens the
-   dialog only if neither has moved. Whole-app test: a chat opened while the POST is held is still
-   what is open after it lands.
+   `?thread=`, the chat draft, the selection box, the drawer, Marginalia, the mode and its sub-mode)
+   and its own press number. The answer opens the dialog only if none has moved. Sol's code review
+   also had it check the DOM for any newly opened `role="dialog"` (modals, hover cards); that was
+   taken out after its review, because the prose's hover cards are dialogs, so a pointer drifting
+   over a glossary term in the round trip would silently cancel the box, and the comment box sits
+   beside a card rather than replacing it. Reader.tsx § `bookmarkBlock` says the same. Whole-app tests hold the POST while a chat, a mode band
+   or the Comments drawer opens, and each remains the foreground choice after it lands.
 3. **Focus on close.** The bookmark button is replaced by the mark before the dialog mounts, so the
    recorded opener was `<body>`. `CommentDialog` no longer records `<body>`, and falls back to the
    paragraph's `.blk-cmt` before the Comments button. Tested in the same file.

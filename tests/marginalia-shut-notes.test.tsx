@@ -126,7 +126,7 @@ describe("a shut line", () => {
       threadId: "t9",
     } as unknown as MarginComment;
     const ai = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
-    expect(ai.querySelector(".marg-shut-button .marg-stamp")?.textContent).toBe("Comment + AI reply");
+    expect(ai.querySelector(".marg-shut-button .marg-stamp")?.textContent).toBe("Comment + AI");
   });
 
   it("counts comments and questions apart, labels each opened row, and opens a question's conversation", () => {

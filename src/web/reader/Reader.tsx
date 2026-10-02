@@ -826,7 +826,7 @@ export function Reader({
      band mounts on the old sub-mode for a frame. Which keys, and that Quiz
      clears `thread`, is `subModeParams` in sub-modes.ts — the same answer the
      metadata page builds its href from. */
-  const [, setSubNav] = useQueryStates({
+  const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
     remember: rememberParam,
     thread: threadParam,
@@ -2041,13 +2041,56 @@ export function Reader({
    *
    * **And only if nothing else has opened since the press, and no later press
    * has been made.** The store answers after a round trip, and in that time
-   * the reader may have opened a comment, a chat or the selection box — an
-   * answer arriving then must not replace what they chose. `surface` is what
-   * is open now; the press keeps a copy and the answer compares. GPT Sol, P1
-   * on the plan.
+   * the reader may have opened a comment, a chat, the selection box, a drawer,
+   * Marginalia or a mode band — an answer arriving then must not replace what
+   * they chose. The mode-specific parameters are included too: moving from
+   * Recall to Quiz is a new foreground choice even though `mode` stays
+   * `remember`. GPT Sol, P1 on the plan and code review of 261002j.
+   *
+   * **Hover cards and modals are deliberately not in it.** Sol's code review
+   * also checked the DOM for any new `role="dialog"`; that was taken out,
+   * because the prose's hover cards are dialogs too, so a pointer drifting
+   * over a glossary term during the round trip would silently cancel the box.
+   * Nor does the comment box replace either: it sits beside a card or under a
+   * modal, and the reader's choice is still on screen.
+   *
+   * **Published in a layout effect, never during render.** A concurrent render
+   * may be abandoned; writing a ref from it would let an uncommitted surface
+   * cancel (or authorise) the async result. The effect runs only for a committed
+   * view, before the browser can accept another press.
    */
   const surface = useRef<readonly unknown[]>([]);
-  surface.current = [note, thread, chatDraft, annotating];
+  useLayoutEffect(() => {
+    surface.current = [
+      note,
+      thread,
+      chatDraft,
+      annotating,
+      panel,
+      mode,
+      margin,
+      bandAway,
+      subNav.remember,
+      subNav.diagram,
+      subNav.referee,
+      subNav.summary,
+      subNav.structure,
+    ];
+  }, [
+    note,
+    thread,
+    chatDraft,
+    annotating,
+    panel,
+    mode,
+    margin,
+    bandAway,
+    subNav.remember,
+    subNav.diagram,
+    subNav.referee,
+    subNav.summary,
+    subNav.structure,
+  ]);
   const bookmarkPress = useRef(0);
   const createComment = owner?.comments.create;
   const bookmarkBlock = useMemo(() => {

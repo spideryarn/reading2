@@ -56,7 +56,7 @@ one would otherwise be missed; it would not be, so it is not
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
 
-  Each comment and question is stamped with its kind (*Comment*, *Comment + AI reply*, *Question*), and
+  Each comment and question is stamped with its kind (*Comment*, *Comment + AI*, *Question*), and
   a line holding both counts them apart ("1 comment · 1 question"). A question opens to *Open the
   conversation*, the Comments drawer's own press. Greg, SPIDERYARN-READING2-9H, 2026-10-01;
   [comments.md § Every mark says which of three it is](comments.md#three-kinds) and

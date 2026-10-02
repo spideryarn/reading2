@@ -176,7 +176,7 @@ describe("the Comments drawer lists the questions the reader asked", () => {
       questions: [HELP],
     });
     const kinds = [...host.querySelectorAll(".dock-question-kind")].map((k) => k.textContent);
-    expect(kinds.sort()).toEqual(["Bookmark", "Comment", "Comment + AI reply", "Question"]);
+    expect(kinds.sort()).toEqual(["Bookmark", "Comment", "Comment + AI", "Question"]);
   });
 
   /* No preview line: `lastLine` is not kept live, so a question minted in this

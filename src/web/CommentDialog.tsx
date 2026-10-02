@@ -16,7 +16,7 @@
  * can be in flight at once, and the panel is how you get back to the ones you
  * are not looking at. Reading order, not ask order — see comment-nav.ts.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
@@ -220,7 +220,9 @@ export function CommentDialog({
   const dialogRef = useRef<HTMLElement>(null);
   /* The block the dialog is on as it closes, for the fallback below. */
   const blockRef = useRef(comment.blockId);
-  blockRef.current = comment.blockId;
+  useLayoutEffect(() => {
+    blockRef.current = comment.blockId;
+  }, [comment.blockId]);
   useEffect(() => {
     const opener = document.activeElement;
     openerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;

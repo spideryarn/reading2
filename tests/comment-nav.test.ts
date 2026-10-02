@@ -234,6 +234,7 @@ describe("commentKind", () => {
     expect(commentKind({ status: "done", answer: "because" })).toBe("comment-ai");
     expect(commentKind({ status: "error" })).toBe("comment-ai");
     /* A visitor's copy: no status, no threadId. */
+    expect(commentKind({})).toBe("bookmark");
     expect(commentKind({ body: "theirs" })).toBe("comment");
     expect(commentKind({ body: "theirs", answer: "an answer" })).toBe("comment-ai");
   });
@@ -242,7 +243,7 @@ describe("commentKind", () => {
     expect(MARK_KIND_LABEL).toEqual({
       bookmark: "Bookmark",
       comment: "Comment",
-      "comment-ai": "Comment + AI reply",
+      "comment-ai": "Comment + AI",
       question: "Question",
     });
   });

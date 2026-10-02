@@ -866,13 +866,20 @@ The comment dialog's arrows still walk comments only.
 >
 > — Greg, 2026-10-01 (SPIDERYARN-READING2-9H)
 
-Since 2026-10-02 the drawer's rows and the margin's lines carry a label: **Comment**, **Comment + AI
-chat**, **Question** (and **Bookmark** in the drawer, for one with no words). Nothing new is stored:
-`commentKind` in [`comment-nav.ts`](../../src/web/comment-nav.ts) reads it off `threadId` (or an
-answer from before 2026-08-28), and a question is an anchored chat, which `askedQuestions` already
-keeps apart from the comments. *Save & ask* whose chat failed before it existed reads as a plain
-comment, which is what it ended up being; a visitor's copy has no `threadId`, so to them an owner's
-comment is *Comment* unless it carries an answer.
+Since 2026-10-02 the drawer's rows and the margin's lines carry a label: **Comment**, **Comment +
+AI**, **Question** (and **Bookmark** in the drawer, for one with no words). The broad *+ AI* stays
+true for a legacy explanation that is pending or failed as well as for one answered in place or in
+a chat. Nothing new is stored: `commentKind` in
+[`comment-nav.ts`](../../src/web/comment-nav.ts) reads the involvement off `threadId`, a legacy
+status or an answer, and a question is an anchored chat, which `askedQuestions` already keeps apart
+from the comments. *Save & ask* whose chat failed before it existed reads as a plain comment, which
+is what it ended up being.
+
+A visitor's copy has neither `threadId` nor status. It therefore keeps *Comment + AI* only when a
+legacy answer crosses the public projection; otherwise it becomes *Comment* when it has words, or
+*Bookmark* when it has neither words nor an answer. That last case includes a wordless modern
+comment whose private conversation link was stripped, and the margin leaves it out as it does any
+bare bookmark.
 [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
 
 ## Where the code is
