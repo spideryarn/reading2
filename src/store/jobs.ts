@@ -846,7 +846,10 @@ export interface JobStore {
    */
   requestCancel(id: string, owner: OwnerId): Promise<Job | undefined>;
 
-  /** Forget one job. Refuses while it is queued or running. */
+  /**
+   * Forget one job: hide it from every reader-facing lookup, keeping the row.
+   * Refuses while it is queued or running, and for one already forgotten.
+   */
   forget(id: string, owner: OwnerId): Promise<boolean>;
 
   /**

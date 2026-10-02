@@ -40,7 +40,7 @@ import { INTERRUPTED } from "../src/messages.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import type { ExpirySettlement, JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
-import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
+import { ingestProvenanceOf, pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
 import { expectClaimed } from "./helpers/expect-claimed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -2054,6 +2054,42 @@ for (const adapter of ADAPTERS) {
       await store.finish(job.id, attempt, { status: "done", steps: job.steps });
       expect(await store.forget(job.id, OWNER)).toBe(true);
       expect(await store.get(job.id, OWNER)).toBeUndefined();
+    });
+
+    /* Greg, 2026-10-02 (Q-import-report-details): a failed import's *Report
+       this* names the job by id and nothing else, so Dismiss must not take the
+       record that id points at. The reader stops seeing it; we can still read it. */
+    it("keeps the record of a forgotten job, out of the reader's sight", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      await store.finish(job.id, attempt, { status: "error", steps: job.steps, error: "x" });
+      expect(await store.forget(job.id, OWNER)).toBe(true);
+
+      expect(await store.get(job.id, OWNER)).toBeUndefined();
+      expect((await store.list(OWNER)).map((j) => j.id)).not.toContain(job.id);
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("gone");
+      expect(await ingestProvenanceOf(job.id, OWNER)).toBeUndefined();
+
+      const retry = aJob({ slug: job.slug });
+      await expect(
+        store.enqueueOrGet(retry, {
+          workKey: "k2",
+          reservesName: false,
+          retryOf: job.id,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+
+      const [row] = await getDb().select().from(jobs).where(eq(jobs.id, job.id));
+      expect(row?.status).toBe("error");
+      expect(row?.dismissedAt).toBeInstanceOf(Date);
+      // Forgotten once: a second Dismiss finds nothing, as it did when it deleted.
+      expect(await store.forget(job.id, OWNER)).toBe(false);
+
+      // Hidden history still occupies a bounded history slot and retires normally.
+      expect(await store.trimFinished(OWNER, 0)).toBe(1);
+      expect((await getDb().select().from(jobs).where(eq(jobs.id, job.id)))[0]).toBeUndefined();
     });
 
     /* ------------------------------------------------------------ retention --

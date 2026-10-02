@@ -100,7 +100,7 @@
  *   GET    /api/jobs             every ingest job this server knows about
  *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
- *   DELETE /api/jobs/:id         forget a finished job's record
+ *   DELETE /api/jobs/:id         hide a finished job from its reader
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
  *   POST   /api/jobs/:id/advance run the next step this job has not done yet

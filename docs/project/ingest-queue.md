@@ -2052,10 +2052,18 @@ derivation so the two agree by construction rather than by trust.
   GET    /api/uploads/:id      what became of one upload
   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
   GET    /api/jobs/:id         one job — what the poll reads
-  DELETE /api/jobs/:id         forget a finished job's record (artefacts untouched)
+  DELETE /api/jobs/:id         hide a finished job from its reader (Dismiss); the row stays
   POST   /api/jobs/:id/cancel
   POST   /api/jobs/:id/retry   → 202, a NEW job with the same steps
 ```
+
+**Dismiss hides a job; it does not delete it**, since 2026-10-02. `DELETE /api/jobs/:id` stamps
+`jobs.dismissed_at`, and every reader-facing lookup treats a stamped row as absent, so the card,
+poll, Retry and Advance all see the job as gone exactly as when the row was deleted. The row stays
+because a failed import's *Report this* carries the job id and nothing that might be private
+([feedback.md § The one rule](feedback.md#the-one-rule)), and an id whose record Dismiss had
+deleted traced nothing. `trimFinished` still retires a dismissed job with the other finished ones.
+Greg, Q-import-report-details.
 
 `POST /api/jobs` answers **202**, not 200: the work has been accepted and has not been done, and the
 body is a receipt to poll. Retry creates a new job rather than mutating the old one — what went

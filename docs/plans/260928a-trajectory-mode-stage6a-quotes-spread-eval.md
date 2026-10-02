@@ -1,5 +1,7 @@
 # Trajectory stage 6a — does a "cover the main parts" nudge spread Quotes better? (offline eval)
 
+Research write-up: [docs/research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
+
 Stage 6a of [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md) § "Stage 6,
 widened", run as the **offline evaluation arm** Sol's F66 asked for: the Quotes version is bumped
 only if the nudge wins. Greg's prompt for it:

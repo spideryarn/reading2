@@ -241,6 +241,9 @@ export interface IngestProvenance {
  * already behind that flag.
  *
  * Owner-scoped, like `get`: somebody else's job is one that is not there.
+ * Dismissed-scoped like `get`, too: otherwise a direct Retry can reserve a
+ * fresh quota slot before `retryJob` gives the reader the 404 it should have
+ * given at the door.
  */
 export async function ingestProvenanceOf(
   id: string,
@@ -249,7 +252,7 @@ export async function ingestProvenanceOf(
   const [row] = await getDb()
     .select({ ingestEventId: jobs.ingestEventId, slug: jobs.slug })
     .from(jobs)
-    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
+    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
     .limit(1);
   return row;
 }
@@ -325,7 +328,10 @@ function noSuchArticle(): Error {
  * otherwise insert on the far side of that, with `requiresArticle` false because
  * the allocation minted. The worker then remakes the article. GPT Sol's F40.
  *
- * **Owner-scoped**, like `get`: somebody else's job is one that is not there.
+ * **Owner-scoped and dismissal-scoped**, like `get`: somebody else's job and
+ * one the reader dismissed are both no longer there to Retry. The latter
+ * matters in the race after `retryJob`'s first read: the row now survives
+ * Dismiss, where the old delete made this locked re-read miss it.
  *
  * **After the article lock, never before.** `destroy` takes `articles` and then
  * `jobs`, and a transaction that took them the other way round would be the
@@ -336,7 +342,7 @@ async function lockRetriedAttempt(tx: Tx, job: Job, retryOf: string) {
   return await tx
     .select({ id: jobs.id })
     .from(jobs)
-    .where(and(eq(jobs.id, retryOf), eq(jobs.ownerId, job.ownerId)))
+    .where(and(eq(jobs.id, retryOf), eq(jobs.ownerId, job.ownerId), isNull(jobs.dismissedAt)))
     .for("update")
     .limit(1);
 }
@@ -938,7 +944,7 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
   const [row] = await tx
     .select()
     .from(jobs)
-    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
+    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
     .limit(1);
   return row ? toJob(row) : undefined;
 }
@@ -1013,8 +1019,9 @@ function settledSteps(cancelled: SQL) {
  * `finish` and `releaseStep` are the sixth and seventh places a job can become
  * terminal, and until 2026-09-03 they were the two that settled nothing — so a
  * job ended through either of them left its reservation `in_flight` for ever,
- * and `forget`/`trimFinished` could then delete the row carrying the only record
- * of which slot it was. There is no caller in `src/` that takes this route, but
+ * and `trimFinished` could then delete the row carrying the only record of
+ * which slot it was (`forget` did too before Dismiss became a soft delete).
+ * There is no caller in `src/` that takes this route, but
  * it is the advertised `JobStore` API and the stage claimed every terminal
  * transition settles. GPT Sol, 2026-09-03,
  * docs/plans/260902i-settlement-code-review-sol.md finding 1.
@@ -1073,7 +1080,8 @@ const rawPgJobStore: JobStore = {
     const rows = await db
       .select()
       .from(jobs)
-      .where(eq(jobs.ownerId, owner))
+      /* A dismissed job is gone as far as the reader can tell — `forget`. */
+      .where(and(eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
       .orderBy(desc(jobs.createdAt), desc(jobs.id));
     return rows.map(toJob);
   },
@@ -1083,7 +1091,7 @@ const rawPgJobStore: JobStore = {
     const [row] = await db
       .select()
       .from(jobs)
-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
+      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), isNull(jobs.dismissedAt)))
       .limit(1);
     return row ? toJob(row) : undefined;
   },
@@ -2054,11 +2062,27 @@ const rawPgJobStore: JobStore = {
     }, READ_COMMITTED);
   },
 
+  /**
+   * **Stamps, never deletes**, since 2026-10-02: every reader-facing lookup
+   * treats a stamped row as gone, so the reader sees what a delete showed them,
+   * and the record stays for the job id a failed import's *Report this* carries
+   * (src/db/schema.ts § `jobs.dismissedAt`). `trimFinished` retires it later
+   * with every other finished job. Already stamped answers `false`, as a
+   * second delete did.
+   */
   async forget(id: string, owner: OwnerId): Promise<boolean> {
     const db = getDb();
     const gone = await db
-      .delete(jobs)
-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, TERMINAL)))
+      .update(jobs)
+      .set({ dismissedAt: sql`now()` })
+      .where(
+        and(
+          eq(jobs.id, id),
+          eq(jobs.ownerId, owner),
+          inArray(jobs.status, TERMINAL),
+          isNull(jobs.dismissedAt),
+        ),
+      )
       .returning({ id: jobs.id });
     return gone.length === 1;
   },
