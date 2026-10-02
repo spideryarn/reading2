@@ -549,6 +549,13 @@ const SHARED_WITH_READER = [
   "src/web/diagram.ts",
   "src/web/experimental-copy.ts",
   "src/web/experimental-store.ts",
+  /* Arrived 2026-10-02 by the second predicted route: `ModeSurface`, already
+     here, gained an import of it so every band's (i) can end in *More in
+     Help →* (plan 261002e). The reader already downloaded it through
+     `Dock.tsx`'s Help link; what is new is only that `/design`'s band gallery
+     reaches it too. Plain data — ids and `helpHref` — importing only
+     `modes.ts` and `router.ts`. */
+  "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages

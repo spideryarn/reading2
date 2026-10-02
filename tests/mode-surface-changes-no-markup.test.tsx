@@ -404,7 +404,7 @@ const SEARCH: BandShape = {
   className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
 };
 
 /** Chat with a conversation open, baseline § "Chat mode". */
@@ -412,7 +412,7 @@ const CHAT: BandShape = {
   className: "mode-band chat has-about",
   label: "Chat about this article",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title, `ArmedDelete` in its unarmed state, and the "All conversations"
      close. `subMode` renders nothing for this fixture. The header is the one
      part of the band the migration restructured — it went from inline JSX to a
@@ -433,7 +433,7 @@ const REMEMBER: BandShape = {
   className: "mode-band chat remember has-about",
   label: "Remember what you took from this article",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
      since plan 261001m (2026-10-01), no "All conversations" close: Remember is
      one conversation and has no list to close back to. `subMode` renders
@@ -463,7 +463,7 @@ const SEARCH_VISITOR: BandShape = {
   className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.srch-empty"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-empty"],
 };
 
 /**
@@ -480,7 +480,7 @@ const CHAT_LIST: BandShape = {
   className: "mode-band chat has-about",
   label: "Chat about this article",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "ol.chat-threads", "form.chat-composer"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "ol.chat-threads", "form.chat-composer"],
   /* No `ArmedDelete` with nothing open — the header's third slot is the
      new-conversation button instead, and the delete is simply absent. */
   headChildren: ["h2", "button.chat-icon[title,type]"],
@@ -1685,14 +1685,14 @@ const SUMMARY: BandShape = {
   className: "mode-band summ has-about",
   label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "div.summ-scroll.simple-scroll"],
 };
 
 const GLOSSARY_SHAPE: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
   /* `WrittenForYou` is in this row too and renders nothing for an owner who has
      not run with a profile, which is this fixture. The count used to be the row;
      it moves into the (i) card since 2026-10-01, plan 261001m, so the row is empty. */
@@ -1719,7 +1719,7 @@ const GLOSSARY_LOADING: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-ask", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.gloss-quiet"],
   headChildren: [],
 };
 
@@ -1732,7 +1732,7 @@ const GLOSSARY_VISITOR: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.gloss-list"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-list"],
   headChildren: [],
 };
 
@@ -1740,7 +1740,7 @@ const IDEAS_SHAPE: BandShape = {
   className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.ideas-scroll"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.ideas-scroll"],
   headChildren: [],
 };
 
@@ -1750,7 +1750,7 @@ const IDEAS_LOADING: BandShape = {
   className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [],
 };
 
@@ -1758,7 +1758,7 @@ const QUOTES_SHAPE: BandShape = {
   className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.quotes-list", "div.quotes-foot"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.quotes-list", "div.quotes-foot"],
   headChildren: [],
 };
 
@@ -1767,7 +1767,7 @@ const QUOTES_LOADING: BandShape = {
   className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.quotes-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.quotes-quiet"],
   headChildren: [],
 };
 
@@ -1775,7 +1775,7 @@ const TIMELINE_SHAPE: BandShape = {
   className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tl-scroll"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tl-scroll"],
   headChildren: [],
 };
 
@@ -1785,7 +1785,7 @@ const TIMELINE_LOADING: BandShape = {
   className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [],
 };
 
@@ -1797,7 +1797,7 @@ const TWEETS_SHAPE: BandShape = {
   head: true,
   /* No foot for a settled thread since 2026-10-01: who wrote it went into the
      (i), first in the band (spya-ucu35y, plan 261001m). */
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
@@ -1806,14 +1806,14 @@ const TWEETS_NONE: BandShape = {
   className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.gloss-empty"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.gloss-empty"],
 };
 
 const TWEETS_LOADING: BandShape = {
   className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "p.gloss-quiet"],
 };
 
 /** A visitor has the posts and the (i), and no footer. */
@@ -1821,7 +1821,7 @@ const TWEETS_VISITOR: BandShape = {
   className: "mode-band gloss tweets has-about",
   label: "Tweets",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
@@ -1845,7 +1845,7 @@ const DEBATE_SHAPE: BandShape = {
   label: "Debate",
   head: true,
   children: [
-    "button.band-about[aria-expanded,aria-label,type]",
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
     "p.dbt-frame",
     /* `.dbt-name` since 2026-09-29, when the relevance bar (`.dbt-rel`, drawn
@@ -1866,7 +1866,7 @@ const DEBATE_LOADING: BandShape = {
   className: "mode-band gloss dbt has-about",
   label: "Debate",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",
@@ -1927,7 +1927,7 @@ const DIAGRAM_SHAPE: BandShape = {
   className: "mode-band diag has-about",
   label: "Diagram",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.diag-kinds[aria-label,role]", "div.sk"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.diag-kinds[aria-label,role]", "div.sk"],
 };
 
 /** A visitor gets no picker at all — not a hidden one — so the band is one
@@ -1936,7 +1936,7 @@ const DIAGRAM_VISITOR: BandShape = {
   className: "mode-band diag has-about",
   label: "Diagram",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-label,type]", "div.sk"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.sk"],
 };
 
 /**
@@ -1959,7 +1959,7 @@ const OUTLINE: BandShape = {
   head: false,
   attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
   children: [
-    "button.band-about[aria-expanded,aria-label,type]",
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",
     "div.outln-measure[aria-hidden]",
   ],

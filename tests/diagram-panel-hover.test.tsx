@@ -734,7 +734,7 @@ describe("the controls explain themselves", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
     (el as HTMLElement).focus();
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-    const cards = document.querySelectorAll('[role="tooltip"]');
+    const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
     expect(cards, "focusing this control opened no card, or more than one").toHaveLength(1);
     const card = cards[0];
     const head = card?.querySelector(".tip-soon-head")?.textContent ?? "";
@@ -791,7 +791,7 @@ describe("the controls explain themselves", () => {
       (button as HTMLElement).focus();
       await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
       expect(
-        document.querySelectorAll('[role="tooltip"]'),
+        document.querySelectorAll('[role="tooltip"], [role="dialog"]'),
         "a step button opened a card, which was deleted",
       ).toHaveLength(0);
       expect(button?.hasAttribute("title"), "a step button fell back to a title").toBe(false);
@@ -971,7 +971,7 @@ describe("what a scatter says about itself", () => {
     const icon = host.querySelector<HTMLElement>(".mode-band > .band-about");
     expect(icon, "no control to open").not.toBeNull();
     await act(async () => icon?.click());
-    const cards = document.querySelectorAll('[role="tooltip"]');
+    const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
     expect(cards, "pressing the icon opened no card, or more than one").toHaveLength(1);
     const body = cards[0]?.textContent ?? "";
     expect(body, "the counts are not in the card").toContain("2 paragraphs");

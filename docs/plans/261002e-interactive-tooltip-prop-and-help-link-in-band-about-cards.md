@@ -203,7 +203,7 @@ landed mid-run; see A).
 
 | | Check | Result |
 |---|---|---|
-| A | Pointer from (i) into the card: down, down-left, down-right, fast | Pass on the final runs (card 10px below the (i); all five moves twice). **One early down-left failure** that did not recur in 8 fresh loads — re-run on the committed final tree, below. |
+| A | Pointer from (i) into the card: down, down-left, down-right, fast | Pass (card 10px below the (i); all five moves twice). One early down-left failure while Sol's edit was landing mid-run; **re-run on the frozen final tree (2b747f1bd, 7ac61dce7 merged with dev): 15 of 15 fresh loads pass**, 10 at `steps:10` and 5 at `steps:2`. |
 | B | Pointer away from the card | Closes in 80–180ms |
 | C | *More in Help →* | `/help#mode-faq`, section in view; Back returns to the article |
 | D | Spine scrub, 40 positions | One card each time, always `role=tooltip`, never `interactive`, `pointer-events: none`; `elementFromPoint` inside a spine card hits the band beneath; nothing sticks |
@@ -218,3 +218,18 @@ landed mid-run; see A).
 ![Keyboard focus on the link](261002e-shot-keyboard-link.png)
 ![A spine card, unchanged](261002e-shot-spine-card.png)
 ![Help, arrived at the FAQ section](261002e-shot-help-section.png)
+
+## The full suite, after merging dev
+
+61 red on the first full run; every one accounted for:
+
+- **Mine, and intended**: the (i) card is now a `dialog`, so seven panel test files that found it by
+  `[role="tooltip"]` found nothing — widened to `[role="tooltip"], [role="dialog"]` (the counts stay
+  meaningful: still exactly one card). `mode-surface-changes-no-markup`'s recorded band shapes gain
+  `aria-haspopup` on the (i), edited on purpose as that file asks — except Quiz, whose band passes no
+  `mode` and so has no Help link and no popup. `eager-client-graph` lists `help/help-anchors.ts` as
+  shared: the reader already downloaded it through the Dock, and `/design` now reaches it through
+  `ModeSurface`.
+- **Not mine**: the fleet, cold-start and pdf-bundle tests wanted `npm run build` /
+  `npm run build:fleet` in a fresh worktree; `live-mic-lock` passed alone (box contention).
+  All green after the build, re-run.
