@@ -130,6 +130,7 @@ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
+import { modePress } from "./mode-press.js";
 import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -3053,7 +3054,7 @@ export function Reader({
         experimental={experimental}
         mode={mode}
         margin={marginOpen}
-        onMode={(next, sub) => {
+        onMode={(next, sub, toggle = false) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old
              entry for ~50ms, so inferring intent from the address races. Back
@@ -3078,6 +3079,22 @@ export function Reader({
             }
             return;
           }
+          /* **Plain closes both columns, and a second press closes the band**
+             (`modePress`, Greg's 96). Both are one push, so one Back puts it
+             all back; neither is a press on a band, so neither names one in
+             the herald. A sub-mode row always moves to its sub-mode. */
+          if (sub === undefined) {
+            const press = modePress({ next, current: mode, bandBack, toggle });
+            if (press === "plain") {
+              void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
+              setBandAway(false);
+              return;
+            }
+            if (press === "close") {
+              void setMode("plain");
+              return;
+            }
+          }
           armSkimOpening(skimArrival.current, mode, next);
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */
@@ -3086,8 +3103,8 @@ export function Reader({
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */
           setBandAway(false);
-          /* A new nonce every press, so pressing the mode you are in shows it
-             again and a second press restarts the three seconds. */
+          /* A new nonce every press, so pressing the mode you are in while it
+             has stepped aside names it again as it comes back. */
           setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
           /* Search draws its results down the rail, so entering search mode
              brings the rail back if the reader had put it away — Greg,
