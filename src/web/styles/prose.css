@@ -132,9 +132,16 @@ tbody tr:first-child td.text.kind-heading {
    the inset from the cell's right edge is the right pad plus half the room the
    centring divides — `.blk-gutter`'s `left` with the sides swapped, and the
    same `font-size` / `font-weight` so `ch` means what it means in the prose
-   (gutter.css § the gutter has the argument). The heading's own prose keeps a
-   slot clear at its end so a long heading wraps before it, not under it. */
-td.text.kind-heading .prose { padding-inline-end: calc(var(--blk-slot) + 0.25rem); }
+   (gutter.css § the gutter has the argument). */
+/* `--blk-slot` has a 24px floor while heading type and padding still scale with
+   the root. At a 12px root (and again once the rem target grows at 20px), the
+   natural one-line row can therefore end before this first-line target does.
+   Floor only rows that draw it, at its exact bottom, so a closed button never
+   intercepts the following row. gutter.css § every heading's gutter has the
+   same invariant, reached there by bottom-aligning its own control. */
+td.text.kind-heading:has(> .fold-toggle) {
+  height: calc(var(--blk-top) + var(--blk-slot));
+}
 .fold-toggle {
   position: absolute;
   right: calc(
@@ -168,6 +175,11 @@ td.text.kind-heading .prose { padding-inline-end: calc(var(--blk-slot) + 0.25rem
 .fold-toggle[data-folded] { opacity: 1; color: var(--ink-soft); }
 @media (hover: hover) {
   tr:hover .fold-toggle { opacity: 1; }
+}
+/* A finger has no hover to bring it up, and at 0.45 a browser check on a 390px
+   phone found it barely visible, so on a touch screen it rests stronger. */
+@media (hover: none) {
+  .fold-toggle { opacity: 0.75; }
 }
 .fold-toggle:hover,
 .fold-toggle:focus-visible { opacity: 1; color: var(--highlight); }
@@ -396,6 +408,14 @@ tr.row-active .block-ref { opacity: 0.95; }
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
   font-weight: var(--reading-weight);
+}
+/* Only a heading that actually has a chevron keeps a slot clear at its end, so
+   a long heading wraps before the control rather than under it. The sibling
+   says that directly; an empty final heading has no control and gives up no
+   measure. Kept after `.prose`'s base rule so the cascade runs from general to
+   specific rather than relying on specificity to undo source order. */
+.fold-toggle ~ .prose {
+  padding-inline-end: calc(var(--blk-slot) + 0.25rem);
 }
 .prose > * { margin: 0; }
 

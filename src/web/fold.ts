@@ -32,7 +32,7 @@
  * Not persisted and not in the URL: reload and everything is open again (plan
  * § Deferred). One article at a time, because there is one prose table.
  */
-import { useEffect, useLayoutEffect, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import type { Block, BlockId } from "../types.js";
 import { isModAltChord, isTyping } from "./key-chord.js";
 import { SAFE_ID } from "./reading-time.js";
@@ -131,6 +131,11 @@ let article: { key: string; blocks: readonly Block[] } | null = null;
 let state: FoldState = EMPTY;
 let hidden: ReadonlySet<BlockId> = new Set();
 const listeners = new Set<() => void>();
+/* The mounted TableView that most recently installed this singleton. A route
+   change replaces keyed Readers: the new table's layout effect runs before the
+   old table's passive cleanup, so an unconditional cleanup would erase the new
+   article. The token makes that stale cleanup a no-op. */
+let mountedBy: symbol | null = null;
 
 /** The attribute the store's own `<style>` carries, so it can find it again. */
 export const FOLD_STYLE_ATTR = "data-fold";
@@ -189,6 +194,7 @@ export function setFoldArticle(key: string, blocks: readonly Block[]): void {
 
 /** The reader is gone: nothing folded, and the style element removed. */
 export function clearFoldArticle(): void {
+  mountedBy = null;
   article = null;
   state = EMPTY;
   commit(new Set());
@@ -259,8 +265,17 @@ export function useFold(): FoldState {
  * something to fold.
  */
 export function useFoldArticle(key: string, blocks: readonly Block[]): void {
-  useLayoutEffect(() => setFoldArticle(key, blocks), [key, blocks]);
-  useEffect(() => clearFoldArticle, []);
+  const mounted = useRef(Symbol("fold article"));
+  useLayoutEffect(() => {
+    mountedBy = mounted.current;
+    setFoldArticle(key, blocks);
+  }, [key, blocks]);
+  useEffect(
+    () => () => {
+      if (mountedBy === mounted.current) clearFoldArticle();
+    },
+    [],
+  );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isModAltChord(e, "KeyT") || e.defaultPrevented) return;

@@ -99,9 +99,10 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
  * the top of the viewport and the line we measure against.
  *
  * `tops` is in document order, so this is the last one that has already gone
- * past the line. Above the first section it clamps to 0 rather than returning
- * -1: there is always a section you are in, even if it hasn't reached the top
- * of the screen yet.
+ * past the line. Above the first section it clamps to the first eligible entry:
+ * there is always a section you are in, even if it hasn't reached the top of
+ * the screen yet. With a `skip` predicate and no eligible entry it returns -1,
+ * because naming a hidden section would be worse than having no answer.
  */
 export function activeSectionIndex(
   tops: number[],
@@ -117,12 +118,22 @@ export function activeSectionIndex(
    */
   skip?: (i: number) => boolean,
 ): number {
-  let active = 0;
+  /* With no filter, index 0 is the deliberate answer above the first section
+     (and for an empty array, for compatibility with the original helper). With
+     a filter there may be no answer at all, so -1 is honest and lets callers'
+     existing optional indexing produce `null` / their row-zero fallback. */
+  let active = skip ? -1 : 0;
   // `.entries()` rather than an index loop: it hands out the value already
   // typed, so there is no indexing to bounds-check.
   for (const [i, top] of tops.entries()) {
     if (skip?.(i)) continue;
-    if (top > line) break;
+    if (top > line) {
+      /* Above the first visible entry, clamp to that entry rather than to a
+         skipped index 0. This is reachable when a folded authored section
+         contains the first starts in the sparse Structure projection. */
+      if (active < 0) active = i;
+      break;
+    }
     active = i;
   }
   return active;

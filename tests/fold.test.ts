@@ -5,8 +5,12 @@
  * relies on to have changed the layout before it returns.
  * docs/plans/261002e-collapsible-headings-and-fold-all.md.
  */
+import { createElement, StrictMode } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
+import { FoldToggle } from "../src/web/FoldToggle.js";
 import {
   FOLD_STYLE_ATTR,
   clearFoldArticle,
@@ -18,7 +22,11 @@ import {
   setFoldArticle,
   toggleFold,
   toggleFoldAll,
+  useFold,
+  useFoldArticle,
 } from "../src/web/fold.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const id = (s: string) => `spya-${s}` as BlockId;
 const h = (s: string, level?: number): Block =>
@@ -136,11 +144,182 @@ describe("the store", () => {
     expect(isFolded("spya-b1")).toBe(false);
   });
 
+  it("recomputes a kept fold against changed blocks, and drops a heading that is no longer foldable", () => {
+    setFoldArticle("slug", blocks);
+    toggleFold(id("b"));
+    const changed = blocks.map((block) =>
+      block.id === id("b1") ? { ...block, id: id("b2") } : block,
+    );
+    setFoldArticle("slug", changed);
+    expect(isFolded("spya-b1")).toBe(false);
+    expect(isFolded("spya-b2")).toBe(true);
+
+    setFoldArticle("slug", changed.filter((block) => block.id !== id("b2")));
+    expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
+  });
+
   it("ignores a toggle on a heading with nothing to fold", () => {
     setFoldArticle("slug", blocks);
     toggleFold(id("ay"));
     toggleFold(id("a1"));
     expect(hiddenBlocks(blocks, set())).toEqual(new Set());
     expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
+  });
+});
+
+function FoldHarness({ articleKey, articleBlocks }: { articleKey: string; articleBlocks: Block[] }) {
+  useFoldArticle(articleKey, articleBlocks);
+  const current = useFold();
+  return createElement("output", { "data-foldable": current.foldable.size });
+}
+
+describe("the mounted article", () => {
+  it("survives StrictMode's effect replay and removes an active fold on unmount", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(FoldHarness, { articleKey: "strict", articleBlocks: blocks }),
+        ),
+      );
+    });
+    expect(host.querySelector("output")?.getAttribute("data-foldable")).toBe("3");
+    const event = new KeyboardEvent("keydown", {
+      code: "KeyT",
+      metaKey: true,
+      altKey: true,
+      cancelable: true,
+    });
+    act(() => window.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(isFolded("spya-b1")).toBe(true); // one listener, not StrictMode's setup twice
+    expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).not.toBeNull();
+    act(() => root.unmount());
+    expect(document.head.querySelector(`style[${FOLD_STYLE_ATTR}]`)).toBeNull();
+    host.remove();
+  });
+
+  it("does not let the old keyed article's passive cleanup clear its replacement", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const next = [h("next", 2), p("next1")];
+    act(() => {
+      root.render(
+        createElement(FoldHarness, { key: "old", articleKey: "old", articleBlocks: blocks }),
+      );
+    });
+    act(() => {
+      root.render(
+        createElement(FoldHarness, { key: "next", articleKey: "next", articleBlocks: next }),
+      );
+    });
+    expect(host.querySelector("output")?.getAttribute("data-foldable")).toBe("1");
+    act(() => toggleFold(id("next")));
+    expect(isFolded("spya-next1")).toBe(true);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("claims the fold chord only when the reader is not typing, no dialog is open, and folding exists", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(createElement(FoldHarness, { articleKey: "chord", articleBlocks: blocks }));
+    });
+    const press = (alreadyClaimed = false) => {
+      const event = new KeyboardEvent("keydown", {
+        code: "KeyT",
+        key: "†",
+        metaKey: true,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      if (alreadyClaimed) event.preventDefault();
+      act(() => window.dispatchEvent(event));
+      return event.defaultPrevented;
+    };
+
+    expect(press()).toBe(true);
+    expect(isFolded("spya-b1")).toBe(true);
+    act(() => toggleFoldAll());
+
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.focus();
+    expect(press()).toBe(false);
+    expect(isFolded("spya-b1")).toBe(false);
+    input.remove();
+
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("open", "");
+    document.body.append(dialog);
+    expect(press()).toBe(false);
+    expect(isFolded("spya-b1")).toBe(false);
+    dialog.remove();
+
+    expect(press(true)).toBe(true);
+    expect(isFolded("spya-b1")).toBe(false);
+
+    act(() => {
+      root.render(
+        createElement(FoldHarness, {
+          articleKey: "chord",
+          articleBlocks: [h("nothing", 2)],
+        }),
+      );
+    });
+    expect(press()).toBe(false);
+    act(() => root.unmount());
+    host.remove();
+  });
+});
+
+describe("FoldToggle", () => {
+  it("keeps its native button props through Tooltip, stops the row click, and Alt-clicks all", () => {
+    setFoldArticle("slug", blocks);
+    const host = document.createElement("div");
+    let rowClicks = 0;
+    const root = createRoot(host);
+    document.body.append(host);
+    act(() => {
+      root.render(
+        createElement(
+          "div",
+          { onClick: () => rowClicks++ },
+          createElement(FoldToggle, { id: id("b") }),
+        ),
+      );
+    });
+    const button = host.querySelector<HTMLButtonElement>("button.fold-toggle")!;
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(rowClicks).toBe(0);
+    expect(isFolded("spya-b1")).toBe(true);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true, altKey: true })));
+    expect(isFolded("spya-a1")).toBe(true);
+    expect(isFolded("spya-b1")).toBe(true);
+    expect(rowClicks).toBe(0);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("renders no control for a heading with nothing to hide", () => {
+    setFoldArticle("slug", blocks);
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    act(() => root.render(createElement(FoldToggle, { id: id("c") })));
+    expect(host.querySelector("button")).toBeNull();
+    act(() => root.unmount());
   });
 });

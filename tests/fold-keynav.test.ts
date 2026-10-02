@@ -92,6 +92,13 @@ describe("a folded row is never where the reader is", () => {
     expect(activeSectionIndex(tops, 100, (i) => i > 0)).toBe(0);
   });
 
+  it("chooses the first visible sparse start, and has no answer when all starts are folded", async () => {
+    const { activeSectionIndex } = await import("../src/web/position.js");
+    const tops = [50, 150, 250];
+    expect(activeSectionIndex(tops, 100, (i) => i === 0)).toBe(1);
+    expect(activeSectionIndex(tops, 100, () => true)).toBe(-1);
+  });
+
   it("is never on screen, so an 'already there' check cannot skip the jump that unfolds it", async () => {
     const { isBlockOnScreen, whereIsBlock } =
       await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");

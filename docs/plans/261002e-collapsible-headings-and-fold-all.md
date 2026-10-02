@@ -205,6 +205,28 @@ Taken as advice, not changed:
 - **Diagram's own step buttons** use unfiltered starts and so unfold their target: consistent with
   "an explicit jump reveals".
 
-### Code review — GPT Sol, workspace-write
+### Code review — GPT Sol, workspace-write, 2026-10-02
 
-Below once it lands.
+[261002e-…-code-review-sol.md](261002e-collapsible-headings-and-fold-all-code-review-sol.md). It
+confirmed the plan-review fixes hold in the code, and fixed four more itself, each read and kept:
+
+1. **A stale cleanup could wipe the next article's folds** (P1). Opening another article mounts a
+   new table before the old one's passive cleanup runs, so the old `clearFoldArticle` emptied the
+   new store. `useFoldArticle` now owns the store by a mount token and a stale cleanup does nothing.
+2. **A folded first section** (P1): with `skip`, `activeSectionIndex` clamped to index 0 even when
+   0 was folded. It now clamps to the first eligible entry, or -1 when there is none.
+3. **The chevron's target at other roots** (P2): `--blk-slot` has a 24px floor while the heading
+   scales, so at a 12px root the chevron hung below its row. A row that draws one is floored to fit
+   it, and only such a heading keeps the slot clear at the end of its prose.
+4. **Reading time over an outline** (P2): the on-screen sampler measured every zero-height folded
+   row; it now skips them, and they accrue nothing.
+
+### Browser check — Sonnet, Playwright on the box, 2026-10-02
+
+On `entropy-24-00930-spya-pywwkq` (25 foldable headings), wide, in Summary and Structure, and at
+390px. Placement, folding (a folded row reads height 0 at the next visible row's top), ⌥-click,
+Ctrl+Alt+T, *Fold all*, ↓ stepping over a folded section, `scrollToBlock` unfolding, the tooltip and
+the console all passed. Two notes acted on or left: the chevron was barely visible at rest on a
+phone, so a touch screen now rests it at 0.75; *Fold all* sometimes wraps onto its own line at the
+end of a long facts line, which is left. A spine click on a folded part lands on the next visible
+heading, by design — the spine draws what is on the page.
