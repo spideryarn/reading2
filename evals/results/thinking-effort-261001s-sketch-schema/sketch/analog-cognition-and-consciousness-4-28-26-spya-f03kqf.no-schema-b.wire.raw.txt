@@ -1,0 +1,91 @@
+{
+  "caption": "A chain running down the length of the article—from the failure of the classical wired-in-synapses model, through oscillations and ephaptic coupling as a fix, into Spatial Computing theory, into wave-based analog computation, and finally into consciousness and its rivals—with two dense stretches opened up as their own close-up scenes.",
+  "title": "Chain with two zooms",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "One argument unfolds top to bottom: synapses alone can't explain flexible thought, so oscillating waves take over as the brain's real-time controller, and that control turns out to be a form of computation that also explains consciousness.",
+      "height": 1300,
+      "items": [
+        {"kind":"node","id":"thesis","shape":"ellipse","x":180,"y":30,"w":400,"h":70,"text":"Cognition & consciousness arise from spikes and brain waves acting on each other","size":"md","block":"spya-c5z6sr"},
+
+        {"kind":"region","x":40,"y":120,"w":680,"h":220,"label":"THE CLASSICAL MODEL FAILS","style":"band","tone":1},
+        {"kind":"node","id":"classical","shape":"box","x":230,"y":150,"w":300,"h":70,"text":"Classic view: fixed neurons, hard-wired feedforward circuits","size":"sm","tone":1,"block":"spya-k046f6"},
+        {"kind":"node","id":"mixed","shape":"box","x":230,"y":250,"w":300,"h":70,"text":"But neurons multitask: mixed selectivity needs flexible routing","size":"sm","tone":1,"block":"spya-v0gbwq"},
+
+        {"kind":"region","x":40,"y":360,"w":680,"h":220,"label":"OSCILLATIONS AS THE FIX","style":"band","tone":2},
+        {"kind":"node","id":"oscorg","shape":"box","x":230,"y":390,"w":300,"h":70,"text":"Brain waves organize and route neural information","size":"sm","tone":2,"block":"spya-jnp59d"},
+        {"kind":"node","id":"ephaptic","shape":"hex","x":230,"y":490,"w":300,"h":70,"text":"Waves directly steer spikes via ephaptic coupling, no synapse needed","size":"sm","tone":2,"block":"spya-mapqhv"},
+
+        {"kind":"region","x":40,"y":600,"w":680,"h":220,"label":"SPATIAL COMPUTING THEORY","style":"band","tone":3,"opens":"inside-spatial"},
+        {"kind":"node","id":"spatial","shape":"box","x":230,"y":630,"w":300,"h":70,"text":"Alpha/beta waves act as inhibitory \u201cstencils\u201d gating gamma/spiking","size":"sm","tone":3,"block":"spya-qck2sw"},
+        {"kind":"node","id":"explains","shape":"box","x":230,"y":730,"w":300,"h":70,"text":"This explains mixed selectivity and low-dimensional subspace coding","size":"sm","tone":3,"block":"spya-zmknun"},
+
+        {"kind":"region","x":40,"y":840,"w":680,"h":220,"label":"WAVES AS COMPUTATION","style":"band","tone":4,"opens":"inside-waves"},
+        {"kind":"node","id":"travel","shape":"box","x":230,"y":870,"w":300,"h":70,"text":"Traveling waves drive shifts between neural coding states","size":"sm","tone":4,"block":"spya-y09vju"},
+        {"kind":"node","id":"analog","shape":"hex","x":230,"y":970,"w":300,"h":70,"text":"Wave interference is efficient, parallel analog computation","size":"sm","tone":4,"block":"spya-h5qjz4"},
+
+        {"kind":"region","x":40,"y":1080,"w":680,"h":200,"label":"CONSCIOUSNESS & SYNTHESIS","style":"band","tone":5},
+        {"kind":"node","id":"anesthesia","shape":"box","x":60,"y":1110,"w":300,"h":70,"text":"Anesthetics of all kinds converge on slow, fragmented waves","size":"sm","tone":5,"block":"spya-uvev07"},
+        {"kind":"node","id":"hybrid","shape":"box","x":400,"y":1110,"w":300,"h":70,"text":"Hybrid model: synapses store, waves select what's active now","size":"sm","tone":5,"block":"spya-dnv2tp"},
+        {"kind":"node","id":"conclusion","shape":"ellipse","x":180,"y":1220,"w":400,"h":60,"text":"Cortex exploits its own wave physics as a built-in computer","size":"md","tone":5,"block":"spya-smkrcs"},
+
+        {"kind":"edge","from":"thesis","to":"classical","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"classical","to":"mixed","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"mixed","to":"oscorg","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"oscorg","to":"ephaptic","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ephaptic","to":"spatial","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"spatial","to":"explains","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"explains","to":"travel","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"travel","to":"analog","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"analog","to":"anesthesia","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"analog","to":"hybrid","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"anesthesia","to":"conclusion","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hybrid","to":"conclusion","via":"curve","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-spatial",
+      "title": "Spatial Computing theory",
+      "caption": "One central mechanism—alpha/beta stencils gating gamma spiking—branches out to explain three separate puzzles: why alpha/beta is the right frequency, why neurons seem to multitask, and why populations settle into low-dimensional patterns.",
+      "height": 620,
+      "items": [
+        {"kind":"node","id":"overview2","shape":"ellipse","x":230,"y":40,"w":300,"h":80,"text":"Alpha/beta patterns act as top-down \u201cstencils\u201d suppressing gamma/spiking","size":"md","block":"spya-qck2sw"},
+
+        {"kind":"node","id":"freq","shape":"box","x":40,"y":200,"w":200,"h":90,"text":"Alpha/beta's medium frequency fits a control role; confirmed in primate PFC","size":"sm","block":"spya-azz3c8"},
+        {"kind":"node","id":"ms","shape":"box","x":280,"y":200,"w":200,"h":90,"text":"Shifting stencils make the same neuron look differently tuned in different contexts","size":"sm","block":"spya-zmknun"},
+        {"kind":"node","id":"subspace","shape":"box","x":520,"y":200,"w":200,"h":90,"text":"Stencils sort spiking into separate, low-dimensional activity patterns","size":"sm","block":"spya-m63zb9"},
+
+        {"kind":"edge","from":"overview2","to":"freq","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"overview2","to":"ms","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"overview2","to":"subspace","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"note1","shape":"note","x":280,"y":350,"w":200,"h":70,"text":"Together: one gating mechanism, several explanatory payoffs","size":"sm"},
+        {"kind":"edge","from":"ms","to":"note1","via":"straight","line":"dashed","arrow":"none"},
+        {"kind":"edge","from":"subspace","to":"note1","via":"straight","line":"dashed","arrow":"none"},
+        {"kind":"edge","from":"freq","to":"note1","via":"curve","line":"dashed","arrow":"none"}
+      ]
+    },
+    {
+      "id": "inside-waves",
+      "title": "Waves as computation",
+      "caption": "A chain: evidence that moving waves accompany changes in neural coding, leading to a general claim about analog computation, and ending with a concrete worked example of waves computing with cortex's own physics.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"evidence","shape":"box","x":230,"y":40,"w":300,"h":80,"text":"Beta traveling waves appear exactly when motor/PFC coding states shift","size":"sm","block":"spya-qr9ra4"},
+        {"kind":"node","id":"proposal","shape":"box","x":230,"y":150,"w":300,"h":70,"text":"Proposal: traveling alpha/beta waves transition activity between coding subspaces","size":"sm","block":"spya-mrsvfu"},
+        {"kind":"node","id":"theta","shape":"box","x":230,"y":250,"w":300,"h":70,"text":"Slower theta waves organize activity at an even larger scale","size":"sm","block":"spya-jcpyd5"},
+        {"kind":"node","id":"analogdef","shape":"hex","x":230,"y":360,"w":300,"h":70,"text":"Analog computing: continuous wave interference solves equations directly","size":"sm","block":"spya-vp5h33"},
+        {"kind":"node","id":"efficiency","shape":"box","x":230,"y":470,"w":300,"h":70,"text":"This is inherently parallel and far more energy-efficient than digital steps","size":"sm","block":"spya-mgnqxk"},
+        {"kind":"node","id":"cortexmed","shape":"box","x":230,"y":580,"w":300,"h":70,"text":"Cortex's overlapping waves could literally compute intersections of context","size":"sm","block":"spya-prykb8"},
+
+        {"kind":"edge","from":"evidence","to":"proposal","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"proposal","to":"theta","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"theta","to":"analogdef","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"analogdef","to":"efficiency","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"efficiency","to":"cortexmed","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

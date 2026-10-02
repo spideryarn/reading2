@@ -19,16 +19,22 @@ import {
   Fragment,
   type ReactNode,
   useEffect,
+  useId,
   useLayoutEffect,
   useState,
 } from "react";
-import type { Ideas } from "../../types.js";
+import { ChevronRight } from "lucide-react";
+import type { CitedWork, Faq, Ideas } from "../../types.js";
+import { useDebateRead } from "../useDebate.js";
+import { useFaqRead } from "../useFaq.js";
+import { byLineOf } from "../CitationsPanel.js";
+import { rowWork } from "../DebatePanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
-import { type MarginaliaNote, layoutNotes } from "./notes.js";
+import { type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -93,21 +99,197 @@ function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
   useRenderCount("MarginNotes");
   return (
     <div className="marg-note" data-marg-note="">
-      {notes.map((note) =>
-        note.kind === "question" ? (
-          <p
-            key={`q${note.depth}`}
-            className="marg-question"
-            data-depth={note.depth}
-            title={QUESTION_TIP(note.depth)}
-          >
-            {note.text}
-          </p>
-        ) : (
-          <IdeaStamp key={`i${note.ideaId}`} note={note} />
-        ),
-      )}
+      {notes.map((note) => {
+        switch (note.kind) {
+          case "question":
+            return (
+              <p
+                key={`q${note.depth}`}
+                className="marg-question"
+                data-depth={note.depth}
+                title={QUESTION_TIP(note.depth)}
+              >
+                {note.text}
+              </p>
+            );
+          case "idea":
+            return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
+          case "faq":
+            return <FaqNote key="faq" items={note.items} />;
+          case "debate":
+            return <DebateNote key="debate" items={note.items} />;
+          case "citation":
+            return <CitationNote key="citation" items={note.items} />;
+          case "comment":
+            return <CommentNote key="comment" items={note.items} />;
+          default: {
+            const never: never = note;
+            return never;
+          }
+        }
+      })}
     </div>
+  );
+}
+
+/**
+ * **One shut line, opened in place** — report 82: *"Rather than showing the
+ * full item, maybe show them default-collapsed."* A disclosure rather than a
+ * hover card, so it is collapsed in the ordinary sense and its open half can
+ * hold a link. The button and the panel are siblings, so nothing interactive
+ * sits inside the button (GPT Sol, F5 on the plan); TableView leaves a press on
+ * a button or a link alone, so neither selects the row. Opening grows the
+ * note, and `useMarginLayout`'s ResizeObserver pushes the notes below down.
+ * docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
+ */
+function ShutNote({
+  kind,
+  stamp,
+  tip,
+  line,
+  children,
+}: {
+  kind: string;
+  stamp: string;
+  /** What this kind of line is, on hover — every mark explains itself. */
+  tip: string;
+  line: string;
+  /** The open half; null when there is nothing more to show than the line. */
+  children: ReactNode | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const panel = useId();
+  const label = (
+    <span className="marg-shut-label">
+      <span className="marg-stamp">{stamp}</span> <span className="marg-shut-line">{line}</span>
+    </span>
+  );
+  if (children === null) {
+    return (
+      <p className="marg-shut" data-kind={kind} title={tip}>
+        {label}
+      </p>
+    );
+  }
+  return (
+    <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
+      <button
+        type="button"
+        className="marg-shut-button"
+        title={tip}
+        aria-expanded={open}
+        aria-controls={panel}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+        {label}
+      </button>
+      <div id={panel} className="marg-open" hidden={!open}>
+        {open ? children : null}
+      </div>
+    </div>
+  );
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["items"] }) {
+  const only = items.length === 1 ? items[0] : undefined;
+  return (
+    <ShutNote
+      kind="faq"
+      stamp="FAQ"
+      tip="A question a careful reader might ask, which this passage answers. From FAQ mode."
+      line={only ? only.question.question : plural(items.length, "question", "questions")}
+    >
+      {items.map(({ question, quote, morePassages }) => (
+        <div key={question.id} className="marg-open-item">
+          {!only && <p className="marg-open-head">{question.question}</p>}
+          <p className="marg-open-quote">Answered here: “{quote}”</p>
+          {morePassages > 0 && (
+            <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
+          )}
+        </div>
+      ))}
+    </ShutNote>
+  );
+}
+
+/** The relation in the reader's words. `unclear` is not a failure, only unsaid. */
+const RELATION_WORD: Record<MarginClaim["relation"], string> = {
+  disputes: "disputes",
+  qualifies: "qualifies",
+  extends: "extends",
+  corroborates: "agrees",
+  unclear: "discusses",
+};
+
+function DebateNote({ items }: { items: readonly MarginClaim[] }) {
+  const only = items.length === 1 ? items[0] : undefined;
+  return (
+    <ShutNote
+      kind="debate"
+      stamp={only ? RELATION_WORD[only.relation] : "Debate"}
+      tip="A page elsewhere on the web that answers a claim made here, and how it bears on it. From Debate mode."
+      line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
+    >
+      {items.map((row) => (
+        <div key={row.id} className="marg-open-item">
+          <p className="marg-open-head">
+            {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
+            <a href={row.url} target="_blank" rel="noreferrer noopener">
+              {rowWork(row).headline}
+            </a>
+          </p>
+          <p className="marg-open-quote">“{row.sourceQuote}”</p>
+          {row.applies && <p>{row.applies}</p>}
+        </div>
+      ))}
+    </ShutNote>
+  );
+}
+
+function CitationNote({ items }: { items: readonly CitedWork[] }) {
+  const only = items.length === 1 ? items[0] : undefined;
+  return (
+    <ShutNote
+      kind="citation"
+      stamp="Cites"
+      tip="A work the piece cites here for the first time, and why. From Citations mode."
+      line={only ? only.title : plural(items.length, "work", "works")}
+    >
+      {items.map((work) => {
+        const by = byLineOf(work);
+        return (
+          <div key={work.id} className="marg-open-item">
+            {!only && <p className="marg-open-head">{work.title}</p>}
+            {by && <p className="marg-open-by">{by}</p>}
+            <p>{work.why}</p>
+          </div>
+        );
+      })}
+    </ShutNote>
+  );
+}
+
+/** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
+    them to the gutter's mark. */
+function CommentNote({ items }: { items: readonly MarginComment[] }) {
+  const only = items.length === 1 ? items[0] : undefined;
+  return (
+    <ShutNote
+      kind="comment"
+      stamp="Note"
+      tip="A comment on this passage. All of them are in the drawer at the foot of the window."
+      line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
+    >
+      {items.map((c) => (
+        <div key={c.id} className="marg-open-item">
+          {c.body && <p>{c.body}</p>}
+          {c.answer && <p className="marg-open-answer">{c.answer}</p>}
+        </div>
+      ))}
+    </ShutNote>
   );
 }
 
@@ -127,8 +309,8 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
       onOpenChange={setOpen}
       content={
         <>
-          <div className="tip-soon-head">{note.name}</div>
-          <p>{note.statement}</p>
+          <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
+          <p className="marg-idea-statement">{note.statement}</p>
           <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
         </>
       }
@@ -242,7 +424,7 @@ function ArcLine({ arc }: { arc: string }) {
       keepSide
       open={open}
       onOpenChange={setOpen}
-      content={<p>{arc}</p>}
+      content={<p className="marg-arc-full">{arc}</p>}
     >
       <button
         type="button"
@@ -256,26 +438,42 @@ function ArcLine({ arc }: { arc: string }) {
   );
 }
 
+/** What the owner's feed hands the Reader: each list, or null for none. */
+export type MarginFeed = {
+  ideas: Ideas["ideas"] | null;
+  faq: Faq["questions"] | null;
+  claims: readonly MarginClaim[] | null;
+};
+
+export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, claims: null };
+
 /**
- * **The owner's ideas, read and never made.** A component of its own so the
- * read happens only while Marginalia is open — `useIdeasRead`, not `useIdeas`,
- * which would arm the auto-run and could spend. A stale list (the article moved
- * under it) is not drawn: its blocks may not be these. Owner only: a visitor's
- * ideas are in their payload.
+ * **The owner's ideas, FAQ and Debate, read and never made.** A component of
+ * its own so the reads happen only while Marginalia is open — the read halves
+ * (`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full hooks, which
+ * arm the automatic run and could spend (Debate is the dearest step in the
+ * app). A stale list (the article moved under it) is not drawn: its blocks may
+ * not be these. Owner only: a visitor's lists are in their payload. Citations
+ * and comments are not read here — the Reader holds both in every mode.
  */
-export function OwnerIdeasFeed({
+export function OwnerMarginFeed({
   slug,
-  onIdeas,
+  onFeed,
 }: {
   slug: string;
-  onIdeas(ideas: Ideas["ideas"] | null): void;
+  onFeed(feed: MarginFeed): void;
 }) {
-  const read = useIdeasRead(slug);
-  const usable = read.status === "ready" && !read.stale ? (read.ideas?.ideas ?? null) : null;
+  const ideasRead = useIdeasRead(slug);
+  const faqRead = useFaqRead(slug);
+  const debateRead = useDebateRead(slug);
+  const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
+  const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
+  const claims =
+    debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
   useEffect(() => {
-    onIdeas(usable);
-  }, [usable, onIdeas]);
-  useEffect(() => () => onIdeas(null), [onIdeas]);
+    onFeed({ ideas, faq, claims });
+  }, [ideas, faq, claims, onFeed]);
+  useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
   return null;
 }
 

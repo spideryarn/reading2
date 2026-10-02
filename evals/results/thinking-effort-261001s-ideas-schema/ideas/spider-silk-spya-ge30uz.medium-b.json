@@ -1,0 +1,170 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "spider-silk-spya-ge30uz",
+  "sourceHash": "e1b739438681beb3.e79e41a4b4b6b689.5a9dbcf7548ed3c5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-dpqvpx",
+      "name": "Form follows ecological function",
+      "provenance": "assumed",
+      "statement": "A trait's specific physical properties can be read as adaptations shaped by the specific task it performs for the organism, so different jobs should be expected to produce different material designs.",
+      "whyYouNeedIt": "The catalogue mapping each gland and silk type to a distinct use (dragline for support, capture-spiral for stickiness and stretch, tubuliform for stiffness in egg sacs) only holds together as an explanation, rather than an arbitrary list, if the reader already assumes that biological structures are tuned to their function.",
+      "occurrences": [
+        {
+          "blockId": "spya-xytxuw",
+          "quote": "Each spider and each type of silk has a set of mechanical properties optimised for their biological function.",
+          "reasoning": "Asserts optimisation-for-function without arguing for the underlying adaptationist premise.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-m3rk4n",
+          "quote": "Tubiliform (a.k.a. cylindriform) silk Protective egg sacs. Stiffest silk.",
+          "reasoning": "The pairing of stiffness with protective use only reads as explanatory, not coincidental, under a form-follows-function assumption.",
+          "start": 455
+        },
+        {
+          "blockId": "spya-pn8bvd",
+          "quote": "As spiders have evolved, so have their silks' complexity and uses, for example from primitive tube webs 300–400 million years ago to complex orb webs 110 million years ago.",
+          "reasoning": "Treats increasing complexity of silk use as evolutionary progress tied to function, assuming adaptive explanation rather than stating it.",
+          "start": 287
+        }
+      ]
+    },
+    {
+      "id": "spya-t9b6b5",
+      "name": "Strength-to-weight, not raw strength, is what matters for a structural fibre",
+      "provenance": "assumed",
+      "statement": "When judging whether a fibre is good for structural use, the relevant comparison is strength per unit weight (specific strength), not the raw breaking stress of equal-sized samples.",
+      "whyYouNeedIt": "The density section's claim that silk is 'five times as strong as the same weight of steel' only makes sense as a meaningful advantage if the reader already accepts that weight-adjusted strength, not absolute strength, is the metric that counts for a real-world material.",
+      "occurrences": [
+        {
+          "blockId": "spya-hng89u",
+          "quote": "spider silk is a much less dense material, so that a given weight of spider silk is five times as strong as the same weight of steel",
+          "reasoning": "This conclusion only follows as a meaningful advantage if specific strength is accepted as the metric of interest, which the passage never argues for.",
+          "start": 342
+        },
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar.",
+          "reasoning": "The qualifier 'weight for weight' is doing all the work and presumes the reader already values that framing over absolute strength.",
+          "start": 48
+        }
+      ]
+    },
+    {
+      "id": "spya-evf699",
+      "name": "Structure at the molecular scale explains bulk mechanical behavior",
+      "provenance": "introduced",
+      "statement": "Spider silk's extraordinary combination of strength and stretchiness comes from its layered molecular architecture: stiff, orderly crystal patches (beta-sheets) are linked by a stretchy, disordered protein matrix, and the two parts working together produce properties neither could produce alone.",
+      "occurrences": [
+        {
+          "blockId": "spya-p263u9",
+          "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.",
+          "reasoning": "States the core structure-to-property link directly.",
+          "start": 491
+        },
+        {
+          "blockId": "spya-ns50b2",
+          "quote": "He suggested crystallites embedded in an amorphous matrix interlinked with hydrogen bonds.",
+          "reasoning": "Develops the same two-phase model as the explanatory mechanism.",
+          "start": 58
+        },
+        {
+          "blockId": "spya-dadew4",
+          "quote": "Ordered regions (i) mainly reorient by deformation for low-stretched fibres and (ii) the fraction of ordered regions increases progressively for higher fibre stretching.",
+          "reasoning": "Shows the structural model being used to explain mechanical response under stretching.",
+          "start": 95
+        }
+      ]
+    },
+    {
+      "id": "spya-ud9sxq",
+      "name": "Toughness, strength, and stiffness are separate properties",
+      "provenance": "introduced",
+      "statement": "A material can be strong (resists breaking), stiff (resists stretching), or tough (absorbs energy before it finally breaks) in different, independent degrees, so comparing materials on just one of these axes can be misleading.",
+      "whyYouNeedIt": "Without this distinction, the claim that silk is 'tougher than steel and Kevlar' but not 'as strong as Kevlar' reads as a contradiction rather than two separate measurements.",
+      "occurrences": [
+        {
+          "blockId": "spya-hv4xng",
+          "quote": "Strength and toughness are distinct quantities. Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.",
+          "reasoning": "States plainly that these are different axes of comparison.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-nwva2u",
+          "quote": "This enables a silk fibre to absorb a large amount of energy before breaking (toughness, the area under a stress-strain curve).",
+          "reasoning": "Defines toughness as a distinct derived quantity from strength and stretch combined.",
+          "start": 171
+        },
+        {
+          "blockId": "spya-dq9b7q",
+          "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.",
+          "reasoning": "Separates stiffness (modulus) as yet another distinct axis from strength and toughness.",
+          "start": 96
+        }
+      ]
+    },
+    {
+      "id": "spya-vzbs3w",
+      "name": "Silk solidifies through a controlled liquid-to-solid phase change, not drying",
+      "provenance": "introduced",
+      "statement": "Spider silk is stored as a liquid protein solution and converted into solid fibre inside the duct by mechanical shear, falling pH, and water removal acting together, not by simple evaporation or drying as with many other fibres.",
+      "occurrences": [
+        {
+          "blockId": "spya-zekc76",
+          "quote": "The shear and elongational forces lead to phase separation.",
+          "reasoning": "States the liquid-to-solid transition mechanism directly.",
+          "start": 910
+        },
+        {
+          "blockId": "spya-ba6knb",
+          "quote": "Collectively, the shear stress and the ion and pH changes induce the liquid silk dope to undergo a phase transition and condense into a solid protein fibre with high molecular organisation.",
+          "reasoning": "Spells out the combined mechanical-chemical cause of solidification.",
+          "start": 501
+        },
+        {
+          "blockId": "spya-m78y5s",
+          "quote": "This allows the silk to flow through the duct as a liquid while maintaining molecular order.",
+          "reasoning": "Shows the liquid-crystal framing that underlies the whole spinning description.",
+          "start": 227
+        },
+        {
+          "blockId": "spya-mepbwz",
+          "quote": "It is pulled on demand from a precursor out of specialised glands,[41] rather than continuously grown like plant cell walls.",
+          "reasoning": "Frames silk formation as an on-demand conversion process rather than passive growth.",
+          "start": 93
+        }
+      ]
+    },
+    {
+      "id": "spya-jzf023",
+      "name": "Copying a natural material requires copying both the ingredient and the process that shapes it",
+      "provenance": "introduced",
+      "statement": "Reproducing a natural fibre artificially is not just a matter of making the same molecule; the device or process that shapes the raw material into its final form is an equally necessary and separate problem to solve.",
+      "occurrences": [
+        {
+          "blockId": "spya-wgee6t",
+          "quote": "These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions (the funnel, valve, tapering duct, and spigot).",
+          "reasoning": "Explicitly splits artificial silk production into two separate necessary tasks.",
+          "start": 82
+        },
+        {
+          "blockId": "spya-up6vkg",
+          "quote": "Spider silks with comparatively simple molecular structure need complex ducts to be able to form an effective fibre.",
+          "reasoning": "Shows that even with the molecule solved, the shaping apparatus is a separate bottleneck.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-jzcepa",
+          "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.",
+          "reasoning": "Attributes the performance gap partly to incomplete replication of both feedstock and process, illustrating the two-part framework in practice.",
+          "start": 573
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:26:37.860Z",
+  "elapsedMs": 34916
+}

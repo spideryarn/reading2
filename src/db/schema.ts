@@ -4977,6 +4977,13 @@ export const billingVouchers = spideryarn.table(
     articles: integer("articles").notNull(),
     /** The administrator's private note. Never sent to the reader. */
     note: text("note"),
+    /**
+     * **A note to the recipient**, written by the administrator and put in the
+     * gift email above everything we wrote. Untrusted on render: it reaches a
+     * stranger's inbox, so the HTML part escapes it (pg-voucher-emails.ts).
+     * Plan 261002b.
+     */
+    recipientNote: text("recipient_note"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -5003,6 +5010,10 @@ export const billingVouchers = spideryarn.table(
        free account may spend. The route validates the same range. */
     check("billing_vouchers_articles_range", sql`${t.articles} between 1 and 1000`),
     check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 500`),
+    check(
+      "billing_vouchers_recipient_note_length",
+      sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 500`,
+    ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),
     /* The claim's lookup: an unclaimed voucher by address. */

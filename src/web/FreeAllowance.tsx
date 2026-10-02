@@ -37,9 +37,8 @@
 import { useState } from "react";
 import { Gift as GiftIcon, X } from "lucide-react";
 
-import { describePlan, type Gift, type ReaderPlan, readableDate } from "../billing-plan.js";
-import { Link } from "./Link.js";
-import { PRICING_HREF, PROFILE_HREF } from "./router.js";
+import { describePlan, type Gift, type ReaderPlan } from "../billing-plan.js";
+import { GiftList, HowYourPlanWorks, PlanInfo } from "./PlanHelp.js";
 import { useBilling } from "./useBilling.js";
 import { useNow } from "./useNow.js";
 
@@ -142,7 +141,10 @@ export function FreeAllowanceBox({ plan, now }: { plan: ReaderPlan; now: number 
       ))}
 
       <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
-        <span className="tw:min-w-0 tw:text-foreground">{copy.headline}</span>
+        <span className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:text-foreground">
+          <span className="tw:min-w-0">{copy.headline}</span>
+          <PlanInfo plan={plan} />
+        </span>
         <span
           data-testid="free-remaining"
           className="tw:inline-flex tw:items-center tw:gap-1 tw:whitespace-nowrap tw:text-muted-foreground"
@@ -162,44 +164,19 @@ export function FreeAllowanceBox({ plan, now }: { plan: ReaderPlan; now: number 
         <p className="tw:m-0 tw:mt-1 tw:text-xs tw:leading-relaxed tw:text-muted-foreground">{copy.detail}</p>
       )}
 
-      <details className="tw:mt-2 tw:text-xs tw:leading-relaxed tw:text-muted-foreground">
-        <summary className="tw:cursor-pointer tw:select-none tw:hover:text-foreground">
-          How free articles work
-        </summary>
-        <ul className="tw:m-0 tw:mt-2 tw:flex tw:list-disc tw:flex-col tw:gap-1 tw:pl-5">
-          <li>
-            The free allowance is for the lifetime of your account, not per month. Each URL or
-            file you add counts once, when it comes back readable.
-          </li>
-          <li>
-            An article you share publicly counts as half, so the number left — which counts private
-            articles — can stretch further.
-          </li>
-          <li>Reading is never limited. Everything you have added stays, however often you return.</li>
-          <li>
-            For more, subscribe to a plan on the <Link href={PRICING_HREF}>Pricing page</Link>; once
-            subscribed, you manage it from your <Link href={PROFILE_HREF}>Profile</Link>.
-          </li>
-        </ul>
-        {gifts.length > 0 && (
-          <>
-            <p className="tw:m-0 tw:mt-3 tw:font-medium tw:text-foreground">
-              {gifts.length === 1 ? "Your gift" : "Your gifts"}
-            </p>
-            <ul className="tw:m-0 tw:mt-1 tw:flex tw:list-disc tw:flex-col tw:gap-1 tw:pl-5">
-              {gifts.map((gift) => {
-                const added = readableDate(gift.claimedAt);
-                return (
-                  <li key={gift.noticeKey}>
-                    {articles(gift.articles)}, a gift{added ? `, added ${added}` : ""}
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="tw:m-0 tw:mt-1">Gifts count while you are on the free plan.</p>
-          </>
-        )}
-      </details>
+      <div className="tw:mt-2">
+        {/* The explainer and the gift list are shared with /profile
+            (PlanHelp.tsx, plan 261002b), so the two pages say one thing. Here
+            the gifts sit inside the collapsed half: the notice above and the
+            icon on the count are this box's loud parts. */}
+        <HowYourPlanWorks plan={plan} where="shelf">
+          {gifts.length > 0 && (
+            <div className="tw:mt-3">
+              <GiftList plan={plan} />
+            </div>
+          )}
+        </HowYourPlanWorks>
+      </div>
     </section>
   );
 }

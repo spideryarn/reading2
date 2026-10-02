@@ -267,6 +267,9 @@ will eventually have to decide whether they are a system or an accident:
 - **[typography.md](typography.md)** — one sans for the article and the chrome alike, the weight
   axis, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
+- **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in IBM
+  Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
+  shows, and how to put a new one in its voice.
 - **[controls.md](controls.md)** — why a button in this app had a 2px white `outset` border and no
   pointer cursor for months, what our hand-written substitute for Tailwind's preflight covers, and
   the one height and one radius the controls on a list page now agree on.

@@ -118,6 +118,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -984,6 +989,47 @@ function parseJson(raw: string): unknown {
   return parseJsonAnswer<unknown>(raw, "the model's answer");
 }
 
+const illustratedStringSchema = { type: "string" } as const;
+const illustratedVignetteSchema = {
+  type: "object",
+  properties: {
+    node: illustratedStringSchema,
+    block: illustratedStringSchema,
+    quote: illustratedStringSchema,
+    depicts: illustratedStringSchema,
+    title: illustratedStringSchema,
+  },
+  required: ["block", "quote", "depicts", "title"],
+  additionalProperties: false,
+} as const;
+
+/** The brief-writing answer only; image calls remain outside this schema. */
+export const ILLUSTRATED_BRIEF_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    style: illustratedStringSchema,
+    plates: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sceneId: illustratedStringSchema,
+          title: illustratedStringSchema,
+          vignettes: { type: "array", items: illustratedVignetteSchema },
+          prompt: illustratedStringSchema,
+        },
+        required: ["sceneId", "title", "vignettes", "prompt"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["style", "plates"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(ILLUSTRATED_BRIEF_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(ILLUSTRATED_BRIEF_OUTPUT_SCHEMA, ["block"]);
+
 function dataUrl(bytes: Uint8Array, mediaType: string): string {
   return `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}`;
 }
@@ -1046,7 +1092,7 @@ export async function generateIllustrated(opts: {
   try {
     const call = streamMessage(
       "illustrated",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
@@ -1064,7 +1110,7 @@ export async function generateIllustrated(opts: {
         messages: [
           { role: "user", content: renderPrompt({ sketch: opts.sketch, profile, figures }) },
         ],
-      },
+      }, ILLUSTRATED_BRIEF_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

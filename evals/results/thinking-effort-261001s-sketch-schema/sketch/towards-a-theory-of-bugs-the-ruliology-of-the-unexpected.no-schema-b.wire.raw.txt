@@ -1,0 +1,97 @@
+{
+  "caption": "A funnel through mounting examples of bugs in simple systems narrows to the single explanatory claim (computational irreducibility), which then fans back out into its consequences for proof, testing, math, and practice.",
+  "title": "funnel into hub, then fan-out",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "Examples of bugs in ever-simpler systems funnel down to one cause, computational irreducibility, which then fans out into what it means for proofs, testing, math, and everyday programming.",
+      "height": 1020,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"Bugs are unforeseeable even in simple programs","size":"md","block":"spya-d46wsq"},
+
+        {"kind":"region","x":40,"y":130,"w":680,"h":260,"label":"BUGS IN SIMPLE SYSTEMS","style":"band","tone":1,"opens":"simple-systems"},
+        {"kind":"node","id":"tm","shape":"box","x":60,"y":170,"w":200,"h":70,"text":"Turing machines meant to compute n+1 glitch at specific n","size":"sm","tone":1,"block":"spya-s7uc4u"},
+        {"kind":"node","id":"spec","shape":"box","x":290,"y":170,"w":200,"h":70,"text":"What counts as a bug depends on the spec chosen","size":"sm","tone":1,"block":"spya-gjut02"},
+        {"kind":"node","id":"ca","shape":"box","x":520,"y":170,"w":180,"h":70,"text":"Doubling cellular automata fail after many good steps","size":"sm","tone":1,"block":"spya-cy4dgs"},
+        {"kind":"node","id":"tell","shape":"box","x":290,"y":280,"w":200,"h":90,"text":"Sometimes structure lets us prove no bug is possible","sub":"rule 122 case","size":"sm","tone":1,"block":"spya-gt6430"},
+
+        {"kind":"node","id":"hub","shape":"hex","x":260,"y":430,"w":260,"h":100,"text":"Computational irreducibility: only running it reveals what it does","size":"lg","block":"spya-wcnws7"},
+
+        {"kind":"node","id":"proof","shape":"box","x":60,"y":590,"w":190,"h":80,"text":"Formal proofs exist only for bug-free machines","size":"sm","tone":2,"block":"spya-qr6x2h"},
+        {"kind":"node","id":"testing","shape":"box","x":290,"y":590,"w":190,"h":80,"text":"Testing can't rule out rare hidden bugs","size":"sm","tone":2,"block":"spya-yc9e2z"},
+        {"kind":"node","id":"surprises","shape":"box","x":520,"y":590,"w":190,"h":80,"text":"Ruliology keeps turning up dramatic late surprises","size":"sm","tone":2,"block":"spya-kjsjh5","opens":"beyond"},
+
+        {"kind":"region","x":40,"y":720,"w":680,"h":250,"label":"BUGS BEYOND PROGRAMMING","style":"band","tone":3,"opens":"beyond"},
+        {"kind":"node","id":"math","shape":"box","x":60,"y":760,"w":200,"h":80,"text":"Math conjectures also fail after huge numbers of cases","size":"sm","tone":3,"block":"spya-bhwh4d"},
+        {"kind":"node","id":"lang","shape":"box","x":290,"y":760,"w":200,"h":80,"text":"Good language design pushes bugs back, never removes them","size":"sm","tone":3,"block":"spya-kdks69"},
+        {"kind":"node","id":"discovery","shape":"box","x":520,"y":760,"w":180,"h":80,"text":"An unexpected result can be a discovery, not just a failure","size":"sm","tone":3,"block":"spya-xdwm97"},
+
+        {"kind":"edge","from":"intro","to":"tm","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"intro","to":"spec","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"intro","to":"ca","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"spec","to":"tell","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"tm","to":"hub","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"tell","to":"hub","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ca","to":"hub","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"proof","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"testing","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"hub","to":"surprises","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"testing","to":"math","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"testing","to":"lang","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"surprises","to":"discovery","via":"curve","arrow":"end"}
+      ]
+    },
+    {
+      "id": "simple-systems",
+      "title": "Bugs in Turing machines and cellular automata",
+      "caption": "A chain: machines that look correct for a stretch, a dependence on which specification is used to judge them, cellular automata with the same pattern, and the rare cases where structural analysis still proves correctness.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"s1","shape":"box","x":260,"y":30,"w":260,"h":80,"text":"A 3-state machine computing n+1 breaks first at n=7","size":"sm","block":"spya-kk6a0n"},
+        {"kind":"node","id":"s2","shape":"box","x":260,"y":140,"w":260,"h":80,"text":"Among thousands of correct machines, first bugs can be delayed far out","size":"sm","block":"spya-rhc6t0"},
+        {"kind":"node","id":"s3","shape":"box","x":260,"y":250,"w":260,"h":80,"text":"One machine works for n=0..14, fails only at n=15","size":"sm","block":"spya-pt0hmz"},
+        {"kind":"node","id":"s4","shape":"box","x":260,"y":360,"w":260,"h":80,"text":"Larger machines hide bugs even longer; all-ones inputs are highest risk","size":"sm","block":"spya-hqukdz"},
+        {"kind":"node","id":"s5","shape":"diamond","x":260,"y":470,"w":260,"h":90,"text":"Judged against what spec?","size":"sm","block":"spya-gjut02"},
+        {"kind":"node","id":"s6a","shape":"box","x":40,"y":600,"w":200,"h":80,"text":"Two seemingly-equal machines diverge at n=27","size":"sm","tone":1,"block":"spya-gjut02"},
+        {"kind":"node","id":"s6b","shape":"box","x":280,"y":600,"w":200,"h":80,"text":"A machine forbidden to run wild suddenly runs out of control or loops forever","size":"sm","tone":1,"block":"spya-rt2gb2"},
+        {"kind":"node","id":"s6c","shape":"box","x":520,"y":600,"w":200,"h":80,"text":"Even a parity rule (always-even output) is eventually broken","size":"sm","tone":1,"block":"spya-jdmx0m"},
+        {"kind":"node","id":"s7","shape":"box","x":260,"y":710,"w":260,"h":0,"text":""},
+
+        {"kind":"edge","from":"s1","to":"s2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s2","to":"s3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s3","to":"s4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s4","to":"s5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s5","to":"s6a","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s5","to":"s6b","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s5","to":"s6c","via":"curve","arrow":"end"}
+      ]
+    },
+    {
+      "id": "beyond",
+      "title": "Bugs beyond programming",
+      "caption": "Two parallel strands — math's own rare counterexamples, and the practical craft of avoiding bugs through language and visualization — both run into the same wall, and the piece ends by reframing a bug as a discovery.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"b1","shape":"box","x":60,"y":40,"w":260,"h":80,"text":"A polynomial factoring pattern holds for ages, breaks at x^105 - 1","size":"sm","tone":3,"block":"spya-ca4f5c"},
+        {"kind":"node","id":"b2","shape":"box","x":60,"y":150,"w":260,"h":80,"text":"A prime-count trend reverses only at the 23,338,590,792th prime","size":"sm","tone":3,"block":"spya-cc855a"},
+        {"kind":"node","id":"b3","shape":"box","x":60,"y":260,"w":260,"h":90,"text":"Mainstream math avoids this by sticking to human-graspable, reducible questions","size":"sm","tone":3,"block":"spya-zcpn8u"},
+
+        {"kind":"node","id":"p1","shape":"box","x":440,"y":40,"w":260,"h":80,"text":"A well-designed language's primitives already match human intent","size":"sm","tone":2,"block":"spya-kdks69"},
+        {"kind":"node","id":"p2","shape":"box","x":440,"y":150,"w":260,"h":80,"text":"Short programs in such a language tend to be the bug-free ones","size":"sm","tone":2,"block":"spya-x8ag2t"},
+        {"kind":"node","id":"p3","shape":"box","x":440,"y":260,"w":260,"h":80,"text":"Seeing a computation's full behavior builds real confidence","size":"sm","tone":2,"block":"spya-qexzj4"},
+        {"kind":"node","id":"p4","shape":"box","x":440,"y":370,"w":260,"h":90,"text":"Trained neural nets are especially exposed: no human-graspable mechanism inside","size":"sm","tone":2,"block":"spya-sggbeh"},
+
+        {"kind":"node","id":"end","shape":"ellipse","x":220,"y":500,"w":320,"h":90,"text":"An unexpected result can be a discovery, not a failure","size":"md","block":"spya-xdwm97"},
+
+        {"kind":"edge","from":"b1","to":"b2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b2","to":"b3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p1","to":"p2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p2","to":"p3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"p3","to":"p4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b3","to":"end","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p4","to":"end","via":"curve","arrow":"end"}
+      ]
+    }
+  ]
+}

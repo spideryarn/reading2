@@ -1,5 +1,7 @@
 # Shelf topics, chosen by a model from the program's candidates
 
+Research write-up: [docs/research/261002e-shelf-topics-which-model-picks-the-pills.md](../research/261002e-shelf-topics-which-model-picks-the-pills.md).
+
 **Status:** planned, 2026-09-29. Changes the design in [shelf-terms.md](../project/shelf-terms.md)
 ("picked without a model"). Follows rounds one to three:
 [260928a](260928a-shelf-facet-terms.md), [260928d](260928d-shelf-topics-diversity-coverage-and-detail-view.md),

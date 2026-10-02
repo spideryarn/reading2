@@ -1,5 +1,7 @@
 # The hierarchy structure pass, in waves
 
+Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+
 **Status: superseded on 2026-09-04 by
 [260904d-deepen-fat-sections.md](260904d-deepen-fat-sections.md), which is the same cascade with a
 better argument and a per-child self-assessment. Read that one; this is here for its stage-0 history

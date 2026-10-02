@@ -238,9 +238,10 @@
     /* One face per voice — the author's, the model's, the reader's — read ONLY by
        src/web/styles/voices.css, and only while the Experimental switch is on. Greg, 2026-10-01:
        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
-       becomes the fourth voice by being left alone. docs/project/typography.md § A face per voice. */
+       becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
+       "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */
     --font-author: 'Source Serif 4 Variable', 'Times New Roman', Times, serif;
-    --font-ai: 'Courier Prime', 'Courier New', Courier, monospace;
+    --font-ai: 'IBM Plex Mono', 'Courier New', Courier, monospace;
     --font-reader: Arial, Helvetica, 'Liberation Sans', sans-serif;
 
     /* ---- reading measure --------------------------------------------- */

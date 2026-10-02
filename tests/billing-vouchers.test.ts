@@ -150,7 +150,7 @@ async function givenUsed(owner: string, n: number): Promise<void> {
 
 /** A voucher for `owner`'s address, unclaimed. */
 async function givenVoucher(owner: string, n: number, note: string | null = null): Promise<string> {
-  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note }, ADMIN_USER_ID_LOCAL);
+  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null }, ADMIN_USER_ID_LOCAL);
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
   return made.id;
 }
@@ -160,7 +160,7 @@ async function claims(...args: Parameters<typeof claimVouchersFor>): Promise<num
   return (await claimVouchersFor(...args)).claimed;
 }
 
-async function makePaid(owner: string, status = "active"): Promise<void> {
+async function makePaid(owner: string, status = "active", priceId = READER_PRICE): Promise<void> {
   if (!pool) return;
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 25 * 86_400_000);
@@ -175,7 +175,7 @@ async function makePaid(owner: string, status = "active"): Promise<void> {
        price_id = excluded.price_id, status = excluded.status,
        current_period_start = excluded.current_period_start,
        current_period_end = excluded.current_period_end`,
-    [owner, `cus_${owner}`, `sub_${owner}`, READER_PRICE, status, start, end],
+    [owner, `cus_${owner}`, `sub_${owner}`, priceId, status, start, end],
   );
 }
 
@@ -413,7 +413,7 @@ describe("the administrator's side", () => {
     const id = randomUUID();
     expect(parseNewVoucher({ id, email: " A@B.example ", articles: 20 })).toEqual({
       ok: true,
-      value: { id, email: "a@b.example", articles: 20, note: null },
+      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null },
     });
     /* The id is the browser's, and required: it is what makes a replay the same create. */
     expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);
@@ -499,6 +499,31 @@ describe("the routes", () => {
     const reply = await drive("GET", "/api/billing/usage", "", OTHER);
     expect(reply.status).toBe(200);
     expect(reply.body.plan).not.toHaveProperty("gifts");
+  });
+
+  it("carries a claimed gift on the paid wire while leaving the paid limit unchanged", async () => {
+    if (!pool) return;
+    const { rows } = await pool.query<{ stripe_price_id: string; ingests_per_period: number }>(
+      `select stripe_price_id, ingests_per_period
+         from spideryarn.billing_tiers
+        where id = 'reader' and active and stripe_price_id is not null`,
+    );
+    const tier = rows[0];
+    if (!tier) throw new Error("the active reader tier needs a Stripe price for this test");
+
+    const id = await givenVoucher(READER, 20);
+    await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
+    await makePaid(READER, "active", tier.stripe_price_id);
+
+    const reply = await drive("GET", "/api/billing/usage", "", READER);
+    expect(reply.status).toBe(200);
+    expect(reply.body.plan).toMatchObject({
+      kind: "paid",
+      limit: tier.ingests_per_period,
+      periodAllowance: tier.ingests_per_period,
+      trial: false,
+      gifts: [{ articles: 20, noticeKey: id }],
+    });
   });
 
   it("serves the plan without the gift when the Auth service cannot confirm", async () => {

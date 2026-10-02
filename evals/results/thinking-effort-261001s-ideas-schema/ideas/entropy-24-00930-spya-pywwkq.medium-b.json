@@ -1,0 +1,187 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-bujg2d",
+      "name": "Undirected dependency versus directed influence between neurons",
+      "provenance": "assumed",
+      "statement": "A measure of how much knowing one variable's state reduces uncertainty about another's current state (an undirected, instantaneous dependency) is a fundamentally different quantity from a measure of how one variable's past states shape another's future beyond what the target's own history already explains (a directed, time-ordered influence).",
+      "whyYouNeedIt": "The argument for needing transfer entropy, and later PID, depends on recognizing that mutual information alone cannot speak to directional flow or computation; without already holding the distinction between dependency and directed influence, the move from mutual information to transfer entropy to PID looks arbitrary rather than necessary.",
+      "occurrences": [
+        {
+          "blockId": "spya-f6sbgx",
+          "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as \"transfer\" or \"flow.\"",
+          "reasoning": "The passage asserts a limitation of mutual information that only makes sense if the reader already separates 'dependency' from 'directed flow' as distinct concepts.",
+          "start": 626
+        },
+        {
+          "blockId": "spya-p4pyuy",
+          "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity",
+          "reasoning": "This contrast presumes the reader already holds the undirected/directed distinction in order to grasp why two different tools are needed at all.",
+          "start": 765
+        }
+      ]
+    },
+    {
+      "id": "spya-krfeda",
+      "name": "A neuron's firing is a statistical decision computed over joint input states",
+      "provenance": "assumed",
+      "statement": "A target neuron's choice to fire or not can be treated as a variable whose uncertainty is reduced by the joint pattern of its presynaptic inputs' past activity, so that 'computation' is modeled as the amount by which joint input states shrink uncertainty about that future firing decision.",
+      "whyYouNeedIt": "The entire motivation for using PID on triads of neurons depends on treating spiking as a 'decision' reducible via information-theoretic uncertainty, a framing that is never argued for but without which the setup of sources, target, and 'past states reducing uncertainty about future state' would not make sense as a model of neural computation.",
+      "occurrences": [
+        {
+          "blockId": "spya-h5dz45",
+          "quote": "Individual neurons receive inputs from from many \"parent\" neurons, which are \"integrated\" into a single \"decision\" by the target neuron, i.e., whether to fire an action potential or not.",
+          "reasoning": "Frames firing as a decision problem, a framing the PID formalism is then built on without justifying why firing should be modeled this way.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-u5ra3d",
+          "quote": "we are interested in knowing how the past states of X1 and X2 reduce our uncertainty about the future state of Y",
+          "reasoning": "Only makes sense as a model of neural computation if one already accepts that uncertainty-reduction about firing is what 'processing information' means for a neuron.",
+          "start": 321
+        }
+      ]
+    },
+    {
+      "id": "spya-c5tya3",
+      "name": "Synergy as the irreducible 'more' of combined inputs",
+      "provenance": "introduced",
+      "statement": "The information that the joint state of several source neurons gives about a target can be strictly greater than the sum of what each source gives alone; this surplus is synergistic information and marks a genuine combination, not just addition, of inputs.",
+      "occurrences": [
+        {
+          "blockId": "spya-h5dz45",
+          "quote": "it cannot be assumed that the joint mutual information (the \"whole\") is reducible to a sum of all its component marginal \"parts\"",
+          "reasoning": "States the inequality that synergy is built on.",
+          "start": 829
+        },
+        {
+          "blockId": "spya-e94ury",
+          "quote": "If the left-hand side of Equation (4) (the \"whole\") is greater than the right-hand side (the sum of the \"parts\"), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.",
+          "reasoning": "Defines synergy directly from the whole-exceeds-parts inequality.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-pjdgu6",
+          "quote": "the joint state of X1 and X2 can account for the activity of Y to some degree. This information is not accounted for by either source independently",
+          "reasoning": "Figure caption restates synergy as information only visible in the joint state.",
+          "start": 716
+        }
+      ]
+    },
+    {
+      "id": "spya-cq3hzg",
+      "name": "PID splits total shared information into redundant/unique/synergistic atoms via a lattice",
+      "provenance": "introduced",
+      "statement": "Given a measure of redundancy, the total information that any set of sources carries about a target can be uniquely broken into non-overlapping pieces (redundant, unique to each source, and synergistic among subsets), arranged on a partially ordered lattice and recovered via Mobius inversion.",
+      "occurrences": [
+        {
+          "blockId": "spya-t02v4p",
+          "quote": "it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts)",
+          "reasoning": "States the core decomposition claim.",
+          "start": 58
+        },
+        {
+          "blockId": "spya-m37w5y",
+          "quote": "it is possible to recursively quantify the value of every partial information atom (Π(α)) via Mobius inversion",
+          "reasoning": "Gives the mechanism (Mobius inversion) by which atom values are computed.",
+          "start": 281
+        }
+      ]
+    },
+    {
+      "id": "spya-sp5gwv",
+      "name": "Redundancy cannot be derived from Shannon theory alone",
+      "provenance": "introduced",
+      "statement": "Classical information theory leaves the four PID quantities underdetermined given only the three mutual-information equations, so some extra, non-unique choice of redundancy function must be imposed before synergy and unique information can be computed.",
+      "occurrences": [
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks",
+          "reasoning": "Shows the consequence: many competing, non-equivalent redundancy functions exist because none is forced by the math.",
+          "start": 112
+        }
+      ]
+    },
+    {
+      "id": "spya-adr2jj",
+      "name": "Synergy concentrates in network rich clubs",
+      "provenance": "introduced",
+      "statement": "The densely interconnected 'rich club' of highly-connected neurons accounts for a hugely disproportionate share of a circuit's synergistic (computational) activity relative to its size.",
+      "occurrences": [
+        {
+          "blockId": "spya-fud8q3",
+          "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club",
+          "reasoning": "Directly reports the concentration of synergy in rich-club triads.",
+          "start": 222
+        },
+        {
+          "blockId": "spya-fud8q3",
+          "quote": "Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy",
+          "reasoning": "Quantifies the disproportionate share of computation located in the rich club.",
+          "start": 524
+        }
+      ]
+    },
+    {
+      "id": "spya-dbscf6",
+      "name": "Recurrent connectivity, not feedback, drives extra synergy",
+      "provenance": "introduced",
+      "statement": "Triads with more connections between the two source neurons (recurrence) show higher synergy, whereas connections running back from the target to the sources (feedback) do not reliably increase and may slightly reduce synergy.",
+      "occurrences": [
+        {
+          "blockId": "spya-sd9fzd",
+          "quote": "triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy",
+          "reasoning": "States the differential effect of recurrent versus feedback connections on synergy.",
+          "start": 25
+        }
+      ]
+    },
+    {
+      "id": "spya-ztsw7f",
+      "name": "Synergy peaks at intermediate, not maximal, input similarity",
+      "provenance": "introduced",
+      "statement": "As the correlation between two converging input streams increases, synergy first rises but then falls once the inputs become too similar, with synergy maximal at a modest, not high, level of shared information; beyond that point redundancy dominates instead.",
+      "occurrences": [
+        {
+          "blockId": "spya-ybmve2",
+          "quote": "the peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease",
+          "reasoning": "States the non-monotonic relationship directly.",
+          "start": 240
+        },
+        {
+          "blockId": "spya-cs9fdy",
+          "quote": "synergy increased only at the shorter timescales and decreased at the longer timescales. Observing the redundancy offered an explanation. Redundancy was positively related to mutual information at all timescales.",
+          "reasoning": "Explains the fall in synergy as a takeover by redundancy once inputs are sufficiently correlated.",
+          "start": 398
+        }
+      ]
+    },
+    {
+      "id": "spya-useksm",
+      "name": "Synergy/redundancy balance shifts with task demands",
+      "provenance": "introduced",
+      "statement": "The relative amounts of synergistic versus redundant information carried by a circuit are not fixed properties of anatomy but change with the behavioral phase, with redundancy rising when reliable, duplicated signal transmission is needed (e.g., during movement execution).",
+      "occurrences": [
+        {
+          "blockId": "spya-t8fayf",
+          "quote": "while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+          "reasoning": "Directly states the task-dependent shift from synergy to redundancy.",
+          "start": 216
+        },
+        {
+          "blockId": "spya-t8fayf",
+          "quote": "during motor execution, the brain needs to send the \"move\" signal to distant muscles, and to ensure high-fidelity transmission the brain may duplicate information many times over",
+          "reasoning": "Gives the functional interpretation linking redundancy to reliable signal transmission.",
+          "start": 542
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T00:54:31.612Z",
+  "elapsedMs": 54089
+}

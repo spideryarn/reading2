@@ -125,6 +125,18 @@ const WAVE_1 = {
   ],
 };
 
+/** The stored tree fixture is ranged; the toc/11 structure response is not. */
+const WAVE_1_ANSWER = {
+  root: {
+    title: WAVE_1.title,
+    gist: WAVE_1.gist,
+    children: WAVE_1.children.map(({ range, ...child }) => ({
+      ...child,
+      start: range[0],
+    })),
+  },
+};
+
 /* --------------------------------------------------------------- the fakes -- */
 
 /**
@@ -1252,7 +1264,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
     streamMessage: () => ({
       onText: () => {},
       finalMessage: async () => ({
-        content: [{ type: "text", text: JSON.stringify({ root: WAVE_1 }) }],
+        content: [{ type: "text", text: JSON.stringify(WAVE_1_ANSWER) }],
         stop_reason: "end_turn",
         usage: { input_tokens: 1, output_tokens: 1 },
       }),

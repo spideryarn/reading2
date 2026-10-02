@@ -1792,7 +1792,8 @@ function CiteCardReading({ work }: { work: CitedWork }) {
       </div>
       {verdict.support === "not-in-extract" && paperDoes && (
         <p className="prose-card-text prose-card-cite-does">
-          <span className="prose-card-cite-does-label">{CITE_DOES_LABEL}:</span> {paperDoes.says}
+          <span className="prose-card-cite-does-label">{CITE_DOES_LABEL}:</span>{" "}
+          <span className="prose-card-cite-does-text">{paperDoes.says}</span>
         </p>
       )}
       {quote !== null && (
@@ -1812,7 +1813,9 @@ function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
   return (
     <div className="prose-card-body">
       <p className="prose-card-head">
-        <span className="prose-card-name">{entry.name}</span>
+        {/* The glossary's canonical name, which the model writes — so a class of
+            its own: the citation card reuses `prose-card-name` for a work's title. */}
+        <span className="prose-card-name prose-card-term-name">{entry.name}</span>
         <GlossaryKindIcon kind={entry.kind} />
       </p>
 
@@ -1820,7 +1823,7 @@ function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
         /* `glossary/1` wrote one blended field, and there is no honest label for
            a blend — see `entryProse`. It renders unlabelled here exactly as it
            does in the panel. */
-        <p className="prose-card-text">{prose.lead}</p>
+        <p className="prose-card-text prose-card-term-lead">{prose.lead}</p>
       ) : (
         prose.sections.map((section) => (
           <div key={section.key} className={`prose-card-part prose-card-part-${section.key}`}>

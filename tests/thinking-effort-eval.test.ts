@@ -9,12 +9,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ARM_NAMES, DEFAULT_ARMS, levelOf, seededShuffle } from "../evals/thinking-effort/arms.js";
 import { renderForJudging } from "../evals/hierarchy-structure/blind.js";
-import { ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
+import { hierarchyTreeFile, ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
 import { assertTreeSound } from "../src/tree-invariants.js";
 import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-effort/tally.js";
 import {
   accountingFaults,
   armEffort,
+  armFormat,
   claimRun,
   ensureModeConfig,
   modeOrderFile,
@@ -38,12 +39,25 @@ describe("armEffort", () => {
     expect(armEffort("low", null)).toEqual({ override: "low", expectedOnWire: "low" });
     expect(armEffort("medium", "high")).toEqual({ override: "medium", expectedOnWire: "medium" });
   });
+
+  it("keeps the frozen no-schema arm at production effort", () => {
+    expect(armEffort("no-schema", "low")).toEqual({ override: null, expectedOnWire: "low" });
+  });
+
+  it("requires schemas for Ideas and shipping Sketch, but not Sketch's frozen arm", () => {
+    expect(armFormat("ideas", "base")).toBe("json_schema");
+    expect(armFormat("ideas", "low")).toBe("json_schema");
+    expect(armFormat("sketch", "base")).toBe("json_schema");
+    expect(armFormat("sketch", "no-schema")).toBeNull();
+    expect(armFormat("illustrated", "base")).toBeNull();
+  });
 });
 
 describe("the arms", () => {
   it("runs two draws of base and two of low by default, and medium only when named", () => {
     expect(DEFAULT_ARMS).toEqual(["base-a", "base-b", "low-a", "low-b"]);
     expect(ARM_NAMES.filter((a) => levelOf(a) === "medium")).toEqual(["medium-a", "medium-b"]);
+    expect(ARM_NAMES.filter((a) => levelOf(a) === "no-schema")).toEqual(["no-schema-a", "no-schema-b"]);
   });
 
   it("shuffles reproducibly from one seed, differently per salt, and loses nothing", () => {
@@ -163,6 +177,20 @@ describe("the lineup", () => {
   it("labels four candidates W to Z", () => {
     expect(labelsFor(4)).toEqual(["W", "X", "Y", "Z"]);
     expect(labelsFor(5)).toEqual(["A", "B", "C", "D", "E"]);
+  });
+
+  it("maps the blind hierarchy aliases onto both repeats of both measured arms", () => {
+    expect([
+      hierarchyTreeFile("base-a", "article"),
+      hierarchyTreeFile("base-b", "article"),
+      hierarchyTreeFile("toc11-a", "article"),
+      hierarchyTreeFile("toc11-b", "article"),
+    ]).toEqual([
+      "toc10-frozen.article.r1.json",
+      "toc10-frozen.article.r2.json",
+      "incumbent.article.r1.json",
+      "incumbent.article.r2.json",
+    ]);
   });
 
   it("strips what a judge could read an arm off", () => {

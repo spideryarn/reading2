@@ -40,6 +40,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
 import {
@@ -485,6 +490,118 @@ function parseJson(raw: string): unknown {
   return parseJsonAnswer<unknown>(raw, "the model's answer");
 }
 
+const stringSchema = { type: "string" } as const;
+const numberSchema = { type: "number" } as const;
+const booleanSchema = { type: "boolean" } as const;
+const enumSchema = <T extends string>(values: readonly T[]) => ({ type: "string", enum: values }) as const;
+const objectSchema = (
+  properties: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+) => ({ type: "object", properties, required, additionalProperties: false }) as const;
+const toned = { tone: numberSchema, muted: booleanSchema } as const;
+
+const nodeSchema = objectSchema(
+  {
+    kind: { const: "node" },
+    id: stringSchema,
+    shape: enumSchema(["box", "pill", "ellipse", "diamond", "hex", "note", "bare"]),
+    x: numberSchema,
+    y: numberSchema,
+    w: numberSchema,
+    h: numberSchema,
+    text: stringSchema,
+    sub: stringSchema,
+    size: enumSchema(["xs", "sm", "md", "lg"]),
+    ...toned,
+    block: stringSchema,
+    opens: stringSchema,
+    detail: stringSchema,
+  },
+  ["kind", "id", "shape", "x", "y", "w", "h", "text", "size"],
+);
+
+const regionSchema = objectSchema(
+  {
+    kind: { const: "region" },
+    x: numberSchema,
+    y: numberSchema,
+    w: numberSchema,
+    h: numberSchema,
+    label: stringSchema,
+    style: enumSchema(["band", "dashed", "bracket", "plain"]),
+    opens: stringSchema,
+    ...toned,
+  },
+  ["kind", "x", "y", "w", "h", "style"],
+);
+
+const edgeSchema = objectSchema(
+  {
+    kind: { const: "edge" },
+    from: stringSchema,
+    to: stringSchema,
+    via: enumSchema(["straight", "elbow", "curve"]),
+    line: enumSchema(["solid", "dashed", "dotted"]),
+    arrow: enumSchema(["none", "end", "start", "both"]),
+    label: stringSchema,
+    ...toned,
+  },
+  ["kind", "from", "to", "via", "line", "arrow"],
+);
+
+const pathSchema = objectSchema(
+  {
+    kind: { const: "path" },
+    d: stringSchema,
+    line: enumSchema(["solid", "dashed", "dotted"]),
+    arrow: enumSchema(["none", "end", "start", "both"]),
+    fill: booleanSchema,
+    ...toned,
+  },
+  ["kind", "d", "line", "arrow", "fill"],
+);
+
+const labelSchema = objectSchema(
+  {
+    kind: { const: "label" },
+    x: numberSchema,
+    y: numberSchema,
+    text: stringSchema,
+    size: enumSchema(["xs", "sm", "md", "lg"]),
+    align: enumSchema(["start", "middle", "end"]),
+    ...toned,
+  },
+  ["kind", "x", "y", "text", "size", "align"],
+);
+
+/** Five primitives, as a union; geometry and id resolution remain in `readSketch`. */
+export const SKETCH_OUTPUT_SCHEMA = objectSchema(
+  {
+    caption: stringSchema,
+    title: stringSchema,
+    scenes: {
+      type: "array",
+      items: objectSchema(
+        {
+          id: stringSchema,
+          title: stringSchema,
+          caption: stringSchema,
+          height: numberSchema,
+          items: {
+            type: "array",
+            items: { anyOf: [nodeSchema, regionSchema, edgeSchema, pathSchema, labelSchema] },
+          },
+        },
+        ["id", "title", "height", "items"],
+      ),
+    },
+  },
+  ["caption", "title", "scenes"],
+);
+
+validateAnthropicJsonSchema(SKETCH_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(SKETCH_OUTPUT_SCHEMA, ["block"]);
+
 /* ------------------------------------------------------------------ the run */
 
 export async function generateSketch(opts: {
@@ -501,6 +618,8 @@ export async function generateSketch(opts: {
   profile?: string | null;
   /** Overrides SYSTEM, for the prompt harness only. Never set in the app. */
   systemOverride?: string;
+  /** Frozen pre-schema eval arm only; production never omits the schema. */
+  outputSchema?: "omit-for-eval";
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
 }): Promise<SketchRun> {
@@ -537,22 +656,25 @@ export async function generateSketch(opts: {
 
   let message: Anthropic.Message;
   try {
+    const request = {
+      max_tokens: maxTokens,
+      thinking: { type: "adaptive" } as const,
+      output_config: { effort: effortFor("sketch") },
+      system: [
+        {
+          type: "text" as const,
+          text: articleWithIds(meta, evidence),
+          ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+        },
+        { type: "text" as const, text: opts.systemOverride ?? SYSTEM },
+      ],
+      messages: [{ role: "user" as const, content: renderPrompt({ tree, profile }) }],
+    };
     const call = streamMessage(
       "sketch",
-      {
-        max_tokens: maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: { effort: effortFor("sketch") },
-        system: [
-          {
-            type: "text" as const,
-            text: articleWithIds(meta, evidence),
-            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
-          },
-          { type: "text" as const, text: opts.systemOverride ?? SYSTEM },
-        ],
-        messages: [{ role: "user", content: renderPrompt({ tree, profile }) }],
-      },
+      opts.outputSchema === "omit-for-eval"
+        ? request
+        : withMessagesJsonSchema(request, SKETCH_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

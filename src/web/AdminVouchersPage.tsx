@@ -20,7 +20,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RefreshCw } from "lucide-react";
 
-import type { VoucherEmailState } from "../admin-vouchers.js";
+import { type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -39,6 +39,9 @@ const INPUT =
   "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25";
 const BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50";
+/** The note to them is a sentence or two, so it gets lines rather than a single box. */
+const TEXTAREA =
+  "tw:min-h-16 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:py-1.5 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25";
 const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
 const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-medium tw:text-muted-foreground`;
 
@@ -66,6 +69,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
   const [email, setEmail] = useState("");
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
   const [note, setNote] = useState("");
+  const [recipientNote, setRecipientNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -79,7 +83,12 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       return;
     }
     setBusy(true);
-    const answer = await create({ email, articles: count, note: note.trim() === "" ? null : note });
+    const answer = await create({
+      email,
+      articles: count,
+      note: note.trim() === "" ? null : note,
+      recipientNote: recipientNote.trim() === "" ? null : recipientNote,
+    });
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
     if (answer.kind === "created") {
@@ -87,6 +96,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       setEmail("");
       setArticles(String(DEFAULT_ARTICLES));
       setNote("");
+      setRecipientNote("");
     }
   }
 
@@ -147,7 +157,74 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
           {busy ? "Creating…" : "Create voucher"}
         </button>
       </div>
+      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-start tw:gap-3">
+        <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          <label className="tw:flex tw:flex-col tw:gap-1">
+            Note to them (optional — it goes in their email, above our words)
+            <textarea
+              id="voucher-new-recipient-note"
+              rows={3}
+              value={recipientNote}
+              onChange={(e) => setRecipientNote(e.target.value)}
+              aria-describedby="voucher-new-recipient-note-hint"
+              className={`${TEXTAREA} tw:w-full`}
+            />
+          </label>
+          {/* Greg, 2026-10-02: the note is unlabelled in the email, so
+              "add a tooltip or something in the interface to remind me to
+              sign my name". */}
+          <p id="voucher-new-recipient-note-hint" className="tw:m-0 tw:text-ink-faint">
+            Sign it yourself, e.g. “— Greg”. The email comes from Spideryarn, so the note isn’t signed
+            otherwise.
+          </p>
+        </div>
+        <EmailSketch articles={wholeNumber(articles)} note={recipientNote} />
+      </div>
     </form>
+  );
+}
+
+/**
+ * **A sketch of the email they will get**, and where the note goes — Greg,
+ * 2026-10-01: *"give a small indication of what the gift voucher email that
+ * gets sent will look like and where my note for them would go"*. Plan
+ * 261002b.
+ *
+ * The subject and heading are the email's own words, from
+ * src/admin-vouchers.ts, which the renderer calls too. **The body is described
+ * rather than quoted**: it depends on who they are (a stranger is invited, a
+ * reader is told their numbers), which only the server can look up, and the
+ * renderer is not browser code. The note is drawn as typed; the server makes
+ * its line breaks plain and escapes it when it builds the email. It is in
+ * italics and unlabelled, as in the email.
+ */
+function EmailSketch({ articles, note }: { articles: number | null; note: string }) {
+  const n = articles !== null && articles >= 1 ? articles : 1;
+  const trimmed = note.trim();
+  return (
+    <section
+      aria-label="What their email will look like"
+      className="tw:min-w-0 tw:flex-1 tw:basis-72 tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3 tw:text-xs tw:text-muted-foreground"
+    >
+      <p className="tw:m-0 tw:mb-2">
+        <span className="tw:text-ink-faint">Subject:</span> {giftEmailSubject(n)}
+      </p>
+      <p className="tw:m-0 tw:mb-2 tw:text-sm tw:font-medium tw:text-foreground">{giftEmailHeading(n)}</p>
+      {trimmed === "" ? (
+        <p className="tw:m-0 tw:mb-2 tw:border-l-2 tw:border-dashed tw:border-highlight/50 tw:pl-2 tw:italic">
+          Your note to them goes here, if you write one.
+        </p>
+      ) : (
+        <p className="tw:m-0 tw:mb-2 tw:whitespace-pre-wrap tw:break-words tw:border-l-2 tw:border-highlight tw:pl-2 tw:text-foreground">
+          <em>{trimmed}</em>
+        </p>
+      )}
+      <p className="tw:m-0">
+        …then a short paragraph from us: what Spideryarn is and how to collect the articles (or, if
+        the address is already a reader's, how many articles they had left and have now), and a
+        button to sign in.
+      </p>
+    </section>
   );
 }
 
@@ -305,6 +382,7 @@ function VoucherRow({
   const [editing, setEditing] = useState(false);
   const [articles, setArticles] = useState(String(voucher.articles));
   const [note, setNote] = useState(voucher.note ?? "");
+  const [recipientNote, setRecipientNote] = useState(voucher.recipientNote ?? "");
   const [email, setEmail] = useState(voucher.email);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -336,6 +414,7 @@ function VoucherRow({
   function startEditing() {
     setArticles(String(voucher.articles));
     setNote(voucher.note ?? "");
+    setRecipientNote(voucher.recipientNote ?? "");
     setEmail(voucher.email);
     setRefusal(null);
     setEditing(true);
@@ -354,6 +433,8 @@ function VoucherRow({
     if (count !== voucher.articles) patch.articles = count;
     const nextNote = note.trim() === "" ? null : note.trim();
     if (nextNote !== voucher.note) patch.note = nextNote;
+    const nextRecipientNote = recipientNote.trim() === "" ? null : recipientNote;
+    if (nextRecipientNote !== voucher.recipientNote) patch.recipientNote = nextRecipientNote;
     if (unclaimed && email.trim().toLowerCase() !== voucher.email) patch.email = email;
     if (Object.keys(patch).length === 0) {
       setEditing(false);
@@ -413,6 +494,28 @@ function VoucherRow({
           />
         ) : (
           <span className="tw:text-muted-foreground">{voucher.note ?? ""}</span>
+        )}
+      </td>
+      <td className={`${CELL} tw:min-w-48`}>
+        {editing ? (
+          <>
+            <textarea
+              aria-label="Note to them"
+              form={`voucher-${voucher.id}`}
+              rows={3}
+              value={recipientNote}
+              onChange={(e) => setRecipientNote(e.target.value)}
+              className={`${TEXTAREA} tw:w-56`}
+            />
+            {/* The email is frozen when it is queued (plan 261001p), so an
+                edit here changes what a later email to a new address says,
+                and nothing already sent or waiting. */}
+            <p className="tw:m-0 tw:mt-1 tw:max-w-56 tw:text-xs tw:text-muted-foreground">
+              Changing it does not resend the email. A new address would get the new note.
+            </p>
+          </>
+        ) : (
+          <span className="tw:whitespace-pre-wrap tw:break-words">{voucher.recipientNote ?? ""}</span>
         )}
       </td>
       <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
@@ -514,7 +617,8 @@ export function AdminVouchersPage() {
               <tr className="tw:border-b tw:border-border">
                 <th className={HEAD}>Email</th>
                 <th className={`${HEAD} tw:text-right`}>Articles</th>
-                <th className={HEAD}>Note</th>
+                <th className={HEAD}>Private note</th>
+                <th className={HEAD}>Note to them</th>
                 <th className={HEAD}>Created</th>
                 <th className={HEAD}>Status</th>
                 <th className={HEAD}>Claimant's free usage</th>

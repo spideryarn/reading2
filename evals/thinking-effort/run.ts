@@ -109,8 +109,17 @@ export interface ArmEffort {
  * for Illustrated, which names none.
  */
 export function armEffort(level: Level, production: Effort | null): ArmEffort {
-  if (level === "base") return { override: null, expectedOnWire: production };
+  if (level === "base" || level === "no-schema") {
+    return { override: null, expectedOnWire: production };
+  }
   return { override: level, expectedOnWire: level };
+}
+
+/** The format each measured request must actually carry on the wire. */
+export function armFormat(mode: Mode, level: Level): "json_schema" | null {
+  if (mode === "ideas") return "json_schema";
+  if (mode === "sketch" && level !== "no-schema") return "json_schema";
+  return null;
 }
 
 /** Files one mode owns exclusively, so three mode processes may share `--out`. */
@@ -285,6 +294,8 @@ export interface WireCapture {
   url: string;
   model: string | null;
   effort: string | null;
+  /** `output_config.format.type`, or null when the request sends no format. */
+  format: string | null;
   thinking: string | null;
   maxTokens: number | null;
   stopReason: string | null;
@@ -305,7 +316,7 @@ export function readCapture(url: string, body: string | null, sse: string | null
     req = {};
   }
   const thinking = req.thinking as { type?: string } | undefined;
-  const output = req.output_config as { effort?: string } | undefined;
+  const output = req.output_config as { effort?: string; format?: { type?: string } } | undefined;
   let stopReason: string | null = null;
   let thinkingTokens: number | null = null;
   let text = "";
@@ -334,6 +345,7 @@ export function readCapture(url: string, body: string | null, sse: string | null
     url,
     model: typeof req.model === "string" ? req.model : null,
     effort: output?.effort ?? null,
+    format: output?.format?.type ?? null,
     thinking: thinking?.type ?? null,
     maxTokens: typeof req.max_tokens === "number" ? req.max_tokens : null,
     stopReason,
@@ -397,6 +409,8 @@ export interface RunRow {
   effortExpected: Effort | null;
   /** What the Messages request actually carried. */
   effortSent: string | null;
+  /** `output_config.format.type` as observed on the wire. */
+  formatSent?: string | null;
   thinkingSent: string | null;
   /** The model as sent, and as the response named it. */
   model: string | null;
@@ -775,6 +789,9 @@ async function main(opts: Options): Promise<void> {
         for (const slug of opts.slugs) {
           const order = selectedArmOrder(mode, slug, state.seed, opts.arms);
           for (const { arm, orderIndex } of order) {
+            if (levelOf(arm) === "no-schema" && mode !== "sketch") {
+              throw new Error(`${arm} is only defined for Sketch's same-effort schema comparison`);
+            }
             const key = `${mode}.${arm}.${slug}`;
             if (state.done.has(key)) {
               console.log(`${key}: already in ${path.basename(state.rowsFile)}, skipped`);
@@ -904,7 +921,12 @@ async function runOne(a: {
           case "sketch": {
             const { generateSketch } = await import("../../src/sketch.js");
             if (a.effort.override) process.env.SPIDERYARN_PIPELINE_EFFORT = a.effort.override;
-            const r = await generateSketch({ power: "standard", article: a.loaded.article, profile: null });
+            const r = await generateSketch({
+              power: "standard",
+              article: a.loaded.article,
+              profile: null,
+              ...(levelOf(a.arm) === "no-schema" ? { outputSchema: "omit-for-eval" as const } : {}),
+            });
             await write(".json", `${JSON.stringify(r.sketch, null, 2)}\n`);
             await write(".raw.txt", r.raw);
             const { sketchSvg } = await import("../sketch/svg.js");
@@ -1034,6 +1056,12 @@ async function runOne(a: {
           `request had to carry effort ${a.effort.expectedOnWire ?? "(none)"} and carried ${w.effort ?? "(none)"}`,
         );
       }
+      const expectedFormat = armFormat(a.mode, levelOf(a.arm));
+      if (w.format !== expectedFormat) {
+        harnessFaults.push(
+          `request had to carry format ${expectedFormat ?? "(none)"} and carried ${w.format ?? "(none)"}`,
+        );
+      }
       if (w.thinking !== "adaptive") harnessFaults.push(`request carried thinking ${w.thinking ?? "(none)"}, not adaptive`);
       if (w.model !== CAPABLE_MODEL_OPENROUTER) {
         harnessFaults.push(`request carried model ${w.model ?? "(none)"}, not ${CAPABLE_MODEL_OPENROUTER}`);
@@ -1079,6 +1107,7 @@ async function runOne(a: {
     effortOverride: a.effort.override,
     effortExpected: a.effort.expectedOnWire,
     effortSent: join(wire.map((w) => w.effort)),
+    formatSent: join(wire.map((w) => w.format)),
     thinkingSent: join(wire.map((w) => w.thinking)),
     model: wire[0]?.model ?? model[0]?.model ?? null,
     answeredBy: model[0]?.answeredBy ?? null,

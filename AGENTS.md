@@ -46,6 +46,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
+  `marginalia.md` (the notes right of the prose, and what other modes' items belong there) ·
   `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
   `column-context.md` (history: the gist columns' fisheye) ·
@@ -86,6 +87,7 @@ listed here; the names under each are files in `docs/project/`.
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
   <br>↳ `colour-scales.md` · `typography.md` (one sans, the weight axis, the vertical rhythm) ·
+  `fonts.md` (a face for each voice: the author's, the model's, the reader's) ·
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
   `loading-spinner.md` (the wordmark for a whole page waiting, `LoaderCircle` for the rest) ·
@@ -457,6 +459,8 @@ nothing else has a copy of.
   runners are hand-rolled copies not to imitate. A batch call in the pipeline, which
   nobody is watching, doesn't need this.
 - **Writing or changing a prompt?** Read [prompting-guide.md](docs/project/prompting-guide.md) first.
+- **Putting words on screen that are not the app's own — a model's, the reader's, the author's?**
+  Read [fonts.md](docs/project/fonts.md) first.
 - **Before writing any Anthropic SDK code**, load the `claude-api` skill for current model ids and
   parameters. Don't hardcode a model from memory.
 - **Before rebuilding something the previous version already solved** — AI headings,

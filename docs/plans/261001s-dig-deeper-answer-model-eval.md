@@ -9,6 +9,10 @@ Follows [261001p](261001p-dig-deeper-one-action-always-searches-bigger-model.md)
 *Dig deeper* answer on Opus because Greg asked for "a bigger model", not because anything measured
 Opus as better.
 
+**Decided 2026-10-02: the answer stays on Opus**; the finalist run is not bought and Luna + check is
+dropped. The write-up, with Greg's words and what would reopen it, is
+[research 261002a](../research/261002a-dig-deeper-answer-model.md).
+
 ## What Greg asked
 
 > yeah ok, let's set up that eval with at least 3 varied representative tricky examples, and then

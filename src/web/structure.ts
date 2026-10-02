@@ -26,7 +26,7 @@
  * docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md
  */
 import type { BlockId, NodeId } from "../types.js";
-import type { SummaryNode } from "./tree.js";
+import { navLabelVoice, type SummaryNode, type TextVoice } from "./tree.js";
 
 /**
  * How far down each column's ladder we got. Every rung is all-or-nothing within
@@ -139,7 +139,7 @@ export interface StructureCard {
    * of the **current** part and of no other, so for every other part in column A
    * the card is the only preview there is.
    */
-  children: { id: NodeId; text: string }[];
+  children: { id: NodeId; text: string; voice: TextVoice }[];
   /**
    * How many the cap left off. **Counted after the unnameable ones are
    * dropped**, never before — a child with neither title nor navLabel is not a
@@ -159,6 +159,12 @@ export interface StructureRow {
   number: string;
   /** The line itself. Never empty — a node with no text gets no row at all. */
   text: string;
+  /**
+   * Whose words `text` is: a title in this slot is `"ui"`; a navLabel is the
+   * model's, or the author's when the node starts at a heading
+   * (tree.ts § `navLabelVoice`). StructurePanel puts the face on it.
+   */
+  voice: TextVoice;
   /** Where clicking it goes — the row's first block. */
   blockId: BlockId;
   startRow: number;
@@ -241,6 +247,11 @@ function rowText(node: SummaryNode): string | null {
   return null;
 }
 
+/** Whose words `rowText` returned — the same order, so the two cannot disagree. */
+function rowVoice(node: SummaryNode): TextVoice {
+  return node.title?.trim() ? "ui" : navLabelVoice(node);
+}
+
 /** Inclusive at both ends: `startRow`/`endRow` are row indices into `blocks`,
     and the first row of a node is the row a jump into it lands on, so an
     exclusive comparison would leave the reader unmarked exactly there. */
@@ -288,6 +299,7 @@ function makeRow(
      */
     number: supplement ? "" : entry.number,
     text,
+    voice: rowVoice(entry),
     blockId: entry.node.range[0],
     startRow: entry.startRow,
     endRow: entry.endRow,
@@ -367,12 +379,13 @@ function cardFor(
         const title = c.title?.trim();
         const nav = allowNavLabels ? c.node.navLabel?.trim() : undefined;
         const text = title || nav || null;
+        const voice: TextVoice = title ? "ui" : navLabelVoice(c);
         /* Keyed by the node's own id rather than by its words: two children of
            one node really can read alike — "Introduction" twice, or a repeated
            paragraph navLabel — and in React a duplicate key is a warning plus a
            list that reconciles to the wrong rows. `BandCard` keys by id for the
            same reason. */
-        return text === null ? [] : [{ id: c.node.id, text }];
+        return text === null ? [] : [{ id: c.node.id, text, voice }];
       })
     : [];
   const children = named.slice(0, CARD_CHILDREN);

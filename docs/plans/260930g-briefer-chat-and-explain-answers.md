@@ -1,5 +1,9 @@
 # Chat and Explain answers, a little briefer
 
+Research write-up: [docs/research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
+
+Research write-up: [docs/research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md](../research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md).
+
 For [SPIDERYARN-READING2-6X](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6X), a
 suggestion from Greg (admin, verified by `scripts/feedback-reporter.ts`, exit 0), sent from chat on
 `pmc13013618-spya-uekgh6`:

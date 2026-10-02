@@ -1,0 +1,86 @@
+{
+  "caption": "A chain running from definitions through the crisis's origins and evidence to its causes, then its responses and reforms — each stage building on the one above it, with two crowded stages (causes, and responses/reform) expanded in their own views.",
+  "title": "Chain with two expansions",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview: the replication crisis",
+      "caption": "A chain: define the problem, trace its outbreak, survey the evidence, diagnose two kinds of cause, then follow the reactions — public, academic, and institutional — that try to fix it.",
+      "height": 1000,
+      "items": [
+        {"kind":"node","id":"n1","shape":"ellipse","x":230,"y":30,"w":300,"h":70,"text":"Replication crisis: findings that won't reproduce","size":"md","block":"spya-kv0w8d"},
+        {"kind":"node","id":"n2","shape":"hex","x":230,"y":130,"w":300,"h":70,"text":"Vocabulary: p-values, power, effect size","size":"sm","block":"spya-cxcn8h"},
+        {"kind":"node","id":"n3","shape":"box","x":230,"y":230,"w":300,"h":70,"text":"Early-2010s failures (priming, ESP, cancer) spark the crisis","size":"sm","block":"spya-yru28f"},
+        {"kind":"node","id":"n4","shape":"box","x":230,"y":330,"w":300,"h":70,"text":"Across fields, roughly half of findings fail to replicate","size":"sm","block":"spya-bha57y"},
+
+        {"kind":"region","x":24,"y":430,"w":712,"h":180,"label":"WHY REPLICATION FAILS","style":"band","tone":1,"opens":"inside-causes"},
+        {"kind":"node","id":"n5","shape":"box","x":70,"y":470,"w":280,"h":100,"text":"Publication system rewards flashy, positive results","size":"sm","tone":1,"block":"spya-d040tg"},
+        {"kind":"node","id":"n6","shape":"box","x":410,"y":470,"w":280,"h":100,"text":"Weak methods, low power, and shaky statistics","size":"sm","tone":1,"block":"spya-bfx638"},
+
+        {"kind":"region","x":24,"y":630,"w":712,"h":330,"label":"RESPONSES & REFORM","style":"band","tone":2,"opens":"inside-responses"},
+        {"kind":"node","id":"n7","shape":"box","x":230,"y":670,"w":300,"h":80,"text":"Public trust and academic backlash","size":"sm","tone":2,"block":"spya-qht6nk"},
+        {"kind":"node","id":"n8","shape":"box","x":230,"y":770,"w":300,"h":80,"text":"Reforms: transparency, preregistration, stricter stats","size":"sm","tone":2,"block":"spya-h32yv9"},
+        {"kind":"node","id":"n9","shape":"box","x":230,"y":870,"w":300,"h":80,"text":"Building infrastructure, rethinking science itself","size":"sm","tone":2,"block":"spya-hc3p7c"},
+
+        {"kind":"edge","from":"n1","to":"n2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n2","to":"n3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n3","to":"n4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n4","to":"n5","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"n4","to":"n6","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"n5","to":"n7","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"n6","to":"n7","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"n7","to":"n8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"n8","to":"n9","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-causes",
+      "title": "Two kinds of cause",
+      "caption": "Two parallel columns, not a sequence: failures in how science is published sit beside failures in how studies are designed and analyzed, each sufficient on its own to make findings unreplicable.",
+      "height": 860,
+      "items": [
+        {"kind":"region","x":24,"y":50,"w":340,"h":430,"label":"PUBLICATION SYSTEM","style":"band","tone":1},
+        {"kind":"node","id":"c1","shape":"box","x":50,"y":100,"w":290,"h":80,"text":"Publication bias: only positive results get published","size":"sm","tone":1,"block":"spya-d040tg"},
+        {"kind":"node","id":"c2","shape":"box","x":50,"y":200,"w":290,"h":80,"text":"Even top journals contain frequent math/stats errors","size":"sm","tone":1,"block":"spya-xxd5as"},
+        {"kind":"node","id":"c3","shape":"box","x":50,"y":300,"w":290,"h":80,"text":"'Publish or perish' discourages doing replications","size":"sm","tone":1,"block":"spya-h2nvfj"},
+        {"kind":"node","id":"c4","shape":"box","x":50,"y":400,"w":290,"h":80,"text":"Papers often lack detail needed to redo the study","size":"sm","tone":1,"block":"spya-wjstmr"},
+
+        {"kind":"region","x":396,"y":50,"w":340,"h":740,"label":"RESEARCH PRACTICES & STATISTICS","style":"band","tone":3},
+        {"kind":"node","id":"c5","shape":"box","x":420,"y":100,"w":290,"h":70,"text":"Flexible choices (HARKing, selective reporting) inflate false positives","size":"sm","tone":3,"block":"spya-bfx638"},
+        {"kind":"node","id":"c6","shape":"box","x":420,"y":190,"w":290,"h":70,"text":"Chronically low statistical power (~20-35%)","size":"sm","tone":3,"block":"spya-p7pun6"},
+        {"kind":"node","id":"c7","shape":"box","x":420,"y":280,"w":290,"h":70,"text":"Underpowered studies overstate effect sizes","size":"sm","tone":3,"block":"spya-nqwfh4"},
+        {"kind":"node","id":"c8","shape":"box","x":420,"y":370,"w":290,"h":70,"text":"Meta-analysis has its own vulnerabilities","size":"sm","tone":3,"block":"spya-z2xbqp"},
+        {"kind":"node","id":"c9","shape":"box","x":420,"y":460,"w":290,"h":70,"text":"P-hacking via many defensible 'forking paths'","size":"sm","tone":3,"block":"spya-qsad7n"},
+        {"kind":"node","id":"c10","shape":"box","x":420,"y":550,"w":290,"h":70,"text":"High, often unexplained variation across studies","size":"sm","tone":3,"block":"spya-ngbkx2"},
+        {"kind":"node","id":"c11","shape":"box","x":420,"y":640,"w":290,"h":70,"text":"Effects sensitive to hidden context replicate poorly","size":"sm","tone":3,"block":"spya-z4db8z"},
+        {"kind":"node","id":"c12","shape":"box","x":420,"y":730,"w":290,"h":70,"text":"Null-hypothesis testing suits 'soft sciences' badly","size":"sm","tone":3,"block":"spya-h9wzrk"}
+      ]
+    },
+    {
+      "id": "inside-responses",
+      "title": "Public reaction, then reform, then broader change",
+      "caption": "A short chain (public reaction, academic clash, credibility revolution) opens into two grouped sets of parallel efforts: concrete publishing reforms, and broader changes to how science itself is practiced.",
+      "height": 980,
+      "items": [
+        {"kind":"node","id":"r1","shape":"box","x":230,"y":40,"w":300,"h":70,"text":"Public mostly unaware, sees replication as quality control","size":"sm","block":"spya-qht6nk"},
+        {"kind":"node","id":"r2","shape":"box","x":230,"y":130,"w":300,"h":70,"text":"Academics clash: reformers vs 'methodological terrorists'","size":"sm","block":"spya-rx27qq"},
+        {"kind":"node","id":"r3","shape":"box","x":230,"y":220,"w":300,"h":70,"text":"Framed as a 'credibility revolution'","size":"sm","block":"spya-n0zj55"},
+
+        {"kind":"region","x":24,"y":310,"w":712,"h":330,"label":"REFORMS IN PUBLISHING","style":"band","tone":2},
+        {"kind":"node","id":"r4","shape":"box","x":50,"y":350,"w":200,"h":70,"text":"Clearer reporting of methods required","size":"xs","tone":2,"block":"spya-bzdyqn"},
+        {"kind":"node","id":"r5","shape":"box","x":280,"y":350,"w":200,"h":70,"text":"Result-blind review at 140+ journals","size":"xs","tone":2,"block":"spya-wv05ca"},
+        {"kind":"node","id":"r6","shape":"box","x":510,"y":350,"w":200,"h":70,"text":"Preregistration locks in methods early","size":"xs","tone":2,"block":"spya-wraexy"},
+        {"kind":"node","id":"r7","shape":"box","x":50,"y":450,"w":200,"h":70,"text":"Proposal: lower significance to p<0.005","size":"xs","tone":2,"block":"spya-pge7t0"},
+        {"kind":"node","id":"r8","shape":"box","x":280,"y":450,"w":200,"h":70,"text":"Larger samples, cross-validation urged","size":"xs","tone":2,"block":"spya-vnwm97"},
+        {"kind":"node","id":"r9","shape":"box","x":510,"y":450,"w":200,"h":70,"text":"Funders back replication, metascience centers","size":"xs","tone":2,"block":"spya-hc3p7c"},
+
+        {"kind":"region","x":24,"y":660,"w":712,"h":200,"label":"BROADER CHANGE","style":"band","tone":4},
+        {"kind":"node","id":"r10","shape":"box","x":150,"y":710,"w":230,"h":80,"text":"Triangulate across methods, not just replicate","size":"sm","tone":4,"block":"spya-sbakqy"},
+        {"kind":"node","id":"r11","shape":"box","x":410,"y":710,"w":230,"h":80,"text":"Replication should build revised, stronger theories","size":"sm","tone":4,"block":"spya-d4kvnh"},
+
+        {"kind":"edge","from":"r1","to":"r2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"r2","to":"r3","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

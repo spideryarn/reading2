@@ -62,8 +62,10 @@ of Greg's 2026-08-30 note quoted in
 
 ## What would have caught it, ranked by ease against value
 
-1. **Log `structureCalls` and `rangelessChildren` at every value** — done. A re-ask rate creeping up
-   is the early warning this lacked: the first sign was a reader's failed import.
+1. **Log `structureCalls` at every value** — done. A re-ask rate creeping up is the early warning
+   this lacked: the first sign was a reader's failed import. `rangelessChildren` was logged too, then
+   retired from production telemetry when `toc/11` made a missing child start impossible on the live
+   wire; its `BuildReport` field remains for legacy and direct ranged-builder inputs.
 2. **Run the long end of the corpus through the structure eval whenever the budget lets in bigger
    documents.** The 260904b re-rating was measured on one Kuhn call that happened to come back clean,
    and one sample cannot show a per-answer fault rate. Cheap as a habit, and not done here.

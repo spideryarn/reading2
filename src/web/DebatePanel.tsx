@@ -1920,7 +1920,15 @@ function Row({
           and the address of the article being read is not its business.
           Clamped to two lines by CSS alone, so the whole title is still in the
           accessibility tree; `more` unclamps it. */}
-      <a className="dbt-title" href={row.url} target="_blank" rel="noreferrer noopener" title={row.url}>
+      {/* `dbt-title-ai` only when the headline is the model's reading of the
+          page; a registry's or search engine's title, or the address, stays UI. */}
+      <a
+        className={work.titleIsAI ? "dbt-title dbt-title-ai" : "dbt-title"}
+        href={row.url}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={row.url}
+      >
         {work.headline}
         <ExternalLink size={11} aria-hidden="true" />
       </a>
