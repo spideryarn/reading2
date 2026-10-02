@@ -20,9 +20,16 @@ const numberOf = (version: string | undefined): number | null => {
  * not rewrite an `arc/6` arc with `arc/5`, and a version it cannot read is not
  * evidence of anything. The same rule as Quotes' `isOutdated` (src/quotes.ts).
  * GPT Sol, plan review of 261002g.
+ *
+ * `currentVersion` defaults to the live constant. Supplying it lets the
+ * regression test exercise the first two-digit boundary (`arc/9` → `arc/10`)
+ * before the app itself reaches it; the production path never supplies it.
  */
-export function isArcOutdated(version: string | undefined): boolean {
+export function isArcOutdated(
+  version: string | undefined,
+  currentVersion = ARC_PROMPT_VERSION,
+): boolean {
   const theirs = numberOf(version);
-  const ours = numberOf(ARC_PROMPT_VERSION);
+  const ours = numberOf(currentVersion);
   return theirs !== null && ours !== null && theirs < ours;
 }

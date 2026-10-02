@@ -47,8 +47,8 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   },
   debate: {
     head: "Debate",
-    what: "A page elsewhere on the web that responds to a claim made in this passage, and whether it agrees, disputes, qualifies or extends it.",
-    how: "From Debate mode. AI searched the web and judged how the page bears on the claim; the quote is the page's own words.",
+    what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
+    how: "From Debate mode. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
   },
   citation: {
     head: "Cites",

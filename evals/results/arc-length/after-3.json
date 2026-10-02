@@ -1,0 +1,68 @@
+{
+  "arm": "after-3",
+  "promptVersion": "arc/6",
+  "arcSha": "d53bc0fe597a",
+  "at": "2026-10-02T18:13:26.077Z",
+  "articles": [
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "sentences": [
+        "What a mind run on far more neurons could still count as a mind is the question just opened.",
+        "That brains and neural nets share one bounded design is now settled; what scaling it up buys is still open.",
+        "That design explains why language is discrete and single-threaded; bigger brains would only shift its balance, not replace it.",
+        "Extending that design to sensing and acting, bigger brains would catch more hidden order, not escape it.",
+        "Within that frame, abstraction appears as a climbable network of hidden order, its reach for bigger brains still unmeasured.",
+        "Computational language offers the clearest test yet, reaching real meta-level thought ordinary language can't, but hitting the same wall.",
+        "Since one brain holds only one thread, more complex coordination among many threads is what bigger brains could add to society.",
+        "The scaling story resolves here: a bigger brain simply claims more of the space of all computation, still recognizably a mind."
+      ]
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "sentences": [
+        "Whether AI can truly feel is still unsettled, yet moral stakes for both machines and humans already follow from the answer.",
+        "Before any evidence is weighed, psychological bias alone explains much of the pull toward seeing machines as conscious.",
+        "Bias cleared away, the deeper question is technical: does computation itself suffice for experience, and four lines of argument say likely not.",
+        "If machine consciousness stays genuinely uncertain, caution about creating it matters as much as judging whether it already exists.",
+        "Neither proved nor disproved, machine consciousness still leaves the more urgent task of not mistaking our own minds for its algorithms."
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "sentences": [
+        "GPT-3 merely scales an old design, yet learns to learn; why that works is still unexplained.",
+        "Scaling already works for GPT-3; now the claim widens to intelligence itself as a product of scale.",
+        "An ensemble story explains why scale works; a loss-based theory backs it, but what more scale buys stays unknown.",
+        "Granting scaling's power, what's unsettled is who will actually commit resources to pushing it further.",
+        "Looking back, scaling's skeptics were repeatedly wrong, while dismissals of 'mere' mechanism miss what success must look like.",
+        "Scaling's promise now carries a cost: models trained on human data may inherit real agency.",
+        "Even stripped of human content, abstract systems still admit agent-like behavior, hard to rule out anywhere.",
+        "The case made, what remains is only pointers to sources and related pages."
+      ]
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "sentences": [
+        "A corroded lump pulled from the sea would take decades to be read as a machine, and still resists a firm birthdate.",
+        "Known only through broken pieces, the puzzle is what fraction of its original design they actually preserve.",
+        "Even its visible face hides a dispute over a basic fact, how many days its calendar ring counted.",
+        "With the day-count still unsettled, attention turns to what the dial's pointers and inscriptions tracked in the sky.",
+        "Having modelled Sun and Moon on its face, the back is shown tracking still longer calendar and eclipse cycles.",
+        "All this is secure, but one spare gear reopens the question of a display never found: the planets.",
+        "Explaining the planets means guessing gears that no longer exist, and every guess so far falls short of the evidence.",
+        "The device looks unique only until Roman and later Eastern accounts of kindred machines are counted.",
+        "What remains unresolved in the gears is settled instead in replicas, screens, and stories built around the mechanism."
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "sentences": [
+        "What tells real science from empty imitation is still unnamed, and that is the stake here.",
+        "Many popular beliefs fail the plainest test of working; why they still pass for science is unexplained.",
+        "Cargo Cult Science names form without result, and integrity is proposed as the missing ingredient.",
+        "Integrity against self-deception is defined; still open is how far it must extend to the public and policy.",
+        "Cases from psychology, physics, and ESP confirm the diagnosis, closing on a wish for the freedom to keep it."
+      ]
+    }
+  ]
+}

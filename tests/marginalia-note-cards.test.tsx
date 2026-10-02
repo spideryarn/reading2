@@ -113,6 +113,26 @@ describe("a note in the margin", () => {
     });
     expect(card()).toBeNull();
   });
+
+  it("opens from keyboard focus and describes the shut button only while its card is open", async () => {
+    paint([{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]);
+    const button = trigger();
+    act(() => button.focus());
+    const openCard = card();
+    expect(openCard, "keyboard focus opened no card").not.toBeNull();
+    expect(openCard?.getAttribute("role")).toBe("tooltip");
+    expect(button.getAttribute("aria-describedby")).toBe(openCard?.id);
+
+    act(() => button.blur());
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+    expect(button.hasAttribute("aria-describedby")).toBe(false);
+  });
 });
 
 describe("a question note", () => {
@@ -141,6 +161,10 @@ describe("the cards' words", () => {
     expect(tip.how).not.toBe(tip.what);
     expect(tip.what).not.toContain(tip.head);
     expect(tip.how).toMatch(/AI|you|person who shared/);
+  });
+
+  it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
+    expect(MARG_TIPS.debate.how).toMatch(/AI wrote the headline/i);
   });
 });
 

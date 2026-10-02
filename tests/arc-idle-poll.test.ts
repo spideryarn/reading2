@@ -82,7 +82,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 const { useArc } = await import("../src/web/useArc.js");
 const { useJobs } = await import("../src/web/useJobs.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
-const { ARC_PROMPT_VERSION } = await import("../src/arc-version.js");
+const { ARC_PROMPT_VERSION, isArcOutdated } = await import("../src/arc-version.js");
 
 const SLUG = "an-arc-at-rest";
 
@@ -326,6 +326,42 @@ describe("an arc from another prompt version, in the payload", () => {
     expect(calls.some((c) => c.startsWith("GET /api/arc/")), "no read: the payload is drawn").toBe(false);
   });
 
+  it("replaces the old payload arc with the current, freshly fingerprinted arc when the job finishes", async () => {
+    const fresh: Arc = {
+      ...ARC,
+      version: ARC_PROMPT_VERSION,
+      sourceHash: "the-current-article-fingerprint",
+      entries: [{ ...ARC.entries[0]!, text: "The new sentence." }],
+    };
+    let written = false;
+    override = (url, method) => {
+      if (url === `/api/arc/${SLUG}`) {
+        return written
+          ? json({ arc: fresh, stale: false, outdated: false })
+          : new Response(null, { status: 404 });
+      }
+      if (method === "POST" && url === "/api/jobs") {
+        queue = [arcJob("queued")];
+        return json(arcJob("queued"));
+      }
+      if (url === `/api/jobs/${jobId}/advance`) {
+        written = true;
+        queue = [arcJob("done")];
+        return json({ job: arcJob("done"), ran: "arc", busy: false, done: true });
+      }
+      return null;
+    };
+
+    await mount(probeFor("arc/1"));
+    await advance(30_000);
+
+    expect(calls.filter((c) => c === "POST /api/jobs"), "one job asked for").toHaveLength(1);
+    expect(calls.some((c) => c === `GET /api/arc/${SLUG}`), "the completion refresh read the arc").toBe(true);
+    expect(lastArc, "the refreshed arc reached the screen").toEqual(fresh);
+    expect(lastArc?.version).toBe(ARC_PROMPT_VERSION);
+    expect(lastArc?.sourceHash).toBe("the-current-article-fingerprint");
+  });
+
   it.each([
     ["current", ARC_PROMPT_VERSION],
     ["newer (a rolled-back build)", "arc/999"],
@@ -335,5 +371,12 @@ describe("an arc from another prompt version, in the payload", () => {
     await advance(2_000);
     expect(calls.filter((c) => c.startsWith("POST")), "no job").toEqual([]);
     expect(lastArc?.version).toBe(version);
+  });
+
+  it("orders numeric versions rather than comparing arc/10 and arc/9 as strings", () => {
+    expect(isArcOutdated("arc/9", "arc/10")).toBe(true);
+    expect(isArcOutdated("arc/10", "arc/9")).toBe(false);
+    expect(isArcOutdated("arc/10", "arc/10")).toBe(false);
+    expect(isArcOutdated("arc/9-extra", "arc/10")).toBe(false);
   });
 });

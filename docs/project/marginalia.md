@@ -78,7 +78,7 @@ the shut line takes the voice of the one item it shows, a count is ours. Tested 
 `tests/marginalia-note-cards.test.tsx`;
 [261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md).
 
-**The arc in the head is at most 20 words** (`arc/6`), after Greg found the head's language *"too
+**The arc in the head is asked for in at most 20 words** (`arc/6`; a median of 17 measured, and some go over), after Greg found the head's language *"too
 complex"* (spya-g4yrew): at 30-odd words it was hard going and cut mid-sentence by the three-line
 clamp, now four lines ([261002p](../investigations/261002p-arc-sentences-shorter-and-plainer.md)). An arc written by an older prompt stays on screen while the owner's open writes a new one
 (`useArc`, `isArcOutdated`).

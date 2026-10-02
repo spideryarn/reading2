@@ -8,11 +8,21 @@ Up: [investigations.md](../project/investigations.md). For plan
 >
 > — Greg, 2026-10-01 (spya-g4yrew)
 
-**Result: `arc/6` ships.** Its sentences run a median 17 words against 31–36, a blind judge found them
-plainer in 33 of 35 parts, they are about as good as the old ones at saying where the argument stands
-(11 better, 13 worse, 11 even), and none misstated its part. Two of the criteria declared beforehand
-were **missed**: 25 of 35 fit whole in the head at its widest (target 80%, got 71%), and none does at
-its narrowest. The whole sentence is in the head's card.
+**Result: `arc/6` ships, with the fit criterion waived — my call, and the reason below.** Its
+sentences run a median 17 words against 31–36, a blind judge found them plainer in 33 of 35 parts,
+they are about as good as the old ones at saying where the argument stands (11 better, 13 worse, 11
+even), and none misstated its part. **The fit criterion as declared failed**: it asked for ≥ 80% whole
+in the head's *three* lines at 288px, and 7 of 35 (20%) were. I then raised the head's clamp to four
+lines, where 25 of 35 (71%) fit in the judged arm and 31 of 35 (89%) in the shipped one — a
+post-hoc change of measure, and two runs that straddle the bar. At the
+column's narrowest none fits at either. And 10 of 35 went over the 20 words the prompt asks for.
+
+**Why ship anyway.** The waived criterion compares against a bar the old prompt never came near (0–1
+of 35 whole in three lines, 0–5 in four): every arc in production is cut mid-sentence today. The new
+one is better on everything measured, cut less often and later, and complete in its card. Holding it
+back for the fit bar would leave Greg with the sentence he complained about. A further round aimed at
+fit (a 14-word ask, or enforcing the limit in `buildArc` and asking again) is named under § What is
+still open; GPT Sol's code review raised the gap (F2), and this paragraph is the answer.
 
 ## What was wrong
 
@@ -54,7 +64,12 @@ head at 288px for ≥ 80% and at 200px for ≥ 50%; plainer in most parts; no mo
 | `before` | arc/5 | 31 | 41 | 31/35 | 5/35 | 1/35 | 0/35 |
 | `before-2` | arc/5 | 36 | 44 | 34/35 | 0/35 | 0/35 | 0/35 |
 | `after` | arc/6, first draft | 16 | 19 | 0/35 | 32/35 | 3/35 | 0/35 |
-| `after-2` | **arc/6, shipped** | 17 | 23 | 10/35 | 25/35 | 7/35 | 0/35 |
+| `after-2` | arc/6, judged | 17 | 23 | 10/35 | 25/35 | 7/35 | 0/35 |
+| `after-3` | **arc/6, shipped** (two phrases from `after-2`) | 18 | 21 | 6/35 | 31/35 | 6/35 | 1/35 |
+
+`after-2` and `after-3` differ by two phrases and by six sentences on fit, which is mostly the spread
+between two runs of nearly one prompt (the two runs of the old prompt differ by five) — read the fit
+numbers as "about 70–90% whole in four lines at 288px", not as either figure.
 
 Blind judgements, unblinded (each new arm against `before`):
 
@@ -101,6 +116,15 @@ Sample (*The Mythology of Conscious AI*, `after-2`):
 
 - At the column's narrowest (200px, a window about 900–1000px wide) no arc fits whole; four lines
   hold about 13 words there.
+- **The next round, if fit matters more than it seems to**: ask for 14 words, or enforce the limit in
+  `buildArc` and ask once more for an over-long sentence. Either needs a blind judge again, because
+  the first draft showed that pushing for short is what turns an arc into a gist.
+- **The judge's evidence** is in `evals/results/arc-length/judge/`: verdicts and keys for both runs,
+  the pairs for the second, and the two scratch scripts that blinded and unblinded them (as `.txt`).
+  The first run's pairs file was overwritten when the second was built; its key and verdicts survive.
+- **The shipped prompt differs from `after-2` by two phrases**: GPT Sol's code review found the
+  prompt both forbidding "next" and using it, so the example's "next, …" became "what is left is …"
+  and the honest-words list lost "next". Re-measured for length only as `after-3`, not re-judged.
 - The 20-word limit is prompt wording, not enforced: 10 of 35 went over, to a maximum of 25.
   `buildArc` checks only the count.
 - Five articles, one run of each new arm: enough to see the first draft lose the arc's job and the

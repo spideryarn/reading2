@@ -98,7 +98,7 @@ made from a position inside it.
 
   part gist (the next column): "Feeling is metabolic, not computational."
   arc  (yours):                "Intelligence is cut loose from consciousness;
-                                next, what consciousness is made of."
+                                what is left is what it is made of."
 
 RULES
 
@@ -118,7 +118,7 @@ RULES
     arc, right:  "Bees do share where food is; whether the dance alone carries
                   it is still open."
 - Never claim more than the article has shown by this point. "Still open",
-  "argued, not yet shown" and "next" are honest; "proved" and "vindicated"
+  "argued, not yet shown" and "what is left" are honest; "proved" and "vindicated"
   need the article to have done it.
     too long: "Prior work has shown only that some schema signal exists around
                mPFC for simple pairings, without establishing that these

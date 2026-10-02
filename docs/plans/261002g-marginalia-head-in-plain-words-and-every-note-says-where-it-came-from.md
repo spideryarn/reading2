@@ -185,3 +185,18 @@ GPT Sol on this plan before building; on the code before pushing.
   words are in their voices.
 - **A red that was not ours**: `tests/public-network-trace.test.tsx` still read the gutter mark's
   native `title`, which 261002e had replaced with `data-tip`; fixed in passing.
+
+## Code review (GPT Sol)
+
+[261002g-code-review-sol.md](261002g-code-review-sol.md): no P0. It fixed three P2s inside the change
+(the Debate card now says the headline may be AI's; tests that could not fail — completion replacing
+the payload arc, `arc/9` before `arc/10`, focus and `aria-describedby` — now can). Its other findings:
+
+- **F1, one regeneration attempt per open: kept.** A refused POST or a failed job leaves the old arc
+  drawn until the owner next opens the article, which tries again. It is the rule the no-arc path
+  already had, it fails safe (the old sentence, not a blank), and an automatic retry is a spending
+  decision nobody asked for.
+- **F2, "ships" did not follow from the declared criteria: right.** The investigation now says the
+  fit criterion failed as declared and was waived, by me, and why; marginalia.md no longer says "at
+  most 20 words"; the judge's evidence is in `evals/results/arc-length/judge/`.
+- **F3, the prompt forbade "next" and used it: fixed**, and re-measured for length as `after-3`.
