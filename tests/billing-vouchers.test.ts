@@ -150,7 +150,7 @@ async function givenUsed(owner: string, n: number): Promise<void> {
 
 /** A voucher for `owner`'s address, unclaimed. */
 async function givenVoucher(owner: string, n: number, note: string | null = null): Promise<string> {
-  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note }, ADMIN_USER_ID_LOCAL);
+  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null }, ADMIN_USER_ID_LOCAL);
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
   return made.id;
 }
@@ -413,7 +413,7 @@ describe("the administrator's side", () => {
     const id = randomUUID();
     expect(parseNewVoucher({ id, email: " A@B.example ", articles: 20 })).toEqual({
       ok: true,
-      value: { id, email: "a@b.example", articles: 20, note: null },
+      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null },
     });
     /* The id is the browser's, and required: it is what makes a replay the same create. */
     expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);

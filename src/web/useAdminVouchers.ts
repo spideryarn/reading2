@@ -31,11 +31,14 @@ export interface NewVoucherInput {
   readonly email: string;
   readonly articles: number;
   readonly note: string | null;
+  /** The note to the recipient, put in their email. Plan 261002b. */
+  readonly recipientNote: string | null;
 }
 
 export interface VoucherPatchInput {
   readonly articles?: number;
   readonly note?: string | null;
+  readonly recipientNote?: string | null;
   readonly email?: string;
   readonly revoked?: boolean;
 }
@@ -154,7 +157,7 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   const create = useCallback(
     async (input: NewVoucherInput): Promise<CreateAnswer> => {
-      const key = JSON.stringify([input.email, input.articles, input.note]);
+      const key = JSON.stringify([input.email, input.articles, input.note, input.recipientNote]);
       const pending =
         pendingCreate.current?.key === key ? pendingCreate.current : { key, id: crypto.randomUUID() };
       pendingCreate.current = pending;

@@ -242,6 +242,14 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
     highPower: usage.highPowerFullPrice + usage.highPowerHalfPrice,
   };
 
+  /* **Gift vouchers, on every arm that names an allowance, and only when there
+     are some** — absent rather than empty, so no surface can mention a voucher
+     to a reader without one. On the Free arms `entitlement.limit` already
+     includes them (`freeEntitlement`, ../store/pg-billing.ts); on the paid arm
+     they are waiting for Free, and the page says so (plan 261002b). */
+  const [firstGift, ...moreGifts] = await giftsFor(ownerId);
+  const gifts = firstGift ? { gifts: [firstGift, ...moreGifts] as const } : {};
+
   if (entitlement.tier === "paid") {
     /* The tier's own product name, or its id if the row has gone. `tierForPrice`
        matched it a moment ago, so the fallback is for a tier deleted between
@@ -266,15 +274,14 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
           cancelAtPeriodEnd: row?.cancelAtPeriodEnd === true,
           currentPeriodEnd: entitlement.periodEnd,
         })?.toISOString() ?? null,
+      /* The row `standingFor` found for this very tier id, never `limit`,
+         which a mid-period switch prorates (plan 261002b, Sol F5). */
+      periodAllowance: standing.kind === "subscribed" ? standing.on.ingestsPerPeriod : null,
+      trial: row?.status === "trialing",
+      ...gifts,
     });
   }
 
-  /* **Gift vouchers, on both Free arms and only when there are some** — absent
-     rather than empty, so no surface can mention a voucher to a reader without
-     one. `entitlement.limit` already includes them (`freeEntitlement`,
-     ../store/pg-billing.ts); this is the list the copy says them from. */
-  const [firstGift, ...moreGifts] = await giftsFor(ownerId);
-  const gifts = firstGift ? { gifts: [firstGift, ...moreGifts] as const } : {};
   /* Further private articles — the wall's own answer, never `limit − used`. */
   const remaining = ingestHeadroom(spent, budget);
 

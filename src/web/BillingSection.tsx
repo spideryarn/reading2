@@ -62,6 +62,7 @@ import { Button } from "@/components/ui/button";
 import { describeAmounts, describePlan, noHigherPlan, switchingPlan } from "../billing-plan.js";
 import type { TierOffer } from "../billing-plan.js";
 import { PlanCards, RECOMMENDED_TIER } from "./PlanCards.js";
+import { GiftList, HowYourPlanWorks, PlanInfo } from "./PlanHelp.js";
 import type { PlanCard } from "./PlanCards.js";
 import { useBilling } from "./useBilling.js";
 
@@ -126,7 +127,12 @@ export function BillingSection() {
       {/* ------------------------------------------------- what you are on -- */}
       <div className="tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:min-w-0">
-          <p className="tw:m-0 tw:text-sm tw:text-foreground">{copy.headline}</p>
+          <p className="tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-foreground">
+            <span className="tw:min-w-0">{copy.headline}</span>
+            {/* Where the reader stands, as a tooltip on a link to Pricing —
+                shared with the shelf (PlanHelp.tsx, plan 261002b). */}
+            <PlanInfo plan={summary.plan} />
+          </p>
           {copy.detail && (
             <p
               className={
@@ -159,6 +165,14 @@ export function BillingSection() {
           </Button>
         )}
       </div>
+
+      {/* **A gift, in the open** — Greg, 2026-10-01: *"make that a bit more
+          visible in the profile, a little bit like you do already on the logged
+          in homepage"*. Nothing at all for a reader without one, and the
+          explainer under it says how the plan works. Both shared with the
+          shelf (PlanHelp.tsx, plan 261002b). */}
+      <GiftList plan={summary.plan} />
+      <HowYourPlanWorks plan={summary.plan} where="profile" />
 
       {/* **A refresh that failed, over a plan that is still on screen.** The
           hook leaves `summary` alone when a reload fails, so this says the card

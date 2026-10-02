@@ -217,6 +217,27 @@ export type ReaderPlan =
        * flags** — see `planEndsAt`.
        */
       readonly endsAt: string | null;
+      /**
+       * **The tier's own allowance a month** — the `billing_tiers` row's
+       * `ingests_per_period` — which is what `limit` goes back to when the
+       * period renews. Not `limit`, which a mid-month switch prorates (33 on a
+       * day-27 upgrade to 150), and **no fallback to it**: null when the row
+       * could not be found, and the copy then names no number. Plan 261002b
+       * (Sol, plan review F5).
+       */
+      readonly periodAllowance: number | null;
+      /**
+       * **A Stripe trial**, whose end is not a renewal: it may convert, end or
+       * fail to pay, so the copy promises no reset (Sol, plan review F2). We
+       * do not sell trials; the state is supported, not expected.
+       */
+      readonly trial: boolean;
+      /**
+       * **Gifts held while subscribed**, which count only on Free (billing.md §
+       * Gift vouchers) — here so the page can say they are waiting rather than
+       * say nothing. Absent when none, as on the Free arms. Plan 261002b.
+       */
+      readonly gifts?: readonly [Gift, ...Gift[]];
     };
 
 /**
@@ -763,6 +784,128 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
               "reading is never limited."
             : `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`),
       };
+    }
+  }
+}
+
+/* ------------------------------------------------ how this plan works -- */
+
+/**
+ * **Where a reader stands, in one paragraph** — the tooltip on the (i) beside
+ * the plan on `/profile` and the shelf (src/web/PlanHelp.tsx). Null where there
+ * is no allowance to explain.
+ *
+ * Greg, 2026-10-01: *"explain the model and when the monthly limits will reset
+ * and what they'll reset to … make sure that as much as possible it's clear to
+ * the user where they stand and how it works and what will change."* Plan
+ * 261002b. Three things it must never say, each a GPT Sol plan-review finding:
+ * that an ending plan hands back a fresh free allowance (F1 — the lifetime
+ * count includes paid months, `usageSql` in src/store/pg-billing.ts); that a
+ * trial renews (F2); or a reset figure taken from `limit`, which a mid-month
+ * switch prorates (F5).
+ */
+export function planTip(plan: ReaderPlan): string | null {
+  switch (plan.kind) {
+    case "off":
+    case "exempt":
+    case "unknown":
+      return null;
+    case "free":
+    case "lapsed": {
+      const makeup = giftMakeup(plan.limit, plan.gifts);
+      return (
+        `${plan.kind === "lapsed" ? "You are back on the free allowance: " : "Your free allowance is "}` +
+        `${articleCount(plan.limit)} for the lifetime of the account${makeup === null ? "" : ` (${makeup})`}. ` +
+        "It does not reset each month. A public article counts as half."
+      );
+    }
+    case "paid": {
+      const waiting = giftsWaiting(plan.gifts);
+      if (plan.trial) {
+        return (
+          `You are on a trial of ${plan.tierName}, with ${articleCount(plan.limit)} until ` +
+          `${readableDate(plan.periodEnd) ?? "the trial ends"}.${waiting}`
+        );
+      }
+      if (plan.endsAt !== null) {
+        return (
+          `Your ${plan.tierName} plan ends on ${readableDate(plan.endsAt) ?? "the end of the period"}. ` +
+          `${FREE_AFTER_PAID}${waiting}`
+        );
+      }
+      const renews = readableDate(plan.periodEnd) ?? "your renewal date";
+      if (plan.periodAllowance === null) {
+        return `Your allowance starts again on ${renews}; unused articles do not carry over.${waiting}`;
+      }
+      const prorated =
+        plan.limit === plan.periodAllowance
+          ? ""
+          : ` This month's is ${plan.limit}, because the plan changed part-way through it.`;
+      return (
+        `${plan.tierName} gives you ${articleCount(plan.periodAllowance)} a month.${prorated} ` +
+        `It starts again on ${renews}, back to ${plan.periodAllowance}; unused articles do not carry over.` +
+        waiting
+      );
+    }
+  }
+}
+
+/**
+ * The free allowance a subscriber goes back to, said so it cannot be read as
+ * a fresh one (Sol, plan review F1).
+ */
+const FREE_AFTER_PAID =
+  "After that you are on the free allowance, which is for the lifetime of the account and already " +
+  "counts the articles you added while subscribed, so it does not start afresh.";
+
+/** *" Your gift of 20 articles is waiting for the Free plan."* — or nothing. */
+function giftsWaiting(gifts: readonly Gift[] | undefined): string {
+  if (!gifts || gifts.length === 0) return "";
+  const total = gifts.reduce((sum, gift) => sum + gift.articles, 0);
+  return gifts.length === 1
+    ? ` Your gift of ${articleCount(total)} is waiting until you are on the Free plan.`
+    : ` Your gifts of ${articleCount(total)} are waiting until you are on the Free plan.`;
+}
+
+/**
+ * **How this plan works**, a sentence a line — the collapsed explainer on both
+ * pages. The links (Pricing, Profile, Manage billing) are the component's to
+ * draw; these are the facts. Empty where there is no allowance to explain.
+ * The same rules as `planTip`, and checked by the same test file.
+ */
+export function planExplainer(plan: ReaderPlan): readonly string[] {
+  const reading = "Reading is never limited. Everything you have added stays, however often you return.";
+  const half =
+    "An article you share publicly counts as half, so the number left — which counts private articles — can stretch further.";
+  switch (plan.kind) {
+    case "off":
+    case "exempt":
+    case "unknown":
+      return [];
+    case "free":
+    case "lapsed":
+      return [
+        "The free allowance is for the lifetime of your account, not per month. Each URL or file you add counts once, when it comes back readable.",
+        half,
+        reading,
+        ...(plan.gifts ? ["Gifts count while you are on the Free plan."] : []),
+      ];
+    case "paid": {
+      const month = plan.trial
+        ? `Your trial gives you ${articleCount(plan.limit)} until ${readableDate(plan.periodEnd) ?? "it ends"}.`
+        : plan.endsAt !== null
+          ? `Your plan gives you ${articleCount(plan.limit)} until it ends on ${readableDate(plan.endsAt) ?? "the end of the period"}.`
+          : `Your allowance is counted month by month, from the day you subscribed. The next month starts on ` +
+            `${readableDate(plan.periodEnd) ?? "your renewal date"}` +
+            `${plan.periodAllowance === null ? "" : `, with ${articleCount(plan.periodAllowance)}`}, ` +
+            "and unused articles do not carry over.";
+      return [
+        month,
+        "An article you share publicly counts as half.",
+        reading,
+        `If the plan ends, you keep what you have paid for. ${FREE_AFTER_PAID}`,
+        ...(plan.gifts ? ["Gifts count only on the Free plan, so yours are kept until then."] : []),
+      ];
     }
   }
 }

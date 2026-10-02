@@ -435,6 +435,21 @@ export function formatSpendNanos(nanos: number): string {
   return `$${dollars.toFixed(4)}`;
 }
 
+/**
+ * **The spend column's figure, in whole dollars** — Greg, 2026-10-01: *"round
+ * to integer dollars (with exact figure as tooltip)"*. The exact figure is
+ * still `formatSpendNanos`, in the cell's `title`.
+ *
+ * A real cost that rounds to nothing is `<$1`, never `$0`: a zero with a
+ * currency sign on it reads as free, the same reason `formatSpendNanos` refuses
+ * `$0.0000`. Plan 261002b stage 3.
+ */
+export function formatWholeDollars(nanos: number): string {
+  const whole = Math.round(nanos / 1e9);
+  if (nanos > 0 && whole === 0) return "<$1";
+  return `$${whole.toLocaleString("en-US")}`;
+}
+
 /* ---------------------------------------------------------- article cost -- */
 
 /**

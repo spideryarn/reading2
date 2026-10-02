@@ -3,7 +3,8 @@
  * `GET /api/admin/vouchers` (src/store/pg-vouchers.ts builds it) and
  * src/web/AdminVouchersPage.tsx (draws it).
  *
- * A flat module with no imports, for the reason src/admin.ts and
+ * A flat module with no imports — types, and the three small functions at the
+ * bottom that say the gift email's subject and heading — for the reason src/admin.ts and
  * src/billing-plan.ts are: the browser may not import from src/store/, even a
  * type (tests/client-imports.test.ts), and two hand-kept copies of one shape
  * are two places to disagree. Admin-only: it carries the private note.
@@ -77,6 +78,8 @@ export interface AdminVoucher {
   readonly email: string;
   readonly articles: number;
   readonly note: string | null;
+  /** The note to the recipient, put in their email. Plan 261002b. */
+  readonly recipientNote: string | null;
   readonly createdAt: string;
   readonly createdBy: string;
   readonly updatedAt: string;
@@ -91,3 +94,33 @@ export interface AdminVoucher {
   readonly emails: VoucherEmails;
 }
 
+
+/* ------------------------------------------------- the gift email's words -- */
+
+/**
+ * **`20 free articles`, `1 free article`** — digits even for one. Here rather
+ * than in src/store/pg-voucher-emails.ts so that `/admin/vouchers`' sketch of
+ * the email and the email itself say the subject and heading from one place.
+ * Plan 261002b.
+ */
+export function freeArticles(n: number): string {
+  return `${n} free article${n === 1 ? "" : "s"}`;
+}
+
+/** The gift email's heading, for both audiences. */
+export function giftEmailHeading(articles: number): string {
+  return `A gift of ${freeArticles(articles)}`;
+}
+
+/** The gift email's subject, for both audiences. Never carries the note. */
+export function giftEmailSubject(articles: number): string {
+  return `${giftEmailHeading(articles)} on Spideryarn`;
+}
+
+/**
+ * **Who the note to the recipient is from**, said above it in both parts of the
+ * email and in the page's sketch. The email is from Spideryarn and the note is
+ * a person's words, so it is labelled rather than left to read as ours (Sol,
+ * plan 261002b review F4).
+ */
+export const GIFT_NOTE_LABEL = "A note from the person who gave you this gift:";
