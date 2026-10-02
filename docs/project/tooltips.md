@@ -26,6 +26,11 @@ meaning a reader has to work out deserves a card as much as a button does; the b
 is decorative and `aria-hidden`, and has one anyway
 ([261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 2).
 
+Words on a card are from the viewer's side. A stranger reading a shared article is not its owner: on
+any surface a visitor can see, the owner is whoever added this article, never *you*. And a card never
+asks the reader to do something unless the control it sits on does it (Greg approved, 2026-10-02;
+[261002e](../plans/261002e-sharing-mark-tooltip-separates-state-from-action.md)).
+
 ## Prefer the rich card to a native `title`
 
 > make a note somewhere that we always prefer to use our rich tooltip machinery because they're just
@@ -185,7 +190,11 @@ sentence is the control's own name, near enough, and would be read twice
 
 The spine's card is a *place* described. The other shape — and by count the commoner one — is a
 **control** described: `ControlTip` in [`Tooltip.tsx`](../../src/web/Tooltip.tsx), a head and two
-paragraphs, with one rule that is the whole reason it is worth a hover.
+paragraphs, and optionally a `press` line, with one rule that is the whole reason it is worth a
+hover. The two paragraphs are statements. If what pressing does is worth saying, it goes in `press`,
+never as a sentence in either paragraph (Greg approved, 2026-10-02, after spya-d886ah: *"One sentence
+is a statement of the current state. The other is a potential action. But there's no … UI
+differentiation between these two kinds of sentence."*).
 
 > The first sentence is what a reader could have guessed by pressing the control; the second is what
 > they could not — where the answer comes from, what it costs, or what the control does *not*
