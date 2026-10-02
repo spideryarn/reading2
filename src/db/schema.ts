@@ -4100,6 +4100,44 @@ export const readingTime = spideryarn.table(
   ],
 );
 
+/**
+ * **The glossary entries the owner has hidden from their own view of one
+ * article** — docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
+ * Greg, 2026-10-02: *"Let's go with Hide for now"* — hide for me, not delete
+ * for everyone.
+ *
+ * - **Keyed on the entry id**, which *Find more* keeps for an incumbent and
+ *   every new revision carries, so a hide outlives both. An entry that leaves
+ *   the glossary leaves a harmless orphan row, and `DELETE` can still remove
+ *   it; `PUT` refuses an id the current glossary does not have
+ *   (src/store/pg-glossary-hidden.ts).
+ * - **A foreign key to `articles`, not to `block_identities`** as
+ *   `reading_time` has: an entry id is minted from the same alphabet as a
+ *   block id but is not one.
+ * - **No `owner_id`**, like `reading_time`: only the owner writes, and
+ *   ownership is inherited through the article. **No timestamp**: nothing reads
+ *   when (GPT Sol's plan review, finding 6).
+ *
+ * Attached to the owner's read as `hidden: true` in `loadGlossary`; the public
+ * read never touches this table.
+ */
+export const glossaryHiddenEntries = spideryarn.table(
+  "glossary_hidden_entries",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    entryId: text("entry_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "glossary_hidden_entries_entry_id_format",
+      sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+  ],
+);
+
 /* -------------------------------------------------------- reader profile -- */
 
 /**

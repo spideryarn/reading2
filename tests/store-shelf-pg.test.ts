@@ -54,6 +54,7 @@ import {
   citationFinds,
   citationInvestigations,
   comments,
+  glossaryHiddenEntries,
   glossaryLookups,
   ingestEvents,
   linkSummaries,
@@ -936,6 +937,8 @@ describe("destroying an article", () => {
           start: 0,
           status: "none",
         }),
+      glossary_hidden_entries: () =>
+        db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({
           articleId: GONE_ARTICLE,

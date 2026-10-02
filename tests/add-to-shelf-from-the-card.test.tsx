@@ -203,6 +203,7 @@ function Harness({ url, canAdd }: { url: string; canAdd: boolean }) {
         lookUpLinks={canAdd}
         canAddToShelf={canAdd}
         showInSpideryarn={false}
+        termActions={null}
       />
     </>
   );
