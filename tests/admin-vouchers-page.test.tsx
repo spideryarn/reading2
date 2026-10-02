@@ -538,8 +538,14 @@ describe("/admin/vouchers", () => {
       expect(sketch()?.textContent).toContain("Your note to them goes here");
       await write("Great to meet you today.");
       expect(sketch()?.textContent).toContain("Great to meet you today.");
-      expect(sketch()?.textContent).toContain("A note from the person who gave you this gift:");
+      expect(sketch()?.textContent).not.toContain("A note from");
+      expect(sketch()?.querySelector("em")?.textContent).toBe("Great to meet you today.");
       expect(sketch()?.textContent).not.toContain("Your note to them goes here");
+    });
+
+    it("reminds you to sign the note, since the email is from Spideryarn", async () => {
+      await mount();
+      expect(form().textContent).toContain("Sign it yourself");
     });
 
     it("says the email is on its way", async () => {

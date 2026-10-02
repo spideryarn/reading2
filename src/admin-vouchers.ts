@@ -116,11 +116,3 @@ export function giftEmailHeading(articles: number): string {
 export function giftEmailSubject(articles: number): string {
   return `${giftEmailHeading(articles)} on Spideryarn`;
 }
-
-/**
- * **Who the note to the recipient is from**, said above it in both parts of the
- * email and in the page's sketch. The email is from Spideryarn and the note is
- * a person's words, so it is labelled rather than left to read as ours (Sol,
- * plan 261002b review F4).
- */
-export const GIFT_NOTE_LABEL = "A note from the person who gave you this gift:";

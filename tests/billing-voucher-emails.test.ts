@@ -1007,10 +1007,15 @@ describe("a note to them, from whoever gave the gift", () => {
     }
   });
 
-  it("says who it is from, in both parts", () => {
-    const mail = giftMessage(20, { kind: "invite" }, "Hello.");
-    expect(mail.text).toContain("A note from the person who gave you this gift:\nHello.");
-    expect(mail.html).toContain("A note from the person who gave you this gift:");
+  it("is in italics and unlabelled in the HTML, and on its own lines in the text", () => {
+    /* Greg, 2026-10-02: "Maybe just italicise the note from me" — the label
+       went, and he signs the note himself. */
+    for (const audience of [{ kind: "invite" } as const, READER_FREE]) {
+      const mail = giftMessage(20, audience, "Hello.\n— Greg");
+      expect(mail.text).toContain("A gift of 20 free articles\n\nHello.\n— Greg\n\nYou have been given");
+      expect(mail.html).toContain("<em>Hello.<br>— Greg</em>");
+      for (const part of [mail.text, mail.html ?? ""]) expect(part).not.toContain("A note from");
+    }
   });
 
   it("turns every kind of line break into one, and every other control character into a space", () => {
