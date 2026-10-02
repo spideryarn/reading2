@@ -1,6 +1,6 @@
 # The hierarchy structure pass, in waves
 
-Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+Investigation write-up: [docs/investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
 
 **Status: superseded on 2026-09-04 by
 [260904d-deepen-fat-sections.md](260904d-deepen-fat-sections.md), which is the same cascade with a
@@ -51,7 +51,7 @@ And, 2026-08-30, the half of the argument that is not about latency:
 ## The measurement that decided it, taken before anything was designed
 
 Both advisors named the same worst case: a small question might still pay the **~6,300 reasoning
-token floor per call** that [260830a § "The cost model was wrong by 3x"](../research/260830a-opening-an-article-before-the-toc.md)
+token floor per call** that [260830a § "The cost model was wrong by 3x"](../investigations/260830a-opening-an-article-before-the-toc.md)
 measured, in which case more calls would be slower *and* dearer, and the whole plan collapses. That
 floor was measured when the stage ran at `effort: "high"`; it has run at `medium` since 2026-08-30
 and nobody re-measured it.
@@ -124,7 +124,7 @@ bought. The plan starts from those numbers rather than re-deriving them.
 - **The model is stable exactly where we do not need it.** On a well-headed article the free
   deterministic carving in `src/heading-tree.ts` reproduces the paid call's depth-1 carving exactly;
   on a headingless one the *same* recipe on byte-identical input gave 8, 7, 8 and 3 parts across
-  four runs ([260830a § 7b](../research/260830a-opening-an-article-before-the-toc.md)).
+  four runs ([260830a § 7b](../investigations/260830a-opening-an-article-before-the-toc.md)).
 - **Blind judging has twice ranked `effort: "low"` above production's `medium`** — eight of eight
   judgements across two evals and two judge families, at 76s vs 149s and $0.13 vs $0.22 on a
   184-block article, with the *same* 6/7 success rate
@@ -814,7 +814,7 @@ good as, faster, never refuses.**
 - [hierarchy.md](../project/hierarchy.md) — the stage
 - [260826h-toc-scaling.md](260826h-toc-scaling.md) — the split that moved the labels out, and
   alternatives A–J including the coarse-to-fine shape this plan builds
-- [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)
+- [260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md)
   — the measured evidence, and Greg's first statement of the wave idea
 - [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) — why `max_tokens` is a
   ceiling and `effort` is the leash

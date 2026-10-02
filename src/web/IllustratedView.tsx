@@ -105,7 +105,7 @@ export const ILLUSTRATED_WAIT = "four to seven minutes";
  * longer does), and the reasoning for naming each half rather than a total still
  * holds for the waits: a sum would read better and would be a number nothing
  * measures — the kind of fact
- * [260903b-facts-that-were-wrong](../../docs/research/260903b-facts-that-were-wrong.md)
+ * [260903b-facts-that-were-wrong](../../docs/investigations/260903b-facts-that-were-wrong.md)
  * is about. Both halves named is also what the reader actually needs to know,
  * because the two steps fail, stop and finish separately.
  *

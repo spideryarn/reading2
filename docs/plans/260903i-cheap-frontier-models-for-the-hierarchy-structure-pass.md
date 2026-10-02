@@ -1,6 +1,6 @@
 # Cheap frontier models for the hierarchy structure pass
 
-Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+Investigation write-up: [docs/investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
 
 Greg, 2026-09-03:
 

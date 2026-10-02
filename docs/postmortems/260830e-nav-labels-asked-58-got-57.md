@@ -88,7 +88,7 @@ connected to a policy.
 **The label pass is where it was caught; stage 3 is where it comes from.** A block whose entire text
 is "or" is not a paragraph, and nothing downstream can make it one — not the ToC, not reading time,
 not search, not zoom. This article is the second independent witness for item **F** in
-[260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md) § 8: stage 3
+[260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md) § 8: stage 3
 promoting sentence fragments to blocks. That item is blocked because merging a fragment
 re-identifies its neighbour, which moves block ids — [the one contract](../../CLAUDE.md) — so it
 needs the stage's owner and Greg.

@@ -166,7 +166,7 @@ Date:   Sun Aug 30 22:56:32 2026 +0300
  docs/plans/260830am-faster-ingest-and-concurrency.md        | 335 +++++++++++--
  docs/postmortems/260830e-nav-labels-asked-58-got-57.md     | 172 +++++++
  docs/project/table-of-contents.md                  |  87 +++-
- docs/research/260830a-opening-an-article-before-the-toc.md |   7 +
+ docs/investigations/260830a-opening-an-article-before-the-toc.md |   7 +
  evals/toc-labels.ts                                |  31 +-
  evals/toc-structure/run.ts                         |  24 +-
  src/labels.ts                                      | 546 ++++++++++++++++++---
@@ -1089,7 +1089,7 @@ index 6df1c1c..f0249a9 100644
 + * all from HTML articles with headings** — the half of the corpus where the
 + * model has the author's own structure to agree with. PDFs are headingless, they
 + * are the half where the model is measured disagreeing with *itself* between
-+ * runs (docs/research/260830a-opening-an-article-before-the-toc.md § 7b), and PDF ingest
++ * runs (docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b), and PDF ingest
 + * reached production on the day this changed. The first thing it did was fail a
 + * 9-page arXiv paper on a gap of **three**: one completed call, $0.1617 spent,
 + * article lost, and nothing the reader could do about it. Greg, 2026-08-30:

@@ -56,7 +56,7 @@ Four questions were put to Greg on 2026-08-30 and answered:
 1. **Order** — latency first.
 2. **"Safe to open"** — *"I'm not that fussed about image-privacy or if we announce to the
    publisher's CDN."* This overrides the image-suppression requirement that
-   [260830a-opening-an-article-before-the-toc.md § 5](../research/260830a-opening-an-article-before-the-toc.md)
+   [260830a-opening-an-article-before-the-toc.md § 5](../investigations/260830a-opening-an-article-before-the-toc.md)
    treated as a hard prerequisite, and it removes a large piece of work: **a reader may open on
    blocks + a tree, with images loading live.** The `assets` step keeps running and keeps being
    worth running; it simply stops being a gate. Recorded in
@@ -69,7 +69,7 @@ Four questions were put to Greg on 2026-08-30 and answered:
 
 Two documents, both already reviewed by GPT Sol, and this plan does not re-argue them:
 
-- [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md) — the
+- [260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md) — the
   full option space, the measurements, and the recommendation (option **B**: publish a free heading
   tree at once and replace it atomically when the model's arrives). Its § 7b is the load-bearing
   finding: **there is no case in which waiting for the structure call buys a better top-level

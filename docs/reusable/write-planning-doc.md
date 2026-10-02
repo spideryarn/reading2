@@ -66,7 +66,7 @@ Don't include a `Date` section at the top since it's implicit from the filename.
 Do include a status line, and say what it rests on: *Status as of 2026-09-03: decided, not built —
 evidence: no hit for `realtime_sessions` outside prose.* A plan is a record of a decision, never
 evidence that something shipped; a plan headed "decided, not built" was read back as built once
-already ([260903b](../research/260903b-facts-that-were-wrong.md)). *(This repo's addition.)*
+already ([260903b](../investigations/260903b-facts-that-were-wrong.md)). *(This repo's addition.)*
 
 ### Goal, context
 

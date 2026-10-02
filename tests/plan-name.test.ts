@@ -5,9 +5,13 @@
  * letters (`a` and `c` used, `b` free) and the roll past `z`. Both produce a
  * plausible-looking filename, so nothing downstream would object.
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
+  DIRS,
   datePrefix,
   letterAt,
   nextPlanFilename,
@@ -102,5 +106,22 @@ describe("datePrefix", () => {
     // reader would name, whatever the machine's offset.
     expect(datePrefix(new Date(2026, 7, 31))).toBe("260831");
     expect(datePrefix(new Date(2026, 0, 5))).toBe("260105");
+  });
+});
+
+describe("DIRS", () => {
+  it("covers every dated docs folder, and each one exists", () => {
+    // `--dir=` refuses a name not in this table, so a folder missing from it
+    // sends its author back to picking a letter by hand.
+    expect(Object.keys(DIRS).sort()).toEqual([
+      "investigations",
+      "plans",
+      "postmortems",
+      "research",
+      "tutorials",
+    ]);
+    for (const { dir } of Object.values(DIRS)) {
+      expect(existsSync(path.join(import.meta.dirname, "..", dir)), dir).toBe(true);
+    }
   });
 });

@@ -440,7 +440,7 @@ second call is worth buying. The plan says what remains.
 blocks. No model, no network, milliseconds — against ~163 seconds and a real bill for the model's.
 
 Measured on 2026-08-30 over seven development documents and five held out
-([the research](../research/260830a-opening-an-article-before-the-toc.md)):
+([the research](../investigations/260830a-opening-an-article-before-the-toc.md)):
 
 - **6 of 7** have enough headings to carve at all;
 - **4 of 7** reproduce the model's depth-one carving *exactly*;
@@ -475,7 +475,7 @@ another, every number under `evals/results/` would describe something nobody rea
 builder, the marker, the exemption and the public boundary are in place, and the publication
 boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
 are not. Those are steps 2–4 in
-[the research](../research/260830a-opening-an-article-before-the-toc.md).
+[the research](../investigations/260830a-opening-an-article-before-the-toc.md).
 
 ## Entry length grows with depth <a id="granularity"></a>
 
@@ -964,7 +964,7 @@ and counted: `LabelRun.dropped`, the `dropped` list in `labels.json`, `labelsDro
 log line and on the progress card, and `evals/hierarchy-labels.ts` reads the artefact rather than inferring
 a fault from a coverage number it can no longer interpret alone. That last one is the *"the eval had
 to be told"* lesson from the R2/R3 build, applied in advance rather than afterwards. The upstream fix
-is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)
+is item **F** in [260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md)
 — stage 3 promoting sentence fragments to blocks — and it is not this stage's to make.
 
 ### Three artefacts, and what survives a failed run
@@ -1473,7 +1473,7 @@ four siblings, and would be useless at telling five adjacent paragraphs apart.
 - [block-ids.md](block-ids.md) — the id contract these ranges are built on
 - [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
 - [architecture.md](architecture.md) — where stage 4 sits in the pipeline
-- [261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — effort vs quality for the structure call: `low` stays,
+- [261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — effort vs quality for the structure call: `low` stays,
   because with thinking off 5 of 16 trees failed (internal nodes with no gist), against 0 of 16 at `low`
 - [`src/types.ts`](../../src/types.ts) — the canonical schema
 - [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts)

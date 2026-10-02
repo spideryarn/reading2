@@ -1,7 +1,7 @@
 # Two repairs in stage 4, and the heading tree as a module
 
 **Landed 2026-08-30.** Greg's go-ahead, after
-[the research](../research/260830a-opening-an-article-before-the-toc.md): *"re 'build the two repairs' and
+[the research](../investigations/260830a-opening-an-article-before-the-toc.md): *"re 'build the two repairs' and
 'the heading tree'. Proceed, perhaps with advice from GPT Sol, and definitely with review from GPT
 Sol."*
 

@@ -122,7 +122,7 @@ Decisions made by the orchestrator, named here so Greg inherits nothing by accid
 - Research written for this plan (Sonnet, 2026-09-02):
   [260902a-tui-prompt-library-for-gjd-remote.md](../research/260902a-tui-prompt-library-for-gjd-remote.md)
   and [260902h-per-repo-config-conventions-for-remote-dev.md](../research/260902h-per-repo-config-conventions-for-remote-dev.md).
-- [260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md) — the Stage 4
+- [260902b-env-key-proposal-spike.md](../investigations/260902b-env-key-proposal-spike.md) — the Stage 4
   spike: the classifier run on both repos' real key names, scored against the allowlist. Zero false
   positives on either model, so pre-ticking is safe; the case for the capable model, against web
   search, and the `temperature` bug that stops the call reaching any upstream at all.
@@ -597,7 +597,7 @@ into its own repo · per-session worktrees on the box · a second Unix user.
     to `isLocalDatabaseUrl` whatever it is called, which is the only arm that can catch
     hellozenno's `DATABASE_URL_PROD`, a name no list in this repo will ever have heard of.
 - 2026-09-02 — **Stage 4 spike: the proposal is safe enough to pre-tick from, and it currently
-  cannot run at all** — [260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md).
+  cannot run at all** — [260902b-env-key-proposal-spike.md](../investigations/260902b-env-key-proposal-spike.md).
   Six runs over both repos' real `.env.local` key names produced **zero false positives**: no key
   ground truth calls a production or infrastructure secret was ever put in a pre-tickable class, on
   either model. But `buildProposalRequest` sends `temperature: 0` while `AI_JOB_ROUTE` sends

@@ -9,7 +9,7 @@ wrongly, invented, or overstated.
 
 ## The docs to check (all new, untracked)
 
-docs/research/261002a-dig-deeper-answer-model.md  (sources: docs/plans/261001s-dig-deeper-answer-model-eval.md, its three *-sol.md reviews beside it, evals/results/dig-deeper/2026-10-02-main-report.md)
+docs/investigations/261002a-dig-deeper-answer-model.md  (sources: docs/plans/261001s-dig-deeper-answer-model-eval.md, its three *-sol.md reviews beside it, evals/results/dig-deeper/2026-10-02-main-report.md)
 docs/research/261002b-*.md  docs/research/261002c-*.md  docs/research/261002d-*.md
 docs/research/261002e-*.md  docs/research/261002f-*.md  docs/research/261002g-*.md
 docs/research/261002h-*.md  docs/research/261002i-*.md  docs/research/261002j-*.md

@@ -9,9 +9,9 @@ Built 2026-08-26 from [prompt-caching.md](../plans/260826g-prompt-caching.md), w
 the alternatives. The research behind it:
 [anthropic](../research/260826b-prompt-caching-anthropic.md) (mechanics, pricing, invalidation),
 [openrouter](../research/260826d-prompt-caching-openrouter.md) (the request-path calls),
-[callsites](../research/260826c-prompt-caching-callsites.md) (the audit). Revisited 2026-10-01:
+[callsites](../investigations/260826c-prompt-caching-callsites.md) (the audit). Revisited 2026-10-01:
 [current practice](../research/261001a-prompt-caching-best-practice-2026.md), a
-[production audit](../research/261001a-prompt-caching-production-audit/README.md) of every call
+[production audit](../investigations/261001a-prompt-caching-production-audit/README.md) of every call
 against thirty days of real spend, and [the plan](../plans/261001l-prompt-caching-across-every-call.md)
 those led to — mostly a decision *not* to add machinery, § What production actually does.
 
@@ -46,7 +46,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was five: the big `ids` group (tweets, ideas, timeline, quiz, faq, simple), glossary with quotes, and arc, crossrefs and sketch each alone — sketch since it moved to `low` effort that day, [measured](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
+| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was five: the big `ids` group (tweets, ideas, timeline, quiz, faq, simple), glossary with quotes, and arc, crossrefs and sketch each alone — sketch since it moved to `low` effort that day, [measured](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
@@ -117,7 +117,7 @@ chosen for what each stage writes, and that is the right reason to choose them.
 
 The same choice was measured for four more modes on 2026-10-01 — Sketch, Illustrated, Hierarchy and
 Ideas, eight articles and two blind judges —
-[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+[261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
 Only Sketch moved, from `high` to `low`, which took it out of the `ids` group: it chose quality and
 price over a cache share that production almost never collects ([below](#what-production-actually-does)).
 
@@ -241,7 +241,7 @@ Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_HIER
 **Measured 2026-10-01, and it is the fact to start from: the ordinary one-call article stages have
 never cached anything in production.** Zero reads and zero writes on every arc, tweets, glossary,
 quotes, ideas, sketch, timeline, quiz and faq call in thirty days of `ai_calls` — the audit, with its
-SQL, is [261001a-prompt-caching-production-audit](../research/261001a-prompt-caching-production-audit/README.md).
+SQL, is [261001a-prompt-caching-production-audit](../investigations/261001a-prompt-caching-production-audit/README.md).
 
 Not a bug. Those stages mark the article only when another step of **their own job** is in the group
 (above), and the reading view posts one job per mode, so the predicate is false on essentially every
@@ -270,7 +270,7 @@ article costs about a dollar, and a perfectly shared article cache would take at
 off it. What can be built without changing any mode's output is about 4%, because every cold call pays
 the write. Thinking is about a quarter of the bill. The article's real size in a prompt is about 0.35 tokens per character, not the
 quarter the audit assumed. Measured in
-[261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md); the
+[261001b](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md); the
 options, waiting on Greg, are in
 [261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md).
 

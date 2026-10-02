@@ -4,9 +4,9 @@ You are GPT Sol, reviewing read-only. Repo root is the current directory.
 
 Read, in order:
 1. docs/plans/261001o-one-shared-article-first-prefix-cached-across-modes.md (the plan)
-2. docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md (the measurement)
+2. docs/investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md (the measurement)
 3. The queries a1.sql–a8.sql in that folder and their verbatim output, results.txt (production, read-only, last 30 days)
-4. The previous sweep it follows: docs/plans/261001l-prompt-caching-across-every-call.md (especially § What the review changed — your own earlier findings F1–F6) and docs/research/261001a-prompt-caching-production-audit/README.md
+4. The previous sweep it follows: docs/plans/261001l-prompt-caching-across-every-call.md (especially § What the review changed — your own earlier findings F1–F6) and docs/investigations/261001a-prompt-caching-production-audit/README.md
 5. Code: src/models.ts (STAGE_EFFORT, ARTICLE_RENDERER), src/pipeline.ts (sharesArticleCache, cacheArticleForStep), src/article-prompt.ts, src/illustrated.ts (~line 1040), src/hierarchy-prompt.ts (renderBlocks, EFFORT), src/messages-stream.ts (MeteredCall.onStart), src/jobs.ts, web/auto-modes.ts, src/pricing.ts.
 
 Questions, in priority order:

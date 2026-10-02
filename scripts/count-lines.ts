@@ -125,6 +125,7 @@ const CATEGORIES: Category[] = [
       ["project", (f) => f.startsWith("docs/project/")],
       ["plans", (f) => f.startsWith("docs/plans/")],
       ["research", (f) => f.startsWith("docs/research/")],
+      ["investigations", (f) => f.startsWith("docs/investigations/")],
       ["postmortems", (f) => f.startsWith("docs/postmortems/")],
       ["reusable", (f) => f.startsWith("docs/reusable/")],
       ["at the root", (f) => !f.includes("/")],

@@ -1,6 +1,6 @@
 # Summary's controls in one row, two plain-words levels, shaped by who is reading
 
-Research write-up: [docs/research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md](../research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md).
+Investigation write-up: [docs/investigations/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md](../investigations/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md).
 
 Three admin reports about the same controls, batched into one piece of work (Overseer queue entry
 `qi-pnsnh6yy`): [SPIDERYARN-READING2-78](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-78)

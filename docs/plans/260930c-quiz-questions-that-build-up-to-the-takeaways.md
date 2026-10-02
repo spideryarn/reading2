@@ -1,6 +1,6 @@
 # Quiz questions that build up to the takeaways
 
-Research write-up: [docs/research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
+Investigation write-up: [docs/investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
 
 **Status: shipped on `dev`, 2026-09-30.** Plan reviewed twice by GPT Sol (round 1 "do not build", round 2 "build
 with the listed fixes"), code reviewed twice (round 2 "do not ship" on a token budget that outlived the

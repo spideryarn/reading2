@@ -285,7 +285,7 @@ new rule safe, since no publisher can opt a link into or out of it.
 `is_byok: false` — `google/gemini-3.1-flash-image` on OpenRouter's `/v1/images` endpoint. So the
 whole direct-Google question below is moot: the better accounting is on the gateway route, the
 privacy page stays true, and there is no new seam to build.
-[260904a-nano-banana-text-in-generated-images.md](../research/260904a-nano-banana-text-in-generated-images.md)
+[260904a-nano-banana-text-in-generated-images.md](../investigations/260904a-nano-banana-text-in-generated-images.md)
 has the numbers.
 
 **The old finding was wrong, and comfortably.** Across 15 plates and 111 supplied strings — 105

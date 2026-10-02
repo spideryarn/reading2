@@ -49,7 +49,7 @@ still written into the history of [`src/illustrated.ts`](../../src/illustrated.t
 and its reasoning was never wrong: *a misspelt word is a confident-looking lie*,
 and `openai/gpt-image-2` returned "SΩUL MACHINE" on the first heading it was asked
 for. What changed is the premise, not the argument.
-[260904a](../research/260904a-nano-banana-text-in-generated-images.md) put **111
+[260904a](../investigations/260904a-nano-banana-text-in-generated-images.md) put **111
 supplied strings across 15 plates** through `google/gemini-3.1-flash-image` and
 got **not one character wrong** — proper nouns, an umlaut, a hyphen, and five
 verbatim article sentences included. So the ban was costing the reader a legible
@@ -306,7 +306,7 @@ and the before-and-after of the prompt that produced them is
 
 **The brief call stays at `high` effort**, measured on 2026-10-01: at `low` and at `medium` both
 judges found the briefs worse — generic styles and riddle captions —
-[261001c § Illustrated](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+[261001c § Illustrated](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
 
 Plates are stored content-addressed in the blob store, never base64 in the
 artefact, and a plate's media type is decided **from the signature, never from

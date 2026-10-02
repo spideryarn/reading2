@@ -3,7 +3,7 @@
 **Built 2026-08-26**, with four deviations from the plan below — see
 [What actually landed](#what-actually-landed) at the foot of this file. The operating manual is
 [docs/project/prompt-caching.md](../project/prompt-caching.md). The research behind every claim here:
-[260826c-prompt-caching-callsites.md](../research/260826c-prompt-caching-callsites.md) (where the money goes),
+[260826c-prompt-caching-callsites.md](../investigations/260826c-prompt-caching-callsites.md) (where the money goes),
 [260826b-prompt-caching-anthropic.md](../research/260826b-prompt-caching-anthropic.md) (mechanics and pricing),
 [260826d-prompt-caching-openrouter.md](../research/260826d-prompt-caching-openrouter.md) (the request-path calls).
 
@@ -57,7 +57,7 @@ prompts for the optimisation's sake — not doing it.
 different `system` strings, and every one puts the article in the user message, *after* its own
 system prompt — so no reordering inside the user message can ever line two stages up
 ([260826c-prompt-caching-callsites.md § Is a cross-feature shared prefix actually
-achievable?](../research/260826c-prompt-caching-callsites.md#is-a-cross-feature-shared-prefix-actually-achievable)).
+achievable?](../investigations/260826c-prompt-caching-callsites.md#is-a-cross-feature-shared-prefix-actually-achievable)).
 The fix is the article as the first block of a `system` **array**, stage instructions second —
 step 4, and it is a real restructure, not a reorder. Even then, sharing is opportunistic: arc
 runs at ingest (`DEFAULT_INGEST_STEPS` in [`src/pipeline.ts`](../../src/pipeline.ts)), while
@@ -392,7 +392,7 @@ not being alarmed by.
 
 ## See also
 
-- [260826c-prompt-caching-callsites.md](../research/260826c-prompt-caching-callsites.md) — the audit this plan executes
+- [260826c-prompt-caching-callsites.md](../investigations/260826c-prompt-caching-callsites.md) — the audit this plan executes
 - [260826b-prompt-caching-anthropic.md](../research/260826b-prompt-caching-anthropic.md) /
   [260826d-prompt-caching-openrouter.md](../research/260826d-prompt-caching-openrouter.md) — mechanics
 - [original-version/prompt-caching.md](../project/original-version/prompt-caching.md) — the

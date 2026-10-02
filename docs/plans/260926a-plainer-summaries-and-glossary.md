@@ -1,6 +1,6 @@
 # Plainer summaries and glossary: a name is a handhold, not an explanation
 
-Research write-up: [docs/research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md](../research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md).
+Investigation write-up: [docs/investigations/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md](../investigations/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md).
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 

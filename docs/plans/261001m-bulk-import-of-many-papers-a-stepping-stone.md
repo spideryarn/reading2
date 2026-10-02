@@ -1,6 +1,6 @@
 # Bulk import of many papers: a stepping stone
 
-Research write-up: [docs/research/261002f-paper-metadata-cheap-model-deepseek-against-luna.md](../research/261002f-paper-metadata-cheap-model-deepseek-against-luna.md).
+Investigation write-up: [docs/investigations/261002f-paper-metadata-cheap-model-deepseek-against-luna.md](../investigations/261002f-paper-metadata-cheap-model-deepseek-against-luna.md).
 
 Status: **Built** (2026-10-01, late evening): Stages 1–4 are on `dev` with their Sol reviews, plus
 the migration `20261001211225_bulk_import_minimal`. A browser check at 1280px and 390px passed;

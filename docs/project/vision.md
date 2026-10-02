@@ -223,13 +223,15 @@ under it, and then the four folders that hold the project's memory.
   [what to rebuild first](original-version/borrow-list.md). A library to consult, not a backlog to
   import.
 
-The record of how the intent above became decisions is kept in four directories, each with a short
+The record of how the intent above became decisions is kept in five directories, each with a short
 doc of its own saying what goes in it and what to call the file:
 
 - **[plans.md](plans.md)** — `docs/plans/`, one file per piece of work, written before it lands and
   kept afterwards, naming the simpler option it passed over.
 - **[research.md](research.md)** — `docs/research/`, the working behind a decision: the options
-  weighed, the sources, the dead ends.
+  weighed, the sources, the dead ends — for external work: the web, the literature, the libraries.
+- **[investigations.md](investigations.md)** — `docs/investigations/`, internal work: evals, model
+  comparisons, prompt and effort measurements, spikes against our own code or data.
 - **[postmortems.md](postmortems.md)** — `docs/postmortems/`, one file per bug worth understanding,
   and the class of mistake it belongs to.
 - **[tutorials.md](tutorials.md)** — `docs/tutorials/`, self-contained HTML explainers for somebody
