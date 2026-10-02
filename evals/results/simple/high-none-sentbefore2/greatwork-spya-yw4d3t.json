@@ -1,0 +1,131 @@
+{
+  "arm": "high-none-sentbefore2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "greatwork-spya-yw4d3t",
+  "version": "simple-prompt/3",
+  "sourceSha256": "51899cd511b30529a56678f23e40fbad054d831e61e0a777e3919d72d94b62bf",
+  "at": "2026-10-02T13:57:25.646Z",
+  "bodyWords": 11890,
+  "bodyBlocks": 330,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "8fa539bf668201bc",
+  "systemsSha256": "22a7f31dd5f183b19197b768e3d744f8b7a1bbe9d8c109d7d209a5f38ab06c68",
+  "power": "high",
+  "guard": true,
+  "wallMs": 13184,
+  "costUsd": 0.074082,
+  "tokens": {
+    "input": 10227,
+    "output": 1844,
+    "reasoning": 406
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 181,
+  "fullerWords": 228,
+  "briefWords": 94,
+  "paragraphs": [
+    {
+      "text": "This is a long essay by Paul Graham about how people do great work in any field. He gathered tips from many fields and looked for what they share. He found the overlap has a clear shape, not just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9"
+      ]
+    },
+    {
+      "text": "It matters because schools expect you to pick a field as a teenager, before you can know what it is like. Graham says that when it comes to choosing what to work on, you are on your own.",
+      "ids": [
+        "spya-kg58at",
+        "spya-nupugj"
+      ]
+    },
+    {
+      "text": "His recipe has four steps: choose a field, learn enough to reach the frontier (the edge of what is known), notice gaps there, and explore the promising ones. Pick work you have a natural talent for and a deep interest in. Don't plan too much; keep doing what seems most interesting and keeps your options open, which he calls \"staying upwind.\"",
+      "ids": [
+        "spya-kr0zrr",
+        "spya-aeqwcs",
+        "spya-zzu2w0"
+      ]
+    },
+    {
+      "text": "His main conclusion is that curiosity drives all four steps. If an oracle gave one word for the secret, he would bet on \"curiosity.\" Many more people could try for great work, he says, but modesty and fear hold them back.",
+      "ids": [
+        "spya-cfv9ys",
+        "spya-a8tsmy",
+        "spya-m03ypv"
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Paul Graham, written in July 2023. He gathered advice on doing great work from many different fields and looked for what they share. His aim is a guide for anyone, in any field, who is very ambitious.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-h7wvhs"
+      ]
+    },
+    {
+      "text": "Graham says schools act as if picking your life's work is easy, expecting teenagers to guess right. In truth, he says, you are on your own here. He also thinks many more people could try for great work, but modesty and fear hold them back.",
+      "ids": [
+        "spya-nupugj",
+        "spya-m03ypv"
+      ]
+    },
+    {
+      "text": "The core recipe has four steps. Choose a field you have a natural talent for and deep interest in. Learn enough to reach the frontier, the edge of what is known. Then notice the gaps there and explore the promising ones.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr"
+      ]
+    },
+    {
+      "text": "Around this he adds habits. Work steadily, because effort adds up over time, like a page a day becoming a book a year. Be earnest, meaning honest and not putting on a show. Start small and improve through successive versions. Protect your morale, your spirit and confidence, since setbacks are normal.",
+      "ids": [
+        "spya-gvh3ek",
+        "spya-udt302",
+        "spya-ngbzxc"
+      ]
+    },
+    {
+      "text": "If he had to pick one word as the secret, it would be curiosity. It guides all four steps. Great work depends on ability, interest, effort and luck. The open question is finding work where your ability and interest combine, and you can only find out by trying.",
+      "ids": [
+        "spya-a8tsmy",
+        "spya-r4vhyb",
+        "spya-chaaks"
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a long essay by Paul Graham about how people do great work in any field. He gathered advice from many fields to see what they share. He found it is more than just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9"
+      ]
+    },
+    {
+      "text": "His basic recipe has four steps. Pick work you are good at and deeply interested in. Learn enough to reach the edge of what people know, notice the gaps, then explore them.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr"
+      ]
+    },
+    {
+      "text": "His main conclusion is that curiosity drives all four steps. You cannot order yourself to be curious, but you can feed it and follow it.",
+      "ids": [
+        "spya-cfv9ys",
+        "spya-mdvj4v"
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

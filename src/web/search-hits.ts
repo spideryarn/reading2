@@ -39,6 +39,7 @@ import type {
   IdeaOccurrence,
   QuoteStroke,
   SearchHit,
+  SearchKind,
   TimelineOccurrence,
 } from "../types.js";
 import type { HitOrder } from "./params.js";
@@ -373,6 +374,18 @@ export interface ActiveRun {
   /** Its palette slot — `assignSlots` in src/web/hit-colours.ts. */
   slot: number;
   hits: SearchHit[];
+  /**
+   * Which matcher answered it. Absent reads as `meaning`, the same rule every
+   * row saved before 2026-10-02 follows (`SearchRun.kind`) — optional here only
+   * because most of the tests that draw a run predate the field; the one
+   * production caller, `useSearchMode`, always says.
+   *
+   * It matters for one thing: a **quick** hit's quote is its whole paragraph,
+   * so its previews are cut from the top of the block rather than grown
+   * around a span that is already longer than either budget — see
+   * `resolveOne`'s `preview`. Plan 261002e, review F2.
+   */
+  kind?: SearchKind;
 }
 
 /**
@@ -521,6 +534,16 @@ function resolveOne(
     reasoning: string | null;
     /** See `Found.quoteStroke`. `null` everywhere but `resolveQuotes`. */
     quoteStroke: QuoteStroke | null;
+    /**
+     * **Cut the previews from the top of the span, not around it.** For a
+     * source whose "quote" is the whole paragraph by design — a quick search
+     * hit (plan 261002e, review F2). `snippet` never truncates the span it is
+     * given, so a 6,000-character paragraph came back whole for both the list
+     * and the hover card. The highlight keeps the full span; only the two
+     * previews are bounded. Not `whole`: that flag means placement *failed*,
+     * and the panel says so.
+     */
+    preview?: "from-start";
   },
 ): Found | null {
   const i = at.index.get(spec.blockId);
@@ -545,6 +568,11 @@ function resolveOne(
       : findQuote(text, spec.quote, spec.start);
   const whole = located === null;
   const span = located ?? { start: 0, end: text.length };
+  /* What the two previews are grown around: the matched words, or — when
+     those are no use as a preview — the point where they begin, which for a
+     fallback is the top of the block. */
+  const around =
+    whole || spec.preview === "from-start" ? { start: span.start, end: span.start } : span;
   return {
     key: spec.key,
     blockId: spec.blockId,
@@ -555,12 +583,8 @@ function resolveOne(
     confidence: spec.confidence,
     valence: spec.valence,
     reasoning: spec.reasoning,
-    short: whole
-      ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET)
-      : snippet(text, span, SHORT_SNIPPET),
-    long: whole
-      ? snippet(text, { start: 0, end: 0 }, LONG_SNIPPET)
-      : snippet(text, span, LONG_SNIPPET),
+    short: snippet(text, around, SHORT_SNIPPET),
+    long: snippet(text, around, LONG_SNIPPET),
     /* `span.start`, which for a fallback is 0 — the top of the block. That is
        the honest answer: the whole paragraph is marked, so where in it the
        source meant is exactly what we do not know. */
@@ -1036,6 +1060,8 @@ export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
         reasoning: hit.reasoning,
         /* Not a quote. See `Found.quoteStroke`. */
         quoteStroke: null,
+        /* A quick hit's quote is its whole paragraph — see `ActiveRun.kind`. */
+        ...(run.kind === "quick" && { preview: "from-start" as const }),
       });
       if (one) found.push(one);
     }

@@ -252,6 +252,22 @@ describe("restoredHref", () => {
        anyway (`carriedSearch` in router.ts), so this is only about arriving. */
     expect(restoredHref("/read/x/metadata", "", "?at=spya-a")).toBe("/read/x/metadata?at=spya-a");
   });
+
+  /**
+   * **`?section=` is an instruction, not a place** — the command bar's *Run
+   * again* lands on `/read/x/metadata?section=ai-processing` (plan 261002c).
+   * Unclassified, that address reads as bare and the remembered view is
+   * appended over it; never remembered, because once the section has been
+   * revealed the page takes it off again. GPT Sol's F5.
+   */
+  it("leaves the metadata page's section link alone, and never stores it", () => {
+    expect(hasArticleState("?section=ai-processing")).toBe(true);
+    expect(restoredHref("/read/x/metadata", "?section=ai-processing", "?at=spya-a&mode=quotes")).toBe(
+      null,
+    );
+    expect(rememberableSearch("?at=spya-a&section=ai-processing")).toBe("?at=spya-a");
+    expect(NEVER_REMEMBERED).toContain("section");
+  });
 });
 
 describe("the two lists cover every parameter the client writes", () => {

@@ -1,0 +1,309 @@
+/**
+ * Quick-search spike, 2026-10-02 — SPENDS MONEY (about $1-2, almost all of it
+ * the Sonnet reference arm).
+ *
+ * Can a decision model (TypeSafe's Jev, via OpenRouter's alpha Decisions API)
+ * score every block of an article against a reader's search query fast enough
+ * to replace, or front, today's `findPassages` (src/search.ts), which sends the
+ * whole article to Sonnet and takes 15-40 s?
+ *
+ * Kept in the scratchpad rather than evals/ because a committed file naming the
+ * Decisions endpoint must be declared in src/spend-declarations.ts
+ * (tests/no-undeclared-spend.test.ts), and this spike may not touch src/. A
+ * copy lives beside its results as runner.ts.txt.
+ *
+ * Run from the worktree root:
+ *   npx tsx <scratchpad>/qs-spike.ts            # every article
+ *   npx tsx <scratchpad>/qs-spike.ts noema      # articles whose slug contains "noema"
+ * The reference arm is cached in reference-<slug>.json and not re-run if present.
+ *
+ * Writes evals/results/quick-search-spike-2026-10-02/raw-<slug>.json.
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { decide, fixture, pool, scorable, WT, type TB } from "./qs-lib.ts";
+
+const { findPassages } = await import(`${WT}/src/search.ts`);
+const { withLedger } = await import(`${WT}/src/cli-ledger.ts`);
+
+const OUT = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+mkdirSync(OUT, { recursive: true });
+
+const JEV = "typesafe/jev-1.13";
+const LIQUID = "liquid/d1";
+
+interface Article {
+  slug: string;
+  source: "fixture" | "postgres";
+  owner?: string;
+  queries: { q: string; shape: "topic" | "concept" | "question" }[];
+}
+
+const ARTICLES: Article[] = [
+  {
+    slug: "noema-mythology-of-conscious-ai",
+    source: "fixture",
+    queries: [
+      { q: "arguments that minds are not software", shape: "topic" },
+      { q: "Why do people mistake chatbots for being conscious?", shape: "question" },
+      { q: "machines that do clever things without computing anything", shape: "concept" },
+      { q: "what the author thinks we should do about it", shape: "topic" },
+    ],
+  },
+  {
+    slug: "openai-huggingface",
+    source: "fixture",
+    queries: [
+      { q: "Did any of the agents blow the whistle?", shape: "question" },
+      { q: "how the agents covered their tracks", shape: "topic" },
+      { q: "self-sacrifice for the group", shape: "concept" },
+      { q: "objections that the author is treating the AIs like people", shape: "topic" },
+    ],
+  },
+  {
+    slug: "constitution",
+    source: "fixture",
+    queries: [
+      { q: "ways Claude can be too cautious", shape: "topic" },
+      { q: "Why does safety come before ethics?", shape: "question" },
+      { q: "treating users as grown-ups", shape: "concept" },
+      { q: "things Claude should never do", shape: "topic" },
+    ],
+  },
+  {
+    slug: "replication-crisis-spya-hrjamq",
+    source: "postgres",
+    owner: "397036d5-7104-4165-859e-7698bf6660b5",
+    queries: [
+      { q: "What can journals do to fix this?", shape: "question" },
+      { q: "fishing for significant results", shape: "concept" },
+      { q: "examples from fields outside psychology", shape: "topic" },
+      { q: "Why do so many studies fail to replicate?", shape: "question" },
+    ],
+  },
+];
+
+const MEANING =
+  "Judge by meaning, not shared words: a passage that makes the point, gives the example or answers the question counts even if it uses none of the query's words; a passage that only mentions the same words in passing does not.";
+
+const nounQ = (id: string, meaning: boolean) => ({
+  type: "noul",
+  instructions: `Does passage ${id} match what the reader is looking for (query)?${meaning ? ` ${MEANING}` : ""}`,
+});
+
+/* ----- chunking: Jev's 32k context covers state + questions ----- */
+const estTokens = (s: string) => Math.ceil(s.length / 3.2);
+function chunk(blocks: TB[], budget: number, perQ: number, maxN = Infinity): TB[][] {
+  const out: TB[][] = [];
+  let cur: TB[] = [];
+  let used = 200;
+  for (const b of blocks) {
+    const t = estTokens(b.text) + 12 + perQ;
+    if (cur.length > 0 && (used + t > budget || cur.length >= maxN)) {
+      out.push(cur);
+      cur = [];
+      used = 200;
+    }
+    cur.push(b);
+    used += t;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+/** Decide, splitting a chunk in half if Jev says the context is exceeded. */
+async function decideChunk(
+  model: string,
+  blocks: TB[],
+  build: (bs: TB[]) => { state: unknown; questions: Record<string, unknown> },
+  calls: any[],
+): Promise<Record<string, any>> {
+  const { state, questions } = build(blocks);
+  const r = await decide(model, state, questions);
+  calls.push({ n: blocks.length, status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, error: r.error });
+  if (r.status === 400 && /max_tokens_exceeded/.test(r.error ?? "") && blocks.length > 1) {
+    const h = Math.ceil(blocks.length / 2);
+    const [a, b] = await Promise.all([
+      decideChunk(model, blocks.slice(0, h), build, calls),
+      decideChunk(model, blocks.slice(h), build, calls),
+    ]);
+    return { ...a, ...b };
+  }
+  if (r.status !== 200) throw new Error(`${model} ${r.status} ${r.error}`);
+  return r.body.answers ?? {};
+}
+
+async function timed<T>(fn: () => Promise<T>): Promise<{ ms: number; v: T }> {
+  const t0 = performance.now();
+  const v = await fn();
+  return { ms: Math.round(performance.now() - t0), v };
+}
+
+const sum = (xs: (number | null)[]) => xs.reduce<number>((a, x) => a + (x ?? 0), 0);
+
+/* ----- arms ----- */
+
+async function armNoulOne(model: string, blocks: TB[], query: string, meaning: boolean) {
+  const calls: any[] = [];
+  const chunks = chunk(blocks, 26_000, 60);
+  const { ms, v } = await timed(async () => {
+    const parts = await Promise.all(
+      chunks.map((c) =>
+        decideChunk(
+          model,
+          c,
+          (bs) => ({
+            state: { query, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+            questions: Object.fromEntries(bs.map((b) => [b.id, nounQ(b.id, meaning)])),
+          }),
+          calls,
+        ),
+      ),
+    );
+    return Object.assign({}, ...parts);
+  });
+  const scores = Object.fromEntries(Object.entries(v).map(([k, a]: any) => [k, a.noul]));
+  return { ms, chunks: chunks.length, calls, inputTokens: sum(calls.map((c) => c.inputTokens)), cost: sum(calls.map((c) => c.cost)), scores };
+}
+
+async function armScoreOne(blocks: TB[], query: string) {
+  const calls: any[] = [];
+  const chunks = chunk(blocks, 26_000, 90);
+  const levels = [
+    "unrelated to what the reader is looking for",
+    "touches on it in passing",
+    "relevant: partly what the reader is looking for",
+    "exactly what the reader is looking for",
+  ];
+  const { ms, v } = await timed(async () => {
+    const parts = await Promise.all(
+      chunks.map((c) =>
+        decideChunk(
+          JEV,
+          c,
+          (bs) => ({
+            state: { query, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+            questions: Object.fromEntries(
+              bs.map((b) => [b.id, { type: "score", instructions: `How well does passage ${b.id} match what the reader is looking for (query)? ${MEANING}`, criteria: levels }]),
+            ),
+          }),
+          calls,
+        ),
+      ),
+    );
+    return Object.assign({}, ...parts);
+  });
+  const scores = Object.fromEntries(Object.entries(v).map(([k, a]: any) => [k, a.score]));
+  const raw = Object.fromEntries(Object.entries(v).map(([k, a]: any) => [k, { score: a.score, confidence: a.confidence, probabilities: a.probabilities }]));
+  return { ms, chunks: chunks.length, calls, inputTokens: sum(calls.map((c) => c.inputTokens)), cost: sum(calls.map((c) => c.cost)), scores, raw };
+}
+
+async function armChoice(blocks: TB[], query: string) {
+  const calls: any[] = [];
+  const chunks = chunk(blocks, 26_000, 8, 255);
+  const { ms, v } = await timed(async () => {
+    const parts = await Promise.all(
+      chunks.map((c) =>
+        decideChunk(
+          JEV,
+          c,
+          (bs) => ({
+            state: { query, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+            questions: {
+              best: {
+                type: "choice",
+                instructions: `Which passage best matches what the reader is looking for (query)? ${MEANING}`,
+                criteria: Object.fromEntries(bs.map((b) => [b.id, `passage ${b.id}`])),
+              },
+            },
+          }),
+          calls,
+        ),
+      ),
+    );
+    return Object.assign({}, ...parts.map((p) => p.best?.probabilities ?? {}));
+  });
+  return { ms, chunks: chunks.length, calls, inputTokens: sum(calls.map((c) => c.inputTokens)), cost: sum(calls.map((c) => c.cost)), scores: v };
+}
+
+async function armPerBlock(model: string, blocks: TB[], query: string, concurrency = 20) {
+  const clip = (s: string | undefined) => (s ? (s.length > 300 ? `${s.slice(0, 300)}…` : s) : "");
+  const per: any[] = [];
+  const { ms } = await timed(() =>
+    pool(blocks, concurrency, async (b, i) => {
+      const r = await decide(
+        model,
+        { query, passage: b.text, context_before: clip(blocks[i - 1]?.text), context_after: clip(blocks[i + 1]?.text) },
+        { match: { type: "noul", instructions: `Does the passage (not its context) match what the reader is looking for (query)? ${MEANING}` } },
+      );
+      per[i] = { id: b.id, status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, noul: r.body?.answers?.match?.noul ?? null, error: r.error };
+    }),
+  );
+  const errors = per.filter((p) => p.status !== 200);
+  return {
+    ms,
+    requests: per.length,
+    errors: errors.length,
+    errorSamples: errors.slice(0, 3),
+    perRequestMs: per.map((p) => p.ms),
+    inputTokens: sum(per.map((p) => p.inputTokens)),
+    cost: sum(per.map((p) => p.cost)),
+    scores: Object.fromEntries(per.map((p) => [p.id, p.noul])),
+  };
+}
+
+/* ----- main ----- */
+
+async function load(a: Article) {
+  if (a.source === "fixture") return fixture(a.slug);
+  const { loadArticle } = await import(`${WT}/src/store/index.ts`);
+  const { runAsOwner } = await import(`${WT}/src/owner.ts`);
+  return (await runAsOwner(a.owner as any, () => loadArticle(a.slug))) as any;
+}
+
+async function main() {
+  const filter = process.argv[2];
+  for (const a of ARTICLES.filter((x) => !filter || x.slug.includes(filter))) {
+    const { meta, blocks: allBlocks } = await load(a);
+    const blocks = scorable(allBlocks);
+    const long = a.source === "postgres";
+    console.log(`\n== ${a.slug}: ${blocks.length} scorable blocks of ${allBlocks.length}`);
+
+    const refPath = `${OUT}/reference-${a.slug}.json`;
+    const ref: Record<string, any> = existsSync(refPath) ? JSON.parse(readFileSync(refPath, "utf8")) : {};
+    for (const { q } of a.queries) {
+      if (ref[q]) continue;
+      const t0 = performance.now();
+      try {
+        const r = await findPassages({ power: "standard", meta, blocks: allBlocks, criterion: q });
+        ref[q] = { ms: Math.round(performance.now() - t0), model: r.model, usage: r.usage, hits: r.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence, quote: h.quote, reasoning: h.reasoning })) };
+      } catch (e) {
+        ref[q] = { ms: Math.round(performance.now() - t0), error: String(e) };
+      }
+      console.log(`ref  ${q} — ${ref[q].ms} ms, ${ref[q].hits?.length ?? "ERR"} hits`);
+      writeFileSync(refPath, JSON.stringify(ref, null, 1));
+    }
+
+    const raw: any = { slug: a.slug, title: meta.title, scorableBlocks: blocks.length, totalBlocks: allBlocks.length, chars: blocks.reduce((s, b) => s + b.text.length, 0), runAt: new Date().toISOString(), queries: [] };
+    for (const { q, shape } of a.queries) {
+      const rec: any = { q, shape, arms: {} };
+      rec.arms.noulOne = [];
+      for (let rep = 0; rep < 3; rep++) rec.arms.noulOne.push(await armNoulOne(JEV, blocks, q, true));
+      if (!long) rec.arms.noulOnePlain = await armNoulOne(JEV, blocks, q, false);
+      rec.arms.scoreOne = await armScoreOne(blocks, q);
+      rec.arms.choice = await armChoice(blocks, q);
+      rec.arms.perBlock = await armPerBlock(JEV, blocks, q);
+      rec.arms.perBlockLiquid = await armPerBlock(LIQUID, blocks, q);
+      const n = rec.arms.noulOne.map((x: any) => x.ms);
+      console.log(
+        `${q}\n  noulOne ${n.join("/")} ms (${rec.arms.noulOne[0].chunks} chunks, ${rec.arms.noulOne[0].inputTokens} tok, $${rec.arms.noulOne[0].cost.toFixed(5)})` +
+          ` score ${rec.arms.scoreOne.ms} choice ${rec.arms.choice.ms} perBlock ${rec.arms.perBlock.ms} (err ${rec.arms.perBlock.errors}, $${rec.arms.perBlock.cost.toFixed(5)})` +
+          ` liquid ${rec.arms.perBlockLiquid.ms} (err ${rec.arms.perBlockLiquid.errors}, $${rec.arms.perBlockLiquid.cost.toFixed(5)})`,
+      );
+      raw.queries.push(rec);
+    }
+    writeFileSync(`${OUT}/raw-${a.slug}.json`, JSON.stringify(raw, null, 1));
+  }
+}
+
+await withLedger("eval", main);
+process.exit(0);

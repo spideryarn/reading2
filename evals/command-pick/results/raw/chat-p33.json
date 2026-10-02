@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944832-VhRSdSlxeFFFoPhFqkdp",
+ "object": "chat.completion",
+ "created": 1790944832,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"action:find\", \"argument\": \"free energy principle\", \"confidence\": 0.85}",
+    "refusal": null,
+    "reasoning": "The user wants to search for \"free energy principle,\" so I'll use the find action with that phrase.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "The user wants to search for \"free energy principle,\" so I'll use the find action with that phrase.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "EosDCsQBCBIYAipAwWT8I702ivFtHXApT2Tkd/g/wwIXzlA7/eHsG4DBWNLwLFyQMwz9kwl9kHoZFv6XAChT4pwOgLWwOUa2zqU1mjIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAHDzP7VBhIMR0U/P7AYv3p4oHy2GgzIBt01A4H2CxZ74kkiMGbfJomrxWw3VveMCumhRy1fxsRrspiYZk/OdkkZTVDbHc6lpltS8Z+rjQluyDvKHyp0fvFPLcBc5b9eaOACG5zbQ7MevasB4YWXXjb+blQORcFlTGDWn4pd7P62sCgMZBIbwCEyT9Oxd18MZ3L7+cp8MG/5G9zMZRtHzHUcIe2aqXVXn9uRshdMo61hzV5v34HtjFXWHcx0IrmX71fcL3+j23ojmoUYAQ==.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2815,
+  "completion_tokens": 61,
+  "total_tokens": 2876,
+  "cost": 0.00624,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.00624,
+   "upstream_inference_prompt_cost": 0.00563,
+   "upstream_inference_completions_cost": 0.00061
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 28,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 3117
+ }
+}

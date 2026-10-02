@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."search_runs" ADD COLUMN "kind" text DEFAULT 'meaning' NOT NULL;--> statement-breakpoint
+ALTER TABLE "spideryarn"."search_runs" ADD CONSTRAINT "search_runs_kind" CHECK ("spideryarn"."search_runs"."kind" in ('quick','meaning'));

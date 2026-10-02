@@ -1,0 +1,93 @@
+/* Shared helpers for the quick-search spike. Plain fetch to OpenRouter's alpha
+   Decisions endpoint; spend is read from the response's usage.cost. */
+import { readFileSync } from "node:fs";
+
+export const WT = "/home/greg/code/spideryarn2/.claude/worktrees/fb-c77zuq-quick-search";
+const env = readFileSync(`${WT}/.env.local`, "utf8");
+export const KEY = env.match(/^OPENROUTER_API_KEY=(.*)$/m)![1]!.replace(/^"|"$/g, "").trim();
+
+export interface DecideResult {
+  status: number;
+  ms: number;
+  body: any;
+  inputTokens: number | null;
+  cost: number | null;
+  error?: string;
+}
+
+export async function decide(
+  model: string,
+  state: unknown,
+  questions: Record<string, unknown>,
+  timeoutMs = 120_000,
+): Promise<DecideResult> {
+  const t0 = performance.now();
+  try {
+    const r = await fetch("https://openrouter.ai/api/alpha/decisions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, state, questions }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await r.text();
+    const ms = Math.round(performance.now() - t0);
+    let body: any;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { unparsed: text.slice(0, 2000) };
+    }
+    return {
+      status: r.status,
+      ms,
+      body,
+      inputTokens: body?.usage?.input_tokens ?? null,
+      cost: body?.usage?.cost ?? null,
+      error: r.ok ? undefined : text.slice(0, 1500),
+    };
+  } catch (e) {
+    return { status: 0, ms: Math.round(performance.now() - t0), body: null, inputTokens: null, cost: null, error: String(e) };
+  }
+}
+
+export interface TB {
+  id: string;
+  text: string;
+  kind: string;
+}
+
+export function fixture(slug: string): { meta: any; blocks: any[] } {
+  const b = JSON.parse(readFileSync(`${WT}/tests/fixtures/data-root/data/${slug}/blocks.json`, "utf8"));
+  const meta = JSON.parse(readFileSync(`${WT}/tests/fixtures/data-root/data/${slug}/meta.json`, "utf8"));
+  return { meta, blocks: Array.isArray(b) ? b : b.blocks };
+}
+
+/** Blocks worth scoring: real text, not media. Headings kept (they are short). */
+export function scorable(blocks: any[]): TB[] {
+  return blocks
+    .filter((b) => b.kind !== "media" && typeof b.text === "string" && b.text.trim().length > 0)
+    .map((b) => ({ id: b.id, text: b.text.trim(), kind: b.kind }));
+}
+
+export async function pool<T, R>(items: T[], n: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]!, i);
+      }
+    }),
+  );
+  return out;
+}
+
+export const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)]! : NaN;
+};
+export const pct = (xs: number[], p: number) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)]! : NaN;
+};

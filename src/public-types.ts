@@ -82,6 +82,7 @@ import type {
   Quote,
   QuoteDrops,
   SearchHit,
+  SearchKind,
   TimelineEvent,
   SkimStop,
   Tree,
@@ -514,7 +515,10 @@ export interface PublicFaq {
  *
  * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain
  * words about the piece and the block ids of passages the payload already
- * carries whole, at every level.
+ * carries whole, at every level. And `sentences` when `usableSentences` says
+ * they are that paragraph's text exactly (plan 261002e): the same words, cut
+ * at sentence ends, each with one of the paragraph's own ids or none, so
+ * nothing new is disclosed.
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
  * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
@@ -842,6 +846,14 @@ export interface PublicSearchRun {
   id: string;
   /** What the reader typed, in their own words. */
   criterion: string;
+  /**
+   * **Which matcher answered** — `SearchRun.kind`. It crosses because it says
+   * what the passages and their numbers *are*: a quick run's confidence is
+   * Jev's probability and its quote is the whole paragraph, and a visitor
+   * reading those as a meaning search's would be misreading them. Nothing
+   * about a person in it. Plan 261002e, F6.
+   */
+  kind: SearchKind;
   createdAt: string;
   /** The passages, rebuilt hit by hit — src/public/dto.ts § publicSearchHits. */
   hits: SearchHit[];

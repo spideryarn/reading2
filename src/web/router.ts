@@ -1135,6 +1135,19 @@ export function searchWithout(search: string, name: string): string {
 }
 
 /**
+ * Several parameters dropped in one byte-preserving pass — `searchWithout`'s
+ * multi-key form for a rewrite that replaces one whole family of state.
+ */
+export function searchWithoutAny(search: string, names: ReadonlySet<string>): string {
+  return withoutPairs(search, (pair) => {
+    for (const name of names) {
+      if (hasKey(pair, name)) return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Drop the pairs a rewrite is consuming, and keep every other one **exactly as
  * it was written**. Text, never `URLSearchParams` — see `settleAddress`.
  */
@@ -1264,7 +1277,21 @@ function liftLegacyTweets(at: Address): Address {
  * overrides this if the link carried an `?at=`, which is the one case where
  * landing partway down is right.
  */
-export function navigate(to: string, options: { replace?: boolean } = {}): void {
+export function navigate(
+  to: string,
+  options: {
+    replace?: boolean;
+    /**
+     * `false` to leave the page where it is — for a write that changes the
+     * query string of the page the reader is already on, which then scrolls
+     * itself: the command bar's *Run again* on the Metadata page, whose
+     * `?section=` reveal scrolls to the section (PageContents.tsx §
+     * `useRevealOnArrival`). Jumping to the top first would be a lurch the
+     * reveal then has to undo.
+     */
+    scroll?: boolean;
+  } = {},
+): void {
   /* The thread's old page is a mode now; an old link goes to the mode rather
      than to *not found*. § `liftedTweetsHref`. */
   const lifted = liftedTweetsHref(to);
@@ -1285,7 +1312,7 @@ export function navigate(to: string, options: { replace?: boolean } = {}): void 
   if (options.replace) history.replaceState(null, "", href);
   else history.pushState(null, "", href);
   if (!historyWatched) window.dispatchEvent(new Event(NAVIGATED));
-  window.scrollTo({ top: 0 });
+  if (options.scroll !== false) window.scrollTo({ top: 0 });
 }
 
 function subscribe(onChange: () => void): () => void {

@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944809-UZutsr4FAf907nNmrUEr",
+ "object": "chat.completion",
+ "created": 1790944809,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"rerun:glossary\", \"argument\": null, \"confidence\": 0.6}",
+    "refusal": null,
+    "reasoning": "\"Redo the glossary with the good model\" sounds like it wants the high-powered AI switch combined with the glossary rerun, but there isn't one command for both so I need to choose which single action best captures the intent.\n\nSince the core action requested is \"redo the glossary,\" I'll go with rerun:glossary as the best fit, treating the model-switch part as an unsupported modifier in this case.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "\"Redo the glossary with the good model\" sounds like it wants the high-powered AI switch combined with the glossary rerun, but there isn't one command for both so I need to choose which single action best captures the intent.\n\nSince the core action requested is \"redo the glossary,\" I'll go with rerun:glossary as the best fit, treating the model-switch part as an unsupported modifier in this case.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "EqYJCsQBCBIYAipAOdBwu1h0CMh3A1qWGeqqkW8Tc4m8fYpeBgR7elXfIp9GUSGWPJsl+WTOgjgDSlQkxl3r71T+jZhBan0udunwXTIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAGvzP7VBhIMt0h092hbk49AB8E8Ggy7bJsI1e8WMop6sM0iMIgVVGp5SATPmvq1tOHr4Y65hT7WWWj89fjVfSZ7H6f3jvgeXqNmujYvZhQwMWXnPiqOB9VIq4hsEdgwzVa8yWRUi7fYF7uzylcAg8OMDGg8LjpwWsJ3Nen8dnhn6fYMZNZNBgJVloXezWBvKqt08U1BQ8esOdX3Zch1LQwFXya8sC3HWZnZFMloVjtj+QqYqda6cGWrgXwgf/UUQLve/3VcMgLQMJRG4difJ12vpSuukUyVtvWoekrGtjKEyvX4LD82EitmnwQvaYsh27E5W4Rsd/eR/lcxvTpwiziqYi1lnM4hKAjSQxEL70Z9lT6gVx1qNC+UQ/WURZkuHZ6LQ5dBfmXNWP3DYUggkD2ntcTuF6hQz1DKzWYoKDDc4EYEvjN/3AFarzE3kdU07UNZXXUljwbtqZP1CvppyC/4yN4diACLNvw0j+5eN0vZGhr90vjFKbO2hBipv1MpgwGTMFc3pJ+rdu10KsAtWUDml7zIYL+2UuyVZHH95b5KgU3blFnX5oK2duHdkiPhrEzQk0qduyvrO+UUkh7YoRYEMaRxmf0TW1Focbpmq4JKDC3Le3Vis9HmdPlBztfh86H+dPkl48corvKL1k7xlKipSREX+SbE9CjRcitOc431FfZPGcxJgyzzwME2A4cBIjJAx6uAdDZXKt6TeiVQk+3C+5GyhSVRusAdBnujeYKQ4uHDiXqbmPdo0YylyvTPQ+W9jkgY7tGT7M2GcHhUEnHDB/ED5Behps0xfbVbTxwM/c21xDXhkdxLJRZ7AbqUhTbGeBcH764D/PWtXeE8rPOKvzXaxWBJekPTOh1fVK+3K3SSLNrMnBbOJPH0fxZgIXSXboYLQSc1fOTpOSMPkELFxENKayqRMwo/rEE7vp6hv5jZfmzMbrUZ5RKvlQ21bq21qGNyuZ/fkKHTV7vAsPXJuPWTBdOEgcPuoYivPw+7P1xFXCFeAFMGdHRdW6DfkdgOtRwXRH/HzWY/pAOe9hzM8+BqWV5g3ezunlM1gs1umOU83CVhdqFBCfLYA2jOiQ20QtL7YPek8zVv/e5DtjUYZpUzRmLMx+K3rRHfNJTLtbY9RLCkSvIRgRNR5uu8XLq0iIdjr/ZSDvh/uIib86LXvi8xdsh3JQdFqBqeR4oBVJ360zzfPNAR0xIY5j4YLJiLkryFFgyPnHLXOin8UxNn7SMAu6qYACNkPZdddr1uaHREx+ZZcp0CurlmrQL99gA4bbHdlsVJ/yjh6JhhCdFN3nEZ3f27DMYt6yfSyCp+vnntLs4YAQ==.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2818,
+  "completion_tokens": 304,
+  "total_tokens": 3122,
+  "cost": 0.008676,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.008676,
+   "upstream_inference_prompt_cost": 0.005636,
+   "upstream_inference_completions_cost": 0.00304
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 273,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 5871
+ }
+}

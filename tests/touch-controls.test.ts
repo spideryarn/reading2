@@ -221,6 +221,22 @@ describe("a control a finger has to hit", () => {
     });
   }
 
+  /* **The band's corner is its own floor, 2rem, not the order rows' 2.5rem.**
+     The badge took the rows' 40px while it sat in one, and that made it a
+     ringed circle beside a 24px (i) on a phone (spya-hf4svm). In the corner
+     both buttons are 32px — over WCAG 2.5.8's 24, with no neighbour to be hit
+     by mistake — and the rule above still floors a badge outside it (Sketch's
+     bar). Plan 261002e. */
+  it("sizes both corner buttons from one finger-sized token", () => {
+    const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
+      selectors(candidate.selector).includes(".mode-band.has-about"),
+    );
+    expect(rule, "no coarse-pointer size for the band's corner").toBeDefined();
+    const size = /--band-corner-btn:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
+    expect(Number(size?.[1]), "the corner is under 24px for a finger").toBeGreaterThanOrEqual(1.5);
+    expect(Number(size?.[1])).toBe(2);
+  });
+
   it("keeps Glossary's icon-only profile badge large enough for a finger", () => {
     const selector = ".prof-badge.icon-only";
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
@@ -471,7 +487,7 @@ describe("an order row on a touch screen", () => {
     });
   }
 
-  it("the button group scrolls, keeps its focus room, and leaves the trail pinned", () => {
+  it("the button group scrolls, keeps its focus room, and its buttons do not shrink", () => {
     const css = readerCssNoComments();
     const all = rulesFor(css, ".gloss-sort-group").filter((r) => r.exact);
     const touch = all
@@ -491,7 +507,9 @@ describe("an order row on a touch screen", () => {
     expect(mouse, "control: the desktop rule is found").toMatch(/display:\s*flex/);
     expect(mouse).not.toMatch(/overflow-x/);
 
-    for (const selector of [".gloss-sort-group > *", ".gloss-sort-trail"]) {
+    /* The row's trailing slot (`.gloss-sort-trail`) went on 2026-10-02: the
+       badge it held is in the band's corner now (plan 261002e). */
+    for (const selector of [".gloss-sort-group > *"]) {
       const fixed = rulesFor(css, selector)
         .filter((r) => r.pointer && r.exact)
         .map((r) => r.decls)

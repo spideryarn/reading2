@@ -160,7 +160,9 @@ npm run deploy
 **That is the whole of it**, since 2026-08-27. It runs the gates against the
 commit you are about to push, applies any pending migrations to the remote,
 pushes, waits for Vercel, checks nine things about what came out, and reads that
-deployment's logs. The plan, the nine measurements behind it and GPT Sol's review
+deployment's logs. Then, only if the code is live, it emails each reader (never an admin) whose
+feedback report's note says `shipped` and who has not yet been told
+([email.md § Feedback that shipped](email.md#feedback-that-shipped)). The plan, the nine measurements behind it and GPT Sol's review
 are in [260827v-deploy-pipeline.md](../plans/260827v-deploy-pipeline.md);
 [`scripts/deploy.ts`](../../scripts/deploy.ts) is the file and its header is the
 short version.

@@ -1,0 +1,128 @@
+/* Reads raw-*.json + reference-*.json; writes summary.json and prints tables + an eyeball dump. */
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { fixture, median, pct, scorable, WT } from "./qs-lib.ts";
+
+const OUT = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+const ARMS = ["noulOne", "noulOnePlain", "scoreOne", "choice", "perBlock", "perBlockLiquid"] as const;
+
+const texts: Record<string, Record<string, string>> = {};
+async function textsFor(slug: string) {
+  if (texts[slug]) return texts[slug];
+  let blocks: any[];
+  if (slug.includes("spya-")) {
+    const { loadArticle } = await import(`${WT}/src/store/index.ts`);
+    const { runAsOwner } = await import(`${WT}/src/owner.ts`);
+    blocks = ((await runAsOwner("397036d5-7104-4165-859e-7698bf6660b5" as any, () => loadArticle(slug))) as any).blocks;
+  } else blocks = fixture(slug).blocks;
+  texts[slug] = Object.fromEntries(scorable(blocks).map((b) => [b.id, b.text]));
+  return texts[slug];
+}
+
+function auc(scores: Record<string, number>, pos: Set<string>) {
+  const P = Object.entries(scores).filter(([k]) => pos.has(k)).map(([, v]) => v);
+  const N = Object.entries(scores).filter(([k]) => !pos.has(k)).map(([, v]) => v);
+  if (!P.length || !N.length) return null;
+  let s = 0;
+  for (const p of P) for (const n of N) s += p > n ? 1 : p === n ? 0.5 : 0;
+  return s / (P.length * N.length);
+}
+
+const summary: any[] = [];
+const eyeball: string[] = [];
+const lat: Record<string, { typical: number[]; long: number[] }> = {};
+const cost: Record<string, { typical: number[]; long: number[] }> = {};
+
+for (const f of readdirSync(OUT).filter((x) => x.startsWith("raw-")).sort()) {
+  const raw = JSON.parse(readFileSync(`${OUT}/${f}`, "utf8"));
+  const ref = JSON.parse(readFileSync(`${OUT}/reference-${raw.slug}.json`, "utf8"));
+  const T = await textsFor(raw.slug);
+  const isLong = raw.scorableBlocks > 255;
+  eyeball.push(`\n\n######## ${raw.slug} (${raw.scorableBlocks} blocks)`);
+  for (const rq of raw.queries) {
+    const r = ref[rq.q];
+    const R = new Set<string>((r.hits ?? []).map((h: any) => h.blockId));
+    const k = R.size;
+    const row: any = { slug: raw.slug, q: rq.q, shape: rq.shape, refMs: r.ms, refHits: k, refUsage: r.usage, arms: {} };
+    eyeball.push(`\n=== "${rq.q}" — reference ${k} hits (${r.ms} ms)`);
+    for (const h of r.hits ?? []) eyeball.push(`  REF ${h.blockId} c=${h.confidence} ${(T[h.blockId] ?? "?").slice(0, 160).replace(/\n/g, " ")}`);
+    for (const arm of ARMS) {
+      const runs = rq.arms[arm];
+      if (!runs) continue;
+      const a = Array.isArray(runs) ? runs[0] : runs;
+      const ms = Array.isArray(runs) ? runs.map((x: any) => x.ms) : [a.ms];
+      lat[arm] ??= { typical: [], long: [] };
+      cost[arm] ??= { typical: [], long: [] };
+      lat[arm][isLong ? "long" : "typical"].push(...ms);
+      cost[arm][isLong ? "long" : "typical"].push(a.cost);
+      const scores: Record<string, number> = Object.fromEntries(Object.entries(a.scores).filter(([, v]) => typeof v === "number")) as any;
+      const ranked = Object.entries(scores).sort((x, y) => y[1] - x[1]).map(([id]) => id);
+      const recallK = k ? ranked.slice(0, k).filter((id) => R.has(id)).length / k : null;
+      const recall10 = k ? ranked.slice(0, 10).filter((id) => R.has(id)).length / k : null;
+      const top5 = ranked.slice(0, 5);
+      const top5Non = top5.filter((id) => !R.has(id));
+      const refScores = [...R].map((id) => scores[id]).filter((v) => typeof v === "number");
+      const thr: any = {};
+      for (const t of arm === "scoreOne" ? [1.5, 2, 2.5] : arm === "choice" ? [0.01, 0.05] : [0.5, 0.7, 0.8, 0.9]) {
+        const sel = Object.entries(scores).filter(([, v]) => v >= t).map(([id]) => id);
+        thr[t] = { n: sel.length, refIn: sel.filter((id) => R.has(id)).length };
+      }
+      let stability = null;
+      if (Array.isArray(runs) && runs.length > 1) {
+        const diffs: number[] = [];
+        for (const id of Object.keys(runs[0].scores)) for (const x of runs.slice(1)) diffs.push(Math.abs(x.scores[id] - runs[0].scores[id]));
+        stability = { maxAbsDiff: Math.max(...diffs), top5Same: runs.every((x: any) => JSON.stringify(Object.entries(x.scores).sort((p: any, q: any) => q[1] - p[1]).slice(0, 5).map((e) => e[0])) === JSON.stringify(top5)) };
+      }
+      row.arms[arm] = {
+        ms,
+        cost: a.cost,
+        inputTokens: a.inputTokens,
+        chunks: a.chunks ?? null,
+        errors: a.errors ?? 0,
+        recallK,
+        recall10,
+        top5NonRef: top5Non.length,
+        auc: auc(scores, R),
+        refScoreMin: refScores.length ? Math.min(...refScores) : null,
+        refScoreMedian: refScores.length ? median(refScores) : null,
+        nonRefMedian: median(Object.entries(scores).filter(([id]) => !R.has(id)).map(([, v]) => v)),
+        thresholds: thr,
+        stability,
+        top10: ranked.slice(0, 10).map((id) => [id, Number(scores[id]!.toFixed(3)), R.has(id)]),
+      };
+      if (arm === "noulOne" || arm === "perBlock" || arm === "scoreOne") {
+        eyeball.push(`  -- ${arm} top 8 (recall@k ${recallK?.toFixed(2)}, auc ${row.arms[arm].auc?.toFixed(2)}):`);
+        for (const id of ranked.slice(0, 8)) eyeball.push(`    ${R.has(id) ? "R" : "."} ${scores[id]!.toFixed(2)} ${id} ${(T[id] ?? "?").slice(0, 150).replace(/\n/g, " ")}`);
+      }
+    }
+    summary.push(row);
+  }
+}
+
+const f2 = (x: number | null | undefined) => (x == null ? "–" : x.toFixed(2));
+console.log("\n| article | query | ref hits | ref s | arm | recall@k | recall@10 | top5 not ref | AUC | ref min | nonref med | ≥0.5 (ref in) | ≥0.8 (ref in) |");
+for (const row of summary) {
+  for (const arm of ARMS) {
+    const a = row.arms[arm];
+    if (!a) continue;
+    const t5 = a.thresholds["0.5"] ?? a.thresholds["2"] ?? a.thresholds["0.05"];
+    const t8 = a.thresholds["0.8"] ?? a.thresholds["2.5"] ?? a.thresholds["0.01"];
+    console.log(`| ${row.slug.slice(0, 12)} | ${row.q.slice(0, 40)} | ${row.refHits} | ${(row.refMs / 1000).toFixed(1)} | ${arm} | ${f2(a.recallK)} | ${f2(a.recall10)} | ${a.top5NonRef} | ${f2(a.auc)} | ${f2(a.refScoreMin)} | ${f2(a.nonRefMedian)} | ${t5?.n} (${t5?.refIn}) | ${t8?.n} (${t8?.refIn}) |`);
+  }
+}
+console.log("\nPer-arm means:");
+for (const arm of ARMS) {
+  const rows = summary.map((r) => r.arms[arm]).filter(Boolean);
+  const m = (f: (a: any) => number | null) => {
+    const xs = rows.map(f).filter((x): x is number => x != null);
+    return xs.reduce((s, x) => s + x, 0) / xs.length;
+  };
+  console.log(`${arm}: recall@k ${f2(m((a) => a.recallK))} recall@10 ${f2(m((a) => a.recall10))} top5NonRef ${f2(m((a) => a.top5NonRef))} AUC ${f2(m((a) => a.auc))} | latency typical med ${median(lat[arm]!.typical)} p90 ${pct(lat[arm]!.typical, 0.9)} long med ${median(lat[arm]!.long)} p90 ${pct(lat[arm]!.long, 0.9)} | cost typical med $${median(cost[arm]!.typical).toFixed(5)} long med $${median(cost[arm]!.long).toFixed(5)}`);
+}
+const refT = summary.filter((r) => !r.slug.includes("spya-")).map((r) => r.refMs);
+const refL = summary.filter((r) => r.slug.includes("spya-")).map((r) => r.refMs);
+console.log(`reference latency typical med ${median(refT)} p90 ${pct(refT, 0.9)}; long ${refL.join("/")}`);
+console.log("ref usage:", JSON.stringify(summary.map((r) => [r.slug.slice(0, 8), r.refUsage])));
+
+writeFileSync(`${OUT}/summary.json`, JSON.stringify({ summary, latency: lat, cost }, null, 1));
+writeFileSync(new URL("./qs-eyeball.txt", import.meta.url), eyeball.join("\n"));
+process.exit(0);

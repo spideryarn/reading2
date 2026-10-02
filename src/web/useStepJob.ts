@@ -306,6 +306,38 @@ export interface StepJob<S extends StepName = StepName> {
   cancel(id: string): void;
 }
 
+/**
+ * **The body of `POST /api/jobs` for one step**, as `start` sends it — and as
+ * the command bar's *Run again* rows send it (CommandBar.tsx § `rerunRows`),
+ * which is why it is out here rather than inline in `start`: two callers that
+ * each spelled the body would be two places to get `force` wrong, and the
+ * mistake is silent either way (see `force` on `StepRun` — a positional force
+ * buys extra model calls, a missing one a run that changes nothing).
+ *
+ * Exported because the bar is not a mode's panel and has no `useStepJob` of
+ * its own: it starts a run for whichever step was named and then hands the
+ * reader to the Metadata row that watches it.
+ */
+export function stepRunRequest<S extends StepName>(
+  slug: string,
+  step: S,
+  { force = false, useProfile = true, precededBy }: StepRun<S> = {},
+): { slug: string; steps: StepName[]; force?: StepName[]; useProfile?: false } {
+  return {
+    slug,
+    /* Sent in reading order because that is what the request means, not
+       because the order is load-bearing: `orderSteps` sorts by `STEP_ORDER`
+       on arrival, so a client that named them backwards would get the same
+       run. `precededBy` defaults to nothing, so the ordinary request is
+       still the same two-field body it has always been. */
+    steps: [...(precededBy ?? []), step],
+    /* The step named, never a positional force — see `force` on `StepRun`
+       for both halves of why. */
+    ...(force ? { force: [step] } : {}),
+    ...(useProfile ? {} : { useProfile: false as const }),
+  };
+}
+
 /** Is this job one that would write the artefact this step writes? */
 function writesStep(job: Job, step: StepName): boolean {
   return job.steps.some((s) => s.name === step);
@@ -600,24 +632,13 @@ export function useStepJob<S extends StepName>(
   }, [queue.jobs, watchedId]);
 
   const start = useCallback(
-    async ({ force = false, useProfile = true, precededBy }: StepRun<S> = {}) => {
+    async (run: StepRun<S> = {}) => {
       setWatchedId(null);
       /* Before the `await`, so the button is gone for the whole of the round
          trip rather than from whenever it comes back. */
       setStarting(true);
-      const started = await queue.run({
-        slug,
-        /* Sent in reading order because that is what the request means, not
-           because the order is load-bearing: `orderSteps` sorts by `STEP_ORDER`
-           on arrival, so a client that named them backwards would get the same
-           run. `precededBy` defaults to nothing, so the ordinary request is
-           still the same two-field body it has always been. */
-        steps: [...(precededBy ?? []), step],
-        /* The step named, never a positional force — see `force` on `StepRun`
-           for both halves of why. */
-        ...(force ? { force: [step] } : {}),
-        ...(useProfile ? {} : { useProfile: false }),
-      });
+      /* The body is `stepRunRequest`'s, shared with the command bar. */
+      const started = await queue.run(stepRunRequest(slug, step, run));
       /* **The reason is taken here, and kept.** See `failed` below: the two
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */

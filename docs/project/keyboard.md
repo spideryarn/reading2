@@ -480,6 +480,32 @@ claimed — and adds three where it does not fire:
 
 The Metadata button's card says so: *"⌘Enter / Ctrl-Enter opens it from the article"*. Tests: `tests/metadata-chord.test.tsx`.
 
+### ⌘⌥T folds or unfolds every section
+
+> And ideally `Cmd+Opt+t` (and appropriate Windows equivalent) as keyboard shortcut to
+> expand/collapse all.
+>
+> — Greg, 2026-10-02 (spya-skqwg8)
+
+**⌘⌥T on a Mac, Ctrl+Alt+T everywhere else, folds every heading's section, or opens them all if
+any is folded** — the same toggle as ⌥-clicking (Alt-clicking) any heading's chevron and as the
+masthead's *Fold all* (`useFoldArticle` in [`fold.ts`](../../src/web/fold.ts);
+[261002e](../plans/261002e-collapsible-headings-and-fold-all.md)). The one chord with Alt in it, so
+it has its own test, `isModAltChord` in [`key-chord.ts`](../../src/web/key-chord.ts), rather than a
+loosening of `isModChord`'s refusal. It matches the physical key (`code`), because ⌥ turns `t`
+into `†`. Otherwise it keeps ⌘-K's rules: no repeat, no Shift, no IME composition, not while typing,
+nothing over an open `<dialog>`, nothing once another handler has `preventDefault`ed, and
+`preventDefault()` only on an article with a heading to fold.
+
+Two places it never arrives: **Linux desktops** open a terminal on Ctrl+Alt+T before the page sees
+it, and **Ctrl+Alt is AltGr** on many Windows layouts. The chevron's ⌥-click and *Fold all* cover
+both. The chevron's card names all three ways.
+
+**↑ / ↓ step over a folded section rather than into it.** Every jump goes through `scrollToBlock`,
+which unfolds whatever it is sent to — a search hit, a Structure row, the spine, `?at=` — because a
+jump to a block is a request to see it. So the arrows filter folded rows out before they step
+(keynav.ts § `step`), or ↓ would open every section it met. Tests: `tests/fold-keynav.test.ts`.
+
 ### Enter in a text box
 
 **Chat-style boxes send on Enter; Shift+Enter is a newline** — the chat composer, the box that

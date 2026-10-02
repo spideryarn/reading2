@@ -82,6 +82,7 @@ import type {
   LibraryHit,
   ListOptions,
   RememberStance,
+  SearchKind,
   SearchRun,
   ShelfState,
   ArcFound,
@@ -1137,12 +1138,15 @@ export interface SearchStore {
    * Record a `pending` run before the model is called.
    *
    * A `wantedId` naming an existing row is a **retry only when the criterion
-   * matches and that row's status is `error`** — all three, and the third is
-   * the one this codebase carries a postmortem for.
+   * and the kind match and that row's status is `error`** — all four, and the
+   * status is the one this codebase carries a postmortem for. `kind` is
+   * required rather than defaulted: a caller that forgot it would otherwise
+   * store a quick search as a meaning one, and nothing would say so.
    */
   begin(
     slug: string,
     criterion: string,
+    kind: SearchKind,
     wantedId?: string,
     now?: () => string,
   ): Promise<{ run: SearchRun; attempt: string | undefined }>;

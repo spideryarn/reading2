@@ -1,0 +1,114 @@
+[
+ {
+  "slug": "constitution",
+  "q": "ways Claude can be too cautious",
+  "0.7": "16/15/16 r0.93",
+  "0.75": "14/14/14 r0.93",
+  "0.8": "14/14/14 r0.93"
+ },
+ {
+  "slug": "constitution",
+  "q": "Why does safety come before ethics?",
+  "0.7": "3/3/3 r1.00",
+  "0.75": "3/3/3 r1.00",
+  "0.8": "2/2/3 r0.78"
+ },
+ {
+  "slug": "constitution",
+  "q": "treating users as grown-ups",
+  "0.7": "4/5/4 r1.00",
+  "0.75": "3/3/2 r0.67",
+  "0.8": "2/2/1 r0.42"
+ },
+ {
+  "slug": "constitution",
+  "q": "things Claude should never do",
+  "0.7": "19/20/18 r0.67",
+  "0.75": "16/17/14 r0.63",
+  "0.8": "10/11/11 r0.63"
+ },
+ {
+  "slug": "noema-mythology-of-conscious-ai",
+  "q": "arguments that minds are not software",
+  "0.7": "20/20/20 r0.79",
+  "0.75": "20/20/20 r0.79",
+  "0.8": "20/20/20 r0.79"
+ },
+ {
+  "slug": "noema-mythology-of-conscious-ai",
+  "q": "Why do people mistake chatbots for being conscious?",
+  "0.7": "10/10/10 r0.57",
+  "0.75": "10/10/9 r0.57",
+  "0.8": "7/7/7 r0.50"
+ },
+ {
+  "slug": "noema-mythology-of-conscious-ai",
+  "q": "machines that do clever things without computing anything",
+  "0.7": "1/1/2 r0.44",
+  "0.75": "1/1/1 r0.33",
+  "0.8": "1/1/1 r0.33"
+ },
+ {
+  "slug": "noema-mythology-of-conscious-ai",
+  "q": "what the author thinks we should do about it",
+  "0.7": "2/2/2 r0.50",
+  "0.75": "2/2/2 r0.50",
+  "0.8": "1/1/1 r0.25"
+ },
+ {
+  "slug": "openai-huggingface",
+  "q": "Did any of the agents blow the whistle?",
+  "0.7": "4/4/3 r0.92",
+  "0.75": "3/3/3 r0.75",
+  "0.8": "2/2/2 r0.50"
+ },
+ {
+  "slug": "openai-huggingface",
+  "q": "how the agents covered their tracks",
+  "0.7": "5/4/5 r0.48",
+  "0.75": "3/3/3 r0.33",
+  "0.8": "2/1/2 r0.19"
+ },
+ {
+  "slug": "openai-huggingface",
+  "q": "self-sacrifice for the group",
+  "0.7": "14/14/14 r1.00",
+  "0.75": "13/13/13 r1.00",
+  "0.8": "13/13/13 r1.00"
+ },
+ {
+  "slug": "openai-huggingface",
+  "q": "objections that the author is treating the AIs like people",
+  "0.7": "3/4/4 r0.33",
+  "0.75": "2/3/3 r0.33",
+  "0.8": "1/1/2 r0.33"
+ },
+ {
+  "slug": "replication-crisis-spya-hrjamq",
+  "q": "What can journals do to fix this?",
+  "0.7": "5/5/4 r0.50",
+  "0.75": "3/3/3 r0.38",
+  "0.8": "3/3/3 r0.38"
+ },
+ {
+  "slug": "replication-crisis-spya-hrjamq",
+  "q": "fishing for significant results",
+  "0.7": "9/9/9 r0.56",
+  "0.75": "6/7/6 r0.33",
+  "0.8": "3/3/2 r0.11"
+ },
+ {
+  "slug": "replication-crisis-spya-hrjamq",
+  "q": "examples from fields outside psychology",
+  "0.7": "20/20/20 r0.83",
+  "0.75": "20/20/20 r0.83",
+  "0.8": "20/17/19 r0.71"
+ },
+ {
+  "slug": "replication-crisis-spya-hrjamq",
+  "q": "Why do so many studies fail to replicate?",
+  "0.7": "20/20/20 r0.50",
+  "0.75": "20/20/20 r0.50",
+  "0.8": "14/15/15 r0.33"
+ }
+]

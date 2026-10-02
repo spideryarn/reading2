@@ -56,6 +56,23 @@ export function isModChord(e: KeyboardEvent, key: string): boolean {
 }
 
 /**
+ * **⌘⌥ + key on a Mac, Ctrl+Alt + key everywhere else** — `isModChord`'s
+ * sibling for the one chord that wants Alt: ⌘⌥T, fold or unfold every section
+ * (fold.ts; Greg, spya-skqwg8). A sibling rather than a flag on that one,
+ * because its refusal of Alt is a rule with reasons and every other chord
+ * keeps it.
+ *
+ * Matched on `code`, the physical key, not `key`: ⌥ turns `t` into `†` on a
+ * Mac, and Ctrl+Alt is AltGr on many layouts, which produces a character of
+ * its own. Shift, auto-repeat and IME composition are refused as above.
+ */
+export function isModAltChord(e: KeyboardEvent, code: string): boolean {
+  if (e.code !== code) return false;
+  if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.shiftKey || e.repeat) return false;
+  return !composing(e);
+}
+
+/**
  * A key press as either a DOM or a React event, as far as these helpers read it.
  * React's synthetic event has no `isComposing` of its own — only `nativeEvent`
  * does — so both places are named and `composing` reads both. (Measured: drop

@@ -67,8 +67,10 @@ export const PAID_ENDPOINT_PATHS: readonly string[] = [
      What the path buys is the scan — a source file that names it is a source
      file that can spend, whether or not anything uses it that way today. */
   "/v1/images",
-  /* Jev's Decisions endpoint (added 2026-09-29, plan 260929c). Only the
-     shelf-topics eval calls it, through the declared bypass `shelf-topics-jev`. */
+  /* Jev's Decisions endpoint (added 2026-09-29, plan 260929c). Callers: quick
+     search, through the owned seam `openRouterDecisions` (src/ai-call.ts, plan
+     261002e — so no `Declaration` for it), and two evals through declared
+     bypasses below, `shelf-topics-jev` and `command-pick-jev`. */
   "/api/alpha/decisions",
 ];
 
@@ -387,8 +389,10 @@ export const DECLARATIONS: readonly Declaration[] = [
        one arm that cannot use the gateway (plan 260929c, R5). The response
        reports `input_tokens`/`output_tokens` and a settled `cost`, which the
        caller maps onto the OpenRouter observer's usage shape. The ledger names
-       the real wire even though adding a Decisions route to the product gateway
-       remains Stage 2's, and only if Jev wins. */
+       the real wire. The `why` below is as written on 2026-09-29: the product
+       gateway has had a Decisions route since 2026-10-02 (`openRouterDecisions`,
+       for quick search, plan 261002e), which left this eval's bypass as it was
+       rather than moving it onto the seam. */
     id: "shelf-topics-jev",
     kind: "bypass",
     since: "2026-09-29",
@@ -397,7 +401,23 @@ export const DECLARATIONS: readonly Declaration[] = [
     job: "eval",
     wire: "decisions",
     metered: true,
-    why: "Jev is a decisions model: OpenRouter refuses it on /chat/completions and serves it only on POST /api/alpha/decisions, a path the gateway (src/ai-call.ts) has no route for. Adding one is Stage 2's decision, taken only if the eval says Jev is worth a sixth wire.",
+    why: "Jev is a decisions model: OpenRouter refuses it on /chat/completions and serves it only on POST /api/alpha/decisions, a path the gateway (src/ai-call.ts) had no route for when this eval was written. The gateway has had one since 2026-10-02 (`openRouterDecisions`, job `search-quick`), but it owns that job's request shape; this eval's score questions and saved raw bodies are its own, so it keeps its declared bypass rather than borrowing the product job's name.",
+  },
+  {
+    /* **Jev again, choosing a command-bar row from a typed request** — plan
+       261002c Stage D, docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md.
+       A second entry rather than a second file under `shelf-topics-jev`,
+       because the register names one file per id and the two evals answer
+       different questions. Same wire, same usage mapping, same reason. */
+    id: "command-pick-jev",
+    kind: "bypass",
+    since: "2026-10-02",
+    account: "openrouter",
+    file: "evals/command-pick/jev.ts",
+    job: "eval",
+    wire: "decisions",
+    metered: true,
+    why: "Measuring whether Jev can be the interface model's fast first pass (docs/project/chat-llm-help-commands-vision.md § Jev first). Jev is served only on POST /api/alpha/decisions, which the gateway (src/ai-call.ts) has no route for; building that sixth wire waits on this eval saying Jev is worth it.",
   },
   {
     /* **The fleet dashboard's dictation, and the first entry here that is not

@@ -189,8 +189,8 @@ export interface DebateResponseBody {
 export interface DebateResponseRefused {
   kind: "refused";
   status: number;
-  /** `ProviderRefused.kind` — `"no-endpoints"` or `null`. */
-  refusalKind: "no-endpoints" | null;
+  /** `ProviderRefused.kind` — a recognised refusal, or `null`. */
+  refusalKind: "no-endpoints" | "context-exceeded" | null;
   /** `Retry-After`, parsed to milliseconds, or `null`. */
   retryAfterMs: number | null;
   bodyUnavailable: string;

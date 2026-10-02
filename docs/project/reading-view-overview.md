@@ -52,6 +52,10 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   columns — the decorated text in the middle, block-anchored marginalia on the right, what is about
   the whole piece on the left, and the single-purpose mode bands receding. Open it before redesigning
   the layout, and for the questions still waiting on Greg.
+- **[chat-llm-help-commands-vision.md](chat-llm-help-commands-vision.md)** — **not decided**: typing
+  or saying what you want and an *interface model* choosing the command — Jev first, a capable model
+  when unsure, the bar's own rows as its tools, the Help as what it knows — and the main Chat doing
+  the same. Open it before giving any model a way to act for the reader: it proposes the line.
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
 - **[mode.md](mode.md)** — the one checklist for adding a mode: the tables the compiler
@@ -78,6 +82,11 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   sent twice. Owner only, behind the experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
   price never does, the limits on one formula, and what it costs a comment in that paragraph.
+- **Folding a section** — a chevron on each heading hides the paragraphs under it; ⌥-click, ⌘⌥T or
+  the masthead's *Fold all* does every section. Not remembered across a reload. Why the cells are
+  hidden rather than the row, and why a jump unfolds:
+  [261002e](../plans/261002e-collapsible-headings-and-fold-all.md); the chord is in
+  [keyboard.md](keyboard.md).
 
 ### The modes in the band
 
@@ -222,8 +231,10 @@ he asked for `/changelog` to be reachable from it as well as from the footer; on
 six more — Library, Feedback, Metadata, Tweets, Homepage, Profile — and left *"a few more
 likely/useful"* to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)).
 The rows that are not modes are drawn below all of them, and come in two shapes:
-**pages**, where Enter goes there, and **actions**, where Enter does the thing — today Feedback,
-which opens the dialog, and Comments, which opens the drawer.
+**pages**, where Enter goes there, and **actions**, where Enter does the thing — Feedback, which
+opens the dialog, Comments, which opens the drawer, and since 2026-10-02 the *Run again* rows below,
+the first that can fail: an action now answers *close* or *stay open, saying why*, and one that is
+still out shows `Starting…` and refuses a second press.
 
 **One of the rows is about the article you are standing on** — its Metadata (Tweets was the second
 until it became a mode on 2026-09-29, and is a mode row now) — and it exists only because the bar does: it is mounted on the reading view and, since 2026-09-30,
@@ -259,6 +270,43 @@ Remember, Diagram, Referee and Summary's plain-words levels; the names live once
 and matchers inside a mode (Quotes' rank, Search's Words | Meaning) are not offered, by decision
 rather than oversight —
 [261001d](../plans/261001d-command-bar-lists-sub-modes.md).
+
+**Every mode Metadata can re-run has a *Run again* row since 2026-10-02** — Greg,
+SPIDERYARN-READING2-8D: *"Add a lot more Metadata functionality to Commands, e.g. to reprocess (a
+particular mode)"*. *Glossary › Run again*, *Thread › Run again* and twelve more, one per step of
+`METADATA_RERUN_STEPS`, whatever the experimental switch says, as on the page. They are **shown only
+once something is typed** (`typedOnly`), so the list the bar opens on did not grow, and they answer
+to whole phrases — `rerun glossary`, `regenerate terms`, `glossary again` — because the ranking
+compares the query with one alias at a time and never combines a verb with a name; plain `glossary`
+still puts the mode first. Enter posts the same forced run Metadata's row does and **waits for the
+answer**: a refusal keeps the bar open with the server's sentence under the box, and an accepted run
+takes the reader to Metadata's *AI processing* section (`?section=ai-processing`, opened and
+flashed, [url-state.md](url-state.md)), where that step's row shows it — **never to the mode**,
+whose generate-on-open would start a second, unforced paid run beside it. The words and labels live
+once, in [`src/web/rerun-commands.ts`](../../src/web/rerun-commands.ts), which Metadata reads too.
+
+**Five more of Metadata's controls have rows, typed-only like *Run again*** (the empty list keeps
+the Metadata row as their stand-in), and none of them spends. Three go to a section —
+*High-powered AI* (`opus`, `stronger model`; to *AI processing*, where its switch is first, never
+throwing the switch, whose own copy states its price), *AI processing*, and *Share this article*
+(`share`, `publish`, `private`; to the *Access & sharing* card, which asks before anything goes public, and above the shared shelf for `share`) — the way an
+accepted run lands there: a step to Metadata from the reading view, the section added in place on
+Metadata. Not *Export*, which the action below owns, and not *What it cost*, which is an
+administrator's. *Archive this article* — *Put this article back* over an archived one, the label
+following the state, and **no row at all while the state is unknown** — presses through the same
+controller as the masthead mark and the page's buttons, so the four cannot disagree and a press while
+another is out sends nothing. *Export this article* downloads the ZIP through the function the
+Export button uses ([`src/web/export-download.ts`](../../src/web/export-download.ts)). Either one
+that fails keeps the bar open with the sentence, and both are offered only where there is a shelf
+row to act on — not on the fixture. Words in
+[`src/web/article-commands.ts`](../../src/web/article-commands.ts).
+
+**`find <words>` searches the article** — also `search`, `search for`, `does it mention` and Greg's
+own *"do they talk about X?"*. It offers one row, *Find “X” in this article*, which opens Search in
+words mode with the words lit up: free, instant, and only when the query starts with one of those
+verbs. So it is not the search fallback Greg refused below — the reader typed the verb — and a query
+that names nothing still says `No command matches.`
+[261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md).
 
 Three pieces of it are worth knowing about:
 

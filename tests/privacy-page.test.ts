@@ -164,6 +164,13 @@ describe("the privacy page", () => {
     expect(prose).toContain("with a short note from whoever gave it, if they wrote one");
   });
 
+  it("says a reader is emailed when their feedback ships, without their words", () => {
+    /* Plan 261002f: scripts/feedback-shipped-emails.ts, run by `npm run deploy`. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("If you send us feedback through the Feedback button and we act on it, we email you once the change is live");
+    expect(prose).toContain("that email does not quote what you wrote");
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a
