@@ -545,7 +545,14 @@ describe("/admin/vouchers", () => {
 
     it("reminds you to sign the note, since the email is from Spideryarn", async () => {
       await mount();
-      expect(form().textContent).toContain("Sign it yourself");
+      const area = form().querySelector<HTMLTextAreaElement>("#voucher-new-recipient-note");
+      expect(area?.labels?.[0]?.textContent).toContain("Note to them");
+      expect(area?.getAttribute("aria-describedby")).toBe("voucher-new-recipient-note-hint");
+      const hint = form().querySelector("#voucher-new-recipient-note-hint");
+      expect(hint?.textContent).toContain("Sign it yourself");
+      expect(hint?.textContent).toContain("— Greg");
+      expect(hint?.closest("label")).toBeNull();
+      expect(hint?.hasAttribute("hidden")).toBe(false);
     });
 
     it("says the email is on its way", async () => {
