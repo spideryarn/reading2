@@ -48,6 +48,12 @@ const rawPgGlossaryHiddenStore: GlossaryHiddenStore = {
         join spideryarn.article_revisions r on r.id = a.current_revision_id
         cross join lateral jsonb_array_elements(coalesce(r.glossary -> 'entries', '[]'::jsonb)) e
         where a.id = ${articleId} and e ->> 'id' = ${entryId}
+        /* Or a term the reader added, which is a lookup row with a name
+           rather than an entry in the document — plan 261002f. */
+        union all
+        select 1
+        from spideryarn.glossary_lookups l
+        where l.article_id = ${articleId} and l.entry_id = ${entryId} and l.added_name is not null
         limit 1
       ), inserted as (
         insert into spideryarn.glossary_hidden_entries (article_id, entry_id)

@@ -2,7 +2,7 @@
 
 **Status: built, 2026-10-02.** Three changes to the bottom bar's mode switch (`DockModes` in
 [`src/web/Dock.tsx`](../../src/web/Dock.tsx)), from two of Greg's reports. GPT Sol reviewed the
-plan ([261002g-plan-review-sol.md](261002g-plan-review-sol.md)); § What the review changed says
+plan ([261002g-mode-bar-plan-review-sol.md](261002g-mode-bar-plan-review-sol.md)); § What the review changed says
 what moved.
 
 ## What the review changed
@@ -28,7 +28,7 @@ what moved.
   rather than a fixed eight.
 - **No job, not only no token** (Sol P2-2): the integration test counts POSTs as well.
 
-The code review ([261002g-code-review-sol.md](261002g-code-review-sol.md)) fixed two more in place:
+The code review ([261002g-mode-bar-code-review-sol.md](261002g-mode-bar-code-review-sol.md)) fixed two more in place:
 choosing Marginalia from the command bar while it is on no longer turns it off, and a press that
 changes nothing (Plain with nothing open, a command naming the mode you are in, a band brought back
 from stepping aside) no longer pushes an empty history entry, which made Back take two presses. It

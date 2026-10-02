@@ -159,6 +159,7 @@ import {
 } from "../reader-capability.js";
 import { markedModes, visitorGap } from "../visitor.js";
 import { SharedNotice, ViewOnlyChip, VisitorBand } from "../PublicChrome.js";
+import { webSource } from "../SourceLink.js";
 import { SmallScreenHint } from "../SmallScreenHint.js";
 import { useRenderCount } from "../perf.js";
 import { makeBlockBookmarker } from "../block-bookmark.js";
@@ -1413,7 +1414,8 @@ export function Reader({
       comments,
     });
     const out = new Map<BlockId, ReactElement>();
-    for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
+    for (const [blockId, notes] of byBlock)
+      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
     return out;
   }, [
     marginRoom,
@@ -2561,7 +2563,16 @@ export function Reader({
           this is the sentence and the ask, which belong with the title. Not
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
-      {!owner && <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />}
+      {/* **And the banner**: where it came from, the takedown offer, the
+          training promise — plan 261002g. `webSource` is the masthead's own
+          check on the address, so the two lines cannot disagree about it. */}
+      {!owner && (
+        <SharedNotice
+          signedIn={signedIn}
+          sessionUnconfirmed={sessionUnconfirmed}
+          source={{ url: webSource(article.meta), guess: article.sourceGuess }}
+        />
+      )}
       {/* **Why the article and the mode panel are never both on screen here**,
           on a narrow touch window, once per device. Below it the reader is
           about to press a mode button and watch the text disappear; this is the

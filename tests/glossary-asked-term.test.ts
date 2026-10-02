@@ -11,15 +11,10 @@
  * >
  * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
  *
- * Two halves of that request are deliberately not built, and this file pins
- * both:
- *
- * - **"add it to the glossary"** — nothing is stored. `AskedTermAnswer` in
- *   src/types.ts has the three reasons; the sharpest is that
- *   src/store/public-reader.ts publishes the whole glossary document to
- *   everyone a shared article is shared with, so a reader-added entry would
- *   leave with it.
- * - **"robust in the spelling"** — the tolerance is exactly `term-match.ts`'s
+ * - **"add it to the glossary"** — built on 2026-10-02 (plan 261002f): a
+ *   finished answer is handed to `lookups.addTerm`, and a stopped one is not.
+ *   What the store does with it is tests/glossary-added-term.test.ts.
+ * - **"robust in the spelling"** is deliberately not built: — the tolerance is exactly `term-match.ts`'s
  *   folding of case, plurals and possessives, and there is no fuzzy matching
  *   and no *"did you mean…"*. The cases below say what that does and does not
  *   buy, so a later change that quietly adds edit distance has to argue with a
@@ -46,7 +41,7 @@ import { MAX_ASKED_TERM } from "../src/asked-term.js";
 import type { ExplainEnding } from "../src/explain.js";
 import { type AskedTermQuestion, makeAskAboutTerm } from "../src/term-lookup.js";
 import { MAX_TERM } from "../src/vocabulary.js";
-import type { Article, AskedTermAnswer, Block, Tree } from "../src/types.js";
+import type { AddedTerm, Article, AskedTermAnswer, Block, Tree } from "../src/types.js";
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
@@ -93,7 +88,14 @@ function media(id: string): Block {
  * check and not a stand-in for one.
  */
 function harness(
-  opts: { blocks?: Block[]; notYours?: boolean; ending?: ExplainEnding; highPowerSince?: string } = {},
+  opts: {
+    blocks?: Block[];
+    notYours?: boolean;
+    ending?: ExplainEnding;
+    highPowerSince?: string;
+    /** What `addTerm` does; by default it adds, as `spya-zzzzzz`. */
+    addTerm?: () => Promise<AddedTerm>;
+  } = {},
 ) {
   const blocks = opts.blocks ?? [para("spya-aaaaaa", "An opening paragraph.")];
   const meta = { slug: "harness", title: "A piece" };
@@ -102,8 +104,15 @@ function harness(
 
   const asked: { blockId: string; quote: string }[] = [];
   const powers: string[] = [];
+  const adds: { name: string; quote: string; answer: string }[] = [];
 
   const prepare = makeAskAboutTerm({
+    lookups: {
+      addTerm: async (_slug, term) => {
+        adds.push({ name: term.name, quote: term.quote, answer: term.lookup.answer });
+        return opts.addTerm ? opts.addTerm() : { kind: "added", entryId: "spya-zzzzzz" };
+      },
+    },
     reader: {
       loadArticle: async () => {
         if (opts.notYours) {
@@ -144,7 +153,7 @@ function harness(
   const ask = async (slug: string, term: unknown, signal?: AbortSignal) =>
     drain(await prepare(slug, term), signal);
 
-  return { ask, prepare, asked, powers };
+  return { ask, prepare, asked, powers, adds };
 }
 
 /**
@@ -241,16 +250,46 @@ describe("a term the article uses", () => {
     expect((await ask("harness", "  attention   heads \n")).term).toBe("attention heads");
   });
 
-  it("keeps nothing — the answer is the whole of what happens", async () => {
-    /* **The deferral, asserted rather than commented.** There is no store on
-       `AskAboutTermDeps` at all, so this is a statement about the *type* as much
-       as the value: a later change that adds persistence has to add a seam here,
-       and adding one is the moment somebody has to answer
-       src/store/public-reader.ts. */
-    const { ask } = harness({ blocks });
-    const answer = await ask("harness", "attention heads");
-    expect(Object.keys(answer).sort()).toEqual(["blockId", "lookup", "quote", "term"]);
-    expect(answer.lookup.searches).toBe(1);
+  it("adds the term once the answer has finished, and says so in the done", async () => {
+    /* Plan 261002f: the "add it to the glossary" half, which 260904 deferred.
+       The store is told the reader's term as the name, the article's own words
+       as the quote "already there" is decided against, and the answer that
+       becomes the entry's explanation. */
+    const { ask, adds } = harness({ blocks });
+    const answer = await ask("harness", "attention head");
+    expect(Object.keys(answer).sort()).toEqual(["added", "blockId", "lookup", "quote", "term"]);
+    expect(answer.added).toEqual({ kind: "added", entryId: "spya-zzzzzz" });
+    expect(adds).toEqual([{ name: "attention head", quote: "Attention Heads", answer: "An answer." }]);
+  });
+
+  it("passes the store's answer through when the term is already there, or there is no list", async () => {
+    for (const result of [
+      { kind: "existing", entryId: "spya-yyyyyy", hidden: true },
+      { kind: "no-glossary" },
+    ] as const) {
+      const { ask } = harness({ blocks, addTerm: async () => result });
+      expect((await ask("harness", "attention heads")).added).toEqual(result);
+    }
+  });
+
+  it("finishes with no done when the add fails, so nothing claims a row that is not there", async () => {
+    const { prepare } = harness({
+      blocks,
+      addTerm: async () => {
+        throw new Error("the store is down");
+      },
+    });
+    const seen: string[] = [];
+    const ended = await (async () => {
+      for await (const event of (await prepare("harness", "attention heads")).stream()) {
+        seen.push(event.type);
+      }
+    })().then(
+      () => "finished",
+      (err: Error) => err.message,
+    );
+    expect(ended).toBe("the store is down");
+    expect(seen).toEqual(["delta", "delta"]);
   });
 
   it("filters a citation that is not a web address before it reaches an href", async () => {
@@ -263,9 +302,11 @@ describe("a term the article uses", () => {
 describe("an answer that stopped part-way", () => {
   const blocks = [para("spya-aaaaaa", "The piece discusses Attention Heads.")];
 
-  /** The events a stream yields before it ends, and how it ended. */
-  async function run(ending: ExplainEnding): Promise<{ seen: string[]; ended: string }> {
-    const { prepare } = harness({ blocks, ending });
+  /** The events a stream yields before it ends, how it ended, and how many adds it made. */
+  async function run(
+    ending: ExplainEnding,
+  ): Promise<{ seen: string[]; ended: string; added: number }> {
+    const { prepare, adds } = harness({ blocks, ending });
     const question = await prepare("harness", "attention heads");
     const seen: string[] = [];
     const ended = await (async () => {
@@ -274,8 +315,16 @@ describe("an answer that stopped part-way", () => {
       () => "finished",
       (err: Error) => err.message,
     );
-    return { seen, ended };
+    return { seen, ended, added: adds.length };
   }
+
+  it("adds nothing for an answer that stopped part-way, whatever stopped it", async () => {
+    /* Half an answer must not become an entry's explanation (plan 261002f). */
+    for (const ending of ["abandoned", "truncated", "filtered"] as const) {
+      expect((await run(ending)).added, ending).toBe(0);
+    }
+    expect((await run("finished")).added).toBe(1);
+  });
 
   it("knows where the term is before the model is asked anything", async () => {
     /* The route sends `found` as its `begin` frame before the first word, so

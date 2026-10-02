@@ -85,6 +85,7 @@ const NO_ARTEFACTS = {
      requires it, so a call site cannot forget it. `"ready"` is what every
      revision says today. */
   navLabelStatus: "ready",
+  sourceGuess: null,
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -1264,6 +1265,7 @@ describe("the artefacts a shared link carries", () => {
     arc: null,
     assets: null,
     navLabelStatus: "ready" as const,
+    sourceGuess: null,
     crossrefs: null,
     crossrefsFresh: false,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
@@ -2023,6 +2025,7 @@ describe("the artefacts a shared link carries", () => {
       searches: [],
       sketch: null,
       navLabelStatus: "ready",
+      sourceGuess: null,
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);

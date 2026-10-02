@@ -1942,9 +1942,20 @@ function TermCard({
           the labels exist to give them. */}
       {entry.lookup && (
         <div className="prose-card-part prose-card-part-looked">
+          {/* **Only "on the web" when the model searched.** `searches: 0` is a
+              real answer — the panel draws it as *no web search* — and every
+              term a reader adds from *Look up a term* (plan 261002f) carries a
+              lookup, often with no search; the card used to call all of them
+              checked on the web. */}
           <p className="prose-card-label">
-            <Globe size={9} />
-            checked on the web
+            {entry.lookup.searches > 0 ? (
+              <>
+                <Globe size={9} />
+                checked on the web
+              </>
+            ) : (
+              "explained, without a web search"
+            )}
           </p>
           <p className="prose-card-text">{entry.lookup.answer}</p>
         </div>

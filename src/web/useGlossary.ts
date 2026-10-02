@@ -28,8 +28,11 @@
  * See docs/project/glossary.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isSpideryarnId } from "../ids.js";
 import type {
+  AddedTerm,
   AskedTermAnswer,
+  AskedTermFound,
   Citation,
   Glossary,
   GlossaryEntry,
@@ -59,7 +62,7 @@ type GlossaryStatus = "loading" | "none" | "ready" | "error";
  * sentence — the reader has read it, and the server's sentences for a broken
  * stream say *what arrived is real*. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
-export interface AskedTermDraft extends Omit<AskedTermAnswer, "lookup"> {
+export interface AskedTermDraft extends AskedTermFound {
   text: string;
 }
 
@@ -87,13 +90,34 @@ export interface LookKept {
 }
 
 /** The box's `begin` frame, if it is one: where the server found the term. */
-function asFound(data: unknown): Omit<AskedTermAnswer, "lookup"> | undefined {
-  const found = data as Partial<AskedTermAnswer> | null;
+function asFound(data: unknown): AskedTermFound | undefined {
+  const found = data as Partial<AskedTermFound> | null;
   return typeof found?.term === "string" &&
     typeof found.blockId === "string" &&
     typeof found.quote === "string"
     ? { term: found.term, blockId: found.blockId, quote: found.quote }
     : undefined;
+}
+
+/**
+ * **What became of the term, checked arm by arm** — plan 261002f. An id goes
+ * into `?term=` and into a hide request, so a malformed one is refused here
+ * rather than trusted because the frame came from our own server.
+ */
+export function isAddedTerm(data: unknown): data is AddedTerm {
+  const a = data as Partial<Record<string, unknown>> | null | undefined;
+  switch (a?.kind) {
+    case "added":
+      return typeof a.entryId === "string" && isSpideryarnId(a.entryId);
+    case "existing":
+      return (
+        typeof a.entryId === "string" && isSpideryarnId(a.entryId) && typeof a.hidden === "boolean"
+      );
+    case "no-glossary":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
@@ -102,7 +126,8 @@ function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
     typeof a?.term === "string" &&
     typeof a.blockId === "string" &&
     typeof a.quote === "string" &&
-    isGlossaryLookup(a.lookup)
+    isGlossaryLookup(a.lookup) &&
+    isAddedTerm(a.added)
   );
 }
 
@@ -746,15 +771,12 @@ export interface UseGlossary {
    * is in — the box at the top of the panel.
    *
    * A reader asked for a search box that would "look for that term and add it
-   * to the glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). This is the first
-   * half; **the second is deferred and nothing is stored**, so the answer lives
-   * in this hook's state and goes when the reader leaves the article. The three
-   * reasons are on `AskedTermAnswer` in src/types.ts, and the one that decides
-   * it is that the glossary document is published with a shared article.
+   * to the glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). Since plan
+   * 261002f, the server stores a finished answer as the owner's added entry.
    *
    * Which is why the answer is **not** merged into `glossary` by `patchEntry`:
-   * there is no entry to merge it into, and inventing one client-side would put
-   * a row on screen that the next reload silently removes.
+   * the server owns its id and dedup decision, so the client refreshes and uses
+   * the entry the read seam returns.
    */
   ask(term: string): Promise<void>;
   /** True while the box's call is out. One at a time, like `look`. */
@@ -765,8 +787,9 @@ export interface UseGlossary {
    */
   askDraft: AskedTermDraft | null;
   /**
-   * The last answer the box got, or null. Never stored, never in the URL.
-   * **Set only from the stream's `done` frame.**
+   * The last answer the box got, or null. The server stores it on the added
+   * term; this temporary copy stays only until the refreshed row arrives.
+   * Never in the URL. **Set only from the stream's `done` frame.**
    */
   asked: AskedTermAnswer | null;
   /** Why the last one was refused, if it was. Carries a `[gl-ask-…]` code. */
@@ -861,10 +884,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   /**
    * The box at the top of the panel: find a term in the prose and explain it.
    *
-   * **The same shape as `look` on the read, minus the merge**, and the missing merge
-   * is the deferral: `lookUpTerm` stores its answer against an entry id and this
-   * has no entry to store against. So the answer lives here until the reader
-   * leaves. See `ask` on `UseGlossary` for why nothing is persisted.
+   * **The same shape as `look` on the read, with a refresh instead of a local
+   * merge.** The server mints the entry id and stores the answer; this hook
+   * re-reads the list, then `AskATerm` selects the row once it arrives.
    *
    * **Refused here on the same rule the server refuses on** —
    * `parseAskedTerm`, one function reaching both halves (src/asked-term.ts) —
@@ -965,6 +987,11 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
           setAskDraft(null);
           setAsked(answer);
         }
+        /* **The term is in the list now, so read the list again** — the box
+           selects the new row once it is there (`AskATerm`). Whether or not
+           this request is still the box's: the row was written either way.
+           Plan 261002f. */
+        if (answer.added.kind === "added") await refresh();
       } catch (err) {
         /* Stopped on purpose — a keystroke, another article, the band closing.
            Not a failure, and nothing to put on a screen that has moved on. */
@@ -988,7 +1015,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
         }
       }
     },
-    [slug],
+    [slug, refresh],
   );
 
   /**

@@ -87,6 +87,7 @@ import type {
   SkimStop,
   Tree,
   Tweet,
+  SourceGuess,
 } from "./types.js";
 
 /**
@@ -130,6 +131,15 @@ export interface PublicMeta {
    */
   url?: string;
 }
+
+/**
+ * **A found guess at an upload's source, as a stranger receives it** — the
+ * owner's `found` member of `SourceGuess` minus nothing, because every field of
+ * it is drawn: `url` and `host` are the link, `kind` and `matchedBy` choose the
+ * words on its card (src/web/Masthead.tsx § `guessTip`). What makes it public is
+ * how the DTO fills it, not its shape: `PublicArticle.sourceGuess`.
+ */
+export type PublicSourceGuess = Omit<Extract<SourceGuess, { status: "found" }>, "status">;
 
 /**
  * One block of prose. `Block` minus `note`.
@@ -257,6 +267,21 @@ export interface PublicArticle extends PublicArtefactSet {
    * whole of it, and none of them is about a person.
    */
   navLabelStatus: NavLabelStatus;
+  /**
+   * **Where we think an uploaded paper came from**, for a stranger — the
+   * public projection 260929g § Decisions 4 deferred, built by
+   * docs/plans/261002g-a-banner-on-every-public-readable-article.md so the
+   * visitor's banner can name a source for an upload too.
+   *
+   * Only a `found` guess crosses, and only what the link draws: no `why`, no
+   * model, no counts, no claim token. `url` has been through `publicSourceUrl`
+   * (src/urls.ts), the policy the article's own address gets, and `host` is
+   * derived from that published `url` rather than copied from the stored
+   * column, which nothing ties to it (src/db/schema.ts § `upload_source_guesses`).
+   * Absent when nobody has looked, when the search found nothing, or when the
+   * policy refused the address — a visitor is told nothing in all three.
+   */
+  sourceGuess?: PublicSourceGuess;
   /**
    * **The cross-references the prose draws** — since 2026-10-01 (plan 261001b,
    * SPIDERYARN-READING2-5Z; Greg's approval of the defence edit).

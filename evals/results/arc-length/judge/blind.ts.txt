@@ -1,0 +1,35 @@
+import fs from "node:fs";
+import { loadEnvLocal } from "../src/env.js";
+loadEnvLocal();
+const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
+const { loadArticle } = await import("../src/store/index.js");
+const { partsOf } = await import("../src/tree-parts.js");
+const before = JSON.parse(fs.readFileSync("evals/results/arc-length/before.json", "utf8"));
+const after = JSON.parse(fs.readFileSync(`evals/results/arc-length/${process.argv[2] ?? "after"}.json`, "utf8"));
+const key: { id: string; A: string }[] = [];
+let out =
+  "# Blind pairs\n\nFor each part: the part's title and gist (what that part says), then two candidate sentences A and B for the reader's margin, each saying where the whole argument has got to as this part opens.\n\n";
+await runAsOwner(environmentOwnerId(), async () => {
+  for (const b of before.articles) {
+    const a = after.articles.find((x: { slug: string }) => x.slug === b.slug);
+    const art = await loadArticle(b.slug);
+    // biome-ignore lint/suspicious/noExplicitAny: a scratch script
+    const tree = art.tree as any;
+
+    // biome-ignore lint/suspicious/noExplicitAny: a scratch script
+    const parts = partsOf(tree) as any[];
+    out += `## Article: ${art.meta.title}\n\n`;
+    b.sentences.forEach((old: string, i: number) => {
+      const neu = a.sentences[i];
+      const p = parts[i] ?? {};
+      const flip = Math.random() < 0.5;
+      const id = `${b.slug.slice(0, 12)}-${i + 1}`;
+      key.push({ id, A: flip ? "after" : "before" });
+      out += `### ${id} — part: ${p.title ?? "?"}\ngist: ${p.gist ?? "(none)"}\n\nA: ${flip ? neu : old}\n\nB: ${flip ? old : neu}\n\n`;
+    });
+  }
+});
+fs.writeFileSync("data/hut-blind-pairs.md", out);
+fs.writeFileSync("data/hut-blind-key.json", JSON.stringify(key, null, 2));
+console.log("pairs", key.length);
+process.exit(0);

@@ -281,7 +281,7 @@ describe("a tap that already means something else does not select the block", ()
       applies: "It bears on this claim.",
     } as unknown as MarginClaim;
     const margin = new Map<BlockId, ReactElement>([
-      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }] })],
+      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }], viewer: "owner" })],
     ]);
     const props = propsFor(articleFrom(loaded), undefined, margin);
     await draw(props);

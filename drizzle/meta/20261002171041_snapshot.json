@@ -1,6 +1,6 @@
 {
   "id": "779369ec-fcdc-4b55-a0fd-dd7b85a50b79",
-  "prevId": "d9590c70-de5b-4bb3-8d3c-d50f882d0c25",
+  "prevId": "ec82194f-46ca-41c1-b5db-21919d6dd0f0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3588,6 +3588,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "added_name": {
+          "name": "added_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -3619,6 +3625,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "glossary_lookups_added_name_length": {
+          "name": "glossary_lookups_added_name_length",
+          "value": "\"spideryarn\".\"glossary_lookups\".\"added_name\" is null or char_length(\"spideryarn\".\"glossary_lookups\".\"added_name\") between 1 and 80"
+        },
         "glossary_lookups_entry_id_format": {
           "name": "glossary_lookups_entry_id_format",
           "value": "\"spideryarn\".\"glossary_lookups\".\"entry_id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"

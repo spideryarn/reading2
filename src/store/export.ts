@@ -797,6 +797,8 @@ export async function exportArticle(
         searches: row.searches,
         model: row.model,
         at: row.at.toISOString(),
+        /* A term the reader added: the row is the whole entry (plan 261002f). */
+        ...(row.addedName !== null ? { addedName: row.addedName } : {}),
       };
     }
     await put("glossary_lookups", "glossary-lookups.json", { lookups });

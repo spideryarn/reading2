@@ -1,25 +1,17 @@
-## Findings
+No P0 findings.
 
-- **P0 — None.**
+- P1 — [useArc.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/useArc.ts:173): an outdated arc gets only one regeneration attempt per mount. `started.current` is set before `queue.start()` and never released. A refused POST, failed/cancelled job, stale completion read, or failed completion refresh can therefore leave the old arc at `status: "ready"` indefinitely, without surfacing the queue failure through `useArc.error`. A remount retries. I did not fix this because automatic retry versus visible retry/error is a product and spending decision.
 
-- **P1 — Left:** [Dock.tsx:2761](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/src/web/Dock.tsx:2761) still exposes modes as radios, but activating the checked radio selects Plain instead. The declined rationale only preserves “exactly one checked”; it does not address the radio contract that activating an option selects that option. The proper fix is the deferred `aria-pressed`/group migration across code, tests, and documentation, so I did not expand this review into that wider change.
+- P1 — [investigation](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/investigations/261002p-arc-sentences-shorter-and-plainer.md:11): “`arc/6` ships” does not follow from the predeclared criteria in the [plan](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md:79). The declared 288px measure was three lines: only 7/35, or 20%, passed—not the highlighted post-hoc four-line result of 25/35. The 200px result was 0/35, and 10/35 outputs exceeded 20 words. Consequently [marginalia.md](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/project/marginalia.md:81) incorrectly says arcs are “at most 20 words.” The qualitative judge totals also have no persisted evidence under `evals/results/arc-length/`. I left this for an explicit criteria waiver or another prompt/eval round.
 
-- **P1 — Fixed:** [Reader.tsx:3067](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/src/web/reader/Reader.tsx:3067) ignored the new `toggle=false` intent for Marginalia. Selecting an already-open Marginalia from Cmd-K closed it. It is now idempotent while retaining the narrow-window swap that brings a hidden column forward.
+- P2 — [arc.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:100): the prompt’s example uses “next,” and line 121 calls “next” honest, while line 149 forbids it. The one-sentence/two-halves rule itself is consistent because the halves form one semicolon-joined sentence. “Never claim more than shown” is clear; the 20-word instruction is clear but demonstrably not a hard constraint. Not fixed because prompt edits require a version bump and re-evaluation.
 
-- **P2 — Fixed:** [Reader.tsx:3097](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/src/web/reader/Reader.tsx:3097) and [Reader.tsx:3121](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/src/web/reader/Reader.tsx:3121) issued same-value `nuqs` pushes for Plain-with-nothing-open, a current-mode command, and restoring a stepped-aside band. Those created invisible history entries. Same-destination writes are now skipped.
+- P2, fixed — [tips.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/tips.ts:48): Debate’s tooltip attributed the quote but omitted that its displayed headline may be AI-derived. It now explains both headline cases and avoids implying every relation fits the old four-item list.
 
-- **P2 — Fixed tests:** [a-second-press-closes-the-mode.test.tsx:330](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/tests/a-second-press-closes-the-mode.test.tsx:330) now verifies raw `?mode=` removal, command-bar idempotence, no empty history pushes, surviving inner separators, and count-based frame sizing. [a-band-link-steps-the-band-aside-on-a-phone.test.tsx:426](/home/greg/code/spideryarn2/.claude/worktrees/fb96-mode-click-toggles-off/tests/a-band-link-steps-the-band-aside-on-a-phone.test.tsx:426) now covers restoring a stepped-aside band through its Dock button without a history push.
+- P2, fixed — the tests could pass without proving that job completion actually replaced the payload arc, that `arc/9` sorts before `arc/10`, or that keyboard focus manages `aria-describedby`. Added coverage in [arc-idle-poll.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/tests/arc-idle-poll.test.ts:329), [arc-version.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc-version.ts:27), and [marginalia-note-cards.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/tests/marginalia-note-cards.test.tsx:116). Mutation checks confirmed these tests fail if numeric comparison or completion refresh is broken.
 
-No other production `Dock.onMode` caller exists.
+The normal success path is sound: owners alone start one unforced run, the regenerated arc carries the current version and article fingerprint, and completion refresh replaces the displayed payload arc. Visitor behavior, voices, question styling, focus behavior, and removal of native titles otherwise checked out.
 
-## Checks
+Checks: 255 relevant tests passed; focused rerun passed 30/30; Biome passed. The TypeScript projects passed through the equivalent direct command, but the overall typecheck coverage gate reports unrelated local `data/hut-blind.ts` and `data/hut-unblind.ts` as belonging to no project; the normal npm wrapper also hit the sandbox’s `tsx` IPC restriction. I did not touch the concurrent `src/feedback-endings.generated.ts` change.
 
-- Focused suite: **10 files, 275 tests passed**
-- Final changed-test rerun: **2 files, 19 tests passed**
-- Typecheck: all **2,733** source files passed through `node --import tsx scripts/typecheck.ts`
-- `npm run typecheck` itself was blocked before checking by sandbox IPC `EPERM`.
-- Lint checked the three touched files: no errors; three advisory complexity notices.
-- Full `npm test` could not start because the sandbox could not connect to the local Postgres port.
-- No commit made.
-
-**Verdict:** changes requested because the P1 radio-semantics mismatch remains; otherwise the implementation is sound after the fixes above.
+Verdict: needs revision before landing because the silent failed-upgrade path and unsupported “ships” conclusion remain.
