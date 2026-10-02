@@ -1,0 +1,48 @@
+# Plan review
+
+## Findings
+
+1. **High — entry IDs are not protected against collisions with the stored glossary, and the stated two-tab guarantee is incomplete.** The plan mints with bare `mintId` and gives the new table uniqueness only over its own `(article_id, entry_id)` and `lower(name)` keys (`docs/plans/261002f-glossary-add-a-looked-up-term.md:59-66`). Existing glossary generation deliberately calls `mintUniqueId` with every already-spent ID (`src/ids.ts:98-107`, `src/glossary.ts:753-763`). A collision with an ID inside the JSON blob would survive the new table’s constraints; then `loadGlossary` would attach the same lookup and hidden state to both entries (`src/store/pg.ts:3474-3495`), while `?term=` would select whichever duplicate appears first (`src/web/modes/glossary/GlossaryMode.tsx:204-210`). Also, the unique lowercased name does not serialize matcher-equivalent concurrent additions such as “attention head” and “attention heads”: both transactions can see no incumbent and their distinct names do not conflict, contrary to the broad claim at plan line 102. Lock one article while checking/minting, use `mintUniqueId` over blob IDs plus personal and other spent IDs, and retry any ID conflict. Test both an injected blob-ID collision and concurrent matcher-equivalent additions.
+
+2. **High — the proposed `AskedTermAnswer` change does not fit the current begin/draft/done types or wire validation.** The plan adds a required-looking result union to `AskedTermAnswer` (`docs/plans/261002f-glossary-add-a-looked-up-term.md:104-107`), but `AskedTermFound` is currently `Omit<AskedTermAnswer, "lookup">` (`src/term-lookup.ts:534-553`) and the client draft repeats that construction (`src/web/useGlossary.ts:62-64`). A required result would therefore also become required before the write has happened. Making it optional avoids the compile error but lets malformed or absent results through: `isAskedTermAnswer` currently validates only the old fields (`src/web/useGlossary.ts:99-106`). Define separate `AskedTermFound`, `AskedTermDraft`, and finished-answer shapes, and validate every result arm at runtime. In particular, validate returned entry IDs with `isSpideryarnId` before writing `?term=`; `termParam` validates strings parsed from the address, but its setter serializes the supplied value (`src/web/params.ts:65-75`, `src/web/params.ts:351-371`). The selection setter already reaches `GlossaryPanel` as `onTerm` (`src/web/GlossaryPanel.tsx:211-215`), so it should be passed into `AskATerm` rather than creating another query-state subscription.
+
+3. **High — the store API shown cannot perform the matching rule the plan promises.** The proposed call passes only `{ name, lookup }` (`docs/plans/261002f-glossary-add-a-looked-up-term.md:88-95`), while the next paragraph says the transaction tests every existing entry’s patterns against the found article quote (`docs/plans/261002f-glossary-add-a-looked-up-term.md:98-101`). That quote is not in the arguments, and `patternsFor` is private (`src/term-lookup.ts:75-82`). Pass the matched quote—or preferably enough revision identity/current blocks to re-establish it—and expose a small shared matcher rather than reaching into `term-lookup.ts`. This also needs an explicit decision for a revision published during the model call: the anchor is chosen before streaming (`src/term-lookup.ts:660-708`), but persistence happens after the answer finishes (`src/term-lookup.ts:711-766`). The lookup insert must also stamp the required `owner_id` (`src/db/schema.ts:3703-3723`).
+
+4. **Medium — model/addition dedup currently loses the personal entry’s hide and selection semantics.** The plan suppresses the added row whenever a later model entry matches it (`docs/plans/261002f-glossary-add-a-looked-up-term.md:123-128`) but leaves its lookup and hide keyed to the suppressed private ID (`docs/plans/261002f-glossary-add-a-looked-up-term.md:130-132`). Hidden state is attached strictly by ID (`src/store/pg.ts:3492-3495`). Consequently, a hidden added term can reappear under the model entry after *Find more*. A model publish between `add` and the client refresh can also suppress the returned ID; the client then clears the answer and selects a row that is absent. Transfer the private lookup/hide to the winning model entry at the read seam, return the effective visible ID, or explicitly accept and test these outcomes. Deferring only “moving the explanation” does not cover the hidden-state regression.
+
+5. **Medium — “export” in Stage 1 is too vague for the repository’s enforced two-export contract.** A new article-scoped table must be added to `ARTICLE_TABLE_COVERAGE`, `ArticleRows`, its snapshot queries, the rollback exporter, the downloadable bundle, bundle documentation/counts, and the sentinel fixture (`src/store/article-rows.ts:91-110`, `tests/store-export-covers-tables.test.ts:243-255`, `tests/store-export-covers-tables.test.ts:364-370`). The two current projections handle lookup and hidden rows separately (`src/store/export.ts:785-798`, `src/store/export.ts:872-877`, `src/store/export-bundle.ts:541-558`). Name both projections and the sentinel test in Stage 1; otherwise the schema-derived coverage test will fail immediately, or a partial declaration will fail behaviorally.
+
+6. **Medium — two consumers need an explicit product decision.** An added entry contains no `senseHere`, `background`, or legacy `gloss` (`docs/plans/261002f-glossary-add-a-looked-up-term.md:114-120`), while Chat’s glossary tool renders only those fields and ignores `lookup` (`src/chat-tools.ts:1364-1392`). Chat will therefore receive a bare term with no explanation. Either include the private lookup there or exclude added rows from that tool. Separately, Skim discards the entire glossary whenever the model artefact is stale (`src/web/stop-card.ts:116-119`), even though added entries have just been relocated against current blocks; this should be either preserved deliberately or changed and tested. Dig deeper itself is sound because it resolves the entry from the combined `loadGlossary` result (`src/term-lookup.ts:289-310`), and Skim includes added entries when the glossary is fresh (`src/web/stop-card.ts:155-187`).
+
+7. **Low — the copy description is behind the actual UI and is false in the no-glossary branch.** The plan says a hint under the box changes (`docs/plans/261002f-glossary-add-a-looked-up-term.md:42-43`), but that line was removed; the promise now lives in the button tooltip (`src/web/GlossaryPanel.tsx:1658-1665`). Since the plan also permits `{ notAdded: "no-glossary" }`, the tooltip cannot unconditionally promise “Added to your list.”
+
+## Design judgment
+
+Automatic addition is the right simpler v1. It matches the reported one-action request, and the plan is right that a post-answer *Add* button would require retaining or resubmitting an answer. If product evidence later calls for choice, the cheap explicit alternative is an intent chosen before the call—“Look up” versus “Look up and add”—not a pending-answer store.
+
+Do not overload the current two-column `glossary_hidden_entries` table as written: row presence currently means hidden and cannot also represent a visible added entry (`src/db/schema.ts:4103-4138`). A coherent one-table alternative would require renaming it to owner glossary state and adding both nullable `name` and explicit `hidden`; that is viable, but not obviously simpler after migration/export changes.
+
+There is, however, a simpler alternative the plan should compare: add nullable `added_name` to `glossary_lookups`. Every added entry necessarily has exactly one completed lookup, and that table already answers all three deferral reasons: it is outside the blob, survives *Find more*, and is absent from public reads. This removes a table, a query, a new export file, and the two-row transaction. The trade-off is coupling entry existence to its answer row. If independent entry identity is considered important, the proposed separate table is the cleaner normalized design.
+
+## Privacy and security
+
+No visitor leak is apparent in the proposed topology. The public reader selects only `article_revisions.glossary` (`src/store/public-reader.ts:293-316`, `src/store/public-reader.ts:813-823`), and the public DTO copies glossary fields explicitly, excluding `lookup`, `hidden`, and therefore the proposed `added` flag (`src/public/dto.ts:342-384`). The schema-derived public table allowlist will also treat the new table as forbidden automatically (`tests/public-imports.test.ts:285-390`).
+
+The write remains owner-only if implemented as planned: ownership is resolved before validation or spend (`src/term-lookup.ts:660-675`) and the final store call checks `articleIdForOwned` again. Add a direct non-owner store/route test so that this is evidence rather than only composition.
+
+## Missing tests
+
+Add to the Stages section:
+
+- ID collision with a blob entry, plus concurrent exact and matcher-equivalent additions.
+- Transaction rollback when the lookup insert fails after the added-entry insert.
+- Runtime validation of every finished-result arm and malformed returned IDs.
+- A component test proving refresh → select the visible row → clear the temporary answer, including the concurrent model-dedup case.
+- Actual Dig deeper on an added entry, not only presence of its initial lookup.
+- Hide/unhide after a later model entry matches the added term.
+- Chat-tool and stale-Skim behavior, whichever policy is chosen.
+- Both export projections with a real sentinel row and all columns.
+- A non-owner cannot write, and a public read containing both the added row and its lookup reveals neither.
+- The no-glossary copy/result branch.
+
+**Verdict: revise then build.**
