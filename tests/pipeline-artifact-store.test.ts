@@ -17,7 +17,7 @@
  * that had one**, and that difference is the whole argument for `has()` asking
  * `whyUnusable` rather than asking whether something is there. `threadIsCurrent`
  * read `tweets.json` itself and answered false when it would not parse, so
- * `tweets` was never exposed; `arc`, `hierarchy`, `extract` and `blocks` had no
+ * `tweets` was never exposed; `arc`, `structure`, `extract` and `blocks` had no
  * such function, and were.
  *
  * Written in the past tense since D0, because the accident of protection has
@@ -363,14 +363,14 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   /* A minimal paper's step writes the same site; planted so "every step" below means every one. */
   store.plant(SLUG, "metadata", "meta", META);
   store.plant(SLUG, "blocks", "blocks", { blocks: BLOCKS });
-  store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
-  store.plant(SLUG, "hierarchy", "tree", TREE);
+  store.plant(SLUG, "structure", "blocks", { blocks: BLOCKS });
+  store.plant(SLUG, "structure", "tree", TREE);
   /**
    * **A *finished* labels run, and both of the last two fields say so since
    * 2026-09-06.**
    *
    * `batches: []` rather than `null`: `null` is now a `PendingLabelsFile`
-   * (src/labels.ts) — the empty manifest `hierarchy` writes before anything has
+   * (src/labels.ts) — the empty manifest `structure` writes before anything has
    * been bought — and the store reads it as *set `nav_label_status` to pending
    * and delete the labels receipt*. This fixture stands for an article whose
    * labels are done.
@@ -392,14 +392,14 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     labels: { n0000: "A title" },
     batches: [],
   };
-  store.plant(SLUG, "hierarchy", "labels", finishedLabels);
+  store.plant(SLUG, "structure", "labels", finishedLabels);
   /**
    * **The same two values again, under the `labels` step's own name**, because
    * this store aliases nothing — tests/helpers/memory-artefacts.ts § *One
-   * artefact's address*. In Postgres `hierarchy` and `labels` write the same two
+   * artefact's address*. In Postgres `structure` and `labels` write the same two
    * columns (`STORAGE`, src/store/artifacts-pg.ts); here every `(step, kind)` is
    * its own address, which is the same reason the fixture plants
-   * `blocks`/`blocks` and `hierarchy`/`blocks` separately a few lines up.
+   * `blocks`/`blocks` and `structure`/`blocks` separately a few lines up.
    *
    * One object, planted twice, rather than two literals: two copies of one
    * manifest is how a fixture comes to assert its own consistency instead of the
@@ -780,8 +780,8 @@ describe("an artefact that cannot be used must not report its step finished", ()
   const cases: { step: StepName; kind: ArtifactKind }[] = [
     { step: "extract", kind: "meta" },
     { step: "blocks", kind: "blocks" },
-    { step: "hierarchy", kind: "tree" },
-    { step: "hierarchy", kind: "labels" },
+    { step: "structure", kind: "tree" },
+    { step: "structure", kind: "labels" },
     { step: "arc", kind: "arc" },
     { step: "tweets", kind: "tweets" },
     { step: "glossary", kind: "glossary" },
@@ -832,10 +832,10 @@ describe("a real artefact of every kind goes into a store and comes back", () =>
     { step: "extract", kind: "extractedHtml", from: "writes", part: "output.html" },
     { step: "blocks", kind: "blocks", from: "writes", part: "output.blocks.json" },
     { step: "blocks", kind: "stampedHtml", from: "writes", part: "output.html" },
-    { step: "hierarchy", kind: "blocks", from: "writes", part: "blocks.json" },
-    { step: "hierarchy", kind: "tree", from: "writes", part: "tree.json" },
+    { step: "structure", kind: "blocks", from: "writes", part: "blocks.json" },
+    { step: "structure", kind: "tree", from: "writes", part: "tree.json" },
     {
-      step: "hierarchy",
+      step: "structure",
       kind: "labels",
       from: "noema-mythology-of-conscious-ai",
       part: "labels.json",
@@ -1067,13 +1067,13 @@ describe("glossary currency, through the stamp rather than a function", () => {
     over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
     store.plant(slug, "glossary", "glossary", glossary);
-    store.plant(slug, "hierarchy", "tree", over.tree ?? TREE);
+    store.plant(slug, "structure", "tree", over.tree ?? TREE);
     store.plant(slug, "extract", "meta", over.meta ?? META);
     /* `forget` is what `rm` on the file was — tests/helpers/memory-artefacts.ts
        § the escape hatches. The *absent* case is what the last-but-one test
        below is about, and there is no other way to reach it. */
-    if (blocks) store.plant(slug, "hierarchy", "blocks", { blocks });
-    else store.forget(slug, "hierarchy", "blocks");
+    if (blocks) store.plant(slug, "structure", "blocks", { blocks });
+    else store.forget(slug, "structure", "blocks");
     return stepIsDone(STEPS.glossary, ctxOf(slug), store);
   }
 
@@ -1193,12 +1193,12 @@ describe("a step that started and did not finish must not report itself done", (
    */
   it("catches a generation half-replaced by a run that died", async () => {
     writeWholeArticle(store);
-    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(true);
+    expect(await stepIsDone(STEPS.structure, ctxOf(), store)).toBe(true);
 
-    const attempt = await store.beginStep(SLUG, "hierarchy");
+    const attempt = await store.beginStep(SLUG, "structure");
     // Generation B's tree, valid in every way, landing beside generation A's
     // labels and blocks.
-    store.plant(SLUG, "hierarchy", "tree", {
+    store.plant(SLUG, "structure", "tree", {
       version: "toc/2",
       generator: CAPABLE_MODEL,
       slug: SLUG,
@@ -1214,7 +1214,7 @@ describe("a step that started and did not finish must not report itself done", (
         },
       },
     });
-    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(false);
+    expect(await stepIsDone(STEPS.structure, ctxOf(), store)).toBe(false);
 
     /* And the marker is the *only* thing holding it back — clearing it says
        done again, over exactly the mixed generation above.
@@ -1225,8 +1225,8 @@ describe("a step that started and did not finish must not report itself done", (
        is that nothing tells it that unless a run really did return. A review
        read the first version of this test as claiming more than that, which it
        did. */
-    await store.finishStep(SLUG, "hierarchy", attempt);
-    expect(await stepIsDone(STEPS.hierarchy, ctxOf(), store)).toBe(true);
+    await store.finishStep(SLUG, "structure", attempt);
+    expect(await stepIsDone(STEPS.structure, ctxOf(), store)).toBe(true);
   });
 
   /**
@@ -1240,16 +1240,16 @@ describe("a step that started and did not finish must not report itself done", (
   it("will not let one runner's success clear another runner's attempt", async () => {
     writeWholeArticle(store);
 
-    const first = await store.beginStep(SLUG, "hierarchy");
-    const second = await store.beginStep(SLUG, "hierarchy"); // overwrites the marker
+    const first = await store.beginStep(SLUG, "structure");
+    const second = await store.beginStep(SLUG, "structure"); // overwrites the marker
 
-    await store.finishStep(SLUG, "hierarchy", first);
-    expect(await store.interrupted(SLUG, "hierarchy"), "the second attempt is still live").toBe(
+    await store.finishStep(SLUG, "structure", first);
+    expect(await store.interrupted(SLUG, "structure"), "the second attempt is still live").toBe(
       true,
     );
 
-    await store.finishStep(SLUG, "hierarchy", second);
-    expect(await store.interrupted(SLUG, "hierarchy")).toBe(false);
+    await store.finishStep(SLUG, "structure", second);
+    expect(await store.interrupted(SLUG, "structure")).toBe(false);
   });
 
   it("says so for every step, artefacts or no artefacts", async () => {
@@ -1407,7 +1407,7 @@ describe("every stamped step covers everything its prompt reads", () => {
    */
   it("not done once the tree has been re-cut underneath them", async () => {
     const after = await statesAfter(() => {
-      store.plant(SLUG, "hierarchy", "tree", {
+      store.plant(SLUG, "structure", "tree", {
         ...TREE,
         nodes: {
           n0000: { ...(TREE as Tree).nodes.n0000, gist: "A different gist entirely." },
@@ -1847,8 +1847,8 @@ describe("valid JSON of the wrong shape is not an artefact", () => {
   const store = memoryArtefacts();
 
   const wrong: { step: StepName; kind: ArtifactKind; body: unknown }[] = [
-    { step: "hierarchy", kind: "tree", body: { nodes: [] } },
-    { step: "hierarchy", kind: "labels", body: { labels: [] } },
+    { step: "structure", kind: "tree", body: { nodes: [] } },
+    { step: "structure", kind: "labels", body: { labels: [] } },
     { step: "blocks", kind: "blocks", body: { blocks: {} } },
     { step: "arc", kind: "arc", body: { entries: {} } },
     { step: "extract", kind: "meta", body: { slug: "" } },

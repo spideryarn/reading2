@@ -217,7 +217,7 @@ const SLUGS = slugs.length > 0 ? slugs : DEFAULT_SLUGS;
 async function runOne(slug: string, article: Article, ideas: readonly Idea[], arm: Arm, run: number): Promise<RunResult> {
   const before = nudgeApplied;
   /* The pipeline's shape (src/article-input.ts): blocks and tree from
-     hierarchy, meta from extract. main() checks its fingerprint equals the
+     the structure step, meta from extract. main() checks its fingerprint equals the
      stored list's sourceHash, i.e. that these are the bytes the pipeline used. */
   const input: PipelineArticle = { slug, blocks: article.blocks, tree: article.tree, meta: article.meta ?? null };
   const { result, report } = await collectSpend(

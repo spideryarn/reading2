@@ -6,7 +6,7 @@ decision into the relevant doc ([vision](vision.md) / [granularity-zoom](granula
 
 ---
 
-## Q1 — Where does the hierarchy come from? <a id="q1"></a>
+## Q1 — Where does the tree come from? <a id="q1"></a>
 
 Greg's framing was structural:
 
@@ -33,7 +33,7 @@ Target branching factor ~5–9 so levels feel like even strides.
 
 Both settled on 2026-08-24 and written up where they belong. Anchors kept so older links still land.
 
-- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + hierarchy agent), and ids are
+- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + structure agent), and ids are
   **random**, not sequential, because sequential ids silently break on re-extraction. See
   [block-ids.md](block-ids.md#why-random-and-not-sequential). Note this went *against* the
   recommendation recorded here, which was sequential-plus-`textHash`; the hash-migration step it
@@ -96,14 +96,14 @@ dollars taken from the ledger rather than from arithmetic —
 [ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs) is the answer
 and the method; the headline is here because eight things link to this anchor.
 
-| | blocks | words | **hierarchy** | labels | total |
+| | blocks | words | **structure** | labels | total |
 |---|---:|---:|---:|---:|---:|
 | *How to Work Hard* | 96 | 3,341 | **$0.0620** | $0.0437 | $0.1057 |
 | *How to Do Great Work* | 330 | 11,890 | **$0.1671** | $0.2144 | $0.3815 |
 
 About **a tenth of a cent per block**, and close to linear. **The tree is one model call** whatever
 the size, and it is the only paid step in the default ingest — so the money between pasting a URL and
-being able to read is the hierarchy column alone. `labels` is bigger on a long article and the reader
+being able to read is the structure column alone. `labels` is bigger on a long article and the reader
 does not wait for it. These are credits; the bank sees about 5.5% more.
 
 **Two things this question assumed that turned out to be wrong**, which is most of why it stayed open:

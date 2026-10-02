@@ -74,7 +74,7 @@ export const STORAGE: {
   /**
    * **`meta`, the same site `extract` writes** — a minimal paper's title,
    * authors, byline, abstract and DOI, assembled into the revision's meta
-   * columns. Two steps over one site, as `blocks`/`hierarchy` share the block
+   * columns. Two steps over one site, as `blocks`/`structure` share the block
    * rows; each step's own run row keeps their doneness apart.
    */
   metadata: { meta: { at: "assembled", of: "meta" } },
@@ -92,7 +92,7 @@ export const STORAGE: {
     blocks: { at: "blocks" },
     stampedHtml: { at: "column", column: "stampedHtml" },
   },
-  hierarchy: {
+  structure: {
     tree: { at: "column", column: "tree" },
     labels: { at: "column", column: "labels" },
     /**
@@ -107,8 +107,8 @@ export const STORAGE: {
     blocks: { at: "blocks" },
   },
   /**
-   * **The same two sites as `hierarchy` above**, in the sense `blocks`/`blocks`
-   * and `hierarchy`/`blocks` already are: one column each, written by two steps.
+   * **The same two sites as `structure` above**, in the sense `blocks`/`blocks`
+   * and `structure`/`blocks` already are: one column each, written by two steps.
    *
    * Stage 4 writes the tree and a `PendingLabelsFile`; this step writes the tree
    * again with the labels merged into its leaves, and the completed manifest

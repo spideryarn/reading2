@@ -2,7 +2,7 @@
  * How big one model response is allowed to be — and why that is a function of
  * the article rather than a constant.
  *
- * Three stages (hierarchy, arc, tweets) each make one streamed call and each has to
+ * Three stages (structure, arc, tweets) each make one streamed call and each has to
  * pass a `max_tokens`. All three used to pass a number somebody had typed once:
  * 32,000 for the tree, 16,000 for the other two. On 2026-08-25 the first stage
  * met an article long enough to blow through its number and the ingest failed
@@ -95,7 +95,7 @@ export const MODEL_MAX_TOKENS = 128_000;
  *
  * **And a stage that meets longer inputs than this was measured on needs its
  * own, larger figure** — the same argument in the other direction. On
- * 2026-09-04 a 142-page paper's structure call was measured spending 47,289
+ * 2026-09-04 a 142-page paper's whole-document call was measured spending 47,289
  * tokens of reasoning, over this reservation, and came back whole; had it been
  * sized with this number it would have truncated eight minutes and two dollars
  * in. So stage 4 passes `STRUCTURE_HEADROOM` (src/structure.ts) instead. This

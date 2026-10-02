@@ -201,11 +201,11 @@ export function buildArc(
  * fields the prompt actually carries.**
  *
  * The arc had no input fingerprint at all until 2026-08-29. Its freshness was its
- * *position* — it sat in `DEFAULT_INGEST_STEPS` behind `hierarchy`, so `cascadeForce`
+ * *position* — it sat in `DEFAULT_INGEST_STEPS` behind `structure`, so `cascadeForce`
  * swept it whenever an earlier step was forced (src/pipeline.ts §
  * `FORCE_ONLY_WHEN_NAMED`, which says so and adds "give it a freshness check of its
  * own and it belongs here too"). That was never quite true: `cascadeForce` only
- * names steps already in the job, so a forced `steps: ["hierarchy"]` has never reached
+ * names steps already in the job, so a forced `steps: ["structure"]` has never reached
  * `arc`, and the resulting stale arc loses entries **in silence** — the join in
  * `buildArcColumn` is by exact block range, and an entry matching no node is simply
  * not drawn.

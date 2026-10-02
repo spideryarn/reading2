@@ -231,7 +231,7 @@ import { ownedSlug } from "./store/owned-slug.js";
  * The numbers are all in scope *here*, at the seam the queue already owns, so
  * this file can answer that question without a single edit inside somebody
  * else's stage — see architecture.md#stage-ownership. The two exceptions are two
- * lines each: `hierarchy` and `arc` keep `CAPABLE_MODEL` private, so they now return it.
+ * lines each: `structure` and `arc` keep `CAPABLE_MODEL` private, so they now return it.
  *
  * A module-level logger is fine and rule 4 in src/log.ts does not forbid it: it
  * carries the component name and nothing else. What must never be module-level
@@ -281,7 +281,7 @@ export { STEP_ORDER };
  * article that has none.
  *
  * **Be clear about the size of that win, because it is smaller than it sounds.**
- * Measured over the one ingest in `data/_ai-calls.jsonl` that logged both: `hierarchy`
+ * Measured over the one ingest in `data/_ai-calls.jsonl` that logged both: `structure`
  * 228s, `arc` 10s. This takes about 4% off the wait. Greg was shown that number
  * and chose to make the change anyway (2026-08-29). What makes it worth having
  * is not the 4%: it is that `arc` now behaves like every other asked-for stage,
@@ -300,11 +300,11 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
   "fetch",
   "extract",
   "blocks",
-  "hierarchy",
+  "structure",
   /* **And deliberately NOT `labels`, which is the whole of the 2026-09-06
      change and the one line nothing checks.**
 
-     The label pass was inside `hierarchy` and was 79.5–92% of its wall clock —
+     The label pass was inside `structure` and was 79.5–92% of its wall clock —
      one measured call took 602 s of a 682 s pass against a 740 s claimant
      deadline. Adding `labels` here would put every second of that back between
      pasting a URL and being able to read, which is exactly what the split
@@ -505,13 +505,13 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
 
      Every other name here reads the blocks and the tree and has nothing read
      what it writes, so the positional cascade would buy a model call for
-     nothing. `labels` fails the second half of that: forcing `hierarchy` re-cuts
+     nothing. `labels` fails the second half of that: forcing `structure` re-cuts
      the tree, and a label written to tell a paragraph apart from *the wrong set
      of neighbours* is wrong in the one way this stage exists to prevent
-     (src/labels.ts § `structureHash`). Re-running `hierarchy` is precisely what
+     (src/labels.ts § `structureHash`). Re-running `structure` is precisely what
      invalidates the labels, so the cascade sweeping them in is the correct
      answer rather than a wasted call — and the store agrees with it in the
-     stronger place: a forced `hierarchy` writes a pending manifest, which
+     stronger place: a forced `structure` writes a pending manifest, which
      deletes this step's receipt whether or not it was swept in.
 
      Left out rather than absent by accident: `arc` is in this set because it
@@ -645,7 +645,7 @@ export interface StepContext {
    * a different and occasionally more useful thing: a step that fans out over
    * several paid calls can decline to **start** one it cannot finish, and hand
    * back with what it has bought already banked, rather than being aborted in
-   * the middle of a call nobody will ever read. The hierarchy step's deepening
+   * the middle of a call nobody will ever read. The structure step's deepening
    * wave is the only reader today (src/structure-deepen.ts § `runExpansionWave`).
    *
    * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
@@ -804,7 +804,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    *
    * A step counts as done when **all** of them are readable, which is the only
    * safe reading for the two steps that make more than one: `extract` makes the
-   * HTML and the metadata, `hierarchy` the tree, the labels and its copy of the
+   * HTML and the metadata, `structure` the tree, the labels and its copy of the
    * blocks. Checking only the first would let a crash between the two writes
    * leave a step that reports itself finished with half its output, and the
    * stage after it would consume the missing half.
@@ -835,7 +835,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    * not readable — and that answers not-current. The safe way to be wrong here
    * is a model call; the other way round is a stale artefact served for ever.
    *
-   * Adding one to `hierarchy` or `arc` is now four lines rather than a whole
+   * Adding one to `structure` or `arc` is now four lines rather than a whole
    * function, which is the point. Neither has one yet, and the interface says
    * so out loud rather than letting bare existence look like freshness.
    */
@@ -902,7 +902,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    * neither of which may buy anything, and a capability that only the
    * run phase has should only be reachable from the run phase. Two of the
    * thirteen steps use it — `extract`, for a PDF's per-chunk transcriptions, and
-   * `hierarchy`, for the nav-label batches — and both hand it straight down to
+   * `structure`, for the nav-label batches — and both hand it straight down to
    * the stage rather than reading it here.
    *
    * **Required, with no default.** A stage handed nothing checkpoints nothing,
@@ -1135,7 +1135,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * **A run that started and never finished is not done, whatever it wrote.**
  * This is asked first and it is not the same question as presence. Per-file
  * atomic renames are not atomicity across a step: `extract` writes two
- * artefacts and `hierarchy` writes three, so a rerun that replaces one of them with a
+ * artefacts and `structure` writes three, so a rerun that replaces one of them with a
  * perfectly valid new one and then dies leaves every path present and parsing,
  * describing two generations at once. No amount of looking at the files can
  * tell, which is why the store records the *attempt* as well as the output —
@@ -1202,8 +1202,8 @@ export async function stepIsDone(
  * hashes it as one.
  */
 async function articleInputHash(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
-  const file = await store.read(ctx.slug, "hierarchy", "blocks");
-  const tree = await store.read(ctx.slug, "hierarchy", "tree");
+  const file = await store.read(ctx.slug, "structure", "blocks");
+  const tree = await store.read(ctx.slug, "structure", "tree");
   if (!file?.blocks || !tree) return null;
   const meta = await store.read(ctx.slug, "extract", "meta");
   return articleFingerprint(file.blocks, tree, meta ?? null);
@@ -2474,7 +2474,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * that one is this step's: stage 4 copies it into the data directory as it
      * writes the tree, so the pair there is guaranteed to be what the tree was
      * built from. Checking the data copy here would mean a finished `blocks`
-     * step reporting itself unfinished until `hierarchy` had run too — so a retry
+     * step reporting itself unfinished until `structure` had run too — so a retry
      * would redo stage 3 every time, and `{ steps: ["blocks"] }` could never
      * skip itself.
      */
@@ -2655,9 +2655,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
   /* Stages 4 + 5 — one model call writes the structure and the gists together;
      src/structure.ts says why they are not two passes. */
-  hierarchy: {
-    name: "hierarchy",
-    label: "Building the hierarchy",
+  structure: {
+    name: "structure",
+    label: "Building the structure",
     /* `labels.json` is in here as well as the tree, because stage 4 is two model
        passes now and a directory with a tree but no labels is a half-run step,
        not a finished one. src/structure.ts writes the tree last for the same reason. */
@@ -2670,13 +2670,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * asks only whether its three artefacts exist. The obvious fix is a stamp
      * hashing stage 3's blocks, and it works — `59e8e3a` had it, with tests.
      *
-     * It was reverted because **`hierarchy` re-running silently drops artefacts that
+     * It was reverted because **`structure` re-running silently drops artefacts that
      * are still marked current.** `arc` is joined to the tree by exact
      * block-**range** pair (`buildArcColumn` in src/web/tree.ts), and an entry
      * whose range matches no node is dropped from the reading view without a
      * word. A rebuilt tree may legitimately choose different boundaries, and
      * `arc` never gets the chance to notice: `cascadeForce` (src/jobs.ts) only
-     * names steps **already in the job**, so a job of `steps: ["hierarchy"]` does
+     * names steps **already in the job**, so a job of `steps: ["structure"]` does
      * not run `arc` at all — and a stamp that is never consulted is no defence.
      * (This paragraph said *"`arc` has no stamp at all"* when it was written on
      * 2026-08-27, in `414f3f96`. `arc` gained one two days later, in the
@@ -2696,7 +2696,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * earlier version of this comment said it did. `has` means readable outputs
      * plus a `done` run row, uniformly, in both stores; with no stamp,
      * `stepIsDone` returns true once `has` does, in both stores. Teaching
-     * storage a private freshness rule for `hierarchy` would put the pipeline's logic
+     * storage a private freshness rule for `structure` would put the pipeline's logic
      * in the storage layer *and* walk straight back into the hazard above, by a
      * different door. GPT Sol, 2026-08-28;
      * docs/plans/260828b-artifacts-pg-has-sol.md.
@@ -2704,8 +2704,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * **What the runner must still do is record the hash.** Having no expected
      * stamp and recording no input are different things: `finishStepRun` has to
      * be given `hashBlocks(blocks)` for this step, because
-     * `reasonsNotToPublish` compares `hierarchy.input_hash` against the stored blocks
-     * and refuses the publication when they differ — so a `hierarchy` left carrying
+     * `reasonsNotToPublish` compares `structure.input_hash` against the stored blocks
+     * and refuses the publication when they differ — so a `structure` left carrying
      * `NO_INPUT_HASH` would make every article unpublishable.
      */
     async run(ctx, store, checkpoints) {
@@ -2744,7 +2744,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       plog.info(
         {
           slug: ctx.slug,
-          step: "hierarchy",
+          step: "structure",
           model: run.model,
           /* Three counts, not one, and `strandedSupplement` is the one that
              matters: it is how an operator learns the apparatus was left out of
@@ -2823,7 +2823,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           blocks: run.blocks,
           sections: run.internal,
         },
-        `hierarchy ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
+        `structure ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
       );
       /* The drop is said on the progress card too, and only when there is one.
          The log line above is where an operator would look afterwards; this is
@@ -2843,7 +2843,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * **`inputHash` and nothing else**, and the reason changed shape on
        * 2026-09-06 without changing the answer.
        *
-       * It used to be a *clash*: `STAMP_SOURCE.hierarchy` is `"labels"`, so
+       * It used to be a *clash*: `STAMP_SOURCE.structure` is `"labels"`, so
        * `assertStampAgrees` compared whatever was passed here against the labels
        * file's own `version` and `generator` — `labels/2` and a model — and a
        * `promptVersion` of `toc/3` beside it threw on every ingest.
@@ -2918,7 +2918,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * Stage 4b — the per-paragraph navigation labels, and **the reason this whole
    * plan exists.**
    *
-   * It was the second half of `hierarchy` until 2026-09-06, and it was
+   * It was the second half of `structure` until 2026-09-06, and it was
    * 79.5–92% of that step's wall clock: one measured call took 602 s of a 682 s
    * pass, against a claimant deadline of 740 s. So it is its own step, off
    * `DEFAULT_INGEST_STEPS`, bought later by a job nobody is watching.
@@ -2940,14 +2940,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * write, a tree write always carries a manifest, and a pending manifest
    * deletes this step's row — so a stale tree leaves nothing here to compare
    * against. What the stamp catches is the one case the deletion cannot see, a
-   * prompt or a model bump with no `hierarchy` run behind it.
+   * prompt or a model bump with no `structure` run behind it.
    */
   labels: {
     name: "labels",
     label: "Labelling the paragraphs",
     /**
      * **Both, and the tree is not incidental.** This step reads the tree
-     * `hierarchy` cut, merges the labels into its leaves and writes it back, so
+     * `structure` cut, merges the labels into its leaves and writes it back, so
      * `tree` is genuinely one of its outputs. It is also what makes
      * `writeArtefacts`'s refusal — a `tree` with no `labels` beside it — a rule
      * every writer of the tree has to keep rather than one step's habit.
@@ -2963,7 +2963,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * safe way to be wrong here is a model call.
      */
     async stamp(ctx, store) {
-      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const file = await store.read(ctx.slug, "structure", "blocks");
       if (!file?.blocks) return null;
       return {
         inputHash: hashBlocks(file.blocks),
@@ -2976,18 +2976,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          from the same step, because the batches are cut along the tree's own
          section boundaries — a label's job is to tell its paragraph apart from
          its neighbours, so the model has to see the neighbours. src/labels.ts. */
-      const file = await store.read(ctx.slug, "hierarchy", "blocks");
-      const structure = await store.read(ctx.slug, "hierarchy", "tree");
+      const file = await store.read(ctx.slug, "structure", "blocks");
+      const structure = await store.read(ctx.slug, "structure", "tree");
       if (!file?.blocks || !structure) {
         throw stageFailure("ours", {
-          generic: `No tree for "${ctx.slug}" — run the hierarchy step first.`,
+          generic: `No tree for "${ctx.slug}" — run the structure step first.`,
         });
       }
       const run = await generateLabels({
         tree: structure,
         blocks: file.blocks,
         slug: ctx.slug,
-        /* **The checkpoint namespace stays `hierarchy-labels`**, and that is the
+        /* **The checkpoint namespace stays `structure-labels`**, and that is the
            one thing this split must not tidy. `batchFingerprint` carries no step
            and no job identity, so every checkpoint row written before today
            survives — but only while the key does not move. Renaming it would
@@ -3060,7 +3060,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           model: run.file.generator,
         },
         /* **The reader-scale sentence, moved here with the pass it is about.**
-           It was on `hierarchy`'s `detail` until 2026-09-06, where after the
+           It was on `structure`'s `detail` until 2026-09-06, where after the
            split it would have said "every paragraph unlabelled" on every
            ingest. The operator's numbers stay in the log line above, which is
            where src/jobs.ts says a step's real numbers belong. */
@@ -3108,7 +3108,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        `articleFingerprint` states and the three stages named above broke.
        GPT Sol, D1-4. */
     stamp: async (ctx, store) => {
-      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const file = await store.read(ctx.slug, "structure", "blocks");
       /* `null` is *"we cannot tell"* and answers not-current, exactly as
          `inputHashFor` does — and must not be confused with a hash that fails to
          match. Both answer not-current; only one is a stale artefact. */
@@ -3116,12 +3116,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return { inputHash: assetsInputHash(file.blocks), promptVersion: ASSETS_VERSION };
     },
     async run(ctx, store) {
-      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const file = await store.read(ctx.slug, "structure", "blocks");
       if (!file?.blocks) {
         /* `ours` rather than a fetch failure: nothing was refused, we simply
            cannot find the blocks this step is defined against. */
         throw stageFailure("ours", {
-          generic: `No blocks for "${ctx.slug}" — run the hierarchy step first.`,
+          generic: `No blocks for "${ctx.slug}" — run the structure step first.`,
         });
       }
       const run = await collectAssets({
@@ -3218,7 +3218,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * it is current, so its position is the only signal there is. Give it a
      * freshness check of its own and it belongs here too."* Position was never
      * quite enough — `cascadeForce` (src/jobs.ts) only names steps **already in
-     * the job**, so a forced `steps: ["hierarchy"]` has never reached `arc`. The tree
+     * the job**, so a forced `steps: ["structure"]` has never reached `arc`. The tree
      * is re-cut, `arc.json` still exists, `stepIsDone` sees a file and skips, and
      * the reading view then drops every arc entry whose range no longer matches a
      * node — with no error and no gap, because `TableView` falls back to the root
@@ -3324,7 +3324,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
       /* `run.thread.generator` is this stage's model id — it is already stored
          on the thread, because the stamp compares it to decide whether a thread
-         needs rewriting. So unlike hierarchy and arc, nothing had to be added to
+         needs rewriting. So unlike structure and arc, nothing had to be added to
          src/tweets.ts to log it. */
       plog.info(
         {
@@ -4112,7 +4112,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * and `PipelineStep`'s types make the safe answer the one you get by doing
    * nothing. Every other article-reading stage followed it on 2026-08-31, and
    * the stages that acquire and cut the article rather than read it — `fetch`,
-   * `extract`, `blocks` and `hierarchy` — converted the same day, so
+   * `extract`, `blocks` and `structure` — converted the same day, so
    * `LEGACY_UNCONVERTED_STEPS` is now empty
    * (docs/plans/260831b-finish-the-database-move.md § Stage 2).
    */

@@ -165,7 +165,7 @@ describe("the pipeline", () => {
   });
 
   it("recognises only real step names", () => {
-    expect(isStepName("hierarchy")).toBe(true);
+    expect(isStepName("structure")).toBe(true);
     expect(isStepName("summarise")).toBe(false);
     expect(isStepName("")).toBe(false);
     expect(isStepName(null)).toBe(false);
@@ -203,25 +203,25 @@ describe("the pipeline", () => {
   it("sorts `tweets` after the steps it reads", () => {
     // Order is about running, not about forcing — `tweets` is exempt from the
     // force-cascade (below) but it still has to run after the stages whose
-    // artefacts it reads, which are `blocks` and `hierarchy`. A name missing from
+    // artefacts it reads, which are `blocks` and `structure`. A name missing from
     // STEP_ORDER sorts to the FRONT, because `indexOf` gives it -1, so
-    // `{ steps: ["hierarchy", "tweets"] }` would have written the thread from the
+    // `{ steps: ["structure", "tweets"] }` would have written the thread from the
     // previous tree and then replaced that tree.
-    expect(orderSteps(["tweets", "hierarchy", "blocks"])).toEqual(["blocks", "hierarchy", "tweets"]);
+    expect(orderSteps(["tweets", "structure", "blocks"])).toEqual(["blocks", "structure", "tweets"]);
   });
 });
 
 describe("orderSteps", () => {
   it("sorts into pipeline order whatever order they arrived in", () => {
     // The steps are a chain: each consumes what the one before it wrote. Run
-    // ["arc", "hierarchy"] as asked and the arc is built from the previous tree,
+    // ["arc", "structure"] as asked and the arc is built from the previous tree,
     // which is then replaced — two successes and an arc describing an article
     // nobody is reading.
-    expect(orderSteps(["arc", "hierarchy", "fetch"])).toEqual(["fetch", "hierarchy", "arc"]);
+    expect(orderSteps(["arc", "structure", "fetch"])).toEqual(["fetch", "structure", "arc"]);
   });
 
   it("de-duplicates", () => {
-    expect(orderSteps(["hierarchy", "hierarchy", "hierarchy"])).toEqual(["hierarchy"]);
+    expect(orderSteps(["structure", "structure", "structure"])).toEqual(["structure"]);
   });
 
   it("leaves an already-ordered list alone", () => {
@@ -256,23 +256,23 @@ describe("orderSteps", () => {
  * thing that would change your mind.⟩
  */
 describe("unrunnableStepPlan", () => {
-  it("refuses blocks without hierarchy, which is the request that strands an article", () => {
-    expect(unrunnableStepPlan(["blocks"])).toMatch(/hierarchy/);
-    expect(unrunnableStepPlan(["fetch", "extract", "blocks"])).toMatch(/hierarchy/);
-    expect(unrunnableStepPlan(["blocks", "assets", "arc"])).toMatch(/hierarchy/);
+  it("refuses blocks without structure, which is the request that strands an article", () => {
+    expect(unrunnableStepPlan(["blocks"])).toMatch(/"structure"/);
+    expect(unrunnableStepPlan(["fetch", "extract", "blocks"])).toMatch(/"structure"/);
+    expect(unrunnableStepPlan(["blocks", "assets", "arc"])).toMatch(/"structure"/);
   });
 
   it("allows the pair, in either order it may be written", () => {
-    expect(unrunnableStepPlan(["blocks", "hierarchy"])).toBeUndefined();
-    expect(unrunnableStepPlan(orderSteps(["hierarchy", "blocks"]))).toBeUndefined();
+    expect(unrunnableStepPlan(["blocks", "structure"])).toBeUndefined();
+    expect(unrunnableStepPlan(orderSteps(["structure", "blocks"]))).toBeUndefined();
     expect(unrunnableStepPlan(DEFAULT_INGEST_STEPS)).toBeUndefined();
     expect(unrunnableStepPlan([...STEP_ORDER])).toBeUndefined();
   });
 
   it("says nothing about a job that does not touch the blocks at all", () => {
-    // `hierarchy` alone is fine and common: it is how somebody repairs exactly
+    // `structure` alone is fine and common: it is how somebody repairs exactly
     // the article this rule exists to stop stranding.
-    expect(unrunnableStepPlan(["hierarchy"])).toBeUndefined();
+    expect(unrunnableStepPlan(["structure"])).toBeUndefined();
     expect(unrunnableStepPlan(["fetch", "extract"])).toBeUndefined();
     expect(unrunnableStepPlan(["tweets"])).toBeUndefined();
   });
@@ -288,14 +288,14 @@ describe("unrunnableStepPlan", () => {
 
        It is also correct on this rule's own terms. What `unrunnableStepPlan`
        refuses is a plan that leaves the article *unpublishable*, and that is
-       `blocks` without `hierarchy` — the tree checked against blocks it was not
+       `blocks` without `structure` — the tree checked against blocks it was not
        built from. Labels are not in that chain: `reasonsNotToPublish` does not
        look at them, and an article with none publishes and reads. */
     expect(unrunnableStepPlan(["labels"])).toBeUndefined();
     /* And the two shapes either side of it: the step that produces its input,
        and the pair a forced re-cut produces. */
-    expect(unrunnableStepPlan(["hierarchy", "labels"])).toBeUndefined();
-    expect(unrunnableStepPlan(orderSteps(["labels", "hierarchy"]))).toBeUndefined();
+    expect(unrunnableStepPlan(["structure", "labels"])).toBeUndefined();
+    expect(unrunnableStepPlan(orderSteps(["labels", "structure"]))).toBeUndefined();
   });
 });
 
@@ -312,12 +312,12 @@ describe("cascadeForce", () => {
       "metadata",
       "extract",
       "blocks",
-      "hierarchy",
+      "structure",
       /* **`labels` IS swept in, and this is the one entry where that is the
          interesting answer rather than the obvious one** (2026-09-06). Every
          other step in `FORCE_ONLY_WHEN_NAMED` is out of the cascade because
          nothing reads what it writes and its inputs did not move. Re-running
-         `hierarchy` moves exactly the input the labels are judged against: the
+         `structure` moves exactly the input the labels are judged against: the
          tree. A label written to tell a paragraph apart from *the wrong set of
          neighbours* is wrong in the one way stage 4b exists to prevent
          (src/labels.ts § `structureHash`), so sweeping them in is correct and
@@ -341,7 +341,7 @@ describe("cascadeForce", () => {
        it has always been the other way in, and that is unchanged. */
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc", "blocks"]))]).toEqual([
       "blocks",
-      "hierarchy",
+      "structure",
       /* Swept in by position since 2026-09-06 — see the note in the case above
          for why that is the right answer for this one step. */
       "labels",
@@ -355,17 +355,17 @@ describe("cascadeForce", () => {
   });
 
   it("cascades within the job's own steps, not the whole pipeline", () => {
-    /* A job of {hierarchy, arc} that forces hierarchy must not invent a fetch step nobody
+    /* A job of {structure, arc} that forces structure must not invent a fetch step nobody
        asked for. It no longer forces `arc` either: since 2026-08-29 `arc` can
        tell for itself whether it is current, so it is in FORCE_ONLY_WHEN_NAMED
        and an unforced run re-does it exactly when its inputs have moved. */
-    expect([...cascadeForce(["hierarchy", "arc"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
+    expect([...cascadeForce(["structure", "arc"], new Set(["structure"]))]).toEqual(["structure"]);
     // Named, it is forced like anything else.
-    expect([...cascadeForce(["hierarchy", "arc"], new Set(["hierarchy", "arc"]))]).toEqual(["hierarchy", "arc"]);
+    expect([...cascadeForce(["structure", "arc"], new Set(["structure", "arc"]))]).toEqual(["structure", "arc"]);
   });
 
   it("ignores a forced step the job isn't running", () => {
-    expect([...cascadeForce(["hierarchy", "arc"], new Set(["fetch"]))]).toEqual([]);
+    expect([...cascadeForce(["structure", "arc"], new Set(["fetch"]))]).toEqual([]);
   });
 
   it("does not sweep `tweets` in by position", () => {
@@ -378,11 +378,11 @@ describe("cascadeForce", () => {
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc"]))]).toEqual(["arc"]);
     /* `arc` is absent here for the same reason `tweets` is, as of 2026-08-29 —
        both can now judge their own freshness. */
-    expect([...cascadeForce(["hierarchy", "arc", "tweets"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
-    /* And with `labels` in the job, forcing `hierarchy` takes it too — the one
-       step the cascade still speaks for after `hierarchy`. */
-    expect([...cascadeForce(["hierarchy", "labels", "arc"], new Set(["hierarchy"]))]).toEqual([
-      "hierarchy",
+    expect([...cascadeForce(["structure", "arc", "tweets"], new Set(["structure"]))]).toEqual(["structure"]);
+    /* And with `labels` in the job, forcing `structure` takes it too — the one
+       step the cascade still speaks for after `structure`. */
+    expect([...cascadeForce(["structure", "labels", "arc"], new Set(["structure"]))]).toEqual([
+      "structure",
       "labels",
     ]);
   });
@@ -396,7 +396,7 @@ describe("cascadeForce", () => {
        make the reader's glossary longer. */
     expect(FORCE_ONLY_WHEN_NAMED.has("glossary")).toBe(true);
     expect([...cascadeForce([...STEP_ORDER], new Set(["fetch"]))]).not.toContain("glossary");
-    expect([...cascadeForce(["hierarchy", "glossary"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
+    expect([...cascadeForce(["structure", "glossary"], new Set(["structure"]))]).toEqual(["structure"]);
   });
 
   it("still forces `glossary` when it is named — that is the Find more button", () => {
@@ -410,9 +410,9 @@ describe("cascadeForce", () => {
     /* `arc` is not here, and its absence is the same rule doing its job: it left
        the positional cascade on 2026-08-29 and was not named. `assets` stays,
        because it never left. */
-    expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy", "tweets"]))]).toEqual([
-      "hierarchy",
-      /* In the cascade since 2026-09-06, and deliberately: forcing `hierarchy`
+    expect([...cascadeForce([...STEP_ORDER], new Set(["structure", "tweets"]))]).toEqual([
+      "structure",
+      /* In the cascade since 2026-09-06, and deliberately: forcing `structure`
          re-cuts the tree, which is the one input that makes a nav label wrong. */
       "labels",
       "assets",
@@ -430,7 +430,7 @@ describe("cascadeForce", () => {
 
        Worth knowing that position was never quite the signal it looked like:
        `cascadeForce` only names steps already in the job, so a forced
-       `{ steps: ["hierarchy"] }` never reached `arc` even then, and the stale arc that
+       `{ steps: ["structure"] }` never reached `arc` even then, and the stale arc that
        resulted lost entries in silence. The stamp is what actually closed that.
        docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1. */
     expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(true);
@@ -448,8 +448,8 @@ describe("cascadeForce", () => {
        the tree the labels were written against. src/pipeline.ts §
        FORCE_ONLY_WHEN_NAMED. */
     expect(FORCE_ONLY_WHEN_NAMED.has("labels")).toBe(false);
-    expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy"]))]).toEqual([
-      "hierarchy",
+    expect([...cascadeForce([...STEP_ORDER], new Set(["structure"]))]).toEqual([
+      "structure",
       "labels",
       "assets",
     ]);
@@ -487,10 +487,10 @@ describe("forceForRetry", () => {
         forced("fetch", "done"),
         forced("extract", "done"),
         forced("blocks", "done"),
-        forced("hierarchy", "error"),
+        forced("structure", "error"),
         forced("arc", "pending"),
       ]),
-    ).toEqual(["fetch", "extract", "blocks", "hierarchy", "arc"]);
+    ).toEqual(["fetch", "extract", "blocks", "structure", "arc"]);
   });
 
   it("forces from the front when a forced job failed at its first step", () => {
@@ -637,7 +637,7 @@ describe("parseJobRequest", () => {
     // the runner, where the message is about a property of undefined rather
     // than about the request that caused it.
     expect(() => parseJobRequest({ slug: "a", steps: ["summarise"] })).toThrow(/steps must be/);
-    expect(() => parseJobRequest({ slug: "a", steps: "hierarchy" })).toThrow(/steps must be/);
+    expect(() => parseJobRequest({ slug: "a", steps: "structure" })).toThrow(/steps must be/);
     expect(() => parseJobRequest({ slug: "a", force: ["nope"] })).toThrow(/force must be/);
   });
 
@@ -923,8 +923,13 @@ describe("the work key", () => {
      an agreement test cannot see a change both sides make together.
      docs/plans/260928a-reset-and-regenerate-article.md. */
   it("hashes a job with no reset exactly as it did before resets existed", () => {
-    const reRead = cascadeForce(DEFAULT_INGEST_STEPS, new Set<StepName>(["extract"]));
-    expect(workKeyFor(DEFAULT_INGEST_STEPS, reRead)).toBe(
+    /* The pin was taken while the step was still called `hierarchy` (renamed
+       `structure` 2026-10-02), and the hash validates no names, so the input
+       spells the old one. */
+    const asPinned = (s: StepName) => (s === "structure" ? ("hierarchy" as StepName) : s);
+    const ingest = DEFAULT_INGEST_STEPS.map(asPinned);
+    const reRead = new Set([...cascadeForce(DEFAULT_INGEST_STEPS, new Set<StepName>(["extract"]))].map(asPinned));
+    expect(workKeyFor(ingest, reRead)).toBe(
       "34a9609c79c0775ecff118cdc95afccb03c279e0d5948389d4f6e17c41978090",
     );
     expect(workKeyFor(["quotes"], new Set(), "a physicist")).toBe(
@@ -1358,7 +1363,7 @@ describe("running a job", () => {
    */
   it("refuses a blocks-only job at the door rather than stranding the article", async () => {
     const blocksOnly = enqueue({ slug: "test-enqueue-blocks-only", steps: ["blocks"] });
-    await expect(blocksOnly).rejects.toThrow(/hierarchy/);
+    await expect(blocksOnly).rejects.toThrow(/"structure"/);
     // A 400 rather than a 500: this is a bad request, and the route maps the
     // field straight onto the status code.
     await expect(blocksOnly).rejects.toMatchObject({ status: 400 });

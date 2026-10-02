@@ -118,7 +118,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /* ------------------------------------------------------------ the fixture -- */
 
-const JOB_STEPS: JobStep[] = [{ name: "hierarchy", label: "Building the hierarchy", status: "pending" }];
+const JOB_STEPS: JobStep[] = [{ name: "structure", label: "Building the structure", status: "pending" }];
 
 let revisionId = "";
 
@@ -130,7 +130,7 @@ async function stepRow(
 ): Promise<void> {
   const values = {
     revisionId,
-    stepName: "hierarchy" as const,
+    stepName: "structure" as const,
     inputHash: NO_INPUT_HASH,
     implementationVersion: PIPELINE_RUN,
     status,
@@ -151,12 +151,12 @@ const theRow = async (tx: Tx) => {
   const rows = await tx
     .select()
     .from(revisionStepRuns)
-    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")));
+    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "structure")));
   return rows[0];
 };
 
 const finish = (tx: Tx, job: { id: string; attemptId: string }, status: "done" | "error" = "done") =>
-  finishStepRun({ revisionId, stepName: "hierarchy", job, status }, tx);
+  finishStepRun({ revisionId, stepName: "structure", job, status }, tx);
 
 /** Nothing this file made survives it. */
 async function cleanUp(): Promise<void> {
@@ -360,13 +360,13 @@ describe("who may begin a step", () => {
 
   it("installs the job's token, and starts unstamped", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
-      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
+      await beginStepRun({ revisionId, stepName: "structure", job }, tx);
 
       const [row] = await tx
         .select()
         .from(revisionStepRuns)
         .where(
-          and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")),
+          and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "structure")),
         );
       expect(row?.status).toBe("running");
       expect(row?.attemptId).toBe(job.attemptId);
@@ -381,7 +381,7 @@ describe("who may begin a step", () => {
   it("refuses a stale token", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
       await expect(
-        beginStepRun({ revisionId, stepName: "hierarchy", job: { id: job.id, attemptId: mintAttempt() } }, tx),
+        beginStepRun({ revisionId, stepName: "structure", job: { id: job.id, attemptId: mintAttempt() } }, tx),
       ).rejects.toThrow(NotTheLiveAttempt);
     });
   });
@@ -398,11 +398,11 @@ describe("who may begin a step", () => {
        below is about the row surviving rather than about a throw — the upsert
        simply declines to write. GPT Sol, finding 4. */
     await withClaimedJob(revisionId, async (tx, job) => {
-      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
+      await beginStepRun({ revisionId, stepName: "structure", job }, tx);
       await finish(tx, job);
       expect((await theRow(tx))?.status).toBe("done");
 
-      await beginStepRun({ revisionId, stepName: "hierarchy", job }, tx);
+      await beginStepRun({ revisionId, stepName: "structure", job }, tx);
 
       const row = await theRow(tx);
       expect(row?.status, "the ended run must stay ended").toBe("done");
@@ -413,7 +413,7 @@ describe("who may begin a step", () => {
   it("refuses a job that is no longer running", async () => {
     await withClaimedJob(revisionId, async (tx, job) => {
       await tx.update(jobs).set({ status: "error" }).where(eq(jobs.id, job.id));
-      await expect(beginStepRun({ revisionId, stepName: "hierarchy", job }, tx)).rejects.toThrow(
+      await expect(beginStepRun({ revisionId, stepName: "structure", job }, tx)).rejects.toThrow(
         NotTheLiveAttempt,
       );
     });
@@ -427,7 +427,7 @@ describe("who may begin a step", () => {
 
        **Its own error since 2026-09-02.** See the matching case above `finish`. */
     await withClaimedJob(null, async (tx, job) => {
-      await expect(beginStepRun({ revisionId, stepName: "hierarchy", job }, tx)).rejects.toThrow(
+      await expect(beginStepRun({ revisionId, stepName: "structure", job }, tx)).rejects.toThrow(
         JobDraftGone,
       );
     });

@@ -468,7 +468,7 @@ export function formatWholeDollars(nanos: number): string {
 export interface ArticleCostLine {
   /** `ai_calls.scope_kind` — `job_step`, `request`, `eval`, `cli`. */
   scopeKind: string;
-  /** `ai_calls.purpose` — the `AiJob`: `hierarchy`, `labels`, `chat`, … */
+  /** `ai_calls.purpose` — the `AiJob`: `structure`, `labels`, `chat`, … */
   job: string;
   /** The pipeline step, for step-scoped work; `null` for a request. */
   stepName: string | null;

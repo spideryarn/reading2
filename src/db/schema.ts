@@ -463,7 +463,7 @@ export const articleVisibilityChanges = spideryarn.table(
  * once.** A job opens a draft (`openOrBeginJobDraft` → `beginDraftIn`, in
  * src/store/pg-revisions.ts), every step of that job writes into *that draft's*
  * row, and a `done` ending publishes it (`publishRevisionIn`, called from
- * src/store/pg-session.ts). `hierarchy`, `arc`, `tweets` and `glossary` take
+ * src/store/pg-session.ts). `structure`, `arc`, `tweets` and `glossary` take
  * exactly that path, the same as `fetch`, `extract` and `blocks`.
  *
  * **One draft per job, not one per step**, and that distinction is the whole
@@ -706,7 +706,7 @@ export const articleRevisions = spideryarn.table(
      *
      * **That rule is intent, not a guard. Nothing enforces it today**, and this
      * comment said `publishRevision` did until 2026-08-27, which was simply
-     * untrue: that function checks blocks, the tree, `checkTree` and the `hierarchy`
+     * untrue: that function checks blocks, the tree, `checkTree` and the `structure`
      * run, and has never looked at these two columns. Nothing writes them yet
      * either, so the claim was vacuous rather than merely wrong — there is no
      * revision it could have been false about.
@@ -1077,8 +1077,8 @@ export const articleRevisions = spideryarn.table(
      * **Not a `nav_label` column on `revision_blocks`, even though the key
      * would fit.** That would give stage 4b write access to stage 3's rows, and
      * a re-run of labels would mutate rows that are otherwise immutable once
-     * the revision is published. `labels.json` is one of the `hierarchy` step's
-     * OUTPUTS (src/pipeline.ts), so its currency rides with the `hierarchy` row in
+     * the revision is published. `labels.json` is one of the `structure` step's
+     * OUTPUTS (src/pipeline.ts), so its currency rides with the `structure` row in
      * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
      * own. Checked against the code, not assumed — an earlier draft of this
      * work had it as a step and would have added a CHECK value for it.
@@ -1112,7 +1112,7 @@ export const articleRevisions = spideryarn.table(
      * **`not null default 'ready'`, and the default is a true statement about
      * every existing row**: they have their labels, because until stage 2 of
      * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md the
-     * `hierarchy` step could not finish without producing them. So the migration
+     * `structure` step could not finish without producing them. So the migration
      * backfills nothing and there is no null to read as a fourth state.
      *
      * **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`: a
@@ -2628,7 +2628,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -2898,7 +2898,7 @@ export const aiCalls = spideryarn.table(
      * column summed across both without this is a number with no meaning.
      */
     wire: text("wire").notNull(),
-    /** Which job made the call: `hierarchy`, `chat`, `embeddings`, … */
+    /** Which job made the call: `structure`, `chat`, `embeddings`, … */
     purpose: text("purpose").notNull(),
     requestedModel: text("requested_model").notNull(),
     /** Which model answered, when the response said. Not always the one asked for. */
@@ -4571,8 +4571,8 @@ export const checkpoints = spideryarn.table(
      * not a step at all and `revision_step_runs_step` rejected the name; stage
      * 2a of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
      * brought the step back, so that CHECK now accepts it. What still holds is
-     * the other half: `hierarchy` writes **two** kinds of checkpoint
-     * (`hierarchy-structure` and `hierarchy-deepen`), so a namespace keyed on
+     * the other half: `structure` writes **two** kinds of checkpoint
+     * (`structure-whole-document` and `structure-deepen`), so a namespace keyed on
      * the step name would share one key space between them for no reason. A
      * closed set,
      * with the CHECK below, for the same reason `revision_step_runs_step` is
@@ -4598,7 +4598,7 @@ export const checkpoints = spideryarn.table(
      */
     check(
       "checkpoints_namespace",
-      sql`${t.namespace} in ('hierarchy-deepen','hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+      sql`${t.namespace} in ('structure-deepen','structure-labels','structure-whole-document','pdf-chunk')`,
     ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the

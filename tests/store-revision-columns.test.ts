@@ -659,8 +659,8 @@ describe("what a revision with no metadata hashes to", () => {
  * rule the codebase follows; the precedent is tests/blocks-baseline.test.ts and
  * tests/sanitize-stale-artefact.test.ts.
  *
- * `hierarchy` is deliberately not required here: it has no `stamp`, on purpose
- * (src/pipeline.ts § `hierarchy` says why at length), and its case exists for a
+ * `structure` is deliberately not required here: it has no `stamp`, on purpose
+ * (src/pipeline.ts § `structure` says why at length), and its case exists for a
  * different reason.
  */
 describe("the metadata page and the pipeline agree about which steps can be current", () => {

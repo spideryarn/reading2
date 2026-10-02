@@ -61,9 +61,9 @@ function row(id: string, over: Partial<AiCallRow>): AiCallRow {
     ownerId: ALICE,
     articleSlug: null,
     jobId: null,
-    stepName: "hierarchy",
+    stepName: "structure",
     wire: "messages",
-    job: "hierarchy",
+    job: "structure",
     requestedModel: "anthropic/claude-sonnet-5",
     answeredModel: "anthropic/claude-sonnet-5",
     upstream: "Anthropic",
@@ -395,8 +395,8 @@ describe("the per-owner spend aggregate", () => {
     const key = (g: { scopeKind: string; job: string; stepName: string | null }) =>
       `${g.scopeKind}/${g.job}/${g.stepName ?? "-"}`;
     expect(groups.map(key).sort()).toEqual([
-      "job_step/hierarchy/hierarchy",
-      "job_step/labels/hierarchy",
+      "job_step/labels/structure",
+      "job_step/structure/structure",
       "request/chat/-",
     ]);
     const chat = groups.find((g) => g.job === "chat");

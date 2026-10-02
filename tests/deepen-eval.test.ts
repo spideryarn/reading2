@@ -417,7 +417,7 @@ describe("checking that a repeat bought its own wave", () => {
     expect(found.filter((f) => f.fatal)).toEqual([]);
   });
 
-  /* And the same arithmetic pointed the other way: an ingest whose hierarchy
+  /* And the same arithmetic pointed the other way: an ingest whose structure
      bill shows no whole-document call resumed a seed from somewhere else. A
      note, because the repeats are still comparable with each other. */
   it("says so, non-fatally, when the ingest did not buy a structure call at all", () => {
@@ -726,7 +726,7 @@ describe("the budget report", () => {
    *
    * A wave that exhausts its redraws throws `DeepenFailed`; `generateStructure`
    * catches it, writes a records file with `failed: true`, falls back to the
-   * wave-1 tree, generates labels and **completes the `hierarchy` step**. So all
+   * wave-1 tree, generates labels and **completes the `structure` step**. So all
    * three phase-D steps are `done`, all three carry a real clock, all three
    * carry `stats`, and all three genuinely overlapped — and every number
    * question 5 printed was a measurement of the FALLBACK path.
@@ -874,7 +874,7 @@ describe("peak concurrency", () => {
  * `fullConcurrencyMs` is the honest replacement: **the longest interval during
  * which all three were genuinely in flight**, which for windows that share a
  * start is `min(finishedAt) - max(startedAt)`. It is bounded by the *shortest*
- * of the three — and the load articles' `hierarchy` is far shorter than the
+ * of the three — and the load articles' `structure` is far shorter than the
  * book's 658-778 s — so it says out loud how much of the book's step was really
  * contended.
  */
@@ -1055,8 +1055,8 @@ describe("the cost eval's checks, in this eval's vocabulary", () => {
       asDeepenFinding({ kind: "scope-leak", step: null, fatal: true, message: "billed to Product" }),
     ).toEqual({ kind: "scope-leak", fatal: true, message: "billed to Product" });
     expect(
-      asDeepenFinding({ kind: "ledger-short", step: "hierarchy", fatal: true, message: "3 rows missing" }),
-    ).toEqual({ kind: "ledger-short", fatal: true, message: "hierarchy: 3 rows missing" });
+      asDeepenFinding({ kind: "ledger-short", step: "structure", fatal: true, message: "3 rows missing" }),
+    ).toEqual({ kind: "ledger-short", fatal: true, message: "structure: 3 rows missing" });
   });
 });
 
@@ -1065,7 +1065,7 @@ describe("the cost eval's checks, in this eval's vocabulary", () => {
 /**
  * **DPN-07 — one nominal re-ask could buy the wave three times.**
  *
- * A claimant that reaches its own 740s deadline inside `hierarchy` requeues the
+ * A claimant that reaches its own 740s deadline inside `structure` requeues the
  * job, and `driveToDone` re-claimed it immediately — with the slug still named
  * in `SPIDERYARN_DEEPEN_REASK`, so the next claim ignored the checkpoint rows
  * just written and bought the wave again. `REQUEUE_BUDGET = 2` permits three
@@ -1079,7 +1079,7 @@ describe("what to do when the claimant hands the job back", () => {
     expect(requeueVerdict({ ...ordinary, reasking: true, requeuesBefore: 1, requeuesNow: 2 })).toBe("stop");
   });
 
-  /* An ordinary pass is re-driven and MUST be: a book's hierarchy step needs
+  /* An ordinary pass is re-driven and MUST be: a book's structure step needs
      658-778s against a 740s deadline, so a requeue there is routine, and
      without the lever the re-drive resumes what it has already paid for. */
   it("carries on driving a pass the lever does not name", () => {
@@ -1120,7 +1120,7 @@ describe("what to do when the claimant hands the job back", () => {
  * **DPN-26 — the fifth instance of "it buys after it already knows".**
  *
  * Phase D's jobs were driven concurrently and *drained* together, and that
- * is all: no failure signal crossed between them. So load 1's `hierarchy` could
+ * is all: no failure signal crossed between them. So load 1's `structure` could
  * fail on its structure call while the book and load 2 went on admitting
  * expansion and label calls — for a question 5 that already could not reach
  * three usable completions. The four earlier instances each got their own guard;
@@ -1133,7 +1133,7 @@ describe("what to do when the claimant hands the job back", () => {
  *
  * **What it can and cannot do**, because the difference matters and the
  * temptation is to overclaim: it stops a job before its **next claim**, so no
- * further step and no re-drive begins. It cannot reach inside a `hierarchy`
+ * further step and no re-drive begins. It cannot reach inside a `structure`
  * call that is already in flight — that is the pipeline's, and `src/` is not
  * this eval's to change. So the honest claim is *stops starting*, not *stops
  * spending*.
@@ -1146,9 +1146,9 @@ describe("the fate three measured jobs share", () => {
 
   it("keeps the first reason, because the first one is the cause", () => {
     const fate = startPhaseFate();
-    fate.lose("load 1's hierarchy failed");
+    fate.lose("load 1's structure failed");
     fate.lose("the book requeued");
-    expect(fate.lost()).toBe("load 1's hierarchy failed");
+    expect(fate.lost()).toBe("load 1's structure failed");
   });
 
   it("tells a job that is about to claim again to stop", () => {
@@ -1162,7 +1162,7 @@ describe("the fate three measured jobs share", () => {
    * **DPN-30 — and this is the level below where DPN-26 was fixed.**
    *
    * Stopping before the next *claim* does not stop the next paid *call*: one
-   * claim runs the whole `hierarchy` step, and that step buys a structure call,
+   * claim runs the whole `structure` step, and that step buys a structure call,
    * an expansion wave and a whole pass of labels. `generateStructure` catches a
    * failed wave and falls straight through to `generateLabels` regardless
    * (src/structure.ts § the `deepenFailed` catch), so after question 5 is known
@@ -1177,7 +1177,7 @@ describe("the fate three measured jobs share", () => {
   it("aborts the instant it is lost, and not before", () => {
     const fate = startPhaseFate();
     expect(fate.signal.aborted, "a phase that is still whole must not cancel anything").toBe(false);
-    fate.lose("the book's hierarchy failed");
+    fate.lose("the book's structure failed");
     expect(fate.signal.aborted).toBe(true);
   });
 
@@ -1217,24 +1217,24 @@ describe("what loses the phase, and what is merely the rehearsal ending", () => 
 
   it("loses it when a paid measured job ends `error`", () => {
     expect(
-      fateReason({ ...paid, status: "error", failedStep: "hierarchy", steps: ["hierarchy"] }),
+      fateReason({ ...paid, status: "error", failedStep: "structure", steps: ["structure"] }),
     ).toMatch(/load 1/);
   });
 
   it("loses it on a requeue", () => {
     expect(
-      fateReason({ ...paid, requeued: true, status: "queued", failedStep: null, steps: ["hierarchy"] }),
+      fateReason({ ...paid, requeued: true, status: "queued", failedStep: null, steps: ["structure"] }),
     ).toMatch(/claim/i);
   });
 
   it("loses it on a wave that fell back", () => {
     expect(
-      fateReason({ ...paid, waveFailed: true, status: "done", failedStep: null, steps: ["hierarchy"] }),
+      fateReason({ ...paid, waveFailed: true, status: "done", failedStep: null, steps: ["structure"] }),
     ).toMatch(/wave/i);
   });
 
   it("says nothing about a job that finished", () => {
-    expect(fateReason({ ...paid, status: "done", failedStep: null, steps: ["hierarchy"] })).toBeNull();
+    expect(fateReason({ ...paid, status: "done", failedStep: null, steps: ["structure"] })).toBeNull();
   });
 
   /* The rehearsal's expected ending: the LAST step of the list fails, because
@@ -1434,7 +1434,7 @@ describe("the seam proof's own assertions", () => {
     repeatWithoutReask: 0,
     repeatWithReask: 2,
     readsWhileReasking: 0,
-    namespaces: ["hierarchy-deepen"],
+    namespaces: ["structure-deepen"],
   };
 
   it("accepts the shape it is looking for", () => {
@@ -1460,10 +1460,10 @@ describe("the seam proof's own assertions", () => {
   });
 
   /* The half that would otherwise be taken on trust: if the deepening path
-     touched `hierarchy-structure`, the seed would not be safe across repeats. */
+     touched `structure-whole-document`, the seed would not be safe across repeats. */
   it("refuses a deepening path that touched the structure checkpoint", () => {
     expect(() =>
-      assertSeamProof({ ...ok, namespaces: ["hierarchy-deepen", "hierarchy-structure"] }),
+      assertSeamProof({ ...ok, namespaces: ["structure-deepen", "structure-whole-document"] }),
     ).toThrow(/holds the seed constant/);
   });
 });
@@ -1471,19 +1471,19 @@ describe("the seam proof's own assertions", () => {
 describe("the recording checkpoint store", () => {
   it("records the namespace of every read and write, and refuses what the real one refuses", async () => {
     const store = recordingCheckpoints({ slug: "s", articleId: "a" });
-    await store.write("s", "hierarchy-deepen", "abc", { v: 1 });
-    expect(await store.read("s", "hierarchy-deepen", ["abc"])).toEqual(new Map([["abc", { v: 1 }]]));
-    expect([...store.namespaces()]).toEqual(["hierarchy-deepen"]);
+    await store.write("s", "structure-deepen", "abc", { v: 1 });
+    expect(await store.read("s", "structure-deepen", ["abc"])).toEqual(new Map([["abc", { v: 1 }]]));
+    expect([...store.namespaces()]).toEqual(["structure-deepen"]);
     /* Bound to one article, exactly as the real store is. */
-    await expect(store.read("other", "hierarchy-deepen", ["abc"])).rejects.toThrow(/bound to/);
-    await expect(store.write("s", "hierarchy-deepen", "NOT A KEY", {})).rejects.toThrow(/usable checkpoint key/);
+    await expect(store.read("other", "structure-deepen", ["abc"])).rejects.toThrow(/bound to/);
+    await expect(store.write("s", "structure-deepen", "NOT A KEY", {})).rejects.toThrow(/usable checkpoint key/);
   });
 
   it("round-trips through JSON, so nothing passes on reference equality", async () => {
     const store = recordingCheckpoints({ slug: "s", articleId: "a" });
     const value = { when: new Date(0) };
-    await store.write("s", "hierarchy-deepen", "k", value);
-    const back = await store.read<{ when: string }>("s", "hierarchy-deepen", ["k"]);
+    await store.write("s", "structure-deepen", "k", value);
+    const back = await store.read<{ when: string }>("s", "structure-deepen", ["k"]);
     expect(back.get("k")!.when).toBe("1970-01-01T00:00:00.000Z");
   });
 });
@@ -1654,9 +1654,9 @@ describe("the estimate", () => {
  * quiet again.
  */
 describe("the driving", () => {
-  /** A compact fixture shape: `hierarchy` measured under a planned cap of 3. */
+  /** A compact fixture shape: `structure` measured under a planned cap of 3. */
   const drive = (jobs: DrivenJob[]) =>
-    checkDriving(jobs, { measuredStep: "hierarchy", jobConcurrency: 3, plannedConcurrency: 3 });
+    checkDriving(jobs, { measuredStep: "structure", jobConcurrency: 3, plannedConcurrency: 3 });
 
   const job = (over: Partial<DrivenJob>): DrivenJob => ({
     phase: "D",
@@ -1679,7 +1679,7 @@ describe("the driving", () => {
       finishedAt: to,
       stepOutcomes: [
         { name: "fetch", status: "done", detail: "1382 KB (fixture book)" },
-        { name: "hierarchy", status: "done", startedAt: from, finishedAt: to },
+        { name: "structure", status: "done", startedAt: from, finishedAt: to },
       ],
     });
 
@@ -1711,7 +1711,7 @@ describe("the driving", () => {
         stepOutcomes: [
           { name: "fetch", status: "done", detail: "1382 KB (fixture book)" },
           {
-            name: "hierarchy",
+            name: "structure",
             status: "done",
             startedAt: "2026-09-05T00:00:00.000Z",
             finishedAt: "2026-09-05T00:00:04.000Z",
@@ -1726,7 +1726,7 @@ describe("the driving", () => {
         stepOutcomes: [
           { name: "fetch", status: "done", detail: "1382 KB (fixture book)" },
           {
-            name: "hierarchy",
+            name: "structure",
             status: "done",
             startedAt: "2026-09-05T00:00:05.000Z",
             finishedAt: "2026-09-05T00:00:09.000Z",
@@ -1735,7 +1735,7 @@ describe("the driving", () => {
       }),
     ]);
     expect(found).toHaveLength(1);
-    expect(found[0]!.message).toMatch(/peak of 1 `hierarchy` step/);
+    expect(found[0]!.message).toMatch(/peak of 1 `structure` step/);
   });
 
   /**
@@ -1746,7 +1746,7 @@ describe("the driving", () => {
   it("goes fatal when the queue's runtime cap is not what phase D was planned at", () => {
     const found = checkDriving(
       [loaded("D 1", "2026-09-05T00:00:00.000Z", "2026-09-05T00:00:10.000Z")],
-      { measuredStep: "hierarchy", jobConcurrency: 1, plannedConcurrency: 3 },
+      { measuredStep: "structure", jobConcurrency: 1, plannedConcurrency: 3 },
     );
     expect(found.map((f) => f.fatal)).toEqual([true]);
     expect(found[0]!.message).toMatch(/SPIDERYARN_JOB_CONCURRENCY/);
@@ -1819,7 +1819,7 @@ describe("the driving", () => {
 
   it("goes fatal when a forced step was skipped on its stamp", () => {
     const found = drive([
-      job({ createdArticle: false, force: ["hierarchy"], stepOutcomes: [{ name: "hierarchy", status: "skipped" }] }),
+      job({ createdArticle: false, force: ["structure"], stepOutcomes: [{ name: "structure", status: "skipped" }] }),
     ]);
     expect(found.map((f) => f.fatal)).toEqual([true]);
     expect(found[0]!.message).toMatch(/bought nothing and measured nothing/);
@@ -1827,7 +1827,7 @@ describe("the driving", () => {
 
   it("goes fatal when the force named a step the job has not got", () => {
     const found = drive([
-      job({ createdArticle: false, force: ["hierarchy"], stepOutcomes: [{ name: "blocks", status: "done" }] }),
+      job({ createdArticle: false, force: ["structure"], stepOutcomes: [{ name: "blocks", status: "done" }] }),
     ]);
     expect(found.map((f) => f.fatal)).toEqual([true]);
   });
@@ -1850,7 +1850,7 @@ describe("the driving", () => {
  * **The free rehearsal died at its first `enqueue` and reported itself clean.**
  *
  * `dev` merged in a rule — `unrunnableStepPlan` in `src/jobs.ts` — that refuses
- * any step list containing `blocks` without `hierarchy`, because such a job runs,
+ * any step list containing `blocks` without `structure`, because such a job runs,
  * succeeds and then cannot publish. `--dry-run` asked for exactly that in all
  * three of its lists, so **every** phase threw a 400, no job row was ever
  * created, and the run printed its whole closing report on the way down:
@@ -1873,16 +1873,16 @@ describe("the step plans, checked against the queue's rule before anything is en
   });
   /** The real rule's shape, as a stand-in a test can hand a wrong list to. */
   const noBlocksWithoutStructure = (steps: readonly string[]): string | undefined =>
-    steps.includes("blocks") && !steps.includes("hierarchy") ? "blocks needs hierarchy" : undefined;
+    steps.includes("blocks") && !steps.includes("structure") ? "blocks needs structure" : undefined;
 
   it("passes lists the queue would take", () => {
     expect(() => assertStepPlansRunnable(plans(), noBlocksWithoutStructure)).not.toThrow();
     expect(() =>
       assertStepPlansRunnable(
         plans({
-          ingest: ["fetch", "extract", "blocks", "hierarchy", "assets"],
-          rerun: ["hierarchy"],
-          force: ["hierarchy"],
+          ingest: ["fetch", "extract", "blocks", "structure", "assets"],
+          rerun: ["structure"],
+          force: ["structure"],
         }),
         noBlocksWithoutStructure,
       ),
@@ -2123,7 +2123,7 @@ describe("how often the model refused, and on what", () => {
  * turned into one is, to the run, indistinguishable from a clean job — and the
  * next phase is purchased.
  *
- * 1. **A terminal status that is not `done`.** A phase-B `hierarchy` writes valid
+ * 1. **A terminal status that is not `done`.** A phase-B `structure` writes valid
  *    deepening records and then label generation throws. `driveJob` records
  *    `jobStatus: "error"` and nothing else happens: phase C is bought over a
  *    repeat that never finished.
@@ -2140,7 +2140,7 @@ describe("how often the model refused, and on what", () => {
  * deepening on at all.
  */
 describe("what a stopped job has to have left behind", () => {
-  const base = { label: "book hierarchy forced (repeat 2)", dryRun: false, requeued: false };
+  const base = { label: "book structure forced (repeat 2)", dryRun: false, requeued: false };
 
   it("is fatal when a paid job ends `error`", () => {
     const f = jobIntegrityFindings({ ...base, status: "error", deepenFlag: true, hasRecords: true });
@@ -2200,7 +2200,7 @@ describe("what a stopped job has to have left behind", () => {
    * is the mistake DPN-19 exists to have fixed, made again one branch over.
    *
    * "The records were LOST" is only true if they were ever asked for. A job that
-   * ended `error` may have failed *before* `hierarchy` ran at all — a step this
+   * ended `error` may have failed *before* `structure` ran at all — a step this
    * eval abandoned at the rendezvous never runs, so it never requests
    * anything — and calling that a lost record is an invention. The generic
    * `not-answerable` finding already says the job did not finish; that is the
@@ -2233,8 +2233,8 @@ describe("what a stopped job has to have left behind", () => {
 /**
  * **DPN-15 — the arithmetic was right and the phase did not arrange the thing it
  * measures.** `peakConcurrency` correctly demands that all three of phase D's
- * `hierarchy` windows be open at one instant, and nothing made them: the book's
- * job is a forced `hierarchy` and starts its measured step at once, while the
+ * `structure` windows be open at one instant, and nothing made them: the book's
+ * job is a forced `structure` and starts its measured step at once, while the
  * two load articles start at `fetch` and get there only after stages 1-3. So the
  * run could spend $40.90 and then report question 5 unanswerable.
  *
@@ -2247,7 +2247,7 @@ describe("what a stopped job has to have left behind", () => {
  * each other and *nothing was held for the book*: the gate opened on the two of
  * them and only then was the book driven at all, so with another job holding the
  * third queue slot both released load steps could finish before the book reached
- * `hierarchy` — and the outcome still read `"all"`. Q5 refuses that afterwards,
+ * `structure` — and the outcome still read `"all"`. Q5 refuses that afterwards,
  * correctly, but only once phase D has spent.
  *
  * So it is three-party. `waitFor(2)` is the **readiness** wait — both loads at
@@ -2575,13 +2575,13 @@ describe("the phase-D start rendezvous", () => {
  * on a gate that opened `"go"`, which is the phase working.
  */
 describe("a measured step the gate gave up on", () => {
-  const base = { dryRun: false, slug: "load1", step: "hierarchy" };
+  const base = { dryRun: false, slug: "load1", step: "structure" };
 
   it("throws before the step runs, so the wave is never bought", () => {
     const err = abandonStep({ ...base, verdict: "abandoned" });
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toContain(ABANDONED_MARKER);
-    expect(err?.message, "the message must name the step and the slug").toMatch(/hierarchy/);
+    expect(err?.message, "the message must name the step and the slug").toMatch(/structure/);
     expect(err?.message).toMatch(/load1/);
     expect(err?.message, "and must say it bought nothing").toMatch(/bought nothing|not bought/i);
   });
@@ -2603,7 +2603,7 @@ describe("a measured step the gate gave up on", () => {
  * **DPN-23 — the run still bought after it knew the answer was gone**, in the one
  * place round 4's fix could not reach.
  *
- * Both load jobs fail before `hierarchy`. The readiness wait ends `"jobs finished
+ * Both load jobs fail before `structure`. The readiness wait ends `"jobs finished
  * first"`, their DPN-18 findings are on the record — and phase D then drove the
  * paid book anyway, because "drive the book" was unconditional. The book's
  * phase-D pass exists **only** to answer question 5 (question 1 is phases A and B

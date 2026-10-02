@@ -20,7 +20,7 @@
  *   creates a job and is recorded `scope_kind: "job_step"` — *exactly* like the
  *   steps that ran when the article was added. The column says which machinery
  *   ran the call, never who asked for it.
- * - **A `hierarchy` row cannot say whether it was the first ingest or a rerun.**
+ * - **A `structure` row cannot say whether it was the first ingest or a rerun.**
  *   `job_id` is kept, but a finished job may be deleted, and even a live job
  *   records no "this was the initial upload" fact.
  *
@@ -33,7 +33,7 @@
  *
  * Because the ledger holds **historical strings**, not today's unions.
  * `data/_ai-calls.jsonl` on this box carries `job: "summarise"` with
- * `step_name: "summary"` — a stage that was split into `hierarchy` and `labels`
+ * `step_name: "summary"` — a stage that was split into `structure` and `labels`
  * long ago and exists in no type. A classifier that quietly folded those into
  * the nearest live category would be inventing provenance again, one rename
  * later. They land in `unknown`, the report prints the distinct
@@ -168,9 +168,9 @@ export type JobDisposition =
   | "no product path";
 
 export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
-  /* The pipeline tasks. `labels` runs inside the `hierarchy` step, so the job
+  /* The pipeline tasks. `labels` runs inside the `structure` step, so the job
      and the step differ — which is why the classifier reads the step. */
-  hierarchy: "step-driven",
+  structure: "step-driven",
   labels: "step-driven",
   arc: "step-driven",
   tweets: "step-driven",
@@ -269,7 +269,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
  *
  * The `null` is the whole of the historical case, and it is why the ledger's
  * `job` column is typed `string` here rather than `AiJob`: `data/_ai-calls`
- * carries `summarise`, a stage that was split into `hierarchy` and `labels` long
+ * carries `summarise`, a stage that was split into `structure` and `labels` long
  * ago and exists in no union. Those rows keep the old step-name treatment;
  * `costCategoryOf` holds only a job this build knows about to its disposition.
  *
@@ -293,10 +293,12 @@ function dispositionOf(job: string): JobDisposition | null {
  * append-only, so its old rows keep the old word for ever.
  *
  * `trajectory` was the Skim mode's job and step name until 2026-10-01 (plan
- * 261001r).
+ * 261001r); `hierarchy` was the Structure step's job and step name until
+ * 2026-10-02 (plan 261002b).
  */
 const RENAMED: Readonly<Record<string, string>> = {
   trajectory: "skim",
+  hierarchy: "structure",
 };
 
 function renamed(name: string): string {
@@ -341,7 +343,7 @@ export function costCategoryOf(raw: CategoryFacts): CostCategory {
      `live_conversation`, so `"voice"` is a value that does something.
 
      **The scope test is the F10 fix.** Without it this branch returned before
-     anything looked at the scope, so `job_step / live_conversation / hierarchy`
+     anything looked at the scope, so `job_step / live_conversation / structure`
      — a live conversation recorded as a pipeline step, which is nonsense —
      came back `voice` rather than `unknown`, and the mismatch rule three lines
      down did not apply to the one job whose figure it most matters for. GPT Sol
@@ -358,8 +360,8 @@ export function costCategoryOf(raw: CategoryFacts): CostCategory {
        whichever step it named — the table would have been describing something
        the classifier did not consult. GPT Sol, F7. */
     if (disposition !== null && disposition !== "step-driven") return "unknown";
-    /* The step, not the job. `labels` runs inside the `hierarchy` step and is
-       recorded `job: "labels", step_name: "hierarchy"` — asking the job would
+    /* The step, not the job. `labels` runs inside the `structure` step and is
+       recorded `job: "labels", step_name: "structure"` — asking the job would
        put half of the default ingest in `unknown`. The step name is what says
        which pipeline slot was paid for. */
     if (facts.stepName === null) return "unknown";

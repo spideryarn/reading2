@@ -552,12 +552,12 @@ describe("tweets freshness, through the step's stamp", () => {
     else if (thread) store.plant(SLUG, "tweets", "tweets", threadFor(BLOCKS, thread));
     else store.forget(SLUG, "tweets", "tweets");
 
-    if (blocks) store.plant(SLUG, "hierarchy", "blocks", { blocks });
-    else store.forget(SLUG, "hierarchy", "blocks");
+    if (blocks) store.plant(SLUG, "structure", "blocks", { blocks });
+    else store.forget(SLUG, "structure", "blocks");
 
     /* The other two thirds of what the stamp compares. Written every time, so
        that "no blocks" stays the only thing a case removes. */
-    store.plant(SLUG, "hierarchy", "tree", over.tree ?? STAMP_TREE);
+    store.plant(SLUG, "structure", "tree", over.tree ?? STAMP_TREE);
     store.plant(SLUG, "extract", "meta", over.meta ?? STAMP_META);
 
     return stepIsDone(STEPS.tweets, ctxFor(), store);
@@ -615,7 +615,7 @@ describe("tweets freshness, through the step's stamp", () => {
 
   it("says not-done when the thread carries no stamp at all", async () => {
     store.plant(SLUG, "tweets", "tweets", { tweets: [], limit: 280 });
-    store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
+    store.plant(SLUG, "structure", "blocks", { blocks: BLOCKS });
     /* **The other two thirds of the stamp, planted rather than inherited from
        whichever case ran last.** `STEPS.tweets.stamp` fingerprints blocks, tree
        and metadata together, so without a tree and a `meta` the *expected*
@@ -624,7 +624,7 @@ describe("tweets freshness, through the step's stamp", () => {
        without testing anything. It passed that way both before and after the
        2026-09-05 conversion, on `ask()` having filled the shared store earlier
        in the file. */
-    store.plant(SLUG, "hierarchy", "tree", STAMP_TREE);
+    store.plant(SLUG, "structure", "tree", STAMP_TREE);
     store.plant(SLUG, "extract", "meta", STAMP_META);
     expect(
       await STEPS.tweets.stamp?.(ctxFor(), store),

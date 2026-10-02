@@ -185,7 +185,7 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
  * They wrote artefacts by hand to paths off `process.cwd()`, which under
  * Postgres are files nothing reads; `npm run structure -- <slug> [--force]` is
  * `scripts/stage.ts` now, driving the queue, and `npm run labels` is gone
- * entirely (there is no `labels` step, and re-labelling is `hierarchy --force`).
+ * entirely (there is no `labels` step, and re-labelling is `structure --force`).
  *
  * **The money did not become unscoped — it changed scope, and that is why this
  * list shrank rather than gaining two admissions.** `runStep` opens a

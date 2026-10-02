@@ -2,7 +2,7 @@
  * **A passage named by our handle for it, in words a reader sees.**
  *
  * Until 2026-09-28, `articleWithIds` (src/article-prompt.ts) showed the article
- * as numbered, id-tagged blocks; the hierarchy prompts still do. A model shown
+ * as numbered, id-tagged blocks; the structure prompts still do. A model shown
  * that machinery sometimes names a passage by it instead of by what it says:
  * *"you can see it again later, in block 39"*, *"Block [spya-dfqq59] gives the
  * publication details"*. The number is one the reader has never seen, and an

@@ -161,7 +161,7 @@ Two consequences worth stating, because they are easy to get wrong:
   rung, because nobody asked.
 
   **`pending` is the ordinary state of a newly added article, since 2026-09-06**, and that is worth
-  knowing before you read the withheld state as a fault. The label pass left the blocking `hierarchy`
+  knowing before you read the withheld state as a fault. The label pass left the blocking `structure`
   step — it was 79.5–92% of its wall clock — so pasting a URL gets you the tree and no paragraph
   labels at all, and a free successor job buys them afterwards
   ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Until it runs the tree carries

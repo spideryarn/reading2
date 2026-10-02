@@ -34,7 +34,7 @@ import type { Tree, TreeNode } from "./types.js";
 export function partsOf(tree: Tree): TreeNode[] {
   const root = tree.nodes[tree.rootId];
   /* `bug`, so the job card does not offer a Retry that cannot work. The tree
-     comes off disk from a `hierarchy` step that already finished, and Retry skips
+     comes off disk from a `structure` step that already finished, and Retry skips
      every step that finished — so a second attempt reads the identical
      tree.json and fails in the same line. A tree that names a root it does not
      contain is stage 4 having written something malformed, which is a defect

@@ -152,7 +152,7 @@ function answerFor(
   const sections = request.own.split(/^SECTION /m).filter((s) => s.trim().length > 0);
   /* **`freeAnswer`, so every fake in this file reports `NO_EXPANSION_USAGE`.**
      None of these tests is about what a call cost; the tokens have a file of
-     their own, tests/hierarchy-deepen-tokens.test.ts. */
+     their own, tests/structure-deepen-tokens.test.ts. */
   return freeAnswer(JSON.stringify({
     sections: sections.map((section, i) => {
       const ids = [...section.matchAll(/(spya-w[a-z0-9]{5})/g)].map((m) => m[1]!);
@@ -455,12 +455,12 @@ describe("which sections a wave asks about", () => {
  * other files, and the failure mode of a derivation written only in a comment is
  * that one of those numbers moves and the comment does not. Both bounds are here,
  * so that raising the width past what a step's budget allows, or moving
- * `STEP_BUDGET_MS.hierarchy` or `DEFAULT_JOB_CONCURRENCY` underneath it, is a
+ * `STEP_BUDGET_MS.structure` or `DEFAULT_JOB_CONCURRENCY` underneath it, is a
  * red test rather than a stale paragraph.
  *
  * The measured inputs, all from the plan's stages 1 and 2 (2026-09-04): wave 1
  * on a book is 102–126 s; the label pass on the largest article we have is
- * 150–270 s (`STEP_BUDGET_MS.hierarchy`'s own note); a scoped call is 16–22 s,
+ * 150–270 s (`STEP_BUDGET_MS.structure`'s own note); a scoped call is 16–22 s,
  * doubled to 45 s for a batch of four parents; and Moby-Dick's 54 sections at
  * four parents a call is 14 calls, taken as 20 for the worst case.
  */
@@ -473,7 +473,7 @@ describe("how wide a wave may be", () => {
     const PER_CALL_MS = 45_000;
     const WAVE_1_MS = 126_000;
     const LABELS_MS = 270_000;
-    const share = STEP_BUDGET_MS.hierarchy - WAVE_1_MS - LABELS_MS;
+    const share = STEP_BUDGET_MS.structure - WAVE_1_MS - LABELS_MS;
     expect(Math.ceil(CALLS / EXPANSION_CONCURRENCY) * PER_CALL_MS).toBeLessThanOrEqual(share);
 
     /* And a round of redraws still fits, which is the reason it is 8 and not the
@@ -1501,7 +1501,7 @@ function payingExecutor(over?: (request: ExpansionRequest, n: number) => string 
  * `ExpansionExecutor` handed back a bare string, so the wave's tokens reached
  * neither `DeepenStats` nor `StructureRun`. They were metered — `streamMessage`
  * calls `beginSpend` for every one — so the money was recoverable from the
- * AI-spend ledger under task `hierarchy`, and that is precisely the wrong shape
+ * AI-spend ledger under task `structure`, and that is precisely the wrong shape
  * for question 4 of the live wave, which is answered by comparing one run's
  * artefact with another's. docs/plans/260904d-deepen-fat-sections.md
  * § "What the live run must answer".

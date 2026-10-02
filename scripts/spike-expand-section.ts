@@ -174,7 +174,7 @@ async function main(): Promise<void> {
     `THE SECTION'S BLOCKS\n\n${renderForSpike(slice)}`;
 
   const started = Date.now();
-  const call = streamMessage("hierarchy", {
+  const call = streamMessage("structure", {
     max_tokens: 16_000,
     thinking: { type: "adaptive" },
     output_config: { effort: PRODUCTION_EFFORT },
