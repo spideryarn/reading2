@@ -25,7 +25,8 @@
  * carries the same top-level skeleton. Its own fingerprint hashes those two
  * rendered strings, so hidden supplement and nested-tree data cannot make a
  * fresh artefact look stale (Sol F11). It thinks at
- * `medium` rather than `high`, so it shares no cached prefix with that group;
+ * `medium` rather than `high`, and its schema also differs, so it shares no
+ * cached prefix with those stages;
  * the after-import box queues each mode as its own job, which shares nothing
  * anyway.
  *
@@ -59,6 +60,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { renderedBlockMathsText } from "./quote-in-block.js";
 import { quoteFinder, quoteFinderWithMultiplicity } from "./quote-match.js";
 import { fallbackHeadTitle } from "./source-hash.js";
@@ -95,8 +101,11 @@ export type { Crossref, Crossrefs, CrossrefsDropped } from "./types.js";
  * named as not links. `/1` had given mostly "see Section 6" and "Figure 4C"
  * links on a paper, three citation lists linked to blocks citing the same
  * works, and ten pull-quotes linked to the sentence they repeat on an essay.
+ *
+ * `crossrefs/3`, 2026-10-02: the request gained `CROSSREFS_OUTPUT_SCHEMA`; the
+ * prompt text is unchanged.
  */
-export const PROMPT_VERSION = "crossrefs/2";
+export const PROMPT_VERSION = "crossrefs/3";
 
 /** A phrase is at least this many words… */
 export const MIN_PHRASE_WORDS = 2;
@@ -423,6 +432,29 @@ function parseJson(raw: string): { links?: unknown } {
   return parseJsonAnswer<{ links?: unknown }>(raw, "the model's answer");
 }
 
+const crossrefStringSchema = { type: "string" } as const;
+
+/** The prompt's three-string link rows; id and quote checks remain in `toLinks`. */
+export const CROSSREFS_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    links: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { from: crossrefStringSchema, phrase: crossrefStringSchema, to: crossrefStringSchema },
+        required: ["from", "phrase", "to"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["links"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(CROSSREFS_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(CROSSREFS_OUTPUT_SCHEMA, ["from", "to"]);
+
 export interface CrossrefsRun {
   crossrefs: Crossrefs;
   blocks: number;
@@ -475,7 +507,7 @@ export async function generateCrossrefs(opts: {
   try {
     const call = streamMessage(
       "crossrefs",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("crossrefs") },
@@ -490,7 +522,7 @@ export async function generateCrossrefs(opts: {
           { type: "text" as const, text: CROSSREFS_SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, cap }) }],
-      },
+      }, CROSSREFS_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

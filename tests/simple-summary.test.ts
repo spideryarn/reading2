@@ -21,6 +21,7 @@ import {
   ANSWER_TOKENS,
   SIMPLE_SYSTEMS,
   SIMPLE_PROMPT_VERSION,
+  SIMPLE_SUMMARY_OUTPUT_SCHEMA,
   SIMPLE_VERSION,
   buildSimpleSummary,
   simplePromptVersion,
@@ -453,6 +454,15 @@ describe("the request", () => {
     const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
     expect(systems[0]?.[0]).toEqual(systems[1]?.[0]);
     expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS)));
+    const outputConfigs = sent.map(
+      (c) => (c.body as { output_config?: { effort?: string; format?: unknown } }).output_config,
+    );
+    expect(outputConfigs).toHaveLength(3);
+    expect(outputConfigs.every((config) => config?.effort === "high")).toBe(true);
+    expect(outputConfigs.every((config) => config?.format !== undefined)).toBe(true);
+    expect(outputConfigs.map((config) => config?.format)).toEqual(
+      Array.from({ length: 3 }, () => ({ type: "json_schema", schema: SIMPLE_SUMMARY_OUTPUT_SCHEMA })),
+    );
     expect(out.simpleSummary.levels).toEqual(GOOD);
   });
 
@@ -473,6 +483,15 @@ describe("the request", () => {
     expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
     expect(out.calls).toBe(4);
     expect(sent.filter((c) => levelOf(c.body) === "brief")).toHaveLength(2);
+    expect(
+      sent.every(
+        (c) =>
+          (c.body as { output_config?: { effort?: string; format?: unknown } }).output_config?.effort === "high" &&
+          JSON.stringify(
+            (c.body as { output_config?: { effort?: string; format?: unknown } }).output_config?.format,
+          ) === JSON.stringify({ type: "json_schema", schema: SIMPLE_SUMMARY_OUTPUT_SCHEMA }),
+      ),
+    ).toBe(true);
     /* The rejected attempt's tokens were spent, so they are counted. */
     expect(out.outputTokens).toBe(4);
   });

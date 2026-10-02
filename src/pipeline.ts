@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { readArticle, tryReadArticle } from "./article-input.js";
 import {
+  ARC_OUTPUT_SCHEMA,
   generateArc,
   inputFingerprint as arcFingerprint,
   PROMPT_VERSION as ARC_PROMPT_VERSION,
@@ -59,6 +60,7 @@ import {
   writeRaw,
 } from "./fetch.js";
 import {
+  GLOSSARY_OUTPUT_SCHEMA,
   generateGlossary,
   previousGlossaryFrom,
   PROMPT_VERSION as GLOSSARY_PROMPT_VERSION,
@@ -82,18 +84,22 @@ import {
   inputFingerprint as timelineFingerprint,
   previousTimelineFrom,
   PROMPT_VERSION as TIMELINE_PROMPT_VERSION,
+  TIMELINE_OUTPUT_SCHEMA,
 } from "./timeline.js";
 import {
   generateQuiz,
   inputFingerprint as quizFingerprint,
   PROMPT_VERSION as QUIZ_PROMPT_VERSION,
+  QUIZ_OUTPUT_SCHEMA,
 } from "./quiz.js";
 import {
+  FAQ_OUTPUT_SCHEMA,
   generateFaq,
   inputFingerprint as faqFingerprint,
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
+  CROSSREFS_OUTPUT_SCHEMA,
   generateCrossrefs,
   inputFingerprint as crossrefsFingerprint,
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
@@ -103,6 +109,7 @@ import {
   inputFingerprint as simpleFingerprint,
   SIMPLE_LEVELS,
   SIMPLE_PROMPT_VERSION,
+  SIMPLE_SUMMARY_OUTPUT_SCHEMA,
 } from "./simple-summary.js";
 import {
   generateDebate,
@@ -203,6 +210,7 @@ import {
   generateTweets,
   inputFingerprint as tweetsFingerprint,
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
+  TWEETS_OUTPUT_SCHEMA,
 } from "./tweets.js";
 import type { Block, JobUpload, Meta, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -334,17 +342,17 @@ const jsonSchemaFormat = (schema: AnthropicJsonSchema): Exclude<ArticleOutputFor
  * `undefined` identity as every other forgotten row.
  */
 export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputFormat>> = {
-  arc: null,
-  tweets: null,
-  glossary: null,
+  arc: jsonSchemaFormat(ARC_OUTPUT_SCHEMA),
+  tweets: jsonSchemaFormat(TWEETS_OUTPUT_SCHEMA),
+  glossary: jsonSchemaFormat(GLOSSARY_OUTPUT_SCHEMA),
   quotes: jsonSchemaFormat(QUOTES_OUTPUT_SCHEMA),
   ideas: jsonSchemaFormat(IDEAS_OUTPUT_SCHEMA),
   sketch: jsonSchemaFormat(SKETCH_OUTPUT_SCHEMA),
-  timeline: null,
-  quiz: null,
-  faq: null,
-  crossrefs: null,
-  simple: null,
+  timeline: jsonSchemaFormat(TIMELINE_OUTPUT_SCHEMA),
+  quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
+  faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
+  crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
+  simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
 };
 
 function sameOutputFormat(a: ArticleOutputFormat, b: ArticleOutputFormat): boolean {

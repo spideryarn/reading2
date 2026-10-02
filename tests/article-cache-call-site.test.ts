@@ -86,7 +86,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STEPS, type PipelineStep, type StepContext } from "../src/pipeline.js";
+import { STEPS, sharesArticleCache, type PipelineStep, type StepContext } from "../src/pipeline.js";
+import { STAGE_EFFORT } from "../src/models.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
@@ -240,10 +241,28 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
     await closeDb();
   }, 60_000);
 
-  it("marks BOTH steps of a same-group pair — the reader as well as the writer", async () => {
-    /* `tweets` and `faq` since `tweets/5` moved tweets to the `ids` renderer;
-       the pair was `arc` and `tweets` when the bug below was found, and those two
-       no longer share. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+  /* **There is no same-group pair today, so the "marks BOTH" walk has nothing to
+     walk.** Since plan 261001s every article stage sends its own output schema,
+     and the schema is part of the cache key, so no two stages share a cached
+     article. Production had shown 0 cross-stage cache reads in the 14 days
+     before (only Simple reads, from its own three levels). The walk that proved
+     the reader as well as the writer gets a breakpoint (`24335207`'s bug, found
+     2026-09-03 as `[true, false]`) is kept as a tripwire rather than deleted:
+     the first test below fails the day a pair forms again, and that is the day
+     to point the second one back at it. */
+  it("no two article stages share a cached article today (tripwire)", () => {
+    const stages = Object.keys(STAGE_EFFORT) as StepName[];
+    const pairs = stages.flatMap((a) =>
+      stages.filter((b) => b !== a && sharesArticleCache(a, [b])).map((b) => `${a}+${b}`),
+    );
+    /* If this fails: a pair exists again. Walk it in the test below, with
+       `[true, true]` as the expectation, and delete this test. */
+    expect(pairs).toEqual([]);
+  });
+
+  it("marks neither of two former group-mates now that their schemas differ", async () => {
+    /* `tweets` and `faq` were the same-group pair until 261001s gave each its
+       own schema. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
     await walk(["tweets", "faq"]);
 
     /* First that both steps ran at all. Every way this file can go wrong
@@ -251,11 +270,7 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
        registry key that did not take — produces a SHORT list, and a short list
        satisfies every `every()` ever written. docs/reusable/silent-success.md. */
     expect(seen.map((s) => s.step)).toEqual(["tweets", "faq"]);
-
-    /* And then the thing itself. Before 2026-09-03 this was `[true, false]`:
-       the writer paid the 1.25x write premium and the reader, last in its
-       group, sent no breakpoint and read nothing. */
-    expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);
+    expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
   }, 30_000);
 
   it("marks neither step when the two are in different cache groups", async () => {

@@ -567,7 +567,7 @@ export type Task =
      docs/project/quotes.md. Article-reading like `glossary`, and like
      `glossary` it never names a block id: the model returns the words and
      `locate` in src/quotes.ts finds the block, so it renders with
-     `articleText`. Its schema now differs from Glossary's absent format, so
+     `articleText`. Its schema differs from Glossary's format, so
      matching article bytes no longer make the two cache-compatible. */
   | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
@@ -586,7 +586,8 @@ export type Task =
      Not to be confused with `illustrate`, the `ImageAiJob` below, which is the
      *second* call: this one is words about a picture, that one is the picture.
      Article-reading like `ideas`, and like `ideas` every vignette names a block
-     id, so it renders with `articleWithIds` and joins that cached prefix.
+     id, so it renders with `articleWithIds`. It is not an `ArticleStage`, so
+     the cross-stage cache predicate deliberately excludes it.
      It is also the one stage that reads another stage's artefact — the Sketch —
      rather than deciding its own shape. src/illustrated.ts. */
   | "illustrated"
@@ -1727,8 +1728,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      argues a piece collapses without an unstated premise.
 
      It used to be cache-compatible with Glossary: same model, effort, renderer
-     and article bytes. That ended when Quotes adopted an output schema before
-     Glossary; their `output_config.format` values now differ. GPT Sol,
+     and article bytes. Their distinct output schemas now keep them apart. GPT Sol,
      2026-08-31; plan 261001s, 2026-10-02.
 
      **And until 2026-09-03 it was not real even there**, which is worth leaving
@@ -1738,8 +1738,8 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      nothing. Measured at 25,428 wasted cached tokens on a 17,000-word article.
      docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md.
 
-     Quotes now sends a schema while Glossary does not, so this historical pair
-     is no longer compatible even though effort and article bytes still match.
+     Their schemas differ, so this historical pair is no longer compatible even
+     though effort and article bytes still match.
      Untested, like every effort choice that has not been through
      evals/results/effort-vs-quality.md, and said out loud so the next person
      knows it is a guess rather than a measurement. */
@@ -1750,9 +1750,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      measured to be enough for.
 
      **It buys no cache share.** Matching the other `ids` + `high` stages on
-     effort and article bytes is no longer sufficient: Ideas sends a schema and
-     they do not. `ARTICLE_OUTPUT_FORMAT` in pipeline.ts records that third
-     dimension. */
+     effort and article bytes is no longer sufficient: every stage now sends a
+     different schema. `ARTICLE_OUTPUT_FORMAT` in pipeline.ts records that
+     third dimension. */
   ideas: "high",
   /* **`low`, MEASURED 2026-10-01, against the `high` it had shipped with.**
      Eight articles, two draws per arm, two blind judges — GPT Sol ranking,
@@ -1771,17 +1771,17 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      eight articles may still exist, and Opus (high-powered AI) runs at `low`
      too, untested — that doc's § What this does not show.
 
-     **It leaves the `ids` + `high` cache group** (`ideas`, `timeline`, `quiz`,
-     `faq`, `simple`, `tweets`) and is alone at `ids` + `low`, so it shares a
+     Its `low` effort alone would keep it out of the former `ids` + `high`
+     group; distinct schemas now separate every member anyway. It shares a
      cached article with nothing. That costs close to nothing today, because each
      mode is its own job and two jobs share no cache
      (docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
      It is a constraint on plan 261001o's caching options, which assumed one
      effort per group. */
   sketch: "low",
-  /* `high`, and it shares the unschematized `ids` group with `quiz`, `faq`,
-     `simple` and `tweets`. It no longer shares with Ideas: Ideas sends an
-     output schema and Timeline does not.
+  /* `high`. It matches `ideas`, `quiz`, `faq`, `simple` and `tweets` on effort
+     and article bytes, but its event schema differs from all of theirs, so the
+     former `ids/high` cache group has dissolved.
 
      The judgment it is being paid for is the sequence — putting a piece that
      recounts the same three months three times, once per participant, back into
@@ -1792,9 +1792,8 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      downstream to correct it. Untested, like every effort choice that has not
      been through evals/results/effort-vs-quality.md. */
   timeline: "high",
-  /* `high`, and it is another member of that group rather than a cache of its
-     own: same effort, same `ids` renderer and no output schema, so `quiz`
-     shares a cached article with `timeline`, `faq`, `simple` and `tweets`.
+  /* `high`. Its question schema differs from every other `ids/high` stage, so
+     matching effort and article bytes buys no cache share.
 
      The judgment it is being paid for is the `hard` band — a question whose
      answer is a move the argument makes across several passages, which is
@@ -1805,9 +1804,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      Untested, like every effort choice that has not been through
      evals/results/effort-vs-quality.md. */
   quiz: "high",
-  /* `high`, a member of the `ids` group: same effort, same renderer, same
-     body-only evidence and no output schema, so `faq` shares a cached article
-     with `timeline`, `quiz`, `simple` and `tweets`. What it is paid for is reading the
+  /* `high`. Its FAQ schema differs from every other `ids/high` stage, so it
+     shares no cached article despite matching their effort and body rendering.
+     What it is paid for is reading the
      argument closely enough to feel where a careful reader would push back.
      Untested, like every effort choice not yet through
      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
@@ -1829,9 +1828,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      `medium` runs on the paper turned its "recurrent connections" (which raise
      synergy) into "feedback loops" (which, in the same paper, lower it), and the
      `high` run kept the author's term. Evidence, not a distribution —
-     evals/simple/results-260930.md. It shares the unschematized `ids/high`
-     group, while schema-constrained Ideas is separate, and sits beside `faq`
-     in `STEP_ORDER` (src/step-order.ts). */
+     evals/simple/results-260930.md. Its paragraph schema differs from every
+     other `ids/high` schema, so it shares no cached article, and it sits beside
+     `faq` in `STEP_ORDER` (src/step-order.ts). */
   simple: "high",
 };
 

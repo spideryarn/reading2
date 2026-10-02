@@ -50,6 +50,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { findQuote } from "./quote-match.js";
 import {
   articleWithIdsFingerprint,
@@ -88,8 +93,11 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
  * gates and orders on (Greg, SPIDERYARN-READING2-5D: *"dense and low level …
  * start with a few that are a little bit more high level"*;
  * docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md).
+ *
+ * `faq/5`, 2026-10-02: the request gained `FAQ_OUTPUT_SCHEMA`; the prompt
+ * text is unchanged.
  */
-export const PROMPT_VERSION = "faq/4";
+export const PROMPT_VERSION = "faq/5";
 
 /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
 export const MAX_QUESTIONS = 12;
@@ -580,6 +588,40 @@ function parseJson(raw: string): { questions?: unknown } {
   return parseJsonAnswer<{ questions?: unknown }>(raw, "the model's answer");
 }
 
+const faqStringSchema = { type: "string" } as const;
+const faqPassageSchema = {
+  type: "object",
+  properties: { blockId: faqStringSchema, quote: faqStringSchema },
+  required: ["blockId", "quote"],
+  additionalProperties: false,
+} as const;
+
+/** The closed question shape `FAQ_SYSTEM` asks for. Score bounds remain code checks. */
+export const FAQ_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          question: faqStringSchema,
+          passages: { type: "array", items: faqPassageSchema },
+          difficulty: { type: "number" },
+          centrality: { type: "number" },
+        },
+        required: ["question", "passages", "difficulty", "centrality"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["questions"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(FAQ_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(FAQ_OUTPUT_SCHEMA, ["blockId"]);
+
 export interface FaqRun {
   faq: Faq;
   blocks: number;
@@ -629,14 +671,14 @@ export async function generateFaq(opts: {
   try {
     const call = streamMessage(
       "faq",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("faq") },
         /* Article first, then this stage's instructions: byte-identical to
-           `ideas`, `timeline`, `quiz` and `sketch` up to the breakpoint —
-           though `sketch`'s `low` effort keeps it out of the cache group
-           (src/models.ts § STAGE_EFFORT). */
+           `ideas`, `timeline`, `quiz` and `sketch` up to the breakpoint. Their
+           distinct schemas now keep every stage out of the others' cache key
+           (`ARTICLE_OUTPUT_FORMAT` in src/pipeline.ts). */
         system: [
           {
             type: "text" as const,
@@ -646,7 +688,7 @@ export async function generateFaq(opts: {
           { type: "text" as const, text: FAQ_SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, count }) }],
-      },
+      }, FAQ_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

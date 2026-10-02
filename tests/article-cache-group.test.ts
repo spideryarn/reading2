@@ -21,19 +21,19 @@ import {
 import type { StepName } from "../src/types.js";
 
 describe("the article cache group", () => {
-  it("separates equal-effort, equal-renderer stages when one sends a schema and the other does not", () => {
+  it("separates equal-effort, equal-renderer stages when their schemas differ", () => {
     expect(STAGE_EFFORT.tweets).toBe(STAGE_EFFORT.ideas);
     expect(ARTICLE_RENDERER.tweets).toBe(ARTICLE_RENDERER.ideas);
-    expect(ARTICLE_OUTPUT_FORMAT.tweets).toBeNull();
+    expect(ARTICLE_OUTPUT_FORMAT.tweets).not.toBeNull();
     expect(ARTICLE_OUTPUT_FORMAT.ideas).not.toBeNull();
+    expect(ARTICLE_OUTPUT_FORMAT.tweets).not.toEqual(ARTICLE_OUTPUT_FORMAT.ideas);
     expect(sharesArticleCache("tweets", ["ideas"])).toBe(false);
     expect(sharesArticleCache("ideas", ["tweets"])).toBe(false);
   });
 
-  it("still shares when effort, renderer, and the absence of a schema all match", () => {
-    expect(ARTICLE_OUTPUT_FORMAT.tweets).toBeNull();
-    expect(ARTICLE_OUTPUT_FORMAT.faq).toBeNull();
-    expect(sharesArticleCache("faq", ["tweets"])).toBe(true);
+  it("does not share when effort and renderer match but the schemas differ", () => {
+    expect(ARTICLE_OUTPUT_FORMAT.tweets).not.toEqual(ARTICLE_OUTPUT_FORMAT.faq);
+    expect(sharesArticleCache("faq", ["tweets"])).toBe(false);
   });
 
   it("no longer puts arc and tweets together, though they still think at the same effort", () => {
@@ -46,14 +46,15 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("tweets", ["arc"])).toBe(false);
   });
 
-  it("separates two text stages when only one sends a schema", () => {
+  it("separates two text stages when their schemas differ", () => {
     /* The schema is part of Anthropic's cache key just as effort is. Quotes
-       adopted one before Glossary, so their formerly shared prefix is no
-       longer compatible even though the article bytes still match. */
+       differ, so their formerly shared prefix is no longer compatible even
+       though the article bytes still match. */
     expect(STAGE_EFFORT.glossary).toBe(STAGE_EFFORT.quotes);
     expect(ARTICLE_RENDERER.glossary).toBe(ARTICLE_RENDERER.quotes);
-    expect(ARTICLE_OUTPUT_FORMAT.glossary).toBeNull();
+    expect(ARTICLE_OUTPUT_FORMAT.glossary).not.toBeNull();
     expect(ARTICLE_OUTPUT_FORMAT.quotes).not.toBeNull();
+    expect(ARTICLE_OUTPUT_FORMAT.glossary).not.toEqual(ARTICLE_OUTPUT_FORMAT.quotes);
     expect(sharesArticleCache("glossary", ["quotes"])).toBe(false);
     expect(sharesArticleCache("quotes", ["glossary"])).toBe(false);
   });
@@ -87,23 +88,16 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("ideas", ["arc", "glossary", "quotes"])).toBe(false);
   });
 
-  it("keeps the unschematized ids/high stages together while Ideas leaves them", () => {
-    /* **Measured rather than asserted**, which is what this file is for. The
-       claim in src/models.ts is that `timeline` shares one cached article
-       prefix with `ideas` and `quiz` — same `high` effort, same `ids`
-       renderer — and shares nothing with the three `articleText` stages, nor
-       with `sketch`, which left the group for `low` on 2026-10-01.
-
-       It is worth pinning in both directions. Sharing where it should not marks
-       the article, pays the 1.25x write premium and collects no read. Not
-       sharing where it should is the opposite mistake and is invisible: three
-       stages in one job each paying for the same 4,000-word article. */
+  it("dissolves the former ids/high group because every schema differs", () => {
+    /* These stages still match on effort and article bytes. Their answer
+       contracts differ, so Anthropic gives each a different cache key. A false
+       share here pays the 1.25x write premium and can never collect a read. */
     expect(STAGE_EFFORT.timeline).toBe(STAGE_EFFORT.ideas);
     expect(ARTICLE_RENDERER.timeline).toBe(ARTICLE_RENDERER.ideas);
     expect(ARTICLE_OUTPUT_FORMAT.ideas).not.toBeNull();
-    expect(ARTICLE_OUTPUT_FORMAT.timeline).toBeNull();
+    expect(ARTICLE_OUTPUT_FORMAT.timeline).not.toBeNull();
     expect(sharesArticleCache("ideas", ["timeline"])).toBe(false);
-    expect(sharesArticleCache("timeline", ["quiz"])).toBe(true);
+    expect(sharesArticleCache("timeline", ["quiz"])).toBe(false);
     expect(sharesArticleCache("timeline", ["arc", "glossary", "quotes"])).toBe(false);
     expect(sharesArticleCache("timeline", ["sketch"])).toBe(false);
   });
@@ -162,18 +156,9 @@ describe("the article cache group", () => {
     expect(cacheArticleForStep(["arc"], 0)).toBe(false);
   });
 
-  it("marks BOTH members of every same-group pair, the reader as well as the writer", () => {
-    /* **The test that was missing, and the reason the bug survived review.**
-       Every case in this file asked the writer's question — "is a later step
-       going to read what I write" — so a predicate that answered it perfectly
-       and never asked the reader's looked complete. Caching is a two-party
-       protocol: the entry is only worth writing if the second request carries a
-       breakpoint of its own, because a request with no `cache_control` performs
-       no lookup at all.
-
-       Generated from the tables rather than hardcoded, so a stage added to a
-       group is covered the day it arrives rather than the day somebody
-       remembers this file. */
+  it("has no distinct same-group pair after the remaining schemas land", () => {
+    /* Generated from all three key dimensions, so a future byte-identical
+       schema pair makes this fail and forces the cache policy to be revisited. */
     const stages = Object.keys(STAGE_EFFORT) as ArticleStage[];
     const pairs = stages.flatMap((a) =>
       stages
@@ -186,41 +171,32 @@ describe("the article cache group", () => {
         )
         .map((b) => [a, b] as const),
     );
-    /* If this ever hits zero the loop below passes vacuously and proves
-       nothing — the failure mode of every generated test. */
-    expect(pairs.length).toBeGreaterThan(0);
-
-    for (const [first, second] of pairs) {
-      const job: StepName[] = [first, second];
-      expect(cacheArticleForStep(job, 0), `${first} (writer) in [${job.join(", ")}]`).toBe(true);
-      expect(cacheArticleForStep(job, 1), `${second} (reader) in [${job.join(", ")}]`).toBe(true);
+    expect(pairs).toEqual([]);
+    for (const first of stages) {
+      for (const second of stages) {
+        if (first === second) continue;
+        expect(sharesArticleCache(first, [second]), `${first} with ${second}`).toBe(false);
+      }
     }
   });
 
-  it("marks all three of a three-mode job, not just the two that write", () => {
-    /* The shape that made "never worked" the wrong word and "never worked for a
-       pair" the right one: in a three-step job of one group the middle step is
-       both a reader and a writer, so the old later-only predicate did mark it.
-       Only the last went out blind. It was first written with `sketch` last;
-       `quiz` stands in since sketch left the group for `low` on 2026-10-01. All
-       three read the same `ids` rendering at the same `high` effort. */
+  it("marks none of the former three-mode group once their schemas differ", () => {
+    /* Same `ids` rendering and `high` effort are no longer sufficient: every
+       format is different, so no request should pay to mark its article. */
     const job: StepName[] = ["tweets", "timeline", "quiz"];
     for (let i = 0; i < job.length; i++) {
-      expect(cacheArticleForStep(job, i), `${job[i]} at ${i}`).toBe(true);
+      expect(cacheArticleForStep(job, i), `${job[i]} at ${i}`).toBe(false);
     }
   });
 
   it("does not let a step out of the group into one, from either side", () => {
-    /* `glossary` sits between arc and tweets/timeline on the policy dimensions at
-       once — same renderer as arc, same nothing as the pair — so it
-       is the stage most likely to be swept in by a predicate that got sloppy
-       about direction when it stopped only looking forwards. */
+    /* `glossary` sits between text and ids stages and is the likeliest accidental
+       bridge if any cache-key dimension is ignored. */
     expect(cacheArticleForStep(["arc", "glossary"], 0)).toBe(false);
     expect(cacheArticleForStep(["arc", "glossary"], 1)).toBe(false);
     expect(cacheArticleForStep(["tweets", "glossary", "timeline"], 1)).toBe(false);
-    // ...while the pair straddling it still finds each other.
-    expect(cacheArticleForStep(["tweets", "glossary", "timeline"], 0)).toBe(true);
-    expect(cacheArticleForStep(["tweets", "glossary", "timeline"], 2)).toBe(true);
+    expect(cacheArticleForStep(["tweets", "glossary", "timeline"], 0)).toBe(false);
+    expect(cacheArticleForStep(["tweets", "glossary", "timeline"], 2)).toBe(false);
   });
 
   it("filters by position, so a repeated step would not be filtered away with itself", () => {
@@ -243,7 +219,7 @@ describe("the article cache group", () => {
     expect(cacheArticleForStep([], 0)).toBe(false);
   });
 
-  it("does not mark a job whose only same-group sibling never runs — nor pretend that is free", () => {
+  it("does not mark two former group members even when both are in the plan", () => {
     /* `job.steps` is the whole plan and is never filtered before `runStep`, but
        it can hold steps that make no call: freshness skips them, or an earlier
        failure stops the walk reaching them. The predicate cannot see that and
@@ -252,10 +228,10 @@ describe("the article cache group", () => {
        filtering on `status === "done"`, buys certainty it cannot deliver: a
        resumed job has `done` steps whose entries expired an hour ago.
 
-       What this pins is that the plan, not the outcome, is the input — so the
-       flag is a pure function of the step list and reading it needs no job. */
-    expect(cacheArticleForStep(["tweets", "faq"], 0)).toBe(true);
-    expect(cacheArticleForStep(["tweets", "faq"], 1)).toBe(true);
+       Here even the plan cannot justify a marker: the formats differ, so no
+       read is possible whether both calls run or not. */
+    expect(cacheArticleForStep(["tweets", "faq"], 0)).toBe(false);
+    expect(cacheArticleForStep(["tweets", "faq"], 1)).toBe(false);
   });
 
   it("does not mark a prefix during an ordinary ingest, where nothing reads it", () => {
@@ -277,10 +253,10 @@ describe("the article cache group", () => {
     }
   });
 
-  it("marks it when a job really does schedule two of the group together", () => {
+  it("does not mark the former group when a job schedules both stages", () => {
     const job: StepName[] = ["tweets", "faq"];
-    expect(cacheArticleForStep(job, 0)).toBe(true);
-    expect(cacheArticleForStep(job, 1)).toBe(true);
+    expect(cacheArticleForStep(job, 0)).toBe(false);
+    expect(cacheArticleForStep(job, 1)).toBe(false);
   });
 
   it("lets the environment override every stage at once, for comparison runs", () => {

@@ -331,12 +331,12 @@ describe("hashBlocks and isStale", () => {
 
 /**
  * **No mutation involving the store: no store reaches this block.** It pins the
- * `tweets/6` wording (plan 261001p) beside the stamp that names it, so the text
+ * `tweets/6` wording (plan 261001p) beside the later request-schema stamp, so the text
  * cannot change without the stamp being looked at.
  */
-describe("the tweets/6 prompt", () => {
+describe("the tweets prompt", () => {
   it("pins the paperwork and safe-takeaway rules behind the new stamp", () => {
-    expect(PROMPT_VERSION).toBe("tweets/6");
+    expect(PROMPT_VERSION).toBe("tweets/7");
     expect(TWEETS_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
     expect(TWEETS_SYSTEM).toContain("any implication it states\nitself");
     expect(TWEETS_SYSTEM).toContain("If it deliberately reaches no conclusion");

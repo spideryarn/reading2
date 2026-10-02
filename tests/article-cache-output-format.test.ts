@@ -32,7 +32,7 @@ import { generateSketch } from "../src/sketch.js";
 import { generateTimeline } from "../src/timeline.js";
 import { generateTweets } from "../src/tweets.js";
 
-type RequestBody = { output_config?: { format?: unknown } };
+type RequestBody = { output_config?: { effort?: string; format?: unknown } };
 
 const sent: { task: string; body: RequestBody }[] = [];
 
@@ -73,6 +73,16 @@ const RUNNERS = {
 } satisfies Record<ArticleStage, () => Promise<unknown>>;
 
 const STAGES = Object.keys(STAGE_EFFORT) as ArticleStage[];
+const STAGES_GAINING_SCHEMAS = [
+  "arc",
+  "tweets",
+  "glossary",
+  "timeline",
+  "quiz",
+  "faq",
+  "crossrefs",
+  "simple",
+] as const satisfies readonly ArticleStage[];
 
 describe("ARTICLE_OUTPUT_FORMAT", () => {
   it.each(STAGES)("matches the request sent by %s", async (stage) => {
@@ -86,5 +96,13 @@ describe("ARTICLE_OUTPUT_FORMAT", () => {
     for (const call of sent) {
       expect(call.body.output_config?.format ?? null).toEqual(ARTICLE_OUTPUT_FORMAT[stage]);
     }
+  });
+
+  it.each(STAGES_GAINING_SCHEMAS)("sends %s with its schema and effort together", async (stage) => {
+    await RUNNERS[stage]().catch(() => undefined);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body.output_config?.format).toMatchObject({ type: "json_schema" });
+    expect(sent[0]?.body.output_config?.effort).toBe(STAGE_EFFORT[stage]);
   });
 });
