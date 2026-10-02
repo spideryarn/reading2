@@ -484,6 +484,15 @@ through Resend is the reader's current confirmed address, the report's kind and 
 filed, **never their words**. The Resend entry on the page says so, and `tests/privacy-page.test.ts`
 holds the clause. `LAST_UPDATED` already reads 2 October 2026.
 
+## The admin is emailed each reader's feedback
+
+**Added 2026-10-02** ([261002j](../plans/261002j-email-the-admin-each-reader-s-feedback.md)), at
+Greg's request: every report a reader (not an admin) files is mailed to our inbox — what they wrote,
+its kind, the page address and slug, their email address and account id. Unlike the shipped-feedback
+email above, **this one does carry their words**, through Resend's log and Namecheap's forwarding of
+`hello@`, which is two more places an erasure has to reach. The Resend entry on the page says so,
+and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 2 October 2026.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
