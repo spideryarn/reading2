@@ -133,6 +133,9 @@ const BRAND_TOKENS = '@import "../../styles/tokens.css"';
 const MANIFEST = [
   "tokens.css",
   "shell.css",
+  /* Shared close geometry before every component sheet, whose later rules own
+     colour and shape but deliberately no width, height or padding. Plan 261002i. */
+  "close.css",
   "crumbs.css",
   "table.css",
   "prose.css",

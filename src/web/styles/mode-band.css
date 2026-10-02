@@ -26,6 +26,16 @@
    here. Each panel keeps a class of its own — `chat`, `gloss` — for whatever
    only it needs. */
 .mode-band {
+  /* **A scrollbar you can see on an iPad.** Greg, 2026-10-02, in Summary:
+     *"there IS a scroll bar in summary mode on my iPad. It's just very hard to
+     see."* iOS draws its own thin overlay indicator, and on `--panel` it was
+     close to invisible. Since Safari 26.2 (iPadOS 26.2) WebKit paints that
+     indicator in `scrollbar-color`'s thumb (WebKit bug 258461); earlier
+     versions ignore this line. **Inherited**, so every scroller in every band gets it from
+     here. Only the colour: `scrollbar-width` is untouched, so no scrollbar
+     takes or gives back any width (narrow-windows.md). On a desktop with
+     classic scrollbars the band's bar takes the same grey. Plan 261002i. */
+  scrollbar-color: var(--ink-faint) transparent;
   position: fixed;
   /* Left of the spine's right edge, right of nothing — the band starts exactly
      where the spine ends, so the two read as one rail of chrome. */

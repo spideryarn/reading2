@@ -342,14 +342,12 @@
   font-weight: 600;
   color: var(--ink);
 }
+/* The size is styles/close.css § .close-x. */
 .ref-how-close {
-  flex: none;
-  padding: 0;
   border: none;
   background: none;
   color: var(--ink-faint);
   cursor: pointer;
-  line-height: 1;
 }
 .ref-how-close:hover { color: var(--ink); }
 .ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }

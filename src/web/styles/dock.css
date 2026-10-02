@@ -745,14 +745,8 @@
   outline-offset: -2px;
 }
 
+/* The size is styles/close.css § .close-x; the round outline is this one's own. */
 .dock-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   background: transparent;

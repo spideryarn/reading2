@@ -136,12 +136,21 @@ list page now agree, and agreeing is the whole of it:
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
 | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
+| every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |
+| the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-10`) | `rounded-md` |
 
 **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
 [`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger
 ([260912c](../plans/260912c-send-button-icon-and-primary-style.md)). The other rows are still
 utility classes; reach for the token when a hand-rolled control has to agree with the 36px row, and
 add its siblings when a second row needs one.
+
+**The close cross is the second control with its size in one place**:
+[`styles/close.css`](../../src/web/styles/close.css), imported straight after `shell.css` so each
+component's own rule wins on everything *but* size — and so those rules must not set a width, a
+height or a padding, which [`tests/close-cross.test.ts`](../../tests/close-cross.test.ts) checks
+for each of the seven. In px, because the app supports a 12px root.
+([261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md))
 
 The chip is stated as a **height**, not as padding, in `chipClass` in
 [`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in

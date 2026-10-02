@@ -204,7 +204,7 @@ export function RefereeHowCard({ onClose }: { onClose(): void }) {
             offered two identical-sounding × buttons with different powers. */}
         <button
           type="button"
-          className="ref-how-close"
+          className="ref-how-close close-x"
           aria-label="Hide this explanation"
           onClick={onClose}
         >
