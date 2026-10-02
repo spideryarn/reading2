@@ -409,3 +409,86 @@ describe("a mouse", () => {
     expect(openTriggers()).toHaveLength(0);
   });
 });
+
+/* ------------------------------------------- the card's row, for a finger -- */
+
+/**
+ * **On the card, where the row is drawn for a finger, a tap presses** — since
+ * 2026-10-02. Greg, on an iPad: *"save me a click."* `fingerRow` is the card's
+ * prop (ShelfEntry.tsx § `Actions`), and the row is drawn for a finger only
+ * where `any-pointer: coarse` matches, so that is what the press asks. The
+ * table keeps the reveal above — it never draws this row for a finger — and so
+ * does a pen on a machine with no finger. Plan 261002i.
+ */
+describe("a finger on the card's row", () => {
+  const coarse = (matches: boolean) =>
+    vi.stubGlobal(
+      "matchMedia",
+      (q: string) => ({ matches: matches && q === "(any-pointer: coarse)", media: q }) as MediaQueryList,
+    );
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderCard(entry: LibraryEntry): void {
+    act(() => {
+      root.render(createElement(Actions, { entry, shelf, onEdit, fingerRow: true }));
+    });
+  }
+
+  it("presses on the first tap where there is a finger", () => {
+    coarse(true);
+    renderCard(FETCHED);
+    press(control("Archive"), "touch");
+    expect(shelf.archive, "a finger's tap on the card's row did not press").toHaveBeenCalledTimes(1);
+    press(control("Edit title"), "touch");
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  /* What an iPad really sends: WebKit bug 282988 makes a finger's click say
+     `mouse`. The device decides here, not the click. */
+  it("presses on the first tap when the click says mouse, as iOS's does", () => {
+    coarse(true);
+    renderCard(FETCHED);
+    press(control("Copy link"), "mouse");
+    press(control("Archive"), "mouse");
+    expect(shelf.archive).toHaveBeenCalledTimes(1);
+    expect(openTriggers(), "a card opened on a direct press").toHaveLength(0);
+  });
+
+  it("reveals Re-fetch before it queues anything, even when the click says mouse", async () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const fetches = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetches);
+    press(control("Re-fetch"), "mouse");
+    expect(fetches, "one unlabelled tap queued a rebuild").not.toHaveBeenCalled();
+    expect(openCardHead()).toBe("Re-fetch and rebuild");
+    press(control("Re-fetch"), "mouse");
+    /* `rerun` reaches `fetch` after an await inside `fetchOk`. */
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fetches).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains an unavailable control rather than doing nothing", () => {
+    coarse(true);
+    renderCard(NO_URL);
+    press(control("Open the original"), "mouse");
+    expect(openTriggers(), "an unavailable control's tap said nothing").toHaveLength(1);
+  });
+
+  it("follows the link on the first tap", () => {
+    coarse(true);
+    renderCard(FETCHED);
+    const ev = press(control("Open the original"), "touch");
+    expect(ev.defaultPrevented, "the first tap was stopped from navigating").toBe(false);
+  });
+
+  it("still reveals first for a pen where there is no finger", () => {
+    coarse(false);
+    renderCard(FETCHED);
+    press(control("Archive"), "touch");
+    expect(shelf.archive, "the reveal was lost where the device has no finger").not.toHaveBeenCalled();
+    expect(openCardHead()).toBe("Archive");
+  });
+});

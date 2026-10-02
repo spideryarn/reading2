@@ -345,7 +345,7 @@ export function CommentDialog({
         )}
         <button
           type="button"
-          className="cmt-close"
+          className="cmt-close close-x"
           /* Where focus lands when the dialog opens — § the dialog takes focus,
              and gives it back. */
           ref={closeRef}

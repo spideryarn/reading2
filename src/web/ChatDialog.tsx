@@ -659,7 +659,7 @@ export function ChatDialog({
     <button
       ref={closeRef}
       type="button"
-      className="chat-dialog-close"
+      className="chat-dialog-close close-x"
       onClick={onClose}
       title="Close (Esc)"
       aria-label="Close"

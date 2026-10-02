@@ -208,7 +208,10 @@ export function ShelfCard({
   ).filter(Boolean) as string[];
 
   return (
-    <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+    /* `@container`: the card's own width decides whether a finger gets the
+       icons or the "⋯" (`Actions` § `fingerRow`), because the shelf's column,
+       not the window, is what has to fit them. */
+    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
       <div className="tw:flex tw:items-start tw:gap-3">
         {editing ? (
           <TitleEditor
@@ -244,15 +247,6 @@ export function ShelfCard({
               {entry.title}
             </Link>
           </h2>
-        )}
-
-        {!editing && (
-          <Actions
-            entry={entry}
-            shelf={shelf}
-            onEdit={() => shelf.beginRename(entry.slug)}
-            archivedShown={archivedShown}
-          />
         )}
       </div>
 
@@ -315,13 +309,21 @@ export function ShelfCard({
         </div>
       )}
 
-      {/* **Wraps, and the note keeps its `ml-auto` when it does.** The row is
-          three things of unpredictable width — a word count, a question count,
-          and a note that is whatever the current sort makes it ("opened 3 weeks
-          ago", "added 26 Aug 2026") — and in a narrow window the last of them
-          is the one that gets squeezed. `gap-y-1` so a wrapped second line does
-          not touch the gist above it. */}
-      <p className="tw:mt-3 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      {/* **The facts on the left, the actions on the right, one row.** Greg,
+          2026-10-01, on an iPad: *"we could move the opened, you know, three
+          days ago to the bottom left, and then we could put the icons in the
+          bottom right, so they'd all be on that same bottom row."* The actions
+          were beside the title until then; the title has the card's whole
+          width now. The note — whatever the current sort makes it ("opened 3
+          weeks ago", "added 26 Aug 2026") — sits with the word count rather
+          than out on the right.
+
+          **Wraps, and the actions keep their `ml-auto` when they do**, so on a
+          card too narrow for one line they go to the right of a line of their
+          own. `gap-y-1` so a wrapped second line does not touch the gist above
+          it. A `<div>` and not the `<p>` it was, because the actions are
+          `<div>`s. Plan 261002i. */}
+      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
         {!minimal && (
           <span className="tw:inline-flex tw:items-center tw:gap-1.5">
             <FileText size={13} />
@@ -358,12 +360,23 @@ export function ShelfCard({
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:ml-auto tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
           >
             {note}
           </button>
         </Tooltip>
-      </p>
+        {!editing && (
+          <div className="tw:ml-auto tw:flex tw:items-center">
+            <Actions
+              entry={entry}
+              shelf={shelf}
+              onEdit={() => shelf.beginRename(entry.slug)}
+              archivedShown={archivedShown}
+              fingerRow
+            />
+          </div>
+        )}
+      </div>
     </article>
   );
 }
@@ -728,10 +741,33 @@ export function Actions({
   onEdit,
   inTooltipGroup = false,
   archivedShown = false,
+  fingerRow = false,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
   onEdit: () => void;
+  /**
+   * **Draw the icons for a finger too, when the card is wide enough.** Greg,
+   * 2026-10-01, on an iPad in portrait: the "⋯" was *"just a tiny bit more
+   * cumbersome … save me a click. And we could keep the three dots menu just in
+   * case things are really, really narrow."*
+   *
+   * True on the card only. There, wherever there is a finger, the row is drawn
+   * at 40px — the house number for a thumb, narrow-windows.md § What a control
+   * owes a finger — once the card's container is at least 28rem across (an
+   * iPad either way up), and the "⋯" below that (a phone). The query is a
+   * container query against `ShelfCard`'s `@container`. A prop, not the query
+   * alone, because the press changes too (`pressCapture` commits on this row)
+   * and that has to be the card's alone — and because it keeps the table's
+   * classes exactly what they were, rather than leaning on a query that
+   * happens not to match where there is no container.
+   *
+   * `any-pointer` for the 40px, where touch.md asks a size rule for `pointer`:
+   * this is the row taking the "⋯"'s place, and the "⋯" is chosen by
+   * `any-pointer`, so whoever gets the row instead gets it finger-sized.
+   * Plan 261002i.
+   */
+  fingerRow?: boolean;
   /** `?archived=1` — which of Archive's two cards is true. */
   archivedShown?: boolean;
   /**
@@ -815,9 +851,30 @@ export function Actions({
          the one row where the card is the point — and Floating UI treats `pen`
          as mouse-like, so its own hover would not have opened the card either.
          GPT Sol, 2026-09-05. */
-      const finger =
-        (e.nativeEvent as PointerEvent).pointerType === "touch" ||
-        (e.nativeEvent as PointerEvent).pointerType === "pen";
+      /* **Where the row is drawn for a finger** (`fingerRow` on a device with
+         one, since 2026-10-02) the click's `pointerType` is not asked at all —
+         on an iPad it says `mouse` (WebKit bug 282988, above) — and the
+         device decides instead. There a tap **presses** a control that is free
+         and undoable — Edit, Open, Copy, Archive, Put back — because Greg asked
+         for the click back and the icons are the explanation he chose. Two
+         kinds still **reveal first**, so every tap there is treated as a
+         finger's:
+         - **an unavailable control**, whose button refuses its own click — a
+           press would be a faded icon doing nothing and never saying why;
+         - **Re-fetch**, the one action that queues paid work, which from a
+           closed "⋯" was two taps and must not become one unlabelled one.
+         GPT Sol's plan review, 2026-10-02. A pen on a machine with no finger
+         is `any-pointer: fine`, never gets here, and keeps the gesture as it
+         was. Plan 261002i. */
+      const fingerSurface =
+        fingerRow &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(any-pointer: coarse)").matches;
+      const finger = fingerSurface
+        ? id === "rerun" ||
+          (e.target as Element).closest("[data-action]")?.getAttribute("data-commits") !== "true"
+        : (e.nativeEvent as PointerEvent).pointerType === "touch" ||
+          (e.nativeEvent as PointerEvent).pointerType === "pen";
       /* `armed?.id !== id` rather than `armed === null`, so a finger moving
          along the row re-reveals rather than firing at whatever it lands on —
          the row can be read by walking it. Spine.tsx § `bandPress`. */
@@ -839,7 +896,7 @@ export function Actions({
          the press it was explaining goes through. GPT Sol, 2026-09-05. */
       setArmed((prev) => (prev?.byTouch ? null : prev));
     },
-    [armed],
+    [armed, fingerRow],
   );
 
   return (
@@ -867,7 +924,13 @@ export function Actions({
        tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx,
        docs/plans/260915b-shelf-actions-reachable-on-touch.md. */}
     <div
-      className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
+      className={
+        fingerRow
+          ? /* The card: a finger gets this row, finger-sized, where the card
+               is 28rem or wider, and the "⋯" below that — `fingerRow`. */
+            "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:gap-1 tw:any-pointer-coarse:opacity-100 tw:any-pointer-coarse:[&_:is(a,button)]:size-10 tw:any-pointer-coarse:[&_svg]:size-[18px] tw:any-pointer-coarse:@max-[28rem]:hidden"
+          : "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
+      }
       onClickCapture={pressCapture}
     >
       <RowGroup joined={inTooltipGroup}>
@@ -1002,7 +1065,7 @@ export function Actions({
         )}
       </RowGroup>
     </div>
-    <ShelfActionsMenu entry={entry} actions={actions} />
+    <ShelfActionsMenu entry={entry} actions={actions} fingerRow={fingerRow} />
     </>
   );
 }
@@ -1088,7 +1151,16 @@ const ITEM =
  * "copy link address" survive on a touchscreen laptop, where a mouse meets this
  * menu too. GPT Sol, 2026-09-15.
  */
-function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: ShelfActions }) {
+function ShelfActionsMenu({
+  entry,
+  actions,
+  fingerRow,
+}: {
+  entry: LibraryEntry;
+  actions: ShelfActions;
+  /** The card, where the "⋯" is only for a card narrower than 28rem — `Actions` § `fingerRow`. */
+  fingerRow: boolean;
+}) {
   const { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit } = actions;
   const [open, setOpen] = useState(false);
 
@@ -1136,7 +1208,13 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
     /* `relative`, so the trigger sits above the card's stretched title link and
        a tap on it is not a tap on the article. `hidden` unless there is a
        finger — the other half of the switch in `Actions`. */
-    <div className="tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:flex">
+    <div
+      className={
+        fingerRow
+          ? "tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:@max-[28rem]:flex"
+          : "tw:relative tw:hidden tw:shrink-0 tw:any-pointer-coarse:flex"
+      }
+    >
       <DropdownMenu.Root open={open} onOpenChange={setOpen}>
         <DropdownMenu.Trigger
           /* Required, not decoration: the menu is portalled away from its card,
@@ -1161,9 +1239,14 @@ function ShelfActionsMenu({ entry, actions }: { entry: LibraryEntry; actions: Sh
             fingerPress.current = null;
             if (press && e.detail !== 0) setOpen(!press.wasOpen);
           }}
-          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:text-foreground"
+          /* **Drawn as a button, not a stray mark** — Greg, 2026-10-01, on an
+             iPad: *"Make the triple dot menu for items in my shelf a bit more
+             visible. It's very small."* A 22px glyph in the foreground colour
+             inside the strong rule, where it was an 18px muted one with no
+             edge. Still 40px. Plan 261002i. */
+          className="tw:relative tw:inline-flex tw:size-10 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-rule-strong tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:border-highlight/60 tw:data-[state=open]:bg-highlight/10 tw:data-[state=open]:border-highlight/60"
         >
-          <Ellipsis size={18} aria-hidden="true" />
+          <Ellipsis size={22} aria-hidden="true" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content
@@ -1302,10 +1385,12 @@ function actionAt(target: EventTarget | null): ActionKey | null {
 /**
  * One card, in the placement the whole row shares.
  *
- * `bottom`, because the row sits at the top right of a card and in a table cell
- * on a dense row — above it is the window edge or the row before, and below it
- * is this article's own body, which is the thing the reader is least surprised
- * to have covered for a moment.
+ * `bottom`, because the row sat at the top right of a card and sits in a table
+ * cell on a dense row — above it is the window edge or the row before, and
+ * below it is this article's own body, which is the thing the reader is least
+ * surprised to have covered for a moment. On the card it is at the bottom right
+ * since 2026-10-02 (plan 261002i), where below is the next card; the card still
+ * goes there, and `keepSide` stops it being thrown onto the buttons.
  *
  * **Controlled, and that is the risky part.** The card has to survive a tap and
  * outlive the `mouseleave` a tap synthesises, which needs an owner of "which
@@ -1370,7 +1455,9 @@ function ActionTip({
           wrapper element, because the row is a flex line of 28px squares and an
           extra box in it would have to be given a layout of its own; `Tooltip`
           clones this again for its ref and handlers, and props survive both. */}
-      {cloneElement(children, { "data-action": id })}
+      {/* `data-commits` too, so `pressCapture` can tell an unavailable control
+          from one that would act — plan 261002i. */}
+      {cloneElement(children, { "data-action": id, "data-commits": String(commits) })}
     </Tooltip>
   );
 }
