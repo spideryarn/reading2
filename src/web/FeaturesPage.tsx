@@ -386,12 +386,17 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <div className="site-bento site-reveal">
           {/* Greg, 2026-08-25, "the Tweet Thread view"; 2026-09-12, that it
               starts writing when opened; 2026-09-29, a column alongside the
-              text with "block links for each tweet item to relevant place in
-              the text … so that if I'm reading the tweet item, I can see where
-              in the text it came from". All three in docs/project/tweets.md. */}
+              text with block links back to relevant passages. The two limits
+              are product facts from src/web/useTweets.ts (only an owner's
+              absent thread auto-runs) and src/tweets.ts § `checkBlocks` plus
+              src/web/Tweets.tsx § `UnlinkedNote` (a post can have no surviving
+              passage id, and threads from before tweets/5 have none). GPT Sol's
+              code review caught the first draft promising both without the
+              limits; "the passages they came from" is unqualified because a
+              post with no surviving id says so in place (`UnlinkedNote`). */}
           <Tile name="Tweets." mode="tweets">
-            The piece as a thread, in a column beside the text, written when you open it. Each item
-            links to the place in the text it came from.
+            The piece as a thread, in a column beside the text, written the first time you open it
+            on an article of your own. Posts link back to the passages they came from.
           </Tile>
           {/* Greg, 2026-09-30, docs/project/cross-references.md, rephrased to
               the reader: "if it describes a result, then it would create an

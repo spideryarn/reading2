@@ -11,7 +11,8 @@
  */
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { experimental, isMode, modeMentions, mount, unmount } from "./helpers/marketing-page-render.js";
+import type { Mode } from "../src/modes.js";
+import { experimental, isMode, mount, unmount } from "./helpers/marketing-page-render.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -46,6 +47,30 @@ const NUMBER_WORDS = [
   "Fourteen",
   "Fifteen",
 ];
+
+const MODE_TITLES = {
+  "Notes in the margin.": "glossary",
+  "Find by concepts and meaning, rather than exact match": "search",
+  "The ideas it introduces, and the ones it needs you to hold.": "ideas",
+  "Structure.": "structure",
+  "Skim.": "skim",
+  "Find out what you kept.": "remember",
+  "Summary.": "summary",
+  "Timeline.": "timeline",
+  "For peer reviewers.": "referee",
+} satisfies Record<string, Mode>;
+
+/** Find every promised occurrence from its title, so a missing `mode` cannot hide it. */
+function expectedModeElements(page: HTMLElement) {
+  const headings = [...page.querySelectorAll<HTMLElement>("h2, h3")];
+  return Object.entries(MODE_TITLES).map(([title, expectedMode]) => {
+    const matches = headings.filter((el) => el.textContent?.trim() === title);
+    expect(matches, title).toHaveLength(1);
+    const container = matches[0]?.closest<HTMLElement>(".site-panel, section") ?? null;
+    expect(container, `${title} has no feature container`).not.toBeNull();
+    return { title, expectedMode, container };
+  });
+}
 
 beforeEach(() => {
   vi.stubGlobal("fetch", async () => new Response("nope", { status: 404 }));
@@ -84,12 +109,19 @@ describe("the landing page's tiles", () => {
   });
 
   it("draws the Experimental tag exactly on the modes MODE_CATALOG marks", async () => {
-    const mentions = modeMentions(await mount(<LandingPage />));
+    const page = await mount(<LandingPage />);
+    const mentions = expectedModeElements(page);
     expect(mentions.length).toBeGreaterThan(0);
-    for (const { title, mode, tagged } of mentions) {
+    for (const { title, expectedMode, container } of mentions) {
+      const mode = container?.dataset.mode ?? "";
+      const tagged = container?.querySelector(".site-experimental") !== null;
       expect(isMode(mode)).toBe(true);
       if (!isMode(mode)) continue;
-      expect({ title, tagged }).toEqual({ title, tagged: experimental(mode) });
+      expect({ title, mode, tagged }).toEqual({
+        title,
+        mode: expectedMode,
+        tagged: experimental(mode),
+      });
     }
   });
 });

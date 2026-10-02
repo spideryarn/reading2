@@ -17,8 +17,14 @@
  */
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MODES } from "../src/modes.js";
-import { experimental, isMode, modeMentions, mount, unmount } from "./helpers/marketing-page-render.js";
+import { MODES, type Mode } from "../src/modes.js";
+import {
+  experimental,
+  isMode,
+  type ModeMention,
+  mount,
+  unmount,
+} from "./helpers/marketing-page-render.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -36,7 +42,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 const { FeaturesPage } = await import("../src/web/FeaturesPage.js");
 
 /** What each titled element on `/features` is about. */
-const TITLES: Record<string, string> = {
+const TITLES = {
   "Structure.": "structure",
   "Diagram.": "diagram",
   "Skim.": "skim",
@@ -58,7 +64,30 @@ const TITLES: Record<string, string> = {
   "Quiz.": "remember",
   "Referee mode.": "referee",
   "Tweets.": "tweets",
-};
+} satisfies Record<string, Mode>;
+
+/**
+ * Every titled feature promised above, found from its visible title rather
+ * than from `[data-mode]`. Starting with `[data-mode]` made an omitted `mode`
+ * prop disappear from the test altogether — particularly bad for the duplicate
+ * Search, Chat and Remember representations, whose other occurrence kept the
+ * coverage assertion green.
+ */
+function expectedMentions(page: HTMLElement): (ModeMention & { expectedMode: Mode })[] {
+  const titled = [...page.querySelectorAll<HTMLElement>("h2, h3, figcaption > strong")];
+  return Object.entries(TITLES).map(([title, expectedMode]) => {
+    const matches = titled.filter((el) => el.textContent?.trim() === title);
+    expect(matches, title).toHaveLength(1);
+    const container = matches[0]?.closest<HTMLElement>(".site-panel, section, figure") ?? null;
+    expect(container, `${title} has no feature container`).not.toBeNull();
+    return {
+      title,
+      mode: container?.dataset.mode ?? "",
+      tagged: container?.querySelector(".site-experimental") !== null,
+      expectedMode,
+    };
+  });
+}
 
 beforeEach(() => {
   vi.stubGlobal("fetch", async () => new Response("nope", { status: 404 }));
@@ -72,23 +101,23 @@ afterEach(() => {
 describe("/features", () => {
   it("names every mode in MODES", async () => {
     const page = await mount(<FeaturesPage signedIn={false} />, "/features");
-    const named = new Set(modeMentions(page).map((m) => m.mode));
+    const named = new Set(expectedMentions(page).map((m) => m.mode));
     expect(MODES.filter((mode) => !named.has(mode))).toEqual([]);
   });
 
   it("gives each mode element the mode its title says", async () => {
     const page = await mount(<FeaturesPage signedIn={false} />, "/features");
-    const mentions = modeMentions(page);
+    const mentions = expectedMentions(page);
     /* The positive control: an empty list would pass the loop below. */
     expect(mentions.length).toBeGreaterThanOrEqual(MODES.length);
-    for (const { title, mode } of mentions) {
-      expect({ title, mode }).toEqual({ title, mode: TITLES[title] });
+    for (const { title, mode, expectedMode } of mentions) {
+      expect({ title, mode }).toEqual({ title, mode: expectedMode });
     }
   });
 
   it("draws the Experimental tag exactly on the modes MODE_CATALOG marks", async () => {
     const page = await mount(<FeaturesPage signedIn={false} />, "/features");
-    const mentions = modeMentions(page);
+    const mentions = expectedMentions(page);
     /* Both halves have to occur, or the iff is only half tested. */
     expect(mentions.some((m) => m.tagged)).toBe(true);
     expect(mentions.some((m) => !m.tagged)).toBe(true);

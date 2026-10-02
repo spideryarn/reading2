@@ -177,3 +177,16 @@ Rewriting any existing sentence for voice; the strapline; the ten unanswered int
 - 2026-10-02 — GPT Sol plan review ([261002b-plan-review-sol.md](261002b-plan-review-sol.md)): no P0,
   four P1, four P2. All accepted; #2 was checked by looking at `search-meaning.png`, whose bar shows
   Hierarchy and Outline. The changes are marked *Sol #n* above.
+- 2026-10-02: stages 1 and 3 built in parallel, with tests red first; stage 2's shots were taken,
+  and every one was looked at before it went in. Referee and ask were retaken once: a title image
+  in frame, a half-cut sentence, and a panel covering the prose.
+- 2026-10-02: browser check of `/` and `/features` at 1440 and 390, and of `/design` at 1440: all
+  pass. No console errors, and /design sent no writes. One cosmetic nit is left: in a three-up row,
+  an untagged tile's title sits about 27px above its tagged neighbours.
+- 2026-10-02: GPT Sol code review ([261002b-code-review-sol.md](261002b-code-review-sol.md)) found
+  no P0, one P1 and two P2s, and fixed them in place:
+  - the P1: the Tweets tile promised more than the code does;
+  - the two P2s: the experimental-tag and privacy tests are now directional, and found by visible
+    title.
+
+  Its Tweets wording was then made plainer, keeping its correction.

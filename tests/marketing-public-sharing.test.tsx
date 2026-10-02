@@ -62,16 +62,15 @@ const PAGES = [
 ];
 
 describe.each(PAGES)("$name on public articles", ({ draw, title }) => {
-  it("names comments and searches as going with a public article, and chats as not", async () => {
+  it("says comments and searches go with it, while chats and the profile do not", async () => {
     const text = block(await draw(), title);
-    expect(text).toMatch(/comments/);
-    expect(text).toMatch(/searches/);
-    expect(text).toMatch(/chats[^.]*not/i);
+    expect(text).toMatch(/comments and searches go with it/i);
+    expect(text).toMatch(/chats and (?:your |the )?profile (?:do not|are not shared)/i);
   });
 
-  it("nowhere says anything stays yours", async () => {
-    const text = (await draw()).textContent ?? "";
-    expect(text).not.toMatch(/stays? yours/i);
+  it("does not still claim comments, searches or notes stay yours", async () => {
+    const text = block(await draw(), title);
+    expect(text).not.toMatch(/(?:comments|searches|notes)[^.]*stays? yours/i);
   });
 
   it("no longer lists gists among what is shared", async () => {
