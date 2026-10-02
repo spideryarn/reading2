@@ -147,10 +147,32 @@ const SCROLL_IDLE_MS = 120;
 const SCROLL_MAX_MS = 1500;
 
 /**
+ * **How long a layout change may still move the page back onto the section.**
+ * Measured on a cold load of `/help#mode-skim` (4x CPU throttle, no cache):
+ * the scroll was asked for while the web fonts were still loading, they landed
+ * about half a second later and the text above the heading reflowed 960px
+ * shorter — but Chrome's smooth scroll keeps the target it computed at the
+ * start, so it went on to the old one and left the heading 880px above the
+ * window. Two seconds covers that with room; the reader's own input ends it
+ * sooner.
+ */
+const SETTLE_MS = 2000;
+/** Input that means the reader is moving the page themselves. */
+const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+
+/**
  * **Scroll `el` to the top of the window, then `flashElement` it once the
  * scroll has settled** — see the constants above for why it waits. Smooth
  * unless the reader asked for reduced motion. Returns a cancel, for a caller
  * that is about to scroll somewhere else or unmount.
+ *
+ * **It stays on `el` while the page settles** (`SETTLE_MS`, `keepAligned`): a
+ * web font landing or the page changing size asks for the same scroll again,
+ * in the same manner, which retargets one still in flight. The reader's first
+ * wheel, key, touch or press ends that at once — never fight the reader. It is
+ * here rather than in the Help page because Metadata's sections are exposed to
+ * the same thing (an aside or a font arriving above the section), and asking
+ * again when nothing moved scrolls nowhere. The flash still fires once.
  *
  * Two callers: Metadata's contents list and search box (PageContents.tsx §
  * reveal, which moved this here), and the Help page's arrival at a fragment
@@ -161,13 +183,16 @@ export function scrollToAndFlash(el: HTMLElement): () => void {
   let idle = setTimeout(done, SCROLL_IDLE_MS);
   const cap = setTimeout(done, SCROLL_MAX_MS);
   window.addEventListener("scroll", onScroll, { passive: true });
+  const behavior: ScrollBehavior = reducedMotion() ? "auto" : "smooth";
   /* Optional-called: jsdom has none. */
-  el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  const align = () => el.scrollIntoView?.({ behavior, block: "start" });
+  align();
+  const stopSettling = keepAligned(el, align);
   function onScroll(): void {
     clearTimeout(idle);
     idle = setTimeout(done, SCROLL_IDLE_MS);
   }
-  function cancel(): void {
+  function stopFlashWait(): void {
     if (finished) return;
     finished = true;
     clearTimeout(idle);
@@ -176,10 +201,59 @@ export function scrollToAndFlash(el: HTMLElement): () => void {
   }
   function done(): void {
     if (finished) return;
-    cancel();
+    stopFlashWait();
     if (el.isConnected) flashElement(el);
   }
-  return cancel;
+  return () => {
+    stopFlashWait();
+    stopSettling();
+  };
+}
+
+/**
+ * **Call `align` whenever layout may have moved `el`**, for `SETTLE_MS` or
+ * until the reader moves the page; returns the stop. Two signals: a web font
+ * finishing (`loadingdone`, and `fonts.ready` for one already under way), and
+ * the body or `el` changing size. Each is optional — jsdom has neither
+ * `document.fonts` nor `ResizeObserver`.
+ */
+function keepAligned(el: HTMLElement, align: () => void): () => void {
+  let stopped = false;
+  const realign = () => {
+    if (!stopped && el.isConnected) align();
+  };
+  /* A ResizeObserver reports every target once on `observe`, which is not a
+     change; so compare each target's size with the last one it reported. */
+  const sizes = new Map<Element, string>();
+  const ro =
+    typeof ResizeObserver === "function"
+      ? new ResizeObserver((entries) => {
+          let changed = false;
+          for (const e of entries) {
+            const size = `${e.contentRect.width}x${e.contentRect.height}`;
+            const before = sizes.get(e.target);
+            sizes.set(e.target, size);
+            if (before !== undefined && before !== size) changed = true;
+          }
+          if (changed) realign();
+        })
+      : null;
+  ro?.observe(document.body);
+  ro?.observe(el);
+  const fonts = (document as { fonts?: FontFaceSet }).fonts;
+  fonts?.addEventListener?.("loadingdone", realign);
+  if (fonts?.status === "loading") void fonts.ready?.then(realign);
+  const timer = setTimeout(stop, SETTLE_MS);
+  for (const type of READER_INPUT) window.addEventListener(type, stop, { capture: true, passive: true });
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    clearTimeout(timer);
+    ro?.disconnect();
+    fonts?.removeEventListener?.("loadingdone", realign);
+    for (const type of READER_INPUT) window.removeEventListener(type, stop, { capture: true });
+  }
+  return stop;
 }
 
 /** The prose is exposed again: fire whatever was held for it. */

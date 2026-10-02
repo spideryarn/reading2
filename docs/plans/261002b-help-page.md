@@ -209,3 +209,27 @@ findings accepted; each was checked against the code.
   exhaustiveness.
 - **R8 — the ways in, as an inventory**: footer, command bar, the Dock link. No new menu, no
   `SiteNav` change.
+
+## What landed (2026-10-02)
+
+- **1a** `4aeb29585` — the route (signed in and out, lazy), footer link, `src/web/help/` skeleton,
+  grouped contents (sticky at `lg`, a `<details>` below), search through `searchSections` with Help's
+  own synonym table, typed anchors with aliases generated from `RETIRED_MODES`, arrival on mount and
+  `hashchange`. The scroll-settle-flash moved out of `PageContents` into `flash.ts §
+  scrollToAndFlash`, shared by Metadata and Help.
+- **1b** `0845ef0d5` — ~12.8k words, drafted by four Opus subagents from the docs and the code, merged
+  into one voice and split into `help-topics.tsx`, `help-modes.tsx`, `help-faq.tsx` behind
+  `help-content.tsx`. One file per plan above became four; the typed `Record`s are as planned.
+  Diagram's `MODE_CATALOG.how` corrected to "about a minute" (it said "minutes"; the panel's
+  `SKETCH_WAIT` says a minute).
+- **2 + docs** `fd2796578` — the Dock's Help link (`LifeBuoy`, after the experimental switch, its word
+  dropping with the bar's other words on narrow windows), the command bar's Help row, and the docs:
+  help-page.md, overseer.md § Deploying step 4, and the signposts.
+- **Code review** `575fd4176` — GPT Sol ([261002b-help-page-code-review-sol.md](261002b-help-page-code-review-sol.md)),
+  write-capable: one owner for a fragment click (C1), nine reader-facing sentences corrected against
+  the code (C3), search fixes (C2), named `#` links (C4), `PINNED_ANCHORS` both ways (C5). C6 (doc
+  wording) applied. **C7 is reported, not fixed — outside this change**: a visitor sees the owner's
+  public notes in the margin under a tooltip that says *"Your note"* (BlockGutter.tsx ~:589).
+- **Browser check** (Playwright, signed out, 1440 and 390): layout, sticky contents, phone width with
+  no sideways scroll, the table, search and Enter, the `#` links all pass. One bug: on a cold first
+  visit `/help#mode-skim` overshot by ~800px — fixed in the next commit.
