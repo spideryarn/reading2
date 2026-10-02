@@ -62,10 +62,21 @@
 import { isSpideryarnId } from "./ids.js";
 import { MODES, RETIRED_MODES } from "./modes.js";
 import { ARTICLE_VIEWS } from "./read-address.js";
-/* Step names a tab loaded before a rename may still send. A report from a stale
-   tab keeps its step rather than losing it; the mode goes through
-   `RETIRED_MODES` instead, the same table `?mode=` links use. */
-import { RETIRED_STEPS } from "./step-order.js";
+
+/**
+ * `RETIRED_STEPS` in src/step-order.ts, copied — the step names a tab loaded
+ * before a rename may still send, so a stale tab's report keeps its step rather
+ * than losing it. Copied, not imported, for the reason `STEPS` below is: this
+ * file is in every reader's startup bundle (via src/web/log-buffer.ts), and
+ * importing src/step-order.ts put that module there too
+ * (tests/eager-client-graph.test.ts). tests/feedback-payload.test.ts feeds
+ * every key of the real table through `stepOf`. The mode goes through
+ * `RETIRED_MODES` instead, the same table `?mode=` links use.
+ */
+const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
+  trajectory: "skim",
+  hierarchy: "structure",
+};
 
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
 export const FEEDBACK_DIAGNOSTICS_VERSION = 1;
