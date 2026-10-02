@@ -38,11 +38,21 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, blockIdentities, comments as commentsTable, jobs } from "../src/db/schema.js";
+import {
+  articles,
+  blockIdentities,
+  comments as commentsTable,
+  glossaryLookups,
+  jobs,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
-import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
+import {
+  seedCommentsFromFiles,
+  seedGlossaryLookupsFromFiles,
+  seedShelfFromFiles,
+} from "./helpers/seed-reader-state.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -79,7 +89,7 @@ const VANISHED = "spya-zzzzzz";
 
 await pgReady({
   suite: "tests/helpers-seed-reader-state.test.ts",
-  tables: ["spideryarn.revision_blocks"],
+  tables: ["spideryarn.revision_blocks", "spideryarn.glossary_lookups"],
 });
 
 /**
@@ -266,6 +276,39 @@ describe("the reader-state seeder", () => {
       expect(row?.archivedAt?.toISOString()).toBe("2019-07-04T09:30:00.000Z");
       expect(row?.lastOpenedAt?.toISOString()).toBe("2019-07-05T09:30:00.000Z");
       expect(row?.purpose).toBe("because I keep arguing about it");
+    } finally {
+      await forget(slug);
+    }
+  });
+
+  it("keeps the name that makes a lookup row an added glossary term", async () => {
+    const slug = "test-seed-added-glossary-term";
+    await forget(slug);
+    await makeFixture(slug, []);
+    await writeFile(
+      path.join(ROOT, "data", slug, "glossary-lookups.json"),
+      JSON.stringify({
+        lookups: {
+          "spya-gta234": {
+            answer: "The answer the reader saw.",
+            citations: [],
+            searches: 0,
+            model: "a-model",
+            at: "2026-10-02T00:00:00.000Z",
+            addedName: "attention head",
+          },
+        },
+      }),
+    );
+    try {
+      await loadArticleIntoPg(slug, { root: ROOT });
+      expect(await seedGlossaryLookupsFromFiles(slug)).toBe(1);
+      const [row] = await getDb()
+        .select({ addedName: glossaryLookups.addedName })
+        .from(glossaryLookups)
+        .innerJoin(articles, eq(articles.id, glossaryLookups.articleId))
+        .where(eq(articles.slug, slug));
+      expect(row?.addedName).toBe("attention head");
     } finally {
       await forget(slug);
     }

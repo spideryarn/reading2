@@ -744,10 +744,9 @@ export function makeAskAboutTerm(
 
         const lookup: GlossaryLookup = {
           answer: event.answer,
-          /* `safeUrl` for `lookUpTerm`'s reason with one word changed: this is
-             where a model-supplied URL stops being a value in flight and
-             becomes one the panel will put in an `href`. It is not stored, and
-             that changes nothing — the `href` is the hazard, not the column. */
+          /* `safeUrl` for `lookUpTerm`'s reason: this is where a model-supplied
+             URL stops being a value in flight and becomes one the panel will
+             put in an `href` and the store will keep. */
           citations: event.citations.flatMap((c) => {
             const url = safeUrl(c.url);
             return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];

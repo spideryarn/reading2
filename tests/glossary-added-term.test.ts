@@ -18,7 +18,7 @@
  * 8. **A visitor to the shared article sees none of it.**
  */
 import { and, eq, isNotNull } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, glossaryLookups } from "../src/db/schema.js";
@@ -175,6 +175,27 @@ describe("adding a looked-up term", () => {
     await asOwner(() => pgGlossaryHiddenStore.unhide(SLUG, MODEL));
   });
 
+  it("does not mint an id already used by an entry in the glossary document", async () => {
+    const collision = "spya-aaaaaa";
+    await setEntries(article, [entry(MODEL, "Zzyzx protocol"), entry(collision, "Another term")]);
+    let calls = 0;
+    const random = vi.spyOn(Math, "random").mockImplementation(() => (calls++ < 6 ? 0 : 0.1));
+    try {
+      const result = await asOwner(() =>
+        pgGlossaryLookupStore.addTerm(SLUG, {
+          name: "collision target",
+          quote: "collision target",
+          lookup: lookup("An answer."),
+        }),
+      );
+      expect(result.kind).toBe("added");
+      if (result.kind === "added") expect(result.entryId).not.toBe(collision);
+    } finally {
+      random.mockRestore();
+      await setEntries(article, [entry(MODEL, "Zzyzx protocol")]);
+    }
+  });
+
   it("makes one entry when two tabs add the same words at once, even under different names", async () => {
     /* **Made deterministic rather than raced.** `Promise.all` over two adds
        passed with the lock deleted, three runs in three — the two
@@ -238,16 +259,20 @@ describe("adding a looked-up term", () => {
   it("gives way to a later model entry for the same words, which takes the reader's answer", async () => {
     const [row] = (await addedRows(article)).filter((r) => r.addedName === word.toLowerCase());
     if (!row) throw new Error("nothing was added");
-    /* A *Find more* that found the same term: a model entry with no lookup. */
+    /* A *Find more* that found the same term: a model entry with no lookup.
+       The old hide deliberately stays on the added id rather than following. */
+    await asOwner(() => pgGlossaryHiddenStore.hide(SLUG, row.entryId));
     const { senseHere: _none, ...model } = entry(LATER, word);
     await setEntries(article, [entry(MODEL, "Zzyzx protocol"), model]);
     const { glossary } = await asOwner(() => pgArticleReader.loadGlossary(SLUG));
     expect(glossary.entries.some((e) => e.id === row.entryId)).toBe(false);
     const winner = glossary.entries.find((e) => e.id === LATER);
     expect(winner?.added).toBeUndefined();
+    expect(winner?.hidden).toBeUndefined();
     expect(winner?.lookup?.answer).toBe("The answer.");
     /* The row is kept: it is still the reader's. */
     expect((await addedRows(article)).some((r) => r.entryId === row.entryId)).toBe(true);
+    await asOwner(() => pgGlossaryHiddenStore.unhide(SLUG, row.entryId));
     await setEntries(article, [entry(MODEL, "Zzyzx protocol")]);
   });
 });

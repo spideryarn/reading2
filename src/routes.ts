@@ -32,7 +32,7 @@
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources → SSE
- *   POST   /api/glossary/:slug/ask   find a term the reader typed and explain it → SSE; stores nothing
+ *   POST   /api/glossary/:slug/ask   find a term the reader typed, explain it and add it → SSE
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
@@ -1980,8 +1980,8 @@ async function streamLinkSummary(
  * number of `delta`, then exactly one of `done` (the whole `AskedTermAnswer`,
  * the shape the JSON route used to send) or `error` (`{ error }`, the
  * reader-facing sentence). **No partial text rides on `error`**, unlike quiz's:
- * nothing about an asked term is kept, so a half-answer has nowhere to go but
- * away. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ * only a finished answer is kept as an added term, so a half-answer has nowhere
+ * to go but away. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  *
  * `gone` goes to the model call, so a reader who changes the question or leaves
  * the article cancels the paid call rather than only the frames — the client

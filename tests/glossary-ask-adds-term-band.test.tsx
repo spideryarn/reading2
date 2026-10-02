@@ -61,6 +61,7 @@ const NEW = entry(NEW_ID, "Attention head", { kind: "term", added: true, lookup:
 
 /* The fake server. */
 let serverHasNew = false;
+let suppressAddedRow = false;
 let hiddenIds = new Set<string>();
 let gets = 0;
 let writes: string[] = [];
@@ -95,7 +96,7 @@ vi.mock("../src/web/lib/api.js", () => {
       }
       if (input.endsWith("/ask")) {
         const done = askDone as { added?: { kind?: string } } | null;
-        if (done?.added?.kind === "added") serverHasNew = true;
+        if (done?.added?.kind === "added") serverHasNew = !suppressAddedRow;
         const body = new ReadableStream<Uint8Array>({
           start(c) {
             c.enqueue(frame("begin", { term: "x", blockId: BLOCK, quote: "Attention Heads" }));
@@ -157,6 +158,7 @@ let root: Root;
 
 beforeEach(() => {
   serverHasNew = false;
+  suppressAddedRow = false;
   hiddenIds = new Set();
   gets = 0;
   writes = [];
@@ -243,6 +245,16 @@ describe("a looked-up term the server added", () => {
     expect(row, "the new row is not drawn").not.toBeNull();
     expect(row?.querySelector(".gloss-added")?.textContent).toBe("added by you");
   });
+
+  it("keeps the answer when the returned id is absent after the refresh", async () => {
+    suppressAddedRow = true;
+    await mount();
+    await lookUp("attention head", answerOf({ kind: "added", entryId: NEW_ID }));
+
+    expect(param("term")).toBeNull();
+    expect(input()?.value).toBe("attention head");
+    expect(host.querySelector(".gloss-ask-answer")?.textContent).toContain("Added to your glossary.");
+  });
 });
 
 describe("a term that was already in the glossary", () => {
@@ -286,6 +298,8 @@ describe("an article with no glossary to add to", () => {
 describe("a `done` whose `added` is not one of the three", () => {
   it.each([
     ["an id that is not an id", { kind: "added", entryId: "not-an-id" }],
+    ["a malformed existing id", { kind: "existing", entryId: "not-an-id", hidden: false }],
+    ["an existing result without its hidden flag", { kind: "existing", entryId: OLD_ID }],
     ["an unknown kind", { kind: "teleported", entryId: NEW_ID }],
   ])("is a failure, never an answer (%s)", async (_label, added) => {
     await mount();

@@ -3498,7 +3498,7 @@ const rawPgArticleReader: ArticleReader = {
        explanation of its own, the reader's follows it there (`absorbed`).
        **A hide does not follow**: the model's entry is a new entry, and
        carrying a hide across would leave *Unhide* on it clearing the wrong
-       row. Plan 261002f § Revised, item 5. */
+       row. docs/project/glossary.md § A finished answer adds the term. */
     const { entries: owners, absorbed } = withAddedEntries(glossary.entries, stored);
     const entries = relocateEntries(owners, blocks).map((entry) => {
       const lookup =

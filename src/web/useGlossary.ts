@@ -771,15 +771,12 @@ export interface UseGlossary {
    * is in — the box at the top of the panel.
    *
    * A reader asked for a search box that would "look for that term and add it
-   * to the glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). This is the first
-   * half; **the second is deferred and nothing is stored**, so the answer lives
-   * in this hook's state and goes when the reader leaves the article. The three
-   * reasons are on `AskedTermAnswer` in src/types.ts, and the one that decides
-   * it is that the glossary document is published with a shared article.
+   * to the glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). Since plan
+   * 261002f, the server stores a finished answer as the owner's added entry.
    *
    * Which is why the answer is **not** merged into `glossary` by `patchEntry`:
-   * there is no entry to merge it into, and inventing one client-side would put
-   * a row on screen that the next reload silently removes.
+   * the server owns its id and dedup decision, so the client refreshes and uses
+   * the entry the read seam returns.
    */
   ask(term: string): Promise<void>;
   /** True while the box's call is out. One at a time, like `look`. */
@@ -790,8 +787,9 @@ export interface UseGlossary {
    */
   askDraft: AskedTermDraft | null;
   /**
-   * The last answer the box got, or null. Never stored, never in the URL.
-   * **Set only from the stream's `done` frame.**
+   * The last answer the box got, or null. The server stores it on the added
+   * term; this temporary copy stays only until the refreshed row arrives.
+   * Never in the URL. **Set only from the stream's `done` frame.**
    */
   asked: AskedTermAnswer | null;
   /** Why the last one was refused, if it was. Carries a `[gl-ask-…]` code. */
@@ -886,10 +884,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   /**
    * The box at the top of the panel: find a term in the prose and explain it.
    *
-   * **The same shape as `look` on the read, minus the merge**, and the missing merge
-   * is the deferral: `lookUpTerm` stores its answer against an entry id and this
-   * has no entry to store against. So the answer lives here until the reader
-   * leaves. See `ask` on `UseGlossary` for why nothing is persisted.
+   * **The same shape as `look` on the read, with a refresh instead of a local
+   * merge.** The server mints the entry id and stores the answer; this hook
+   * re-reads the list, then `AskATerm` selects the row once it arrives.
    *
    * **Refused here on the same rule the server refuses on** —
    * `parseAskedTerm`, one function reaching both halves (src/asked-term.ts) —

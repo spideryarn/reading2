@@ -974,6 +974,10 @@ term is stored**:
 | [Find more terms](#finding-more) recomputes and merges the document | It cannot touch a row outside the document. If a later *Find more* writes an entry that names the same words, the model's entry is drawn and the added one is not, and the reader's answer moves to it if it has none of its own. |
 | A shared article publishes the whole glossary blob ([`public-reader.ts`](../../src/store/public-reader.ts)) | The public read reads only the blob and never `glossary_lookups`. Added terms are attached at the owner's read seam (`loadGlossary`) and **only the owner sees them**, as with hides. The tooltip says so. |
 
+The answer follows a later model entry; a hide does not. The hide is keyed to
+the added entry's id, and carrying it onto a different model entry would leave
+*Unhide* deleting the wrong row.
+
 The pieces: `addTerm` in [`pg-lookups.ts`](../../src/store/pg-lookups.ts) (one transaction that
 locks the article row, so two tabs adding *attention head* and *attention heads* make one entry)
 and [`glossary-added.ts`](../../src/glossary-added.ts), which builds the owner's list for both

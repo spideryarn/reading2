@@ -240,7 +240,14 @@ describe("the guards, through the store's own wiring", () => {
 /** A reader, a lookup store and an `explain`, all under this test's control. */
 function harness(opts: {
   text: string;
-  entry: { id: string; name: string; aliases: string[]; blocks: string[] };
+  entry: {
+    id: string;
+    name: string;
+    aliases: string[];
+    blocks: string[];
+    added?: true;
+    lookup?: GlossaryLookup;
+  };
   citations: { url: string; title?: string }[];
   ending?: ExplainEnding;
   saveFails?: boolean;
@@ -426,6 +433,33 @@ describe("what the model is asked, and what is kept from its answer", () => {
     expect(saved[0]?.termId).toBe("spya-kennedy");
     expect(saved[0]?.lookup.model).toBe("a-model");
     expect(saved[0]?.lookup.searches).toBe(2);
+  });
+
+  it("digs deeper on a reader-added entry and keeps its private id", async () => {
+    const id = "spya-add234";
+    const { lookUp, saved } = harness({
+      text: "Attention Heads compare one position with another.",
+      entry: {
+        id,
+        name: "attention head",
+        aliases: [],
+        blocks: ["spya-aaaaaa"],
+        added: true,
+        lookup: {
+          answer: "The first answer.",
+          citations: [],
+          searches: 0,
+          model: "a-model",
+          at: "2026-10-02T00:00:00.000Z",
+        },
+      },
+      citations: [],
+    });
+
+    await lookUp("harness", id);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.termId).toBe(id);
+    expect(saved[0]?.lookup.answer).toBe("An answer.");
   });
 });
 

@@ -1591,16 +1591,14 @@ function Term({
  * >
  * > — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
  *
- * Two things it deliberately does not do, and the button's tooltip says the
- * first one out loud rather than letting the reader find out (a line under the
- * box said it until 2026-09-29, when it went to save a phone two lines):
+ * Two boundaries matter here, and the button's tooltip says the first one out
+ * loud (a line under the box held the old promise until 2026-09-29, when it
+ * moved to save a phone two lines):
  *
- * - **It adds nothing to the list.** The glossary is one JSON document that a
- *   *Find more terms* run rewrites and that a shared link publishes whole, so a
- *   reader-added entry would be merged away by the first and handed to
- *   strangers by the second — src/types.ts § `AskedTermAnswer`. Saying "not
- *   added to the list" in the tooltip is what stops the answer's disappearance
- *   from reading as a bug.
+ * - **An added term is private reader state.** It lives outside the glossary
+ *   document that *Find more terms* rewrites and a shared link publishes, then
+ *   joins the owner's list at the read seam — src/glossary-added.ts. The
+ *   tooltip says both that it is added and that only this reader sees it.
  * - **It does not correct spelling.** The tolerance is `term-match.ts`'s
  *   folding of case, plurals and possessives, and no more. When it finds
  *   nothing there is **no "did you mean…"**: it says which of three things it

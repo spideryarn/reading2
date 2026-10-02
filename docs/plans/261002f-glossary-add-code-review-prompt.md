@@ -1,0 +1,18 @@
+You are reviewing built code in the repo at the current directory (Spideryarn: TypeScript, React, Postgres via Drizzle). This is a code review with fix rights: fix what you find **inside this change**, keep fixes small and in the house style (read the surrounding comments; match their density), and report anything wider instead of fixing it.
+
+The change is commit 0abd03712 on this branch: `git show 0abd03712` (and `git show 0abd03712 --stat`). The plan it implements, including the "Revised after GPT Sol's plan review" section that supersedes the top: docs/plans/261002f-glossary-add-a-looked-up-term.md. Your own plan review: docs/plans/261002f-glossary-add-plan-review-sol.md — check each of its findings was actually addressed in code, not just in the plan.
+
+What it does: a finished "Look up a term" answer in the glossary adds the term to the owner's own glossary, stored as a `glossary_lookups` row with a new nullable `added_name` column (migration drizzle/20261002170242_glossary_lookups_added_name.sql). `addTerm` in src/store/pg-lookups.ts writes it in one transaction that locks the article row; src/glossary-added.ts builds the owner's list (stored entries + added ones; a model entry that names the same words wins and gets the reader's lookup via `absorbed`); `loadGlossary` in src/store/pg.ts attaches; `hide` in src/store/pg-glossary-hidden.ts accepts added ids; `makeAskAboutTerm` in src/term-lookup.ts calls addTerm after the answer finishes; the client (src/web/useGlossary.ts `isAddedTerm`, the refresh after an add; src/web/GlossaryPanel.tsx `AskATerm`, `AddedNote`, the row label) selects the new row.
+
+Deliberate decisions (do not reverse without a concrete bug): every finished look-up adds (no separate Add button); a hide on an added term does NOT follow it to a model entry that later absorbs it; chat's glossary tool shows an added term's name and a note, not its answer text; Skim on a stale list still drops the whole glossary.
+
+Look especially for:
+1. Correctness of `addTerm`: the lock, the existing-check against the quote (`coversWholly`), id minting, owner_id, the no-glossary arm, error paths; whether `articleIdForOwned(slug, tx)` and the lock really serialise as the comment claims.
+2. Anything that assumes every entry id is in the stored glossary blob and now breaks for an added entry: Dig deeper (`lookUpTerm`), the hover card (src/web/ProseHoverCard.tsx), Skim stop cards (src/web/stop-card.ts), `?term=` handling in src/web/modes/glossary/GlossaryMode.tsx, the stale/occurrence logic, the export (src/store/export.ts, src/store/export-bundle.ts), the fixture loader in src/glossary-lookups.ts.
+3. Privacy: any path that shows an added term or its answer to a visitor of a shared article, or lets a non-owner write.
+4. The client: the effect in `AskATerm` (loops, stale closures, a selection the threshold or `GlossaryMode` immediately clears), `isAddedTerm`, the refresh.
+5. Tests: tests/glossary-added-term.test.ts, tests/glossary-ask-adds-term-band.test.tsx, tests/glossary-asked-term.test.ts — do they test what they claim?
+
+Gates you can run: `npm run typecheck`; single test files with `timeout 300 npx vitest run <file>` (the Postgres ones need the local database, which is up). Do not run the whole suite, do not run git commands that change state (no commit, checkout, reset, stash), do not touch .env.local, and do not run migrations.
+
+Write your findings to docs/plans/261002f-glossary-add-code-review-sol.md: each finding with severity, file:line evidence, and either "FIXED: <what you changed>" or "NOT FIXED: <why, and what you recommend>". End with a verdict line.
