@@ -122,6 +122,36 @@ on, not enough to read instead of going there. One card for the whole reading vi
 ([`BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx)), so a chip here means what it means in
 every other band.
 
+### Each sentence is a door too (since 2026-10-02)
+
+> Could we highlight the phrases or sentences in the summary that's being displayed that relate to
+> the blocks on the screen? … perhaps I could hover over the summary-sentence and it would
+> highlight, and I'd get a rich tooltip … and I could click on those.
+>
+> — Greg, 2026-10-01 (SPIDERYARN-READING2-8V, `spya-ra5fuz`)
+
+The writer answers each paragraph as its sentences, and each sentence names **at most one of its
+paragraph's own ids**, or none. That sentence is drawn as a `BlockRef` with the sentence as its words
+(`.simple-sentence` makes it read as prose), so it gets three things without code of its own: the
+shared card on hover or focus, a press that goes to the passage, and the band's on-screen wash
+(8K's rule, `onScreenLinkCss` in [`on-screen.ts`](../../src/web/on-screen.ts)), which lights a sentence
+while its passage is on screen. On touch a tap jumps; there is no card, as for every block link.
+
+- **A sentence can only point where its paragraph already does**, so the fidelity guard, which checks
+  each paragraph against its cited blocks, still covers it. An id outside the paragraph's is nulled
+  and counted, never added.
+- **Shown only if the sentences are the text.** The stored paragraph keeps `text` (the sentences
+  joined) and `ids`; `sentences` is an optional field beside them, read only through
+  `usableSentences` ([`types.ts`](../../src/types.ts)), which answers "none" unless they rejoin to
+  exactly the `text` the guard read. A paragraph without usable sentences — every one written before
+  `simple-prompt/4` — draws as it always did. Nothing is backfilled: *Write it again* picks it up.
+- Measured before it landed, in
+  [261002e](../plans/261002e-summary-sentences-point-at-their-passage.md) § Ledger.
+
+**Not yet** (Greg's own v2, 2026-10-01): several passages per sentence, a colour per pairing, and
+lighting the *sentence in the article* a summary sentence came from — which needs an anchor finer
+than a block ([block-ids.md](block-ids.md)).
+
 ### The fidelity guard (since 2026-10-01)
 
 Plain words pull a model towards the everyday name for a thing, and on the PID paper that name was

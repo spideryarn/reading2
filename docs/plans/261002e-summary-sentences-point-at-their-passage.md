@@ -205,3 +205,10 @@ GPT Sol on this plan before stage 1, and on the code before push.
   `evals/results/simple/high-none-sentbefore{1,2}/`, three articles each (PID paper
   `entropy-24-00930-spya-pywwkq`, `greatwork-spya-yw4d3t`, `noema-mythology-of-conscious-ai`); six
   of six valid, 181–214 words in the probe's one-line report, $0.86 in all.
+- **Stages 1 and 3** built by an Opus subagent, committed as 28f99cdf1. Deviations from the plan:
+  `sentences` is typed `unknown` on `SimpleParagraph`, so the compiler refuses any read that skips
+  `usableSentences`; a second counter, `emptySentences`; `ANSWER_TOKENS` 1,350 → 2,150.
+- **Stage 2, measured** in [261002o](../investigations/261002o-summary-sentences-that-name-their-passage.md):
+  plainness 8–8 (2 the same) against a control of 4–1 (4 the same); fidelity flags no worse; links
+  29/31 GOOD, 0 WRONG; 96% of sentences carry an id; about 40% more output tokens and +2.6 s median
+  per press. Shipped as built.
