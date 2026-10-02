@@ -318,8 +318,9 @@ describe("debate mode's identification bar", () => {
 });
 
 describe("search mode parameters", () => {
-  it("reads the two matchers and refuses anything else", () => {
+  it("reads the three matchers and refuses anything else", () => {
     expect(matchParam.parse("words")).toBe("words");
+    expect(matchParam.parse("quick")).toBe("quick");
     expect(matchParam.parse("meaning")).toBe("meaning");
     expect(matchParam.parse("regex")).toBeNull();
     expect(matchParam.parse("")).toBeNull();
@@ -352,6 +353,7 @@ describe("search mode parameters", () => {
     it("lets an explicit ?match= win over the words it is carrying", () => {
       expect(resolveMatcher("meaning", "wet hardware")).toBe("meaning");
       expect(resolveMatcher("words", null)).toBe("words");
+      expect(resolveMatcher("quick", null)).toBe("quick");
     });
 
     it("is not fooled by a query of nothing but spaces", () => {

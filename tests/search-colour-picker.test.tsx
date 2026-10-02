@@ -34,6 +34,7 @@ const RUNS: SavedSearch[] = [
 ].map((criterion, i) => ({
   id: `spya-aaaa${"bc"[i]}${i}`,
   criterion,
+  kind: "meaning" as const,
   createdAt: `2026-08-2${i}T00:00:00.000Z`,
   status: "done" as const,
   hits: [],

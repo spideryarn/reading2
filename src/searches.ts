@@ -41,7 +41,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { SearchRun } from "./types.js";
+import type { SearchKind, SearchRun } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -137,6 +137,7 @@ export async function loadRuns(slug: string): Promise<SearchRun[]> {
 export function withRun(
   runs: SearchRun[],
   criterion: string,
+  searchKind: SearchKind,
   wantedId: string | undefined,
   at: string,
   sourceHash?: string,
@@ -156,9 +157,22 @@ export function withRun(
 
      Only a run that failed is retryable. A `pending` row that is stuck because
      the server died is not covered here and is deliberately left to delete and
-     search again, which costs one call rather than risking one. */
+     search again, which costs one call rather than risking one.
+
+     **And the kind is part of the question** (plan 261002e). A failed quick
+     search retried as a meaning one — a client that lost track, or a replay —
+     would otherwise reset the row and answer it with the other matcher, so a
+     run labelled *quick* could end up holding Sonnet's quotes. The same words
+     asked the other way are a different search, and get a new id like any
+     other collision. */
   const existing = wantedId
-    ? runs.find((r) => r.id === wantedId && r.criterion === criterion && r.status === "error")
+    ? runs.find(
+        (r) =>
+          r.id === wantedId &&
+          r.criterion === criterion &&
+          r.kind === searchKind &&
+          r.status === "error",
+      )
     : undefined;
   if (existing) {
     /* Rebuilt field by field rather than spread, and that is the whole point:
@@ -171,6 +185,7 @@ export function withRun(
     const run: SearchRun = {
       id: existing.id,
       criterion,
+      kind: existing.kind,
       createdAt: existing.createdAt,
       status: "pending",
       hits: [],
@@ -201,6 +216,7 @@ export function withRun(
         ? wantedId
         : mintUniqueId(taken),
     criterion,
+    kind: searchKind,
     createdAt: at,
     status: "pending",
     hits: [],

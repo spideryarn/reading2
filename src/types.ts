@@ -3660,10 +3660,33 @@ export interface SearchHit {
  * to disk *before* the model is called, so a crash mid-search leaves a visible
  * unfinished run rather than a criterion that silently evaporated.
  */
+/**
+ * **Which matcher answered a saved search** — `"meaning"` (the model reads the
+ * article and quotes what matches, src/search.ts) or `"quick"` (Jev scores every
+ * block, src/quick-search.ts). Plan 261002e.
+ */
+export type SearchKind = "quick" | "meaning";
+
+/** The two, as a value, for a route to narrow a request body against. */
+export const SEARCH_KINDS = ["quick", "meaning"] as const satisfies readonly SearchKind[];
+
+export function isSearchKind(x: unknown): x is SearchKind {
+  return (SEARCH_KINDS as readonly unknown[]).includes(x);
+}
+
 export interface SearchRun {
   id: string;
   /** What the reader typed, in their own words. Never logged — it is prose. */
   criterion: string;
+  /**
+   * **Which matcher this run is** — stated on the row, never inferred from
+   * `model`, because a pending or failed run has no model yet and the panel
+   * still has to label it. Part of a run's identity: a retry keeps it, and a
+   * retry that names the other kind is a new run (`withRun`, src/searches.ts).
+   * Every row written before 2026-10-02 is `"meaning"`, which is what the
+   * column's default says.
+   */
+  kind: SearchKind;
   createdAt: string;
   status: "pending" | "done" | "error";
   hits: SearchHit[];

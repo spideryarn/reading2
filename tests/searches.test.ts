@@ -92,6 +92,7 @@ describe("reading a searches.json", () => {
     const run: SearchRun = {
       id: "spya-k3m9qt",
       criterion: "arguments against the main claim",
+      kind: "meaning",
       createdAt: "2026-08-20T00:00:00.000Z",
       status: "done",
       hits: [HIT],
@@ -155,10 +156,22 @@ describe("withRun — which run a begin produces", () => {
   const at = "2026-08-20T00:00:00.000Z";
 
   it("mints when the id is free, and says so", () => {
-    const { runs, run, kind } = withRun([], "arguments against the main claim", undefined, at);
+    const { runs, run, kind } = withRun(
+      [],
+      "arguments against the main claim",
+      "meaning",
+      undefined,
+      at,
+    );
     expect(kind).toBe("minted");
     expect(run.status).toBe("pending");
+    expect(run.kind).toBe("meaning");
     expect(runs).toHaveLength(1);
+  });
+
+  it("writes the kind it was asked for onto a new run", () => {
+    const { run } = withRun([], "minds are not software", "quick", undefined, at);
+    expect(run.kind).toBe("quick");
   });
 
   it("resets a failed run of the same question in place, keeping its createdAt", () => {
@@ -170,6 +183,7 @@ describe("withRun — which run a begin produces", () => {
     const failed: SearchRun = {
       id: "spya-k3m9qt",
       criterion: "arguments against the main claim",
+      kind: "quick",
       createdAt: at,
       status: "error",
       error: "the model fell over",
@@ -178,6 +192,7 @@ describe("withRun — which run a begin produces", () => {
     const { runs, run, kind } = withRun(
       [failed],
       "arguments against the main claim",
+      "quick",
       "spya-k3m9qt",
       "2026-08-21T00:00:00.000Z",
     );
@@ -186,7 +201,36 @@ describe("withRun — which run a begin produces", () => {
     expect(run.id).toBe("spya-k3m9qt");
     expect(run.createdAt).toBe(at);
     expect(run.status).toBe("pending");
+    /* A retried quick run stays quick. */
+    expect(run.kind).toBe("quick");
     expect("error" in run).toBe(false);
+  });
+
+  it("mints a new run when a retry names the other kind, leaving the failed one alone", () => {
+    /* Plan 261002e, F5. The same words asked the other way are a different
+       search: resetting the failed quick row and answering it with the meaning
+       matcher would leave a row labelled *quick* holding Sonnet's quotes. */
+    const failed: SearchRun = {
+      id: "spya-k3m9qt",
+      criterion: "arguments against the main claim",
+      kind: "quick",
+      createdAt: at,
+      status: "error",
+      error: "the model fell over",
+      hits: [],
+    };
+    const { runs, run, kind } = withRun(
+      [failed],
+      "arguments against the main claim",
+      "meaning",
+      "spya-k3m9qt",
+      "2026-08-21T00:00:00.000Z",
+    );
+    expect(kind).toBe("minted");
+    expect(run.id).not.toBe("spya-k3m9qt");
+    expect(run.kind).toBe("meaning");
+    expect(runs).toHaveLength(2);
+    expect(runs.find((r) => r.id === "spya-k3m9qt")).toEqual(failed);
   });
 
   it("keeps at most MAX_RUNS, oldest first", () => {
@@ -195,7 +239,7 @@ describe("withRun — which run a begin produces", () => {
     // Each one finished, because a `pending` run is never trimmed — see below.
     let runs: SearchRun[] = [];
     for (let i = 0; i < MAX_RUNS + 3; i++) {
-      ({ runs } = withRun(done(runs), `criterion ${i}`, undefined, at));
+      ({ runs } = withRun(done(runs), `criterion ${i}`, "meaning", undefined, at));
     }
     expect(runs).toHaveLength(MAX_RUNS);
     expect(runs[0]?.criterion).toBe("criterion 3");
@@ -207,11 +251,12 @@ describe("withRun — which run a begin produces", () => {
        trim used to spare only the run it had just written, so thirty newer
        searches begun while an old one was still running deleted it mid-call.
        docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
-    let { runs, run: slow } = withRun([], "the slow one", undefined, at);
+    let { runs, run: slow } = withRun([], "the slow one", "meaning", undefined, at);
     for (let i = 0; i < MAX_RUNS + 3; i++) {
       ({ runs } = withRun(
         runs.map((r) => (r.id === slow.id ? r : { ...r, status: "done" as const })),
         `criterion ${i}`,
+        "meaning",
         undefined,
         at,
       ));
@@ -259,6 +304,7 @@ describe("a saved search knows which article it answered", () => {
   const OLD_RUN: SearchRun = {
     id: "spya-k3m9qt",
     criterion: "saved last week",
+    kind: "meaning",
     createdAt: "2026-08-20T00:00:00.000Z",
     status: "done",
     hits: [HIT],

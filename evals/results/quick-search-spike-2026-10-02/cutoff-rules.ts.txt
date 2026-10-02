@@ -1,0 +1,36 @@
+/* Offline: try cut-off rules on the saved noulOne scores (rep 0 and all 3 reps). */
+import { readdirSync, readFileSync } from "node:fs";
+import { fixture, scorable, WT } from "./qs-lib.ts";
+const OUT = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+const out: string[] = [];
+for (const f of readdirSync(OUT).filter((x) => x.startsWith("raw-")).sort()) {
+  const raw = JSON.parse(readFileSync(`${OUT}/${f}`, "utf8"));
+  const ref = JSON.parse(readFileSync(`${OUT}/reference-${raw.slug}.json`, "utf8"));
+  let blocks: any[];
+  if (raw.slug.includes("spya-")) {
+    const { loadArticle } = await import(`${WT}/src/store/index.ts`);
+    const { runAsOwner } = await import(`${WT}/src/owner.ts`);
+    blocks = ((await runAsOwner("397036d5-7104-4165-859e-7698bf6660b5" as any, () => loadArticle(raw.slug))) as any).blocks;
+  } else blocks = fixture(raw.slug).blocks;
+  const kind = Object.fromEntries(scorable(blocks).map((b) => [b.id, b.kind]));
+  const words = Object.fromEntries(scorable(blocks).map((b) => [b.id, b.text.split(/\s+/).length]));
+  for (const rq of raw.queries) {
+    const R = new Set((ref[rq.q].hits ?? []).map((h: any) => h.blockId));
+    const res: string[] = [];
+    for (const rule of ["A", "B"]) {
+      const sizes: string[] = [];
+      for (const run of rq.arms.noulOne) {
+        let e = Object.entries(run.scores as Record<string, number>).sort((a, b) => b[1] - a[1]);
+        if (rule === "B") e = e.filter(([id]) => kind[id] !== "heading" && words[id]! >= 4);
+        const top = e[0]?.[1] ?? 0;
+        const cut = rule === "A" ? 0.8 : Math.max(0.75, top - 0.08);
+        const sel = e.filter(([, v]) => v >= cut).slice(0, 20).map(([id]) => id);
+        sizes.push(`${sel.length}(${sel.filter((id) => R.has(id)).length})`);
+      }
+      res.push(`${rule}: ${sizes.join(" ")}`);
+    }
+    out.push(`${raw.slug.slice(0, 8)} | ${rq.q.slice(0, 40)} | ref ${R.size} | ${res.join(" | ")}`);
+  }
+}
+console.log(out.join("\n"));
+process.exit(0);

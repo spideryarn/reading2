@@ -3662,10 +3662,22 @@ export const searchRuns = spideryarn.table(
      * migrate. `MAX_STORED_COLOUR`, src/searches.ts, is the same number.
      */
     colour: integer("colour"),
+
+    /**
+     * **Which matcher answered** — `'meaning'` (src/search.ts) or `'quick'`
+     * (Jev, src/quick-search.ts). Plan 261002e.
+     *
+     * Stated rather than inferred from `model`, because a pending or failed run
+     * has no model and the panel still has to label it. `NOT NULL DEFAULT
+     * 'meaning'` because every row before 2026-10-02 was one, and the CHECK
+     * because a third value read back as either would be wrong in silence.
+     */
+    kind: text("kind").notNull().default("meaning"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
     check("search_runs_status", sql`${t.status} in ('pending','done','error')`),
+    check("search_runs_kind", sql`${t.kind} in ('quick','meaning')`),
     check("search_runs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     check("search_runs_colour", sql`${t.colour} is null or (${t.colour} >= 0 and ${t.colour} < 64)`),
     /* An attempt is both columns or neither. Half of one is a run that either

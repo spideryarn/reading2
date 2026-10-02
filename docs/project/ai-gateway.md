@@ -3,8 +3,8 @@
 Up: [architecture.md](architecture.md)
 
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
-*recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation and the PDF
-reader alike.
+*recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation, quick search and
+the PDF reader alike.
 
 Writing or changing a prompt that puts words in front of a reader? Its wording rule, and how to
 measure the change, are in [prompting-guide.md](prompting-guide.md).
@@ -113,6 +113,11 @@ like**. Only the first collapsed.
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **decisions** | `/api/alpha/decisions` — a `state` and typed questions in, `{answers}` of probabilities out, no text at all | quick search (`search-quick`, `openRouterDecisions`), since 2026-10-02 — [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second). Before that only the shelf-topics eval's declared bypass spoke it | [`src/ai-call.ts`](../../src/ai-call.ts) |
+
+The heading still says five: it is kept for the anchors that point at it, and the table, not the
+heading, is the count — six product wires since the decisions one, seven counting live
+conversation's `realtime`.
 
 Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
 other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
@@ -937,7 +942,8 @@ built on 2026-09-02 — the server's journal, endpoints and pricing first (Stage
 browser's reporting (Stage 2B, [`src/web/live/meter.ts`](../../src/web/live/meter.ts)).
 
 The rule is now: **every paid operation goes through one of two owned seams or through the realtime
-acceptance endpoint.** OpenRouter owns messages, chat and embeddings; live conversation is metered
+acceptance endpoint.** OpenRouter owns messages, chat and embeddings (and, since, images,
+transcription and decisions); live conversation is metered
 from the browser's own report, because there is no seam for it to pass through.
 
 Three things about it are worth knowing before you touch this file's claims:
