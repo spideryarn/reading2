@@ -4233,9 +4233,8 @@ export const ALWAYS_SHARED = [
        found source guess crosses to a visitor's banner (plan 261002g,
        `PublicArticle.sourceGuess`), so the owner is told it goes out. */
     detail:
-      "The title the page itself carried, the byline, the publication, the language, the " +
-      "publication's own one-line excerpt, and a link back to the original where we have one " +
-      "— for an uploaded file, the page we found that matches it.",
+      "The article's title, byline, publication, language and one-line excerpt, plus a source link " +
+      "where we have one — for an uploaded file, that may be a page we found that matches it.",
   },
   {
     /**

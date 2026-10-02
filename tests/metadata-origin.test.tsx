@@ -149,12 +149,12 @@ async function owner(meta: Partial<Meta>) {
 }
 
 /** The visitor's page, which fetches nothing and is handed everything. */
-async function visitor(meta: Partial<Meta>) {
+async function visitor(meta: Partial<Meta>, sourceGuess?: SourceGuess) {
   await act(async () => {
     root.render(
       createElement(PublicMetadataPage, {
         slug: SLUG,
-        article: article(meta),
+        article: { ...article(meta), sourceGuess },
         available: {
           arc: false,
           tweets: false,
@@ -331,6 +331,21 @@ describe("the visitor's metadata page", () => {
     await visitor({ url: URL_ });
 
     expect(hrefs()).toContain(URL_);
+  });
+
+  it("links a shared upload to the source page we found for it", async () => {
+    const guess: SourceGuess = {
+      status: "found",
+      url: "https://arxiv.org/abs/2401.01234",
+      host: "arxiv.org",
+      kind: "canonical",
+      matchedBy: "arxiv",
+    };
+    await visitor({}, guess);
+
+    expect(hrefs()).toContain(guess.url);
+    expect(host.querySelector(".origin-guess")?.textContent).toContain("?");
+    expect(host.textContent).not.toContain(UPLOADED);
   });
 
   /**

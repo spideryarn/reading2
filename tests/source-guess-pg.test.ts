@@ -11,8 +11,9 @@
  * - **The fence.** A search that outlives its claim must not overwrite the
  *   answer of the claim that replaced it.
  * - **The cap.** A third claim is refused and the row settles as `none`.
- * - **The payload.** `loadArticle` carries the row; the public projection
- *   never does, because a visitor sees no guess (plan § Decisions 4).
+ * - **The payload.** The owner's `loadArticle` carries the stored union; the
+ *   public projection carries only a sanitized found guess, for the visitor's
+ *   provenance banner (plan 261002g § Decisions 3).
  *
  * Skips loudly when there is no database — tests/helpers/pg-ready.ts.
  */

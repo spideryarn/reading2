@@ -18,9 +18,14 @@
  */
 import { ExternalLink } from "lucide-react";
 
-import type { Article } from "../types.js";
+import type { Article, SourceGuess } from "../types.js";
 import type { PublicArtefacts } from "../public-types.js";
-import { SHARED_LINK_CARRIES, TAKEDOWN_LINK } from "../messages.js";
+import {
+  BANNER_SOURCE_GUESS_CANONICAL,
+  BANNER_SOURCE_GUESS_MATCHING,
+  SHARED_LINK_CARRIES,
+  TAKEDOWN_LINK,
+} from "../messages.js";
 import { Dock } from "./Dock.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
@@ -29,30 +34,42 @@ import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
+import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
 
 /**
- * The link out to the publisher, or nothing.
+ * The link out to the publisher, the source page found for an upload, or
+ * nothing.
  *
  * Nothing rather than a line saying there is no link: this page is short and a
  * visitor has no way to act on the difference. The owner's page does say it,
  * because on that one the absence is a fact about their own library
  * (src/web/Metadata.tsx § `Origin`).
  */
-function SourceRow({ url }: { url: string | null }) {
-  if (url === null) return <div className="tw:mb-6" />;
+function SourceRow({ url, guess }: { url: string | null; guess: SourceGuess | undefined }) {
+  if (url !== null) {
+    return (
+      <p className="tw:m-0 tw:mb-6 tw:text-xs">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+        >
+          {url}
+          <ExternalLink size={12} className="tw:shrink-0" />
+        </a>
+      </p>
+    );
+  }
+  if (guess?.status !== "found") return <div className="tw:mb-6" />;
   return (
-    <p className="tw:m-0 tw:mb-6 tw:text-xs">
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
-      >
-        {url}
-        <ExternalLink size={12} className="tw:shrink-0" />
-      </a>
+    <p className="tw:m-0 tw:mb-6 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-1.5 tw:text-xs tw:text-muted-foreground">
+      <span>
+        {guess.kind === "canonical" ? BANNER_SOURCE_GUESS_CANONICAL : BANNER_SOURCE_GUESS_MATCHING}
+      </span>
+      <GuessedSourceLink guess={guess} className="origin-link origin-guess" viewer="visitor" />
     </p>
   );
 }
@@ -128,9 +145,10 @@ export function PublicMetadataPage({
             this page and the masthead.
 
             **And no "uploaded" arm**, unlike the owner's page. An absent url
-            here means an upload *or* an address the policy withheld, and this
-            page cannot tell which — src/web/Masthead.tsx § `OriginLine`. */}
-        <SourceRow url={webSource(meta)} />
+            here means an upload *or* an address the policy withheld. Only a
+            separately projected found guess can add a source link; it still
+            does not disclose which absence was behind it. */}
+        <SourceRow url={webSource(meta)} guess={article.sourceGuess} />
 
         <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
 

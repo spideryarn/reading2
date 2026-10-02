@@ -474,6 +474,12 @@ describe("the public read of an upload's guessed source", () => {
     expect(q.sql).not.toContain("owner_id");
   });
 
+  it("ties the guess to the same article whose slug was made public", () => {
+    expect(q.sql).toMatch(
+      /inner join "spideryarn"\."articles" on "spideryarn"\."articles"\."id" = "spideryarn"\."upload_source_guesses"\."article_id"/,
+    );
+  });
+
   it("takes only a found guess", () => {
     expect(q.sql).toMatch(/"status" = 'found'/);
   });
