@@ -1812,6 +1812,22 @@ function EditQuestion({
   onCancel(): void;
 }) {
   const [value, setValue] = useState(text);
+  /**
+   * **A press that is refused says so.** While an answer is arriving the edit
+   * cannot go (see the call site), and Enter used to do nothing at all and the
+   * tick merely greyed out — a reader who pressed Enter saw no answer and no
+   * reason. Investigating spya-f3b6ab; the class is in
+   * docs/postmortems/261002g-a-refusal-with-no-voice.md. Cleared when asking
+   * becomes possible again, so the sentence never outlives its cause.
+   */
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (canAsk) setHeld(false);
+  }, [canAsk]);
+  const ask = () => {
+    if (canAsk) onDone(value);
+    else setHeld(true);
+  };
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = box.current;
@@ -1837,10 +1853,15 @@ function EditQuestion({
           if (e.key === "Escape") onCancel();
           if (isSendEnter(e)) {
             e.preventDefault();
-            if (canAsk) onDone(value);
+            ask();
           }
         }}
       />
+      {held && !canAsk && (
+        <p className="chat-discard-warning chat-edit-held" role="status">
+          An answer is still arriving. Ask again once it has finished — your rewrite is kept.
+        </p>
+      )}
       {discards > 0 && (
         <p className="chat-discard-warning">
           Asking again will discard the {discards} message{discards === 1 ? "" : "s"} below.
@@ -1851,8 +1872,10 @@ function EditQuestion({
           type="button"
           className="chat-icon"
           title={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
-          disabled={!canAsk}
-          onClick={() => onDone(value)}
+          /* `aria-disabled`, not `disabled`, so a press still reaches `ask` and
+             can say why it was refused — the composer's Send does the same. */
+          aria-disabled={!canAsk || undefined}
+          onClick={ask}
         >
           <Check size={12} />
         </button>

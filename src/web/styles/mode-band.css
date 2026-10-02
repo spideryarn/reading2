@@ -293,7 +293,7 @@
   color: var(--ink-faint);
   cursor: pointer;
 }
-.chat-icon:not(:disabled):hover { background: var(--surface-raised); color: var(--ink); }
+.chat-icon:not(:disabled):not([aria-disabled="true"]):hover { background: var(--surface-raised); color: var(--ink); }
 .chat-icon.danger:not(:disabled):hover { color: var(--destructive, oklch(0.65 0.2 25)); }
 /* Armed: one press has already happened and the next one deletes. Coloured
    rather than merely hovered, because the whole point is that it looks
@@ -310,7 +310,10 @@
    a browser pass reported it could not visually confirm the disabled state,
    which was the right observation and the wrong conclusion — there was nothing
    to see. 2026-08-26. */
-.chat-icon:disabled { opacity: 0.4; cursor: default; }
+/* `aria-disabled` too: Ask again uses it rather than `disabled`, so a refused
+   press can still say why (EditQuestion in ChatPanel.tsx). */
+.chat-icon:disabled,
+.chat-icon[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 
 .chat-error {
   margin: 0;
