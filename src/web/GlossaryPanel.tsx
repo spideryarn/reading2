@@ -316,18 +316,17 @@ export function GlossaryPanel({
           Greg, on a phone: *"The Glossary stuff at the top takes up too much
           space … maybe move the "N words" onto the `order` row somehow -
           actually maybe we already show the "of N" so we don't need it"*
-          (`[SPIDERYARN-READING2-4G]`). The row held two things, and both
-          move to the end of the sort row: the profile badge always, and the
-          count everywhere but *prioritised*, which already says it as
-          "8 of 24" on the threshold row. The other orders have no numbering,
-          so there the count is the only total on screen.
+          (`[SPIDERYARN-READING2-4G]`). The row held two things: the profile
+          badge moved first to the sort row and then to the band's corner; the
+          count moved to the (i). *Prioritised* still says "8 of 24" beside
+          its own threshold, where the count describes the control.
 
           **Otherwise a fragment, not a conditional**, and that is the trap
-          this used to guard alone: while the list is still coming, both
-          children are gated on `glossary`, and `head={glossary && …}` would
-          hand the surface `null` and render no `.band-head` at all — deleting
-          a row that was on screen. With one term, or fewer than two sorts on
-          offer, there is no sort row to carry them, so the old row stays.
+          this used to guard alone: `head={glossary && <></>}` would hand the
+          surface `null` while the list is still coming and render no
+          `.band-head` at all, so the corner could hang into the status below.
+          With one term, or fewer than two sorts on offer, there is no sort row
+          to host the corner, so the old row stays.
           docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
 
           **The count has gone to the band's (i)** since 2026-10-01 (plan

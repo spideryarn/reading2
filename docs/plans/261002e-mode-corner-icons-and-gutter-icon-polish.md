@@ -1,6 +1,6 @@
 # The band's corner icons, and the gutter's
 
-**Status:** planned 2026-10-02; revised after the Sol plan review (below).
+**Status:** built 2026-10-02, on `dev`. Revised after the Sol plan review (below); the Sol code review (`…-code-review-sol.md`) said *ship*, and fixed three small things itself: `profile` now needs `mode` at the type level, a "Couldn't copy" card test, and stale comments. Sketch is deferred, as § Deferred says.
 
 Two reports from Greg the same morning, both about small icons not lining up or not answering.
 

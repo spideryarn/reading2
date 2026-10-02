@@ -1,0 +1,1925 @@
+diff --git a/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-code-review-prompt.md b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-code-review-prompt.md
+new file mode 100644
+index 000000000..4c811e06b
+--- /dev/null
++++ b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-code-review-prompt.md
+@@ -0,0 +1,49 @@
++You are reviewing built code in the Spideryarn repo (this worktree), and you may fix what you find.
++
++The plan is docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md. Read it first, including
++§ What GPT Sol's plan review changed: you reviewed the plan earlier
++(docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-sol.md). Check that each
++of your eleven findings was handled the way the plan says.
++
++The change is `git diff e23212480080d63d76ec4eac1fa4c7d2553d33eb` (the base this branch started
++from), including uncommitted work in the tree. It is also saved as
++docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-code-review.diff. In short:
++
++1. The corner. `ModeSurface` gains `profile`; the badge is the band's second direct child after the
++   (i). In mode-band.css: `--band-corner-btn` and `--band-corner-*`, `--band-about-room` grows via
++   `.mode-band.has-about:has(> .prof-badge)`, and `.band-head` is floored at the corner's height.
++   narrow-window.css sets 2rem on a coarse pointer. Summary, Glossary, Quotes, Ideas and Tweets pass
++   their badge as `profile`; the trailing slots of SortBar/RankBar and ThreadHead's children went.
++2. The gutter. Every control carries `data-tip` instead of `title`, and BlockLinkCard.tsx's
++   delegated card serves them (`GUTTER_CONTROL`, `TipNote`, a MutationObserver on `data-tip` for the
++   open one, no `aria-describedby`). gutter.css has one shared hover/focus colour rule, a
++   `row-gap: max(0.25rem, 4px)`, and thresholds moved to 52/3.25, 80/5 and 108/6.75, plus the
++   negated one-slot query. `.block-chat.has:hover` was re-added after the blue.
++3. Tests: tests/gutter-control-card.test.tsx (new), tests/every-mode-draws-its-surface.test.tsx
++   (`PROFILED` sweep and the no-badge check), tests/gutter-target-size.test.ts and
++   tests/block-gutter.test.tsx updated.
++
++Real-browser evidence, Playwright on this box with Chrome at 390, 820 and 1440 px:
++- In all five profiled modes, the badge and the (i) have identical tops and sizes (32px on a
++  coarse pointer, 24px otherwise), with a constant gap.
++- With a mouse on the bookmark, its colour went from oklch(0.63 0 0) to rgb(219,138,69).
++- The slot pitch went from 24px to 28px.
++
++Look hardest at:
++- Specificity and source order in gutter.css. Does any state now get the wrong colour or
++  opacity? Cases: the one-slot marked-row block, `.failed`, `.block-chat.has` at rest, a hover, and
++  a touch `row-active` row.
++- Whether the new thresholds change any row's behaviour you think is wrong. Does layout.ts, or
++  anything else, compute gutter heights from slot counts?
++- BlockLinkCard: the effect that now re-runs on every `setShown` from the reword observer. Any
++  loop, leak or stale closure? Focus-visible behaviour on a gutter button that is pressed with the
++  mouse (it would gain focus).
++- The corner: a band where `profile` is given but the band has no `mode`/`about`; Search,
++  Outline and Structure's fit; RTL is not a concern.
++- Anything in the docs edits (docs/project/mode.md, tooltips.md, design-css-overview.md) that is
++  now false.
++
++Fix what you find inside these files. Run `npx vitest run` on the test files named above and
++`npm run typecheck`. Report each finding with severity (P0-P3), file:line, and what you changed or
++why you didn't. Report anything wider for me to decide. End with a verdict: ship / fix then ship /
++rethink.
+diff --git a/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-prompt.md b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-prompt.md
+new file mode 100644
+index 000000000..fe8b5adb8
+--- /dev/null
++++ b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-prompt.md
+@@ -0,0 +1,15 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this worktree). Read-only: do not edit anything.
++
++The plan: docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md. Read it, then check it against the real code:
++- src/web/ModeSurface.tsx, src/web/BandAbout.tsx, src/web/WrittenForYou.tsx, src/web/ProfilePanel.tsx
++- src/web/styles/mode-band.css (§ the band's (i), `--band-about-room`), src/web/styles/profile.css (.prof-badge), src/web/styles/narrow-window.css (the pointer: coarse block that sizes .prof-badge.icon-only)
++- the WrittenForYou call sites: src/web/modes/summary/SummaryMode.tsx, GlossaryPanel.tsx, QuotesPanel.tsx, IdeasPanel.tsx, Tweets.tsx, and SketchView.tsx / DiagramPanel.tsx
++- src/web/BlockGutter.tsx, src/web/styles/gutter.css (the container-query thresholds, the hover/reveal rules), src/web/BlockLinkCard.tsx (the delegated card), src/web/Tooltip.tsx (ControlTip)
++- tests/every-mode-draws-its-surface.test.tsx, tests/block-gutter.test.tsx, tests/gutter-target-size.test.ts, tests/mode-surface-changes-no-markup.test.tsx
++
++Give numbered findings with severity (P0-P3), file:line, and a concrete fix:
++1. Anything in the plan that is wrong about the code as it is.
++2. Risks: the out-of-flow corner growing to two buttons (does every mode's top row really clear via --band-about-room? Search's zero-slack fit? Outline's measuring copies?); the profile panel's popover anchoring when its trigger moves into an absolutely positioned corner; tab order; WrittenForYou renders null when not written, so how should the band decide has-profile without reserving room for an absent badge?
++3. The gutter: the delegated card for buttons that also act on click (show-on-focus, a stale card after the permalink copy, aria-describedby on a button that already has aria-label); removing `title`: does anything depend on it (tests, accessibility)? The row-gap and the new thresholds: is the arithmetic right, including the one-slot `@container not (...)` block and the open "…" panel?
++4. Simpler alternatives I missed.
++End with a verdict: build as planned / revise then build / rethink.
+diff --git a/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-sol.md b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-sol.md
+new file mode 100644
+index 000000000..e65384a4f
+--- /dev/null
++++ b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish-plan-review-sol.md
+@@ -0,0 +1,25 @@
++1. **P1 — `profile?: ReactNode` cannot reliably determine whether a badge rendered.** [plan:53](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:53), [WrittenForYou.tsx:128](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/WrittenForYou.tsx:128), [IdeasPanel.tsx:204](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/IdeasPanel.tsx:204), [Tweets.tsx:114](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/Tweets.tsx:114). Ideas and Tweets can pass a real `<WrittenForYou>` element which subsequently returns `null`; `ModeSurface` would still see a truthy node, add `.has-profile`, and reserve space for an absent badge. Fix by either pre-gating every call site on the actual profiled condition, or more simply derive the expanded room in CSS with `:has(.band-corner > .prof-badge)`. Add both profiled and unprofiled fixtures; the proposed “any badge is in the corner” assertion can otherwise pass vacuously.
++
++2. **P1 — the existing coarse-pointer minimum will prevent the proposed 32px badge.** [narrow-window.css:861](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/narrow-window.css:861), [profile.css:440](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/profile.css:440). Setting `width`/`height: 2rem` does not override `.prof-badge.icon-only { min-width/min-height: 2.5rem }`, so the main phone defect remains. Explicitly remove or scope that rule away from the corner, reset both minimum dimensions, and remove the border there. A `corner` prop is unnecessary if `.band-corner .prof-badge` owns the appearance.
++
++3. **P1 — “every top row already clears” is only horizontally true; moving the badge can collapse the row vertically.** [plan:69](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:69), [GlossaryPanel.tsx:336](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/GlossaryPanel.tsx:336), [QuotesPanel.tsx:726](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/QuotesPanel.tsx:726), [IdeasPanel.tsx:187](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/IdeasPanel.tsx:187). In the no-sort Glossary/Quotes states and in Ideas, the badge is the only possible header content. Removing it leaves an empty `.band-head` roughly one padding-row high, while the coarse corner reaches 32px plus its top inset; deleting that header instead lets the corner overlap the first status/list row. Specify a corner-only minimum block size or an explicit host row for these states, and test loading, one-item, unprofiled, and profiled states. Summary and Tweets already have real control rows.
++
++4. **P1 — the new wrapper invalidates the explicit ModeSurface DOM contract and a large baseline test that the plan does not name.** [ModeSurface.tsx:10](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/ModeSurface.tsx:10), [mode-surface-changes-no-markup.test.tsx:402](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/mode-surface-changes-no-markup.test.tsx:402), [every-mode-draws-its-surface.test.tsx:1313](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/every-mode-draws-its-surface.test.tsx:1313). Every baseline currently expects a direct `button.band-about`; changing only the every-mode guard will leave many deterministic failures. Either explicitly revise the ModeSurface contract and all affected baselines, or use the simpler alternative: keep the two buttons as direct absolute children and position them with shared offsets. Also pin the intended tab order; today the `(i)` is deliberately first, while the plan silently changes that to profile → `(i)` → the visually left-hand mode controls.
++
++5. **P1 — the tooltip is not pointer-only.** [plan:100](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:100), [BlockLinkCard.tsx:391](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/BlockLinkCard.tsx:391). The delegated card intentionally opens immediately on keyboard focus and adds `aria-describedby`; only touch is excluded. Rewrite the plan as “mouse hover and keyboard focus, not touch,” preserve `focusin`/`focusout`, and add a gutter-control Tab test.
++
++6. **P1 — the promised live tooltip refresh needs new observation machinery.** [plan:102](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:102), [BlockLinkCard.tsx:290](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/BlockLinkCard.tsx:290), [BlockLinkCard.tsx:309](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/BlockLinkCard.tsx:309). The current observer watches only child-list detachment, and open content refreshes only when `index` or `resolveXref` changes. A copied permalink or toggled “…” keeps the same element, so its card stays stale. Observe `data-tip` attribute mutations on the current trigger, or explicitly re-read it after state changes. Test `Copied`, copy failure, and More → Close while the card remains open.
++
++7. **P1 — the new threshold arithmetic is correct, but the plan must explicitly update the negated one-slot query.** [gutter.css:466](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/gutter.css:466), [gutter.css:515](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/gutter.css:515), [gutter-target-size.test.ts:377](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/gutter-target-size.test.ts:377). The positive thresholds should be 52/3.25rem, 80/5rem, and 108/6.75rem, and the marked-row block must become `not ((min-height: 52px) and (min-height: 3.25rem))`. Leaving it at 48 creates a 48–52px range where the mark no longer shares the one slot. Update both hard-coded test lookups. The open panel’s `height:auto` will naturally include the new grid gaps.
++
++8. **P2 — one `data-tip` string is not enough to render a `ControlTip`, and blindly describing labelled buttons duplicates speech.** [plan:94](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:94), [Tooltip.tsx:388](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/Tooltip.tsx:388), [BlockLinkCard.tsx:277](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icon-polish/src/web/BlockLinkCard.tsx:277). `ControlTip` requires a heading plus `what` and `how`; several proposed strings exactly equal the button’s `aria-label`, so attaching them as `aria-describedby` may announce the same sentence twice. Use `TipNote` for the current one-line copy, or define genuinely additional `what/how` data. Skip `aria-describedby` where the tooltip adds nothing to the accessible name. Ensure `.blk-cmt` joins the delegated selector too.
++
++9. **P2 — removing `title` is accessibility-safe, but existing tests depend on it and need deliberate replacement.** [block-gutter.test.tsx:241](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/block-gutter.test.tsx:241), [block-gutter.test.tsx:315](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/block-gutter.test.tsx:315), [block-gutter.test.tsx:395](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/tests/block-gutter.test.tsx:395). The controls retain explicit `aria-label`s, so no accessible name depends on `title`; however, several exact-copy tests do. Replace them with assertions for `data-tip`, absence of `title`, keyboard/hover card contents, and `aria-describedby` behavior.
++
++10. **P2 — Sketch is not “just a prop” in the current ownership shape.** [plan:78](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md:78), [SketchView.tsx:195](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/SketchView.tsx:195), [DiagramPanel.tsx:1526](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/DiagramPanel.tsx:1526). `OwnerSketch` owns `useSketch` and constructs the badge below `DiagramPanel`’s `ModeSurface`; data cannot be passed upward with an ordinary prop. Decide before building: either explicitly exempt and defer Sketch, or introduce a render-prop/owner wrapper that hands both body and badge to the surface while preserving the owner/visitor capability boundary.
++
++11. **P2 — preserve the failed-permalink state when consolidating hover rules.** [gutter.css:635](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/gutter.css:635), [gutter.css:646](/home/greg/code/spideryarn2/.claude/worktrees/fbhf4svm-mode-header-and-gutter-icons/src/web/styles/gutter.css:646). Its destructive colour currently wins by equal specificity and later source order. Keep that ordering or exclude `.failed` from the orange rule. Consider applying the shared colour to `:focus-visible` as keyboard parity, while retaining `.block-chat.has` blue only at rest.
++
++Search’s zero-slack fit is safe if `.band-corner` itself remains absolutely positioned. Outline’s measuring copies are also safe because their right inset already derives from `--band-about-room`. The profile popover should anchor correctly: `useFloating` references the actual button, uses `autoUpdate`, and portals the panel, so an absolutely positioned ancestor does not break it.
++
++**Verdict: revise then build.** The visual direction is sound, and the gutter gap arithmetic is sound, but presence detection, coarse sizing, empty top rows, delegated-tooltip focus/state, and the negated container query need to be specified before implementation.
+\ No newline at end of file
+diff --git a/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md
+new file mode 100644
+index 000000000..a282dc97a
+--- /dev/null
++++ b/docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md
+@@ -0,0 +1,187 @@
++# The band's corner icons, and the gutter's
++
++**Status:** planned 2026-10-02; revised after the Sol plan review (below).
++
++Two reports from Greg the same morning, both about small icons not lining up or not answering.
++
++`spya-hf4svm`, on Summary:
++
++> We've added (i) and profile icons to every mode. Great. But their position/sizing/alignment looks
++> a bit off, especially on a phone. Take screenshots and see if you can improve this. And perhaps
++> update docs or make this reusable/template as part of creating new modes so that it's a bit more
++> standardised.
++
++`spya-jc0vm6`, on Glossary:
++
++> Re the icons in the vertical gutter next to a block:
++> - Problem: when I hover my mouse over the Bookmark icon, it doesn't glow
++> - Make sure they all have tooltips
++> - Also, please slightly increase the vertical gaps between them
++
++## What the screenshots showed
++
++The screenshots were taken with Playwright against the local dev server on `ds-spya-me0d4g`, at a
++phone (390), an iPad (820) and a laptop (1440) width. They are in the session scratchpad, and the
++boxes below are CSS px from its `before-boxes.json`.
++
++**The corner.** Every band has its (i) (plan 261001m), placed by `ModeSurface`, the same in every
++mode. The profile badge (`WrittenForYou`, "written for you") is not: **each mode puts it in its own
++top row, wherever that row has room.**
++
++| | (i) | profile badge |
++|---|---|---|
++| size, phone/iPad | 24 × 24, no ring | **40 × 40, with a ring** (narrow-window.css gives `.prof-badge.icon-only` the 2.5rem finger floor) |
++| size, laptop | 24 × 24 | 19.8 × 19.8 |
++| centre line, phone | y 19.2 | y 28.4 in Summary (**9px lower**), 26.4 in Quotes |
++| where | top-right corner, every band | Summary, Quotes: left of the (i), at varying gaps. **Ideas and Tweets: top-left**, as the row's first item. Glossary: **a second row** down. |
++
++So on a phone the two icons in the corner are a 40px ringed circle beside a 24px bare glyph, on two
++different centre lines, and on a laptop the gap between them is different in every mode.
++
++**The gutter.** The permalink, chat and "?" turn `--highlight` (orange) when pointed at. **The
++bookmark button stays grey, and so does the "…"**, because neither has a `:hover` colour rule: the
++three that glow were each given one separately (`.blk-permalink:hover`, `.block-chat:hover`,
++`.blk-help:hover`) and the two that came later were not. Every control has a `title`, but a native
++title appears only after about a second, in the browser's own style, and tooltips.md calls a native
++`title` a regression. That is likely why they read as "no tooltip". The slots are 24px apart, which
++leaves 9px between two 15px glyphs.
++
++## The design
++
++### 1. One corner, owned by `ModeSurface`
++
++`ModeSurface` gains a `profile?: ReactNode` slot beside `about`. When it is given one, the corner
++becomes a small row, `.band-corner`, positioned exactly where the (i) is now, holding **the profile
++badge, then the (i)**:
++
++```
++┌ mode-band ─────────────────────────── (👤)(i) ┐   ← ModeSurface's, every mode the same
++│ [the mode's own top row, padded clear]        │
++```
++
++- **One size for both**: a new `--band-corner-btn`, 1.5rem with a pointer and **2rem on a coarse
++  pointer**, for the (i) and the badge alike. A 40px ringed circle in the corner is the thing that
++  looks wrong on the phone. 2rem (32px) is above WCAG 2.2's 24px minimum. It is under the 2.5rem
++  floor the sort rows use, but a corner icon has no neighbour to hit by mistake.
++- **The badge in the corner is the bare icon**, with no ring, like the (i) beside it. Its colour
++  still carries the changed-profile state, and the panel it opens still says that state in words
++  (WrittenForYou.tsx § `compact`).
++- **`--band-about-room` grows with what is in the corner.** `.has-profile` adds a second
++  button's width and the gap. Every top row already pads its right edge by that variable, so no
++  mode's stylesheet changes.
++- `WrittenForYou` takes a `corner` prop rather than a new component: the panel, labels and
++  Regenerate are unchanged. The modes stop placing it and pass it as `profile=` instead: Summary,
++  Glossary, Quotes, Ideas, Tweets.
++- **Ideas loses its words.** It is the one mode that shows *"written for you"* in full, and its
++  comment argues the words matter more there. Greg asked for standardisation, so it becomes the
++  same icon as everywhere else. The panel's first line says the same fact in words.
++- **Sketch** draws its badge in `.sk-bar`, inside Diagram's band, and SketchView is one of
++  several pictures that band switches between. It moves to the corner if lifting it into
++  `DiagramPanel` is small; otherwise it is deferred by name below.
++
++The guard in `tests/every-mode-draws-its-surface.test.tsx` already finds the (i) as the band's
++first child. It will look for `:scope > .band-corner > .band-about` instead. A new check in the same
++sweep: any `.prof-badge` in a populated band is inside the corner. That makes "the badge goes in the
++corner" something a new mode cannot forget, which is the "reusable/template" half of the report.
++
++### 2. The gutter
++
++- **One hover rule for all five controls**: `.blk-permalink, .block-chat, .blk-bookmark,
++  .blk-help, .blk-more` turn `--highlight` when pointed at. The three existing per-control rules
++  fold into it. `.blk-cmt` (the reader's own mark) is already `--highlight`; it lifts to full
++  opacity, as now. `.block-chat.has` stays blue at rest, as it must (gutter.css says why), and
++  turns orange on hover as it already does.
++- **House tooltips, through the card the gutter already has.** BlockLinkCard.tsx is one delegated
++  card for the whole reading view. It already serves the gutter's reading-time line, and it exists
++  because a Floating UI instance per trigger is too many on a long article. The gutter's controls
++  join its selector. Each control carries its words in `data-tip` instead of `title`: the same
++  strings, kept state-dependent where they already are (the permalink's *Copied*, the chat count).
++  The card is drawn with `ControlTip`'s shape, using the same classes and delays as every other
++  tooltip. Removing `title` stops a native one from appearing on top of the house one. A finger
++  gets no card, as now: the card is pointer-only, and a tap on a gutter control does the thing.
++  The card refreshes if the open control's `data-tip` changes (the permalink after a copy).
++- **A 4px gap between slots**: `row-gap: max(0.25rem, 4px)`, which makes 13px between glyphs instead
++  of 9. **The cost**: the container queries that decide how many controls a row can draw are
++  thresholds of n × slot, and become n × slot + (n − 1) × gap: two slots at 52px/3.25rem instead of
++  48/3rem, three at 80/5rem instead of 72/4.5rem, four at 108/6.75rem instead of 96/6rem. A row in
++  the 4px band below each new threshold folds one control behind the "…". No row gets taller.
++  The rem and px halves still flip at the same 16px root, so the `and` form stays exact.
++  `tests/gutter-target-size.test.ts` pins these strings, and moves with them.
++
++### Docs
++
++- mode.md, under *Every band has an (i)*: one line saying the profile badge goes in `profile=` and
++  lands in the corner. This is signposting, not a rule change.
++- design-css-overview.md § The band's (i): the corner row and `--band-corner-btn`.
++- tooltips.md: the gutter's controls are the delegated card's, with no `title`.
++- The comments in gutter.css and BlockGutter.tsx that say `title`.
++
++## The simpler options passed over
++
++- **Fix the sizes and leave the badge where each mode puts it.** This is less churn, but the
++  report is about the badge and the (i) not lining up, and a badge in five different places cannot
++  line up with anything. It would also leave nothing for the next mode to follow.
++- **Keep `title` on the gutter and add only the hover colour.** Every control does have a title, so
++  "make sure they all have tooltips" might be met on paper. But a second's delay and the browser's
++  own style is why it reads as missing, and the delegated card is already in the reading view, so
++  joining it costs a selector and a branch.
++- **A bigger slot instead of a gap** (`--blk-slot` 24 → 28px): this gives the same space, but grows
++  the one-line paragraph's floor and the rhythm with it. A gap only moves the thresholds.
++
++## Deferred, by name
++
++- **Sketch's badge**, if lifting it out of SketchView into DiagramPanel's band turns out to be more
++  than a prop. The plan doc's status will say which.
++- **Tweets' copy button** sits about 2px off the (i)'s centre line. This is the mode's own head row,
++  and the corner change may fix it; if it does not, it is noted rather than chased.
++- **The phone gutter shot.** The screenshot script could not select a row by tapping; the touch
++  reveal is untouched by this plan, so it is checked by the existing tests rather than a new shot.
++- `fbkd5dk5-gutter-icons-right` is a queued session whose name says it will move the gutter. It
++  starts hours after this lands, so it will build on this rather than collide with it.
++
++## Stages
++
++1. The corner: `ModeSurface.profile`, `.band-corner`, sizes, the five modes moved, the guard.
++2. The gutter: hover rule, delegated tooltips, gap and thresholds, tests.
++3. Docs, `npm test`, `npm run typecheck`, lint on touched files, after-screenshots at the three
++   widths, GPT Sol code review, push to `dev`, feedback note.
++
++## What GPT Sol's plan review changed
++
++`261002e-…-plan-review-sol.md`, verdict *revise then build*. Every finding was checked against the
++code and held. What moved:
++
++- **No `.band-corner` wrapper** (finding 4). The badge is a second direct child of the band, after
++  the (i), positioned absolutely one button-width to its left. The (i) stays first in the DOM and
++  in tab order, as plan 261001m decided; the badge comes next. `mode-surface-changes-no-markup`'s
++  baselines keep `button.band-about` first.
++- **Whether a badge is there is asked of the DOM, not of the prop** (finding 1). `WrittenForYou`
++  returns `null` for an unprofiled artefact, and a `ReactNode` cannot say that ahead of time. So the
++  room grows with `.mode-band:has(> .prof-badge)`, and nothing is reserved for an absent badge.
++  The tests mount both a profiled and an unprofiled fixture.
++- **The corner's own styling beats the coarse floor** (finding 2): `.mode-band > .prof-badge`
++  resets `min-width`/`min-height`, and sets the border to none, inside the same `pointer: coarse`
++  block that sets the 2.5rem floor. That floor still applies to badges outside the corner.
++  WrittenForYou needs no new prop: the band's selector owns the corner look.
++- **A head row always holds the corner** (finding 3). Glossary, Quotes and Ideas keep their
++  fragment heads, so the row survives with nothing in it. `.mode-band.has-about > .band-head` gets
++  a `min-height` of the corner button plus its two insets, so an emptied row is exactly as tall as
++  the icons it holds, and the corner can't hang into the list below.
++- **Tooltips open on mouse hover and on keyboard focus, never on touch** (finding 5).
++  `focusin` stays as it is.
++- **The card re-reads `data-tip` when it changes** (finding 6): the open trigger is watched for
++  `data-tip` attribute mutations, so *Copied*, *Couldn't copy* and More → Close update in place.
++- **One line, not a `ControlTip`** (finding 8): the gutter's tips are one sentence each, drawn with
++  `TipNote`. The card adds **no `aria-describedby`** to a gutter control, because its words already
++  are, or nearly are, the control's `aria-label`; it would only be read twice. `.blk-cmt` joins
++  the selector.
++- **The `title` tests become `data-tip` tests**, plus a "no `title`" check and a hover/focus card
++  test (finding 9).
++- **The one-slot negated query moves too** (finding 7): `not ((min-height: 52px) and
++  (min-height: 3.25rem))`. Sol confirmed the positive thresholds, 52/3.25, 80/5 and 108/6.75.
++- **`.blk-permalink.failed` keeps its red** (finding 11): the shared hover rule is written before
++  it, so equal specificity and later source order still give the red. The shared colour applies on
++  `:focus-visible` too.
++- **Sketch is deferred** (finding 10): `OwnerSketch` owns `useSketch` below Diagram's surface, so
++  the badge cannot be handed up as a prop; it needs a render-prop or an owner wrapper. It stays in
++  `.sk-bar`, its picture's own toolbar, for now.
+diff --git a/docs/project/design-css-overview.md b/docs/project/design-css-overview.md
+index bc9283bb2..9dbdd9694 100644
+--- a/docs/project/design-css-overview.md
++++ b/docs/project/design-css-overview.md
+@@ -205,7 +205,10 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
+   `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet, and a
+   measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
+ 
+-Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
++Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
++*written for you* badge sits beside it, the same size, through `ModeSurface`'s `profile`, and
++`--band-about-room` grows only when one rendered — plan
++[261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
+ 
+ ## The stacking order, which is real even though it is not a scale
+ 
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index 3ddad83b8..455b3fb5f 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -201,6 +201,15 @@ Then the residue, which is why this page exists:
+   `var(--band-about-room)` to its right padding in your own stylesheet
+   ([design-css-overview.md](design-css-overview.md) § The band's (i)). Plan
+   [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
++
++  **If your mode's output is written for the reader's profile**, hand its `<WrittenForYou compact
++  … />` to `ModeSurface` as `profile`, not into a row of your own: it goes in the corner beside the
++  (i), the same size and in the same place in every mode, and the room your top row keeps clear
++  grows by itself when it renders. Plan
++  [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
++  *[`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
++  § `PROFILED`: a profiled fixture draws one badge, a direct child of the band, right after the (i).
++  Add your mode to the list.*
+   *[`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
+   § `DRAWS`: every band row says `about: "corner"` or names why it is exempt, and the sweep checks
+   one (i), first in the band, in the empty and the populated state, and no "Written by" on the band
+diff --git a/docs/project/tooltips.md b/docs/project/tooltips.md
+index bddcad4a9..900daf572 100644
+--- a/docs/project/tooltips.md
++++ b/docs/project/tooltips.md
+@@ -39,8 +39,9 @@ reason. The reason that has held so far is *cost per trigger*: a `Tooltip` is a
+ and the gutter has a control per block on an article of several hundred. That reason is weaker than
+ it looks, because a delegated card ([§ The second implementation](#the-second-implementation-and-why-there-is-one))
+ costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2026-10-01 for exactly
+-that. The gutter's remaining `title`s — permalink, chat, bookmark, help and overflow — are the next
+-candidates.
++that, and the gutter's controls — the mark, permalink, chat, bookmark, help and overflow — followed
++on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
++[261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+ 
+ ## What we chose
+ 
+@@ -171,6 +172,13 @@ one per block. Same shape — many triggers, nothing to click in the card — so
+ points: the strip is a whole paragraph tall, so the reference is the strip at the pointer's height
+ ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+ 
++**And the gutter's controls on 2026-10-02** (`GUTTER_CONTROL`): each carries its one sentence in
++`data-tip` rather than `title`, and the card draws it with `TipNote`, re-reading it while open when
++it changes (the permalink's *Copied*, the "…" turning into ✕). Mouse hover and keyboard focus open
++it; a finger does not, because a tap presses the control. It adds no `aria-describedby` there: the
++sentence is the control's own name, near enough, and would be read twice
++([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
++
+ ## `ControlTip`, which is what most of them are now
+ 
+ The spine's card is a *place* described. The other shape — and by count the commoner one — is a
+diff --git a/src/web/BlockGutter.tsx b/src/web/BlockGutter.tsx
+index f64390e3c..5490b64c9 100644
+--- a/src/web/BlockGutter.tsx
++++ b/src/web/BlockGutter.tsx
+@@ -586,7 +586,7 @@ export function BlockGutter({
+             setOpen(false);
+             onOpenComment(first.id);
+           }}
+-          title={
++          data-tip={
+             comments && comments.length > 1
+               ? `Your notes on this paragraph (${comments.length})`
+               : "Your note on this paragraph"
+@@ -618,22 +618,24 @@ export function BlockGutter({
+       <a
+         className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
+         href={blockHref(id, linkBase)}
+-        /* The tooltip Greg asked for, carrying the full id. `title` rather than
+-           the Tooltip component on purpose: that is a Floating UI instance per
+-           trigger, and this is one trigger per block on an article that can run
+-           to several hundred. It is also what `.block-chat` beside it has
+-           always used. */
+-        title={
++        /* The tooltip Greg asked for, carrying the full id. **`data-tip`, read
++           by the reading view's one delegated card** (BlockLinkCard.tsx §
++           `GUTTER_CONTROL`), since 2026-10-02: not the Tooltip component,
++           which is a Floating UI instance per trigger on an article that can
++           run to several hundred blocks, and no longer a native `title`, which
++           shows after a second in the browser's own style and read as no
++           tooltip at all (spya-jc0vm6, *"Make sure they all have tooltips"*).
++           Every control in this column does the same. */
++        data-tip={
+           copy === "copied"
+             ? `Copied — ${id}`
+             : copy === "failed"
+               ? `Couldn't copy. Use the link's own menu — ${id}`
+               : `${id} — click to copy a link to this paragraph`
+         }
+-        /* Names it as the link it is, and carries the full id — which is the
+-           condition on using `title` for the hint at all, since a native title
+-           is delayed, is not reliably exposed on keyboard focus, and does not
+-           exist on touch. */
++        /* Names it as the link it is, and carries the full id — the card is
++           not hung on it as a description (it would be read twice), and it
++           does not open for a finger, so the name has to carry the id. */
+         aria-label={`Link to this paragraph, ${id}`}
+         onClick={onCopy}
+       >
+@@ -672,14 +674,14 @@ export function BlockGutter({
+              conversation", and *"(3 total)"* says the count is the set rather
+              than promising the reader all of it.
+ 
+-             **`title` and `aria-label` are one string here**, unlike the
++             **`data-tip` and `aria-label` are one string here**, unlike the
+              permalink and the "?" beside it, and the divergence is what was
+              wrong rather than what was right: the accessible name was the bare
+              singular, so the count on screen was the one thing a screen reader
+              could not hear. Nothing about the count is decoration.
+ 
+              With no conversation on the block, both are unchanged. */
+-          title={
++          data-tip={
+             chatCount
+               ? `Open a conversation about this paragraph (${chatCount} total)`
+               : "Chat about this paragraph"
+@@ -715,7 +717,7 @@ export function BlockGutter({
+           could not change behind the behaviour. GPT Sol's condition on stage 2
+           being coherent on its own.
+ 
+-          **`title` and `aria-label` diverge here, as they do for the permalink
++          **`data-tip` and `aria-label` diverge here, as they do for the permalink
+           above.** The tooltip has room to name the cost; the accessible name is
+           read out on focus, in a gutter where four of them go past in a row, so
+           it stays to the verb.
+@@ -761,7 +763,7 @@ export function BlockGutter({
+               announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
+             });
+           }}
+-          title="Bookmark this paragraph"
++          data-tip="Bookmark this paragraph"
+           aria-label="Bookmark this paragraph"
+         >
+           <Bookmark size={GLYPH} aria-hidden="true" />
+@@ -777,7 +779,7 @@ export function BlockGutter({
+             setOpen(false);
+             onHelp(id);
+           }}
+-          title="Ask the AI for help with this paragraph"
++          data-tip="Ask the AI for help with this paragraph"
+           aria-label="Ask the AI for help"
+         >
+           <CircleHelp size={GLYPH} aria-hidden="true" />
+@@ -839,7 +841,7 @@ export function BlockGutter({
+             if (e.detail === 0) goTo.current = open ? "more" : "head";
+             setOpen((was) => !was);
+           }}
+-          title={open ? "Close paragraph controls" : "More for this paragraph"}
++          data-tip={open ? "Close paragraph controls" : "More for this paragraph"}
+           aria-label={open ? "Close paragraph controls" : "More for this paragraph"}
+         >
+           {open ? <X size={GLYPH} aria-hidden="true" /> : <Ellipsis size={GLYPH} aria-hidden="true" />}
+diff --git a/src/web/BlockLinkCard.tsx b/src/web/BlockLinkCard.tsx
+index bc77c17fe..2baacd8d3 100644
+--- a/src/web/BlockLinkCard.tsx
++++ b/src/web/BlockLinkCard.tsx
+@@ -39,6 +39,16 @@
+  * hover intent, detach and dismiss logic below; `READING_LINE` is the one
+  * branch that differs, plus where the card is placed (`referenceFor`).
+  * docs/plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md.
++ *
++ * **And every control in the gutter** (`GUTTER_CONTROL`, since 2026-10-02):
++ * the mark, the permalink, chat, the bookmark, the "?" and the "…". Each had a
++ * native `title`, which reads as no tooltip at all — Greg (spya-jc0vm6): *"Make
++ * sure they all have tooltips"*. Each now carries its one sentence in
++ * `data-tip`, and the card draws it, re-reading it if it changes while open
++ * (the permalink's *Copied*, the "…" turning into ✕). It adds no
++ * `aria-describedby` there, because the sentence is the control's own name,
++ * near enough, and would be read twice.
++ * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+  */
+ import {
+   FloatingArrow,
+@@ -55,7 +65,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
+ import type { Block, BlockId } from "../types.js";
+ import { snippet } from "./citations.js";
+ import type { Section } from "./position.js";
+-import { ControlTip } from "./Tooltip.js";
++import { ControlTip, TipNote } from "./Tooltip.js";
+ import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
+ 
+ /** What a card says about one block. */
+@@ -143,7 +153,11 @@ const DELAY = { open: 240, close: 90 } as const;
+    forged one gets no card. */
+ /** The gutter's reading-time line (BlockGutter.tsx, gutter.css § reading time). */
+ const READING_LINE = ".blk-gutter > span.blk-read";
+-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}`;
++/** A control in the gutter (BlockGutter.tsx), whose words are its `data-tip`. */
++const GUTTER_CONTROL = ".blk-gutter > button[data-tip], .blk-gutter > a[data-tip]";
++const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}`;
++/** The two that are not links, and draw a control's card rather than a passage's preview. */
++const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}`;
+ 
+ /**
+  * **`ReadingCard` — what the reading-time line is.** The same words on every row: how far you
+@@ -192,6 +206,10 @@ function contentFor(
+   resolveXref: XrefResolver | undefined,
+ ): ReactNode | null {
+   if (el.matches(READING_LINE)) return <ReadingCard />;
++  if (el.matches(GUTTER_CONTROL)) {
++    const tip = el.getAttribute("data-tip")?.trim() ?? "";
++    return tip === "" ? null : <TipNote>{tip}</TipNote>;
++  }
+   /* A cross-reference's target comes from the resolver and only from there —
+      never `data-block-link`, `data-block-missing` or `data-block-preview` off
+      the mark. Since 2026-10-01 the sanitiser drops all three from an
+@@ -277,8 +295,9 @@ function BlockLinkCard({
+   useEffect(() => {
+     const el = shown?.el;
+     /* Not on a trigger hidden from assistive technology — the reading-time
+-       line is decoration, and nothing about reading time is announced. */
+-    if (!el || el.getAttribute("aria-hidden") === "true") return;
++       line is decoration, and nothing about reading time is announced — nor
++       on a gutter control, whose card says its own name again. */
++    if (!el || el.getAttribute("aria-hidden") === "true" || el.matches(GUTTER_CONTROL)) return;
+     const had = el.getAttribute("aria-describedby");
+     el.setAttribute("aria-describedby", had ? `${had} ${cardId}` : cardId);
+     return () => {
+@@ -303,7 +322,24 @@ function BlockLinkCard({
+     closeIfDetached();
+     const observer = new MutationObserver(closeIfDetached);
+     observer.observe(document.documentElement, { childList: true, subtree: true });
+-    return () => observer.disconnect();
++    /* **A gutter control's words can change under an open card** — the
++       permalink says *Copied*, the "…" becomes ✕ — on the same element, so
++       nothing above would notice. Re-read them, and only the open one's. */
++    const reword = new MutationObserver(() => {
++      if (currentRef.current !== el) return;
++      const content = contentFor(el, indexRef.current, resolveRef.current);
++      if (content === null) {
++        currentRef.current = null;
++        setShown(null);
++      } else {
++        setShown({ el, content });
++      }
++    });
++    if (el.matches(GUTTER_CONTROL)) reword.observe(el, { attributes: true, attributeFilter: ["data-tip"] });
++    return () => {
++      observer.disconnect();
++      reword.disconnect();
++    };
+   }, [shown]);
+ 
+   /* A new article/index can change the words under an anchor even if React
+@@ -450,7 +486,7 @@ function BlockLinkCard({
+       >
+         {/* A control-shaped card (ControlTip) wants `.tip-soon`'s width and
+             paragraphs; a link's preview wants `.tip-cite`'s. */}
+-        <div className={`tooltip ${drawn.el.matches(READING_LINE) ? "tip-soon" : "tip-cite"}`} style={styles}>
++        <div className={`tooltip ${drawn.el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"}`} style={styles}>
+           {drawn.content}
+           {/* fill and stroke are props, not CSS — Tooltip.tsx says why. */}
+           <FloatingArrow
+diff --git a/src/web/GlossaryPanel.tsx b/src/web/GlossaryPanel.tsx
+index a715ce5d1..7c22c4654 100644
+--- a/src/web/GlossaryPanel.tsx
++++ b/src/web/GlossaryPanel.tsx
+@@ -68,7 +68,7 @@
+  * The four designs this was chosen from, and the two things it is a bet on, are
+  * in docs/plans/260826b-glossary-prioritised-order.md.
+  */
+-import { type ReactNode, useState } from "react";
++import { useState } from "react";
+ import {
+   ExternalLink,
+   Globe,
+@@ -257,9 +257,9 @@ export function GlossaryPanel({
+      glossary already made this exact choice once — "a label instead of a
+      warning triangle" — and the reason holds. src/web/WrittenForYou.tsx.
+      Provenance about the owner's own run, so a visitor sees none of it:
+-     `profileHash` never leaves the server (src/public-types.ts). `null` rather
+-     than a component that renders nothing, so the sort row's trailing slot
+-     is empty when there is nothing to put in it. */
++     `profileHash` never leaves the server (src/public-types.ts). It sits in
++     the band's corner beside the (i) since 2026-10-02 (`ModeSurface`'s
++     `profile`, plan 261002e). */
+   /* **Its Regenerate is `more`, the forced run** — the glossary has no
+      replace verb. Forcing appends only when the list's profile hash matches
+      (src/glossary.ts § existingFor), and the panel offers Regenerate only when
+@@ -311,6 +311,7 @@ export function GlossaryPanel({
+       feature="gloss"
+       mode="glossary"
+       about={about}
++      profile={badge}
+       /* **No head row at all while the sort row is drawn**, since 2026-09-29.
+           Greg, on a phone: *"The Glossary stuff at the top takes up too much
+           space … maybe move the "N words" onto the `order` row somehow -
+@@ -330,10 +331,12 @@ export function GlossaryPanel({
+           docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+ 
+           **The count has gone to the band's (i)** since 2026-10-01 (plan
+-          261001m), so this row holds only the badge now. It is still a
+-          fragment rather than `null`, for the reason above: the row holds
+-          its place while the list is coming, and the (i) sits in it. */
+-      head={sorts.length > 0 ? null : <>{badge}</>}
++          261001m), and the badge to the band's corner beside it since
++          2026-10-02 (plan 261002e), so this row holds nothing of its own. It
++          is still a fragment rather than `null`, for the reason above: the row
++          holds its place while the list is coming, and the corner sits in it
++          (mode-band.css floors a head at the corner's height). */
++      head={sorts.length > 0 ? null : <></>}
+       /* Pinned under the scroller rather than at the end of it, which is what
+           `foot` is for. The guard is the one it had as a trailing child: the
+           run row belongs to an owner whose glossary has arrived. */
+@@ -387,7 +390,6 @@ export function GlossaryPanel({
+           options={sorts}
+           sort={order}
+           onSort={onSort}
+-          trailing={badge}
+         />
+       )}
+ 
+@@ -995,7 +997,7 @@ interface SortOption {
+ /**
+  * Which sorts this particular glossary can actually offer. **Fewer than two is
+  * no bar at all**, and the panel asks this before drawing, because whether the
+- * bar is there decides where the profile badge goes (`GlossaryPanel`).
++ * bar is there decides whether the band keeps its empty head row (`GlossaryPanel`).
+  */
+ function sortOptions(entries: GlossaryEntry[]): SortOption[] {
+   const options: SortOption[] = [
+@@ -1044,24 +1046,20 @@ function sortOptions(entries: GlossaryEntry[]): SortOption[] {
+ }
+ 
+ /**
+- * The sort buttons, and — at the right-hand end — whatever the panel hands
+- * `trailing`: the count and the profile badge, which came here from a head row
+- * of their own on 2026-09-29, so that row could go (`GlossaryPanel`).
+- *
+- * **The trailing slot is beside the group, not in it.** The group is what a
+- * screen reader announces as "Order the terms by", and a profile button inside
+- * it would be announced as one of the orders. GPT Sol's review of the plan.
++ * The sort buttons. Their row's right-hand end held the count and the profile
++ * badge from 2026-09-29, so the head row could go; the count went to the band's
++ * (i) on 2026-10-01 (plan 261001m) and the badge to the band's corner on
++ * 2026-10-02 (plan 261002e), and the row's right padding keeps that corner
++ * clear (`.gloss-sort`, `--band-about-room`).
+  */
+ function SortBar({
+   options,
+   sort,
+   onSort,
+-  trailing,
+ }: {
+   options: SortOption[];
+   sort: TermSort;
+   onSort(sort: TermSort): void;
+-  trailing: ReactNode;
+ }) {
+   return (
+     <div className="gloss-sort">
+@@ -1081,7 +1079,6 @@ function SortBar({
+           </button>
+         ))}
+       </OrderGroup>
+-      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
+     </div>
+   );
+ }
+diff --git a/src/web/IdeasPanel.tsx b/src/web/IdeasPanel.tsx
+index 866533ea4..6a01db166 100644
+--- a/src/web/IdeasPanel.tsx
++++ b/src/web/IdeasPanel.tsx
+@@ -184,38 +184,40 @@ export function IdeasPanel({
+       feature="gloss ideas"
+       mode="ideas"
+       about={about}
+-      /* **A fragment, so the row survives an absent artefact.** Both children
+-          are gated on `ideas`, so the header is empty while the list is coming
+-          — and `head={ideas && …}` would hand the surface `null`, which draws
+-          no `.band-head` at all and takes a row off the screen. */
+-      head={
+-        <>
+-          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+-              docs/plans/260905d-declutter-the-reading-view-top-bars.md), and
+-              the count on 2026-10-01, to the band's (i) (plan 261001m). The
+-              row stays for the profile label below, and as the row the (i)
+-              sits in. */}
+-          {/* A label rather than a control, and on the head line rather than in
+-              a banner: it is provenance, not a warning. It matters more here
+-              than anywhere else it appears — a changed profile does not merely
+-              re-pitch these, it changes what "assumed" means. */}
+-          {/* Provenance about the owner's own run: `profileHash` never leaves
+-              the server, so a visitor sees none of it. src/public-types.ts. */}
+-          {ideas && owner && (
+-            <WrittenForYou
+-              written={owner.profiled}
+-              changed={owner.profileChanged}
+-              slug={owner.slug}
+-              /* The forced run replaces the list (plan 261002b). */
+-              regenerate={{
+-                run: () => void owner.regenerate(),
+-                busy: owner.job !== null || owner.starting,
+-                refresh: () => owner.refresh(),
+-              }}
+-            />
+-          )}
+-        </>
++      /* **The badge is in the band's corner**, beside the (i), since
++          2026-10-02 (`ModeSurface`'s `profile`, plan 261002e). It is the
++          same icon as in every other mode now, where until then this was the
++          one band that said *"written for you"* in words, on the argument
++          that a changed profile changes what "assumed" means here. Greg asked
++          for the corner to be standardised (spya-hf4svm); the panel the icon
++          opens says the same fact in words at its top. A label rather than a
++          control, and provenance about the owner's own run: `profileHash`
++          never leaves the server, so a visitor sees none of it
++          (src/public-types.ts). */
++      profile={
++        ideas && owner ? (
++          <WrittenForYou
++            written={owner.profiled}
++            changed={owner.profileChanged}
++            slug={owner.slug}
++            compact
++            /* The forced run replaces the list (plan 261002b). */
++            regenerate={{
++              run: () => void owner.regenerate(),
++              busy: owner.job !== null || owner.starting,
++              refresh: () => owner.refresh(),
++            }}
++          />
++        ) : null
+       }
++      /* **An empty head, kept as the row the corner sits in.** The mode's
++          name went on 2026-09-05 — the Dock says it (§ Stage 5 of
++          docs/plans/260905d-declutter-the-reading-view-top-bars.md) — the
++          count on 2026-10-01, to the band's (i) (plan 261001m), and the badge
++          on 2026-10-02, to the corner. Without the row the corner would sit on
++          the first group's heading and its count; mode-band.css floors a head
++          at the corner's height. */
++      head={<></>}
+       /* No standing redo button under the list any more. Greg, 2026-09-29
+           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
+           have a "redo this processing" button - let's just rely on the
+diff --git a/src/web/ModeSurface.tsx b/src/web/ModeSurface.tsx
+index 13605677f..1d79285b5 100644
+--- a/src/web/ModeSurface.tsx
++++ b/src/web/ModeSurface.tsx
+@@ -117,6 +117,7 @@ export function ModeSurface({
+   foot,
+   mode,
+   about,
++  profile,
+   ref,
+   ...rest
+ }: {
+@@ -209,6 +210,22 @@ export function ModeSurface({
+    * either, there is no (i).
+    */
+   about?: ReactNode;
++  /**
++   * **The owner's *written for you* badge**, already rendered (`WrittenForYou`),
++   * which this puts in the corner beside the (i) — the same place and the same
++   * size in every mode. Greg, 2026-10-02 (spya-hf4svm): *"We've added (i) and
++   * profile icons to every mode. Great. But their position/sizing/alignment
++   * looks a bit off, especially on a phone … make this reusable/template as part
++   * of creating new modes"*. Each mode used to put it in its own top row.
++   *
++   * Second in the DOM, after the (i), so the (i) stays first in tab order.
++   * Out of flow like the (i), and the room the top row keeps clear grows only
++   * when a badge actually rendered — `WrittenForYou` returns `null` for an
++   * artefact written without a profile, so mode-band.css asks
++   * `:has(> .prof-badge)` rather than this component guessing from the prop.
++   * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
++   */
++  profile?: ReactNode;
+   /** For `OutlinePanel`, which measures the band to choose a rung. */
+   ref?: Ref<HTMLElement>;
+ } & PassThrough) {
+@@ -225,6 +242,7 @@ export function ModeSurface({
+           {extra && about}
+         </BandAbout>
+       )}
++      {hasAbout && profile}
+       {/* **The three values React renders as nothing, and a boolean is two of
+           them.** `head` is written by a caller as `cond && <X/>` or
+           `cond ? <X/> : null` at least as often as it is omitted, and those hand
+diff --git a/src/web/QuotesPanel.tsx b/src/web/QuotesPanel.tsx
+index a7e71c41e..5af3c8c5e 100644
+--- a/src/web/QuotesPanel.tsx
++++ b/src/web/QuotesPanel.tsx
+@@ -48,7 +48,7 @@
+  * agreeing is that both call `markedQuotes` below.
+  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
+  */
+-import { useState, type ReactElement, type ReactNode } from "react";
++import { useState, type ReactElement } from "react";
+ import { Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
+ import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
+ import type { QuoteRank } from "./params.js";
+@@ -590,13 +590,12 @@ export function QuotesPanel({
+      order the list is actually in. One call, one answer, passed down. */
+   const rank = effectiveRank(all, chosenRank);
+   /* Empty with fewer than two quotes or two ranks; then there is no rank row
+-     and the head row carries the count and the badge instead. */
++     and the empty head row holds the band's corner instead. */
+   const ranks = quotes && quotes.quotes.length > 1 ? rankOptions(all) : [];
+   /* Provenance about the owner's own run, so a visitor sees none of it:
+      `profileHash` never leaves the server (src/public-types.ts). An icon since
+-     2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
+-     that renders nothing, so the rank row's trailing slot is empty when there
+-     is nothing to put in it.
++     2026-10-01, as Glossary's is (plan 260929a), and in the band's corner since
++     2026-10-02 (`ModeSurface`'s `profile`, plan 261002e).
+ 
+      **No `regenerate`, on purpose.** Its panel edits the profile like every
+      other, but Quotes' forced run appends to a current list — across a profile
+@@ -705,6 +704,7 @@ export function QuotesPanel({
+       feature="quotes"
+       mode="quotes"
+       about={about}
++      profile={badge}
+       /* **No head row while the rank row is drawn**, since 2026-10-01 — Greg,
+           on a landscape iPhone: *"all the stuff at the top of their columns
+           takes up the vertical real estate, and I can't see the actual result"*
+@@ -720,10 +720,11 @@ export function QuotesPanel({
+           row, so the old row stays and carries both.
+ 
+           **The count has gone to the band's (i)** since 2026-10-01 (plan
+-          261001m), so this row holds only the badge now. Still a fragment
+-          rather than `null`, for the reason above: the row holds its place
+-          while the list loads, and the (i) sits in it. */
+-      head={ranks.length > 0 ? null : <>{badge}</>}
++          261001m), and the badge to the band's corner beside it since
++          2026-10-02 (plan 261002e), so this row holds nothing of its own.
++          Still a fragment rather than `null`, for the reason above: the row
++          holds its place while the list loads, and the corner sits in it. */
++      head={ranks.length > 0 ? null : <></>}
+       /* Pinned under the list rather than at the end of it. Same guard it had
+           as a trailing child of the band — and **not on a stale or an outdated
+           list**, whose banner offers the one honest action there, a list of its
+@@ -752,7 +753,6 @@ export function QuotesPanel({
+           options={ranks}
+           rank={rank}
+           onRank={onRank}
+-          trailing={badge}
+         />
+       )}
+ 
+@@ -922,24 +922,20 @@ function rankOptions(quotes: readonly Quote[]): RankOption[] {
+ }
+ 
+ /**
+- * The rank buttons, and at the right-hand end whatever the panel hands
+- * `trailing`: the count and the profile badge, which came here from a head row
+- * of their own on 2026-10-01, so that row could go — the move Glossary made on
+- * 2026-09-29 (plan 260929a), for Greg's *"all the stuff at the top of their
+- * columns takes up the vertical real estate"* (`spya-gcdwps`, plan 261001l).
+- * **The trailing slot is beside the group, not in it**, for the reason
+- * GlossaryPanel.tsx § SortBar gives.
++ * The rank buttons. The row took the count and the profile badge from a head
++ * row of their own on 2026-10-01, for Greg's *"all the stuff at the top of
++ * their columns takes up the vertical real estate"* (`spya-gcdwps`, plan
++ * 261001l); the count has since gone to the band's (i) (plan 261001m) and the
++ * badge to the band's corner (plan 261002e).
+  */
+ function RankBar({
+   options,
+   rank,
+   onRank,
+-  trailing,
+ }: {
+   options: readonly RankOption[];
+   rank: QuoteRank;
+   onRank(rank: QuoteRank): void;
+-  trailing: ReactNode;
+ }) {
+   return (
+     <div className="quotes-rank">
+@@ -959,7 +955,6 @@ function RankBar({
+           </button>
+         ))}
+       </OrderGroup>
+-      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
+     </div>
+   );
+ }
+diff --git a/src/web/Tweets.tsx b/src/web/Tweets.tsx
+index abccb79f2..ae024811a 100644
+--- a/src/web/Tweets.tsx
++++ b/src/web/Tweets.tsx
+@@ -53,7 +53,7 @@
+  *
+  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
+  */
+-import { useEffect, useMemo, useState, type ReactNode } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import type { Article, BlockId, Job, TweetThread } from "../types.js";
+@@ -104,28 +104,26 @@ export function TweetsPanel({
+       label="Tweets"
+       mode="tweets"
+       feature="gloss tweets"
+-      /* **A head only when there is a thread**: *Copy the thread* and the
+-         owner's profile badge, which are not the mode's name (mode.md § the
+-         band's chrome). No thread, no row. The counts that were here are in
+-         the (i), with who wrote it — spya-ucu35y. */
+-      head={
+-        ready && thread ? (
+-          <ThreadHead thread={thread} article={article}>
+-            {owner?.thread && (
+-              <WrittenForYou
+-                written={owner.thread.profileHash != null}
+-                changed={owner.profileChanged}
+-                slug={slug}
+-                compact
+-                /* The forced run replaces the thread (plan 261002b). */
+-                regenerate={{
+-                  run: () => void owner.regenerate(),
+-                  busy: owner.job !== null || owner.starting,
+-                  refresh: () => owner.refresh(),
+-                }}
+-              />
+-            )}
+-          </ThreadHead>
++      /* **A head only when there is a thread**: *Copy the thread*, which is
++         not the mode's name (mode.md § the band's chrome). No thread, no row.
++         The counts that were here are in the (i), with who wrote it —
++         spya-ucu35y — and the owner's profile badge is in the corner beside
++         it since 2026-10-02 (plan 261002e). */
++      head={ready && thread ? <ThreadHead thread={thread} article={article} /> : null}
++      profile={
++        ready && owner?.thread ? (
++          <WrittenForYou
++            written={owner.thread.profileHash != null}
++            changed={owner.profileChanged}
++            slug={slug}
++            compact
++            /* The forced run replaces the thread (plan 261002b). */
++            regenerate={{
++              run: () => void owner.regenerate(),
++              busy: owner.job !== null || owner.starting,
++              refresh: () => owner.refresh(),
++            }}
++          />
+         ) : null
+       }
+       about={
+@@ -228,22 +226,14 @@ function UnlinkedNote({ thread, slug }: { thread: PublicTweets; slug: string })
+ }
+ 
+ /**
+- * **The head row: *Copy the thread*, and `children`**, which is where the
+- * owner puts their profile badge. The thread's numbers were here until
+- * 2026-10-01; they are in `TweetsAbout` now (spya-ucu35y).
++ * **The head row: *Copy the thread*.** The thread's numbers were here until
++ * 2026-10-01; they are in `TweetsAbout` now (spya-ucu35y). The owner's profile
++ * badge was here too, and is in the band's corner since 2026-10-02 (plan
++ * 261002e).
+  */
+-export function ThreadHead({
+-  thread,
+-  article,
+-  children,
+-}: {
+-  thread: PublicTweets;
+-  article: Article;
+-  children?: ReactNode;
+-}) {
++export function ThreadHead({ thread, article }: { thread: PublicTweets; article: Article }) {
+   return (
+     <div className="tw:flex tw:w-full tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1">
+-      {children}
+       <CopyButton
+         text={() => threadMarkdown(thread, article)}
+         label="Copy the thread"
+diff --git a/src/web/modes/summary/SummaryMode.tsx b/src/web/modes/summary/SummaryMode.tsx
+index d732a5d9d..583018bae 100644
+--- a/src/web/modes/summary/SummaryMode.tsx
++++ b/src/web/modes/summary/SummaryMode.tsx
+@@ -15,7 +15,7 @@
+  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+  *
+  * ```
+- *  ▤ ○──●──○ ▤▤   ⓤ
++ *  ▤ ○──●──○ ▤▤
+  *  the paragraphs, each with the passages it rests on
+  * ```
+  *
+@@ -67,8 +67,9 @@ export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId
+       onJump={onJump}
+       render={(body, badge, about) => (
+         <SummarySurface
+-          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} badge={badge} />}
++          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} />}
+           about={about}
++          profile={badge}
+         >
+           {body}
+         </SummarySurface>
+@@ -79,8 +80,8 @@ export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId
+ 
+ /**
+  * The plain-words levels' owner half: the read, the job and the press — and
+- * the *written for you* badge, which belongs in the row above the paragraphs
+- * and needs this hook's answer, so the band hands a `render` in rather than
++ * the *written for you* badge, which belongs in the band's corner and needs
++ * this hook's answer, so the band hands a `render` in rather than
+  * the row reaching down.
+  */
+ function OwnerSimple({
+@@ -148,7 +149,7 @@ export function VisitorSummaryBand({
+   const [level, setLevel] = useQueryState("summary", summaryParam);
+   return (
+     <SummarySurface
+-      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} badge={null} />}
++      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} />}
+     >
+       <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={level} onJump={onJump} />
+     </SummarySurface>
+@@ -162,6 +163,7 @@ export function VisitorSummaryBand({
+ function SummarySurface({
+   controls,
+   about = null,
++  profile = null,
+   children,
+ }: {
+   controls: ReactNode;
+@@ -170,10 +172,12 @@ function SummarySurface({
+    * `about`): for the owner, who wrote the paragraphs and when.
+    */
+   about?: ReactNode;
++  /** The owner's *written for you* badge, for the band's corner (ModeSurface.tsx § `profile`). */
++  profile?: ReactNode;
+   children: ReactNode;
+ }) {
+   return (
+-    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
++    <ModeSurface label="Summary" feature="summ" mode="summary" about={about} profile={profile}>
+       {/* **No `head`, so there is no title row at all.** It said the mode's own
+           name, which the Dock at the foot of the page is already saying — Greg,
+           2026-09-05: *"I think we can rely on the bottom bar to tell us what
+@@ -185,8 +189,9 @@ function SummarySurface({
+           docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
+ 
+       {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
+-          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider
+-          and the badge, and no labels: the group is named for a screen reader
++          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider,
++          and no labels — the badge is in the band's corner since 2026-10-02
++          (plan 261002e): the group is named for a screen reader
+           by its hidden legend, and the slider's card says what each level is. */}
+       <div className="summ-controls">{controls}</div>
+       {children}
+@@ -221,7 +226,7 @@ const PLAIN_HOW =
+   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";
+ 
+ /**
+- * **The plain-words slider, and the badge** — Summary's one row. Greg,
++ * **The plain-words slider** — Summary's one row. Greg,
+  * 2026-09-30 (SPIDERYARN-READING2-7J): *"let's provide a UI-slider with 3
+  * level"*. A slider rather than three pills because the three are one scale —
+  * shorter and plainer to the left, longer and fuller to the right — and a
+@@ -254,13 +259,10 @@ export function SummaryControls({
+   slug,
+   value,
+   onChange,
+-  badge,
+ }: {
+   slug: string | null;
+   value: SimpleLevel;
+   onChange(next: SimpleLevel): void;
+-  /** The owner's *written for you* badge, or null. */
+-  badge?: ReactNode;
+ }) {
+   /* **The gesture seam.** Choosing a level with nothing stored writes all
+      three — Greg's rule about opening a mode, one level down
+@@ -381,7 +383,6 @@ export function SummaryControls({
+           </button>
+         </Tooltip>
+       </fieldset>
+-      {badge ? <span className="summ-badge">{badge}</span> : null}
+     </>
+   );
+ }
+diff --git a/src/web/styles/glossary.css b/src/web/styles/glossary.css
+index 1839cff2a..4f1ddad65 100644
+--- a/src/web/styles/glossary.css
++++ b/src/web/styles/glossary.css
+@@ -56,15 +56,6 @@
+   gap: 0.25rem;
+   min-width: 0;
+ }
+-/* The trailing detail at the far end of a sort row: the Glossary's count and
+-   profile badge, and the FAQ's (i). `margin-left: auto` pushes it right, and
+-   multiple contents wrap as one piece. */
+-.gloss-sort-trail {
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 0.4rem;
+-  margin-left: auto;
+-}
+ .gloss-sort-btn {
+   padding: 0.1rem 0.4rem;
+   border: 1px solid transparent;
+@@ -129,8 +120,7 @@
+     margin: -3px;
+   }
+   .gloss-sort-group::-webkit-scrollbar { display: none; }
+-  .gloss-sort-group > *,
+-  .gloss-sort-trail { flex-shrink: 0; }
++  .gloss-sort-group > * { flex-shrink: 0; }
+ }
+ 
+ /* The threshold slider — the one control in this panel that sets a number
+diff --git a/src/web/styles/gutter.css b/src/web/styles/gutter.css
+index 4442f41bd..38bab5438 100644
+--- a/src/web/styles/gutter.css
++++ b/src/web/styles/gutter.css
+@@ -199,10 +199,19 @@
+   grid-template-columns: var(--blk-slot);
+   grid-auto-rows: var(--blk-slot);
+   align-content: start;
+-  /* **No row gap, deliberately.** The first draft asked for 4px of it and GPT
+-     Sol took it out: going from a 15px slot to a 24px one already supplies the
+-     visible separation Greg asked for, and a gap on top of that pushed the row
+-     floor up by 4px for nothing. */
++  /* **A 4px gap between slots, since 2026-10-02**, and that reverses a
++     decision. The first draft of the 24px slot asked for 4px and GPT Sol took
++     it out: the slot alone already supplied the separation Greg had asked for.
++     Then the glyphs grew from 12px to 15px (2026-09-29), which left 9px of air
++     between two of them, and Greg asked for more: *"please slightly increase
++     the vertical gaps between them"* (spya-jc0vm6). 13px now.
++
++     **It costs no row any height** — the one-slot floor below holds one slot
++     and no gap — but every container query in § the count counts it: n slots
++     need n × slot + (n − 1) × gap. Written with the slot's two halves, so it
++     scales and floors exactly as the slot does, and the queries' `and` form
++     stays exact. Plan 261002e. */
++  row-gap: max(0.25rem, 4px);
+   align-items: center;
+   justify-items: center;
+   line-height: 0;
+@@ -463,7 +472,7 @@ td.text.kind-heading .blk-gutter {
+    is what gives way. There is no `:has(.blk-cmt)` left in this section at all —
+    the count says everything the mark used to be asked to stand in for. */
+ 
+-@container (min-height: 48px) and (min-height: 3rem) {
++@container (min-height: 52px) and (min-height: 3.25rem) {
+   /* Two slots: the first control, and either the second or the way to it. */
+   .blk-gutter > :nth-child(1) { display: inline-flex; }
+   .blk-gutter[data-controls="2"] > * { display: inline-flex; }
+@@ -472,7 +481,7 @@ td.text.kind-heading .blk-gutter {
+   .blk-gutter[data-controls="2"] > .blk-more { display: none; }
+ }
+ 
+-@container (min-height: 72px) and (min-height: 4.5rem) {
++@container (min-height: 80px) and (min-height: 5rem) {
+   /* Three slots: three controls are out, four are two and a dot. */
+   .blk-gutter > :nth-child(-n + 2) { display: inline-flex; }
+   .blk-gutter[data-controls="3"] > * { display: inline-flex; }
+@@ -480,7 +489,7 @@ td.text.kind-heading .blk-gutter {
+   .blk-gutter[data-controls="3"] > .blk-more { display: none; }
+ }
+ 
+-@container (min-height: 96px) and (min-height: 6rem) {
++@container (min-height: 108px) and (min-height: 6.75rem) {
+   /* Four slots, which is every control there can be. */
+   .blk-gutter > * { display: inline-flex; }
+   .blk-gutter[data-controls="4"] > .blk-more { display: none; }
+@@ -512,7 +521,7 @@ td.text.kind-heading .blk-gutter {
+    browser without container queries skips the block and keeps the collapsed
+    default. And not while open: the unfolded column is auto-placed, and a
+    control pinned to the first cell would sit on another. */
+-@container not ((min-height: 48px) and (min-height: 3rem)) {
++@container not ((min-height: 52px) and (min-height: 3.25rem)) {
+   .blk-gutter[data-marked]:not([data-open]) > .blk-cmt { display: inline-flex; }
+   .blk-gutter[data-marked]:not([data-open]) > .blk-cmt,
+   .blk-gutter[data-marked]:not([data-open]) > .blk-more { grid-area: 1 / 1; }
+@@ -633,7 +642,26 @@ td.text.kind-heading .blk-gutter {
+   :where(tr:hover) .blk-permalink { opacity: 0.6; pointer-events: auto; }
+ }
+ .blk-permalink:hover,
+-.blk-permalink:focus-visible { opacity: 1; color: var(--highlight); }
++.blk-permalink:focus-visible { opacity: 1; }
++
++/* **Every control lights when it is the thing you are pointing at**, in one
++   rule since 2026-10-02. The permalink, chat and the "?" were each given a
++   `:hover` colour when they arrived; the bookmark button and the "…" came
++   later and were not, so they stayed grey — Greg: *"when I hover my mouse over
++   the Bookmark icon, it doesn't glow"* (spya-jc0vm6). Focus too, so a keyboard
++   gets what a mouse gets. `.block-chat.has` keeps its blue at rest and lights
++   like the rest; `.blk-permalink.failed` is written below this so its red
++   still wins. Plan 261002e. */
++.blk-permalink:hover,
++.block-chat:hover,
++.blk-bookmark:hover,
++.blk-help:hover,
++.blk-more:hover,
++.blk-permalink:focus-visible,
++.block-chat:focus-visible,
++.blk-bookmark:focus-visible,
++.blk-help:focus-visible,
++.blk-more:focus-visible { color: var(--highlight); }
+ 
+ /* Copying failed, and the reader is told rather than left with a tick that
+    means nothing. The title says what to do instead.
+@@ -871,7 +899,12 @@ td.text.kind-heading .blk-gutter[data-open] {
+    hovering it — the only affordance a whole-block anchor gets, since it draws
+    no mark in the prose. */
+ .block-chat.has { color: var(--chat-mark); }
+-.block-chat:hover { color: var(--highlight); }
++/* …and lights like its neighbours when pointed at. This line used to be
++   `.block-chat:hover`, written after the blue on purpose; the shared rule in
++   § the hover reveal is written before it, so the one case it cannot reach
++   is said again here. */
++.block-chat.has:hover,
++.block-chat.has:focus-visible { color: var(--highlight); }
+ .block-chat-n {
+   font-family: var(--font-mono);
+   font-size: 0.58rem;
+@@ -887,7 +920,6 @@ td.text.kind-heading .blk-gutter[data-open] {
+    this is their own gutter. The chat button's colour is reserved for the fact
+    that a conversation *exists*, which is the one thing in this column that is
+    about what the machine has produced rather than what the reader has done. */
+-.blk-help:hover { color: var(--highlight); }
+ 
+ /* ------------------------------------------------------- reading time ----
+    **A hairline down the gutter's text-side edge, stronger where you have spent
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index 6a46382b8..d70e214d6 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -1092,22 +1092,72 @@
+    controls is `--band-about-room`: `has-about` sets it, and a band's top row
+    adds it to its right padding. `.band-head` does so below; a mode whose top
+    row is its own does so in its own stylesheet. */
+-.mode-band.has-about { --band-about-room: 1.9rem; }
+-.mode-band > .band-about {
++/* **The corner holds one or two buttons of one size**: the (i), and, left of
++   it, the owner's *written for you* badge when `ModeSurface`'s `profile` drew
++   one. Greg, 2026-10-02 (spya-hf4svm): *"their position/sizing/alignment looks
++   a bit off, especially on a phone"* — the badge was a 40px ringed circle on a
++   phone beside a 24px (i), on another centre line, and in a different place in
++   every mode. Plan 261002e.
++
++   `--band-corner-btn` is both buttons' box, and narrow-window.css § a coarse
++   pointer raises it for a finger. `--band-about-room` is what a top row keeps
++   clear: one button and the inset, or two and the gap when a badge is there.
++   **Asked of the DOM with `:has()`**, because `WrittenForYou` renders nothing
++   for an artefact written without a profile and the prop cannot know that. */
++.mode-band.has-about {
++  --band-corner-btn: 1.5rem;
++  /* `.band-head`'s own vertical padding, so the corner and a 24px control in
++     a head row share a centre line (Tweets' copy button sat 2px below it). */
++  --band-corner-top: 0.55rem;
++  --band-corner-right: 0.4rem;
++  --band-corner-gap: 0.2rem;
++  --band-about-room: calc(var(--band-corner-btn) + var(--band-corner-right));
++}
++.mode-band.has-about:has(> .prof-badge) {
++  --band-about-room: calc(
++    var(--band-corner-btn) * 2 + var(--band-corner-gap) + var(--band-corner-right)
++  );
++}
++.mode-band > .band-about,
++.mode-band.has-about > .prof-badge {
+   position: absolute;
+-  top: 0.45rem;
+-  right: 0.4rem;
++  top: var(--band-corner-top);
++  right: var(--band-corner-right);
+   /* Above any sticky row inside the band (Ideas' group headings are 1), which
+      come later in the DOM and would otherwise paint over it. */
+   z-index: 3;
+ }
+-.mode-band.has-about > .band-head { padding-right: calc(0.7rem + var(--band-about-room)); }
++/* The badge, the corner's way: the (i)'s box and the (i)'s quiet — no ring,
++   no padding of its own — so the two read as a pair. Its colour still carries
++   *changed* (profile.css § `.prof-badge.changed`), and the panel it opens says
++   so in words. Outside a band's corner (Sketch's bar) it keeps its pill. */
++.mode-band.has-about > .prof-badge {
++  right: calc(var(--band-corner-right) + var(--band-corner-btn) + var(--band-corner-gap));
++  width: var(--band-corner-btn);
++  height: var(--band-corner-btn);
++  min-width: 0;
++  min-height: 0;
++  padding: 0;
++  justify-content: center;
++  border: 0;
++  border-radius: 0.4rem;
++}
++.mode-band.has-about > .prof-badge:hover,
++.mode-band.has-about > .prof-badge.open { background: var(--surface-raised); }
++/* **A head row always holds the corner.** Glossary, Quotes and Ideas keep a
++   head with nothing in it but the place the corner sits (their fragments), and
++   without this floor that row is only its padding, so the corner hangs into
++   the list below. */
++.mode-band.has-about > .band-head {
++  padding-right: calc(0.7rem + var(--band-about-room));
++  min-height: calc(var(--band-corner-btn) + var(--band-corner-top) * 2);
++}
+ .band-about {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+-  width: 1.5rem;
+-  height: 1.5rem;
++  width: var(--band-corner-btn, 1.5rem);
++  height: var(--band-corner-btn, 1.5rem);
+   padding: 0;
+   border: 0;
+   border-radius: 0.4rem;
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index e0fc58216..697dec690 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -866,6 +866,13 @@
+     min-height: 2.5rem;
+     justify-content: center;
+   }
++
++  /* **The band's corner, for a finger: 32px, both buttons alike.** Not the
++     2.5rem floor above — that is what made the corner's badge a 40px ring
++     beside a 24px (i) (spya-hf4svm). 32px clears WCAG 2.5.8's 24, and a corner
++     has no neighbour to be hit by mistake. mode-band.css § the band's (i)
++     sizes both from this and resets the floor for the corner's badge. */
++  .mode-band.has-about { --band-corner-btn: 2rem; }
+ }
+ 
+ /* ------------------------------------------------- § a field iOS zooms into ----
+diff --git a/src/web/styles/summary.css b/src/web/styles/summary.css
+index f0fa554c1..47c115592 100644
+--- a/src/web/styles/summary.css
++++ b/src/web/styles/summary.css
+@@ -85,8 +85,6 @@
+   .summ-slider-end { transition: none; }
+ }
+ 
+-/* The *written for you* badge, pushed to the row's far end. */
+-.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
+ 
+ /* ---- the paragraphs' scroller ---- */
+ /* The reader's own scroller (SimplePanel.tsx). `overscroll-behavior: contain`
+diff --git a/tests/block-gutter.test.tsx b/tests/block-gutter.test.tsx
+index 2e829db64..d44f6a7d1 100644
+--- a/tests/block-gutter.test.tsx
++++ b/tests/block-gutter.test.tsx
+@@ -240,7 +240,7 @@ describe("the permalink", () => {
+ 
+   it("carries the full id where a reader and a screen reader can each get it", () => {
+     paint();
+-    expect(link().getAttribute("title")).toContain(ID);
++    expect(link().getAttribute("data-tip")).toContain(ID);
+     expect(link().getAttribute("aria-label")).toContain(ID);
+   });
+ });
+@@ -314,7 +314,7 @@ describe("the chat button", () => {
+        the button reporting more than it does. GPT Sol, F-05. */
+     paint(undefined, 2);
+     const b = host.querySelector(".block-chat") as HTMLButtonElement;
+-    expect(b.getAttribute("title")).toBe("Open a conversation about this paragraph (2 total)");
++    expect(b.getAttribute("data-tip")).toBe("Open a conversation about this paragraph (2 total)");
+     /* **The same sentence, and that is the fix** — unlike the permalink and the
+        "?", whose two names diverge on purpose. The accessible name here used to
+        be the bare singular, so the number on screen was the one thing a screen
+@@ -329,7 +329,7 @@ describe("the chat button", () => {
+     // count, and the press really does begin a conversation.
+     paint();
+     const b = host.querySelector(".block-chat") as HTMLButtonElement;
+-    expect(b.getAttribute("title")).toBe("Chat about this paragraph");
++    expect(b.getAttribute("data-tip")).toBe("Chat about this paragraph");
+     expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
+   });
+ });
+@@ -394,7 +394,7 @@ describe('the "?"', () => {
+        that costs money without a confirmation. */
+     paint();
+     const b = host.querySelector(".blk-help") as HTMLButtonElement;
+-    expect(b.getAttribute("title")).toBe("Ask the AI for help with this paragraph");
++    expect(b.getAttribute("data-tip")).toBe("Ask the AI for help with this paragraph");
+     /* Shorter, and divergent on purpose — the same split the permalink above
+        makes. A screen reader announces this on focus with three more buttons
+        queued behind it in the same gutter, so the accessible name stops at the
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index 08a47561a..0e160c361 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -681,6 +681,17 @@ const REMEMBER_THREAD: Seeded = {
+ 
+ type Fixtures = "missing" | "populated";
+ let fixtures: Fixtures;
++/**
++ * **Whether the populated artefacts were written for a profile** — off
++ * everywhere but the corner-badge sweep below, which turns it on to make the
++ * owner's *written for you* badge draw (every hook reads `profileHash != null`).
++ * Plan 261002e.
++ */
++let profiled = false;
++/** The fixture as served: its own `profileHash`, or one, when `profiled`. */
++function stamped<T extends object>(artefact: T): T {
++  return profiled ? { ...artefact, profileHash: "test-profile" } : artefact;
++}
+ /**
+  * **The Sketch, served even in the `missing` state.** Set only by the
+  * Illustrated press: the plates are painted from the Sketch, so with no Sketch
+@@ -779,11 +790,11 @@ const GONE = () => new Response(null, { status: 404 });
+ function artefact(url: string): Response | null {
+   const has = fixtures === "populated";
+   if (url.startsWith("/api/glossary/"))
+-    return has ? json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false }) : GONE();
++    return has ? json({ glossary: stamped(GLOSSARY), stale: false, outdated: false, profileChanged: false }) : GONE();
+   if (url.startsWith("/api/ideas/"))
+-    return has ? json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false }) : GONE();
++    return has ? json({ ideas: stamped(IDEAS), stale: false, outdated: false, profileChanged: false }) : GONE();
+   if (url.startsWith("/api/quotes/"))
+-    return has ? json({ quotes: QUOTES, stale: false, outdated: false, profileChanged: false }) : GONE();
++    return has ? json({ quotes: stamped(QUOTES), stale: false, outdated: false, profileChanged: false }) : GONE();
+   if (url.startsWith("/api/timeline/"))
+     return has ? json({ timeline: TIMELINE, stale: false, outdated: false }) : GONE();
+   if (url.startsWith("/api/debate/"))
+@@ -793,7 +804,7 @@ function artefact(url: string): Response | null {
+   if (url.startsWith("/api/faq/"))
+     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+   if (url.startsWith("/api/tweets/"))
+-    return has ? json({ thread: THREAD, stale: false, profileChanged: false }) : GONE();
++    return has ? json({ thread: stamped(THREAD), stale: false, profileChanged: false }) : GONE();
+   if (url.startsWith("/api/skim/"))
+     return has
+       ? json({ skim: SKIM, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
+@@ -804,7 +815,7 @@ function artefact(url: string): Response | null {
+       : GONE();
+   if (url.startsWith("/api/illustrated/")) return GONE();
+   if (url.startsWith("/api/simple/"))
+-    return has ? json({ simpleSummary: SIMPLE, stale: false, outdated: false, profileChanged: false }) : GONE();
++    return has ? json({ simpleSummary: stamped(SIMPLE), stale: false, outdated: false, profileChanged: false }) : GONE();
+   return null;
+ }
+ 
+@@ -869,6 +880,7 @@ beforeEach(() => {
+   posts.length = 0;
+   mutations.length = 0;
+   fixtures = "missing";
++  profiled = false;
+   sketchDrawn = false;
+   resetActivations();
+   jobEngine.reset();
+@@ -1557,6 +1569,10 @@ describe("phase B — what each mode's real controller drew", () => {
+         expect(corner.length, `${mode}: no (i) in the band's corner`).toBe(1);
+         expect(corner[0], `${mode}: the (i) is not the band's first child`).toBe((band as Element).firstElementChild);
+         expect((band as Element).querySelectorAll(".band-about").length, `${mode}: a second (i)`).toBe(1);
++        /* Nothing here was written for a profile, so no badge — and with none,
++           the corner keeps no room for one (mode-band.css asks `:has()`). The
++           profiled half is the sweep below. */
++        expect((band as Element).querySelectorAll(".prof-badge").length, `${mode}: a badge on an unprofiled band`).toBe(0);
+         await act(async () => (corner[0] as HTMLButtonElement).click());
+         const card = document.querySelector(".band-about-card");
+         expect(card?.textContent?.trim() ?? "", `${mode}: the (i) opened an empty card`).not.toBe("");
+@@ -1567,6 +1583,45 @@ describe("phase B — what each mode's real controller drew", () => {
+ 
+ });
+ 
++/* ================================================= the badge in the corner ==
++   **The owner's *written for you* badge sits beside the (i), in every mode
++   that draws one** — `ModeSurface`'s `profile`, since 2026-10-02. Greg
++   (spya-hf4svm): *"their position/sizing/alignment looks a bit off … make this
++   reusable/template as part of creating new modes"*. Each mode used to put it
++   in its own row, in five different places.
++
++   `PROFILED` is written from the product, not derived from the code: the modes
++   whose artefact can be written for the reader's profile and that show it in
++   the band. Sketch is the named exception — its badge is in its picture's own
++   toolbar, plan 261002e § Deferred. */
++const PROFILED = ["summary", "glossary", "ideas", "quotes", "tweets"] as const satisfies readonly Mode[];
++
++describe("the written-for-you badge sits in the band's corner", () => {
++  for (const mode of PROFILED) {
++    it(
++      `${mode}: one badge, a direct child of the band, right after the (i)`,
++      async () => {
++        fixtures = "populated";
++        profiled = true;
++        await open(`?mode=${mode}`);
++        const row = DRAWS[mode];
++        if (row.kind !== "band") throw new Error(`${mode} draws no band`);
++        const band = host.querySelector(row.where);
++        expect(band, `${mode}: no ${row.where} on the page`).not.toBeNull();
++        expect(readable(band as Element), `${mode}: the band drew no body`).toContain(row.says);
++        const badges = (band as Element).querySelectorAll(".prof-badge");
++        expect(badges.length, `${mode}: not exactly one badge in the band`).toBe(1);
++        expect(badges[0]?.parentElement, `${mode}: the badge is inside a row, not the corner`).toBe(band);
++        expect(
++          badges[0]?.previousElementSibling?.classList.contains("band-about"),
++          `${mode}: the badge does not follow the (i)`,
++        ).toBe(true);
++      },
++      PHASE_MS,
++    );
++  }
++});
++
+ /* The two modes that draw no band used to be checked here, in tests written by
+    hand beside the table rather than generated from it. They are rows in `DRAWS`
+    now — GPT Sol's F21. Two hand-written tests cover the two modes somebody
+diff --git a/tests/glossary-compact-header.test.tsx b/tests/glossary-compact-header.test.tsx
+index 1de5d0e9c..1c3f00375 100644
+--- a/tests/glossary-compact-header.test.tsx
++++ b/tests/glossary-compact-header.test.tsx
+@@ -4,10 +4,11 @@
+  * reports of 2026-09-29, `[SPIDERYARN-READING2-4G]` and `-4H`, and
+  * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+  *
+- * - no head row while the sort row is drawn, and the profile badge at the end
+- *   of the sort row instead; the head row back when there is no sort row to
+- *   carry the badge; the term count in the band's (i) since 2026-10-01 (plan
+- *   261001m);
++ * - no head row while the sort row is drawn; the head row back when there is
++ *   no sort row, holding the band's corner; the term count in the band's (i)
++ *   since 2026-10-01 (plan 261001m); the profile badge at the sort row's end
++ *   until 2026-10-02, and in the band's corner beside the (i) since (plan
++ *   261002e);
+  * - no "order" word, and no hint line under the Look up box — its "not added
+  *   to the list" is in the button's tooltip;
+  * - the kind of a term as an icon with a label, and none for `concept`.
+@@ -300,13 +301,16 @@ describe("the head row", () => {
+     }
+   });
+ 
+-  it("is gone while the sort row is drawn, and the badge is at the sort row's end", async () => {
++  /* The badge was at the sort row's end from 2026-09-29; since 2026-10-02 it is
++     in the band's corner beside the (i), as in every mode (plan 261002e,
++     spya-hf4svm). */
++  it("is gone while the sort row is drawn, and the badge is in the band's corner", async () => {
+     await mount(owner(glossary("a-profile", SCORED), {}));
+     expect(host.querySelector(".band-head")).toBeNull();
+-    const sortRow = host.querySelector(".gloss-sort");
+-    expect(sortRow?.querySelector(".gloss-sort-trail button.prof-badge")).not.toBeNull();
+     expect(host.querySelectorAll("button.prof-badge")).toHaveLength(1);
+-    /* Beside the named group, not inside it, so it is not announced as an order. */
++    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
++    expect(host.querySelector(".gloss-sort .prof-badge")).toBeNull();
++    /* Not inside the named group, so it is not announced as an order. */
+     expect(host.querySelector('[role="group"] .prof-badge')).toBeNull();
+     /* Prioritised says the total on the threshold row, as "n of 4". */
+     expect(host.querySelector(".gloss-count")).toBeNull();
+@@ -321,7 +325,7 @@ describe("the head row", () => {
+     expect(host.querySelector(".band-head")).toBeNull();
+     expect(host.querySelector(".gloss-gate")).toBeNull();
+     expect(host.querySelector(".gloss-count")).toBeNull();
+-    expect(host.querySelector(".gloss-sort-trail button.prof-badge")).not.toBeNull();
++    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
+     expect(await aboutCard()).toContain("4 terms.");
+   });
+ 
+@@ -350,16 +354,16 @@ describe("the head row", () => {
+   it("leaves the sort row's end empty in prioritised for a list written without a profile", async () => {
+     await mount(owner(glossary(null, SCORED), {}));
+     expect(host.querySelector(".gloss-sort")).not.toBeNull();
+-    expect(host.querySelector(".gloss-sort-trail")).toBeNull();
+     expect(host.querySelector(".prof-badge")).toBeNull();
+   });
+ 
+-  it("comes back, with the badge, when there is no sort row; the count is in the (i)", async () => {
++  it("comes back, holding the corner, when there is no sort row; the count is in the (i)", async () => {
+     await mount(owner(glossary("a-profile", [SCORED[0]!]), {}));
+     expect(host.querySelector(".gloss-sort")).toBeNull();
+     const head = host.querySelector(".band-head");
++    expect(head).not.toBeNull();
+     expect(head?.querySelector(".gloss-count")).toBeNull();
+-    expect(head?.querySelector("button.prof-badge")).not.toBeNull();
++    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
+     expect(await aboutCard()).toContain("One term.");
+   });
+ 
+diff --git a/tests/gutter-control-card.test.tsx b/tests/gutter-control-card.test.tsx
+new file mode 100644
+index 000000000..995606aca
+--- /dev/null
++++ b/tests/gutter-control-card.test.tsx
+@@ -0,0 +1,158 @@
++// @vitest-environment jsdom
++/**
++ * **Every control in the prose gutter has a house tooltip** — the reading
++ * view's one delegated card (src/web/BlockLinkCard.tsx), never a native
++ * `title`.
++ *
++ * Greg, 2026-10-02 (spya-jc0vm6), on the icons beside a block: *"Make sure
++ * they all have tooltips"*. They all had a `title`, which a browser shows
++ * after about a second, in its own style, and never on focus — which reads as
++ * no tooltip at all, and tooltips.md calls a regression. The gutter's
++ * reading-time line already used the delegated card; its controls join it.
++ *
++ * Mouse hover and keyboard focus open it; a finger does not, because a tap on
++ * a gutter control does the thing. The card adds no `aria-describedby`: its
++ * words are the control's own `aria-label`, near enough, and would be read
++ * twice. docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { BlockId, Comment } from "../src/types.js";
++import { BlockGutter } from "../src/web/BlockGutter.js";
++import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
++
++class FakeResizeObserver {
++  observe() {}
++  unobserve() {}
++  disconnect() {}
++}
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++const AFTER_THE_DELAY = 500;
++const ID = "spya-gutcrd" as BlockId;
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
++  vi.useFakeTimers();
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  window.history.replaceState(null, "", "/read/example");
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++  Reflect.deleteProperty(navigator as object, "clipboard");
++  vi.useRealTimers();
++  vi.unstubAllGlobals();
++});
++
++/** One gutter with every control it can have but the mark, or the mark when `comments` is given. */
++function paint(comments?: Comment[]): void {
++  act(() =>
++    root.render(
++      <BlockLinkProvider index={new Map()}>
++        <BlockGutter
++          id={ID}
++          linkBase="/read/example"
++          {...(comments ? { comments } : {})}
++          chatCount={0}
++          onOpenComment={() => {}}
++          onChatAbout={() => {}}
++          onHelp={() => {}}
++          onBookmark={() => Promise.resolve(true)}
++          onJump={() => {}}
++          announce={() => {}}
++        />
++      </BlockLinkProvider>,
++    ),
++  );
++}
++
++const card = () => document.querySelector<HTMLElement>(".tooltip-anchor");
++const control = (sel: string) => host.querySelector<HTMLElement>(`.blk-gutter > ${sel}`)!;
++
++async function hover(el: HTMLElement, pointerType = "mouse"): Promise<void> {
++  el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType }));
++  await act(async () => {
++    vi.advanceTimersByTime(AFTER_THE_DELAY);
++  });
++}
++
++describe("the gutter's controls", () => {
++  it("carry no native title, and each says what it does in data-tip", () => {
++    paint();
++    const all = [...host.querySelectorAll<HTMLElement>(".blk-gutter > button, .blk-gutter > a")];
++    expect(all.length).toBe(5); // permalink, chat, bookmark, "?", "…"
++    for (const el of all) {
++      expect(el.hasAttribute("title"), `${el.className} still has a native title`).toBe(false);
++      expect(el.dataset.tip?.trim() ?? "", `${el.className} has nothing to say`).not.toBe("");
++    }
++  });
++
++  it("open the house card on hover, the bookmark included, with no aria-describedby", async () => {
++    paint();
++    for (const [sel, words] of [
++      [".blk-bookmark", "Bookmark this paragraph"],
++      [".blk-permalink", ID],
++      [".block-chat", "Chat about this paragraph"],
++      [".blk-help", "Ask the AI for help with this paragraph"],
++      [".blk-more", "More for this paragraph"],
++    ] as const) {
++      const el = control(sel);
++      await hover(el);
++      expect(card()?.textContent ?? "", `${sel}: no card on hover`).toContain(words);
++      expect(el.hasAttribute("aria-describedby"), `${sel}: the card is read twice`).toBe(false);
++    }
++  });
++
++  it("open it for the reader's mark too", async () => {
++    paint([{ id: "c1", blockId: ID, start: 0, quote: "q", createdAt: "2026-10-02T09:00:00Z", status: "none" }]);
++    await hover(control(".blk-cmt"));
++    expect(card()?.textContent ?? "").toContain("Your note on this paragraph");
++  });
++
++  it("open it on keyboard focus", async () => {
++    paint();
++    const help = control(".blk-help");
++    await act(async () => help.focus());
++    expect(card()?.textContent ?? "").toContain("Ask the AI");
++  });
++
++  it("do not open it for a finger, which presses the control instead", async () => {
++    paint();
++    await hover(control(".blk-bookmark"), "touch");
++    expect(card()).toBeNull();
++  });
++
++  it("change the open card's words when the control's state changes", async () => {
++    paint();
++    const more = control(".blk-more");
++    await hover(more);
++    expect(card()?.textContent ?? "").toContain("More for this paragraph");
++    await act(async () => {
++      more.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
++    });
++    expect(more.dataset.tip).toBe("Close paragraph controls");
++    expect(card()?.textContent ?? "").toContain("Close paragraph controls");
++  });
++
++  it("say Copied on the open permalink card once the copy lands", async () => {
++    Object.defineProperty(navigator, "clipboard", {
++      configurable: true,
++      value: { writeText: () => Promise.resolve() },
++    });
++    paint();
++    const link = control(".blk-permalink");
++    await hover(link);
++    await act(async () => {
++      link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
++    });
++    expect(card()?.textContent ?? "").toContain("Copied");
++  });
++});
+diff --git a/tests/gutter-target-size.test.ts b/tests/gutter-target-size.test.ts
+index 05eccfc5c..1f32d1cdd 100644
+--- a/tests/gutter-target-size.test.ts
++++ b/tests/gutter-target-size.test.ts
+@@ -344,17 +344,24 @@ describe("the column shows as many controls as the row has room for", () => {
+        Asserted as exact strings because the failure is silent: the wrong
+        threshold still renders a gutter, just one slot too many, on a device the
+        author is not using. */
+-    for (const [px, rem] of [
+-      [48, 3],
+-      [72, 4.5],
+-      [96, 6],
++    /* **n slots and the n − 1 gaps between them**, since 2026-10-02: Greg
++       asked for *"slightly increase the vertical gaps"* (spya-jc0vm6), and a
++       4px gap moves every threshold by a gap per slot after the first. Both
++       halves still flip at the same 16px root — 24px = 1.5rem and 4px =
++       0.25rem there — so the `and` form is still exactly `max()`. */
++    for (const [n, px, rem] of [
++      [2, 52, 3.25],
++      [3, 80, 5],
++      [4, 108, 6.75],
+     ] as const) {
+       expect(css).toContain(
+         "@container (min-height: " + px + "px) and (min-height: " + rem + "rem)",
+       );
+-      // Each pair is exactly one slot apart, which is the whole arithmetic.
+-      expect(px / 24).toBe(rem / 1.5);
++      expect(px).toBe(n * 24 + (n - 1) * 4);
++      expect(rem).toBe(n * 1.5 + (n - 1) * 0.25);
+     }
++    // The gap the thresholds count, with the same two halves as the slot.
++    expect(css).toContain("row-gap: max(0.25rem, 4px)");
+   });
+ 
+   it("takes the controls in one order, and it is BlockGutter's render order", () => {
+@@ -374,7 +381,7 @@ describe("the column shows as many controls as the row has room for", () => {
+        and the "…" share the only cell (gutter.css § One slot and a mark), and
+        that is the one place a `grid-area` may appear. Everywhere else the
+        source order is still the placement. */
+-    const oneSlot = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
++    const oneSlot = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
+     const oneSlotEnd = css.indexOf("\n}\n", oneSlot);
+     for (const m of css.matchAll(/grid-area:/g)) {
+       const p = m.index ?? -1;
+@@ -401,7 +408,7 @@ describe("the column shows as many controls as the row has room for", () => {
+        So: three controls fit in three slots and draw no dot; four do not. */
+     expect(css).toContain('.blk-gutter[data-controls="3"] > .blk-more { display: none; }');
+     expect(css).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }');
+-    const four = css.slice(css.indexOf("@container (min-height: 96px)"));
++    const four = css.slice(css.indexOf("@container (min-height: 108px)"));
+     expect(four).toContain(".blk-gutter > * { display: inline-flex; }");
+     expect(four).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: none; }');
+   });
+@@ -457,7 +464,7 @@ describe("the column shows as many controls as the row has room for", () => {
+        browser pass found the bookmark button vanish with nothing in its place.
+        The mark and the "…" now share the cell; the "…" is drawn over it only
+        when revealed. */
+-    const at = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
++    const at = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
+     expect(at, "no one-slot block for a marked gutter").toBeGreaterThan(-1);
+     const end = css.indexOf("\n}\n", at);
+     const block = css.slice(at, end);
+@@ -548,7 +555,9 @@ describe("the column shows as many controls as the row has room for", () => {
+        or the button is invisible for exactly the reader who cannot find it by
+        waving a mouse at the page. It was in the hover list until the query
+        arrived; splitting it out is what keeps it device-independent. */
+-    const focused = rulesWith(".blk-help:focus-visible");
++    /* The reveal, among the rules naming it — the shared colour rule
++       (§ every control lights) names it too since 2026-10-02. */
++    const focused = rulesWith(".blk-help:focus-visible").filter((r) => r.body.includes("opacity"));
+     expect(focused.length, "nothing reveals `.blk-help` on focus").toBe(1);
+     expect(focused[0]?.body).toContain("opacity: 1");
+     expect(focused[0]?.body).toContain("pointer-events: auto");
+@@ -580,6 +589,21 @@ describe("the column shows as many controls as the row has room for", () => {
+     expect(rulesWith(".blk-permalink:hover")[0]?.body).toContain("opacity: 1");
+   });
+ 
++  it("lights every control it is pointed at, the bookmark and the dot included", () => {
++    /* Greg, 2026-10-02 (spya-jc0vm6): *"when I hover my mouse over the
++       Bookmark icon, it doesn't glow"*. Three controls had a `:hover` colour
++       each, written separately; the bookmark and the "…", which came later,
++       had none. One rule for all five, and `.blk-permalink.failed` after it so
++       its red still wins. */
++    for (const control of [".blk-permalink", ".block-chat", ".blk-bookmark", ".blk-help", ".blk-more"]) {
++      const lit = rulesWith(`${control}:hover`);
++      expect(lit.length, `${control} has no :hover rule`).toBeGreaterThan(0);
++      expect(lit.map((r) => r.body).join(" "), `${control} does not glow`).toContain("color: var(--highlight)");
++    }
++    const shared = css.indexOf(".blk-bookmark:hover");
++    expect(css.indexOf(".blk-permalink.failed {")).toBeGreaterThan(shared);
++  });
++
+   it("leaves the reader's marks alone on a touch device", () => {
+     /* **The touch block may raise the affordances and must not touch state.**
+        Two things live in this gutter that are facts rather than buttons — a
+diff --git a/tests/no-profile-row-beside-paid-buttons.test.tsx b/tests/no-profile-row-beside-paid-buttons.test.tsx
+index 7c12ad0d6..af88a8f68 100644
+--- a/tests/no-profile-row-beside-paid-buttons.test.tsx
++++ b/tests/no-profile-row-beside-paid-buttons.test.tsx
+@@ -139,7 +139,9 @@ describe("beside the button that spends", () => {
+ describe("the badge", () => {
+   it("still says a list was written for the reader, and is the way into the panel", () => {
+     draw(owner({ status: "ready", profiled: true }), { ideas: [] });
+-    const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
+-    expect(badge?.textContent).toContain("written for you");
++    /* An icon in the band's corner since 2026-10-02, as in every mode (plan
++       261002e); its name says it, and the panel it opens says it in words. */
++    const badge = host.querySelector<HTMLButtonElement>(".mode-band > button.prof-badge");
++    expect(badge?.getAttribute("aria-label")).toMatch(/^Written for your profile/);
+   });
+ });
+diff --git a/tests/quotes-and-citations-compact-header.test.tsx b/tests/quotes-and-citations-compact-header.test.tsx
+index f4688695c..dec214d49 100644
+--- a/tests/quotes-and-citations-compact-header.test.tsx
++++ b/tests/quotes-and-citations-compact-header.test.tsx
+@@ -148,10 +148,13 @@ describe("the Quotes band's top", () => {
+     expect(host.querySelector(".quotes-bar-value")?.textContent).toContain("of 3");
+   });
+ 
+-  it("carries the profile badge as an icon at the end of the rank row, outside the group", async () => {
++  /* At the rank row's end from 2026-10-01; in the band's corner beside the (i)
++     since 2026-10-02, as in every mode (plan 261002e). */
++  it("carries the profile badge as an icon in the band's corner, outside the group", async () => {
+     await mountQuotes(quotesOwner(quotes(THREE, "p"), true), "prioritised");
+-    const badge = host.querySelector(".quotes-rank .gloss-sort-trail .prof-badge");
+-    expect(badge, "no profile badge on the rank row").not.toBeNull();
++    const badge = host.querySelector(".mode-band > .prof-badge");
++    expect(badge, "no profile badge in the band's corner").not.toBeNull();
++    expect(host.querySelector(".quotes-rank .prof-badge")).toBeNull();
+     expect(host.querySelector('[role="group"] .prof-badge')).toBeNull();
+     expect(badge?.textContent?.trim()).toBe("");
+   });
+diff --git a/tests/touch-controls.test.ts b/tests/touch-controls.test.ts
+index beaa08607..2a89e2fe6 100644
+--- a/tests/touch-controls.test.ts
++++ b/tests/touch-controls.test.ts
+@@ -221,6 +221,22 @@ describe("a control a finger has to hit", () => {
+     });
+   }
+ 
++  /* **The band's corner is its own floor, 2rem, not the order rows' 2.5rem.**
++     The badge took the rows' 40px while it sat in one, and that made it a
++     ringed circle beside a 24px (i) on a phone (spya-hf4svm). In the corner
++     both buttons are 32px — over WCAG 2.5.8's 24, with no neighbour to be hit
++     by mistake — and the rule above still floors a badge outside it (Sketch's
++     bar). Plan 261002e. */
++  it("sizes both corner buttons from one finger-sized token", () => {
++    const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
++      selectors(candidate.selector).includes(".mode-band.has-about"),
++    );
++    expect(rule, "no coarse-pointer size for the band's corner").toBeDefined();
++    const size = /--band-corner-btn:\s*([\d.]+)rem/.exec(rule?.decls ?? "");
++    expect(Number(size?.[1]), "the corner is under 24px for a finger").toBeGreaterThanOrEqual(1.5);
++    expect(Number(size?.[1])).toBe(2);
++  });
++
+   it("keeps Glossary's icon-only profile badge large enough for a finger", () => {
+     const selector = ".prof-badge.icon-only";
+     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
+@@ -471,7 +487,7 @@ describe("an order row on a touch screen", () => {
+     });
+   }
+ 
+-  it("the button group scrolls, keeps its focus room, and leaves the trail pinned", () => {
++  it("the button group scrolls, keeps its focus room, and its buttons do not shrink", () => {
+     const css = readerCssNoComments();
+     const all = rulesFor(css, ".gloss-sort-group").filter((r) => r.exact);
+     const touch = all
+@@ -491,7 +507,9 @@ describe("an order row on a touch screen", () => {
+     expect(mouse, "control: the desktop rule is found").toMatch(/display:\s*flex/);
+     expect(mouse).not.toMatch(/overflow-x/);
+ 
+-    for (const selector of [".gloss-sort-group > *", ".gloss-sort-trail"]) {
++    /* The row's trailing slot (`.gloss-sort-trail`) went on 2026-10-02: the
++       badge it held is in the band's corner now (plan 261002e). */
++    for (const selector of [".gloss-sort-group > *"]) {
+       const fixed = rulesFor(css, selector)
+         .filter((r) => r.pointer && r.exact)
+         .map((r) => r.decls)

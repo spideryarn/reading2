@@ -155,4 +155,21 @@ describe("the gutter's controls", () => {
     });
     expect(card()?.textContent ?? "").toContain("Copied");
   });
+
+  it("say Couldn't copy on the open permalink card when the copy is refused", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error("denied")) },
+    });
+    paint();
+    const link = control(".blk-permalink");
+    await hover(link);
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(link.dataset.tip).toContain("Couldn't copy");
+    expect(card()?.textContent ?? "").toContain("Couldn't copy");
+  });
 });

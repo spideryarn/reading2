@@ -664,7 +664,7 @@ td.text.kind-heading .blk-gutter {
 .blk-more:focus-visible { color: var(--highlight); }
 
 /* Copying failed, and the reader is told rather than left with a tick that
-   means nothing. The title says what to do instead.
+   means nothing. The delegated card says what to do instead.
 
    This used to need a second, `tr:hover .blk-permalink.failed`, because the
    row's recessive rule was (0,2,1) and drew the alert at 0.6 — dimmed, on the
@@ -946,8 +946,8 @@ td.text.kind-heading .blk-gutter[data-open] {
    over the column. Every control owns the column's full width, and a strip
    that reached 5px into it took the right edge of every icon's click (GPT Sol,
    plan review, 2026-09-29). The line is drawn at the strip's own left edge,
-   inside it, so pointing at the line finds the title (it was drawn 2px outside
-   until 2026-10-01, and could not be hovered); `pointer-events: none` so the
+   inside it, so pointing at the line finds its delegated card (it was drawn 2px
+   outside until 2026-10-01, and could not be hovered); `pointer-events: none` so the
    pseudo-element is never the target itself. The width is `--read` times the gap, clamped, so on a row with
    no reading time it is zero wide and there is nothing to hover.
 

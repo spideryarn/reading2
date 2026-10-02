@@ -109,6 +109,16 @@ type PassThrough = Omit<
   | "about"
 >;
 
+/**
+ * A profile badge is the second half of the band's corner, never a corner of
+ * its own. Requiring `mode` when `profile` is supplied prevents a caller from
+ * handing us a badge that the `hasAbout` guard below would otherwise discard
+ * silently because there is no adjacent (i) to put it beside.
+ */
+type Corner =
+  | { mode: Mode; profile?: ReactNode }
+  | { mode?: undefined; profile?: never };
+
 export function ModeSurface({
   label,
   feature,
@@ -228,7 +238,7 @@ export function ModeSurface({
   profile?: ReactNode;
   /** For `OutlinePanel`, which measures the band to choose a rung. */
   ref?: Ref<HTMLElement>;
-} & PassThrough) {
+} & Corner & PassThrough) {
   const extra = typeof about !== "boolean" && about != null;
   const hasAbout = mode !== undefined || extra;
   const className = [feature ? `mode-band ${feature}` : "mode-band", hasAbout ? "has-about" : ""]

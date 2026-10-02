@@ -708,16 +708,17 @@ export function QuotesPanel({
       /* **No head row while the rank row is drawn**, since 2026-10-01 — Greg,
           on a landscape iPhone: *"all the stuff at the top of their columns
           takes up the vertical real estate, and I can't see the actual result"*
-          (`spya-gcdwps`). Its two things go to the end of the rank row: the
-          profile badge always, and the count everywhere but *prioritised*,
-          whose bar row already says "5 of 14". The move Glossary made (plan
-          260929a); plan 261001l.
+          (`spya-gcdwps`). Its profile badge is now in the band's corner and
+          its count in the (i); *prioritised* still says "5 of 14" beside its
+          own threshold, where the count describes the control. The compact
+          row began with Glossary (plan 260929a); plans 261001l, 261001m and
+          261002e finished the moves.
 
           **Otherwise a fragment, so the row is there before the quotes are.**
-          Both children are gated on `quotes`; `head={quotes && …}` would pass
-          the surface `null` while the list loads and no `.band-head` would be
-          drawn at all. With one quote, or one rank on offer, there is no rank
-          row, so the old row stays and carries both.
+          `head={quotes && <></>}` would pass the surface `null` while the list
+          loads and draw no `.band-head`, so the corner could hang into the
+          status below. With one quote, or one rank on offer, there is no rank
+          row to host the corner, so the old row stays.
 
           **The count has gone to the band's (i)** since 2026-10-01 (plan
           261001m), and the badge to the band's corner beside it since

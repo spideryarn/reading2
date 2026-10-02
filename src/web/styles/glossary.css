@@ -47,8 +47,8 @@
    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
 .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
-/* The buttons, as the named group; the trailing slot sits beside it rather
-   than in it (GlossaryPanel.tsx § SortBar). */
+/* The buttons as one named group. The profile badge that used to sit beside
+   it moved to the band's corner in plan 261002e. */
 .gloss-sort-group {
   display: flex;
   flex-wrap: wrap;
