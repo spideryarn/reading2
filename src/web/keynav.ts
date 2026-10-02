@@ -171,8 +171,9 @@ export function measureRow(): number {
      what its callers assume (jump-history.ts and ReturnChip.tsx say so;
      DiagramPanel reads `measuredRow ?? atRow` and indexes TermJump's rows).
      `activeSectionIndex` returns -1 once it is handed a `skip` and finds no
-     eligible row — no rows on the page, or every one folded — and -1 here
-     reached DiagramPanel as a real row, so its card described nothing. */
+     eligible row. Here that means no rows on the page: folding always leaves
+     its heading rows visible. The -1 reached DiagramPanel as a real row, so
+     its card described nothing. */
   return Math.max(0, activeSectionIndex(tops, readingLine(), skip));
 }
 
