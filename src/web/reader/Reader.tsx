@@ -66,6 +66,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -102,7 +103,7 @@ import {
   hitMarks as buildHitMarks,
   type Found,
 } from "../search-hits.js";
-import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
+import { buildArcColumn, buildGeometry, buildOutline, buildSummaryTree, nodeLabel } from "../tree.js";
 import {
   marginParam,
   modeParam,
@@ -503,6 +504,51 @@ export function Reader({
     [geometry, liveArc],
   );
 
+  /**
+   * **The headings breadcrumb's tree** — the one Structure draws, cut at the
+   * section depth so the path never names a paragraph. HeadingsCrumbs.tsx,
+   * crumbs.ts.
+   */
+  const crumbsRoot = useMemo(
+    () => buildSummaryTree(article.tree, article.blocks, sectionDepth(geometry)),
+    [article.tree, article.blocks, geometry],
+  );
+  /**
+   * **Is the breadcrumb drawn?** For a reader with Experimental features on,
+   * at every scroll position — Greg, 2026-09-29 (spya-m3pteb): *"always
+   * present if experimental features are turned on, and invisible if not"*.
+   *
+   * **Not while a band covers the prose** (a phone with a mode open): the
+   * shell's guard would pin the bar over the band, and the band is what is on
+   * screen. That includes the band *stepped aside* (`bandAway`), deliberately
+   * for v1: drawing the bar the moment a band link is followed would push the
+   * prose down 44px in the middle of that jump, before its position write has
+   * landed (GPT Sol, plan review of 261002h, finding 2).
+   *
+   * **Not for a tree with nothing to name** either, or the bar is 44px of
+   * blank. A tree where no part has a title or a navLabel is the case.
+   */
+  const showCrumbs =
+    experimental.on &&
+    !(bandOpen && fit.modeW === 0) &&
+    (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
+  /**
+   * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
+   * is in it, and since 2026-10-02 for anybody it holds the breadcrumb for.
+   * The Parts / Sections / Paragraphs pills that were the rest of it went
+   * with the Hierarchy mode on 2026-09-29
+   * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md § 7). On
+   * a narrow mode view the chip is the only thing telling a visitor they are
+   * read-only, so the bar stays for it.
+   *
+   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
+   * leaves while you read, which lets `--bar-bottom` fall to the status-bar
+   * inset when this is false. Nothing in `scroll.ts` needs telling: both
+   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
+   * absent bar, and measure a present one.
+   */
+  const showBar = owner === null || showCrumbs;
+
   // A string, so it compares by value: a fresh object every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
@@ -513,7 +559,13 @@ export function Reader({
   // the prose with `modeW` still 0, so without them switching into it at a
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}`;
+  //
+  // `showBar` since 2026-10-02: the controls bar is 44px in flow above the
+  // table, and it now comes and goes with the experimental switch, which loads
+  // after the article and can be pressed mid-read. That moves every row down
+  // without resizing the table, so the table's ResizeObserver hears nothing
+  // (GPT Sol, plan review of 261002h, finding 1).
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -1945,22 +1997,6 @@ export function Reader({
   const address = useAddress();
 
   /**
-   * **Is the controls bar drawn at all?** Only for a visitor, since 2026-09-29:
-   * the read-only chip is all that is left in it. The Parts / Sections /
-   * Paragraphs pills that were the rest of it went with the Hierarchy mode
-   * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md § 7). On
-   * a narrow mode view that chip is the only thing telling a visitor they are
-   * read-only, so the bar stays for it.
-   *
-   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
-   * leaves while you read, which lets `--bar-bottom` fall to the status-bar
-   * inset when this is false. Nothing in `scroll.ts` needs telling: both
-   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
-   * absent bar.
-   */
-  const showBar = owner === null;
-
-  /**
    * **The band the modes take turns in — one switch, and the compiler checks
    * it.**
    *
@@ -2630,6 +2666,15 @@ export function Reader({
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
           {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {/* Where in the structure the reader is — `showCrumbs` above. */}
+          {showCrumbs && (
+            <HeadingsCrumbs
+              root={crumbsRoot}
+              sections={sections}
+              layoutKey={layoutKey}
+              onJump={jumpTo}
+            />
+          )}
           {/* **Failures of the comment transport left this bar on 2026-09-08**,
               for the Dock's Comments button — which is the control they are about,
               and which is on screen whether or not this bar is. They were here

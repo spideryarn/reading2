@@ -675,9 +675,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    granularity pills scrolls the page as focus moves, and without this the
    control they are on slides off the top mid-tab — focus lands somewhere
    invisible and the page looks broken. (That was Hierarchy's pills, which this
-   rule was extended to laptops for; the bar holds only a visitor's read-only
-   chip since 2026-09-29, and the rule still holds for whatever is focusable
-   in it.)
+   rule was extended to laptops for; the bar holds a visitor's read-only chip
+   since 2026-09-29, and the headings breadcrumb's buttons since 2026-10-02,
+   and the rule still holds for whatever is focusable in it.)
 
    `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
    difference is the whole rule: `--bar-bottom` is an inherited property that
@@ -735,7 +735,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    showing a mode and the article side by side (docs/plans/260908e-…).
 
    It looked safe here, and for an **owner** it is: since 260908a the bar is not
-   drawn at all in a band mode, so the leading `:has(:where(.reader) > .controls)`
+   drawn at all in a band mode (bar the headings breadcrumb's, since 2026-10-02,
+   which is never drawn where a band covers the prose — Reader.tsx §
+   `showCrumbs`), so the leading `:has(:where(.reader) > .controls)`
    never matches and the rest never runs. That is not true of a **visitor**.
    `barHasContent` in layout.ts opens
 
@@ -751,8 +753,16 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    `:has()`'s most specific argument is still
    `:where(.reader) > .controls:focus-within` and the whole selector is the
    (0,4,0) the paragraph above computes. */
+/* **And the headings breadcrumb, since 2026-10-02**: a bar holding it stays,
+   because a position you can see only when scrolling back is not at a glance —
+   Greg asked for it *"always present"* (crumbs.css). An argument of the same
+   `:has()`, not a third one chained on: `.controls > .crumbs` is (0,2,0), the
+   same as `.controls:focus-within`, so the selector stays (0,4,0). GPT Sol,
+   plan review of 261002h. A covering band never has crumbs (Reader.tsx §
+   `showCrumbs`), so this cannot pin a bar over one. */
 :root:has(:where(.reader) > .controls):has(
     :where(.reader) > .controls:focus-within,
+    :where(.reader) > .controls > .crumbs,
     :where(.reader.band-covers) .mode-band
   ) {
   --bar-bottom: calc(var(--bar-h) + var(--safe-top));

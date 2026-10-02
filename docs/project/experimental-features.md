@@ -211,6 +211,23 @@ here, not consent; `/privacy` says we keep it. Fable argued for recording for ev
 time cannot be backfilled —
 [260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
 
+**And the headings breadcrumb, since 2026-10-02** — one line in the sticky bar at the top of the
+reading view saying where in the structure you are, part › section, following you as you scroll:
+
+> I sometimes feel as though I lose track of where I am. The structure mode helps a lot, but then I
+> have to have it open. […] Let's make it always present if experimental features are turned on,
+> and invisible if not, because it is an experimental feature.
+>
+> — Greg, 2026-09-29 (spya-m3pteb)
+
+It is the tree [Structure](structure.md) draws and the same "you are here", each crumb jumps to its
+part or section and carries the row's card. It costs 44px at the top of the prose, because it reuses
+the controls bar rather than adding a second piece of sticky chrome, and the bar stops sliding away
+while it holds the breadcrumb. It is not drawn where an open mode covers the prose on a narrow
+window, including after a band link steps that mode aside. The reasoning, the patterns looked at and
+what was deferred (one line per heading level, a thinner bar) are
+[261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
+
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The
 control has been behind the switch since 2026-09-28 and joined this section — then called *Re-run

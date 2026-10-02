@@ -86,9 +86,9 @@ import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.
  * true on 2026-09-07** for the reader this chip is *for*. The bar leaves while
  * you read at every width now
  * (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md), and
- * a visitor is the one reader who still has a bar in a band mode —
- * `barHasContent` returns `true` for a non-owner precisely so this chip is
- * drawn. Until 2026-09-08 `shell.css`'s guard then pinned that bar in every
+ * a visitor is the one reader who always has a bar in a band mode —
+ * `showBar` in Reader.tsx is true for a non-owner precisely so this chip is
+ * drawn (an owner has one only for the headings breadcrumb, since 2026-10-02). Until 2026-09-08 `shell.css`'s guard then pinned that bar in every
  * band mode, which is how the older claim survived; narrowing the guard to a
  * covering band (docs/plans/260908e-…) let it hide, so the chip now comes and
  * goes with the bar it sits in. Scrolling up brings both back, which is the
