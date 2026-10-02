@@ -55,7 +55,7 @@ import type {
 } from "../types.js";
 import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
@@ -190,17 +190,25 @@ export interface UseCitations {
  *
  * ## An always-mounted read is not an always-fresh read
  *
- * The opening GET happens once, and **every later revalidation belongs to the
- * band**: its mount `reload`, and its job-completion `refresh`. So a list
- * written while the band was closed — a job that finished after the reader left
- * it, another tab, a CLI run with no job row at all — does not reach the prose
- * until the band is opened again or the page is reloaded.
+ * The opening GET happens once, and until 2026-10-02 **every later
+ * revalidation belonged to the band**: its mount `reload`, and its
+ * job-completion `refresh`. So a run that finished after the reader had left
+ * the band reached neither the prose nor Marginalia until the band was opened
+ * again or the page reloaded. It was named rather than fixed, to match the
+ * glossary and the quotes, which had the same gap.
  *
- * **Named rather than fixed**, because the glossary and the quotes have exactly
- * this gap and both say so, and matching the established pattern beats inventing
- * a third one here. It is a **staleness** gap and not a disagreement: the panel
- * and the prose read the same `CitationsRead`, so they are stale together and
- * can never show different lists.
+ * **Now the read hears its own step finish**, through `useStepFinished`
+ * (useStepJob.ts) — quiet, so it buys no polling and starts nothing. All three
+ * reads got the same line on the same day (plan 261002d's follow-up,
+ * tests/always-mounted-reads-refresh.test.tsx). What it still cannot hear is
+ * a run in **another tab** while this tab's engine is idle, or a CLI run with
+ * no job row; those wait for the band's mount `reload` or a page reload. With
+ * the band open, a completion is refreshed twice — the band's and this — and
+ * `useOrderedRead` makes the second a trailing read: one extra GET.
+ *
+ * It is a **staleness** gap and not a disagreement: the panel and the prose
+ * read the same `CitationsRead`, so they are stale together and can never show
+ * different lists.
  */
 export interface CitationsRead {
   status: CitationsStatus;
@@ -315,6 +323,9 @@ export function useCitationsRead(slug: string): CitationsRead {
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
   const { reload, refresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the band still reaches the prose
+     and the margin — § An always-mounted read is not an always-fresh read. */
+  useStepFinished(slug, "citations", refresh);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `CitationsBand`'s own mount

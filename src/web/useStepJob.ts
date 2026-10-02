@@ -313,10 +313,12 @@ function writesStep(job: Job, step: StepName): boolean {
  * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Debate and
  * Ideas through their read halves, and with the margin open beside the band
  * that runs one of them, the band's read was refreshed and the margin's was
- * not. The shared citations read in `OwnedReader` is the second: the band
- * refreshes it, but only while the band is mounted. Calling `useStepJob` there
- * instead would work and would hand each a `start` it must never call — the
- * thing the read halves were split out to prevent.
+ * not. The always-mounted reads `OwnedReader` holds for the prose — citations,
+ * glossary, quotes — are the others: the band refreshed them, but only while it
+ * was mounted (useCitations.ts § An always-mounted read is not an always-fresh
+ * read). Calling `useStepJob` in either place would work and would hand each a
+ * `start` it must never call — the thing the read halves were split out to
+ * prevent.
  *
  * **Quiet, always.** It buys no idle poll and no poll on arrival
  * (`jobEngine.subscribeQuietly`), so mounting it costs nothing: it hears a

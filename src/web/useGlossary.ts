@@ -41,7 +41,7 @@ import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
 import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
@@ -318,6 +318,10 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the band still reaches the prose
+     (and the margin). useCitations.ts § An always-mounted read is not an
+     always-fresh read. */
+  useStepFinished(slug, "glossary", refresh);
 
   /**
    * A new article clears the old one's list — **during render, not in an
