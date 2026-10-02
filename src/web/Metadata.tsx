@@ -760,20 +760,37 @@ export function Metadata({
       {/* The contents list in the left margin. It reads its entries off the
           `[data-section]` elements inside `main`, so there is no second list of
           section names to keep in step — PageContents.tsx says why that matters
-          more here than usual. Hidden below `xl`, where there is no margin to
-          put it in. */}
+          more here than usual. Hidden below `lg`, where there is no margin to
+          put it in; from `lg` until the centred margin is wide enough there is
+          only room once `main` steps right to clear it, which is the
+          `tw:lg:ml-…` below. */}
       <PageContents containerRef={body} label="Sections of this page" />
 
-      {/* `metadata-page` carries exactly one rule, and it is a typography fix
-          rather than a layout one: every `<button>` on this page inherits its
-          font (styles.css § metadata). We import no preflight, on purpose, so a
-          button otherwise keeps the UA's 13.3px Arial — which is why the
-          collapsible section headings drew half again the size of the ones
-          beside them. Greg, 2026-09-03: *"some of them seem larger than others
-          somehow?"* */}
+      {/* `metadata-page` carries no rule now. It once held a typography fix —
+          every `<button>` on this page inheriting its font, because we import
+          no preflight and a button otherwise keeps the UA's 13.3px Arial
+          (Greg, 2026-09-03: *"some of them seem larger than others
+          somehow?"*). That reset is app-wide since 2026-09-04 (tailwind.css §
+          the bit of preflight we need; feedback.css § metadata keeps the
+          diagnosis).
+
+          **`tw:lg:ml-…` is room for the contents list, and nothing else.** It is
+          `mx-auto`'s own left margin for a 48rem column, but never less than
+          12rem plus the left safe inset: the list ends at 12.5rem plus that
+          inset (it is fixed chrome, so it adds it — tokens.css § safe areas),
+          and this column's text starts 1.5rem inside it, so a 1rem gap. The
+          `max` picks the centred margin from 1152px plus twice the left inset
+          of containing-block width (a little more window width with a classic
+          scrollbar, since `100%` is the width beside it). Below that the page
+          sits right of centre — by up to 4rem when the inset is zero — so an
+          iPad in landscape gets the list. Greg, SPIDERYARN-READING2-9M,
+          2026-10-01: *"not visible
+          on my iPad, even in landscape mode, even though there's quite a lot of
+          space on either side."*
+          docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md. */}
       <main
         ref={body}
-        className={`metadata-page tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
+        className={`metadata-page tw:mx-auto tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))] tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
       >
         <Link
           href={backHref}

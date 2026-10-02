@@ -367,13 +367,21 @@ export function PageContents({
   return (
     /* **Fixed, in the margin — not a column beside the content.** As a flex
        sibling it would push the prose column off centre on wide windows and
-       change nothing on narrow ones, where it is hidden anyway. Fixed leaves
-       the page exactly where it already was.
+       change nothing on narrow ones, where it is hidden anyway. Fixed keeps
+       the nav out of the page's layout: the page stays centred wherever its
+       margin holds the list, and Metadata moves it only where that is needed.
 
-       `xl` because the arithmetic says so: the content is `max-w-3xl` (48rem)
-       and centred, so a 1280px window leaves 16rem each side and this is 11rem
-       at 1.5rem in. One breakpoint down there is not room, and a contents list
-       overlapping the prose is worse than no contents list.
+       `lg` (1024px), the width of the smallest full-screen landscape iPad.
+       The list is 11rem at 1.5rem in, plus the left safe inset (tokens.css §
+       safe areas — the installed app, and a phone's notch in landscape); the
+       content is `max-w-3xl` (48rem) and centred. With no left safe inset its
+       margin holds the list from 1152px up; an inset raises that threshold by
+       twice its width. Below it the page steps its column right just far enough
+       to clear the list (Metadata.tsx § `tw:lg:ml-…`) —
+       so this nav assumes its page does that, and a page that mounts it
+       without it would put the list over the prose. It was `xl` until Greg,
+       SPIDERYARN-READING2-9M, 2026-10-01: *"not visible on my iPad, even in
+       landscape mode"*. Plan 261002a.
 
        **A fixed top, not vertically centred** — centred it was until the
        search box arrived (plan 261001s), and then every keystroke that
@@ -384,7 +392,7 @@ export function PageContents({
        long page's contents never run under it. Sol, plan review. */
     <nav
       aria-label={label}
-      className="tw:hidden tw:xl:flex tw:xl:flex-col tw:fixed tw:left-6 tw:top-[calc(6rem_+_var(--safe-top))] tw:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:z-10 tw:w-44 tw:font-sans"
+      className="tw:hidden tw:lg:flex tw:lg:flex-col tw:fixed tw:left-[calc(1.5rem_+_var(--safe-left))] tw:top-[calc(6rem_+_var(--safe-top))] tw:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:z-10 tw:w-44 tw:font-sans"
     >
       {/* **Above the list, in the same column** — where Greg asked for it.
           Typing filters the list below to what matches, best first; Enter
@@ -453,14 +461,16 @@ export function PageContents({
                  answer to "where am I", and a screen reader is owed it too. */
               aria-current={here === entry.id ? "true" : undefined}
               /* **`tw:font-sans` on the button, not just on the `<nav>`.** The
-                 page-scoped reset that fixes this everywhere else
-                 (styles.css § metadata) hangs off `.metadata-page`, which is on
-                 `<main>` — and this nav is main's *sibling*, so the reset never
-                 reaches it. A font-family on the parent cannot win either: the
-                 UA stylesheet assigns one to the button element directly. So
-                 these entries would have drawn in Arial beside a page of Geist,
-                 which is the exact bug this component was shipped alongside a
-                 fix for. GPT Sol, 2026-09-03. */
+                 page-scoped reset this was written beside hung off
+                 `.metadata-page`, on `<main>` — and this nav is main's
+                 *sibling*, so it never reached here. That reset is app-wide
+                 now (tailwind.css § the bit of preflight we need), so this is
+                 belt and braces rather than the only fix. Before that reset, a
+                 font-family on the parent could not win: the UA stylesheet
+                 assigned one to the button element directly. So these entries
+                 would have drawn in Arial beside a page of Geist, which is the
+                 exact bug this component was shipped alongside a fix for. GPT
+                 Sol, 2026-09-03. */
               className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight ${
                 here === entry.id
                   ? "tw:border-highlight tw:text-foreground"
