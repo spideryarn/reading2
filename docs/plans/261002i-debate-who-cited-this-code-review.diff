@@ -1,0 +1,382 @@
+diff --git a/src/debate.ts b/src/debate.ts
+index a64a35740..1448ccf58 100644
+--- a/src/debate.ts
++++ b/src/debate.ts
+@@ -207,8 +207,10 @@ export type {
+  * `debate/3`, 2026-09-29: each row also says how much the passage `bears` on its target — `directly`, `partly` or `loosely` — so a reader can order the list by relevance (SPIDERYARN-READING2-5P; docs/plans/260929h-debate-mode-clearer-sources-and-orders.md, stage 2). The stage also asked for the work's `title`, `authors` and `year`, checked against the page's extract, and dropped them before shipping: measured, they verified on 1 row of 11, because the search engine's extract is a passage from the middle of the page and the page's head is almost never in it (the plan's § The measurement, as it runs).
+  *
+  * `debate/4`, 2026-09-30: a third, search-free call reads the kept rows and stores the themes they share and the key sources as `synthesis` (SPIDERYARN-READING2-6M; docs/plans/260930j-debate-themes-and-key-sources.md). The two passes' prompts are unchanged, so a row means what it meant under `debate/3`.
++ *
++ * `debate/5`, 2026-10-02: pass A looks for the work that **cites** the article and says something about it, scholarly papers included, and searches by its title; its witness must contain the title or address in full; and both passes are told to copy an extract's own mistakes (a split word, a stray space, `*`) rather than tidy them. Greg asked for who has cited a piece, for and against (SPIDERYARN-READING2-9D); measured on the old prompt, the right replies were found and then lost to exactly those two checks. No check in code changed. docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md.
+  */
+-export const PROMPT_VERSION = "debate/4";
++export const PROMPT_VERSION = "debate/5";
+ 
+ /* ------------------------------------------------------------ the four caps --
+    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
+@@ -1124,7 +1126,12 @@ Every quotation you give is COPIED, character for character, out of the text the
+ search returned to you. We look each one up in that text. A quotation we cannot
+ find drops the whole row — not the quote, the row — and retyping a phrase from
+ memory is the commonest way that happens. If the extract you were shown does not
+-contain a sentence worth quoting, leave the page out.`;
++contain a sentence worth quoting, leave the page out.
++
++Copy the extract's own mistakes too. Text taken from a PDF or a web page often
++has a word split in two ("argu ing"), a space after a quotation mark, or
++formatting marks such as *asterisks*. Keep them exactly as they appear: a
++quotation you have tidied up is one we cannot find.`;
+ 
+ const READING = `"relation", "lean", "applies", "limits" and "bears" are YOUR READING of the
+ passage you quoted, and are shown to the reader as such.
+@@ -1172,9 +1179,23 @@ other. If you cannot tell what a page is doing, say so.`;
+  * Stage 0's finding said to the model in the model's own terms, and it is what
+  * makes an empty answer feel like the right answer rather than a failure.
+  */
+-export const DIRECT_SYSTEM = `You are looking for pages on the open web that RESPOND TO one specific article:
+-reviews of it, replies to it, critiques of it, corrections of it, or later posts
+-by its own author revisiting it.
++export const DIRECT_SYSTEM = `You are looking for what other people have written ABOUT one specific article:
++work that cites it and says something about it — to build on it, test it,
++dispute it or qualify it — as well as reviews of it, replies to it, critiques of
++it, corrections of it, or later posts by its own author revisiting it.
++
++The reader most wants to know who has engaged with this piece, and which way:
++who disputes it and who supports it. Scholarly work counts as much as anything
++else — papers, preprints, published comments and replies, theses, book
++chapters — and so does a careful blog post. A page that cites it only in a
++list, saying nothing about it, does not: there is nothing to quote.
++
++WHERE TO LOOK
++
++Work that cites an article names it by its title, so search for that: the exact
++title in quotes; the title with "reply", "comment", "response" or "critique";
++the authors' surnames with the year. A search for the article's subject finds
++pages about the subject, which are not what is wanted here.
+ 
+ MOST ARTICLES HAVE NONE, AND AN EMPTY LIST IS THE RIGHT ANSWER
+ 
+@@ -1194,6 +1215,17 @@ does so, copied from that page, in "articleReferenceQuote". A page that says onl
+ "a recent essay" does not qualify. Neither does a page on the same subject by
+ somebody who has plainly never read this one.
+ 
++Those words must CONTAIN THE TITLE, or the address, in full. "The paper by
++Smith [1]" or "Smith and Jones (2018)" does not name it, even on a page that is
++plainly about it, and the row is thrown away. Look in the text you were shown
++for a place that gives the title: a headline that repeats it ("<the title>: a
++reply"), a sentence that cites it in full, or a reference-list entry. Quote
++that. If the text you were shown has no such place, leave the page out, however
++sure you are that it responds to this article.
++
++"sourceQuote" is a different passage: the words in which the page says what it
++makes of the article.
++
+ ${QUOTING}
+ 
+ ${RESTRAINT}
+@@ -1206,8 +1238,10 @@ Here this row's target is THE ARTICLE ITSELF — the piece described above — s
+ "relation" and "lean" are both about that article. Not the passage's tone, and
+ not its stance toward some other subject the passage is also about.
+ 
+-Prefer named authors and established venues where you have the choice. No
+-ranking by prominence is applied to what you return, and the reader is told so.
++Prefer published work, named authors and established venues where you have the
++choice, and work that takes a position on the article over work that only
++mentions it. No ranking by prominence is applied to what you return, and the
++reader is told so.
+ 
+ ${plainWords("explain")}
+ 
+@@ -1315,8 +1349,8 @@ export function directPrompt(meta: Meta | null, tree: Tree): string {
+   ].filter(Boolean);
+   return `${lines.join("\n")}
+ 
+-Find pages that respond to this article. Remember that an empty list is the
+-usual and honest answer.`;
++Find work that cites this article and says something about it, or responds to
++it. Remember that an empty list is the usual and honest answer.`;
+ }
+ 
+ /** What pass B is asked, under the article itself. */
+@@ -1716,7 +1750,10 @@ export function admissibleSources(
+   articleUrl: string | null,
+ ): Map<string, SearchEvidence> {
+   const cited = new Map<string, SearchEvidence>();
+-  collectSearchEvidence(annotations, cited);
++  /* Every extract of a page, not the first: the model read them all, and the
++     checks run once the answer is complete (openrouter-stream.ts §
++     `extracts: "all"`; plan 261002i). */
++  collectSearchEvidence(annotations, cited, undefined, { extracts: "all" });
+   const admissible = new Map<string, SearchEvidence>();
+   for (const [url, evidence] of cited) {
+     if (articleUrl && sameTarget(url, articleUrl)) continue;
+diff --git a/src/openrouter-stream.ts b/src/openrouter-stream.ts
+index 74a1aa659..a82ff8fc7 100644
+--- a/src/openrouter-stream.ts
++++ b/src/openrouter-stream.ts
+@@ -487,19 +487,63 @@ export function collectCitations(
+  * `content` is absent on some rows and under some engines, so it is spread in
+  * only when there is something in it — an empty excerpt is a claim we cannot
+  * make, not a page that said nothing.
++ *
++ * ## `extracts: "all"` — every extract of a page, for a caller that checks after the answer
++ *
++ * **One page can come back several times with a different extract each
++ * time**, and the model reads all of them. First sighting wins by default, so
++ * the extract cannot change under a row a streaming caller has already
++ * checked. But a caller that checks only once the whole answer is in — Debate
++ * — was refusing quotations the model copied correctly from a page's *second*
++ * extract: 33 of 76 quotations missing from a first extract, measured over 48
++ * recorded Debate runs on 2026-10-02
++ * (docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md).
++ *
++ * So such a caller may ask for **every distinct extract, in the order they
++ * came**, joined by `EXTRACT_SEPARATOR` and capped as one. Opt-in, so chat,
++ * explain, Citations and Dig deeper are untouched. The vetting is unchanged:
++ * the URL was already accepted the first time it was seen, and the title stays
++ * the first sighting's.
+  */
+ export function collectSearchEvidence(
+   annotations: Annotation[] | undefined,
+   into: Map<string, SearchEvidence>,
+   onDropped?: () => void,
++  opts: { extracts?: "first" | "all" } = {},
+ ): void {
+-  collectAnnotated(annotations, into, onDropped, (c) => ({
+-    url: c.url,
+-    ...(c.title ? { title: c.title } : {}),
+-    ...(c.content ? { excerpt: c.content.slice(0, MAX_EVIDENCE_EXCERPT) } : {}),
+-  }));
++  const merge =
++    opts.extracts === "all"
++      ? (seen: SearchEvidence, c: CitedPage): SearchEvidence => {
++          const more = c.content ?? "";
++          if (more === "" || (seen.excerpt ?? "").includes(more)) return seen;
++          const joined = seen.excerpt === undefined ? more : `${seen.excerpt}${EXTRACT_SEPARATOR}${more}`;
++          return { ...seen, excerpt: joined.slice(0, MAX_EVIDENCE_EXCERPT) };
++        }
++      : undefined;
++  collectAnnotated(
++    annotations,
++    into,
++    onDropped,
++    (c) => ({
++      url: c.url,
++      ...(c.title ? { title: c.title } : {}),
++      ...(c.content ? { excerpt: c.content.slice(0, MAX_EVIDENCE_EXCERPT) } : {}),
++    }),
++    merge,
++  );
+ }
+ 
++/**
++ * **What stands between two extracts of one page** under `extracts: "all"`.
++ *
++ * It has to stop a quotation running from the end of one extract into the
++ * start of the next, because those words are adjacent only in our buffer,
++ * never on the page. The quote matchers collapse whitespace, so blank lines
++ * alone would not do it; a character no page puts between two sentences of
++ * prose, and no model copies into a quotation, does.
++ */
++export const EXTRACT_SEPARATOR = "\n\n⁂\n\n";
++
+ /**
+  * The rules both collectors obey, in one place, with only *what to keep* left
+  * to the caller.
+@@ -519,10 +563,18 @@ function collectAnnotated<T>(
+   into: Map<string, T>,
+   onDropped: (() => void) | undefined,
+   keep: (c: CitedPage) => T,
++  /** A later sighting of a URL already kept; absent means first sighting wins. */
++  merge?: (seen: T, c: CitedPage) => T,
+ ): void {
+   for (const a of annotations ?? []) {
+     const c = a.url_citation;
+-    if (a.type !== "url_citation" || !c?.url || into.has(c.url)) continue;
++    if (a.type !== "url_citation" || !c?.url) continue;
++    const seen = into.get(c.url);
++    if (seen !== undefined) {
++      /* Already vetted when it was first kept, so nothing below needs asking again. */
++      if (merge) into.set(c.url, merge(seen, { ...c, url: c.url }));
++      continue;
++    }
+     // Refused here rather than guarded at the point of render, because this
+     // is where model output stops being a string and starts being stored.
+     if (!isWebUrl(c.url)) {
+diff --git a/tests/collect-citations.test.ts b/tests/collect-citations.test.ts
+index e126c0f5c..c07291076 100644
+--- a/tests/collect-citations.test.ts
++++ b/tests/collect-citations.test.ts
+@@ -19,6 +19,7 @@
+  */
+ import { describe, expect, it, vi } from "vitest";
+ import {
++  EXTRACT_SEPARATOR,
+   MAX_EVIDENCE_EXCERPT,
+   collectCitations,
+   collectSearchEvidence,
+@@ -236,3 +237,62 @@ describe("collectSearchEvidence", () => {
+     expect(into.size).toBe(0);
+   });
+ });
++
++/**
++ * `extracts: "all"` — the opt-in for a caller that checks once the answer is
++ * complete (Debate). The default above stays first-sighting-wins.
++ */
++describe('collectSearchEvidence with extracts: "all"', () => {
++  const gatherAll = (annotations: unknown[], onDropped?: () => void): SearchEvidence[] => {
++    const into = new Map<string, SearchEvidence>();
++    collectSearchEvidence(annotations as Parameters<typeof collectSearchEvidence>[0], into, onDropped, {
++      extracts: "all",
++    });
++    return [...into.values()];
++  };
++
++  it("joins a page's distinct extracts in arrival order, keeping the first title", () => {
++    expect(
++      gatherAll([
++        found("https://a.test", "First", "first extract"),
++        found("https://b.test", "B", "other page"),
++        found("https://a.test", "Second", "second extract"),
++      ]),
++    ).toStrictEqual([
++      { url: "https://a.test", title: "First", excerpt: `first extract${EXTRACT_SEPARATOR}second extract` },
++      { url: "https://b.test", title: "B", excerpt: "other page" },
++    ]);
++  });
++
++  it("does not repeat an extract it already holds, and ignores an empty one", () => {
++    expect(
++      gatherAll([
++        found("https://a.test", "A", "the same words"),
++        found("https://a.test", "A", "the same words"),
++        found("https://a.test", "A", ""),
++      ]),
++    ).toStrictEqual([{ url: "https://a.test", title: "A", excerpt: "the same words" }]);
++  });
++
++  it("takes an extract from a later sighting when the first had none", () => {
++    expect(gatherAll([found("https://a.test", "A"), found("https://a.test", "A", "late words")])).toStrictEqual([
++      { url: "https://a.test", title: "A", excerpt: "late words" },
++    ]);
++  });
++
++  it("caps the joined text as one excerpt", () => {
++    const got = gatherAll([
++      found("https://a.test", undefined, "x".repeat(MAX_EVIDENCE_EXCERPT - 10)),
++      found("https://a.test", undefined, "y".repeat(500)),
++    ]);
++    expect(got[0]?.excerpt).toHaveLength(MAX_EVIDENCE_EXCERPT);
++  });
++
++  it("still refuses a URL that is not http(s), however often it appears", () => {
++    const dropped = vi.fn();
++    expect(
++      gatherAll([found("javascript:alert(1)", "x", "one"), found("javascript:alert(1)", "x", "two")], dropped),
++    ).toStrictEqual([]);
++    expect(dropped).toHaveBeenCalledTimes(2);
++  });
++});
+diff --git a/tests/debate.test.ts b/tests/debate.test.ts
+index e6886b2a6..25aaaade8 100644
+--- a/tests/debate.test.ts
++++ b/tests/debate.test.ts
+@@ -43,6 +43,7 @@ import {
+   MAX_DIRECT_ROWS,
+   MIN_QUOTE_CHARS,
+   MIN_QUOTE_WORDS,
++  admissibleSources,
+   namesArticle,
+   PROMPT_VERSION,
+   blockTextById,
+@@ -159,6 +160,60 @@ const groupInput = { admissible, article: ARTICLE, blockText };
+    blocks against a page's extract, so it needs them too. */
+ const claimInput = groupInput;
+ 
++/* --------------------------------------------- one page, several extracts -- */
++
++/**
++ * **The search hands back one page several times, with a different extract
++ * each time** — and the model reads all of them. Measured on 2026-10-02 over 48
++ * recorded runs (plan 261002i § Measured): 75 of 565 returned pages came back
++ * with more than one distinct extract, and of the 76 quotations not found in a
++ * page's first extract, 33 were in a later extract of the same page. Each was
++ * a true quotation refused because only the first extract was kept. The row
++ * that showed it was a published reply whose "Citation: …" line, the one
++ * place giving the article's title, was in the second extract.
++ */
++describe("a page the search returned twice, with two different extracts", () => {
++  const REPLY = "https://journal.example/replies/starter-week-3";
++  const annotation = (content: string) => ({
++    type: "url_citation" as const,
++    url_citation: { url: REPLY, title: "A reply", content },
++  });
++  const twice = admissibleSources(
++    [
++      annotation("I thank the author for these notes, but a young starter needs warmer water, not more feeds."),
++      annotation("Citation: Notes on my sourdough starter, week 3: a reply. Journal of Baking 4: e215."),
++    ],
++    ARTICLE_URL,
++  );
++
++  it("checks a quotation against every extract of that page, not only the first", () => {
++    const group = readDirectGroup(
++      [
++        {
++          url: REPLY,
++          sourceQuote: "a young starter needs warmer water, not more feeds",
++          articleReferenceQuote: "Citation: Notes on my sourdough starter, week 3: a reply.",
++          relation: "disputes",
++          lean: "leans-against",
++          applies: "It says the fix is warmth rather than feeding.",
++        },
++      ],
++      { admissible: twice, article: ARTICLE, blockText },
++      2,
++    );
++    expect(group.counts.lost.directnessUnverified).toBe(0);
++    expect(group.counts.lost.unverifiedSource).toBe(0);
++    expect(group.rows.map((r) => r.url)).toEqual([REPLY]);
++  });
++
++  /* Joining two extracts must not let a quotation run from the end of one into
++     the start of the next: those words are next to each other only in our
++     buffer, never on the page. */
++  it("does not find a quotation stitched across the two extracts", () => {
++    expect(locate(twice.get(REPLY)?.excerpt ?? "", "not more feeds. Citation: Notes on my sourdough")).toBeNull();
++  });
++});
++
+ /* ------------------------------------------------------ the sourdough fixture -- */
+ 
+ describe("an article nobody has written about", () => {
+@@ -1179,13 +1234,28 @@ describe("what the prompts insist on", () => {
+       expect(prompt).toMatch(/UNTRUSTED DATA/);
+     }
+   });
++
++  /**
++   * **The two instructions `debate/5` added, because each was measured costing
++   * the right rows** (plan 261002i § Measured): the model offered a witness
++   * without the title ("the article by Ioannidis [1]") and tidied an extract's
++   * split word before quoting it, and the code refused both rows as it should.
++   * The fix is the asking, so the asking is held here.
++   */
++  it("asks pass A for citing work, named by its full title, and both passes to keep an extract's mistakes", () => {
++    expect(DIRECT_SYSTEM).toMatch(/cites it and says something about it/);
++    expect(DIRECT_SYSTEM).toMatch(/CONTAIN THE TITLE, or the address, in full/);
++    for (const prompt of [DIRECT_SYSTEM, CLAIMS_SYSTEM]) {
++      expect(prompt).toMatch(/Copy the extract's own mistakes too/);
++    }
++  });
+ });
+ 
+ /* ------------------------------------------------------------ the plumbing -- */
+ 
+ describe("the stamp and the failure copy", () => {
+   it("has a prompt version that is one constant", () => {
+-    expect(PROMPT_VERSION).toBe("debate/4");
++    expect(PROMPT_VERSION).toBe("debate/5");
+   });
+ 
+   /**

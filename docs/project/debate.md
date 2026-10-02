@@ -48,6 +48,12 @@ publisher's `/doi/10.…` path) gets Crossref's or DataCite's authors and year, 
 record's title agrees with the page's; the by-line and the date order prefer them and say where
 they came from, and a visitor sees them too
 ([261001a](../plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md) stage 6).
+Since 2026-10-02 the search for responses also looks for the work that **cites** the piece, and
+every extract the search returned for a page is checked, not just the first — which had been
+throwing away correctly copied replies
+([261002i](../plans/261002i-debate-leads-with-who-has-cited-this-article.md),
+[postmortem 261002g](../postmortems/261002g-debate-refused-quotes-from-a-later-extract-of-the-same-page.md)).
+Listing every citer from a citation index is that plan's stage 2, and waits on Greg.
 
 How the mode was evaluated, and what that found:
 [260906b](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), with the stage-0
