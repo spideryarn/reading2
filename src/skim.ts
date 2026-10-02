@@ -11,7 +11,7 @@
  * ## What it reads, and what it does not
  *
  * Its input is other steps' artefacts, like `illustrated`'s: the stored
- * Quotes, the **Ideas** (stage 6 — the article's key points), the hierarchy
+ * Quotes, the **Ideas** (stage 6 — the article's key points), the structure step's
  * tree (each quote's section path, and the top-level outline with its gists)
  * and the reader's profile. **It never reads the article's prose** — the prompt
  * holds the quotes, which are already the article's own words, the Ideas' names
@@ -473,7 +473,7 @@ export function routeProfileIsStale(
  * A section title counts, once lower-cased with any leading numbering (`1.`,
  * `I.`, `A)`) and all punctuation stripped, when it is:
  *
- * - `abstract`, or `abstract and keywords` (the hierarchy stage writes that
+ * - `abstract`, or `abstract and keywords` (the structure stage writes that
  *   title for a front matter's abstract-plus-keywords node) — anywhere;
  * - `executive summary` — **only in the paper's opening** (`opening`);
  * - plain `summary` is handled only by `inAbstract`, which requires the tree to

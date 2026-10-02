@@ -42,7 +42,8 @@ export const MODES = [
      name. Retired 2026-09-29 — Greg (SPIDERYARN-READING2-4B): "Remove the
      Hierarchy mode altogether. I think the Structure mode is
      better/sufficient." `?mode=hierarchy` opens Structure, through
-     `RETIRED_MODES` below. The tree and the pipeline step keep the name.
+     `RETIRED_MODES` below. The pipeline step kept the name until 2026-10-02,
+     when it became `structure` too (plan 261002b).
      docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
   "chat",
   "glossary",

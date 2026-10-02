@@ -28,7 +28,7 @@
  * them are a `Trigger` wrapping one React element, which is the property that
  * rules them out. What a link *can* honestly say is docs/project/links.md.
  */
-import { useCallback, useEffect, useMemo, useReducer, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactElement } from "react";
 import {
   Asterisk,
   BookA,
@@ -47,6 +47,7 @@ import {
      `QuotesPanel` both use it for the same distinction, and using a different
      icon here would make the same claim in a second vocabulary. */
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview } from "../types.js";
@@ -56,7 +57,7 @@ import { hostOf } from "../urls.js";
    arithmetic here would be a card and a masthead disagreeing about one page,
    which is the drift src/reading-time.ts exists to make impossible. */
 import { readingMinutes } from "../reading-time.js";
-import { entryProse } from "./GlossaryPanel.js";
+import { DIG_DEEPER_SAYS, DIG_DEEPER_UNQUOTED, entryProse } from "./GlossaryPanel.js";
 /* **The band's own provenance function, not a second opinion.** `sourceOf`
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
@@ -166,6 +167,7 @@ function HoverCard({
   lookUpLinks,
   canAddToShelf,
   showInSpideryarn,
+  termActions,
 }: {
   entries: GlossaryEntry[];
   /**
@@ -286,6 +288,19 @@ function HoverCard({
    * future visitor payload still draws nothing (GPT Sol, plan review).
    */
   showInSpideryarn: boolean;
+  /**
+   * **What an owner may do to a term from the card** — *Dig deeper* and
+   * *Hide*, plan 261002c § 3. Greg, 2026-10-02: *"We have a 'Dig deeper' in
+   * Glossary mode. Add that to the in-text glossary tooltip."* (spya-p09u4s),
+   * and *"it would be great if the new clickable Glossary hover-card also
+   * includes a 'Hide' action"*.
+   *
+   * `null` for a visitor, and then neither button is drawn: a dig is a model
+   * call the owner pays for, and a hide is the owner's own view of their own
+   * article. Reader passes its `GlossaryRead`, which is only on the owner's arm
+   * of the capability (reader-capability.ts), so a visitor has nothing to pass.
+   */
+  termActions: TermActions | null;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   /* The same indexing for the citations, for the same reason: `read` runs on
@@ -585,7 +600,14 @@ function HoverCard({
               the reader, and which matched the longer phrase is not a thing the
               mark records. */}
           {found.map((entry) => (
-            <TermCard key={entry.id} entry={entry} onOpen={() => { close(); onOpenTerm(entry.id); }} />
+            <TermCard
+              key={entry.id}
+              entry={entry}
+              onOpen={() => { close(); onOpenTerm(entry.id); }}
+              actions={termActions}
+              onClose={close}
+              onOpenTerm={onOpenTerm}
+            />
           ))}
           {/* The citation half, under the term half and above the link half.
               That order is the one the link half already argues for: the reader
@@ -1807,8 +1829,78 @@ function CiteCardReading({ work }: { work: CitedWork }) {
   );
 }
 
-function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
+/**
+ * **The owner's two verbs on a term**, as the card needs them — a structural
+ * slice of `GlossaryRead` (src/web/useGlossary.ts), which Reader passes whole.
+ * Both live on the read rather than the band so the card can use them in any
+ * mode: plan 261002c, GPT Sol's plan review finding 1.
+ */
+export interface TermActions {
+  /** Starts a dig; `false` if another one already holds the slot. */
+  look(id: string): Promise<boolean>;
+  /** The term a dig is running for, or null — one at a time, across the band and the card. */
+  looking: string | null;
+  /** The list describes an older article, so an empty `blocks` proves nothing (`occurrencesFitTheArticle`). */
+  stale: boolean;
+  /** Pessimistic: resolves once the server has it and the list is re-read; throws a sentence. */
+  setHidden(id: string, hidden: boolean): Promise<void>;
+  hiding: ReadonlySet<string>;
+}
+
+function TermCard({
+  entry,
+  onOpen,
+  actions,
+  onClose,
+  onOpenTerm,
+}: {
+  entry: GlossaryEntry;
+  onOpen(): void;
+  /** `null` for a visitor: no Dig deeper, no Hide. */
+  actions: TermActions | null;
+  onClose(): void;
+  onOpenTerm(id: string): void;
+}) {
   const prose = entryProse(entry);
+  /* Why the Hide pressed here did not go through. The card's own line, because
+     the band's error surface may not be on screen — GPT Sol's plan review,
+     finding 5: a failed card hide must say so where the press was. */
+  const [hideFailed, setHideFailed] = useState<string | null>(null);
+
+  /* The band's rule, for the band's reason (`Term` § `unquoted` in
+     GlossaryPanel.tsx): no recorded passage on a list we know fits the article
+     means there is nothing to anchor a dig to. */
+  const unquoted = actions !== null && entry.blocks.length === 0 && !actions.stale;
+  const digging = actions?.looking === entry.id;
+  const digBusy = (actions?.looking ?? null) !== null;
+  const hiding = actions?.hiding.has(entry.id) ?? false;
+
+  /**
+   * **Start the dig, then open the band on the term**, where the answer streams
+   * into the row with everything the band already does about it — the wait
+   * sentence, the draft, a failure, *Dig deeper again*. The card closes: it is
+   * 18rem and closes when the pointer leaves, and a minute-long answer needs
+   * somewhere that stays put. `onOpenTerm` is `openTermInGlossary`, which lowers
+   * the threshold if it would hide the row. The plan's other option — the answer
+   * streaming inside the card — is passed over in its § 3.
+   */
+  const dig = () => {
+    if (!actions) return;
+    void actions.look(entry.id);
+    onClose();
+    onOpenTerm(entry.id);
+  };
+
+  const hide = async () => {
+    if (!actions) return;
+    setHideFailed(null);
+    try {
+      await actions.setHidden(entry.id, true);
+      onClose();
+    } catch (err) {
+      setHideFailed((err as Error).message);
+    }
+  };
 
   return (
     <div className="prose-card-body">
@@ -1865,6 +1957,41 @@ function TermCard({ entry, onOpen }: { entry: GlossaryEntry; onOpen(): void }) {
           in the glossary
         </button>
       </p>
+
+      {/* The owner's two verbs, a row of their own under the ways out, so the
+          foot does not wrap in an 18rem card. Plain buttons, like *in the
+          glossary*: a tap inside the card is left entirely alone by the touch
+          path (useHoverCard.ts § "Inside the card"), so they work on a finger
+          as that one does. */}
+      {actions && (
+        <p className="prose-card-acts">
+          <button
+            type="button"
+            className="prose-card-act"
+            disabled={digBusy || unquoted}
+            title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
+            onClick={dig}
+          >
+            {digging ? (
+              <LoaderCircle size={10} className="cmt-spinner" />
+            ) : (
+              <Globe size={10} />
+            )}
+            {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
+          </button>
+          <button
+            type="button"
+            className="prose-card-act"
+            disabled={hiding}
+            title="Hide this term from your glossary and the underlines — only for you. Unhide it from the glossary's Hidden list."
+            onClick={() => void hide()}
+          >
+            <Trash2 size={10} />
+            Hide
+          </button>
+        </p>
+      )}
+      {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>
   );
 }

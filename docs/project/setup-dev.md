@@ -576,7 +576,7 @@ knowing here:
   gave three new revisions and **one distinct id set**, measured 2026-09-05.
 - **`--force` re-runs the step; it does not buy a fresh answer.** These runs share the article's
   `checkpoints` rows, which is what makes a killed run cheap to repeat — and it means a forced
-  `hierarchy` on an unchanged article replays the structure call it already paid for, and a forced
+  `structure` on an unchanged article replays the whole-document call it already paid for, and a forced
   `labels` replays the batches. Two consecutive forced `hierarchy` runs, measured 2026-09-05 while
   the two were still one step: two model calls, then **zero**. Changing what a
   `force` means to a checkpoint is a queue-wide question, not a CLI one — the browser's Refresh does

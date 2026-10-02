@@ -6,7 +6,7 @@ decision into the relevant doc ([vision](vision.md) / [granularity-zoom](granula
 
 ---
 
-## Q1 — Where does the hierarchy come from? <a id="q1"></a>
+## Q1 — Where does the tree come from? <a id="q1"></a>
 
 Greg's framing was structural:
 
@@ -33,7 +33,7 @@ Target branching factor ~5–9 so levels feel like even strides.
 
 Both settled on 2026-08-24 and written up where they belong. Anchors kept so older links still land.
 
-- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + hierarchy agent), and ids are
+- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + structure agent), and ids are
   **random**, not sequential, because sequential ids silently break on re-extraction. See
   [block-ids.md](block-ids.md#why-random-and-not-sequential). Note this went *against* the
   recommendation recorded here, which was sequential-plus-`textHash`; the hash-migration step it
@@ -96,14 +96,14 @@ dollars taken from the ledger rather than from arithmetic —
 [ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs) is the answer
 and the method; the headline is here because eight things link to this anchor.
 
-| | blocks | words | **hierarchy** | labels | total |
+| | blocks | words | **structure** | labels | total |
 |---|---:|---:|---:|---:|---:|
 | *How to Work Hard* | 96 | 3,341 | **$0.0620** | $0.0437 | $0.1057 |
 | *How to Do Great Work* | 330 | 11,890 | **$0.1671** | $0.2144 | $0.3815 |
 
 About **a tenth of a cent per block**, and close to linear. **The tree is one model call** whatever
 the size, and it is the only paid step in the default ingest — so the money between pasting a URL and
-being able to read is the hierarchy column alone. `labels` is bigger on a long article and the reader
+being able to read is the structure column alone. `labels` is bigger on a long article and the reader
 does not wait for it. These are credits; the bank sees about 5.5% more.
 
 **Two things this question assumed that turned out to be wrong**, which is most of why it stayed open:
@@ -185,26 +185,13 @@ Two things worth carrying forward rather than burying:
 
 ---
 
-## Q10 — Should a tooltip be hoverable? <a id="q10"></a>
+## Q10 — decided <a id="q10"></a>
 
-Every card in the app is `pointer-events: none`, so the pointer cannot enter one: move onto it and
-it closes. WCAG 2.1 § 1.4.13 asks for the opposite — hover content must stay available while the
-pointer moves onto it — and while the native `title` attribute is exempt from that criterion, a card
-we draw ourselves is not. The homepage masthead's three links were conforming by exemption until
-2026-08-28, when they stopped being `title` attributes. Raised by ⟨Sol⟩ reviewing that change.
-
-| Option | For | Against |
-|---|---|---|
-| **Leave it** | the rail is most of the tooltips in the app, and a spine card that took hover would sit on the band you are pointing at and hold itself open | a known 1.4.13 failure, worst for anyone using magnification or a large cursor, where crossing the gap is easy to do by accident |
-| Hoverable everywhere | one behaviour, conforming | breaks the rail, which is the surface the tooltip was built for |
-| **Per-use**: `Tooltip` takes a prop that adds `.tooltip-anchor.interactive` and a `safePolygon()` corridor | the masthead and any future prose-ish card conform; the spine keeps what it has | a second interaction mode inside a shared component, and `safePolygon` is the fiddliest part of Floating UI to get right |
-
-**Recommendation: per-use, when something needs it.** Nothing in these three cards is worth
-travelling to — no link, no button, nothing to select but a sentence and an address — so the cost
-today is the standard, not the reader. The machinery already exists (`ProseHoverCard` uses
-`.interactive` for real reasons), so this is a prop and a corridor rather than a design.
-[tooltips.md § The pointer cannot enter a card](tooltips.md#the-pointer-cannot-enter-a-card-and-that-used-to-be-exempt)
-has the detail.
+**Should a tooltip be hoverable?** Per use, decided by Greg on 2026-10-02: a card with something to
+press takes `<Tooltip interactive>`; every other card, the spine's above all, keeps
+`pointer-events: none`. Written up in
+[tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter). Anchor kept
+so older links still land.
 
 ---
 

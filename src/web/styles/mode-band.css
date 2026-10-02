@@ -1126,3 +1126,10 @@
 .band-about-card p + p { margin-top: 0.4rem; }
 /* Who made it and when: last in the card, and quieter than what the mode is. */
 .band-about-card .band-about-made { color: var(--ink-faint); font-size: 0.92em; }
+/* *More in Help →*, the card's last line and the one thing in it to press —
+   which is why this card, alone of the corner's, is `interactive` (Tooltip.tsx,
+   plan 261002e). A link's colour rather than ink, so it reads as somewhere to
+   go and not as one more sentence. */
+.band-about-card .band-about-help a { color: var(--highlight-ink); text-decoration: none; }
+.band-about-card .band-about-help a:hover,
+.band-about-card .band-about-help a:focus-visible { text-decoration: underline; }

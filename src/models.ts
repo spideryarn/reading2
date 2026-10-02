@@ -578,7 +578,7 @@ export type Tier = "capable" | "quick";
  * below, so that "not a tier decision" stops meaning "invisible".
  */
 export type Task =
-  | "hierarchy"
+  | "structure"
   | "labels"
   | "arc"
   | "tweets"
@@ -1000,12 +1000,12 @@ export type AiJob =
  *   gistable block, every article — so it is where the tenth-of-the-price would
  *   actually be felt. It is also the core of the product: the gist columns *are*
  *   granularity zoom. Cheapest to move, most expensive to get wrong.
- * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `hierarchy`** all
+ * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `structure`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
  */
 export const TASK_TIER: Record<Task, Tier> = {
-  hierarchy: "capable",
+  structure: "capable",
   labels: "capable",
   arc: "capable",
   tweets: "capable",
@@ -1269,7 +1269,7 @@ export type Wire =
  * what ran. Two copies of that pair disagree silently.
  */
 export const TASK_WIRE: Record<Task, Wire> = {
-  hierarchy: "messages",
+  structure: "messages",
   labels: "messages",
   arc: "messages",
   tweets: "messages",
@@ -1397,7 +1397,7 @@ export const REQUEST_PATH_TASKS: readonly Task[] = ALL_TASKS.filter(
  * `effortFor` is where it lives.
  */
 export const MODEL_ENV_VAR: Record<Task, string | null> = {
-  hierarchy: null,
+  structure: null,
   labels: null,
   arc: null,
   tweets: null,

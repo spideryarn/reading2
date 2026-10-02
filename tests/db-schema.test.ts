@@ -992,7 +992,7 @@ describe("the schema keeps the promises the plan makes", () => {
        * so it is logged at `warn` and the stage carries on. The only symptom of
        * a namespace declared and never accepted is therefore a cache that never
        * hits and a bill that goes up. docs/reusable/silent-success.md; and it
-       * came within one migration of happening when `hierarchy-deepen` was added
+       * came within one migration of happening when `structure-deepen` was added
        * on 2026-09-05.
        *
        * Asserted against `CHECKPOINT_NAMESPACES` itself rather than a list typed
@@ -1010,7 +1010,7 @@ describe("the schema keeps the promises the plan makes", () => {
       await expectViolation(c, /checkpoints_namespace/, () =>
         c.query(
           `insert into spideryarn.checkpoints (article_id, namespace, key, value)
-           values ($1, 'hierarchy-invented', 'k0', '{}'::jsonb)`,
+           values ($1, 'structure-invented', 'k0', '{}'::jsonb)`,
           [ART_1],
         ),
       );

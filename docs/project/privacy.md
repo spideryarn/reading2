@@ -337,7 +337,7 @@ words the reader sees are [copy.md](copy.md) § *The words on the one control th
 What belongs on **this** page is the part that is a promise about a reader's data.
 
 **What actually goes.** One statement, `delete from articles`, and the cascade: the revisions, the
-blocks and their identities, the hierarchy and every generated artefact, and all of the reader's own
+blocks and their identities, the tree and every generated artefact, and all of the reader's own
 work on the piece — comments, notes, highlights, questions, chats, saved searches, where they left
 off. Measured, not assumed: the Stage A spike seeded a fully populated article and listed what
 emptied.

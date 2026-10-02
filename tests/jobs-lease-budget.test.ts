@@ -90,16 +90,16 @@ describe("the job lease and the platform's kill", () => {
    * way to find out.
    *
    * The costs are measurements, not guesses, and each is the worst observed:
-   * `hierarchy` from the ledger, `assets` from a real run against the 10-image
+   * `structure` from the ledger, `assets` from a real run against the 10-image
    * article (7.1s measured, but its 180s cap is what bounds it), and the three
    * cheap steps rounded generously upward.
    */
   /* **"Fits one invocation" is about elapsed time, not about how many requests
      it actually takes** — and since 2026-09-04 those are different answers. The
      sum below still fits the deadline, which is what this case asserts and what
-     `maxDuration` is about; but `STEP_BUDGET_MS.hierarchy` is now 700 s, so a
+     `maxDuration` is about; but `STEP_BUDGET_MS.structure` is now 700 s, so a
      walk that has spent ~125 s on `fetch → extract → blocks` hands the claim
-     back rather than starting `hierarchy`, and the ordinary article takes two
+     back rather than starting `structure`, and the ordinary article takes two
      requests. That is deliberate (src/jobs.ts § `STEP_BUDGET_MS`) and it does
      not weaken this assertion: a budget that stopped fitting one invocation
      would still be a budget nothing could recover from. */
@@ -137,7 +137,7 @@ describe("the job lease and the platform's kill", () => {
       /* MEASURED 2026-08-30, worst in data/_ai-calls.jsonl: one call, so sum
          and wall clock agree and no grouping argument applies. This is the
          number the whole budget turns on. */
-      hierarchy: 320_400,
+      structure: 320_400,
       /* A CAP, not a measurement — the step's own wall clock. Measured cost on
          the corpus's worst article (10 images) is 7.1s; the cap exists for a
          hanging publisher, where 10 images cost ~151s. */
@@ -180,7 +180,7 @@ describe("the job lease and the platform's kill", () => {
    * `busy`, backs off, and the card catches up when the poll sees it finish.
    * The work lands and the model spend is not thrown away.
    *
-   * **Turning it on would silently make every disconnect fatal**, mid-`hierarchy`,
+   * **Turning it on would silently make every disconnect fatal**, mid-`structure`,
    * with the money already spent — and somebody will one day have an entirely
    * good reason to add it for an unrelated route. It is a one-line change in a
    * file that looks like deployment trivia, with nothing local to warn them.
@@ -199,12 +199,12 @@ describe("the job lease and the platform's kill", () => {
     /* **Wall time per step, grouped by `runId`** — which is the unit the
        deadline actually bounds, and getting that wrong is how this number was
        first derived. From data/_ai-calls.jsonl on 2026-08-30, the longest step
-       any real run has taken is a `hierarchy` of **320.4s in a single call**.
+       any real run has taken is a `structure` of **320.4s in a single call**.
 
        Two corrections worth keeping, because both were reported to other
        sessions before they were checked. `summarise` was cited as 240.3s and
        does **not** belong here: that is ten calls *summed*, and its wall time
-       is 91.3s, because they overlap. And the earlier `hierarchy` figure of "324.0s
+       is 91.3s, because they overlap. And the earlier `structure` figure of "324.0s
        over three calls" was three unrelated runs five hours apart, collapsed
        together by a null slug. Sum a step's calls and you overstate a
        concurrent step and understate nothing; only wall time answers "did this
@@ -214,25 +214,25 @@ describe("the job lease and the platform's kill", () => {
   });
 
   /**
-   * **The hand-back threshold for `hierarchy` may not admit a step the same
+   * **The hand-back threshold for `structure` may not admit a step the same
    * evidence says cannot finish.**
    *
    * ⟨GPT Sol, reviewing the built stage 3 of
    * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, finding 2⟩
-   * `STEP_BUDGET_MS.hierarchy` was 320.4 s, measured on *ordinary* articles.
+   * `STEP_BUDGET_MS.structure` was 320.4 s, measured on *ordinary* articles.
    * Measured on Kuhn's *A Landscape of Consciousness* — 142 pages, two
    * production ingests on 2026-09-04 — the structure call alone is **508 s** and
    * the whole step is **658–778 s**, against a 740 s deadline. Those same two
-   * ingests recorded `extract` at 305–347 s, so the walk reached `hierarchy`
+   * ingests recorded `extract` at 305–347 s, so the walk reached `structure`
    * with 393–435 s left, admitted it on a 320.4 s budget, bought most of a
    * structure call it could not finish, and spent one of only two requeues.
    *
-   * So the rule is: **after the worst measured PDF extract, `hierarchy` is
+   * So the rule is: **after the worst measured PDF extract, `structure` is
    * handed back rather than started.** Everything below is measured, and the
    * assertion is the relationship rather than the number, so re-tuning either
    * side is free and breaking the pair is not.
    */
-  it("refuses to start hierarchy on what a long PDF's extract leaves behind", () => {
+  it("refuses to start structure on what a long PDF's extract leaves behind", () => {
     /* MEASURED 2026-09-04, production, release `436d6b56`: `spya-y807kg` at
        09:26 and `spya-bub4bd` at 10:42, the same 142-page paper. The whole
        `POST /api/jobs/:id/advance` returned 200 in 347 s and 305 s. The
@@ -241,8 +241,8 @@ describe("the job lease and the platform's kill", () => {
     const measuredPdfExtractMs = 305_000;
     const leftAfterIt = LEASE_MS - DEADLINE_MARGIN_MS - measuredPdfExtractMs;
     expect(
-      STEP_BUDGET_MS.hierarchy,
-      "the walk would start `hierarchy` with less window than the 142-page paper's " +
+      STEP_BUDGET_MS.structure,
+      "the walk would start `structure` with less window than the 142-page paper's " +
         "structure call alone took (508 s) — it buys most of one and spends a requeue",
     ).toBeGreaterThan(leftAfterIt);
 
@@ -253,7 +253,7 @@ describe("the job lease and the platform's kill", () => {
        stops being "reserve nearly the whole window" and becomes "this table no
        longer decides anything", which is worth failing on. */
     expect(
-      STEP_BUDGET_MS.hierarchy,
+      STEP_BUDGET_MS.structure,
       "a budget at or over the claimant's deadline can never be met, so the table has " +
         "stopped saying anything about this step",
     ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
@@ -264,9 +264,9 @@ describe("the job lease and the platform's kill", () => {
    * was registered with nothing checking it.
    *
    * `STEP_BUDGET_MS.labels` decides one thing: whether a claim that has just
-   * finished `hierarchy` starts the label pass on what is left of its window or
+   * finished `structure` starts the label pass on what is left of its window or
    * hands back. A budget under the worst measured pass admits a step the same
-   * evidence says will not finish — `hierarchy`'s own finding, one step later —
+   * evidence says will not finish — `structure`'s own finding, one step later —
    * and a budget at or over the claimant's deadline is never satisfied by any
    * claim, so the row stops deciding anything at all.
    *

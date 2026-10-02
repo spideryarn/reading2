@@ -164,15 +164,15 @@ describe("the storage map", () => {
    * > Postgres that claim belongs to `produces`.
    *
    * The counts are the point and the assertion above cannot make them: deleting
-   * `labels` from `hierarchy.produces` **and** from `STORAGE` leaves that one
-   * green, and leaves `hierarchy` calling itself finished with a tree and no
-   * labels beside it. `hierarchy` went from two to three when the nav labels
+   * `labels` from `structure.produces` **and** from `STORAGE` leaves that one
+   * green, and leaves `structure` calling itself finished with a tree and no
+   * labels beside it. `structure` went from two to three when the nav labels
    * became a second model pass (docs/plans/260826h-toc-scaling.md), which is
    * why src/structure.ts writes the tree last of the three.
    */
-  it("has both of extract's and all three of hierarchy's", () => {
+  it("has both of extract's and all three of structure's", () => {
     expect(STEPS.extract.produces).toEqual(["extractedHtml", "meta"]);
-    expect([...STEPS.hierarchy.produces].sort()).toEqual(["blocks", "labels", "tree"]);
+    expect([...STEPS.structure.produces].sort()).toEqual(["blocks", "labels", "tree"]);
   });
 
   it("refuses a pair no step produces, rather than returning undefined", () => {
@@ -183,7 +183,7 @@ describe("the storage map", () => {
     /* Two files on disk, deliberately, when there was a disk. One table here,
        necessarily — and this is the assertion that says the difference was
        noticed rather than missed. */
-    expect(siteFor("blocks", "blocks")).toEqual(siteFor("hierarchy", "blocks"));
+    expect(siteFor("blocks", "blocks")).toEqual(siteFor("structure", "blocks"));
   });
 
   it("gives the two HTMLs different places, unlike the filesystem", () => {
@@ -432,17 +432,17 @@ describe("reading an artefact out of Postgres", () => {
   it("refuses a slug that is not the one it is bound to", async () => {
     /* And **before** reading anything: a plausible artefact for the wrong
        article, with nothing saying so, is the worst answer available. */
-    await expect(readArtefact(ref, getDb(), "some-other-piece", "hierarchy", "tree")).rejects.toThrow(
+    await expect(readArtefact(ref, getDb(), "some-other-piece", "structure", "tree")).rejects.toThrow(
       WrongArticle,
     );
   });
 
   it("returns the tree exactly as it was stored", async () => {
-    expect(await read("hierarchy", "tree")).toEqual(TREE);
+    expect(await read("structure", "tree")).toEqual(TREE);
   });
 
-  it("returns the labels, which is where hierarchy keeps its stamp", async () => {
-    expect(await read("hierarchy", "labels")).toEqual(LABELS);
+  it("returns the labels, which is where structure keeps its stamp", async () => {
+    expect(await read("structure", "labels")).toEqual(LABELS);
   });
 
   it("keeps the two HTMLs apart", async () => {
@@ -485,7 +485,7 @@ describe("reading an artefact out of Postgres", () => {
   });
 
   it("gives stage 3 and stage 4 the same blocks", async () => {
-    expect(await read("hierarchy", "blocks")).toEqual(await read("blocks", "blocks"));
+    expect(await read("structure", "blocks")).toEqual(await read("blocks", "blocks"));
   });
 
   it("drops a column that is null rather than a level of 0", async () => {
@@ -511,7 +511,7 @@ describe("reading an artefact out of Postgres", () => {
       .set({ tree: { ...TREE, nodes: [] } as unknown as Tree })
       .where(eq(articleRevisions.id, ref.revisionId));
     try {
-      expect(await read("hierarchy", "tree")).toBeNull();
+      expect(await read("structure", "tree")).toBeNull();
     } finally {
       await db
         .update(articleRevisions)
@@ -776,7 +776,7 @@ describe("an article whose blocks have all gone", () => {
        every late step would then be compared against `hashBlocks([])`, a
        real-looking fingerprint of nothing. */
     expect(await readArtefact(ref, getDb(), SLUG, "blocks", "blocks")).toBeNull();
-    expect(await readArtefact(ref, getDb(), SLUG, "hierarchy", "blocks")).toBeNull();
+    expect(await readArtefact(ref, getDb(), SLUG, "structure", "blocks")).toBeNull();
   });
 });
 
@@ -938,10 +938,10 @@ describe("whether a step has actually produced anything", () => {
   }, 60_000);
   afterAll(cleanUp);
 
-  const has = (step: "hierarchy" | "arc" | "blocks", kinds: ArtifactKind[]) =>
+  const has = (step: "structure" | "arc" | "blocks", kinds: ArtifactKind[]) =>
     hasArtefacts(ref, getDb(), SLUG, step, kinds);
 
-  const runRow = async (step: "hierarchy" | "arc" | "blocks", status: "running" | "done" | "error") => {
+  const runRow = async (step: "structure" | "arc" | "blocks", status: "running" | "done" | "error") => {
     const row = {
       revisionId: ref.revisionId,
       stepName: step,
@@ -962,7 +962,7 @@ describe("whether a step has actually produced anything", () => {
   };
 
   it("refuses a slug that is not the one it is bound to", async () => {
-    await expect(hasArtefacts(ref, getDb(), "elsewhere", "hierarchy", ["tree"])).rejects.toThrow(
+    await expect(hasArtefacts(ref, getDb(), "elsewhere", "structure", ["tree"])).rejects.toThrow(
       WrongArticle,
     );
   });
@@ -987,18 +987,18 @@ describe("whether a step has actually produced anything", () => {
        is very nearly proof that the step put them there; here it is not.
 
        Watched red by deleting the run-row read. */
-    expect(await has("hierarchy", ["tree", "labels"])).toBe(false);
+    expect(await has("structure", ["tree", "labels"])).toBe(false);
   });
 
   it("says yes once the step is recorded done and everything reads back", async () => {
-    await runRow("hierarchy", "done");
-    expect(await has("hierarchy", ["tree", "labels", "blocks"])).toBe(true);
+    await runRow("structure", "done");
+    expect(await has("structure", ["tree", "labels", "blocks"])).toBe(true);
   });
 
   it("says no while the step is still running", async () => {
-    await runRow("hierarchy", "running");
-    expect(await has("hierarchy", ["tree", "labels"])).toBe(false);
-    expect(await stepInterrupted(ref, getDb(), SLUG, "hierarchy")).toBe(true);
+    await runRow("structure", "running");
+    expect(await has("structure", ["tree", "labels"])).toBe(false);
+    expect(await stepInterrupted(ref, getDb(), SLUG, "structure")).toBe(true);
   });
 
   it("says no to a step that ended in error, artefacts or no artefacts", async () => {
@@ -1008,14 +1008,14 @@ describe("whether a step has actually produced anything", () => {
 
        And it is not *interrupted*: it finished, badly. `stepIsDone` treats those
        differently, so the two questions must not collapse into one. */
-    await runRow("hierarchy", "error");
-    expect(await has("hierarchy", ["tree", "labels"])).toBe(false);
-    expect(await stepInterrupted(ref, getDb(), SLUG, "hierarchy")).toBe(false);
+    await runRow("structure", "error");
+    expect(await has("structure", ["tree", "labels"])).toBe(false);
+    expect(await stepInterrupted(ref, getDb(), SLUG, "structure")).toBe(false);
   });
 
   it("says no when one of the step's products is missing", async () => {
     /* All of them, never any of them. `arc` is the whole of the arc step, and
-       `hierarchy` declares three — a done row beside two of them is a step that
+       `structure` declares three — a done row beside two of them is a step that
        cannot be believed. */
     await runRow("arc", "done");
     expect(await has("arc", ["arc"])).toBe(true);
@@ -1025,9 +1025,9 @@ describe("whether a step has actually produced anything", () => {
       .set({ labels: null })
       .where(eq(articleRevisions.id, ref.revisionId));
     try {
-      await runRow("hierarchy", "done");
-      expect(await has("hierarchy", ["tree"])).toBe(true);
-      expect(await has("hierarchy", ["tree", "labels"])).toBe(false);
+      await runRow("structure", "done");
+      expect(await has("structure", ["tree"])).toBe(true);
+      expect(await has("structure", ["tree", "labels"])).toBe(false);
     } finally {
       await db
         .update(articleRevisions)
@@ -1039,33 +1039,33 @@ describe("whether a step has actually produced anything", () => {
   it("says no when nothing was asked for", async () => {
     /* Not "yes, all of nothing". A step whose products list is empty has not
        been shown to have run, and the file adapter answers the same way. */
-    await runRow("hierarchy", "done");
-    expect(await has("hierarchy", [])).toBe(false);
+    await runRow("structure", "done");
+    expect(await has("structure", [])).toBe(false);
   });
 
   it("keeps saying yes about a tree built from blocks that have since moved", async () => {
-    /* **The assertion that says freshness stayed out of storage.** The `hierarchy`
+    /* **The assertion that says freshness stayed out of storage.** The `structure`
        row records a hash that has nothing to do with the blocks now stored, and
-       `has` does not care: the tree is there and a run of `hierarchy` finished.
+       `has` does not care: the tree is there and a run of `structure` finished.
 
        An earlier version of the plan wanted the opposite — compare the row's
        `input_hash` against the stored blocks — and it is wrong twice over. It
        is a freshness rule in the one function that must not have one, and it
-       re-runs `hierarchy`, which moves the tree's boundaries, which silently drops
+       re-runs `structure`, which moves the tree's boundaries, which silently drops
        every `arc` entry whose block range no longer matches a node.
        GPT Sol, 2026-08-28. */
-    await runRow("hierarchy", "done");
+    await runRow("structure", "done");
     const [row] = await getDb()
       .select({ hash: revisionStepRuns.inputHash })
       .from(revisionStepRuns)
       .where(
         and(
           eq(revisionStepRuns.revisionId, ref.revisionId),
-          eq(revisionStepRuns.stepName, "hierarchy"),
+          eq(revisionStepRuns.stepName, "structure"),
         ),
       );
     expect(row?.hash, "the row must not happen to describe these blocks").toBe(NO_INPUT_HASH);
-    expect(await has("hierarchy", ["tree", "labels", "blocks"])).toBe(true);
+    expect(await has("structure", ["tree", "labels", "blocks"])).toBe(true);
   });
 });
 
@@ -1077,7 +1077,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 class RollBack extends Error {}
 
 const JOB_STEPS: JobStep[] = [
-  { name: "hierarchy", label: "Building the hierarchy", status: "pending" },
+  { name: "structure", label: "Building the structure", status: "pending" },
 ];
 
 /**
@@ -1143,7 +1143,7 @@ describe("writing artefacts into a draft", () => {
   const begun = async (
     tx: Tx,
     claimed: JobDraftRef,
-    step: "hierarchy" | "arc" | "blocks" | "fetch" | "extract",
+    step: "structure" | "arc" | "blocks" | "fetch" | "extract",
   ) => {
     await beginStepRun(
       { revisionId: claimed.revisionId, stepName: step, job: { id: claimed.jobId, attemptId: claimed.attemptId } },
@@ -1682,8 +1682,8 @@ describe("writing artefacts into a draft", () => {
 
   it("records the stamp on the running row, where stampFor will find it", async () => {
     await withClaim(async (tx, claimed) => {
-      await begun(tx, claimed, "hierarchy");
-      /* `hierarchy` has no `PipelineStep.stamp` and must still record an input hash,
+      await begun(tx, claimed, "structure");
+      /* `structure` has no `PipelineStep.stamp` and must still record an input hash,
          because `reasonsNotToPublish` compares that column against the stored
          blocks. Having no expected stamp and recording no input are different
          things. */
@@ -1691,7 +1691,7 @@ describe("writing artefacts into a draft", () => {
         claimed,
         tx,
         SLUG,
-        "hierarchy",
+        "structure",
         { tree: TREE, labels: LABELS, blocks: { blocks: NEW_BLOCKS } },
         { inputHash: "hash-of-the-blocks" },
       );
@@ -1701,7 +1701,7 @@ describe("writing artefacts into a draft", () => {
         .where(
           and(
             eq(revisionStepRuns.revisionId, claimed.revisionId),
-            eq(revisionStepRuns.stepName, "hierarchy"),
+            eq(revisionStepRuns.stepName, "structure"),
           ),
         );
       expect(row?.inputHash).toBe("hash-of-the-blocks");
@@ -1775,8 +1775,8 @@ describe("the store, assembled", () => {
 
   it("answers the read-only questions without a transaction", async () => {
     const store = readOnlyPgArtifacts(ref, getDb());
-    expect(await store.read(SLUG, "hierarchy", "tree")).toEqual(TREE);
-    expect(await store.has(SLUG, "hierarchy", ["tree"])).toBe(false);
-    expect(await store.interrupted(SLUG, "hierarchy")).toBe(false);
+    expect(await store.read(SLUG, "structure", "tree")).toEqual(TREE);
+    expect(await store.has(SLUG, "structure", ["tree"])).toBe(false);
+    expect(await store.interrupted(SLUG, "structure")).toBe(false);
   });
 });

@@ -31,7 +31,7 @@ import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 /**
  * The hover animations the loader does not run, and why. Every animation is
  * either here or in `LOADER_HOLD_MS`, and the test fails on one in neither, so
- * a fourteenth hover animation is a decision rather than a default.
+ * a new hover animation is a decision rather than a default.
  */
 export const LOADER_EXCLUDED: Readonly<Record<string, string>> = {
   "spya-strain": "moves the letters as well as the spider, so it would fight the letters track",
@@ -61,6 +61,7 @@ export const LOADER_HOLD_MS: Readonly<Record<string, { run: number; rest?: numbe
   "spya-register": { run: 1200 }, // once, 640ms + nine 20ms staggers
   "spya-type": { run: 2820 }, // the cursor: 700ms delay + 2 × 1.06s blink
   "spya-abseil": { run: 2000 }, // 1 × 2s
+  "spya-dew": { run: 1600 }, // once, 630ms stagger + 900ms
 };
 
 const eligible = (reach: LogoAnimation["reach"]) =>
@@ -204,7 +205,7 @@ export function LogoLoader({ label }: { label: string }) {
           className={`logo-loader tw:flex tw:items-center tw:gap-1.5 ${running.length ? `spya-anim ${running.join(" ")}` : ""}`}
         >
           <LogoMark />
-          <span className="tw:font-prose tw:text-[0.82rem] tw:text-foreground">
+          <span className="tw:text-[0.82rem]">
             <LogoLetters />
           </span>
         </div>

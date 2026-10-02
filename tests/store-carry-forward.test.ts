@@ -14,7 +14,7 @@
  * happen to have can pass by luck, so this builds its own article: publishes
  * blocks B1 with all three on-demand artefacts stamped against them, then
  * **re-extracts** to B2 — one paragraph reworded, one dropped, every surviving
- * id kept — and re-runs `hierarchy` beside it, which is what `cascadeForce` already
+ * id kept — and re-runs `structure` beside it, which is what `cascadeForce` already
  * does and what the publication guard requires.
  *
  * ## Four one-line ways to make it red, from the plan
@@ -180,7 +180,7 @@ const ASSETS_HASH1 = assetsInputHash(B1);
  *
  * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
  * two answer different questions and two steps still ask the narrow one:
- * `hierarchy.input_hash` is compared against the stored blocks by
+ * `structure.input_hash` is compared against the stored blocks by
  * `reasonsNotToPublish`, and `assets` asks a narrower question still — see
  * `ASSETS_HASH1`. Declared below `treeFor` — see the note there.
  */
@@ -477,7 +477,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     for (const name of ["fetch", "extract", "blocks"] as StepName[]) {
       await step(firstRevision, name);
     }
-    await step(firstRevision, "hierarchy", { inputHash: HASH1 });
+    await step(firstRevision, "structure", { inputHash: HASH1 });
     /* **The label pass, which has been its own step since 2026-09-06** and so
        is part of what a finished article carries into its next draft.
        docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
@@ -591,7 +591,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
       .set({ tree: treeFor(B2), arc: arcFor(B2), stampedHtml: B2.map((b) => b.html).join("\n") })
       .where(eq(articleRevisions.id, secondRevision));
     await step(secondRevision, "blocks");
-    await step(secondRevision, "hierarchy", { inputHash: HASH2 });
+    await step(secondRevision, "structure", { inputHash: HASH2 });
     await step(secondRevision, "arc", { inputHash: HASH2 });
 
     const published = await publishRevision({ slug: SLUG, revisionId: secondRevision });
@@ -632,7 +632,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
        comparison is what yields "present but not current". */
     expect(runs.get("tweets")?.inputHash).toBe(TWEETS_FINGERPRINT1);
     expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
-    expect(runs.get("hierarchy")?.inputHash, "hierarchy was re-run against B2").toBe(HASH2);
+    expect(runs.get("structure")?.inputHash, "structure was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,
     );
@@ -658,7 +658,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
 
     /* `glossary` because it is one of the carried ones: its row was written in
        the first revision and copied, so this asks the copy and the read at
-       once. `hierarchy` below is the re-run half of the same question. */
+       once. `structure` below is the re-run half of the same question. */
     const carried = after.get("glossary");
     expect(carried?.startedAt, "a carried run has a start").toBeInstanceOf(Date);
     expect(carried?.startedAt?.toISOString()).toBe(before.get("glossary")?.startedAt?.toISOString());
@@ -666,7 +666,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
       before.get("glossary")?.finishedAt?.toISOString(),
     );
 
-    for (const name of ["glossary", "hierarchy"] as StepName[]) {
+    for (const name of ["glossary", "structure"] as StepName[]) {
       const row = after.get(name);
       const stage = meta.stages.find((s) => s.step === name);
       expect(stage?.startedAt, `${name} start, as the page is told it`).toBe(
@@ -716,7 +716,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     expect(pg.labels, "Postgres should offer to regenerate labels").toBe(false);
     /* The step that WAS re-run, so this is not a test that everything is
        false — which is the shape this assertion could rot into. */
-    expect(pg.hierarchy).toBe(true);
+    expect(pg.structure).toBe(true);
   }, 30_000);
 
   /**

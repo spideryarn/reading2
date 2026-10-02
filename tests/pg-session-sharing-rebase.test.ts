@@ -260,7 +260,7 @@ async function articleFromARealJob(slug: string): Promise<Fixture> {
     })
     .where(eq(articleRevisions.id, begun.revisionId));
   for (const name of ["fetch", "extract", "blocks"] as StepName[]) await stepRun(begun.revisionId, name);
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   await publishRevision({ slug, revisionId: begun.revisionId });
 
   const arcJob = await claimWithSession(slug, ["arc"]);

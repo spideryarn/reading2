@@ -21,7 +21,7 @@
  * **Nothing is aliased.** On disk `extractedHtml` and `stampedHtml` are the same
  * `output/<slug>.html`, because stage 3 overwrites stage 2's page in place; here
  * they are two values, as they are two columns in Postgres. Same for the two
- * `blocks`: `(blocks, blocks)` and `(hierarchy, blocks)` are already separate
+ * `blocks`: `(blocks, blocks)` and `(structure, blocks)` are already separate
  * files and stay separate here.
  *
  * That is a deliberate choice rather than an oversight, and it is the direction
@@ -115,9 +115,9 @@ function outcomeOf(
  * before it did anything else:
  *
  * ```
- * const first = await store.read("x", "hierarchy", "blocks");
+ * const first = await store.read("x", "structure", "blocks");
  * first.blocks[0].text = "mutated";
- * const second = await store.read("x", "hierarchy", "blocks");
+ * const second = await store.read("x", "structure", "blocks");
  * // filesystem: "before"    memory (then): "mutated"
  * ```
  *
@@ -220,7 +220,7 @@ export function memoryArtefacts(): MemoryArtifactStore {
          run that somebody could still restore; answering "no" there is how
          stage 3 mints a fresh id for every paragraph and reports success.
          src/store/artifacts.ts § `hasEarlierBlocks`. */
-      const outcome = outcomeOf(held, slug, "hierarchy", "blocks");
+      const outcome = outcomeOf(held, slug, "structure", "blocks");
       if (outcome.state === "absent") return false;
       if (outcome.state === "unusable") return true;
       const { blocks } = outcome.value as ArtifactMap["blocks"];
@@ -281,7 +281,7 @@ export function memoryArtefacts(): MemoryArtifactStore {
  * else.
  *
  * **It refuses an article it found nothing for**, by name. A store loaded from a
- * misspelled slug is empty, every stage then fails saying *run the hierarchy
+ * misspelled slug is empty, every stage then fails saying *run the structure
  * step first*, and the suite reads as though it had proved something about the
  * stage. That is the shape docs/reusable/silent-success.md is about, and it is
  * the same refusal `loadArticleIntoPg` makes for the same reason.

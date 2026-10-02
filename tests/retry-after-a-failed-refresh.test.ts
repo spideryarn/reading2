@@ -11,13 +11,13 @@
  *
  * 1. Published revision R1 exists.
  * 2. A forced job writes new `fetch`, `extract` and `blocks` into a **draft**,
- *    then fails at `hierarchy`.
+ *    then fails at `structure`.
  * 3. The failed draft is discarded (`failRevisionIn`, src/store/pg-session.ts).
  *    Everything those three steps produced goes with it. The reader is still on
  *    R1, which is the draft's whole purpose.
- * 4. Retry forces from the first step that did not *finish* — `hierarchy`.
+ * 4. Retry forces from the first step that did not *finish* — `structure`.
  * 5. The retry's own draft is copied from **R1** again, so `fetch`, `extract`
- *    and `blocks` all find R1's artefacts current and skip, and `hierarchy` runs over
+ *    and `blocks` all find R1's artefacts current and skip, and `structure` runs over
  *    the old article. **The job reports success and the refresh is gone**, with
  *    a row of green ticks over it. docs/reusable/silent-success.md.
  *
@@ -34,7 +34,7 @@
  * retaining the failed draft so the retry can adopt its completed work — was
  * costed and moved to that plan's § *Appendix: someday maybe*.
  *
- * **The cost is real and is not mitigated here.** A refresh that fails at `hierarchy`
+ * **The cost is real and is not mitigated here.** A refresh that fails at `structure`
  * re-fetches, re-extracts and, for a PDF, pays for the transcription a second
  * time. The obvious saving is the per-chunk checkpoints src/pdf-read.ts already
  * writes, and they do not help on a deployment: they land under `dataDir`, which
@@ -56,7 +56,7 @@
  * `data/_jobs/`.
  *
  * **An earlier version of this note said such a test would need a network fetch
- * and a paid `hierarchy` call, and that was wrong.** Injected stages reproduce the
+ * and a paid `structure` call, and that was wrong.** Injected stages reproduce the
  * discarded-draft sequence for nothing; only the *article read back at the end*
  * would have wanted the real pipeline, and it is not what the fault is about.
  */
@@ -80,7 +80,7 @@ const forced = (name: StepName, status: JobStep["status"]): JobStep => ({
 });
 
 /**
- * The job the fault is about: the shelf's refresh button, dead at `hierarchy`.
+ * The job the fault is about: the shelf's refresh button, dead at `structure`.
  *
  * `{ slug, force: ["fetch"] }` is literally what src/web/ShelfEntry.tsx sends,
  * and `cascadeForce` turns it into a force flag on every step of the job — which
@@ -90,7 +90,7 @@ const REFRESH_THAT_DIED_AT_STRUCTURE: JobStep[] = [
   forced("fetch", "done"),
   forced("extract", "done"),
   forced("blocks", "done"),
-  forced("hierarchy", "error"),
+  forced("structure", "error"),
   forced("assets", "pending"),
 ];
 
@@ -100,7 +100,7 @@ describe("a retry after a failed forced refresh", () => {
   /**
    * **The fault itself, at the one function that decides it.**
    *
-   * Forcing `hierarchy` alone is the answer that reads as thrift and behaves as data
+   * Forcing `structure` alone is the answer that reads as thrift and behaves as data
    * loss: the three steps above it finished into a draft that no longer exists,
    * so "they are already done" is a statement about a revision the retry cannot
    * see. The retry has to acquire the article again.
@@ -110,7 +110,7 @@ describe("a retry after a failed forced refresh", () => {
       "fetch",
       "extract",
       "blocks",
-      "hierarchy",
+      "structure",
       "assets",
     ]);
     /* The half that matters most, said on its own so a partial fix cannot pass:
@@ -132,7 +132,7 @@ describe("a retry after a failed forced refresh", () => {
   it("makes the new job re-run every step the refresh had asked for", () => {
     const names = REFRESH_THAT_DIED_AT_STRUCTURE.map((s) => s.name);
     const forcedAgain = cascadeForce(names, new Set(forceForRetry(REFRESH_THAT_DIED_AT_STRUCTURE)));
-    expect([...forcedAgain]).toEqual(["fetch", "extract", "blocks", "hierarchy", "assets"]);
+    expect([...forcedAgain]).toEqual(["fetch", "extract", "blocks", "structure", "assets"]);
   });
 
   /* --------------------------------------------------------------- 3 -- */
@@ -151,7 +151,7 @@ describe("a retry after a failed forced refresh", () => {
         plain("fetch", "done"),
         plain("extract", "done"),
         plain("blocks", "done"),
-        plain("hierarchy", "error"),
+        plain("structure", "error"),
       ]),
     ).toEqual([]);
   });

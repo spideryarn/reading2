@@ -68,7 +68,7 @@ import { ModeSurface } from "../../ModeSurface.js";
  *
  * All three are deliberate. **Past tense** because by the time anybody is
  * looking at this band the article's text has already gone to the model
- * provider — ingest ran extraction, hierarchy and gists on it, and a PDF was
+ * provider — ingest ran extraction, structure and gists on it, and a PDF was
  * read by a model before it was anything else. A notice here saying *this will
  * send your manuscript to a third party* would be warning about something the
  * app has already done. The present-tense half of the same fact belongs at the

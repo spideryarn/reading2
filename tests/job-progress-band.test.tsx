@@ -203,7 +203,7 @@ it("says nothing about the driver when the driver is fine", () => {
 });
 
 /**
- * **The way out without the statistical claim.** `hierarchy` has a threshold of
+ * **The way out without the statistical claim.** `structure` has a threshold of
  * its own, argued from evidence, and no `usually` sentence — one successful
  * attempt is not a distribution. So it gets the warning and not the comparison.
  * src/job-state.ts § `slowSentence`.
@@ -213,8 +213,8 @@ it("does not call a run unusual when nothing measured what usual is", () => {
     job({
       steps: [
         {
-          name: "hierarchy",
-          label: "Building the hierarchy",
+          name: "structure",
+          label: "Building the structure",
           status: "running",
           startedAt: ago(20 * 60_000),
         },

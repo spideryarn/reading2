@@ -1,10 +1,10 @@
 /**
  * **Blind judging materials for the thinking-effort eval** (plan 261001p).
- * Free: it reads what run.ts (or the Hierarchy harness) wrote and spends
+ * Free: it reads what run.ts (or the structure-whole-document harness) wrote and spends
  * nothing.
  *
  *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode sketch
- *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode hierarchy --hierarchy-run evals/results/structure-whole-document/<run>
+ *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode structure --structure-run evals/results/structure-whole-document/<run>
  *
  * Per article, ONE lineup of every arm's output under shuffled labels (W, X,
  * Y, Z for four) — GPT Sol's review, F8: a lineup ranked with ties, not three
@@ -17,7 +17,7 @@
  *   generators were shown it (`articleWithIds` over the body evidence).
  * - `lineup-<slug>.md` — the candidates, each rendered readably: Sketch as the
  *   PNG's path plus its scene JSON; Ideas as their JSON with each occurrence's
- *   block text resolved beside its id; Illustrated as its brief; Hierarchy
+ *   block text resolved beside its id; Illustrated as its brief; Structure
  *   through blind.ts's `renderForJudging`.
  * - `keys/key-<slug>.json` — label → arm. **Never shown to a judge**, which is
  *   why it is in its own directory: point a judge at `judging/<mode>/*.md`.
@@ -27,7 +27,7 @@
  * (mode, article), so each article gets a fresh order and every order can be
  * reproduced. Provenance fields a judge could read an arm off (`generator`,
  * hashes, `version`, model/usage/timing fields) are stripped recursively from
- * what is shown. Hierarchy's sampled deep gists use the same recorded seed too.
+ * what is shown. Structure's sampled deep gists use the same recorded seed too.
  */
 import { randomInt } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -42,7 +42,7 @@ import { renderForJudging } from "../structure-whole-document/blind.js";
 import { DEFAULT_ARMS, MODES, seededRandom, seededShuffle } from "./arms.js";
 import { readModeRows } from "./run.js";
 
-const JUDGED_MODES = [...MODES, "hierarchy"] as const;
+const JUDGED_MODES = [...MODES, "structure"] as const;
 type JudgedMode = (typeof JUDGED_MODES)[number];
 
 /** The two repeats of toc/10 and toc/11, named in the shape tally.ts already understands. */
@@ -50,7 +50,7 @@ export const STRUCTURE_ARMS = ["base-a", "base-b", "toc11-a", "toc11-b"] as cons
 
 export const structureTreeFile = (arm: string, slug: string): string => {
   const match = /^(base|toc11)-([ab])$/.exec(arm);
-  if (!match) throw new Error(`unknown hierarchy judging arm ${arm}`);
+  if (!match) throw new Error(`unknown structure judging arm ${arm}`);
   const source = match[1] === "base" ? "toc10-frozen" : "incumbent";
   const repeat = match[2] === "a" ? 1 : 2;
   return `${source}.${slug}.r${repeat}.json`;
@@ -112,14 +112,14 @@ function parseArgs(argv: string[]): Options {
     };
     if (a === "--results") results = next();
     else if (a === "--mode") mode = next();
-    else if (a === "--hierarchy-run") structureRun = next();
+    else if (a === "--structure-run") structureRun = next();
     else if (a === "--arms") arms = next().split(",");
     else if (a === "--seed") seed = Number.parseInt(next(), 10);
     else throw new Error(`unknown argument ${a}`);
   }
   if (!results) throw new Error("--results <dir> is required: the directory run.ts wrote");
   if (!(JUDGED_MODES as readonly string[]).includes(mode)) throw new Error(`--mode must be one of ${JUDGED_MODES.join(", ")}`);
-  if (mode === "hierarchy" && !structureRun) throw new Error("--mode hierarchy needs --hierarchy-run <evals/results/structure-whole-document/run dir>");
+  if (mode === "structure" && !structureRun) throw new Error("--mode structure needs --structure-run <evals/results/structure-whole-document/run dir>");
   return { results, mode: mode as JudgedMode, structureRun, arms, seed };
 }
 
@@ -163,7 +163,7 @@ async function render(
       const brief = stripProvenance(await readJson(`${base}.brief.json`));
       return [head, "", "```json", JSON.stringify(brief, null, 2), "```"].join("\n");
     }
-    case "hierarchy": {
+    case "structure": {
       const file = path.join(opts.structureRun as string, "trees", structureTreeFile(arm, slug));
       if (!existsSync(file)) return missing;
       /* blind.ts's own heading, renamed to this lineup's. */
@@ -185,7 +185,7 @@ const ASK: Record<JudgedMode, string> = {
   sketch: "a picture of how the article is put together, for a reader who has not read it yet",
   ideas: "the ideas a reader needs in order to get this article, each tied to the passages that carry it",
   illustrated: "a brief for an illustrator: plates that paint the article's argument, each vignette tied to a real quote",
-  hierarchy: "a table of contents that carves the article into sections a first-time reader would navigate by",
+  structure: "a table of contents that carves the article into sections a first-time reader would navigate by",
 };
 
 async function main(opts: Options): Promise<void> {
@@ -200,9 +200,9 @@ async function main(opts: Options): Promise<void> {
   await writeFile(seedFile, `${JSON.stringify({ seed }, null, 2)}\n`, "utf-8");
 
   const arms: string[] =
-    opts.arms ?? (opts.mode === "hierarchy" ? [...STRUCTURE_ARMS] : [...DEFAULT_ARMS]);
+    opts.arms ?? (opts.mode === "structure" ? [...STRUCTURE_ARMS] : [...DEFAULT_ARMS]);
   const slugs =
-    opts.mode === "hierarchy"
+    opts.mode === "structure"
       ? [...new Set((await readJson<{ results: { slug: string }[] }>(path.join(opts.structureRun as string, "run.json"))).results.map((r) => r.slug))]
       : [...new Set((await readModeRows(opts.results, opts.mode)).map((r) => r.slug))];
   if (slugs.length === 0) throw new Error(`nothing to line up for ${opts.mode} in ${opts.results}`);

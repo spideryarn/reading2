@@ -98,9 +98,10 @@ The brief for step 3, and for anyone else updating the page:
 - The footer, on every page that has one ([website-text.md](website-text.md)).
 - The command bar's **Help** row (⌘K / Ctrl-K, then *help*).
 - The **Help** link in the dock, which opens the section for the mode you are in.
+- **Every band's (i)**, whose card ends in *More in Help →* to that mode's section, since
+  2026-10-02 — the first `Tooltip` card the pointer can enter
+  ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)).
 
-**Why not an (i) beside every mark.** Greg suggested more (i) icons linking into Help. A tooltip card
-cannot hold a link (cards are `pointer-events: none`, and making them interactive is
-[open-questions.md](open-questions.md) Q10), and the two obvious places for a new icon have no room:
-the spine is 12px wide and clips, and a band's corner already holds its (i). So v1 has one contextual
-link in the dock; an (i) whose card links on into Help waits on Q10.
+**Why not an (i) beside every mark.** Greg suggested more (i) icons linking into Help. The two
+obvious places for a new icon have no room: the spine is 12px wide and clips, and a band's corner
+already holds its (i). So the band's existing (i) carries the link instead of a second icon.

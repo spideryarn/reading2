@@ -832,7 +832,7 @@ describe("recoverPdfFigures", () => {
        `Assets` and a run that recorded everything correctly and handed it to
        nobody would look exactly like this feature working. */
     const store = memoryArtefacts();
-    store.plant("a", "hierarchy", "blocks", { blocks });
+    store.plant("a", "structure", "blocks", { blocks });
     const out = await STEPS.assets.run(CTX, store, nullCheckpointStore());
     const assets = out.parts?.assets as Assets;
     expect(assets.entries).toEqual([]);

@@ -1,5 +1,5 @@
 {
-  "id": "bd6a947f-c22c-4957-9749-ae13f61a3865",
+  "id": "3398dbdb-a5a3-4727-9e81-30d7985c7bb6",
   "prevId": "db464ade-83ee-4265-a33a-53657865df5c",
   "version": "7",
   "dialect": "postgresql",
@@ -3387,6 +3387,59 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.glossary_hidden_entries": {
+      "name": "glossary_hidden_entries",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_id": {
+          "name": "entry_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "glossary_hidden_entries_article_id_articles_id_fk": {
+          "name": "glossary_hidden_entries_article_id_articles_id_fk",
+          "tableFrom": "glossary_hidden_entries",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "glossary_hidden_entries_article_id_entry_id_pk": {
+          "name": "glossary_hidden_entries_article_id_entry_id_pk",
+          "columns": [
+            "article_id",
+            "entry_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "glossary_hidden_entries_entry_id_format": {
+          "name": "glossary_hidden_entries_entry_id_format",
+          "value": "\"spideryarn\".\"glossary_hidden_entries\".\"entry_id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "spideryarn.glossary_lookups": {
       "name": "glossary_lookups",
       "schema": "spideryarn",
@@ -5585,13 +5638,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'meaning'"
         }
       },
       "indexes": {},
@@ -5626,10 +5672,6 @@
         "search_runs_status": {
           "name": "search_runs_status",
           "value": "\"spideryarn\".\"search_runs\".\"status\" in ('pending','done','error')"
-        },
-        "search_runs_kind": {
-          "name": "search_runs_kind",
-          "value": "\"spideryarn\".\"search_runs\".\"kind\" in ('quick','meaning')"
         },
         "search_runs_id_format": {
           "name": "search_runs_id_format",

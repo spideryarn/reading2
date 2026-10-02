@@ -1903,7 +1903,7 @@ export function DiagramPanel({
       <div className="diag-scroll" ref={attachScroller}>
         {root === null ? (
           <p className="diag-quiet">
-            This article has no usable tree, so there is nothing to draw. Run <code>npm run hierarchy</code>{" "}
+            This article has no usable tree, so there is nothing to draw. Run <code>npm run structure</code>{" "}
             for it and the picture appears.
           </p>
         ) : box === null || box.w === 0 ? (

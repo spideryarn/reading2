@@ -6,8 +6,8 @@
  * before mine, in the same job*. Nothing kept it. The option took any
  * `StepName`, and the server's `orderSteps` (src/jobs.ts) sorts whatever
  * arrives by `STEP_ORDER` and by nothing else, so a caller naming a **later**
- * step got it back after their own: `precededBy: ["assets"]` on `hierarchy`
- * comes out `["hierarchy", "assets"]`, a "preceding" step that runs afterwards,
+ * step got it back after their own: `precededBy: ["assets"]` on `structure`
+ * comes out `["structure", "assets"]`, a "preceding" step that runs afterwards,
  * with nothing anywhere saying so. GPT Sol found it reviewing the one-press
  * draw-then-paint chain, 2026-09-03.
  *
@@ -61,8 +61,8 @@ describe("precededBy", () => {
   it("orders by STEP_ORDER, not by where the caller put the name", () => {
     expect(orderSteps(["illustrated", "sketch"])).toEqual(["sketch", "illustrated"]);
     /* The reproduction, exactly: `assets` asked for as a *preceding* step of
-       `hierarchy` and handed back after it. */
-    expect(orderSteps(["hierarchy", "assets"])).toEqual(["hierarchy", "assets"]);
+       `structure` and handed back after it. */
+    expect(orderSteps(["structure", "assets"])).toEqual(["structure", "assets"]);
   });
 
   it("takes a step STEP_ORDER genuinely runs first", () => {
@@ -75,8 +75,8 @@ describe("precededBy", () => {
   });
 
   it("refuses a step STEP_ORDER runs at or after the caller's own", () => {
-    // @ts-expect-error `assets` comes AFTER `hierarchy`, so `orderSteps` would hand it back second and it would precede nothing.
-    const after: Run<"hierarchy"> = { precededBy: ["assets"] };
+    // @ts-expect-error `assets` comes AFTER `structure`, so `orderSteps` would hand it back second and it would precede nothing.
+    const after: Run<"structure"> = { precededBy: ["assets"] };
     expect(after.precededBy).toEqual(["assets"]);
 
     // @ts-expect-error a step does not precede itself, and naming it here would only duplicate what `start` already sends.

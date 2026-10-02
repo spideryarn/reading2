@@ -874,6 +874,13 @@ export async function exportArticle(
     await put("reading_time", "reading-time.json", { seconds });
   }
 
+  /* The glossary entries the owner hid, by id — plan 261002c § 2. */
+  if (rows.glossaryHiddenEntries.length) {
+    await put("glossary_hidden_entries", "glossary-hidden.json", {
+      hidden: rows.glossaryHiddenEntries.map((row) => row.entryId),
+    });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }

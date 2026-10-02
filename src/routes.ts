@@ -144,6 +144,7 @@ import {
   searchStore,
   shelfStore,
   readingTimeStore,
+  glossaryHiddenStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -7453,6 +7454,8 @@ const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
 /* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
+/* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
+const GLOSSARY_HIDDEN_PATTERN = /^\/api\/glossary\/([\w.%-]+)\/hidden\/([\w.%-]+)$/;
 /* No slug, and that is the whole shape of it: this one is about the reader
    rather than about an article. */
 const READER_PATH = "/api/reader";
@@ -8814,6 +8817,37 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const slug = slugPart(captures, 1);
       const batch = readingTimeBatch(await readBody(req, MAX_READING_TIME_BODY_BYTES));
       await readingTimeStore.add(slug, batch);
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
+  /* **Hide a glossary entry, for the owner, on this article — and show it
+     again.** docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md
+     § 2. Owner-only through `articleIdForOwned` in the store, as reading time
+     is; both idempotent, both 204. PUT refuses an id the current glossary does
+     not have (a 404 with a sentence); DELETE does not check, so an orphan row
+     can still go. Never spends. The read is `GET /api/glossary/:slug`, which
+     attaches `hidden: true`. No collision with `/:id/lookup` (POST, one more
+     segment) or `/ask` (one segment). */
+  {
+    kind: "pattern",
+    method: "PUT",
+    pattern: GLOSSARY_HIDDEN_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await glossaryHiddenStore.hide(slugPart(captures, 1), slugPart(captures, 2));
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: GLOSSARY_HIDDEN_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      await glossaryHiddenStore.unhide(slugPart(captures, 1), slugPart(captures, 2));
       res.statusCode = 204;
       res.end();
     },

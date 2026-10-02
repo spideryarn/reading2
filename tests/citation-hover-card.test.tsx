@@ -197,6 +197,7 @@ function Harness({ works, entries, owner }: { works: CitedWork[]; entries: Gloss
         lookUpLinks={false}
         canAddToShelf={false}
         showInSpideryarn={owner}
+        termActions={null}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id) => jumped.push(id)}
         onFollowNote={() => {}}

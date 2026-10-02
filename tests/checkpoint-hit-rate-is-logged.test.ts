@@ -254,8 +254,8 @@ describe("the label batch checkpoints", () => {
       });
     });
 
-    expect(written).toContain("hierarchy-labels");
-    const said = lines(written, "hierarchy-labels", '"found":0');
+    expect(written).toContain("structure-labels");
+    const said = lines(written, "structure-labels", '"found":0');
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/"asked":[1-9]/);
   });
@@ -361,8 +361,8 @@ describe("the scoped expansion checkpoints", () => {
       });
     });
 
-    expect(written).toContain("hierarchy-deepen");
-    const said = lines(written, "hierarchy-deepen", '"found":0');
+    expect(written).toContain("structure-deepen");
+    const said = lines(written, "structure-deepen", '"found":0');
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/"asked":[1-9]/);
     expect(said[0]).toMatch(/"usable":0/);
@@ -387,8 +387,8 @@ describe("the scoped expansion checkpoints", () => {
     await run();
 
     const written = await logLinesWhile(run);
-    expect(written).toContain("hierarchy-deepen");
-    const said = lines(written, "hierarchy-deepen", '"found":');
+    expect(written).toContain("structure-deepen");
+    const said = lines(written, "structure-deepen", '"found":');
     expect(said).toHaveLength(1);
     /* All three track something, which is what stops the pair of tests passing
        on two constants. */

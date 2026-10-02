@@ -67,7 +67,7 @@ export type RepairOutcome = "accepted" | "still-invalid";
  *
  * Named for what it actually counts, which is not the same as "model answers
  * repaired" and must not be read as it. One model answer can be parsed more than
- * once — a stored hierarchy expansion is parsed again when a run resumes, and a
+ * once — a stored structure-step expansion is parsed again when a run resumes, and a
  * refused expansion is parsed twice by design — so this over-counts answers; and
  * a repair that removed commas from an answer with another fault in it is
  * counted here but is not an accommodation. Counting answers would mean

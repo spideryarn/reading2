@@ -190,11 +190,11 @@ export function blocksFromDetail(detail: string | undefined): number | null {
  * Every step that buys a model call over the whole article.
  *
  * **`labels` is not on it and must not be**, because there is no `labels` step:
- * the nav labels fan out inside `hierarchy` (src/pipeline.ts § STEP_ORDER), so
- * their rows carry `stepName: "hierarchy"`.
+ * the nav labels fan out inside `structure` (src/pipeline.ts § STEP_ORDER), so
+ * their rows carry `stepName: "structure"`.
  */
 const PAYING_STEPS: readonly StepName[] = [
-  "hierarchy",
+  "structure",
   "arc",
   "tweets",
   "glossary",
@@ -214,7 +214,7 @@ const PAYING_STEPS: readonly StepName[] = [
  * fixture rather than one list.
  *
  * **Intersected with the steps the job was actually asked for**, or a run
- * deliberately stopping short of `hierarchy` — a free smoke pass, or a later
+ * deliberately stopping short of `structure` — a free smoke pass, or a later
  * per-mode run — would report a fatal no-spend for a step that never ran.
  */
 export function mustPayFor(fixture: CostFixture | null, steps: readonly StepName[]): string[] {
@@ -227,9 +227,9 @@ export function mustPayFor(fixture: CostFixture | null, steps: readonly StepName
  * **Which `AiJob`s must appear in the ledger**, which is a different question
  * from which steps must pay and catches something the step check cannot.
  *
- * `hierarchy` is one step and *two* jobs — the structure call and the label
- * fan-out — and both carry `stepName: "hierarchy"`. So a draw where every label
- * batch was skipped or lost still shows a priced `hierarchy` step and reports a
+ * `structure` is one step and *two* jobs — the whole-document call and the label
+ * fan-out — and both carry `stepName: "structure"`. So a draw where every label
+ * batch was skipped or lost still shows a priced `structure` step and reports a
  * plausible number for an article whose labels were never bought. Requiring
  * `job: "labels"` is the only check that sees it. GPT Sol, 2026-09-02.
  *
@@ -253,8 +253,8 @@ export function requiredAiJobsFor(
       if (fixture?.kind === "pdf") jobs.push("pdf");
       continue;
     }
-    if (step === "hierarchy") {
-      jobs.push("hierarchy", "labels");
+    if (step === "structure") {
+      jobs.push("structure", "labels");
       continue;
     }
     if (PAYING_STEPS.includes(step)) jobs.push(step);
@@ -267,7 +267,7 @@ export function requiredAiJobsFor(
  * names differ.
  *
  * Only two do, and both are the same trick: the nav labels fan out inside
- * `hierarchy` (there is no `labels` step), and PDF transcription is `job: "pdf"`
+ * `structure` (there is no `labels` step), and PDF transcription is `job: "pdf"`
  * inside `extract`. Every other paying step buys an `AiJob` of its own name, so
  * the map holds the exceptions and the lookup falls through to the name itself.
  *
@@ -277,7 +277,7 @@ export function requiredAiJobsFor(
  * `ColdExpectation.stepStatuses` in report.ts.
  */
 export const AI_JOB_STEP: Readonly<Record<string, string>> = {
-  labels: "hierarchy",
+  labels: "structure",
   pdf: "extract",
 };
 
@@ -288,7 +288,7 @@ export const AI_JOB_STEP: Readonly<Record<string, string>> = {
  * A fatal finding means the number this draw produced is not the number it
  * claims to be, and the next draw would spend money measuring the same wrong
  * thing — so `oneDraw` throws on a non-empty answer here. What must *not* reach
- * it is an absence the job's own status explains: a draw whose `hierarchy`
+ * it is an absence the job's own status explains: a draw whose `structure`
  * failed before its label fan-out is a paid failure to be counted, and on
  * 2026-09-03 it stopped the sweep that existed to count it
  * (evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html).
@@ -360,11 +360,11 @@ export function assertDistinctEvalOwner(evalOwner: string, environmentOwner: str
  * without anybody choosing it, which is why tests/cost-eval.test.ts writes the
  * eight out longhand rather than deriving them from here.
  */
-const ON_DEMAND_MODES: readonly StepName[] = PAYING_STEPS.filter((s) => s !== "hierarchy");
+const ON_DEMAND_MODES: readonly StepName[] = PAYING_STEPS.filter((s) => s !== "structure");
 export const ALL_MODES = ON_DEMAND_MODES;
 
 /**
- * `--steps fetch,extract,blocks,hierarchy` or `--modes arc,ideas` — a comma-separated
+ * `--steps fetch,extract,blocks,structure` or `--modes arc,ideas` — a comma-separated
  * list, checked against `STEP_ORDER` so a typo is a message rather than a job
  * that quietly runs the default five and a bill nobody expected.
  *
@@ -414,7 +414,7 @@ export function assertSweepArgs(args: {
         "would find every mode already generated: a mode with a `stepIsDone` stamp skips " +
         "(src/pipeline.ts), the run records $0 for it, and the fatal no-spend finding stops " +
         "the sweep — after it has paid for a second ingest. Run it again with a fresh run tag " +
-        "instead, or use --repeat on an ingest-only step list to measure hierarchy variation.",
+        "instead, or use --repeat on an ingest-only step list to measure the structure step's variation.",
     );
   }
   if (args.allModes && args.against !== null) {
@@ -476,7 +476,7 @@ export function assertAdoptable(slug: string, articleId: string | null): void {
  * minutes apart, in two jobs that share nothing.
  *
  * The ingest steps are unaffected — `sharesArticleCache` returns false for
- * anything that is not an `ArticleStage`, and `hierarchy` is not one, so an
+ * anything that is not an `ArticleStage`, and `structure` is not one, so an
  * ordinary ingest marks nothing and writes no cache entry for a later draw of
  * the same fixture to read. Checked in the code rather than assumed.
  *

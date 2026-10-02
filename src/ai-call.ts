@@ -1092,7 +1092,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
  */
 export type ChatJob = Exclude<
   AiJob,
-  | "hierarchy"
+  | "structure"
   | "labels"
   | "arc"
   | "tweets"

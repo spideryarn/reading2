@@ -163,6 +163,38 @@ describe("termPattern", () => {
     expect(termSpans("written in C++ mostly", p)).toHaveLength(1);
   });
 
+  it("treats a space and a hyphen between two words as the same thing", () => {
+    // spya-n04d5p: the entry was named "Delayed win-shift task" and the paper
+    // mostly writes "delayed-win-shift task", so it found one block of six.
+    // These four sentences are the production article's own shapes.
+    const p = termPattern(["Delayed win-shift task"])!;
+    expect(termSpans("an 8-arm maze delayed-win-shift task^{41,42}", p)).toHaveLength(1);
+    expect(termSpans("(a) A delayed-win-shift task was used.", p)).toHaveLength(1);
+    expect(termSpans("study phase of a delayed win-shift task for memory", p)).toHaveLength(1);
+    expect(termSpans("a delayed win shift task", p)).toHaveLength(1);
+    // U+2010 and U+2011, the typographic hyphens a PDF extraction can carry.
+    expect(termSpans("a delayed‐win‑shift task", p)).toHaveLength(1);
+    // The match covers the hyphenated words, not just a part of them.
+    const [span] = termSpans("the delayed-win-shift task.", p);
+    expect(span).toEqual({ start: 4, end: 26 });
+  });
+
+  it("sorts forms longest-first after their separators are made one", () => {
+    // Raw length would put the first ahead of the second, and then the
+    // two-word branch would win against the three-word phrase.
+    const p = termPattern(["alpha----------beta", "alpha beta gamma"])!;
+    const [span] = termSpans("an alpha beta gamma here", p);
+    expect(span).toEqual({ start: 3, end: 19 });
+  });
+
+  it("does not let a hyphen stand in for nothing, or an en dash for a space", () => {
+    const p = termPattern(["win shift"])!;
+    expect(termSpans("a winshift", p)).toHaveLength(0);
+    expect(termSpans("a win–shift", p)).toHaveLength(0);
+    // A hyphen at the edge of a form is the form's own text, not a separator.
+    expect(termSpans("a win shift-", termPattern(["win shift-"])!)).toHaveLength(1);
+  });
+
   it("is null when there is nothing to match", () => {
     expect(termPattern([])).toBeNull();
     expect(termPattern(["", "   "])).toBeNull();

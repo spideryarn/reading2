@@ -538,7 +538,7 @@ describe("canonicaliseNotes, rule by rule", () => {
        and the thing that says so is that the back-link aims at a *block*: a real
        back-link aims at the marker, or at the `<sup>` around it. */
     const doc = parse(
-      `<div id="hierarchy"><p>Chapter <a href="#c1">1</a></p></div>` +
+      `<div id="structure"><p>Chapter <a href="#c1">1</a></p></div>` +
         `<div id="c1"><p>Chapter one, with enough words to be prose. <a href="#hierarchy">Contents</a></p></div>`,
     );
     expect(canonicaliseNotes(doc).notes).toBe(0);

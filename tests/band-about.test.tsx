@@ -32,6 +32,8 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const draw = (el: ReactElement) => act(() => root.render(el));
@@ -67,6 +69,88 @@ describe("ModeSurface's about", () => {
     expect(card).toContain(`${MODE_CATALOG.tweets.description}.`);
     expect(card).toContain(MODE_CATALOG.tweets.how);
     expect(card.indexOf(MODE_CATALOG.tweets.how)).toBeLessThan(card.indexOf("12 posts."));
+  });
+
+  /* Plan 261002e: the one card in the corner with something to press, and so
+     the one that lets the pointer in. */
+  it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
+    draw(
+      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+        body
+      </ModeSurface>,
+    );
+    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
+    const card = document.querySelector(".band-about-card")!;
+    const link = card.querySelector("a")!;
+    expect(link.textContent).toBe("More in Help →");
+    expect(link.getAttribute("href")).toBe("/help#mode-tweets");
+    expect(card.textContent?.endsWith("More in Help →")).toBe(true);
+    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
+  });
+
+  it("has no link, and stays a card the pointer cannot enter, for a band with no mode", async () => {
+    draw(<ModeSurface label="Tweets" about="What this is.">body</ModeSurface>);
+    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
+    expect(document.querySelector(".band-about-card a")).toBeNull();
+    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(false);
+  });
+
+  it("toggles closed on a mouse click while its interactive card is hover-open", async () => {
+    vi.useFakeTimers();
+    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".band-about-card a")).not.toBeNull();
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      button.focus();
+      button.click();
+    });
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".band-about-card")).toBeNull();
+  });
+
+  it("keeps a touch-open card available for the following tap on its Help link", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Chrome");
+    vi.stubGlobal("scrollTo", vi.fn());
+    const navigate = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    // jsdom has no pointer modality or :focus-visible implementation. A touch
+    // focuses a button without making it focus-visible in the browser.
+    const matches = button.matches.bind(button);
+    vi.spyOn(button, "matches").mockImplementation((selector) => selector === ":focus-visible" ? false : matches(selector));
+    const touch = (type: string) => {
+      const event = new MouseEvent(type, { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: "touch" });
+      return event;
+    };
+    await act(async () => {
+      button.dispatchEvent(touch("pointerenter"));
+      button.dispatchEvent(touch("pointerdown"));
+      button.dispatchEvent(new MouseEvent("mouseenter"));
+      button.focus();
+      button.click();
+    });
+    await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    const link = document.querySelector(".band-about-card a") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: link }));
+      button.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: link }));
+      link.dispatchEvent(touch("pointerdown"));
+      link.focus();
+    });
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(link.isConnected).toBe(true);
+    await act(async () => link.click());
+    expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-tweets");
   });
 
   it("has an (i) from the mode alone, when there is nothing to add yet", () => {

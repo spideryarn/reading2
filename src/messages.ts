@@ -424,7 +424,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      reader that trying again was worth a go.
 
      `jb-publish-refused` is `bug` because the reader has no move: the remedy —
-     re-running the `hierarchy` step — belongs to whoever runs the app, and a
+     re-running the `structure` step — belongs to whoever runs the app, and a
      *retry* is not it, since a retry skips every step that finished and reads
      the same artefacts back. `jb-publish-moved` is `retry` because for that one
      the old sentence was true all along: another publication landed first, and
@@ -888,7 +888,7 @@ export const ANSWER_OVERFLOWED_FIXED_ASK: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, hierarchy, glossary, tweets, quotes — each
+ * Six pipeline stages — arc, labels, structure, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress
@@ -1054,7 +1054,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  *
  * `PublishRefused` (src/store/pg-revisions.ts) is the last gate before a draft
  * becomes the article: it refuses a draft with no blocks, no tree, a tree
- * `checkTree` rejects, a `hierarchy` run that did not finish or ran against
+ * `checkTree` rejects, a `structure` run that did not finish or ran against
  * different blocks, or a revision that is not this article's to publish. Until
  * 2026-09-07 it carried a list of free-text reasons and nothing else, so
  * `failureKindOf` (src/job-failure.ts) found nothing to read and fell through
@@ -1072,7 +1072,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  *
  * **`bug`, not `blocked`.** `blocked` is the one non-retryable kind that admits
  * a way out, and there is none here that a reader can take: the remedy is
- * re-running the `hierarchy` step, which is an instruction for whoever runs the
+ * re-running the `structure` step, which is an instruction for whoever runs the
  * app. And note that a **retry** is not that re-run — Retry skips every step
  * that finished, so it reads the identical tree back and stops in the same
  * place (src/job-failure.ts § `stageFailure`).
@@ -4658,7 +4658,7 @@ export const DEBATE_EXTRACTS_ONLY =
    mode carried a notice saying that using it would send the manuscript to a
    third-party service. That was false, and falsely reassuring: by the time
    anybody reaches Referee mode the text has *already* gone — `DEFAULT_INGEST_STEPS`
-   in src/pipeline.ts runs extraction, hierarchy and gists at ingest, and a PDF
+   in src/pipeline.ts runs extraction, structure and gists at ingest, and a PDF
    is read by a model before it is anything else. GPT Sol's review of the plan
    found it and called it the most serious thing in the draft. So the sentence
    at the *add* surface is present tense and comes first in the reader's life,

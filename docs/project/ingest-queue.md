@@ -144,7 +144,7 @@ The middle step carries no bearer token and no API key. The grant is in the URL,
 path *we* chose, and it lasts two hours. `MAX_BODY_BYTES` in
 [`src/routes.ts`](../../src/routes.ts) is untouched — that is the point, no route grew a
 large-body path. Measured end to end on 2026-08-27 with the 145 KB fixture: verified, extracted,
-split, given its hierarchy and its arc in 148 seconds, and `GET /api/source/:slug` handed back all 144,779 bytes.
+split, given its tree and its arc in 148 seconds, and `GET /api/source/:slug` handed back all 144,779 bytes.
 
 **Where each piece lives.** [`src/web/upload.ts`](../../src/web/upload.ts) hashes and sends;
 [`src/store/blobs.ts`](../../src/store/blobs.ts) is the seam, with the Supabase and filesystem
@@ -618,7 +618,7 @@ box that is on by default. When the import finishes, the page opens the article 
 per main mode: Tweets, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
 front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
 the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
-paper before `hierarchy`):
+paper before `structure`):
 [260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
 [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
 
@@ -813,7 +813,7 @@ front of the list, kept short because what it is illustrating is the shape rathe
   fetch     Fetching the page              → raw
   extract   Extracting the article         → extractedHtml, meta
   blocks    Splitting into blocks          → blocks, stampedHtml   (and the sanitiser)
-  hierarchy Building the hierarchy         → tree, labels (EMPTY — see `labels`), blocks
+  structure Building the structure         → tree, labels (EMPTY — see `labels`), blocks
   labels    Labelling the paragraphs       → labels, tree          (never on a plain add)
   assets    Fetching the images            → assets
   arc       Writing the arc                → arc
@@ -832,8 +832,8 @@ from source, and *"potentially it'll be used in other ways too"* (2026-08-25). A
 same machinery given a different sub-list, and none of them needed a special case.
 
 - **Add** — every step in `DEFAULT_INGEST_STEPS`, which is `fetch`, `extract`, `blocks`,
-  `hierarchy`, `assets`. **Not a prefix of `STEP_ORDER` since 2026-09-06**: `labels` sits between
-  `hierarchy` and `assets` in the order and is deliberately skipped here, so pasting a URL does not
+  `structure`, `assets`. **Not a prefix of `STEP_ORDER` since 2026-09-06**: `labels` sits between
+  `structure` and `assets` in the order and is deliberately skipped here, so pasting a URL does not
   wait on it ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
@@ -879,7 +879,7 @@ its position was the only signal it had.
 **It has one as of 2026-08-29** ([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`, over the
 blocks, the tree and the metadata the prompt carries), which by that rule makes it a candidate for
 the set. It is worth knowing *why* it needed one: position was never quite the signal it looked
-like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["hierarchy"] }` never
+like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["structure"] }` never
 reached `arc` at all — the tree was re-cut, `arc.json` stayed, and the reading view silently dropped
 every arc entry whose range no longer matched a node, because the join is by exact block range.
 docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
@@ -925,7 +925,7 @@ without anyone having to remember.
 This was wrong for an afternoon, and the way it was wrong is the reason it is now a rule rather
 than a convention. "Refresh from source" was written as `force: ["fetch", "extract"]` — force the
 two stages that read the outside world, leave the rest alone. But the rest are not independent of
-them: `blocks`, `hierarchy` and `arc` all find their artefacts still on disk from last time, skip
+them: `blocks`, `structure` and `arc` all find their artefacts still on disk from last time, skip
 themselves in milliseconds, and report three green ticks. What you get is **a freshly fetched
 article under last week's tree and last week's arc** — every gist describing paragraphs that have
 moved, and nothing anywhere saying so.
@@ -973,7 +973,7 @@ whose every plate failed returns successfully — and is off the list for that.
 replaced sat unbuilt for three days because nothing on that page could honestly say a stage was out
 of date. A button that offers a re-run and makes no claim about whether you need one needs no such
 answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md) for
-what saying it would still take, and for why `hierarchy` — the workaround the 2026-09-05 postmortem
+what saying it would still take, and for why `structure` — the workaround the 2026-09-05 postmortem
 names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
 free `labels` successor that would restore them is not built.
 
@@ -1037,19 +1037,19 @@ queue rather than about the button
   409 this queue has, and it is there because a first reset's successors, queued at its
   publication, would otherwise run after a second reset and undo it.
 - **It spends no billing slot**, and neither do its successors; it can spend model calls
-  (a PDF's front-matter pass; the hierarchy and labels passes, which were measured paying in
+  (a PDF's front-matter pass; the structure and labels passes, which were measured paying in
   full — $0.52 and four minutes — on a local fixture; and each regenerated mode).
 
 ### A step is done when *all* its files are there
 
-`extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels manifest
+`extract` makes the HTML **and** the metadata. `structure` makes the tree, the labels manifest
 **and** its copy of the blocks; `labels` makes the manifest again, filled in, and the tree again with
 the labels merged into it. Each step declares a `produces` list rather than a single artefact, and
 counts as done only when every one of them is readable — because a crash between two writes would
 otherwise leave a step reporting itself finished with half its output, and the stage after it
 consuming the missing half.
 
-**Two steps writing one column is fine and is not new**: `blocks` and `hierarchy` have both called
+**Two steps writing one column is fine and is not new**: `blocks` and `structure` have both called
 the block rows theirs since the Postgres move. What keeps their doneness apart is that `hasArtefacts`
 asks the *asking step's own* `revision_step_runs` row before it looks at an artefact, so one step's
 write never makes another step done ([`tests/shared-site-run-row-gate.test.ts`](../../tests/shared-site-run-row-gate.test.ts)).
@@ -1063,10 +1063,10 @@ filesystem store.)
 the tree was built from. (Until 2026-09-05 this was literally two files — stage 3's
 `output/<slug>.blocks.json`, stage 4's copy at `data/<slug>/blocks.json` — the reasoning is unchanged
 under Postgres, only the artefact is now a row rather than a path.) Each step's
-`done()` checks *its own* artefact — the first write for `blocks`, the second for `hierarchy`. Getting that
-backwards means a finished `blocks` step reports itself unfinished until `hierarchy` has also run, so
+`done()` checks *its own* artefact — the first write for `blocks`, the second for `structure`. Getting that
+backwards means a finished `blocks` step reports itself unfinished until `structure` has also run, so
 every retry redoes stage 3 and a `{ steps: ["blocks"] }` job can never skip itself. Which also means:
-run `blocks` on its own and the two copies disagree until you run `hierarchy` as well. That is the
+run `blocks` on its own and the two copies disagree until you run `structure` as well. That is the
 pipeline's existing shape, not something the queue introduced, and it is why a re-run of a middle
 stage should generally include the ones after it.
 
@@ -1290,7 +1290,7 @@ other makes or reads.** A sharing job is one whose steps are all *sharing steps*
 no `reset` and reserves no name. Each step's column and the other sharing steps it reads (`illustrated`
 reads `sketch`; `skim` reads `quotes` and `ideas`) are one exhaustive policy in
 [`src/sharing-steps.ts`](../../src/sharing-steps.ts), and `mayOverlap` there is the rule. Everything
-else — ingest, re-extraction, `hierarchy`, `labels`, `assets`, a reset — runs alone exactly as
+else — ingest, re-extraction, `structure`, `labels`, `assets`, a reset — runs alone exactly as
 before, and FIFO holds for every pair that may not overlap, so a mode job never jumps an older
 re-extraction.
 
@@ -1422,13 +1422,13 @@ structured `endingKind` field would be the better long-term answer and was consi
 rejected for now because it could only classify jobs settled after it landed, and every interrupted
 job a reader can see today carries the sentence and no field.
 
-**The "taking longer than usual" threshold is per step, not global.** Six minutes into `hierarchy` is
+**The "taking longer than usual" threshold is per step, not global.** Six minutes into `structure` is
 an ordinary run; six minutes into `fetch` is a fetch that is never coming back. But a **threshold**
 and a **promise** are different claims, and only the weaker one is affordable on this much data.
 
 - A threshold says *past here, stop assuming this is normal*. Every step has one.
 - *"This step usually takes N"* is a promise about finishing, and **one step has earned one**:
-  `sketch`. `hierarchy` gets a threshold and no sentence.
+  `sketch`. `structure` gets a threshold and no sentence.
 
 `sketch`'s evidence is thirteen calls, all `ok`, 121–199s, median 144 — and the reason a *call*
 duration may stand in for a *step* duration here is that a `sketch` step is one model call, and on
@@ -1437,10 +1437,10 @@ the single occasion the two clocks can be compared they agree exactly: the one r
 reader's, which is a caveat about *what was drawn* and not about the clock — and is why the sentence
 is a range.
 
-**`hierarchy` keeps its ten-minute threshold rather than falling back to the default**, and the
+**`structure` keeps its ten-minute threshold rather than falling back to the default**, and the
 reason is the sort that only shows up if you check: the default is 180s, which is **below the only
-successful hierarchy run there has ever been** (187s). Letting it default would put a warning under
-the one shape of run we have evidence for, every time. Two more grounds: hierarchy steps have been
+successful structure run there has ever been** (187s). Letting it default would put a warning under
+the one shape of run we have evidence for, every time. Two more grounds: structure steps have been
 seen doing genuine work for 498s — the two longest failures ran fifteen and seventeen successful
 model calls before hitting the token budget — and the claimant self-aborts at 740s, so ten minutes
 leaves ~140s in which the sentence is on screen before the lease settles the job.
@@ -1469,7 +1469,7 @@ a guess, so past it the reader is told the step *has been running for a while* �
 longer than usual, which would be a statistical claim from no statistics.
 
 **The card runs its own clock.** `ctx.report` writes `step.detail` in memory and never persists it,
-so a job six minutes into `hierarchy` returns a byte-identical record on every poll and `sameJobs`
+so a job six minutes into `structure` returns a byte-identical record on every poll and `sameJobs`
 correctly suppresses the re-render — the elapsed time would freeze at whatever it read when the step
 began. Both surfaces use `useNow(1000)` while busy and `null` — off — otherwise. It
 said *a day* and called it a timer that never fires; it fired, once a day, per card.
@@ -1522,7 +1522,7 @@ running out inside slug allocation, which is a fault rather than a queue state.
 
 Since 2026-09-07 a **publication can queue a job**. When a revision reaches the shelf saying
 `nav_label_status = 'pending'` — a freshly ingested article, whose paragraph labels are no longer
-part of `hierarchy` ([structure-step.md](structure-step.md#two-passes)) — `publishRevisionIn`
+part of `structure` ([structure-step.md](structure-step.md#two-passes)) — `publishRevisionIn`
 ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) queues a `{ steps: ["labels"] }` job
 for the article's owner **on the publication's own transaction**, through `enqueueSuccessorIn`
 ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)).
@@ -1739,7 +1739,7 @@ implementation was to route the overrun through `settleExpired`'s requeue, which
 budget — but that statement **nulled the pointer**, and on a first ingest there is no published
 revision for the next draft to copy from. So `blocks` re-runs as a genuine first ingest and mints
 **every block id afresh** ([`src/ids.ts`](../../src/ids.ts); GPT Sol reproduced `same: false` over
-identical HTML). Everything keyed on those ids goes with them — the hierarchy structure checkpoint
+identical HTML). Everything keyed on those ids goes with them — the structure step's whole-document checkpoint
 above all — so every window would re-buy the most expensive call in the pipeline.
 
 The pause was therefore built as its own statement. **The lapsed half was then fixed to match**, on
@@ -1832,8 +1832,8 @@ built. What makes an expired lease mean something in the meantime is that the cl
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
 
-So in practice: the server dies during `hierarchy`, you press Retry, and `fetch`, `extract` and `blocks`
-are skipped in milliseconds while `hierarchy` starts again. That is "picks up from where it started" for
+So in practice: the server dies during `structure`, you press Retry, and `fetch`, `extract` and `blocks`
+are skipped in milliseconds while `structure` starts again. That is "picks up from where it started" for
 the case that matters — the two model calls, which are the expensive part.
 
 **The check used to be existence, and it is not any more.** A step declares `produces` — the
@@ -1866,13 +1866,13 @@ than a shared path — see [block-ids.md § The freshness guard](block-ids.md#th
    specifies that `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. Three
    steps implement it — `tweets` and `summary` via the optional `isDone` above, `glossary` via the
    newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
-   `tree.json` and `arc.json` carry no hash at all, so `hierarchy` and `arc` are still presence-only, and
+   `tree.json` and `arc.json` carry no hash at all, so `structure` and `arc` are still presence-only, and
    `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
    one, and since 2026-09-06 something **does** compare it: the `labels` step declares a `stamp()` of
    the blocks hash, its prompt version and its model, and `stepIsDone` checks it. What keeps that
    step honest across a *re-cut tree* is not the stamp but the receipt deletion in `writeArtefacts`
    ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
-2. **Atomic artefact writes across a step's whole set.** `hierarchy` and `labels` write temp-then-rename,
+2. **Atomic artefact writes across a step's whole set.** `structure` and `labels` write temp-then-rename,
    and the store's `write` does too; the other stages still write in place, and none of it makes the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
 
@@ -1979,7 +1979,7 @@ identical artefact again. That is what separates the two lists:
 | a PDF that will not open — locked with a password, or damaged past parsing | |
 | a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
 | an answer truncated at `max_tokens` — *see below* | |
-| a publication refused over the draft's own blocks, tree or `hierarchy` run — `[jb-publish-refused]` | a publication refused because the article moved on underneath the draft — `[jb-publish-moved]` |
+| a publication refused over the draft's own blocks, tree or `structure` run — `[jb-publish-refused]` | a publication refused because the article moved on underneath the draft — `[jb-publish-moved]` |
 | a step that needs a model with no API key configured — `[ai-not-set-up]` | |
 
 **The publication is a door of its own, and it said nothing about itself until 2026-09-07.**
@@ -2017,7 +2017,7 @@ have to agree; softening the sentence is the honest way to make them.
 
 It is `truncationFailure` that carries the tag, and it returns an `Error` rather than a string
 **so that `throw new Error(truncationFailure(…))` does not compile.** Five stages meet a truncation
-— hierarchy, arc, summary, glossary, thread — and each used to build its own `new Error` around the
+— structure, arc, summary, glossary, thread — and each used to build its own `new Error` around the
 message, which is precisely how a sixth stage added next month copies the line without the tag and
 nothing says so. The type is the guard.
 

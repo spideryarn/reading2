@@ -13,7 +13,7 @@
  *
  * What the plan settled, so it is not re-litigated a row at a time:
  *
- *  - **`hierarchy` is out.** A forced run writes an empty pending-label manifest
+ *  - **`structure` is out.** A forced run writes an empty pending-label manifest
  *    (src/structure.ts § the merge), which deletes the carried `labels` receipt,
  *    so the press strips every paragraph label the reader had and the article
  *    goes back to saying *"Paragraph labels are still arriving"*.
@@ -27,14 +27,14 @@
  *    first of the three questions above.** The successor is free of *quota* and
  *    is not free: it is the slowest and dearest pass in the pipeline — 682 s
  *    measured — so a press here would buy one silently, on top of the
- *    `hierarchy` call it names, and the labels would be gone for the eleven
+ *    `structure` call it names, and the labels would be gone for the eleven
  *    minutes in between. A control whose whole design is *how many metered
  *    calls does one press buy* may not have a second one hiding behind it.
  *  - **`illustrated` is out.** It refuses without a usable Sketch and does not
  *    pull the prerequisite in, and a run whose every plate failed returns
  *    *successfully* — so it can replace a good picture with an empty one.
  *  - **`labels` is out.** It is not a mode a reader goes to, and with
- *    `hierarchy` out there is nothing on that page that invalidates it.
+ *    `structure` out there is nothing on that page that invalidates it.
  *  - **`blocks` is out** because a lone button could only fail:
  *    `unrunnableStepPlan` (src/jobs.ts) refuses `{ steps: ["blocks"] }` with a
  *    400.

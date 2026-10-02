@@ -326,6 +326,37 @@
 }
 .prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
+/* The owner's *Dig deeper* and *Hide*, a row under the foot (plan 261002c § 3).
+   The same quiet button as `.prose-card-open`, with the same padding-as-target
+   reasoning above, minus the push to the right. */
+.prose-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+}
+.prose-card-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.prose-card-act:hover { color: var(--highlight-ink); }
+.prose-card-act:disabled { opacity: 0.45; cursor: default; }
+.prose-card-act:disabled:hover { color: var(--ink-faint); }
+.prose-card-act svg { flex: none; }
+.prose-card-act:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.prose-card-failed { color: var(--highlight-ink); }
+
 
 /* ---- a work the piece cites ------------------------------------------
    The citation section, added 2026-09-16 (SPIDERYARN-READING2-3M). It reuses

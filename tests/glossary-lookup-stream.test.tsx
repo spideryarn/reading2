@@ -13,8 +13,10 @@
  *    end as `lookFailed`, the draft kept, and **the list read again** — the
  *    server may have stored the answer even though this stream did not say so
  *    (a save's read-back failing, or the socket dying after the save).
- * 3. Another article, or the band going, stops reading — and nothing from the
- *    old stream lands on the new article's list.
+ * 3. Another article, or the reader leaving it, stops reading — and nothing from the
+ *    old stream lands on the new article's list. Closing the band alone no longer
+ *    does, since plan 261002c lifted the lookup onto the read —
+ *    tests/glossary-hide-owner-band.test.tsx holds that half.
  * 4. Two presses in one tick start one request.
  *
  * Harness from tests/glossary-asked-term-stream.test.tsx.
@@ -198,8 +200,8 @@ async function mount(slug = "constitution"): Promise<void> {
 }
 
 /** Start a lookup and leave it in flight — the promise boxed, see the ask test's `start`. */
-async function start(): Promise<{ running: Promise<void> }> {
-  let running: Promise<void> = Promise.resolve();
+async function start(): Promise<{ running: Promise<unknown> }> {
+  let running: Promise<unknown> = Promise.resolve();
   await act(async () => {
     running = band?.look(ID) ?? Promise.resolve();
   });
@@ -207,7 +209,7 @@ async function start(): Promise<{ running: Promise<void> }> {
   return { running };
 }
 
-async function finished(running: Promise<void>): Promise<void> {
+async function finished(running: Promise<unknown>): Promise<void> {
   await act(async () => {
     await running;
   });
@@ -418,7 +420,7 @@ describe("a reader who moves on", () => {
     expect(band?.lookFailed).toBeNull();
   });
 
-  it("stops reading when the band goes", async () => {
+  it("stops reading when the read itself goes — the reader left the article", async () => {
     await mount();
     await start();
     send("delta", { text: "An answer " });
@@ -432,7 +434,7 @@ describe("a reader who moves on", () => {
 
   it("starts one request for two presses in one tick", async () => {
     await mount();
-    let first: Promise<void> = Promise.resolve();
+    let first: Promise<unknown> = Promise.resolve();
     await act(async () => {
       first = band?.look(ID) ?? Promise.resolve();
       void band?.look(ID);
