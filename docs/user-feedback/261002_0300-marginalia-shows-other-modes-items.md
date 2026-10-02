@@ -49,4 +49,5 @@ One question for Greg is left in [interface-vision.md](../project/interface-visi
 question 2, now narrower). Should Debate show every row in the margin, as built, or only the rows
 that dispute a claim? It does not hold this report up.
 
-Commits: (filled in at commit).
+Commits: b1af6f07b (the build), a9373e1ca (GPT Sol's code-review fixes and the browser check's two
+changes).
