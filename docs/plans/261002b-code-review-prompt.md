@@ -1,22 +1,33 @@
-You are reviewing built code in the Spideryarn repo (this worktree), and you may FIX what you find
-inside this change's scope; report anything wider for me to decide. Do not commit.
+# Code review: 261002b — Greg's three answers
 
-The plan: docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
-(and your own plan review, docs/plans/261002b-plan-review-sol.md). The diff:
-docs/plans/261002b-code-review.diff (commit f298ef76b against 886812f5a).
+You are reviewing a small change in this repo (Spideryarn). Read
+`docs/plans/261002b-greg-answers-citations-cap-import-report-summary-on-add.md` for intent, then the
+diff in `docs/plans/261002b-code-review.diff` (the working tree also has it applied).
 
-Files: src/web/ShelfPublicSection.tsx, src/web/ShelfPhoneHint.tsx, src/web/small-screen-hint.ts,
-src/web/ShelfControls.tsx, src/web/Library.tsx, src/web/shelf-narrow.ts, src/web/params.ts,
-src/web/PublicLibraryPage.tsx; tests/shelf-include-public.test.tsx, tests/shelf-phone-hint.test.ts.
+Fix what you find inside this scope directly in the working tree; report anything wider for me to
+decide. Do not commit. Do not run `npm run db:migrate` or anything that changes a database other
+than the per-run test database the suite creates itself.
 
-Look for: correctness bugs (state, URL params, Back/Forward, dedup timing, the empty-shelf
-condition interacting with archived/public, focus/scroll of #add-url); whether the Tailwind
-`tw:landscape:hidden` / `tw:portrait:hidden` variants actually compile with this repo's Tailwind
-setup (check the CSS build config — if they don't, fix it); accessibility of the new chip and
-section; any import-graph guard tests that the PublicLibraryPage exports would trip (search tests/
-for guards on the public import graph); copy that claims more than the code does; tests that could
-not go red. Then check the conclusion: is this change ready to land on dev?
+Please check especially:
 
-Run `npx vitest run tests/shelf-include-public.test.tsx tests/shelf-phone-hint.test.ts` and
-`npm run typecheck` after any fix. Report findings P0/P1/P2 with file:line, and list exactly what
-you changed.
+1. **Dismiss now stamps `jobs.dismissed_at` instead of deleting** (`src/store/pg-jobs.ts` §
+   `forget`, `list`, `get`). Is there any other reader of a job by id or by owner — in
+   `src/store/pg-jobs.ts` (claim, advance, enqueueOrGet's re-read, retry, settleExpired,
+   trimFinished), `src/jobs.ts`, `src/routes.ts`, or other `src/store/pg-*.ts` files that select
+   from `jobs` — where a dismissed row that previously would have been absent now changes
+   behaviour visibly to the reader or wrongly (e.g. a uniqueness/arbitration check, an upload
+   recovery path such as `jobForUpload`/`queueAnUpload`, a shelf or delete path, billing)? Name
+   the file and line, and say whether it matters.
+2. Is `trimFinished` still correct with dismissed rows (they still take retention slots — is that
+   acceptable or harmful)?
+3. The citations fuse: `INVESTIGATE_RATE_POLICY.daily.globalFills` 25 → 62 for a $50 ceiling.
+   Is there any other place that states or depends on the $20 / 25 figure (docs, comments, tests,
+   UI copy)?
+4. Are the tests meaningful — would they fail if the change were reverted?
+5. Doc accuracy in `docs/project/feedback.md`, `docs/project/ingest-queue.md`,
+   `docs/project/summaries.md`, `docs/project/citations.md`.
+
+Gates you may run: `npx vitest run tests/store-jobs-parity.test.ts tests/citation-investigate.test.ts
+tests/import-report.test.ts tests/auto-modes.test.tsx` and `npm run typecheck`.
+
+End with a verdict line and a list of findings (P0–P3), each with what you changed, if anything.

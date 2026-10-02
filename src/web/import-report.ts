@@ -13,12 +13,13 @@
  * rule: a pre-typed value is not "something the reader typed into this dialog"
  * just because it sits in the box. A URL can carry a private token, a filename
  * is the reader's own words, and an error sentence is open-ended. The card
- * still shows all three; this does not carry them. Whether it may is Greg's
- * call, written up in the plan rather than built.
+ * still shows all three; this does not carry them. Greg kept it so on
+ * 2026-10-02 (Q-import-report-details, "yes").
  *
- * The price of ids alone: Dismiss forgets the job record (`DELETE
- * /api/jobs/:id`), so a report filed and then dismissed names a job we no
- * longer have. The slug and the times are what survive that.
+ * **The job id is the way back**, and Dismiss keeps it working: since the same
+ * day `DELETE /api/jobs/:id` stamps `jobs.dismissed_at` rather than deleting
+ * the row (src/store/pg-jobs.ts § `forget`), so a report filed and then
+ * dismissed still names a record we can read.
  */
 import type { Job } from "../types.js";
 

@@ -25,7 +25,8 @@
  *
  * **6 and 7 have no caller in `src/`** — the coordinator goes through
  * `pgStoreSession` — so they were a trap rather than a leak, and the trap has
- * teeth: `forget` and `trimFinished` delete terminal jobs, and
+ * teeth: `trimFinished` deletes terminal jobs (`forget` did too before
+ * 2026-10-02), and
  * `jobs.ingest_event_id` is the only record of which slot a job was spending.
  * GPT Sol counted them, 2026-09-03,
  * docs/plans/260902i-settlement-code-review-sol.md finding 1.
@@ -1019,14 +1020,14 @@ describe("a job's ending settles its quota slot", () => {
    *
    * No caller in `src/` takes this route — the coordinator goes through
    * `pgStoreSession` — so this was a trap rather than a leak. But it is the
-   * advertised `JobStore` API, and the trap has teeth: `forget` deletes a
+   * advertised `JobStore` API, and the trap has teeth: retention deletes a
    * terminal job, and `jobs.ingest_event_id` is the *only* record of which slot
    * that job was spending. Delete it over an unsettled reservation and the slot
    * counts against its owner for ever with nothing left to say why. GPT Sol,
    * 2026-09-03, finding 1.
    *
-   * So the `forget` is part of the case rather than tidying-up: it is the second
-   * half of the failure being ruled out.
+   * So forgetting and then trimming is part of the case rather than tidying-up:
+   * it is the second half of the failure being ruled out.
    */
   mine("gives the slot back when `finish` ends the job on the store itself", async () => {
     const slug = `${SLUG_PREFIX}store-finish`;
@@ -1044,9 +1045,11 @@ describe("a job's ending settles its quota slot", () => {
     expect(ended.status).toBe("error");
     expect(await ledger(reservation)).toEqual(RELEASED);
 
-    /* And now the provenance can go, because there is nothing left to trace. */
+    /* Dismiss hides it first; retention is the operation that now removes the
+       provenance and makes the stranded-slot hazard concrete. */
     expect(await pgJobStore.forget(job.id, OWNER)).toBe(true);
-    expect(await ledger(reservation), "forgetting the job stranded its slot").toEqual(RELEASED);
+    expect(await pgJobStore.trimFinished(OWNER, 0)).toBe(1);
+    expect(await ledger(reservation), "retiring the job stranded its slot").toEqual(RELEASED);
   });
 
   /**

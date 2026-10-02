@@ -4444,14 +4444,10 @@ export function forceForRetry(steps: JobStep[]): StepName[] {
 }
 
 /**
- * Forget a finished job. Its artefacts are untouched; only the record goes.
- *
- * The unlink waits for whatever is still writing this job. Terminal status
- * lands in the live map before its `persist` completes, so a poll can show
- * `done` and the reader can dismiss it while the rename is still in flight —
- * and an unlink that got there first would be undone by it, the forgotten job
- * reappearing at the next restart. Tombstoning as well as waiting, because a
- * write queued behind the delete would do the same thing.
+ * Forget a finished job — Dismiss on its card. Its artefacts are untouched, and
+ * since 2026-10-02 so is its record: the store hides it from the reader rather
+ * than deleting it, so the job id a failed import's *Report this* carries still
+ * traces something (src/store/pg-jobs.ts § `forget`).
  */
 export async function forgetJob(id: string): Promise<boolean> {
   // `false` for somebody else's, as for a missing one — and the store is what

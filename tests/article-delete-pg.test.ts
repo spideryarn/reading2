@@ -301,8 +301,9 @@ describe("an article with a job still on it", () => {
  * `requestCancel` in [pg-jobs.ts](../src/store/pg-jobs.ts), `settleIn` in
  * [pg-session.ts](../src/store/pg-session.ts), and `settleExpired`'s sweep. The
  * unsettled reservation F3 is about belongs to an **active** job, and those are
- * still refused rather than deleted. `forget` and `trimFinished` have deleted
- * terminal rows on exactly this reasoning since before any of this.
+ * still refused rather than deleted. `trimFinished` has deleted terminal rows
+ * on exactly this reasoning since before any of this; `forget` did too before
+ * Dismiss became a soft delete.
  */
 describe("the finished jobs an article leaves behind", () => {
   it("goes with the article, so a retry has nothing left to retry", async () => {
