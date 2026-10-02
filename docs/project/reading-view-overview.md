@@ -78,6 +78,11 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   sent twice. Owner only, behind the experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
   price never does, the limits on one formula, and what it costs a comment in that paragraph.
+- **Folding a section** — a chevron on each heading hides the paragraphs under it; ⌥-click, ⌘⌥T or
+  the masthead's *Fold all* does every section. Not remembered across a reload. Why the cells are
+  hidden rather than the row, and why a jump unfolds:
+  [261002e](../plans/261002e-collapsible-headings-and-fold-all.md); the chord is in
+  [keyboard.md](keyboard.md).
 
 ### The modes in the band
 

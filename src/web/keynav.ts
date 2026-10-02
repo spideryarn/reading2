@@ -57,6 +57,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
 /* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
+import { isFolded } from "./fold.js";
 
 /**
  * The attribute a zone wears to say "arrows here mean this level".
@@ -164,7 +165,9 @@ export function measureRow(): number {
   /* A centred arrival sits below the reading line, and until the reader moves
      it is the item they are in (scroll.ts § `anchor`, plan 260929a). */
   const held = anchoredRow();
-  return held ?? activeSectionIndex(rowTops(), readingLine());
+  if (held !== null) return held;
+  const { tops, skip } = rowTops();
+  return activeSectionIndex(tops, readingLine(), skip);
 }
 
 /** The anchored arrival's index among the article's rows, or `null`. */
@@ -176,10 +179,17 @@ function anchoredRow(): number | null {
   return null;
 }
 
-/** Every article row's distance from the top of the viewport, in order. */
-function rowTops(): number[] {
-  const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
-  return Array.from(rows, (r) => r.getBoundingClientRect().top);
+/**
+ * Every article row's distance from the top of the viewport, in order, and
+ * which rows are folded away — `activeSectionIndex`'s `skip`, so a folded row
+ * tying with the next visible one is never the row the reader is in (fold.ts).
+ */
+function rowTops(): { tops: number[]; skip: (i: number) => boolean } {
+  const rows = Array.from(document.querySelectorAll<HTMLElement>("tbody tr[data-block]"));
+  return {
+    tops: rows.map((r) => r.getBoundingClientRect().top),
+    skip: (i) => isFolded(rows[i]?.dataset.block ?? ""),
+  };
 }
 
 /**
@@ -240,14 +250,14 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
      the block above it whose top happens to cross the line (plan 260929a, Sol F1). */
   const a = arrivalAnchor();
   if (a !== null && blocks.some((b) => b.id === a.id)) return { kind: "block", blockId: a.id as BlockId };
-  const tops = rowTops();
+  const { tops, skip } = rowTops();
   const first = tops[0];
   /* No rows at all — an empty article, or a mode not drawing the table — or
      every row still below the line. Either way no block is under the reader,
      and `top` is what lets Back restore the actual top of the page rather than
      scrolling the first paragraph under the chrome. */
   if (first === undefined || first > readingLine()) return { kind: "top" };
-  const block = blocks[activeSectionIndex(tops, readingLine())];
+  const block = blocks[activeSectionIndex(tops, readingLine(), skip)];
   /* More rows drawn than blocks handed in. Not reachable today, and a wrong
      block is worse than an honest "the beginning". */
   return block === undefined ? { kind: "top" } : { kind: "block", blockId: block.id };
@@ -513,11 +523,15 @@ export function useArrowNav(
 
     /** One step at depth `d`, chained from our own last target. */
     const step = (d: number, dir: -1 | 1, e: KeyboardEvent) => {
-      const target = stepTarget(
-        plan.starts[d] ?? [],
-        chain.current ?? measureRow(),
-        dir,
-      );
+      /* **Over a folded section, never into it.** `scrollToBlock` unfolds
+         whatever it is sent to, so a folded row left in the list would make ↓
+         open every section it met (fold.ts). Filtered here, at the press,
+         because folding changes nothing the plan is memoised on. */
+      const starts = (plan.starts[d] ?? []).filter((row) => {
+        const id = blocks[row]?.id;
+        return id === undefined || !isFolded(id);
+      });
+      const target = stepTarget(starts, chain.current ?? measureRow(), dir);
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
       // keypress goes back to the browser, so ↓ on the last paragraph still
