@@ -159,3 +159,9 @@ Red first, against Postgres, with the account lookup injected (no Auth service, 
   and folded in above: F1 Retry after a claim; F2 ambiguity before confirmation; F3 the defences it
   rests on, named; F4 `/privacy`; F5 waiting gifts in R′; F6 a real abort and tests through the
   pages; F7 the status wording in the diagnosis.
+- 2026-10-02: GPT Sol code review ([answer](261002a-fb99-code-review-sol.md)), which fixed in
+  place: two fail-open boundaries so the lookup can never fail a create or PATCH, no lookup reason
+  in a log line, a claimed-Retry test that no longer manufactures the duplicate it rules out, and
+  more tests. Its wider note (any outbox Retry past Resend's 24-hour window after an ambiguous
+  attempt can duplicate) is 261001p's documented limit, unchanged here. Landed on `dev` with the
+  feedback note.
