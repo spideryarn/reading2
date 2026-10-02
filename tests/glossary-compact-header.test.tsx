@@ -4,10 +4,11 @@
  * reports of 2026-09-29, `[SPIDERYARN-READING2-4G]` and `-4H`, and
  * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
  *
- * - no head row while the sort row is drawn, and the profile badge at the end
- *   of the sort row instead; the head row back when there is no sort row to
- *   carry the badge; the term count in the band's (i) since 2026-10-01 (plan
- *   261001m);
+ * - no head row while the sort row is drawn; the head row back when there is
+ *   no sort row, holding the band's corner; the term count in the band's (i)
+ *   since 2026-10-01 (plan 261001m); the profile badge at the sort row's end
+ *   until 2026-10-02, and in the band's corner beside the (i) since (plan
+ *   261002e);
  * - no "order" word, and no hint line under the Look up box — its "not added
  *   to the list" is in the button's tooltip;
  * - the kind of a term as an icon with a label, and none for `concept`.
@@ -158,7 +159,7 @@ async function aboutCard(): Promise<string> {
   const button = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
   if (!button) throw new Error("the band has no (i)");
   await act(async () => button.click());
-  const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+  const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
   await act(async () => button.click());
   return text;
 }
@@ -302,13 +303,16 @@ describe("the head row", () => {
     }
   });
 
-  it("is gone while the sort row is drawn, and the badge is at the sort row's end", async () => {
+  /* The badge was at the sort row's end from 2026-09-29; since 2026-10-02 it is
+     in the band's corner beside the (i), as in every mode (plan 261002e,
+     spya-hf4svm). */
+  it("is gone while the sort row is drawn, and the badge is in the band's corner", async () => {
     await mount(owner(glossary("a-profile", SCORED), {}));
     expect(host.querySelector(".band-head")).toBeNull();
-    const sortRow = host.querySelector(".gloss-sort");
-    expect(sortRow?.querySelector(".gloss-sort-trail button.prof-badge")).not.toBeNull();
     expect(host.querySelectorAll("button.prof-badge")).toHaveLength(1);
-    /* Beside the named group, not inside it, so it is not announced as an order. */
+    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
+    expect(host.querySelector(".gloss-sort .prof-badge")).toBeNull();
+    /* Not inside the named group, so it is not announced as an order. */
     expect(host.querySelector('[role="group"] .prof-badge')).toBeNull();
     /* Prioritised says the total on the threshold row, as "n of 4". */
     expect(host.querySelector(".gloss-count")).toBeNull();
@@ -323,7 +327,7 @@ describe("the head row", () => {
     expect(host.querySelector(".band-head")).toBeNull();
     expect(host.querySelector(".gloss-gate")).toBeNull();
     expect(host.querySelector(".gloss-count")).toBeNull();
-    expect(host.querySelector(".gloss-sort-trail button.prof-badge")).not.toBeNull();
+    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
     expect(await aboutCard()).toContain("4 terms.");
   });
 
@@ -352,16 +356,16 @@ describe("the head row", () => {
   it("leaves the sort row's end empty in prioritised for a list written without a profile", async () => {
     await mount(owner(glossary(null, SCORED), {}));
     expect(host.querySelector(".gloss-sort")).not.toBeNull();
-    expect(host.querySelector(".gloss-sort-trail")).toBeNull();
     expect(host.querySelector(".prof-badge")).toBeNull();
   });
 
-  it("comes back, with the badge, when there is no sort row; the count is in the (i)", async () => {
+  it("comes back, holding the corner, when there is no sort row; the count is in the (i)", async () => {
     await mount(owner(glossary("a-profile", [SCORED[0]!]), {}));
     expect(host.querySelector(".gloss-sort")).toBeNull();
     const head = host.querySelector(".band-head");
+    expect(head).not.toBeNull();
     expect(head?.querySelector(".gloss-count")).toBeNull();
-    expect(head?.querySelector("button.prof-badge")).not.toBeNull();
+    expect(host.querySelector(".mode-band > button.prof-badge")).not.toBeNull();
     expect(await aboutCard()).toContain("One term.");
   });
 

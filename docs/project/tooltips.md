@@ -39,8 +39,9 @@ reason. The reason that has held so far is *cost per trigger*: a `Tooltip` is a 
 and the gutter has a control per block on an article of several hundred. That reason is weaker than
 it looks, because a delegated card ([§ The second implementation](#the-second-implementation-and-why-there-is-one))
 costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2026-10-01 for exactly
-that. The gutter's remaining `title`s — permalink, chat, bookmark, help and overflow — are the next
-candidates.
+that, and the gutter's controls — the mark, permalink, chat, bookmark, help and overflow — followed
+on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
+[261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
 ## What we chose
 
@@ -146,9 +147,10 @@ tap commits, which is `bandPress`'s rule reached by a different route
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 
-It is also the one tooltip here that **takes pointer events**, because its card carries a link out
-and a button in; every other one is `pointer-events: none` so that a panel can never land under the
-pointer and keep itself open. If a third customer ever has both properties — many triggers that are
+It was also the first tooltip here to **take pointer events**, because its card carries a link out
+and a button in; a `Tooltip` does so only when it is `interactive`
+([§ A card the pointer can enter](#a-card-the-pointer-can-enter)), and every other one is
+`pointer-events: none` so that a panel can never land under the pointer and keep itself open. If a third customer ever has both properties — many triggers that are
 not React elements — that is the point at which this becomes a shared hook rather than a second file.
 [glossary.md § The hover card](glossary.md#the-hover-card) has the rest.
 
@@ -170,6 +172,13 @@ one per block. Same shape — many triggers, nothing to click in the card — so
 `contentFor` and a `ControlTip` rather than a fourth file. Its one difference is where the card
 points: the strip is a whole paragraph tall, so the reference is the strip at the pointer's height
 ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+
+**And the gutter's controls on 2026-10-02** (`GUTTER_CONTROL`): each carries its one sentence in
+`data-tip` rather than `title`, and the card draws it with `TipNote`, re-reading it while open when
+it changes (the permalink's *Copied*, the "…" turning into ✕). Mouse hover and keyboard focus open
+it; a finger does not, because a tap presses the control. It adds no `aria-describedby` there: the
+sentence is the control's own name, near enough, and would be read twice
+([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
 ## `ControlTip`, which is what most of them are now
 
@@ -235,6 +244,30 @@ card arguing with itself and not one arguing with the code. Worth knowing before
 set — the second paragraph is where the unguessable fact goes, which is exactly where a plausible
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
+
+### The `press` line: what pressing does, set apart
+
+`ControlTip` has an optional fourth line, `press`, since 2026-10-02: **what pressing the control does,
+or where it goes**, drawn last with a rule above it, full ink, medium weight and an arrow before it.
+It came from Greg's report on the sharing mark's card, which read *"Only you can read this. Share it
+with anyone."*:
+
+> One sentence is a statement of the current state. The other is a potential action. But there's no
+> explanation of what this means or how this functionality works, or any UI differentiation between
+> these two kinds of sentence.
+>
+> — Greg, 2026-10-02 (`spya-d886ah`)
+
+So the masthead's two marks (sharing and archive) now keep the state in `what`, the explanation in
+`how`, and the press in `press`. It sits outside the two paragraphs above, which keep their rule;
+it is a different kind of sentence, not a third paragraph. The line is text, not a button: the action is the control the card sits on, and `press` says
+what it does. A card *can* now hold a button ([§ A card the pointer can enter](#a-card-the-pointer-can-enter)),
+but these two do not use it — the sharing mark is itself a link to the same page an in-card
+button would go to, and the plan says what would make one worth it. The outside evidence for
+the split is
+[261002b-tooltip-text-state-versus-action.md](../research/261002b-tooltip-text-state-versus-action.md);
+the plan is
+[261002e](../plans/261002e-sharing-mark-tooltip-separates-state-from-action.md).
 
 ### A shortcut is named on its card
 
@@ -547,26 +580,55 @@ pointer. The rail stops being fifty separate waits and becomes something you can
 tooltips. 90ms to close is short but not instant, so a wobble between two adjacent bands does not
 blink the panel out and back.
 
-## The pointer cannot enter a card, and that used to be exempt
+## A card the pointer can enter
 
-Every panel is `pointer-events: none` (`.tooltip-anchor` in
-[styles/tooltip.css](../../src/web/styles/tooltip.css)), so moving the pointer onto a card closes it: `useHover`
-sees the pointer leave the trigger, and the card is not somewhere the pointer can go. That is
-deliberate and it is right for the rail — a spine card that took hover would sit on top of the band
-you are pointing at and hold itself open. The single exception is `ProseHoverCard`, which carries
-links out and buttons in, and gets `.tooltip-anchor.interactive`.
+**By default it cannot.** Every panel is `pointer-events: none` (`.tooltip-anchor` in
+[styles/tooltip.css](../../src/web/styles/tooltip.css)), so moving the pointer onto a card closes it:
+`useHover` sees the pointer leave the trigger, and the card is not somewhere the pointer can go. That
+is deliberate and it is right for the rail — a spine card that took hover would sit on top of the band
+you are pointing at and hold itself open.
 
 **WCAG 2.1 § 1.4.13 "Content on Hover or Focus" asks for the opposite.** Content that appears on
 hover has to stay available while the pointer moves onto it. The native `title` attribute is
-explicitly exempt from that criterion; a card we drew ourselves is not. So the masthead's three
-links were conforming by exemption while they were `title` attributes, and stopped being so on
-2026-08-28 when they became cards. It costs a reader using magnification or a large cursor the most,
-because for them the gap between trigger and panel is easy to cross by accident.
+explicitly exempt; a card we drew ourselves is not. Found by ⟨Sol⟩ on 2026-08-28, when the masthead's
+three links stopped being `title` attributes. It costs a reader using magnification or a large cursor
+the most, because for them the gap between trigger and panel is easy to cross by accident.
 
-Found by ⟨Sol⟩ reviewing that change. **Undecided** — [open-questions.md § Q10](open-questions.md#q10)
-carries the call, because the fix is not local: it means letting `Tooltip` take `.interactive` and a
-`safePolygon()` corridor per use, and the spine, which is most of the tooltips in the app, wants
-exactly the behaviour we have.
+**Decided per use**, 2026-10-02:
+
+> Q-hover-cards-clickable (c) would be ideal if we can make it work, but test & check in browser
+> carefully. If this ends up being really complicated, we'll reconsider.
+>
+> — Greg, 2026-10-02
+
+(c) was the per-use option: a card that holds something to press — a link, a button — asks for it;
+nothing else changes. The other two were leaving it (a known 1.4.13 failure) and making every card
+hoverable (which breaks the rail). So **a card with nothing to press keeps the old behaviour**, and
+with it the 1.4.13 gap: the masthead's cards, the Dock's, the spine's. That is accepted rather than
+overlooked — their contents are a sentence to read, not somewhere to go.
+
+`<Tooltip interactive={{ label }}>` turns on, together
+([plan 261002e](../plans/261002e-interactive-tooltip-prop-and-help-link-in-band-about-cards.md)):
+
+- **`.tooltip-anchor.interactive`**, so the card takes pointer events — the class the prose card
+  already used.
+- **a `safePolygon()` corridor** as `useHover`'s `handleClose`, so the pointer can cross the gap from
+  trigger to card, diagonally included, without the card closing under it.
+- **a non-modal `FloatingFocusManager`**, because the card is portalled to the end of `<body>` and
+  Tab would otherwise never reach it. It never *moves* focus on opening — a card opened by hovering
+  must not take the keyboard's place.
+- **two focus rules the library does not make**: the pointer leaving does not close a card the
+  keyboard is inside, and Escape from inside one puts focus back on the trigger. Both were GPT Sol's
+  plan-review findings, and both were real in a jsdom probe before they were fixed.
+- **role `dialog`, named by `label`**, instead of `tooltip`: ARIA's tooltip may not hold anything
+  focusable. So an interactive card is no longer its trigger's `aria-describedby`; the trigger says
+  it opens a dialog. `label` is required for the same reason a dialog without a name is announced as
+  just "dialog".
+
+The first customer is **every band's (i)**: its card ends in *More in Help →*, to the mode's section
+of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The prose card
+(`ProseHoverCard`) was interactive long before this, through its own machinery — § The second
+implementation says why it is separate — and is not a customer.
 
 ## Checking it in a browser
 

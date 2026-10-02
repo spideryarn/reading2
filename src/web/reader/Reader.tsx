@@ -2477,7 +2477,7 @@ export function Reader({
     /* Every block link inside — panels, chips, the chat dialog through its
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
-    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref}>
+    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
     <div
       /* `text-alone` says the article is the only thing on the page, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -2683,6 +2683,9 @@ export function Reader({
         openComment={note}
         chats={chats}
         chatCounts={chatCounts}
+        /* A visitor is handed the owner's notes, and the gutter's mark must not
+           call them theirs — BlockGutter.tsx § `notesBy`. */
+        notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,

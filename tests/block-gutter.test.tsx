@@ -66,9 +66,14 @@ afterEach(() => {
 function paint(
   comments?: Comment[],
   chatCount = 0,
-  slots: { chat?: boolean; help?: boolean; bookmark?: (id: BlockId) => Promise<boolean> } = {},
+  slots: {
+    chat?: boolean;
+    help?: boolean;
+    bookmark?: (id: BlockId) => Promise<boolean>;
+    notesBy?: "you" | "owner";
+  } = {},
 ): void {
-  const { chat = true, help = true, bookmark } = slots;
+  const { chat = true, help = true, bookmark, notesBy = "you" } = slots;
   act(() => {
     root.render(
       <BlockGutter
@@ -76,6 +81,7 @@ function paint(
         linkBase="/read/example"
         {...(comments ? { comments } : {})}
         chatCount={chatCount}
+        notesBy={notesBy}
         onOpenComment={(id) => opened.push(id)}
         {...(chat ? { onChatAbout: (id: BlockId) => chatted.push(id) } : {})}
         {...(help ? { onHelp: (id: BlockId) => helped.push(id) } : {})}
@@ -240,7 +246,7 @@ describe("the permalink", () => {
 
   it("carries the full id where a reader and a screen reader can each get it", () => {
     paint();
-    expect(link().getAttribute("title")).toContain(ID);
+    expect(link().getAttribute("data-tip")).toContain(ID);
     expect(link().getAttribute("aria-label")).toContain(ID);
   });
 });
@@ -281,6 +287,31 @@ describe("the comment marker", () => {
     expect(host.querySelector(".blk-n")).toBeNull();
   });
 
+  /**
+   * **A visitor's notes are the owner's, and the mark must say so.** A shared
+   * link carries the owner's comments (messages.ts § `ALWAYS_SHARED`), so a
+   * stranger reading one meets this mark — and until 2026-10-02 it told them
+   * *"Your note on this paragraph"*. GPT Sol, C7 in
+   * docs/plans/261002b-help-page-code-review-sol.md;
+   * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md § 4.
+   */
+  it("speaks from the visitor's side when the notes are the owner's", () => {
+    for (const notes of [[comment("c1", 5)], [comment("c1", 5), comment("c2", 40)]]) {
+      paint(notes, 0, { chat: false, help: false, notesBy: "owner" });
+      const mark = host.querySelector(".blk-cmt");
+      for (const words of [mark?.getAttribute("data-tip"), mark?.getAttribute("aria-label")]) {
+        expect(words).toBeTruthy();
+        expect(words).not.toMatch(/\byour\b/i);
+        expect(words).toMatch(/whoever added this article/);
+      }
+    }
+  });
+
+  it("calls the owner's own notes theirs", () => {
+    paint([comment("c1", 5)]);
+    expect(host.querySelector(".blk-cmt")?.getAttribute("data-tip")).toMatch(/^Your note/);
+  });
+
   it("is drawn for a comment whose quote no longer resolves", () => {
     // The gutter never sees a resolved mark — it is handed comments grouped by
     // blockId. This is the orphan, and it is the reason the marker exists.
@@ -314,7 +345,7 @@ describe("the chat button", () => {
        the button reporting more than it does. GPT Sol, F-05. */
     paint(undefined, 2);
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Open a conversation about this paragraph (2 total)");
+    expect(b.getAttribute("data-tip")).toBe("Open a conversation about this paragraph (2 total)");
     /* **The same sentence, and that is the fix** — unlike the permalink and the
        "?", whose two names diverge on purpose. The accessible name here used to
        be the bare singular, so the number on screen was the one thing a screen
@@ -329,7 +360,7 @@ describe("the chat button", () => {
     // count, and the press really does begin a conversation.
     paint();
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Chat about this paragraph");
+    expect(b.getAttribute("data-tip")).toBe("Chat about this paragraph");
     expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
   });
 });
@@ -394,7 +425,7 @@ describe('the "?"', () => {
        that costs money without a confirmation. */
     paint();
     const b = host.querySelector(".blk-help") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Ask the AI for help with this paragraph");
+    expect(b.getAttribute("data-tip")).toBe("Ask the AI for help with this paragraph");
     /* Shorter, and divergent on purpose — the same split the permalink above
        makes. A screen reader announces this on focus with three more buttons
        queued behind it in the same gutter, so the accessible name stops at the

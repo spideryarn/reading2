@@ -108,7 +108,7 @@ const jumps: BlockId[] = [];
    it was at the order row's end. Its card opens with the mode's catalog words. */
 const ABOUT = '.mode-band > .band-about[aria-label="About this mode"]';
 const about = () => host.querySelector<HTMLButtonElement>(ABOUT)!;
-const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
+const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
 const orders: FaqOrder[] = [];
 const bars: (number | null)[] = [];
 

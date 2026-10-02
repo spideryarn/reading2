@@ -1983,7 +1983,10 @@ function TermCard({
             type="button"
             className="prose-card-act"
             disabled={hiding}
-            title="Hide this term from your glossary and the underlines — only for you. Unhide it from the glossary's Hidden list."
+            /* Statements, not two instructions in one run — spya-d886ah's rule
+               (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
+               "Unhide it from the glossary's Hidden list." */
+            title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
             onClick={() => void hide()}
           >
             <Trash2 size={10} />

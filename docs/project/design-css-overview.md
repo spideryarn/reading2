@@ -205,7 +205,10 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
   `.gloss-sort` do so already; any other top row does so in its mode's own stylesheet, and a
   measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
 
-Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
+Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
+*written for you* badge sits beside it, the same size, through `ModeSurface`'s `profile`, and
+`--band-about-room` grows only when one rendered — plan
+[261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
 
 ## The stacking order, which is real even though it is not a scale
 
@@ -277,9 +280,9 @@ will eventually have to decide whether they are a system or an accident:
   be allowed to wrap; the reading view's columns are given up in JavaScript rather than at a
   breakpoint; and `env(safe-area-inset-*)`, every value of which is `0px` on every machine we
   develop on.
-- **[design-logo.md](design-logo.md)** — the thirteen animations the wordmark plays when you point
-  at it or hold it down, how they were picked from about 140 ideas, and the four ways a fourteenth
-  can silently do nothing.
+- **[design-logo.md](design-logo.md)** — the fourteen animations the wordmark plays when you point
+  at it or hold it down, how they were picked from about 140 ideas, why the name rests white, and
+  the five ways a fifteenth can silently do nothing.
 - **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
   wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`
   for anything inline.

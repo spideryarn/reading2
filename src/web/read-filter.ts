@@ -30,11 +30,15 @@ export interface ReadSoFar {
 
 /**
  * The level at which a block counts as read: on screen for at least 70% of
- * the time it takes to read it. Level 4 alone is too strict — a brisk reader
- * lands at 3 on most paragraphs, and those already *look* read in the gutter —
- * and 1–2 is scrolling past, which is what the quiz filter exists to leave out.
+ * the time it takes to read it. Higher is too strict — a brisk reader lands
+ * about there on most paragraphs — and below is scrolling past, which is what
+ * the quiz filter exists to leave out.
+ *
+ * **The 70% is the rule; the level number follows it.** It was 3 until
+ * 261002e slowed the levels down (reading-time.ts § `readLevel`) and kept a
+ * boundary at 0.7 so this could stay put.
  */
-export const READ_ENOUGH: ReadLevel = 3;
+export const READ_ENOUGH: ReadLevel = 2;
 
 export function isRead(levels: ReadonlyMap<BlockId, ReadLevel>, id: BlockId): boolean {
   return (levels.get(id) ?? 0) >= READ_ENOUGH;

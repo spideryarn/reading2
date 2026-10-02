@@ -123,6 +123,7 @@ function propsFor(loaded: LoadedArticle, over: Record<string, unknown> = {}) {
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     ...over,
   };

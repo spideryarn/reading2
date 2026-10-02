@@ -89,6 +89,7 @@ function propsFor(article: Article, comments: Comment[], spies: Spies) {
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     linkBase: "/read/x",
     ...spies,

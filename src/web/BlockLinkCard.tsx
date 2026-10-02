@@ -39,6 +39,16 @@
  * hover intent, detach and dismiss logic below; `READING_LINE` is the one
  * branch that differs, plus where the card is placed (`referenceFor`).
  * docs/plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md.
+ *
+ * **And every control in the gutter** (`GUTTER_CONTROL`, since 2026-10-02):
+ * the mark, the permalink, chat, the bookmark, the "?" and the "…". Each had a
+ * native `title`, which reads as no tooltip at all — Greg (spya-jc0vm6): *"Make
+ * sure they all have tooltips"*. Each now carries its one sentence in
+ * `data-tip`, and the card draws it, re-reading it if it changes while open
+ * (the permalink's *Copied*, the "…" turning into ✕). It adds no
+ * `aria-describedby` there, because the sentence is the control's own name,
+ * near enough, and would be read twice.
+ * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
  */
 import {
   FloatingArrow,
@@ -55,7 +65,9 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
 import type { Section } from "./position.js";
-import { ControlTip } from "./Tooltip.js";
+import { SAFE_ID, spentWords } from "./reading-time.js";
+import { ControlTip, TipNote } from "./Tooltip.js";
+import type { ReadingTimeFor } from "./useReadingTime.js";
 import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
 
 /** What a card says about one block. */
@@ -111,6 +123,7 @@ export function useBlockLinks(): BlockLinkIndex | null {
 export function BlockLinkProvider({
   index,
   resolveXref,
+  readingTimeFor,
   children,
 }: {
   index: BlockLinkIndex;
@@ -126,12 +139,18 @@ export function BlockLinkProvider({
    * article cannot know, never from an attribute it could have written.
    */
   resolveXref?: XrefResolver | undefined;
+  /**
+   * The seconds behind each reading-time line, for its card — the owner's
+   * `useReadingTime().timeFor`. Absent for a visitor, who has no lines, and
+   * then the card explains the line without a time.
+   */
+  readingTimeFor?: ReadingTimeFor | undefined;
   children: ReactNode;
 }) {
   return (
     <BlockLinkContext.Provider value={index}>
       {children}
-      <BlockLinkCard index={index} resolveXref={resolveXref} />
+      <BlockLinkCard index={index} resolveXref={resolveXref} readingTimeFor={readingTimeFor} />
     </BlockLinkContext.Provider>
   );
 }
@@ -143,22 +162,44 @@ const DELAY = { open: 240, close: 90 } as const;
    forged one gets no card. */
 /** The gutter's reading-time line (BlockGutter.tsx, gutter.css § reading time). */
 const READING_LINE = ".blk-gutter > span.blk-read";
-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}`;
+/** A control in the gutter (BlockGutter.tsx), whose words are its `data-tip`. */
+const GUTTER_CONTROL = ".blk-gutter > button[data-tip], .blk-gutter > a[data-tip]";
+const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}`;
+/** The two that are not links, and draw a control's card rather than a passage's preview. */
+const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}`;
 
 /**
- * **`ReadingCard` — what the reading-time line is.** The same words on every row: how far you
- * got is what the line itself shows, and a level read off the row once would go
- * stale while the card stayed open (Sol, plan review of 261001r).
+ * **`ReadingCard` — what the reading-time line is, and how long you have spent
+ * beside it.** Greg asked for the time (spya-d940uu).
+ *
+ * **Live**: `timeFor` reads the running totals on every render, and the card
+ * re-renders once a second while it is open — the recorder's own resolution.
+ * Read once, it would go stale while the card stayed open (Sol, plan review of
+ * 261001r). Keyed by block where it is made (`contentFor`), so moving straight
+ * from one line to the next is a new card rather than the old one's last tick.
  *
  * "Stronger", never "darker": the page is dark and the line is `--ink`, so it
  * gets *lighter* — the `title` said darker, and Greg saw it brighten
  * (spya-mn3ruw). The conditions are useReadingTime.ts's and Reader's.
  */
-function ReadingCard() {
+function ReadingCard({ id, timeFor }: { id: BlockId | null; timeFor: ReadingTimeFor | undefined }) {
+  const [, setTick] = useState(0);
+  const live = id !== null && timeFor !== undefined;
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [live]);
+  const time = id !== null ? (timeFor?.(id) ?? null) : null;
   return (
     <ControlTip
       head="Reading time"
-      what="This line grows stronger the longer you spend reading the passage beside it: none at first, clearest once you have spent as long as it takes to read."
+      state={
+        time
+          ? `You have spent ${spentWords(time.seconds)} here. It takes about ${spentWords(time.expected)} to read.`
+          : undefined
+      }
+      what="This line grows stronger the longer you spend reading the passage beside it: nothing for a glance, faint after one read, clearest after reading it slowly, or several times."
       how="It counts while the passage is visible in the reading view, the page is visible, and you have been active in the last five minutes. Only you see it."
     />
   );
@@ -190,8 +231,17 @@ function contentFor(
   el: HTMLElement,
   index: BlockLinkIndex,
   resolveXref: XrefResolver | undefined,
+  readingTimeFor: ReadingTimeFor | undefined,
 ): ReactNode | null {
-  if (el.matches(READING_LINE)) return <ReadingCard />;
+  if (el.matches(READING_LINE)) {
+    const row = el.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+    const id = row !== null && SAFE_ID.test(row) ? (row as BlockId) : null;
+    return <ReadingCard key={id ?? ""} id={id} timeFor={readingTimeFor} />;
+  }
+  if (el.matches(GUTTER_CONTROL)) {
+    const tip = el.getAttribute("data-tip")?.trim() ?? "";
+    return tip === "" ? null : <TipNote>{tip}</TipNote>;
+  }
   /* A cross-reference's target comes from the resolver and only from there —
      never `data-block-link`, `data-block-missing` or `data-block-preview` off
      the mark. Since 2026-10-01 the sanitiser drops all three from an
@@ -241,9 +291,11 @@ function focusVisible(el: Element): boolean {
 function BlockLinkCard({
   index,
   resolveXref,
+  readingTimeFor,
 }: {
   index: BlockLinkIndex;
   resolveXref: XrefResolver | undefined;
+  readingTimeFor: ReadingTimeFor | undefined;
 }) {
   const [shown, setShown] = useState<{ el: HTMLElement; content: ReactNode } | null>(null);
   const cardId = useId();
@@ -253,6 +305,8 @@ function BlockLinkCard({
   indexRef.current = index;
   const resolveRef = useRef(resolveXref);
   resolveRef.current = resolveXref;
+  const readingRef = useRef(readingTimeFor);
+  readingRef.current = readingTimeFor;
 
   const { refs, floatingStyles, context, isPositioned } = useFloating({
     open: shown !== null,
@@ -277,8 +331,9 @@ function BlockLinkCard({
   useEffect(() => {
     const el = shown?.el;
     /* Not on a trigger hidden from assistive technology — the reading-time
-       line is decoration, and nothing about reading time is announced. */
-    if (!el || el.getAttribute("aria-hidden") === "true") return;
+       line is decoration, and nothing about reading time is announced — nor
+       on a gutter control, whose card says its own name again. */
+    if (!el || el.getAttribute("aria-hidden") === "true" || el.matches(GUTTER_CONTROL)) return;
     const had = el.getAttribute("aria-describedby");
     el.setAttribute("aria-describedby", had ? `${had} ${cardId}` : cardId);
     return () => {
@@ -303,7 +358,24 @@ function BlockLinkCard({
     closeIfDetached();
     const observer = new MutationObserver(closeIfDetached);
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    /* **A gutter control's words can change under an open card** — the
+       permalink says *Copied*, the "…" becomes ✕ — on the same element, so
+       nothing above would notice. Re-read them, and only the open one's. */
+    const reword = new MutationObserver(() => {
+      if (currentRef.current !== el) return;
+      const content = contentFor(el, indexRef.current, resolveRef.current, readingRef.current);
+      if (content === null) {
+        currentRef.current = null;
+        setShown(null);
+      } else {
+        setShown({ el, content });
+      }
+    });
+    if (el.matches(GUTTER_CONTROL)) reword.observe(el, { attributes: true, attributeFilter: ["data-tip"] });
+    return () => {
+      observer.disconnect();
+      reword.disconnect();
+    };
   }, [shown]);
 
   /* A new article/index can change the words under an anchor even if React
@@ -314,14 +386,14 @@ function BlockLinkCard({
   useEffect(() => {
     const el = currentRef.current;
     if (!el) return;
-    const content = contentFor(el, index, resolveXref);
+    const content = contentFor(el, index, resolveXref, readingTimeFor);
     if (content === null) {
       currentRef.current = null;
       setShown(null);
     } else {
       setShown({ el, content });
     }
-  }, [index, resolveXref]);
+  }, [index, resolveXref, readingTimeFor]);
 
   /* Delegated on the document: the links are in every panel and come and go
      with them, and one listener pair costs the same however many there are.
@@ -345,7 +417,7 @@ function BlockLinkCard({
     const show = (el: HTMLElement, clientY?: number) => {
       pending = null;
       if (!el.isConnected) return shut();
-      const content = contentFor(el, indexRef.current, resolveRef.current);
+      const content = contentFor(el, indexRef.current, resolveRef.current, readingRef.current);
       if (content === null) return shut();
       currentRef.current = el;
       // Before the state, so the reference exists when the panel mounts.
@@ -450,7 +522,7 @@ function BlockLinkCard({
       >
         {/* A control-shaped card (ControlTip) wants `.tip-soon`'s width and
             paragraphs; a link's preview wants `.tip-cite`'s. */}
-        <div className={`tooltip ${drawn.el.matches(READING_LINE) ? "tip-soon" : "tip-cite"}`} style={styles}>
+        <div className={`tooltip ${drawn.el.matches(CONTROL_SHAPED) ? "tip-soon" : "tip-cite"}`} style={styles}>
           {drawn.content}
           {/* fill and stroke are props, not CSS — Tooltip.tsx says why. */}
           <FloatingArrow

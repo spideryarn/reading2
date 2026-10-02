@@ -58,6 +58,7 @@
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import type { Mode } from "../modes.js";
 import { AboutMode, BandAbout } from "./BandAbout.js";
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 
 /**
  * Everything an `<aside>` takes that this component does not name itself.
@@ -109,6 +110,16 @@ type PassThrough = Omit<
   | "about"
 >;
 
+/**
+ * A profile badge is the second half of the band's corner, never a corner of
+ * its own. Requiring `mode` when `profile` is supplied prevents a caller from
+ * handing us a badge that the `hasAbout` guard below would otherwise discard
+ * silently because there is no adjacent (i) to put it beside.
+ */
+type Corner =
+  | { mode: Mode; profile?: ReactNode }
+  | { mode?: undefined; profile?: never };
+
 export function ModeSurface({
   label,
   feature,
@@ -117,6 +128,7 @@ export function ModeSurface({
   foot,
   mode,
   about,
+  profile,
   ref,
   ...rest
 }: {
@@ -209,9 +221,25 @@ export function ModeSurface({
    * either, there is no (i).
    */
   about?: ReactNode;
+  /**
+   * **The owner's *written for you* badge**, already rendered (`WrittenForYou`),
+   * which this puts in the corner beside the (i) — the same place and the same
+   * size in every mode. Greg, 2026-10-02 (spya-hf4svm): *"We've added (i) and
+   * profile icons to every mode. Great. But their position/sizing/alignment
+   * looks a bit off, especially on a phone … make this reusable/template as part
+   * of creating new modes"*. Each mode used to put it in its own top row.
+   *
+   * Second in the DOM, after the (i), so the (i) stays first in tab order.
+   * Out of flow like the (i), and the room the top row keeps clear grows only
+   * when a badge actually rendered — `WrittenForYou` returns `null` for an
+   * artefact written without a profile, so mode-band.css asks
+   * `:has(> .prof-badge)` rather than this component guessing from the prop.
+   * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+   */
+  profile?: ReactNode;
   /** For `OutlinePanel`, which measures the band to choose a rung. */
   ref?: Ref<HTMLElement>;
-} & PassThrough) {
+} & Corner & PassThrough) {
   const extra = typeof about !== "boolean" && about != null;
   const hasAbout = mode !== undefined || extra;
   const className = [feature ? `mode-band ${feature}` : "mode-band", hasAbout ? "has-about" : ""]
@@ -220,11 +248,12 @@ export function ModeSurface({
   return (
     <aside {...rest} ref={ref} className={className} aria-label={label}>
       {hasAbout && (
-        <BandAbout label="About this mode">
+        <BandAbout label="About this mode" help={mode ? helpHref(modeAnchor(mode)) : undefined}>
           {mode && <AboutMode mode={mode} />}
           {extra && about}
         </BandAbout>
       )}
+      {hasAbout && profile}
       {/* **The three values React renders as nothing, and a boolean is two of
           them.** `head` is written by a caller as `cond && <X/>` or
           `cond ? <X/> : null` at least as often as it is omitted, and those hand

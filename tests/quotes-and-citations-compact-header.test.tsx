@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 const head = () => host.querySelector(".band-head");
-const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
+const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
 
 /** Open the band's (i), read its card, and close it again. */
 async function quotesAbout(): Promise<string> {
@@ -148,10 +148,13 @@ describe("the Quotes band's top", () => {
     expect(host.querySelector(".quotes-bar-value")?.textContent).toContain("of 3");
   });
 
-  it("carries the profile badge as an icon at the end of the rank row, outside the group", async () => {
+  /* At the rank row's end from 2026-10-01; in the band's corner beside the (i)
+     since 2026-10-02, as in every mode (plan 261002e). */
+  it("carries the profile badge as an icon in the band's corner, outside the group", async () => {
     await mountQuotes(quotesOwner(quotes(THREE, "p"), true), "prioritised");
-    const badge = host.querySelector(".quotes-rank .gloss-sort-trail .prof-badge");
-    expect(badge, "no profile badge on the rank row").not.toBeNull();
+    const badge = host.querySelector(".mode-band > .prof-badge");
+    expect(badge, "no profile badge in the band's corner").not.toBeNull();
+    expect(host.querySelector(".quotes-rank .prof-badge")).toBeNull();
     expect(host.querySelector('[role="group"] .prof-badge')).toBeNull();
     expect(badge?.textContent?.trim()).toBe("");
   });
