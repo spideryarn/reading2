@@ -2146,6 +2146,15 @@ export const jobs = spideryarn.table(
     profile: text("profile"),
 
     /**
+     * **The reader's Illustrated steering note**, or null for none (every job
+     * but a noted paint). `Job.illustrationNote`, src/types.ts: on the row for
+     * the reason `profile` above is — a job resumed elsewhere without it would
+     * paint plainly and report success. Part of `work_key` when present.
+     * docs/plans/261002j-illustrated-steering-note.md.
+     */
+    illustrationNote: text("illustration_note"),
+
+    /**
      * **This job is a reset**, and what to make again once it publishes — or
      * null, which is every other job.
      *
