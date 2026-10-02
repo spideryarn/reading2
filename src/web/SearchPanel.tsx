@@ -385,9 +385,9 @@ export function SearchPanel({
 /**
  * How a question still out from this tab is told apart from another: its
  * trimmed words **and its kind**. A quick search and a meaning search for the
- * same words are two questions, so *flesh out* can ask the second while the
- * first is still running (plan 261002e, review F5). `useSearch.isRunning` keys
- * its ref the same way.
+ * same words are two questions, so the box can ask meaning while quick is
+ * still running. *Flesh out* appears on a finished quick row (plan 261002e,
+ * review F5). `useSearch.isRunning` keys its ref the same way.
  */
 function runningKey(criterion: string, kind: SearchKind): string {
   return `${kind}\u0000${criterion.trim()}`;

@@ -257,6 +257,7 @@ async function askChunk(
   blocks: Block[],
   signal: AbortSignal,
   tally: Tally,
+  cancel: AbortController,
   depth = 0,
 ): Promise<Record<string, number>> {
   tally.requests++;
@@ -283,11 +284,21 @@ async function askChunk(
     ) {
       tally.halvings++;
       const half = Math.ceil(blocks.length / 2);
-      const [first, second] = await Promise.all([
-        askChunk(criterion, blocks.slice(0, half), signal, tally, depth + 1),
-        askChunk(criterion, blocks.slice(half), signal, tally, depth + 1),
-      ]);
-      return { ...first, ...second };
+      const halves = [
+        askChunk(criterion, blocks.slice(0, half), signal, tally, cancel, depth + 1),
+        askChunk(criterion, blocks.slice(half), signal, tally, cancel, depth + 1),
+      ];
+      try {
+        const [first, second] = await Promise.all(halves);
+        return { ...first, ...second };
+      } catch (failure) {
+        /* An aggregate rejection does not settle its other half. Cancel the
+           whole search now, then drain both children at every recursion level
+           so no descendant's meter can finish after the collector closes. */
+        cancel.abort(failure);
+        await Promise.allSettled(halves);
+        throw failure;
+      }
     }
     throw err;
   }
@@ -347,11 +358,15 @@ export async function* quickPassagesStream({
   };
 
   let noul: Record<string, number>;
-  const tasks = chunks.map((chunk) => askChunk(criterion, chunk, composite, tally));
+  const tasks = chunks.map((chunk) => askChunk(criterion, chunk, composite, tally, cancel));
   try {
     noul = Object.assign({}, ...(await Promise.all(tasks)));
-  } catch (err) {
-    cancel.abort();
+  } catch (caught) {
+    /* A nested split cancels immediately but drains before rejecting. Another
+       chunk can therefore reject with AbortError first; retain the failure
+       that caused cancellation rather than reporting its secondary symptom. */
+    const err = cancel.signal.aborted ? cancel.signal.reason : caught;
+    cancel.abort(err);
     /* Every chunk's meter finishes before this generator throws, so each row
        lands inside the caller's collector rather than as a late finish. */
     await Promise.allSettled(tasks);
@@ -362,11 +377,14 @@ export async function* quickPassagesStream({
       requests: tally.requests,
       halvings: tally.halvings,
     };
-    if (signal?.aborted) {
+    /* The composite keeps the first abort's reason. Cleanup can outlast the
+       deadline or a later disconnect; neither should rename an earlier
+       provider failure as a timeout or abandonment. */
+    if (signal?.aborted && composite.reason === signal.reason) {
       line.info(facts, "quick search was abandoned");
       throw new Error(READER_LEFT);
     }
-    if (deadline.aborted) {
+    if (deadline.aborted && composite.reason === deadline.reason) {
       line.error({ ...facts, timedOut: true }, `no answer from ${QUICK_SEARCH_MODEL} — deadline fired`);
       throw new Error(tookTooLong(Math.round(timeoutMs / 1000)).message);
     }

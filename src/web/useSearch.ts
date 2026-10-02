@@ -124,8 +124,9 @@ export interface SearchApi {
    * Read from a ref, so two presses inside one React batch both see the first.
    *
    * Keyed on kind as well as words, because a quick search and a meaning
-   * search for the same words are two different questions — *flesh out* asks
-   * the second while the first may still be out (plan 261002e, review F5).
+   * search for the same words are two different questions. The box can ask
+   * meaning while quick is still out; *flesh out* appears once quick finishes
+   * (plan 261002e, review F5).
    */
   isRunning(criterion: string, kind: SearchKind): boolean;
   remove(id: string): void;

@@ -451,10 +451,11 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
  * question per block, all in one request; about 0.4 s and $0.0004 a search on
  * a typical article, against 5–16 s for the meaning search.
  *
- * **Pinned to the dated id, not `-latest`**, because the floor the hits are cut
+ * **Requests the versioned id, not `-latest`**, because the floor the hits are cut
  * at (`QUICK_FLOOR`, 0.7) was measured on this model and means nothing on the
- * next one: a quietly-upgraded alias would move every quick search's hit count
- * with nothing to say why. docs/investigations/261002o-quick-search-spike.md.
+ * next one. The provider may return a dated id, which is stored as the model
+ * that answered; the request itself names `typesafe/jev-1.13`.
+ * docs/investigations/261002o-quick-search-spike.md.
  *
  * Served only on OpenRouter's alpha Decisions endpoint, so it has its own
  * gateway seam (`openRouterDecisions`, src/ai-call.ts) and its own wire. No

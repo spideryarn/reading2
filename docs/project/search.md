@@ -139,8 +139,8 @@ and, on the relationship between them:
 >
 > — [original-version/search-and-chat.md](original-version/search-and-chat.md#text-search)
 
-The two meet in [`search-hits.ts`](../../src/web/search-hits.ts) and **nothing downstream of that
-file knows which one ran**. One `Found[]`, one list, one kind of mark, one sort control. A third way
+The matchers meet in [`search-hits.ts`](../../src/web/search-hits.ts): one `Found[]`, one list, one
+kind of mark, one sort control. The panel uses the saved run's kind to explain each score. A third way
 of matching would be a third arm of one ternary — and when one came, quick search, it went upstream
 of that file instead: it returns the same `SearchHit`s as meaning, so it is a second generator behind
 the same route and the same saved list.

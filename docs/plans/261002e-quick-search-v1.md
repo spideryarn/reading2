@@ -96,8 +96,9 @@ Why this over the alternatives Greg named:
   `retry` resends a run with its own kind; the saved list shows in both quick and meaning; a quick
   row gets its tag and a *flesh out* button.
 - **Which blocks** are scored: `isSearchable` ([`src/block-policy.ts`](../../src/block-policy.ts)),
-  the predicate that already decides whether a search hit may be shown. It drops headings, which the
-  spike found Jev rates highly for any query about the title (0.90). It keeps notes and references,
+  the predicate that already decides whether a search hit may be shown, plus a local filter that
+  drops headings, which the spike found Jev rates highly for any query about the title (0.90).
+  It keeps notes and references,
   deliberately, because that predicate's policy is Greg's: a note is part of what a reader searches.
 
 ## Stages
@@ -166,7 +167,8 @@ with changes*. All nine findings accepted:
 - **F4** every question must come back answered, `noul` in [0,1], or the run fails — never a
   silent empty success; one deadline over all chunks and retries.
 - **F5** `kind` is part of retry identity (`withRun` and its SQL); in-flight duplicate suppression
-  is per kind + criterion, so *flesh out* can run while the quick one is pending.
+  is per kind + criterion, so the box can start meaning while quick is pending;
+  *flesh out* itself appears only on a finished quick row.
 - **F6** `kind` is carried through export, the public reader and its DTO, and the seed helper.
   Visitors see the quick tag and hits, never *flesh out*.
 - **F7** the 0.8 floor was measured on the arm with the sentence we dropped. Re-measured on the

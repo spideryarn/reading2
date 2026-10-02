@@ -338,6 +338,119 @@ describe("quickPassagesStream", () => {
     expect(sent.map((s) => Object.keys(s.body.questions).length)).toEqual([2, 1, 1]);
   });
 
+  it("drains a halved chunk's aborted sibling before closing its spend collector", async () => {
+    const blocks = [block("one"), block("two")];
+    let siblingFinished = false;
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Sent["body"];
+      const ids = Object.keys(body.questions);
+      if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          // Real cancellation still has asynchronous body/transport cleanup.
+          setTimeout(() => {
+            siblingFinished = true;
+            reject(init.signal?.reason);
+          }, 20);
+        });
+      });
+    });
+    const { report } = await collectSpend(async () => {
+      await expect(
+        drain(quickPassagesStream({ meta, blocks, criterion: "q" })),
+      ).rejects.toThrowError(ProviderRefused);
+    });
+    // Capture at collector closure; letting a late call mutate the array would
+    // disguise the missing persistent row as a correct in-memory report.
+    const outcomes = report.calls.map((c) => c.outcome).sort();
+    const finishedAtClose = siblingFinished;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(finishedAtClose).toBe(true);
+    expect(report.pending).toEqual([]);
+    expect(outcomes).toEqual(["aborted", "error", "error"]);
+  });
+
+  it("keeps the halved chunk's failure when another top-level chunk aborts first", async () => {
+    const blocks = Array.from({ length: 3 }, () => block("x".repeat(32_000)));
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Sent["body"];
+      const ids = Object.keys(body.questions);
+      if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          const delay = ids[0] === blocks[1]!.id ? 20 : 0;
+          setTimeout(() => reject(new DOMException("Aborted", "AbortError")), delay);
+        });
+      });
+    });
+    const { report } = await collectSpend(async () => {
+      await expect(
+        drain(quickPassagesStream({ meta, blocks, criterion: "q" })),
+      ).rejects.toMatchObject({ status: 502 });
+    });
+    expect(report.pending).toEqual([]);
+    expect(report.calls.map((c) => c.outcome).sort()).toEqual([
+      "aborted", "aborted", "error", "error",
+    ]);
+  });
+
+  it.each(["deadline", "reader"] as const)(
+    "drains every descendant of a halved chunk on %s cancellation",
+    async (cause) => {
+      const blocks = [block("one"), block("two")];
+      const left = new AbortController();
+      const signals: AbortSignal[] = [];
+      let startedHalves = 0;
+      vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as Sent["body"];
+        if (Object.keys(body.questions).length === 2) {
+          return Promise.resolve(reply(OVERFLOW, 400));
+        }
+        const signal = init.signal!;
+        signals.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            setTimeout(() => reject(signal.reason), ++startedHalves * 10);
+          });
+          if (signals.length === 2 && cause === "reader") left.abort();
+        });
+      });
+      const { report } = await collectSpend(async () => {
+        await expect(
+          drain(quickPassagesStream({
+            meta, blocks, criterion: "q", signal: left.signal, timeoutMs: 30,
+          })),
+        ).rejects.toThrow(cause === "reader" ? /reader disconnected/ : /\[ai-/);
+      });
+      expect(signals).toHaveLength(2);
+      expect(signals[0]).toBe(signals[1]);
+      expect(report.pending).toEqual([]);
+      expect(report.calls.map((c) => c.outcome).sort()).toEqual(["aborted", "aborted", "error"]);
+    },
+  );
+
+  it("does not relabel a provider refusal when the deadline expires during cancellation cleanup", async () => {
+    const blocks = Array.from({ length: 3 }, () => block("x".repeat(32_000)));
+    let call = 0;
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      if (call++ === 0) return Promise.resolve(reply("{}", 502));
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          setTimeout(() => reject(init.signal?.reason), 60);
+        });
+      });
+    });
+    const { report } = await collectSpend(async () => {
+      await expect(
+        drain(quickPassagesStream({ meta, blocks, criterion: "q", timeoutMs: 30 })),
+      ).rejects.toMatchObject({ status: 502 });
+    });
+    expect(report.pending).toEqual([]);
+    expect(report.calls.map((c) => c.outcome).sort()).toEqual(["aborted", "error"]);
+  });
+
   it("does not halve an ordinary refusal", async () => {
     const blocks = Array.from({ length: 4 }, (_, i) => block(`passage ${i}`));
     const sent = stubJudge(() => reply('{"error":{"message":"HTTP 400: bad","code":400}}', 400));
