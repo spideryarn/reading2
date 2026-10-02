@@ -35,7 +35,8 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
-import { type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
+import { type HeadStep, type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
+import { type Voice, voiceClass, withVoice } from "../voice.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -347,7 +348,7 @@ export function MarginaliaHead({
    *  the line says the other way to get the notes back: close the panel.
    *  docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   beside?: boolean;
-  path: readonly string[];
+  path: readonly HeadStep[];
   arc: string | null;
 }) {
   useRenderCount("MarginaliaHead");
@@ -377,13 +378,13 @@ export function MarginaliaHead({
     <aside className="marg-head" aria-label="Where you are">
       {path.length > 0 && (
         <p className="marg-path">
-          {path.map((title, depth) => (
+          {path.map(({ title, voice }, depth) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the path is a fixed ancestry, part then section; position is its identity.
             <Fragment key={depth}>
               {/* Outside the line-clamped box: it remains one spoken path even
                   when the visible title is cut after its second line. */}
               {depth > 0 && <span className="sr-only"> › </span>}
-              <PathStep title={title} depth={depth} />
+              <PathStep title={title} voice={voice} depth={depth} />
             </Fragment>
           ))}
         </p>
@@ -394,7 +395,8 @@ export function MarginaliaHead({
 }
 
 /** A clamped title whose complete text is reachable by hover, focus and tap. */
-function PathStep({ title, depth }: { title: string; depth: number }) {
+/** One title, in its voice — the author's heading kept, or the model's (fonts.md) — here and in its card. */
+function PathStep({ title, voice, depth }: { title: string; voice: Voice; depth: number }) {
   const [open, setOpen] = useState(false);
   return (
     <Tooltip
@@ -402,11 +404,11 @@ function PathStep({ title, depth }: { title: string; depth: number }) {
       keepSide
       open={open}
       onOpenChange={setOpen}
-      content={<p>{title}</p>}
+      content={<p className={voiceClass(voice)}>{title}</p>}
     >
       <button
         type="button"
-        className="marg-path-step"
+        className={withVoice("marg-path-step", voice)}
         data-depth={depth}
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}

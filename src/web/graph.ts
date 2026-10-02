@@ -48,7 +48,8 @@
 import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId, SimilarPair } from "../types.js";
 
-import type { SummaryNode } from "./tree.js";
+import { type SummaryNode, titleVoice } from "./tree.js";
+import type { Voice } from "./voice.js";
 import { type LinkKind, MAX_DRAWN_DEPTH, walk } from "./diagram.js";
 /* The stage-2 stamps by their one spelling — src/reserved.ts. */
 import { NOTE_BACK_ATTR, NOTE_REF_ATTR } from "./notes-view.js";
@@ -60,7 +61,10 @@ export interface GraphNode {
   depth: number;
   number: string;
   title: string;
+  /** Whose words `title` is — tree.ts § `titleVoice`. */
+  titleVoice: Voice;
   gist?: string;
+  gistVoice: Voice;
   /** Which L1 part this is inside, 0-based; -1 for the root. */
   part: number;
   startRow: number;
@@ -373,7 +377,9 @@ export function buildGraph(
       depth: n.node.depth,
       number: n.number,
       title: n.title,
+      titleVoice: titleVoice(n.node),
       ...(n.gist !== undefined && { gist: n.gist }),
+      gistVoice: "ai",
       part: e.part,
       startRow: n.startRow,
       endRow: n.endRow,

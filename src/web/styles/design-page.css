@@ -58,6 +58,9 @@
 }
 .design-note {
   margin: 0 0 0.9rem;
+  /* Our words, even inside a `.prose` specimen, which is in the author's face
+     (voices.css; docs/project/fonts.md). */
+  font-family: var(--font-ui);
   max-width: 62ch;
   font-size: 0.8rem;
   line-height: 1.5;

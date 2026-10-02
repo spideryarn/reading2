@@ -17,7 +17,9 @@
 import { describe, expect, it } from "vitest";
 import { childLabel } from "../src/web/Spine.js";
 import { structureProjection } from "../src/web/structure.js";
-import { buildOutline, buildSummaryTree, navLabelVoice } from "../src/web/tree.js";
+import { PREAMBLE_TITLE } from "../src/heading-tree.js";
+import { articleTitleVoice } from "../src/web/voice.js";
+import { buildOutline, buildSummaryTree, navLabelVoice, nodeLabel, titleVoice } from "../src/web/tree.js";
 import type { Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
 
 const b = (id: string, kind: Block["kind"], tag: string, text: string): Block => ({
@@ -91,7 +93,7 @@ describe("navLabel voice", () => {
     ]);
   });
 
-  it("carries it to Structure's paragraph rows and its section card's children; titles stay UI", () => {
+  it("carries it to Structure's paragraph rows and its section card's children; a model's title is the model's", () => {
     const root = buildSummaryTree(tree, blocks, 3);
     const proj = structureProjection({
       root,
@@ -102,7 +104,8 @@ describe("navLabel voice", () => {
     });
     const rows = proj.columnB.rows;
     const byId = new Map(rows.map((r) => [r.id, r]));
-    expect(byId.get("n2" as NodeId)?.voice).toBe("ui");
+    /* "Scattering" claims no author's heading, so the model wrote it (spya-rp8cr4). */
+    expect(byId.get("n2" as NodeId)?.voice).toBe("ai");
     expect(byId.get("n3" as NodeId)?.voice).toBe("author");
     expect(byId.get("n4" as NodeId)?.voice).toBe("ai");
   });
@@ -123,5 +126,63 @@ describe("navLabel voice", () => {
       ["n3", "author"],
       ["n4", "ai"],
     ]);
+  });
+});
+
+/**
+ * **Whose words a section title is** (spya-rp8cr4). Greg: "if the headlines are
+ * AI-generated, they should be in AI-generated-font. Ideally, it would use
+ * author-font if the headlines were preserved from the author". The tree says
+ * which with `sourceHeading`, by the comparison the pipeline itself uses.
+ */
+describe("titleVoice", () => {
+  const n = (extra: Partial<TreeNode>) => node("t", 1, "n0", [], ["spya-hhhhhh", "spya-hhhhhh"], extra);
+
+  it("is the author's when the title is the heading the node kept", () => {
+    expect(titleVoice(n({ title: "Why the sky is blue", sourceHeading: "Why the sky is blue" }))).toBe("author");
+    /* The pipeline's own `sameHeading`: curly quotes and spacing are not a rewrite. */
+    expect(titleVoice(n({ title: "What\u2019s  left", sourceHeading: "What's left" }))).toBe("author");
+  });
+
+  it("is the model's when it rewrote the author's heading, or there was none", () => {
+    expect(titleVoice(n({ title: "How light scatters", sourceHeading: "Introduction" }))).toBe("ai");
+    expect(titleVoice(n({ title: "How light scatters" }))).toBe("ai");
+  });
+
+  it("is ours for the apparatus and the heading tree's preamble", () => {
+    expect(titleVoice(n({ title: "Notes", treatment: "supplement" }))).toBe("ui");
+    expect(titleVoice(n({ title: PREAMBLE_TITLE }))).toBe("ui");
+  });
+
+  /* An author can call a section anything, including our preamble's words, so
+     the kept heading is asked first (GPT Sol, plan review of 261002f, P2). */
+  it("is the author's even when their heading happens to read like ours", () => {
+    expect(titleVoice(n({ title: PREAMBLE_TITLE, sourceHeading: PREAMBLE_TITLE }))).toBe("author");
+  });
+
+  it("nodeLabel gives the title with its voice, else the navLabel with its own", () => {
+    const kept = n({ title: "Why the sky is blue", sourceHeading: "Why the sky is blue" });
+    expect(nodeLabel({ node: kept })).toEqual({ text: "Why the sky is blue", voice: "author" });
+    /* The shown title may have the article's number taken off; the voice is the stored node's. */
+    const numbered = n({ title: "3.2 Methods", sourceHeading: "3.2 Methods" });
+    expect(nodeLabel({ node: numbered }, "Methods")).toEqual({ text: "Methods", voice: "author" });
+    const leaf = n({ title: "", navLabel: "Blue light scatters most" });
+    expect(nodeLabel({ node: leaf })).toEqual({ text: "Blue light scatters most", voice: "ai" });
+    expect(nodeLabel({ node: leaf, startsAtHeading: true })?.voice).toBe("author");
+    expect(nodeLabel({ node: n({ title: " " }) })).toBeNull();
+  });
+});
+
+/**
+ * **An article's title: the author's, the reader's rename, or unknown.** Only a
+ * page that knows whether there is a rename may say whose it is; a guess of
+ * "author" would put the reader's own words in the author's face (voice.ts §
+ * `articleTitleVoice`).
+ */
+describe("articleTitleVoice", () => {
+  it("is the reader's after a rename, the author's without one, and ours when nobody knows", () => {
+    expect(articleTitleVoice(true)).toBe("reader");
+    expect(articleTitleVoice(false)).toBe("author");
+    expect(articleTitleVoice(undefined)).toBe("ui");
   });
 });

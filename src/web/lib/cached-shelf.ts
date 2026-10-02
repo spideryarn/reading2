@@ -213,6 +213,9 @@ function isDrawableEntry(value: unknown): boolean {
     maybe(e.siteName, str) &&
     maybe(e.url, str) &&
     maybe(e.gist, str) &&
+    /* Absent on a body saved before 2026-10-02; voice.ts § `gistVoice` draws
+       that in the app's face rather than refusing the whole shelf over it. */
+    maybe(e.gistVoice, (v) => v === "ai" || v === "author") &&
     maybe(e.lastOpenedAt, str) &&
     maybe(e.archivedAt, str) &&
     maybe(e.fixture, (v) => typeof v === "boolean") &&

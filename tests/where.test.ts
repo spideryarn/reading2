@@ -10,7 +10,12 @@ interface N {
   id: string;
   children: N[];
 }
-const shape: WhereShape<N> = { id: (n) => n.id, title: (n) => n.id.toUpperCase(), sections: (n) => n.children };
+const shape: WhereShape<N> = {
+  id: (n) => n.id,
+  title: (n) => n.id.toUpperCase(),
+  voice: () => "ai",
+  sections: (n) => n.children,
+};
 const node = (id: string, children: N[] = []): N => ({ id, children });
 
 /** Titles, indented two spaces a level, and "…n" for a more-row, "*" on the path, ">" for here. */
@@ -78,6 +83,26 @@ describe("from the stored tree", () => {
   it("places a block in its section, without paragraph rows", () => {
     expect(drawn(whereForBlock(tree, index, "b4"))).toEqual(["Introduction", "*Results", "  Rich clubs", "  >Synergy"]);
     expect(drawn(whereForBlock(tree, index, "b0"))).toEqual([">Introduction", "Results"]);
+  });
+
+  it("says whose words each title is: a kept heading the author's, a written one the model's", () => {
+    const voiced = {
+      ...tree,
+      nodes: {
+        ...tree.nodes,
+        // The author's "Results" kept as the title, and a heading the model rewrote.
+        results: { ...tree.nodes.results, sourceHeading: "Results" },
+        r1: { ...tree.nodes.r1, sourceHeading: "3.1 Clubs" },
+      },
+    } as unknown as Tree;
+    const voices = whereForBlock(voiced, index, "b4").map((r) => (r.kind === "node" ? `${r.title}:${r.voice}` : ""));
+    expect(voices).toEqual(["Introduction:ai", "Results:author", "Rich clubs:ai", "Synergy:ai"]);
+  });
+
+  it("draws an untitled section in our words, not the model's", () => {
+    const untitled = { ...tree, nodes: { ...tree.nodes, intro: { ...tree.nodes.intro, title: " " } } } as unknown as Tree;
+    const first = whereForBlock(untitled, index, "b0")[0];
+    expect(first?.kind === "node" && [first.title, first.voice]).toEqual(["Untitled section", "ui"]);
   });
 
   it("draws nothing for a block the tree does not cover, or a flat tree", () => {

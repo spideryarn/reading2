@@ -100,7 +100,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { navLabelVoice, type OutlineEntry, type TextVoice } from "./tree.js";
+import { navLabelVoice, nodeLabel, titleVoice, type OutlineEntry } from "./tree.js";
+import { type Voice, voiceClass, withVoice } from "./voice.js";
 import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
@@ -132,6 +133,8 @@ import { isFolded } from "./fold.js";
  */
 interface BandParent {
   title: string;
+  /** Whose words `title` is — tree.ts § `titleVoice`. */
+  voice: Voice;
   index: number;
   total: number;
 }
@@ -217,7 +220,7 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   /** The children of `e` as bands, each knowing where in `e` it sits. */
   const childBands = (e: OutlineEntry): Band[] =>
     e.children.map((c, i) =>
-      bandFor(c, { title: e.node.title, index: i, total: e.children.length }),
+      bandFor(c, { title: e.node.title, voice: titleVoice(e.node), index: i, total: e.children.length }),
     );
 
   // L2s are rendered as siblings in the same track rather than nested inside
@@ -1376,10 +1379,11 @@ const MAX_CHILDREN = 5;
  * navigation chrome, and the spine is one of the two places the node shape
  * sanctions it. It is never standing in for prose the reader could be shown.
  */
-export function childLabel(e: OutlineEntry): { label: string; voice: TextVoice } {
+export function childLabel(e: OutlineEntry): { label: string; voice: Voice } {
   const nav = e.node.navLabel?.trim();
   if (nav) return { label: nav, voice: navLabelVoice(e) };
-  return { label: e.node.title?.trim() || "", voice: "ui" };
+  const title = e.node.title?.trim() || "";
+  return { label: title, voice: title ? titleVoice(e.node) : "ui" };
 }
 
 /**
@@ -1399,19 +1403,22 @@ export function childLabel(e: OutlineEntry): { label: string; voice: TextVoice }
  * already being shown rather than from an id: `Section 2 of 4` under
  * `REFERENCES` reads as a place in the article, and `spya-k3m9qt` does not.
  */
-function bandLabel(band: Band): string {
-  const own = band.entry.node.title?.trim() || band.entry.node.navLabel?.trim();
+function bandLabel(band: Band): { text: string; voice: Voice } {
+  const own = nodeLabel(band.entry);
   if (own) return own;
-  return band.parent
-    ? `Section ${band.parent.index + 1} of ${band.parent.total}`
-    : "Untitled section";
+  return {
+    text: band.parent
+      ? `Section ${band.parent.index + 1} of ${band.parent.total}`
+      : "Untitled section",
+    voice: "ui",
+  };
 }
 
 /** The band's name for a screen reader, with the matches in it if there are any. */
 function ariaFor(band: Band, matches: number): string {
   const name = band.parent
-    ? `${band.parent.title} › ${bandLabel(band)}`
-    : bandLabel(band);
+    ? `${band.parent.title} › ${bandLabel(band).text}`
+    : bandLabel(band).text;
   if (matches === 0) return name;
   return `${name} — ${matches} search ${matches === 1 ? "match" : "matches"}`;
 }
@@ -1438,11 +1445,12 @@ function BandCard({
   const kids = children
     .map((c) => ({ id: c.node.id, ...childLabel(c) }))
     .filter((c) => c.label !== "");
+  const label = bandLabel(band);
   return (
     <>
       {parent && (
         <div className="tip-crumb">
-          <span className="tip-crumb-name">{parent.title}</span>
+          <span className={withVoice("tip-crumb-name", parent.voice)}>{parent.title}</span>
           {/* **Where in the part, which is the one thing a proportional rail
               cannot show.** The rail says how far through the *article* you
               are; nothing on it says this is the third section of seven. One
@@ -1457,7 +1465,7 @@ function BandCard({
         </div>
       )}
       <div className="tip-title">
-        {bandLabel(band)}
+        <span className={voiceClass(label.voice)}>{label.text}</span>
         {node.sourceHeading && <span className="tip-own">§</span>}
       </div>
       {/* The gist, or the nav label standing in for one — but never the nav
@@ -1472,12 +1480,7 @@ function BandCard({
       {kids.length > 0 && (
         <ul className="tip-kids">
           {kids.slice(0, MAX_CHILDREN).map((c) => (
-            <li
-              key={c.id}
-              className={
-                c.voice === "ai" ? "tip-kid-ai" : c.voice === "author" ? "tip-kid-author" : undefined
-              }
-            >
+            <li key={c.id} className={voiceClass(c.voice)}>
               {c.label}
             </li>
           ))}

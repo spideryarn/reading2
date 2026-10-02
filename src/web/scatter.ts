@@ -71,7 +71,8 @@ import {
   walk,
 } from "./diagram.js";
 import { terms } from "./graph.js";
-import type { SummaryNode } from "./tree.js";
+import { type SummaryNode, titleVoice } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 /** Which palette slot a dot takes. The panel owns which palette. */
 export type ScatterHue = "section" | "progress" | "topic";
@@ -161,6 +162,8 @@ interface Dot {
   part: number;
   number: string;
   title: string;
+  /** Whose words `title` is — tree.ts § `titleVoice`. */
+  titleVoice: Voice;
 }
 
 /** What a row of the article belongs to, for the card and for the hue. */
@@ -168,6 +171,8 @@ interface Section {
   part: number;
   number: string;
   title: string;
+  /** Whose words `title` is — tree.ts § `titleVoice`. */
+  titleVoice: Voice;
 }
 
 /**
@@ -187,6 +192,7 @@ function sectionsByRow(root: SummaryNode, rows: number): (Section | null)[] {
       part: entry.part,
       number: entry.node.number,
       title: entry.node.title,
+      titleVoice: titleVoice(entry.node.node),
     };
     for (let r = entry.node.startRow; r <= entry.node.endRow && r < rows; r++) {
       if (r < 0) continue;
@@ -243,6 +249,7 @@ function dots(root: SummaryNode, blocks: readonly Block[], input: ScatterInput):
       part: at?.part ?? -1,
       number: at?.number ?? "",
       title: at?.title ?? "",
+      titleVoice: at?.titleVoice ?? "ui",
     });
   }
   // The server sends them in document order; sorting is what makes that a
@@ -439,10 +446,13 @@ function node(
     depth: 0,
     number: d.number,
     title: d.title || "This paragraph",
+    // Our stand-in when no section holds it.
+    titleVoice: d.title ? d.titleVoice : "ui",
     /* The card's second line. A paragraph has no gist — it is the thing a gist
        would compress — so it gets its own opening words, which is the one piece
        of text that says what this dot is. */
     gist: excerpt(d.block.text),
+    gistVoice: "author",
     blocks: 1,
     startRow: d.startRow,
     endRow: d.endRow,

@@ -605,6 +605,12 @@ const SHARED_WITH_READER = [
   "src/web/useNow.ts",
   "src/web/useExperimental.ts",
   "src/web/useSession.ts",
+  /* Arrived 2026-10-02 (plan 261002f) by the second predicted route:
+     `TitleEditor`, `ShelfEntry` and `library-columns`, all here already, now
+     put a title or a blurb in its writer's face through it. The reader already
+     downloads it — the shelf and every mode with a section title import it —
+     and it is a leaf of three small functions importing nothing at runtime. */
+  "src/web/voice.ts",
 ];
 
 /**

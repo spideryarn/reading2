@@ -59,6 +59,7 @@ import {
 } from "./structure.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { SummaryNode } from "./tree.js";
+import { type Voice, voiceClass, withVoice } from "./voice.js";
 
 /**
  * The rungs stage 1 draws at.
@@ -233,24 +234,24 @@ function capacityFrom(
  * one, and column B's header names that part in words — so a crumb here would be
  * the third printing of a fact already on screen twice.
  */
-function RowCard({ card, number, text }: { card: StructureCard; number: string; text: string }) {
+function RowCard({
+  card,
+  number,
+  text,
+  voice,
+}: { card: StructureCard; number: string; text: string; voice: Voice }) {
   return (
     <>
       <div className="tip-title">
         {number ? <span className="tip-num">{number}</span> : null}
-        {text}
+        <span className={voiceClass(voice)}>{text}</span>
       </div>
       {card.gist ? <p className="tip-gist">{card.gist}</p> : null}
       {card.navLabel ? <p className="tip-gist tip-navlabel">{card.navLabel}</p> : null}
       {card.children.length > 0 && (
         <ul className="tip-kids">
           {card.children.map((c) => (
-            <li
-              key={c.id}
-              className={
-                c.voice === "ai" ? "tip-kid-ai" : c.voice === "author" ? "tip-kid-author" : undefined
-              }
-            >
+            <li key={c.id} className={voiceClass(c.voice)}>
               {c.text}
             </li>
           ))}
@@ -313,20 +314,9 @@ function Row({
               lining up with them. Outline renders its empty span for the same
               reason. GPT Sol's code review, finding 5. */}
           <span className="struct-num">{row.number}</span>
-          {/* A navLabel standing in for a title is the model's words, or the
-              author's heading when the node starts at one (structure.ts §
-              `rowVoice`); voices.css puts the face on the modifier. */}
-          <span
-            className={
-              row.voice === "ai"
-                ? "struct-text struct-text-ai"
-                : row.voice === "author"
-                  ? "struct-text struct-text-author"
-                  : "struct-text"
-            }
-          >
-            {row.text}
-          </span>
+          {/* The author's heading kept, or the model's title or navLabel
+              (tree.ts § `nodeLabel`); voice.ts puts the face on it. */}
+          <span className={withVoice("struct-text", row.voice)}>{row.text}</span>
           {/* Inside the title's grid, in its column, so a gist starts where its
               title does — the list face's `.outln-gist` does the same. */}
           {row.gist ? <span className="struct-gist">{row.gist}</span> : null}
@@ -367,7 +357,7 @@ function Row({
         <Tooltip
           placement="right"
           className="tip-struct"
-          content={<RowCard card={card} number={row.number} text={row.text} />}
+          content={<RowCard card={card} number={row.number} text={row.text} voice={row.voice} />}
         >
           {button}
         </Tooltip>
@@ -672,7 +662,9 @@ export function StructurePanel({
               {proj.ofPart ? (
                 <p className="struct-of" ref={ofRef}>
                   <span className="struct-num">{proj.ofPart.number}</span>
-                  <span className="struct-text">{proj.ofPart.text}</span>
+                  <span className={withVoice("struct-text", proj.ofPart.voice)}>
+                    {proj.ofPart.text}
+                  </span>
                 </p>
               ) : null}
               {columnB.rows.length > 0 || columnB.later > 0 ? (

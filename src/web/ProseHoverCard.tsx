@@ -99,6 +99,7 @@ import {
   type NoteIndex,
   type NoteMarker,
 } from "./notes-view.js";
+import { articleTitleVoice, gistVoice, voiceClass } from "./voice.js";
 
 /** What the pointer found: a term, a citation, a link, or several over the same words. */
 interface Hit {
@@ -1368,9 +1369,19 @@ function ExternalBody({
             <BookOpen size={9} />
             {library.self ? "this is the piece you are reading" : "on your shelf"}
           </p>
-          <p className="prose-card-title">{library.entry.title}</p>
+          <p className="prose-card-title">
+            <span className={voiceClass(articleTitleVoice(Boolean(library.entry.titleOverridden)))}>
+              {library.entry.title}
+            </span>
+          </p>
+          {/* The model's gist or the article's excerpt, on a span because
+              `.prose-card-text` sets the app's face (voice.ts § `gistVoice`). */}
           {library.entry.gist && (
-            <p className="prose-card-text">{clip(library.entry.gist, 220)}</p>
+            <p className="prose-card-text">
+              <span className={voiceClass(gistVoice(library.entry))}>
+                {clip(library.entry.gist, 220)}
+              </span>
+            </p>
           )}
           <p className="prose-card-meta">
             {library.entry.words.toLocaleString()} words · ~{library.entry.minutes} min

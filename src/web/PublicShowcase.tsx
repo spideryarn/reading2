@@ -87,6 +87,7 @@ import type { PublicLibraryEntry } from "../public-library-types.js";
 import { Link } from "./Link.js";
 import { loadPublicLibrary } from "./public-api.js";
 import { PUBLIC_LIBRARY_HREF, readHref } from "./router.js";
+import { articleTitleVoice, withVoice } from "./voice.js";
 
 /**
  * How many articles the block shows.
@@ -194,7 +195,10 @@ function ShowcaseArticle({ entry }: { entry: PublicLibraryEntry }) {
         href={readHref(entry.slug)}
         /* `readHref`, so this page, the shelf and the owner's library cannot
            come to disagree about where an article lives. */
-        className="tw:font-prose tw:text-base tw:text-foreground tw:no-underline tw:hover:text-highlight"
+        className={withVoice(
+          "tw:text-base tw:text-foreground tw:no-underline tw:hover:text-highlight",
+          articleTitleVoice(false),
+        )}
       >
         {entry.title}
       </Link>

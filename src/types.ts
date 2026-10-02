@@ -1911,8 +1911,20 @@ export interface LibraryEntry {
   sections: number;
   /** How many questions have been asked about it — reader state, not article state. */
   comments: number;
-  /** The whole piece in one sentence: the tree root's gist. */
+  /**
+   * The whole piece in one sentence: the tree root's gist — or, where there is
+   * none, its summary, or the article's own excerpt (src/library-scalars.ts §
+   * the blurb's fallback). So it may be the model's words or the author's.
+   */
   gist?: string;
+  /**
+   * **Whose words `gist` is**, so the shelf can put it in the right face
+   * (docs/project/fonts.md): `author` when it is the excerpt, `ai` when a model
+   * wrote it. Present whenever `gist` is; absent only on a shelf body saved in
+   * the browser before 2026-10-02, which the client reads as unknown and draws
+   * in the app's face (src/web/voice.ts § `gistVoice`).
+   */
+  gistVoice?: "ai" | "author";
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
   /**

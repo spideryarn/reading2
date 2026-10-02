@@ -106,6 +106,7 @@ import { type UseDictationField, useDictationField } from "./useDictationField.j
 import { armActivation } from "./activation.js";
 import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
+import { withVoice } from "./voice.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -1171,7 +1172,12 @@ function LookAgain({
           const retry = retryOf(row);
           return (
             <li key={row.section.blockId}>
-              <button type="button" className="quiz-look-again-section" onClick={() => onRead(row.section.blockId)}>
+              {/* In the title's voice: the author's heading kept, or the model's (fonts.md). */}
+              <button
+                type="button"
+                className={withVoice("quiz-look-again-section", row.section.titleVoice)}
+                onClick={() => onRead(row.section.blockId)}
+              >
                 {row.section.title}
               </button>
               {retry !== undefined && (

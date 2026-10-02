@@ -47,6 +47,7 @@ import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
+import { articleTitleVoice, gistVoice, withVoice } from "./voice.js";
 
 /* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
    this file is shared with the lazy /admin and /design routes, and importing
@@ -226,7 +227,12 @@ export function ShelfCard({
             }}
           />
         ) : (
-          <h2 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:break-words tw:font-prose tw:text-xl tw:leading-snug">
+          <h2
+            className={withVoice(
+              "tw:m-0 tw:min-w-0 tw:flex-1 tw:break-words tw:text-xl tw:leading-snug",
+              articleTitleVoice(Boolean(entry.titleOverridden)),
+            )}
+          >
             {/* The stretched link: a real `<a href>` whose ::after covers the
                 card, so the whole card is a click target and ⌘-click still
                 opens a tab. Everything interactive after this needs `relative`
@@ -274,11 +280,15 @@ export function ShelfCard({
         )}
       </p>
 
-      {/* The whole piece in one sentence. Serif, because it is the article
-          talking rather than the app — the same distinction the reading view
-          makes between prose and chrome. */}
+      {/* The whole piece in one sentence: a model's gist, or the article's own
+          excerpt where there is none, each in its voice's face (voice.ts). */}
       {entry.gist && (
-        <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+        <p
+          className={withVoice(
+            "tw:mt-3 tw:mb-0 tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint",
+            gistVoice(entry),
+          )}
+        >
           {entry.gist}
         </p>
       )}
@@ -291,7 +301,12 @@ export function ShelfCard({
           {entry.abstract && (
             <details className="tw:text-xs tw:text-muted-foreground">
               <summary className="tw:cursor-pointer tw:select-none">Abstract</summary>
-              <p className="tw:mt-2 tw:mb-0 tw:break-words tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+              <p
+                className={withVoice(
+                  "tw:mt-2 tw:mb-0 tw:break-words tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint",
+                  "author",
+                )}
+              >
                 {entry.abstract}
               </p>
             </details>
