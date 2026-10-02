@@ -804,6 +804,12 @@ export function Actions({
    * is already being told everything by hovering.
    */
   const [armed, setArmed] = useState<{ id: ActionKey; byTouch: boolean } | null>(null);
+  /* iOS reports a finger honestly here, then calls the click a mouse click
+     (WebKit 282988). Keep this one fact from the start of the gesture so the
+     wide card can recognise an iPad tap without also treating a real mouse on
+     a touchscreen laptop as a finger. Consumed by the next click, and cleared
+     if the browser takes the gesture for scrolling. */
+  const pointerAtDown = useRef<string | null>(null);
 
   /**
    * **The whole touch gesture, in one handler on the row.**
@@ -842,6 +848,8 @@ export function Actions({
    */
   const pressCapture = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
+      const down = e.detail === 0 ? null : pointerAtDown.current;
+      pointerAtDown.current = null;
       const id = actionAt(e.target);
       if (!id) return;
       /* **`pen` as well as `touch`**, because docs/project/touch.md § An Apple
@@ -852,9 +860,10 @@ export function Actions({
          as mouse-like, so its own hover would not have opened the card either.
          GPT Sol, 2026-09-05. */
       /* **Where the row is drawn for a finger** (`fingerRow` on a device with
-         one, since 2026-10-02) the click's `pointerType` is not asked at all —
-         on an iPad it says `mouse` (WebKit bug 282988, above) — and the
-         device decides instead. There a tap **presses** a control that is free
+         one, since 2026-10-02), use the preceding `pointerdown`: on an iPad it
+         says `touch` even though the click says `mouse` (WebKit bug 282988,
+         above). This also keeps an actual mouse a mouse on a hybrid machine.
+         There a tap **presses** a control that is free
          and undoable — Edit, Open, Copy, Archive, Put back — because Greg asked
          for the click back and the icons are the explanation he chose. Two
          kinds still **reveal first**, so every tap there is treated as a
@@ -866,15 +875,20 @@ export function Actions({
          GPT Sol's plan review, 2026-10-02. A pen on a machine with no finger
          is `any-pointer: fine`, never gets here, and keeps the gesture as it
          was. Plan 261002i. */
+      const clickPointer = (e.nativeEvent as PointerEvent).pointerType;
+      const fingerPress =
+        down === "touch" ||
+        down === "pen" ||
+        (down === null && (clickPointer === "touch" || clickPointer === "pen"));
       const fingerSurface =
         fingerRow &&
+        fingerPress &&
         typeof window.matchMedia === "function" &&
         window.matchMedia("(any-pointer: coarse)").matches;
       const finger = fingerSurface
         ? id === "rerun" ||
           (e.target as Element).closest("[data-action]")?.getAttribute("data-commits") !== "true"
-        : (e.nativeEvent as PointerEvent).pointerType === "touch" ||
-          (e.nativeEvent as PointerEvent).pointerType === "pen";
+        : fingerPress;
       /* `armed?.id !== id` rather than `armed === null`, so a finger moving
          along the row re-reveals rather than firing at whatever it lands on —
          the row can be read by walking it. Spine.tsx § `bandPress`. */
@@ -931,6 +945,12 @@ export function Actions({
             "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:gap-1 tw:any-pointer-coarse:opacity-100 tw:any-pointer-coarse:[&_:is(a,button)]:size-10 tw:any-pointer-coarse:[&_svg]:size-[18px] tw:any-pointer-coarse:@max-[28rem]:hidden"
           : "tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100 tw:any-pointer-coarse:hidden"
       }
+      onPointerDownCapture={(e) => {
+        pointerAtDown.current = e.pointerType;
+      }}
+      onPointerCancelCapture={() => {
+        pointerAtDown.current = null;
+      }}
       onClickCapture={pressCapture}
     >
       <RowGroup joined={inTooltipGroup}>

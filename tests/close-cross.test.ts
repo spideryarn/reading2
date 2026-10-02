@@ -27,18 +27,67 @@ const CLOSES: ReadonlyArray<readonly [string, string]> = [
 /* Comments out, or the one above a rule becomes part of its selector. */
 const css = readerCss().replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** Every declaration block whose selector list names `.cls` (not `.cls:hover`). */
-function rulesFor(cls: string): string[] {
-  const out: string[] = [];
-  const re = /([^{}]+)\{([^}]*)\}/g;
-  for (let m = re.exec(css); m; m = re.exec(css)) {
-    const selectors = (m[1] ?? "").split(",").map((s) => s.trim());
-    if (selectors.includes(`.${cls}`)) out.push(m[2] ?? "");
+/**
+ * Every declaration block in the CSS, including rules nested in `@media`.
+ *
+ * A flat `selector { body }` regexp silently treats an at-rule as the selector
+ * and its first nested rule as the body. That is exactly where a later
+ * finger-only size would be written, so missing nested blocks would make this
+ * guard green over the regression it exists to catch.
+ */
+function blocks(source: string): ReadonlyArray<{ prelude: string; body: string }> {
+  const found: Array<{ prelude: string; body: string }> = [];
+  const stack: Array<{ prelude: string; bodyStart: number }> = [];
+  let boundary = 0;
+  let quote: "\"" | "'" | null = null;
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "\"" || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "{") {
+      stack.push({ prelude: source.slice(boundary, i).trim(), bodyStart: i + 1 });
+      boundary = i + 1;
+    } else if (ch === "}") {
+      const block = stack.pop();
+      if (block) found.push({ prelude: block.prelude, body: source.slice(block.bodyStart, i) });
+      boundary = i + 1;
+    } else if (ch === ";") {
+      boundary = i + 1;
+    }
   }
-  return out;
+  return found;
+}
+
+/** The class is on the element selected at the right edge, pseudo-classes included. */
+function targetsClass(selector: string, cls: string): boolean {
+  const at = selector.lastIndexOf(`.${cls}`);
+  if (at < 0) return false;
+  const afterName = selector[at + cls.length + 1];
+  if (afterName && /[a-zA-Z0-9_-]/.test(afterName)) return false;
+  return !/[ >+~]/.test(selector.slice(at + cls.length + 1));
+}
+
+function rulesFor(cls: string, source = css): string[] {
+  return blocks(source)
+    .filter(({ prelude }) => !prelude.startsWith("@"))
+    .filter(({ prelude }) => prelude.split(",").some((selector) => targetsClass(selector.trim(), cls)))
+    .map(({ body }) => body);
 }
 
 describe("the close cross", () => {
+  it("sees a size hidden in an at-rule, selector list, or pseudo-class", () => {
+    const fixture = "@media (any-pointer: coarse) { .other, .probe:hover { width: 40px; } }";
+    expect(rulesFor("probe", fixture)).toEqual([" width: 40px; "]);
+  });
+
   it("is 32px, in px, with an 18px glyph", () => {
     const [rule] = rulesFor("close-x");
     expect(rule, "the .close-x rule").toBeTruthy();
@@ -68,7 +117,9 @@ describe("the close cross", () => {
       const own = rulesFor(cls);
       expect(own.length, `a rule for .${cls}`).toBeGreaterThan(0);
       for (const body of own) {
-        expect(body).not.toMatch(/(?:^|[\s;])(?:min-|max-)?(?:width|height)\s*:/);
+        expect(body).not.toMatch(
+          /(?:^|[\s;])(?:min-|max-)?(?:width|height|inline-size|block-size)\s*:/,
+        );
         expect(body).not.toMatch(/(?:^|[\s;])padding(?:-[a-z]+)?\s*:/);
       }
     });
