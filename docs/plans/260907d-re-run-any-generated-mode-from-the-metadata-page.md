@@ -927,7 +927,7 @@ offer into an answer.
 Note what is genuinely still missing, so that whoever picks it up does not start from the wrong end:
 `tweets` has no `outdated` at all (its `PROMPT_VERSION` is module-private,
 `src/store/pg.ts:2504`), and `hierarchy` has none of the kind the modes have
-([hierarchy.md](../project/hierarchy.md)).
+([hierarchy.md](../project/structure-step.md)).
 
 **This is the piece that kept the `SOON` row unbuilt for three days, and it is not what was asked
 for. If you find yourself designing a content-hash provenance scheme for the tree, stop.**

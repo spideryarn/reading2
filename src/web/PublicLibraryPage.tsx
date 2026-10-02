@@ -397,16 +397,24 @@ export type ShelfState =
  * a reader something false about the world with complete confidence, which is
  * worse than admitting we could not read it. src/web/public-api.ts.
  */
-export function usePublicShelf(): { state: ShelfState; again: () => void } {
+export function usePublicShelf(
+  /**
+   * Whether to read at all. The page always does; the owner's shelf only once
+   * Include public is on or a search wants the count, and its live shelf has
+   * answered (Library.tsx; plan 261002b § Part D). It reads once, the first
+   * time this is true, and keeps the answer if it goes false again.
+   */
+  enabled = true,
+): { state: ShelfState; again: () => void } {
   const [state, setState] = useState<ShelfState>({ kind: "loading" });
   /**
    * **Which read is allowed to answer**, and it is a ref rather than state
    * because nothing renders from it.
    *
-   * Two reads really are in the air at once in the ordinary case: `main.tsx`
-   * mounts the app inside `<StrictMode>`, so in development every effect runs
-   * mount → cleanup → mount and this hook starts two. Without a generation the
-   * loser can land last and put a stale answer on screen — and before the
+   * Retries can overlap a pending read. StrictMode replays the mount effect,
+   * but `started` below keeps that replay from starting a second request.
+   * Without a generation a superseded read can land last and put a stale
+   * answer on screen — and before the
    * discriminated state above it could do worse, leaving the failure and the
    * list up together.
    */
@@ -444,9 +452,12 @@ export function usePublicShelf(): { state: ShelfState; again: () => void } {
       });
   }, []);
 
+  const started = useRef(false);
   useEffect(() => {
+    if (!enabled || started.current) return;
+    started.current = true;
     again();
-  }, [again]);
+  }, [again, enabled]);
 
   return { state, again };
 }

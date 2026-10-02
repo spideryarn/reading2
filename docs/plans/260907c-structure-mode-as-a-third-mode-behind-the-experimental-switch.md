@@ -614,7 +614,7 @@ sit.
 - [260828aw-outline-mode.md](260828aw-outline-mode.md) — the rung ladder, the churn measurement, and
   the corpus table this plan's ladders are shaped from.
 - [mode.md](../project/mode.md) · [experimental-features.md](../project/experimental-features.md)
-  · [granularity-zoom.md](../project/granularity-zoom.md) · [hierarchy.md](../project/hierarchy.md)
+  · [granularity-zoom.md](../project/granularity-zoom.md) · [hierarchy.md](../project/structure-step.md)
   · [column-context.md](../project/column-context.md)
 - [`src/web/outline.ts`](../../src/web/outline.ts) · [`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)
   · [`tree.ts`](../../src/web/tree.ts) · [`layout.ts`](../../src/web/layout.ts)

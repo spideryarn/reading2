@@ -39,7 +39,7 @@ import { blocksArtefact } from "../src/blocks.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, ingestEvents, jobs as jobsTable, uploads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { buildTree } from "../src/hierarchy.js";
+import { buildTree } from "../src/structure.js";
 import {
   type AdvanceParts,
   type StepRegistry,
@@ -244,11 +244,11 @@ function fakeExtract(fail = false): PipelineStep<"extract"> {
   };
 }
 
-/** `hierarchy` without the model — tests/reset-and-regenerate.test.ts's fake. */
-function fakeHierarchy(): PipelineStep<"hierarchy"> {
+/** `structure` without the model — tests/reset-and-regenerate.test.ts's fake. */
+function fakeStructure(): PipelineStep<"structure"> {
   return {
-    name: "hierarchy",
-    label: STEPS.hierarchy.label,
+    name: "structure",
+    label: STEPS.structure.label,
     produces: ["tree", "labels", "blocks"],
     async run(ctx, store) {
       const file = await store.read(ctx.slug, "blocks", "blocks");
@@ -296,7 +296,7 @@ function partsWith(opts: { failExtract?: boolean } = {}): AdvanceParts {
     /* The real stage 2 for a web page — Readability, no model — so what
        *Read this* keeps of the paper's metadata is the real step's doing. */
     extract: opts.failExtract ? fakeExtract(true) : STEPS.extract,
-    hierarchy: fakeHierarchy(),
+    structure: fakeStructure(),
     assets: fakeAssets(),
   };
   return { power: async () => "standard", session: claimSession, steps };

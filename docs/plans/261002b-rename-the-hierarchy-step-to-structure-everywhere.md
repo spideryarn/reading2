@@ -154,9 +154,20 @@ short and the guard makes it safe: deploy when no ingest is queued or running (a
 first); if one starts in between, the migration refuses and the deploy stops before Vercel — retry
 once it drains. In the minutes between the migration and the new code going live, an old worker
 *starting* a `hierarchy` step fails the CHECK loudly, and a job *enqueued* by old code holds
-`"name":"hierarchy"` in `jobs.steps`, which nothing checks. Stage 2 finds out what the new code does
-with such a row and makes sure it fails that one job with a plain message rather than wedging the
-worker loop — no permanent alias in the job reader.
+`"name":"hierarchy"` in `jobs.steps`, which nothing checks.
+
+**What new code does with that row, traced (Sonnet, 2026-10-02):** `toJob`
+(`src/store/pg-jobs.ts`) casts `steps` without checking them; `registry[step.name]` is `undefined`
+and `stepIsDone` throws a `TypeError` *before* `runStep`'s catch, so `advanceJob` 500s with the
+lease held. The job is requeued twice over ~38 minutes, ends `error`, and **Retry copies the same
+step name** into the new job. (With a sibling job on the slug, `readsOf` in `src/sharing-steps.ts`
+throws inside the claim instead.) The reader sees a card stuck with no message. **So stage 2 moves
+`RETIRED_STEPS` out of `src/feedback-payload.ts` into `src/step-order.ts` and applies it where job
+rows are read** (`steps[].name` and `reset.regenerate`) — one table, read by both, so a stale row
+runs under its new name and a retry carries the new name. This reverses this plan's first "no alias
+in the job reader": a guard that fails the job cleanly would still have lost the reader's ingest,
+while the translation finishes it at the cost of one lookup. It also covers the same window left
+open by the Skim rename (`trajectory`).
 
 **Checkpoints keep their keys** (Sol F6, verified): `checkpointKey` hashes only the caller's object,
 never the namespace (`src/source-hash.ts`), so a moved row is found again and an article
@@ -201,3 +212,24 @@ in: each is its own migration, and bundling them would make one review cover thr
   `AiJob` and every protocol literal held to stage 2 (F2, F3), `whole-document` not `sections` (F4),
   `evals/cost/baseline/` kept as history (F5), checkpoint keys confirmed namespace-free (F6), an
   explicit `CASE` (F7). Waiting on 261001s to push before stage 1.
+- 2026-10-02: **stage 1 on dev** (`b96fb333e`, merged as `d1794917c`). Scripted: 43 `git mv`s and
+  ~460 files; stored-literal counts checked equal to HEAD's (115 namespace, 1,196 step). The script
+  first rewrote paths inside history's prose too; those files were restored and only their link
+  targets repointed. One test (`parse-json`) built `src/${stage}.ts` from the step list — found by
+  the full suite, fixed.
+- 2026-10-02: **stage 2 built** (`d988cc77f` + review fixes). A literal pass (144 files), then 93
+  compiler errors for bare `hierarchy:` keys, then three Opus prose passes (src/scripts, tests/evals,
+  docs) reading ~1,480 hits one by one. **Two paths broken by the namespace swap** — a plan name
+  (`260904c-hierarchy-structure-in-waves.md`) and the dated results folder
+  `evals/results/hierarchy-structure/` — both restored; eval review records restored to their
+  original text. The job-reader translation has a test watched red (`tests/retired-step-names`).
+  Production counts, read-only: `revision_step_runs` 421 of 4,116; `checkpoints` 139 labels + 30
+  whole-document + 0 deepen; 2 finished jobs; none live.
+- GPT Sol code review
+  ([code-review-sol](261002b-rename-the-hierarchy-step-to-structure-everywhere-code-review-sol.md)),
+  write access: five fixes taken — `LOCK TABLE … ACCESS EXCLUSIVE NOWAIT` before the drain guard so
+  no enqueue slips between the guard and the rewrites (a busy table refuses; retry); retired-name
+  translation in the two raw publication readers in `src/store/pg-revisions.ts`; Article cost shows
+  old ledger rows under the new name; review-record links; checkpoint comments. Left, and recorded
+  here rather than fixed: `evals/cost/harness.ts` still assumes labels run inside the structure step
+  (pre-existing, since 2026-09-06). Taken after: the eval flag `--hierarchy-run` → `--structure-run`.

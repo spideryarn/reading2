@@ -92,7 +92,7 @@ ${PROFILE_RULES}`;
 - **Block ids and numbers are not words for a reader either, and that rule lives with the ids.**
   `BLOCK_ID_NOTE` in [`src/article-prompt.ts`](../../src/article-prompt.ts) is printed in every
   `articleWithIds` article, so a prompt shown ids is told not to write "block 39" or "block
-  spya-…" in prose, and a prompt shown none is not. The hierarchy prompts, which number their
+  spya-…" in prose, and a prompt shown none is not. The structure step's prompts, which number their
   own blocks, do not say it yet: no leak has been seen there, and the note's wording does not fit
   their numbered lines, so `toc/10` passed it by (`src/article-prompt.ts` says why).
   Why it is not in the core above:
@@ -102,7 +102,7 @@ ${PROFILE_RULES}`;
   authors' list, affiliations, acknowledgements, funding and disclosures are paperwork when they
   only record how the piece was produced, and content when the piece uses them. `"summary"` leaves
   it out; `"structure"` keeps the node a table of contents must have and labels it. Summary, Tweets
-  and both hierarchy prompts carry it; the evidence is
+  and both structure-step prompts carry it; the evidence is
   [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
@@ -187,7 +187,7 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
 Reading a few outputs and finding them better is not evidence: the same prompt, run twice, reads
 differently. This is the method that worked, in `evals/plain-words/`:
 
-1. **Call production's own function** (`structureRequest`, `generateGlossary`, `explainStream`,
+1. **Call production's own function** (`wholeDocumentRequest`, `generateGlossary`, `explainStream`,
    `converse`, …), not a copy of the prompt, on a few real local articles of the difficulty the
    change is for. Record a hash of the prompt source with each run.
 2. **Run the old prompt twice.** The second run is the control, and it tells you how much two

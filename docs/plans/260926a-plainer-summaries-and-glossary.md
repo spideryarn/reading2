@@ -1,6 +1,6 @@
 # Plainer summaries and glossary: a name is a handhold, not an explanation
 
-Research write-up: [docs/research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md](../research/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md).
+Investigation write-up: [docs/investigations/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md](../investigations/261002d-plain-words-prompts-measured-blind-pairs-and-briefer-answers.md).
 
 From SPIDERYARN-READING2-44, a suggestion from Greg, overseer queue entry `qi-qpsx92kg`.
 
@@ -70,7 +70,7 @@ exists, it is just more bookkeeping than a first cut needs to buy blind.
 unchanged; plain-wording them would break the one thing they are for.
 
 `PROMPT_VERSION` `toc/7` → `toc/8`. **New articles only** — the decision Greg made twice
-([hierarchy.md § prompt-versions](../project/hierarchy.md#prompt-versions)); an existing tree keeps
+([hierarchy.md § prompt-versions](../project/structure-step.md#prompt-versions)); an existing tree keeps
 its gists until its stage is re-run from the metadata page. The bump also invalidates structure
 checkpoints for articles mid-stage, which is what it is for. The byte pins in
 `tests/hierarchy-structure-request-parity.test.ts` and `tests/hierarchy-prompt-hoist.test.ts` move

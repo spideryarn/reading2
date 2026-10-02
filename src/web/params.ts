@@ -1131,10 +1131,14 @@ export const diagramHueParam = createParser<ScatterHue>({
  * `?referee=`: in the URL, because it changes the whole band, and pushed,
  * because switching is a deliberate act Back should undo.
  *
- * **`simple` is the default**, the stop the slider rests on, and is omitted
- * from the address. `gists`, the outline this mode drew until 2026-10-01, is
- * no longer a value, so an old `?summary=gists` reads as `simple` — the same
- * degrade-to-the-default rule as every other parser in this file.
+ * **`brief` is the default**, and is omitted from the address: Greg,
+ * 2026-10-01 (8N, spya-zw479b), *"In summary mode, default to the brief summary
+ * when it opens for the first time"* — Simple and Fuller are written out, while
+ * Brief stays absent; `last-view.ts` remembers the resulting view
+ * (docs/plans/261002c-summary-opens-on-brief.md).
+ * `simple` was the default until then. `gists`, the outline this mode drew
+ * until 2026-10-01, is no longer a value, so an old `?summary=gists` reads as
+ * `brief` — the same degrade-to-the-default rule as every other parser here.
  *
  * **Writing it never spends.** Only a press on a plain-words control (the
  * slider, an end button or a command-bar row) arms the run; Back, a pasted link
@@ -1144,7 +1148,7 @@ export const summaryParam = createParser<SimpleLevel>({
   parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
   serialize: (v) => v,
 })
-  .withDefault("simple")
+  .withDefault("brief")
   .withOptions({ history: "push" });
 
 /* ---------------------------------------------------------- structure mode --

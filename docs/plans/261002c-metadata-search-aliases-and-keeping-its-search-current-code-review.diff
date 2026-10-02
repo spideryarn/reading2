@@ -1,0 +1,471 @@
+diff --git a/docs/project/web-client.md b/docs/project/web-client.md
+index 12ea14b7d..436581dde 100644
+--- a/docs/project/web-client.md
++++ b/docs/project/web-client.md
+@@ -26,7 +26,7 @@ Why the feature exists and what a gist may and may not be:
+ | [`src/web/modes/`](../../src/web/modes/) | a mode's controller and its band, out of `App.tsx` — `modes/ideas/IdeasMode.tsx` was the first, joined on 2026-09-06 by Timeline, Quotes, Debate and Glossary, then by Search, Summary, Diagram and Referee, and last by Chat and Remember, which share one `modes/conversation/ConversationModes.tsx` because `RememberBand` renders `ConversationBand`; more follow under [260905e](../plans/260905e-main-app-architecture-review.md). The extraction is what lets a boundary enclose the mode's own computation, since a boundary cannot catch a throw from the component that renders it |
+ | [`src/web/LazyPage.tsx`](../../src/web/LazyPage.tsx) | **the two routes whose code is not in the reader's first download** — `/admin` and `/design`, fetched when somebody asks for the address. Takes a loader and a route key rather than children, because a rejected `React.lazy` re-throws its rejection forever, so *Try again* has to build a **fresh** lazy type, and because both routes sit in the same position in `SignedIn`'s tree, so without the key one route's failure — or its loaded component — follows the reader to the other. Reader, shelf and mode code stays **eager** on purpose: cached JSON cannot make an unloaded chunk execute, and in-tab offline navigation depends on that. [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) is what stops the boundary quietly rotting, and [260905i](../plans/260905i-lazy-load-admin-and-design-routes.md) has the numbers |
+ | [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/`, `/read/<slug>`, and its `/metadata` page (`/tweets` redirects to `?mode=tweets`) — [library.md](library.md) |
+-| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
++| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md). **Any change to its sections or their controls keeps its search current**, because Greg asked (`spya-nkjpte`, 2026-10-02): *"any time we update the Metadata page, we keep that search and ToC up-to-date."* The contents list (ToC) needs nothing: it reads the page's `<Section>`s. The search needs words: every `<Section>` must carry `keywords` (a type error without them), written as the words a reader would *type* — *regenerate*, *get rid of* — not the ones the section prints; a new kind of word that means the same everywhere on the page goes in [`page-search.ts`](../../src/web/page-search.ts) § `METADATA_SYNONYMS`; and a new control gets a phrasing in [`tests/metadata-contents-reveal.test.tsx`](../../tests/metadata-contents-reveal.test.tsx) § the words a reader brings. A new thing to *do* there may want an alias on the command bar's Metadata row too (`CommandBar.tsx` § `articleRows`) — [261002c](../plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md) |
+ | [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `TweetsPanel`, the Tweets mode's band (`?mode=tweets`; a page at `/read/<slug>/tweets` until 2026-09-29, when it became a mode — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)): the article as a numbered thread, each post linking to its passages, with the line that says the thread is out of date; the read and the job live in [`useTweets.ts`](../../src/web/useTweets.ts) — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
+ | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles — [library.md](library.md) |
+ | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) + [`useJobs.ts`](../../src/web/useJobs.ts) | paste a URL, watch the five stages tick over — [ingest-queue.md](ingest-queue.md). The poll is deliberate; `jobEngine.ts`'s header says why it is not server-sent events. `useJobs` has two ways in: `add(url)` for an ingest, `run({slug, steps})` for a named step on an article already on the shelf — the thread page is the only caller of the second |
+diff --git a/src/web/CommandBar.tsx b/src/web/CommandBar.tsx
+index dff133572..4811e9e39 100644
+--- a/src/web/CommandBar.tsx
++++ b/src/web/CommandBar.tsx
+@@ -296,7 +296,14 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
+       href: readHref(slug, search, "metadata"),
+       label: "Metadata",
+       description: "Where this came from, how long it is, and every step that built it.",
+-      aliases: ["about", "details", "source", "reading time", "stats"],
++      /* The second line is what you go there to *do* — the page has the only
++         controls for each. Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching
++         for "regenerate" … and nothing matched"*. Plan 261002c. */
++      aliases: [
++        "about", "details", "source", "reading time", "stats",
++        "regenerate", "rerun", "re-run", "redo", "reprocess", "ai processing", "high-powered",
++        "cost", "price", "export", "download", "share", "public", "archive", "delete",
++      ],
+       /* The metadata page shows what the pipeline already wrote; opening it
+          runs nothing. */
+       generates: false,
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index b378a0193..01c08ae82 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -893,7 +893,7 @@ export function Metadata({
+             the article's own voice, which makes it read as part of the heading
+             rather than as the first of nine cards. */}
+         {Boolean(root?.gist || root?.summary || meta.note) && (
+-          <Section label="In one sentence">
++          <Section label="In one sentence" keywords="takeaway gist summary short brief one line what is it about">
+             <div className={`${CARD} tw:p-5`}>
+               {root?.gist && (
+                 <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
+@@ -927,7 +927,7 @@ export function Metadata({
+           <Section
+             label="Authors"
+             aside={`${meta.authors.length}`}
+-            keywords="names writers byline who wrote it affiliations"
++            keywords="names writers byline who wrote it affiliations people person researchers institution university"
+             collapsible
+           >
+             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
+@@ -1074,7 +1074,7 @@ export function Metadata({
+             rather than about the article. */}
+         <Section
+           label="Your reading"
+-          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off"
++          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off resume continue position"
+         >
+           {/* The per-article half of the reader profile. The global half is
+               read-only here with a link to /profile, because a global value
+@@ -1194,7 +1194,7 @@ export function Metadata({
+             takes the article off the shelf, followed only by permanent
+             deletion. Both belong past everything somebody might have come here
+             to read. */}
+-        <Section label="Archive this article" keywords="remove from shelf">
++        <Section label="Archive this article" keywords="remove from shelf put away tidy done unarchive restore library">
+           <ArchiveArticle archive={archive} fixture={showingFixture} />
+         </Section>
+ 
+@@ -1212,7 +1212,7 @@ export function Metadata({
+             and shutting the section only adds a press in front of it. */}
+         <Section
+           label="Delete this article"
+-          keywords="permanent permanently forever"
++          keywords="permanent permanently forever gone wipe for good irreversible"
+           collapsible
+           keepMounted
+         >
+@@ -1291,7 +1291,7 @@ function SharingSection({
+   return (
+     <Section
+       label="Access & sharing"
+-      keywords="anyone everybody readers signed in account permission public link privacy visible who can read"
++      keywords="anyone everybody readers signed in account permission public link privacy visible who can read send friend colleague republish"
+     >
+       {/* **In a card, like every other section on this page**, since
+           2026-09-04. It was the one section whose contents sat straight on the
+@@ -1419,7 +1419,7 @@ function RerunSection({
+        a failed metadata request draws the section open, with the error first. */
+     <Section
+       label="AI processing"
+-      keywords="steps stages pipeline models summaries glossary structure hierarchy"
++      keywords={AI_PROCESSING_KEYWORDS}
+       collapsible={!error}
+       keepMounted
+       aside={error ? null : aside}
+@@ -1587,6 +1587,28 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
+   simple: "Simple summary",
+ };
+ 
++/**
++ * **What a reader might type looking for *AI processing*** — the section where
++ * everything is asked for again, and so the one with the most ways to say it.
++ * Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to
++ * find ways to regenerate the AI processing, and nothing matched"*.
++ *
++ * The words for *again* that mean only that are a synonym group in
++ * page-search.ts § METADATA_SYNONYMS (*regenerate*, *reprocess*, …). The
++ * broader ones are here, on this section alone: a synonym applies to every
++ * section, so *update* or *over* in that group would rank this above *At a
++ * glance* for *over time* (GPT Sol, plan review of 261002c, P2). Then the
++ * High-powered AI switch and the *Whole article* row, which `RERUN_LABEL` does
++ * not name, and every row it does — built from it, so a new row is findable
++ * the day it is added.
++ */
++const AI_PROCESSING_KEYWORDS = [
++  "steps stages pipeline models summaries glossary structure hierarchy",
++  "start over again reset whole update fix generate",
++  "high powered power opus sonnet model better smarter stronger capable",
++  ...Object.values(RERUN_LABEL),
++].join(" ");
++
+ /**
+  * **The four rows for which "another model call" is not the whole story**,
+  * said under the mode's name, before the press, because nothing else on this
+@@ -1836,7 +1858,7 @@ function CostSection({ slug }: { slug: string }) {
+   return (
+     <Section
+       label="What it cost"
+-      keywords="ai calls models tokens breakdown"
++      keywords="ai calls models tokens breakdown total expensive cheap"
+       collapsible={!failed}
+       aside={articleCostSummary(load)}
+     >
+@@ -1949,7 +1971,7 @@ function ExportSection({
+        Its error, if one arrives while shut, is inside `hidden` and so is not
+        announced until the section is opened — accepted: the reader shut it
+        themselves, mid-wait. GPT Sol, plan review. */
+-    <Section label="Export" keywords="data files zip" collapsible keepMounted>
++    <Section label="Export" keywords="data files zip markdown take out keep offline" collapsible keepMounted>
+       <div className={`${CARD} tw:p-4`}>
+         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
+             the toolbar's `IconButton` — this one has a label to carry and no
+@@ -2225,7 +2247,7 @@ function CameFrom({ meta }: { meta: Meta }) {
+        heading now says that. Fable, 2026-09-03. */
+     <Section
+       label="How well we read the PDF"
+-      keywords="transcription missed missing words pages"
++      keywords="transcription missed missing words pages accuracy errors mistakes garbled ocr scanned"
+     >
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+@@ -2353,7 +2375,7 @@ function TechnicalDetails({
+   return (
+     <Section
+       label="Technical details"
+-      keywords="address url source original stored storage location link fingerprint hash slug id revision"
++      keywords="address url source original stored storage location link fingerprint hash slug id revision where from website web page developer"
+       collapsible
+     >
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+@@ -3369,10 +3391,17 @@ function Section({
+    * search box above the contents list reads them (`data-keywords`,
+    * page-search.ts). Mostly for the sections that unmount their body when
+    * shut, whose words are otherwise not on the page to find. The synonyms
+-   * every page shares live in page-search.ts § SYNONYMS; these are this
+-   * section's own. Plan 261001s.
++   * the whole page shares live in page-search.ts § METADATA_SYNONYMS; these
++   * are this section's own. Plan 261001s.
++   *
++   * **Required, and generous**: the words a reader *types* — *regenerate*,
++   * *get rid of*, *who can see it* — not the words the section prints. A new
++   * section, or a new control in one, comes with its words, and a case in
++   * tests/metadata-contents-reveal.test.tsx § the words a reader brings.
++   * Greg, `spya-nkjpte`, 2026-10-02 — docs/project/web-client.md, the
++   * Metadata.tsx row. Plan 261002c.
+    */
+-  keywords?: string;
++  keywords: string;
+   collapsible?: boolean;
+   /**
+    * **Shut hides the children rather than unmounting them.** For *AI
+@@ -3460,7 +3489,7 @@ function Section({
+       ref={sectionEl}
+       id={sectionId(label)}
+       data-section={label}
+-      {...(keywords ? { "data-keywords": keywords } : {})}
++      data-keywords={keywords}
+       className="tw:mt-8 tw:scroll-mt-24"
+     >
+       {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
+diff --git a/src/web/page-search.ts b/src/web/page-search.ts
+index e0bb2172b..864fb89eb 100644
+--- a/src/web/page-search.ts
++++ b/src/web/page-search.ts
+@@ -12,7 +12,7 @@
+  * keystroke; it needs the words a reader types to reach the section that means
+  * them. Four things do that here, each pinned in tests/page-search.test.ts:
+  *
+- * - **A synonym table** (`SYNONYMS`), hand-written for the words this page is
++ * - **A synonym table** (`METADATA_SYNONYMS`), hand-written for the words this page is
+  *   about — *price* finds *What it cost*, *download* finds *Export*.
+  * - **A light stem** on both sides, so *costs*, *sharing* and *authored* meet
+  *   *cost*, *share* and *author*.
+@@ -63,13 +63,14 @@ export type SynonymTable = readonly (readonly string[])[];
+  * rather than adding its words here, where they would widen Metadata's matches
+  * with words that mean nothing on it.
+  */
+-const SYNONYMS: SynonymTable = [
++export const METADATA_SYNONYMS: SynonymTable = [
+   ["cost", "price", "spend", "spent", "money", "dollar", "bill", "expense", "charge", "paid", "usage"],
+-  ["delete", "remove", "erase", "trash", "destroy", "bin", "purge"],
++  ["delete", "remove", "erase", "trash", "destroy", "bin", "purge", "rid"],
+   ["archive", "hide", "shelve", "shelf", "unshelve"],
+   ["share", "public", "private", "link", "visibility", "visible", "access", "publish", "permission"],
+   ["export", "download", "backup", "save", "copy", "json"],
+-  ["rerun", "regenerate", "redo", "refresh", "retry", "rebuild", "again", "run", "restart", "processing"],
++  ["rerun", "regenerate", "regen", "redo", "refresh", "retry", "rebuild", "again", "run", "restart",
++    "reprocess", "recompute", "remake", "rewrite", "reanalyse", "reanalyze", "processing"],
+   ["author", "writer", "byline", "wrote", "written"],
+   ["reading", "read", "finished"],
+   ["time", "duration", "long"],
+@@ -85,7 +86,7 @@ const SYNONYMS: SynonymTable = [
+  * purpose: both sides go through it, so it only has to be consistent, not
+  * right. Short words are left alone, or *is* and *as* would vanish.
+  */
+-function stem(word: string): string {
++export function searchStem(word: string): string {
+   let w = word;
+   if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
+   if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
+@@ -102,7 +103,7 @@ function words(text: string): string[] {
+     .toLowerCase()
+     .split(/[^\p{L}\p{N}]+/u)
+     .filter(Boolean)
+-    .map(stem);
++    .map(searchStem);
+ }
+ 
+ /** Stemmed word → its stemmed group, for one table. */
+@@ -117,7 +118,7 @@ function groupsOf(table: SynonymTable): GroupIndex {
+   if (cached) return cached;
+   const index = new Map<string, readonly string[]>();
+   for (const group of table) {
+-    const stems = group.map(stem);
++    const stems = group.map(searchStem);
+     for (const s of stems) index.set(s, stems);
+   }
+   INDEXES.set(table, index);
+@@ -136,10 +137,11 @@ const STOPWORDS = new Set(
+     "were", "be", "been", "it", "its", "this", "that", "my", "me", "i", "you", "your", "we", "our",
+     "how", "much", "many", "what", "which", "where", "when", "why", "do", "does", "did", "can",
+     "show", "see", "find", "about", "make", "change", "used", "want", "need", "like", "article", "page",
++    "get", "please",
+     /* Fragments produced when punctuation splits ordinary contractions:
+        "what's", "you're", "I've", "I'll", "I'd", "can't". */
+     "s", "re", "ve", "ll", "d", "m", "t",
+-  ].map(stem),
++  ].map(searchStem),
+ );
+ 
+ /** A query word shorter than this does not expand through the table by prefix. */
+@@ -178,11 +180,20 @@ function hit(term: string, synonyms: Set<string>, have: readonly string[]): numb
+  * The ids of the sections that answer `query`, best first. An empty query
+  * answers nothing, and the caller shows its whole list instead. `synonyms` is
+  * the page's own table; omitted, it is Metadata's.
++ *
++ * **Every word must hit somewhere — among the words that mean anything here.**
++ * When no section answers every word, a word that no section answers at all
++ * (*please*, *zebra*) is dropped and the rest are tried again, so *regenerate
++ * my glossary please* finds AI processing. Words that each mean something on
++ * the page still have to agree: *delete cost* finds nothing rather than both,
++ * so a second word only ever narrows. Not "rank by how many words hit", which
++ * would make it widen. Greg, `spya-nkjpte` ("more flexible/forgiving"); GPT
++ * Sol, plan review of 261002c, P1.
+  */
+ export function searchSections(
+   query: string,
+   sections: readonly SearchableSection[],
+-  synonyms: SynonymTable = SYNONYMS,
++  synonyms: SynonymTable = METADATA_SYNONYMS,
+ ): string[] {
+   const all = words(query);
+   if (all.length === 0) return [];
+@@ -190,23 +201,31 @@ export function searchSections(
+   const terms = content.length > 0 ? content : all;
+   const groups = groupsOf(synonyms);
+   const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t, groups) }));
+-  const scored: { id: string; score: number; order: number }[] = [];
+-  sections.forEach((section, order) => {
++  /* Each section's best score for each query word, 0 for a miss. */
++  const rows = sections.map((section, order) => {
+     const fields: Record<Field, string[]> = {
+       label: words(section.label),
+       keywords: words(section.keywords),
+       aside: words(section.aside),
+     };
+-    let score = 0;
+-    for (const { term, synonyms } of expanded) {
++    const scores = expanded.map(({ term, synonyms }) => {
+       let best = 0;
+       for (const field of Object.keys(FIELD_WEIGHT) as Field[]) {
+         best = Math.max(best, FIELD_WEIGHT[field] * hit(term, synonyms, fields[field]));
+       }
+-      if (best === 0) return; // every word must hit somewhere
+-      score += best;
+-    }
+-    scored.push({ id: section.id, score, order });
++      return best;
++    });
++    return { id: section.id, order, scores };
+   });
+-  return scored.sort((a, b) => b.score - a.score || a.order - b.order).map((s) => s.id);
++  const answering = (wanted: readonly number[]) =>
++    rows
++      .filter((r) => wanted.every((i) => (r.scores[i] ?? 0) > 0))
++      .map((r) => ({ ...r, score: wanted.reduce((sum, i) => sum + (r.scores[i] ?? 0), 0) }))
++      .sort((a, b) => b.score - a.score || a.order - b.order)
++      .map((r) => r.id);
++  const every = terms.map((_, i) => i);
++  const found = answering(every);
++  if (found.length > 0) return found;
++  const known = every.filter((i) => rows.some((r) => (r.scores[i] ?? 0) > 0));
++  return known.length > 0 && known.length < every.length ? answering(known) : [];
+ }
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index 8679a97dc..3c6afa794 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -1069,6 +1069,22 @@ describe("the rows that are not modes", () => {
+     }
+   });
+ 
++  /**
++   * **The words for what you do on the Metadata page reach it** — Greg,
++   * `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to find
++   * ways to regenerate the AI processing, and nothing matched"*. On the reading
++   * view the bar has no row for re-running anything; the page that does is
++   * Metadata. Plan 261002c.
++   */
++  it("answers the words for re-running and the page's other controls with Metadata", () => {
++    readingSignedIn();
++    openBar();
++    for (const query of ["regenerate", "rerun", "reprocess", "ai processing", "cost", "export", "delete"]) {
++      type(query);
++      expect(listed(), `typing ${JSON.stringify(query)} did not offer Metadata`).toContain("Metadata");
++    }
++  });
++
+   it("navigates to this article's metadata page, carrying the reader's place", () => {
+     history.replaceState(null, "", "/read/a-piece?at=spya-k3m9qt");
+     readingSignedIn();
+diff --git a/tests/metadata-contents-reveal.test.tsx b/tests/metadata-contents-reveal.test.tsx
+index c0047c87e..52a8a493e 100644
+--- a/tests/metadata-contents-reveal.test.tsx
++++ b/tests/metadata-contents-reveal.test.tsx
+@@ -374,3 +374,46 @@ describe("the search box above it (83)", () => {
+     expect(entries()).toEqual(all);
+   });
+ });
++
++/* **The words a reader brings, against the real page** — Greg, `spya-nkjpte`,
++   2026-10-02: *"Add lots more keyword-aliases for Metadata page search to make
++   it more flexible/forgiving (e.g. I tried searching for "regenerate" to find
++   ways to regenerate the AI processing, and nothing matched)."* Run on the
++   rendered page rather than a copied list, so a section whose `keywords` drift
++   fails here. docs/plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md. */
++describe("the search box finds a section by the words a reader brings (nkjpte)", () => {
++  const CASES: [string, string][] = [
++    ["regenerate", "AI processing"],
++    ["regen", "AI processing"],
++    ["rerun", "AI processing"],
++    ["re-run", "AI processing"],
++    ["reprocess", "AI processing"],
++    ["recompute", "AI processing"],
++    ["start again", "AI processing"],
++    ["start over", "AI processing"],
++    ["reset", "AI processing"],
++    ["redo the whole article", "AI processing"],
++    ["update", "AI processing"],
++    ["fix", "AI processing"],
++    ["high powered", "AI processing"],
++    ["opus", "AI processing"],
++    ["better model", "AI processing"],
++    ["regenerate glossary", "AI processing"],
++    ["regenerate my glossary please", "AI processing"],
++    ["redo the quiz", "AI processing"],
++    ["thread", "AI processing"],
++    ["tldr", "In one sentence"],
++    ["make it private", "Access & sharing"],
++    ["get rid of it forever", "Delete this article"],
++    ["hide it", "Archive this article"],
++    ["json", "Export"],
++    /* Authors is not here: this article has none, so the page draws no
++       section for it. tests/page-search.test.ts covers *who wrote this*. */
++  ];
++  for (const [query, expected] of CASES) {
++    it(`"${query}" → ${expected}`, async () => {
++      await type(query);
++      expect(entries()[0]).toBe(expected);
++    });
++  }
++});
+diff --git a/tests/page-search.test.ts b/tests/page-search.test.ts
+index 3e3f0807d..5fdb3e36f 100644
+--- a/tests/page-search.test.ts
++++ b/tests/page-search.test.ts
+@@ -11,7 +11,13 @@
+  * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
+  */
+ import { describe, expect, it } from "vitest";
+-import { searchSections, type SearchableSection } from "../src/web/page-search.js";
++import { HELP_SYNONYMS } from "../src/web/help/help-content.js";
++import {
++  METADATA_SYNONYMS,
++  searchSections,
++  searchStem,
++  type SearchableSection,
++} from "../src/web/page-search.js";
+ 
+ function section(
+   label: string,
+@@ -205,3 +211,44 @@ describe("searchSections with a synonym table of its own", () => {
+     expect(searchSections("price", PAGE, OWN)).toEqual([]);
+   });
+ });
++
++/* **Forgiving about a word nothing on the page has** — Greg, `spya-nkjpte`,
++   2026-10-02 ("more flexible/forgiving"). After an AND miss, a query word that
++   matches no section at all is dropped and AND is tried again; two words that
++   each mean something still narrow, so *delete cost* finds nothing. GPT Sol,
++   plan review of 261002c, P1. */
++describe("searchSections drops a word that matches nothing anywhere", () => {
++  it("finds the section the other words agree on", () => {
++    expect(find("regenerate my glossary please")[0]).toBe("AI processing");
++    expect(find("delete zebra")).toEqual(find("delete"));
++  });
++
++  it("still narrows when every word means something", () => {
++    expect(find("delete cost")).toEqual([]);
++  });
++
++  it("still finds nothing when no word means anything", () => {
++    expect(find("zebra giraffe")).toEqual([]);
++  });
++});
++
++/* `groupsOf` keeps the last group a stem appears in, silently — so a word in
++   two groups loses its first meaning with no error. Checked on stems, since two
++   spellings can stem to one word. GPT Sol, plan review of 261002c, P2. */
++describe("each synonym table puts a word in one group only", () => {
++  for (const [name, table] of [
++    ["Metadata", METADATA_SYNONYMS],
++    ["Help", HELP_SYNONYMS],
++  ] as const) {
++    it(name, () => {
++      const seen = new Map<string, number>();
++      table.forEach((group, i) => {
++        for (const word of group) {
++          const stem = searchStem(word);
++          expect(seen.get(stem) ?? i, `"${word}" is in groups ${seen.get(stem)} and ${i}`).toBe(i);
++          seen.set(stem, i);
++        }
++      });
++    });
++  }
++});

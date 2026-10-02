@@ -243,7 +243,7 @@ Each of these leaves an article that still renders, so nothing draws attention t
 1. **Turning on `SANITIZE_NAMED_PROPS`.** It is DOM-clobbering protection, it is off by default, and
    it rewrites every `id` to `user-content-<id>`. That renames all 139 block ids on the sample
    article, orphans every comment and every `#spya-…` link, and breaks
-   [the one contract the project rests on](block-ids.md). Nothing throws. Hierarchy just quietly stops
+   [the one contract the project rests on](block-ids.md). Nothing throws. The tree just quietly stops
    resolving.
 2. **Narrowing `ALLOWED_ATTR` by hand.** `id` survives because it is in DOMPurify's *default*
    allowlist. A hand-written list that forgets it takes the spine with it.
@@ -485,7 +485,7 @@ is not available on most machines and a security guard whose test skips is not a
 Worth its own heading, because it is the same trap one level up and it nearly shipped.
 
 Stage 3 stamps the file it writes, `output/<slug>.blocks.json`. **The file the server opens is
-`data/<slug>/blocks.json`, and that one is written by stage 4** ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
+`data/<slug>/blocks.json`, and that one is written by stage 4** ([`src/structure.ts`](../../src/structure.ts)),
 from scratch, as a plain `{ blocks }`. So the stamp was written, correctly, into a file the read seam
 never touches — and every article in the library read back as stale.
 

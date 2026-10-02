@@ -54,7 +54,7 @@ let activeIsOfflineCopy: boolean;
 const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0, chosenBy: "program", refreshing: false };
 
 vi.mock("../src/web/lib/api.js", () => ({
-  apiFetch: async (url: string) => {
+  apiFetch: async (url: string, init?: RequestInit) => {
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
     if (url.startsWith("/api/library/terms")) return json(NO_TERMS);
     if (url === "/api/library") {
@@ -68,6 +68,13 @@ vi.mock("../src/web/lib/api.js", () => ({
     if (url.startsWith("/api/library/search?")) {
       const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
       return json({ query: params.get("q") ?? "", archived: false, hits: [], articles: 0, capped: false });
+    }
+    if (init?.method === "PATCH" && url.startsWith("/api/library/")) {
+      const slug = decodeURIComponent(url.slice("/api/library/".length));
+      const found = active.find((e) => e.slug === slug);
+      if (!found) return json({ error: "gone" }, 404);
+      active = active.filter((e) => e.slug !== slug);
+      return json({ entry: { ...found, archivedAt: "2026-10-02T12:00:00.000Z" } });
     }
     return json({ error: "unmocked" }, 404);
   },
@@ -262,7 +269,10 @@ describe("the Include public chip", () => {
     await traverse(() => history.forward());
     expect(publicChip()?.getAttribute("aria-pressed")).toBe("true");
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
-    expect(publicReads).toBe(2);
+    /* One read: the listing is `Library`'s since Part D, shared by the section
+       and the search's count, so turning the chip off and on again does not
+       ask again. */
+    expect(publicReads).toBe(1);
   });
 
   it("says when a search leaves none, and says the cap", async () => {
@@ -298,6 +308,85 @@ describe("the Include public chip", () => {
     await settle();
     expect(publicReads).toBe(2);
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+  });
+});
+
+describe("beside the search's answer (spya-s9fhmw)", () => {
+  const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+  const buttons = () => [...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+
+  it("counts the public cards that match, offers Include public, and pressing it shows them", async () => {
+    await show("/?q=ann");
+    expect(line()?.textContent).toContain("1 public article matches by title, author, site or description.");
+    expect(buttons()).toEqual(["Include archived", "Include public"]);
+    const press = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include public");
+    act(() => press?.click());
+    await settle();
+    expect(new URLSearchParams(location.search).get("public")).toBe("1");
+    expect(publicTitles()).toEqual(["Zebra crossings"]);
+    // One read for the count and the section both.
+    expect(publicReads).toBe(1);
+    expect(buttons()).toEqual(["Include archived"]);
+  });
+
+  it("does not count your own shared article as public, and qualifies a capped zero", async () => {
+    truncated = true;
+    await show("/?q=mine");
+    expect(line()?.textContent).toContain("None of the most recently shared public articles matches");
+    expect(buttons()).toContain("Include public");
+  });
+
+  it("still excludes your own shared article after archiving it without loading the archive", async () => {
+    await show("/?q=mine");
+    expect(line()?.textContent).toContain("No public article matches");
+    const card = [...host.querySelectorAll("main > ul > li")].find((li) => li.querySelector("h2")?.textContent === "Mine, shared")!;
+    act(() => card.querySelector<HTMLButtonElement>('[data-action="archive"]')!.click());
+    await settle();
+    expect(line()?.textContent).toContain("No public article matches");
+    const press = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include public")!;
+    act(() => press.click());
+    await settle();
+    expect(publicTitles()).toEqual([]);
+    expect(publicReads).toBe(1);
+  });
+
+  it("says 'at least' for a positive count from a capped listing", async () => {
+    truncated = true;
+    await show("/?q=zebra");
+    expect(line()?.textContent).toContain("At least 1 public article matches");
+    expect(publicReads).toBe(1);
+  });
+
+  it.each(["a", "or", "-holland", "a b"])("does not count %s when the card rule keeps no word, but offers the buttons", async (query) => {
+    await show(`/?q=${encodeURIComponent(query)}`);
+    expect(line()?.textContent).not.toContain("public article");
+    expect(buttons()).toEqual(["Include archived", "Include public"]);
+    expect(publicReads).toBe(0);
+  });
+
+  it("keeps both buttons when the public count fails", async () => {
+    publicFails = true;
+    await show("/?q=ann");
+    expect(buttons()).toEqual(["Include archived", "Include public"]);
+    expect(line()?.textContent).not.toContain("public article");
+  });
+
+  it("does not count public cards against an incomplete cached owner shelf", async () => {
+    cached = [entry("alpha", "Alpha")];
+    let release!: () => void;
+    activeGate = new Promise<void>((resolve) => { release = resolve; });
+    await show("/?q=mine");
+    expect(publicReads).toBe(0);
+    expect(line()?.textContent).not.toContain("public article");
+    release();
+    await settle();
+    expect(publicReads).toBe(1);
+    expect(line()?.textContent).toContain("No public article matches");
+  });
+
+  it("says the counts come before Unread and topics when either is on", async () => {
+    await show("/?q=ann&show=unread");
+    expect(line()?.textContent).toContain("Counted before Unread and topics.");
   });
 });
 

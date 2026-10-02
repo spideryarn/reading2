@@ -932,7 +932,7 @@ test harness at all — true when it was written on 2026-08-27, and false since:
 mounts this very card. So the three tests named at the foot of
 [`tests/link-facts.test.ts`](../../tests/link-facts.test.ts) are now simply unwritten rather than
 impossible. A doc that says "this cannot be done here" outlives the reason it was true —
-[260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md).
+[260903b-facts-that-were-wrong.md](../investigations/260903b-facts-that-were-wrong.md).
 
 What is tested is the pair of pure functions either side of the wire
 ([`tests/link-facts.test.ts`](../../tests/link-facts.test.ts)), because those are where somebody

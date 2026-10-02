@@ -23,7 +23,7 @@
  *
  * ## What is faked, and why that costs no claim
  *
- * `fetch` reaches the network, and `extract`-on-a-PDF and `hierarchy` are paid
+ * `fetch` reaches the network, and `extract`-on-a-PDF and `structure` are paid
  * model calls, so those three and `assets` (which fetches images) are fakes
  * over the real registry, the way tests/labels-land-after-the-shelf.test.ts
  * does it. **`blocks` is the real step**, because it is the one that keeps a
@@ -62,7 +62,7 @@ import {
   revisionStepRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { buildTree, type ModelNode } from "../src/hierarchy.js";
+import { buildTree, type ModelNode } from "../src/structure.js";
 import { mintId } from "../src/ids.js";
 import {
   advanceJobWith,
@@ -267,7 +267,7 @@ async function publishWithExtras(
 
   for (const name of ["fetch", "extract"] as StepName[]) await stepRun(begun.revisionId, name);
   await stepRun(begun.revisionId, "blocks", hashBlocks(blocks));
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   for (const name of extras) await stepRun(begun.revisionId, name, hashBlocks(blocks));
 
   await publishRevision({ slug, revisionId: begun.revisionId });
@@ -307,14 +307,14 @@ function fakeExtract(calls: Calls): PipelineStep<"extract"> {
   };
 }
 
-/** `hierarchy` without the model call — tests/labels-land-after-the-shelf.test.ts's fake. */
-function fakeHierarchy(fail = false): PipelineStep<"hierarchy"> {
+/** `structure` without the model call — tests/labels-land-after-the-shelf.test.ts's fake. */
+function fakeStructure(fail = false): PipelineStep<"structure"> {
   return {
-    name: "hierarchy",
-    label: STEPS.hierarchy.label,
+    name: "structure",
+    label: STEPS.structure.label,
     produces: ["tree", "labels", "blocks"],
     async run(ctx, store) {
-      if (fail) throw new Error("the fixture's hierarchy gave up on purpose");
+      if (fail) throw new Error("the fixture's structure gave up on purpose");
       const file = await store.read(ctx.slug, "blocks", "blocks");
       if (!file?.blocks) throw new Error(`no blocks for ${ctx.slug}`);
       const structure = mergeLabels(buildTree(rootOver(file.blocks), {}, file.blocks, ctx.slug), {});
@@ -353,12 +353,12 @@ function fakeAssets(): PipelineStep<"assets"> {
   };
 }
 
-function partsFor(calls: Calls, opts: { failHierarchy?: boolean } = {}): AdvanceParts {
+function partsFor(calls: Calls, opts: { failStructure?: boolean } = {}): AdvanceParts {
   const steps: StepRegistry = {
     ...STEPS,
     fetch: fakeFetch(calls),
     extract: fakeExtract(calls),
-    hierarchy: fakeHierarchy(opts.failHierarchy),
+    structure: fakeStructure(opts.failStructure),
     assets: fakeAssets(),
   };
   return {
@@ -614,7 +614,7 @@ describe("a reset, through the real claim and publication", () => {
     const before = await publishWithExtras(slug, ["quotes", "glossary"]);
     const { job } = await enqueueReset({ slug, regenerate: true, profile: PROFILE, pump: false });
 
-    const finished = await drive(job.id, partsFor({ fetch: 0, extract: 0 }, { failHierarchy: true }));
+    const finished = await drive(job.id, partsFor({ fetch: 0, extract: 0 }, { failStructure: true }));
     expect(finished.job.status).toBe("error");
     expect(await currentRevisionOf(slug)).toBe(before.revisionId);
     expect((await revision(before.revisionId)).quotes).toEqual(marker("quotes"));

@@ -465,3 +465,163 @@ describe("flashBlock with a cited work", () => {
     style.remove();
   });
 });
+
+/**
+ * **Staying on the section while the page settles** — flash.ts §
+ * scrollToAndFlash. On a cold load of `/help#mode-skim` the smooth scroll was
+ * aimed while the web fonts were still loading; they arrived mid-flight, the
+ * text above reflowed ~960px shorter, and Chrome's smooth scroll went on to the
+ * old target, leaving the heading 880px above the window. So a layout change
+ * shortly after the scroll asks for it again — unless the reader has already
+ * moved the page themselves, which always wins.
+ */
+describe("scrollToAndFlash keeps the section aligned while layout settles", () => {
+  type Call = { id: string; behavior: string | undefined };
+  type Observer = { cb: ResizeObserverCallback; disconnected: boolean; targets: Element[] };
+  let calls: Call[];
+  let observers: Observer[];
+  let height = 100;
+  const report = (o: Observer, h: number) =>
+    o.cb(
+      o.targets.map((target) => ({ target, contentRect: { width: 800, height: h } }) as unknown as ResizeObserverEntry),
+      {} as ResizeObserver,
+    );
+  let fonts: EventTarget & { ready: Promise<unknown>; status: string };
+  let resolveFonts: () => void;
+  const realRO = globalThis.ResizeObserver;
+  const realFonts = Object.getOwnPropertyDescriptor(document, "fonts");
+
+  beforeEach(() => {
+    calls = [];
+    observers = [];
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value(this: HTMLElement, o?: ScrollIntoViewOptions) {
+        calls.push({ id: this.id, behavior: o?.behavior });
+      },
+    });
+    globalThis.ResizeObserver = class {
+      rec: Observer;
+      constructor(cb: ResizeObserverCallback) {
+        this.rec = { cb, disconnected: false, targets: [] };
+        observers.push(this.rec);
+      }
+      /* A real observer reports each target once on `observe`, with no change
+         behind it — the report that must not count as a layout change. */
+      observe(t: Element) {
+        this.rec.targets.push(t);
+        report(this.rec, height);
+      }
+      unobserve() {}
+      disconnect() {
+        this.rec.disconnected = true;
+      }
+    } as unknown as typeof ResizeObserver;
+    const target = new EventTarget() as typeof fonts;
+    target.status = "loading";
+    target.ready = new Promise<void>((r) => {
+      resolveFonts = r;
+    });
+    fonts = target;
+    Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+    document.body.innerHTML = '<section id="far"></section>';
+  });
+
+  afterEach(() => {
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    globalThis.ResizeObserver = realRO;
+    if (realFonts) Object.defineProperty(document, "fonts", realFonts);
+    else delete (document as { fonts?: unknown }).fonts;
+  });
+
+  const far = () => document.getElementById("far") as HTMLElement;
+  /** The page grows, as text reflowing would: every live observer hears it. */
+  const resize = () => {
+    height += 37;
+    for (const o of observers) if (!o.disconnected) report(o, height);
+  };
+
+  it("does not count the observer's first report as a change", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    scrollToAndFlash(far());
+    expect(observers.length, "an observer is watching").toBeGreaterThan(0);
+    expect(calls.length).toBe(1);
+  });
+
+  it("asks again when the page resizes after the scroll began", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    scrollToAndFlash(far());
+    expect(calls).toEqual([{ id: "far", behavior: "smooth" }]);
+    vi.advanceTimersByTime(300);
+    resize();
+    expect(calls.length, "re-aligned once").toBe(2);
+    expect(calls[1]?.id).toBe("far");
+  });
+
+  it("asks again when a web font finishes loading", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    scrollToAndFlash(far());
+    vi.advanceTimersByTime(200);
+    fonts.dispatchEvent(new Event("loadingdone"));
+    expect(calls.length).toBe(2);
+    resolveFonts();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls.length, "fonts.ready asks too").toBe(3);
+  });
+
+  it("flashes once, however many times it re-aligns", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    const el = far();
+    const add = vi.spyOn(el.classList, "add");
+    scrollToAndFlash(el);
+    vi.advanceTimersByTime(100);
+    resize();
+    vi.advanceTimersByTime(400);
+    resize();
+    vi.advanceTimersByTime(3000);
+    expect(add.mock.calls.filter(([c]) => c === "element-flash").length).toBe(1);
+  });
+
+  for (const [what, fire] of [
+    ["a wheel", () => window.dispatchEvent(new WheelEvent("wheel"))],
+    ["a key", () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }))],
+    ["a touch", () => window.dispatchEvent(new Event("touchstart"))],
+    ["a pointer press", () => window.dispatchEvent(new Event("pointerdown"))],
+  ] as const) {
+    it(`never fights the reader: ${what} first, and a later resize is left alone`, async () => {
+      const { scrollToAndFlash } = await import("../src/web/flash.js");
+      scrollToAndFlash(far());
+      vi.advanceTimersByTime(100);
+      fire();
+      resize();
+      fonts.dispatchEvent(new Event("loadingdone"));
+      expect(calls.length).toBe(1);
+      expect(observers.every((o) => o.disconnected), "and it lets go").toBe(true);
+    });
+  }
+
+  it("stops watching once the settle window has passed", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    scrollToAndFlash(far());
+    vi.advanceTimersByTime(5000);
+    resize();
+    expect(calls.length).toBe(1);
+    expect(observers.every((o) => o.disconnected)).toBe(true);
+  });
+
+  it("stops watching when cancelled — a newer jump, or the page leaving", async () => {
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    const cancel = scrollToAndFlash(far());
+    cancel();
+    resize();
+    expect(calls.length).toBe(1);
+  });
+
+  it("re-aligns instantly under reduced motion", async () => {
+    reduceMotion(true);
+    const { scrollToAndFlash } = await import("../src/web/flash.js");
+    scrollToAndFlash(far());
+    resize();
+    expect(calls.map((c) => c.behavior)).toEqual(["auto", "auto"]);
+  });
+});

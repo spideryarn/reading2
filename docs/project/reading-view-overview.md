@@ -350,6 +350,8 @@ The key itself, and the four things the chord refuses to do, are
   file, and the bracketed code at the end of every message.
 - **[website-text.md](website-text.md)** — the pages that are about Spideryarn rather than about an
   article: the landing page, and the one address a reader writes to.
+- **[help-page.md](help-page.md)** — `/help`, the page for readers: what it is for, where its words
+  live, why its anchors never change, and the deploy step that keeps it true.
 - **[privacy.md](privacy.md)** — what we do with a reader's data and the page that says so: the four
   decisions Greg made, what a bug report carries, and which claims are pinned by a test rather than
   by somebody remembering.

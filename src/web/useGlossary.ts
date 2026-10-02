@@ -41,7 +41,7 @@ import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
 import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
@@ -318,6 +318,10 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the band still reaches the prose.
+     useCitations.ts § An always-mounted read is not an
+     always-fresh read. */
+  useStepFinished(slug, "glossary", refresh);
 
   /**
    * A new article clears the old one's list — **during render, not in an
@@ -461,6 +465,8 @@ export interface UseGlossary {
    *   260913a.
    */
   more(useProfile?: boolean): Promise<void>;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
   look(id: string): Promise<void>;
@@ -903,6 +909,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     starting: queue.starting,
     find,
     more,
+    refresh,
     cancel: queue.cancel,
     look,
     lookDraft,

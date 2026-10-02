@@ -143,7 +143,7 @@ interface StepRun<S extends StepName> {
    * **`StepBefore<S>` is what makes the name true, and it is a fix rather than
    * decoration.** `orderSteps` sorts by `STEP_ORDER` and by nothing else, so a
    * caller naming a *later* step here would get it back **after** their own:
-   * `precededBy: ["assets"]` on `hierarchy` comes out as `["hierarchy",
+   * `precededBy: ["assets"]` on `structure` comes out as `["structure",
    * "assets"]`, a "preceding" step that runs afterwards, with nothing anywhere
    * saying so. GPT Sol reproduced exactly that on 2026-09-03. No caller does it,
    * so this was a trap for the next one rather than a live bug — and the choice
@@ -335,6 +335,48 @@ export function stepRunRequest<S extends StepName>(
 /** Is this job one that would write the artefact this step writes? */
 function writesStep(job: Job, step: StepName): boolean {
   return job.steps.some((s) => s.name === step);
+}
+
+/**
+ * **Hear this step finish for this article, and nothing else** — the
+ * completion half of `useStepJob`, for a surface that shows an artefact it must
+ * never make.
+ *
+ * Marginalia's feed is the reason (plan 261002d): it reads FAQ, Debate and
+ * Ideas through their read halves, and with the margin open beside the band
+ * that runs one of them, the band's read was refreshed and the margin's was
+ * not. The always-mounted reads `OwnedReader` holds for the prose — citations,
+ * glossary, quotes — are the others: the band refreshed them, but only while it
+ * was mounted (useCitations.ts § An always-mounted read is not an always-fresh
+ * read). Calling `useStepJob` in either place would work and would hand each a
+ * `start` it must never call — the thing the read halves were split out to
+ * prevent.
+ *
+ * **Quiet, always.** It buys no idle poll and no poll on arrival
+ * (`jobEngine.subscribeQuietly`), so mounting it costs nothing: it hears a
+ * completion only while the engine is already polling for somebody's job,
+ * which it is whenever a band in this tab started one. A job finished in
+ * another tab while this one's engine is idle is not heard; the next mount's
+ * opening read picks it up.
+ *
+ * **Narrower than `useStepJob` by one case, knowingly.** The engine's first job
+ * list of the session is a baseline, not news, so a job that was already `done`
+ * on it is never announced. `useStepJob` covers that for a job *it* started
+ * (§ the reconciliation effect, keyed on the id its POST returned); this hook
+ * starts nothing, so it has no id to watch for. The window is a band press
+ * before the session's first poll answers, and a reopen reads it anyway.
+ *
+ * @param onFinished pass the read's `refresh`, never its `reload` — the same
+ *   rule as `useStepJob`'s, for the same reason (useOrderedRead.ts).
+ */
+export function useStepFinished(slug: string, step: StepName, onFinished: () => void): void {
+  const announce = useCallback(
+    (job: Job) => {
+      if (job.slug === slug && writesStep(job, step)) onFinished();
+    },
+    [slug, step, onFinished],
+  );
+  useJobs("quiet", announce);
 }
 
 /**

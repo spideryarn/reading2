@@ -11,7 +11,7 @@ Opus as better.
 
 **Decided 2026-10-02: the answer stays on Opus**; the finalist run is not bought and Luna + check is
 dropped. The write-up, with Greg's words and what would reopen it, is
-[research 261002a](../research/261002a-dig-deeper-answer-model.md).
+[research 261002a](../investigations/261002a-dig-deeper-answer-model.md).
 
 ## What Greg asked
 

@@ -19,7 +19,7 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
@@ -550,6 +550,49 @@ async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> 
   return entry;
 }
 
+
+/* --------------------------------------------- one rule for "a passage matches" --- */
+
+/**
+ * Joined on `current_revision_id`, not just on `article_id`. Without it a
+ * search would return the same paragraph once per historical revision — and
+ * since the pipeline publishes a new revision on every re-run, an article you
+ * had rebuilt three times would quietly outrank everything else by having three
+ * copies of itself in the results.
+ *
+ * Shared by `searchLibrary` and `countArchivedMatches` so that "the archive has
+ * 3 articles that mention it" and the passages the chip then reveals are
+ * answers to the same question (plan 261002b § Part D).
+ */
+const currentRevisionOfItsArticle = and(
+  eq(articles.id, revisionBlocks.articleId),
+  eq(articles.currentRevisionId, revisionBlocks.revisionId),
+);
+
+/** What makes a block a hit, whoever is asking — everything but the archive rule. */
+function matchingPassage(tsquery: ReturnType<typeof sql>) {
+  return [
+    /* **Your library, not the union of everybody's.** This one is reached
+       by chat's `search_library` tool as well as by the reader's own box,
+       so without it a model answering your question could quote a
+       stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
+    ownedByReader(),
+    /* Headings and media carry no prose worth a snippet, and a hit on a
+       one-word heading is noise at the top of the list.
+
+       **And no `treatment <> 'supplement'` beside it, deliberately.** This
+       is library full-text search, and `isSearchable` in
+       src/block-policy.ts is the one predicate of the five that includes
+       supplements: a note is often the best sentence in a piece, and a
+       reader who searches for it has to find it. docs/plans/260828o-footnotes.md
+       recorded the opposite as work to do and was wrong; GPT Sol's
+       decision 4. tests/library-search.test.ts holds the filesystem half
+       to the same rule, and tests/block-policy.test.ts guards this line. */
+    eq(revisionBlocks.gistable, true),
+    sql`${revisionBlocks.fts} @@ ${tsquery}`,
+  ];
+}
+
 const rawPgLibrarySearch: LibrarySearch = {
   async searchLibrary(query: string, limit: number, opts: LibrarySearchOptions = {}) {
     const trimmed = query.trim();
@@ -598,22 +641,10 @@ const rawPgLibrarySearch: LibrarySearch = {
       })
       .from(revisionBlocks)
       .innerJoin(articleRevisions, eq(articleRevisions.id, revisionBlocks.revisionId))
-      /* Joined on `current_revision_id`, not just on `article_id`. Without it a
-         search would return the same paragraph once per historical revision —
-         and since the pipeline publishes a new revision on every re-run, an
-         article you had rebuilt three times would quietly outrank everything
-         else by having three copies of itself in the results. */
-      .innerJoin(
-        articles,
-        and(eq(articles.id, revisionBlocks.articleId), eq(articles.currentRevisionId, revisionBlocks.revisionId)),
-      )
+      .innerJoin(articles, currentRevisionOfItsArticle)
       .where(
         and(
-          /* **Your library, not the union of everybody's.** This one is reached
-             by chat's `search_library` tool as well as by the reader's own box,
-             so without it a model answering your question could quote a
-             stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
-          ownedByReader(),
+          ...matchingPassage(tsquery),
           /* Archived articles are out of the index, not filtered from the
              results — unless the reader asked for them with the shelf's
              Include archived chip, and then each hit says it is archived so
@@ -628,19 +659,6 @@ const rawPgLibrarySearch: LibrarySearch = {
              An unknown slug simply excludes nothing; `ne` on a column with no
              such value is true for every row. */
           ...(opts.excludeSlug ? [ne(articles.slug, opts.excludeSlug)] : []),
-          /* Headings and media carry no prose worth a snippet, and a hit on a
-             one-word heading is noise at the top of the list.
-
-             **And no `treatment <> 'supplement'` beside it, deliberately.** This
-             is library full-text search, and `isSearchable` in
-             src/block-policy.ts is the one predicate of the five that includes
-             supplements: a note is often the best sentence in a piece, and a
-             reader who searches for it has to find it. docs/plans/260828o-footnotes.md
-             recorded the opposite as work to do and was wrong; GPT Sol's
-             decision 4. tests/library-search.test.ts holds the filesystem half
-             to the same rule, and tests/block-policy.test.ts guards this line. */
-          eq(revisionBlocks.gistable, true),
-          sql`${revisionBlocks.fts} @@ ${tsquery}`,
         ),
       )
       /* Tie-broken by slug then position, so two equally-ranked passages come
@@ -662,6 +680,25 @@ const rawPgLibrarySearch: LibrarySearch = {
 
     log("store").debug({ hits: hits.length, capped }, "library search");
     return { hits, capped };
+  },
+
+  /* **How many archived articles the search would have found**, counted rather
+     than listed, so no cap applies. The shelf says it beside a search run with
+     Include archived off — Greg, spya-s9fhmw: *"include a sense of how many
+     archived and public results would have matched, so that the user knows
+     whether it's worth bothering"*. Same parse, same predicates; only the
+     archive rule is turned round. */
+  async countArchivedMatches(query: string) {
+    const trimmed = query.trim();
+    if (!trimmed) return 0;
+    const tsquery = sql`websearch_to_tsquery(${CONFIG}, ${trimmed})`;
+    const [row] = await getDb()
+      .select({ n: sql<number>`count(distinct ${articles.id})::int` })
+      .from(revisionBlocks)
+      .innerJoin(articleRevisions, eq(articleRevisions.id, revisionBlocks.revisionId))
+      .innerJoin(articles, currentRevisionOfItsArticle)
+      .where(and(...matchingPassage(tsquery), isNotNull(articles.archivedAt)));
+    return Number(row?.n ?? 0);
   },
 };
 

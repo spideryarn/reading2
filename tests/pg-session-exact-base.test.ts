@@ -335,7 +335,7 @@ async function publishR1(slug: string): Promise<Fixture> {
   }
   /* The one run row that has to carry a real hash: the publication gate compares
      it with `hashBlocks` of the stored blocks and refuses when they differ. */
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   await stepRun(begun.revisionId, "arc");
 
   await publishRevision({ slug, revisionId: begun.revisionId });

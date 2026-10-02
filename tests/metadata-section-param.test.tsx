@@ -323,7 +323,7 @@ function CollapsibleHarness({ onRevealed }: { onRevealed: () => void }) {
     "main",
     { ref },
     shown
-      ? <Section label="Late" collapsible>
+      ? <Section label="Late" keywords="late" collapsible>
           <p>Revealed</p>
         </Section>
       : null,

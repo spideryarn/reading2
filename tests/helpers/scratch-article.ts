@@ -207,21 +207,21 @@ export interface ScratchOptions {
    *
    * **A rewrite of `blocks.json` is mirrored for you.** The fixture layout
    * keeps the blocks in two places — `data/<slug>/blocks.json` for step
-   * `hierarchy` and `output/<slug>.blocks.json` for step `blocks`
+   * `structure` and `output/<slug>.blocks.json` for step `blocks`
    * (`LAYOUT` in ./fixture-artefacts.ts) — and `copyArtefacts` copies both. Editing one
    * and not the other loads two different articles into one revision, and which
    * of them wins is a question about `STEP_ORDER` that no test should have to
    * ask. So `mutate` gets the article directory, and whatever it leaves in
    * `blocks.json` is copied over the `output/` twin before the load.
    *
-   * **And the hierarchy stamp is recomputed for you**, which is the part that
+   * **And the structure stamp is recomputed for you**, which is the part that
    * has no filesystem-era equivalent at all. `publishRevision` refuses a
    * revision whose tree was built from different blocks, comparing
-   * `hashBlocks(blocks)` against the `hierarchy` step's `input_hash` — which on
+   * `hashBlocks(blocks)` against the `structure` step's `input_hash` — which on
    * this path comes from `labels.json`'s `sourceHash` (`STAMP_SOURCE` in
    * src/store/artifacts.ts). Rewriting the blocks and leaving that alone is
    * refused with *"the tree was built from different blocks — re-run
-   * hierarchy"*. The filesystem store had no such check, which is why fixtures
+   * structure"*. The filesystem store had no such check, which is why fixtures
    * of this shape worked for a year without anybody keeping the two in step.
    *
    * The tree itself is **not** rewritten, and cannot be from here: a `mutate`
@@ -268,10 +268,10 @@ async function cloneCorpusArticle(slug: string, from: string): Promise<string> {
  * Record the blocks these labels were made from, after `mutate` changed them.
  *
  * See `ScratchOptions.mutate` for why. Quiet when there is no `labels.json`:
- * an article with no `hierarchy` stamp is refused by the publish guard anyway,
+ * an article with no `structure` stamp is refused by the publish guard anyway,
  * and it is refused with a message about the tree, which is the true one.
  */
-async function restampHierarchy(dir: string): Promise<void> {
+async function restampStructure(dir: string): Promise<void> {
   const at = path.join(dir, "labels.json");
   let labels: Record<string, unknown>;
   try {
@@ -308,7 +308,7 @@ export async function scratchArticleInPg(
       const dir = path.join(root, "data", slug);
       await mutate(dir);
       await cp(path.join(dir, "blocks.json"), path.join(root, "output", `${slug}.blocks.json`));
-      await restampHierarchy(dir);
+      await restampStructure(dir);
     }
     loaded = await loadArticleIntoPg(slug, { root, ...(ownerId ? { ownerId } : {}) });
   } catch (err) {

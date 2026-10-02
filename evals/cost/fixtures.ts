@@ -1,6 +1,6 @@
 /**
  * The three articles the cost eval holds constant — **a committed manifest, not
- * a directory listing**, for the reason evals/hierarchy-structure/corpus.ts
+ * a directory listing**, for the reason evals/structure-whole-document/corpus.ts
  * gives: what gets measured has to be a decision, and a run has to be able to
  * say the bytes were the bytes.
  *

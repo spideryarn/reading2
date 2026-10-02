@@ -13,7 +13,7 @@
  *
  * ## Why this is not one of the tools that already exist
  *
- * - `npm run hierarchy` used to pass `nullCheckpointStore()` and resume nothing,
+ * - `npm run structure` used to pass `nullCheckpointStore()` and resume nothing,
  *   so every repeat would re-buy the ~$1.00 structure call **and hand each
  *   repeat a different seed** — precisely the confound that makes question 1
  *   unanswerable. Stage E put that command through the queue on 2026-09-05
@@ -38,7 +38,7 @@
  * - **A — the book, ingested with deepening on.** One job, the production
  *   `STEPS`, with only stage 1 replaced by a fixture step that writes the local
  *   bytes. This is repeat 1.
- * - **B — the repeats, serial.** `{steps: ["hierarchy"], force: ["hierarchy"]}`
+ * - **B — the repeats, serial.** `{steps: ["structure"], force: ["structure"]}`
  *   against the same slug, with `SPIDERYARN_DEEPEN_REASK` naming that slug.
  *   **Serial deliberately**: a contended repeat would confound question 1, which
  *   is the one the rest of the plan leans on. Forcing re-runs the step; the
@@ -46,12 +46,12 @@
  *   the scoped wave is re-bought — which this run proves for free before it
  *   spends, and checks again against the ledger afterwards.
  * - **C — inertness.** One ordinary article ingested with the flag **off**, then
- *   the same article's hierarchy forced with the flag **on**. The published tree
+ *   the same article's structure forced with the flag **on**. The published tree
  *   must be identical and `deepen.targets` must be 0. "Nobody asked" and "asked
  *   and found nothing" are different facts, and the artefacts distinguish them:
  *   the flag-off pass writes no records file at all.
  * - **D — the budget under load.** `DEFAULT_JOB_CONCURRENCY` jobs at once: one
- *   more forced hierarchy on the book (so it is a further repeat rather than
+ *   more forced structure on the book (so it is a further repeat rather than
  *   pure overhead) and enough ordinary articles to fill the remaining slots.
  *
  * ## What it refuses to do
@@ -79,7 +79,7 @@ import { withLedger } from "../../src/cli-ledger.js";
 import { getDb } from "../../src/db/client.js";
 import { articles, jobs as jobsTable } from "../../src/db/schema.js";
 import { loadEnvLocal } from "../../src/env.js";
-import { CASCADE_RECIPE } from "../../src/hierarchy-cascade.js";
+import { CASCADE_RECIPE } from "../../src/structure-cascade.js";
 import {
   DEEPEN_ENV,
   DEEPEN_RECORDS_ENV,
@@ -87,9 +87,9 @@ import {
   type DeepenStats,
   deepenTree,
   freeAnswer,
-} from "../../src/hierarchy-deepen.js";
-import type { ExpansionRequest } from "../../src/hierarchy-expand.js";
-import { buildTree, type ModelNode, structureRequest } from "../../src/hierarchy.js";
+} from "../../src/structure-deepen.js";
+import type { ExpansionRequest } from "../../src/structure-expand.js";
+import { buildTree, type ModelNode, wholeDocumentRequest } from "../../src/structure.js";
 import { isMain } from "../../src/is-main.js";
 import {
   type AdvanceParts,
@@ -202,11 +202,11 @@ const PHASE_D_LOAD_COUNT = PHASE_D_JOB_COUNT - 1;
  * held load step is holding **its own claim**, whose effective deadline is
  * `EFFECTIVE_DEADLINE_MS` (740 s), and it is holding it *after* its step's clock
  * has started — so every second here is a second off that job's lease and a
- * second added to the `hierarchy` window question 5 reads.
+ * second added to the `structure` window question 5 reads.
  *
  * Three minutes is chosen against the thing being waited for rather than against
  * patience: the load jobs start from the same fixture-backed `fetch` at the same
- * instant, so they reach `hierarchy` close together unless
+ * instant, so they reach `structure` close together unless
  * something is already wrong — a shared box serialising them on a claim slot,
  * most likely (`STANDING_NOTES`). Waiting longer than this would not rescue that
  * case; it would only spend the survivor's lease on it. `startRendezvous`.
@@ -217,8 +217,8 @@ const LOAD_RENDEZVOUS_TIMEOUT_MS = 3 * 60_000;
  * **A hold long enough to be worth saying out loud**, in the run's notes.
  *
  * Below this, the wait is the ordinary jitter of two jobs reaching the same step;
- * above it, a reader comparing the load jobs' `hierarchy` clocks against
- * `STEP_BUDGET_MS.hierarchy` is reading a number with idle waiting inside it.
+ * above it, a reader comparing the load jobs' `structure` clocks against
+ * `STEP_BUDGET_MS.structure` is reading a number with idle waiting inside it.
  */
 const NOTABLE_HOLD_MS = 5_000;
 
@@ -234,7 +234,7 @@ const NOTABLE_HOLD_MS = 5_000;
  * arranged by construction: the rendezvous releases all of them within one turn
  * of the event loop, so an instant of full overlap is guaranteed to any run that
  * gets that far. What is *not* guaranteed is duration, and duration is bounded by
- * the **shortest** of them — the load articles' `hierarchy`, which is far
+ * the **shortest** of them — the load articles' `structure`, which is far
  * shorter than a book's 658-778 s.
  *
  * **Why sixty seconds.** Against a 700 s budget it is under a tenth of the
@@ -279,7 +279,7 @@ interface RunMeta {
   node: string;
   model: string | null;
   effort: {
-    hierarchy: string | null;
+    structure: string | null;
     pipelineEnvOverride: string | null;
     note: string;
   };
@@ -325,8 +325,8 @@ interface JobRecord {
     ms: number | null;
   }[];
   elapsedMs?: number;
-  /** `finishedAt - startedAt` on the hierarchy step alone — question 5. */
-  hierarchyMs?: number | null;
+  /** `finishedAt - startedAt` on the structure step alone — question 5. */
+  structureMs?: number | null;
   /**
    * **How many times the claimant handed this job back at its own deadline**,
    * and `null` where it never did. Non-null on a re-asking pass means this run
@@ -376,10 +376,10 @@ const STANDING_NOTES = [
   "Stage 1 (fetch) is a fixture read of a file named on the command line, so no network latency " +
     "is in any elapsed time here, and there is no committed manifest holding those bytes constant " +
     "— output/ is gitignored. The sha256 of what this run read is in `fixtures`.",
-  "There is no `labels` step: nav labels fan out inside `hierarchy`. Every label call carries " +
-    "stepName=hierarchy and job=labels. The SCOPED EXPANSION CALLS also carry job=hierarchy, the " +
+  "There is no `labels` step: nav labels fan out inside `structure`. Every label call carries " +
+    "stepName=structure and job=labels. The SCOPED EXPANSION CALLS also carry job=structure, the " +
     "same as the whole-document structure call — so on a repeat with the structure checkpoint " +
-    "resumed, the `hierarchy` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that " +
+    "resumed, the `structure` bucket IS the wave. `checkRepeatBoughtItsWave` is what turns that " +
     "into a check rather than an assumption.",
   "Money is the ledger's (`costStore.forJob`). Token counts are reported beside it and are never " +
     "converted into a price here.",
@@ -420,7 +420,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * So a re-asking pass stops on its first requeue: the job is left `queued` and
  * resumable, the self-abort is recorded, and the pass becomes a fatal finding
  * rather than a silent third purchase. An ordinary pass is re-driven as before,
- * and must be — a book's `hierarchy` step needs 658–778 s against a 740 s
+ * and must be — a book's `structure` step needs 658–778 s against a 740 s
  * deadline, so a requeue there is routine, and without the lever the re-drive
  * resumes every answer it already paid for.
  */
@@ -648,7 +648,7 @@ function announcing(
            `AbortSignal.any` rather than a replacement: **`ctx.signal` keeps
            doing its own job**, and only a *lost fate* adds a second reason to
            stop. The same composition `src/labels.ts` and
-           `src/hierarchy-deepen.ts` already make. */
+           `src/structure-deepen.ts` already make. */
         if (fate === undefined) return step.run(ctx, store, checkpoints);
         const under = { ...ctx, signal: AbortSignal.any([ctx.signal, fate.signal]) };
         return step.run(under, store, checkpoints);
@@ -774,7 +774,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
     finishedAt: s.finishedAt ?? null,
     ms: stepMs(s),
   }));
-  record.hierarchyMs = record.stepOutcomes.find((s) => s.name === "hierarchy")?.ms ?? null;
+  record.structureMs = record.stepOutcomes.find((s) => s.name === "structure")?.ms ?? null;
   record.deepenFlag = process.env[DEEPEN_ENV] === "1";
   record.reaskEnv = process.env[REASK_ENV] ?? null;
   record.observedSpend = observedSpend;
@@ -975,7 +975,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   console.log(
     `  spend ${record.money == null ? "NOT READ" : `$${(moneyTotalNanos(record.money) / 1e9).toFixed(4)}`}` +
       (record.money != null && record.money.unpriced > 0 ? `   (${record.money.unpriced} unpriced)` : "") +
-      `   hierarchy step ${record.hierarchyMs === null || record.hierarchyMs === undefined ? "—" : `${(record.hierarchyMs / 1000).toFixed(1)}s`}`,
+      `   structure step ${record.structureMs === null || record.structureMs === undefined ? "—" : `${(record.structureMs / 1000).toFixed(1)}s`}`,
   );
   if (record.byAiJob?.length) console.log(formatStepTable(record.byAiJob));
   console.log(`  deepening ${deepeningLine(record)}`);
@@ -1013,11 +1013,11 @@ function deepeningLine(record: JobRecord): string {
  * How many input tokens a structure call on this document would carry, which is
  * the floor `checkRepeatBoughtItsWave` compares the ledger against.
  *
- * Free — `structureRequest` builds the request without sending it — and it is a
+ * Free — `wholeDocumentRequest` builds the request without sending it — and it is a
  * **conservative** floor: it is the estimated answer size, which is far smaller
  * than the prompt, so a re-bought structure call cannot slip under it.
  */
-function structureTokenFloor(blocks: number): number {
+function wholeDocumentTokenFloor(blocks: number): number {
   /* Nothing here has the blocks in hand once the job is finished, and reading
      them back to price a check would be a second definition of what a structure
      call is. So the floor is deliberately crude: a whole-document call on a book
@@ -1053,9 +1053,9 @@ function answerTheQuestions(opts: {
   /** Every pass of every slug, failed ones included; the gates do the filtering. */
   allRecords: RecordsPass[];
   jobs: readonly JobRecord[];
-  /** How many hierarchy steps phase D planned to run at once. */
+  /** How many structure steps phase D planned to run at once. */
   expectedLoadSteps: number;
-  /** Which step phase D is measured on — `hierarchy`, or `blocks` under `--dry-run`. */
+  /** Which step phase D is measured on — `structure`, or `blocks` under `--dry-run`. */
   measuredStep: string;
 }): { answers: Record<string, unknown>; findings: DeepenFinding[]; printed: string } {
   const findings: DeepenFinding[] = [];
@@ -1169,7 +1169,7 @@ function answerTheQuestions(opts: {
     });
   const q5 = budgetReport({
     clocks,
-    budgetMs: STEP_BUDGET_MS.hierarchy,
+    budgetMs: STEP_BUDGET_MS.structure,
     deadlineMs: EFFECTIVE_DEADLINE_MS,
     fullConcurrencyFloorMs: FULL_CONCURRENCY_FLOOR_MS,
     expected: opts.expectedLoadSteps,
@@ -1180,7 +1180,7 @@ function answerTheQuestions(opts: {
     findings.push({
       kind: "over-budget",
       fatal: false,
-      message: `${over.label} took ${((over.ms ?? 0) / 1000).toFixed(1)}s, past STEP_BUDGET_MS.hierarchy.`,
+      message: `${over.label} took ${((over.ms ?? 0) / 1000).toFixed(1)}s, past STEP_BUDGET_MS.structure.`,
     });
   }
   /* **Phase D's book pass belongs here, not in Q1.** It is a real repeat and a
@@ -1293,7 +1293,7 @@ export function parseArgs(argv: readonly string[]): Args {
 
 function currentMeta(databaseTarget: string): RunMeta {
   const git = (a: string[]): string => execFileSync("git", a, { encoding: "utf-8" }).trim();
-  let hierarchyEffort: string | null = null;
+  let structureEffort: string | null = null;
   let model: string | null = null;
   try {
     /* Free, and it reads the real constants rather than restating them: an empty
@@ -1301,13 +1301,13 @@ function currentMeta(databaseTarget: string): RunMeta {
        fit one response), and no call is made. The alternative was writing the
        model id and the effort down here, which is a second copy of a constant
        that has already moved once and taken a whole analysis with it —
-       evals/cost/run.ts § structureEffort. */
-    hierarchyEffort = structureRequest([]).effort;
-    /* `modelFor("hierarchy", "standard")`, which is the same door `recordCandidate` writes
+       evals/cost/run.ts § wholeDocumentEffort. */
+    structureEffort = wholeDocumentRequest([]).effort;
+    /* `modelFor("structure", "standard")`, which is the same door `recordCandidate` writes
        onto every record — so the run's metadata and the records cannot disagree
-       about which model produced them. `structureRequest`'s params leave the id
+       about which model produced them. `wholeDocumentRequest`'s params leave the id
        to `streamMessage`, so reading it there gives `undefined`. */
-    model = modelFor("hierarchy", "standard");
+    model = modelFor("structure", "standard");
   } catch {
     /* A signature change here must not stop a paid run — `commit` recovers it. */
   }
@@ -1329,16 +1329,16 @@ function currentMeta(databaseTarget: string): RunMeta {
     node: process.version,
     model,
     effort: {
-      hierarchy: hierarchyEffort,
+      structure: structureEffort,
       pipelineEnvOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
       note:
-        "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts " +
+        "The expansion prompt's own effort is module-private in src/structure-expand.ts " +
         "(EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. " +
         "Every CandidateRecord carries the model and effort it was decided under.",
     },
     jobConcurrency: DEFAULT_JOB_CONCURRENCY,
     jobConcurrencyRuntime: jobConcurrency(),
-    stepBudgetMs: STEP_BUDGET_MS.hierarchy,
+    stepBudgetMs: STEP_BUDGET_MS.structure,
     effectiveDeadlineMs: EFFECTIVE_DEADLINE_MS,
   };
 }
@@ -1353,7 +1353,7 @@ export function assertJobConcurrency(runtime: number, planned: number): void {
   if (runtime === planned) return;
   throw new Error(
     `The queue's runtime cap is ${runtime} and phase D is planned at ${planned}: ` +
-      "SPIDERYARN_JOB_CONCURRENCY is set in this process. Question 5 asks whether the hierarchy " +
+      "SPIDERYARN_JOB_CONCURRENCY is set in this process. Question 5 asks whether the structure " +
       "step fits its budget with DEFAULT_JOB_CONCURRENCY jobs at once, and at any other cap the " +
       "the phase-D jobs serialise while every promise stays alive — which reads as a pass. " +
       "Unset the variable and run again.",
@@ -1392,7 +1392,7 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
    *
    * Measured rather than reasoned: after the failed paid run of 2026-09-05,
    * whose wave banked 28 expansion answers, the database held **zero**
-   * `hierarchy-deepen` rows — not for that article, not for any. So the next
+   * `structure-deepen` rows — not for that article, not for any. So the next
    * attempt buys the whole wave again, and anybody sizing it off this line was
    * sizing it wrong. Use `--keep` if the answers are what you are after.
    */
@@ -1410,7 +1410,7 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
  *
  * `--dry-run` asks for `extract` rather than `blocks`, and that is not a
  * preference: `unrunnableStepPlan` (src/jobs.ts) refuses a job that runs
- * `blocks` without `hierarchy`, since the tree is checked against the blocks it
+ * `blocks` without `structure`, since the tree is checked against the blocks it
  * was built from and the article could never publish. Forcing `blocks` alone is
  * a 400 at `enqueue`, so the free rehearsal died before it created a single job
  * — while printing a clean report on the way down —
@@ -1431,7 +1431,7 @@ async function cleanup(jobs: readonly JobRecord[]): Promise<void> {
  */
 export function stepsFor(dryRun: boolean): StepPlans {
   if (!dryRun) {
-    return { ingest: DEFAULT_INGEST_STEPS, rerun: ["hierarchy"], force: ["hierarchy"] };
+    return { ingest: DEFAULT_INGEST_STEPS, rerun: ["structure"], force: ["structure"] };
   }
   /* **The identical shape with no model call in it.** `extract` re-runs stage 2,
      which buys nothing, and driving it exercises the same enqueue → force →
@@ -1454,9 +1454,9 @@ async function main(): Promise<void> {
   );
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${meta.evalOwnerId}   (environment owner ${meta.environmentOwnerId})`);
-  console.log(`Model:  ${meta.model ?? "?"}   hierarchy effort ${meta.effort.hierarchy ?? "?"}`);
+  console.log(`Model:  ${meta.model ?? "?"}   structure effort ${meta.effort.structure ?? "?"}`);
   console.log(
-    `Budget: STEP_BUDGET_MS.hierarchy ${(meta.stepBudgetMs / 1000).toFixed(0)}s, ` +
+    `Budget: STEP_BUDGET_MS.structure ${(meta.stepBudgetMs / 1000).toFixed(0)}s, ` +
       `self-abort at ${(meta.effectiveDeadlineMs / 1000).toFixed(0)}s, ` +
       `job concurrency ${meta.jobConcurrencyRuntime} (planned ${meta.jobConcurrency})`,
   );
@@ -1503,9 +1503,9 @@ async function main(): Promise<void> {
 
   const counts = {
     bookIngestDeepened: 1,
-    bookHierarchyRepeat: args.repeats - 1 + 1 /* the phase-D repeat */,
+    bookStructureRepeat: args.repeats - 1 + 1 /* the phase-D repeat */,
     articleIngestDeepened: articleSlugs.length,
-    articleHierarchyResumed: 1,
+    articleStructureResumed: 1,
   };
   const bill = estimate(counts);
 
@@ -1550,7 +1550,7 @@ async function main(): Promise<void> {
   console.log(`  C  ${articleSlugs[0]}   ${rerun.join(",")} forced   deepen ON    (must be inert)`);
   console.log(
     `  D  ${PHASE_D_JOB_COUNT} at once: ${articleSlugs.slice(1).join(", ")} ingest, HELD at the ` +
-      `entry to \`${rerun[0] ?? "hierarchy"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
+      `entry to \`${rerun[0] ?? "structure"}\` until ${bookSlug} ${rerun.join(",")} forced ` +
       `(repeat ${args.repeats + 1}) is there too, then all ${PHASE_D_JOB_COUNT} released together`,
   );
 
@@ -1558,11 +1558,11 @@ async function main(): Promise<void> {
   console.log("─".repeat(70));
   for (const line of [
     "the re-ask lever names the book's slug and none of the article slugs — else repeats are free and circular",
-    "the deepening path touches `hierarchy-deepen` and never `hierarchy-structure` — the seed is held",
+    "the deepening path touches `structure-deepen` and never `structure-whole-document` — the seed is held",
     "an ordinary repeat resumes and buys nothing; a re-asking one buys every call again and reads none",
     "every repeat's wave-1 frontier is identical — if it moved, the seed moved and Q1 is void",
     "every repeat bought its own wave (stats.calls > 0 where stats.targets > 0)",
-    "no REPEAT's `hierarchy` ledger rows carry a whole structure call's worth of input tokens — and phase A's do, because the ingest is what buys the seed",
+    "no REPEAT's `structure` ledger rows carry a whole structure call's worth of input tokens — and phase A's do, because the ingest is what buys the seed",
     "every ledger row carries scopeKind \"eval\", so nothing here is billed to Product",
     "every call each step's own collector saw has a ledger row, and the ledger is re-read at the end to say whether the numbers stood still",
     "phase C: the published tree is unchanged, the flag-off pass wrote no records file, and deepen.targets is 0 — an eligible section makes it an invalid control, not a note",
@@ -1571,7 +1571,7 @@ async function main(): Promise<void> {
     "phase D: if the gate gives up after every job was driven, every measured step it releases is ABANDONED and throws before it runs, so a phase that cannot answer question 5 buys nothing trying to. Those jobs end `error` by this eval's doing and each says so in a finding of its own",
     "phase D: the measured jobs share one fate — a failed step, a wave that fell back, or a claim handed back, and the others stop before their next claim AND cancel the calls their running step has not made yet. One claim runs the whole hierarchy step (structure call, wave, AND a full label pass, which starts even after the wave failed), so the fate's abort signal is combined into the measured step's own. What is left is the single request already in flight, which may still be billed",
     "phase D: a measured job STOPS on its first requeue rather than being re-driven — a re-drive takes the rendezvous's latched verdict, runs outside the gate, and lets the queue overwrite the first attempt's clock",
-    `phase D: the hierarchy STEPS' own windows reach concurrency ${PHASE_D_JOB_COUNT}, and all of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement`,
+    `phase D: the structure STEPS' own windows reach concurrency ${PHASE_D_JOB_COUNT}, and all of them completed with a wave's stats and no failure — a step that started and failed carries a clock and is not a measurement`,
     `phase D: all ${PHASE_D_JOB_COUNT} measured steps are in flight TOGETHER for at least ${(FULL_CONCURRENCY_FLOOR_MS / 1000).toFixed(0)}s — declared here, before anything is bought, so it cannot be chosen after the figure is seen. Peak concurrency ${PHASE_D_JOB_COUNT} is ARRANGED by the rendezvous and is only a wiring check; this is the load measurement, and below the floor question 5 reports latency after a synchronised start rather than sustained full load`,
     "a re-asking pass that hands its claim back at its own deadline is STOPPED, not re-driven: re-claiming it buys the whole wave again",
     "candidates paired across repeats on parent-plus-range, never on `where` — refused outright if the range is missing",
@@ -1660,7 +1660,7 @@ async function main(): Promise<void> {
       args,
       bookSlug,
       runDir,
-      measuredStep: rerun[0] ?? "hierarchy",
+      measuredStep: rerun[0] ?? "structure",
       /* A (1) + B (`repeats - 1`) + C (2) + D (`PHASE_D_JOB_COUNT`). The plan printed above is
          the same arithmetic said in words. */
       expectedJobs: args.repeats + 2 + PHASE_D_JOB_COUNT,
@@ -1688,7 +1688,7 @@ async function main(): Promise<void> {
  * **The free proof, and it lives here rather than in `harness.ts` for a reason
  * that is about the import graph rather than about tidiness.**
  *
- * It needs `buildTree`, which is in `src/hierarchy.ts`, which imports the app —
+ * It needs `buildTree`, which is in `src/structure.ts`, which imports the app —
  * and through it `src/cli-ledger.ts` and the ledger's filesystem adapter. This
  * file already imports the world and is never loaded by a test; `harness.ts` is
  * imported by `tests/deepen-eval.test.ts`, and keeping the reach out of it is
@@ -1705,7 +1705,7 @@ async function main(): Promise<void> {
  * **Twelve synthetic paragraphs and a fake executor, and it costs nothing.**
  *
  * Two authored headings that no boundary starts on, so the heading rule forces
- * the one section open — the same construction `tests/hierarchy-deepen-wave.test.ts`
+ * the one section open — the same construction `tests/structure-step-deepen-wave.test.ts`
  * uses, because the point is to exercise `deepenTree`'s checkpoint behaviour and
  * not to be a realistic article.
  *
@@ -1912,7 +1912,7 @@ async function runPhases(opts: {
         ctx,
         await enqueueJob(ctx, {
           phase: "B",
-          label: `book hierarchy forced (repeat ${r})`,
+          label: `book structure forced (repeat ${r})`,
           repeat: r,
           slug: liveBookSlug,
           url: null,
@@ -1924,7 +1924,7 @@ async function runPhases(opts: {
     );
     /* **The requeue refusal is only a refusal if the run then stops.** The pass
        is left `queued` so its paid answers stay resumable, and the very next
-       repeat would force `hierarchy` on the same slug and publish over the base
+       repeat would force `structure` on the same slug and publish over the base
        revision that queued job is holding. ⟨GPT Sol, DPN-07-R.⟩ */
     if (stopIfCompromised(ctx, [b], `repeat ${r + 1} and phases C and D`)) return;
   }
@@ -1953,7 +1953,7 @@ async function runPhases(opts: {
       ctx,
       await enqueueJob(ctx, {
         phase: "C",
-        label: "the same article, hierarchy forced, deepening ON",
+        label: "the same article, structure forced, deepening ON",
         repeat: null,
         slug: off.slug,
         url: null,
@@ -2065,8 +2065,8 @@ async function runPhases(opts: {
  *
  *    **The first half alone was not enough, and the sentence that said it was is
  *    the one DPN-29's standard let through** (DPN-30). One claim runs the *whole*
- *    `hierarchy` step, and that step buys a structure call, an expansion wave and
- *    a whole pass of labels — `generateHierarchy` catches a failed wave and falls
+ *    `structure` step, and that step buys a structure call, an expansion wave and
+ *    a whole pass of labels — `generateStructure` catches a failed wave and falls
  *    straight through to `generateLabels` regardless. So "a call already in
  *    flight finishes" did not cover the calls a *running* step had not started
  *    yet. Most of phase D's spend could therefore still be bought after question
@@ -2076,7 +2076,7 @@ async function runPhases(opts: {
  *    batches are queued *with* the signal (`src/labels.ts` §
  *    `queue.add(…, { signal })`), so **the ones that have not started are
  *    dropped**; the wave's calls carry it through `liveExpansionExecutor`; and
- *    `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+ *    `src/structure-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
  *    wait, never a call in flight"*. So the honest bound is now **the single
  *    request already in flight**, which may still be billed, rather than a whole
  *    label pass. The claim itself cannot be aborted — its `AbortController` is
@@ -2088,7 +2088,7 @@ async function runPhases(opts: {
  *    when every phase-D job holds a claim, which is all of
  *    `DEFAULT_JOB_CONCURRENCY`'s slots. ⟨DPN-29 — I asserted the contrary three
  *    times.⟩ What really remains is runtime failure, which statement 3 now stops,
- *    and **duration**: the load articles' `hierarchy` is far shorter than the
+ *    and **duration**: the load articles' `structure` is far shorter than the
  *    book's 658-778 s, so they close long before it does.
  *
  * That last point is worth reading twice before quoting question 5, because it
@@ -2141,14 +2141,14 @@ async function runPhaseD(opts: {
    * **The rendezvous, and which way round it goes.**
    *
    * The load jobs start at `fetch` and reach the measured step only after
-   * stages 1-3; the book's job is a forced `hierarchy` and is there at once. So
+   * stages 1-3; the book's job is a forced `structure` and is there at once. So
    * the book is **driven last** — but *every job* is held at the entry, and the
    * full width is the point.
    *
    * Holding only the loads and releasing them before driving the book left the
    * hole one party over: the loads waited for each other, nothing waited for the
    * book, and with the last queue slot taken the released load steps could
-   * finish before the book ever reached `hierarchy` — while the outcome said
+   * finish before the book ever reached `structure` — while the outcome said
    * `"all"`. ⟨GPT Sol, DPN-20-R.⟩
    *
    * **The book does hold, inside its claim, and it costs nothing.** Its step
@@ -2166,7 +2166,7 @@ async function runPhaseD(opts: {
     expected: loadSlugs.length + 1,
     timeoutMs: LOAD_RENDEZVOUS_TIMEOUT_MS,
   });
-  const measuredStep = rerun[0] ?? "hierarchy";
+  const measuredStep = rerun[0] ?? "structure";
   /* **One fate for all of them** — the invariant behind DPN-26, and behind
      the four separate guards that preceded it. `startPhaseFate`. */
   const fate = startPhaseFate();
@@ -2196,7 +2196,7 @@ async function runPhaseD(opts: {
      this record. */
   const bookQueued = await enqueueJob(ctx, {
     phase: "D",
-    label: `book hierarchy forced under load (repeat ${args.repeats + 1})`,
+    label: `book structure forced under load (repeat ${args.repeats + 1})`,
     repeat: args.repeats + 1,
     slug: liveBookSlug,
     url: null,
@@ -2209,7 +2209,7 @@ async function runPhaseD(opts: {
 
   /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
      does, and the rejection travels straight out through `withLevers` —
-     which restores `SPIDERYARN_DEEPEN_HIERARCHY` and `SPIDERYARN_DEEPEN_REASK`
+     which restores `SPIDERYARN_DEEPEN_STRUCTURE` and `SPIDERYARN_DEEPEN_REASK`
      while the other two jobs are still running under them, and lets
      `reportRun` start reading half-written ledgers and deleting articles
      underneath live tasks. Draining first costs nothing and is the only way
@@ -2275,7 +2275,7 @@ async function runPhaseD(opts: {
       );
       /* **What the hold cost**, which is not nothing: it was spent inside each
          job's claim and inside its measured step's own clock. A reader comparing
-         those clocks against `STEP_BUDGET_MS.hierarchy` has to know. The book's
+         those clocks against `STEP_BUDGET_MS.structure` has to know. The book's
          own hold is a microtask, because everyone was already waiting for it. */
       const notable = lined.held.filter((h) => h.ms >= NOTABLE_HOLD_MS);
       if (notable.length > 0) {
@@ -2284,7 +2284,7 @@ async function runPhaseD(opts: {
         ctx.runFile.notes.push(
           `Phase D held ${said} at the entry to \`${measuredStep}\` waiting for the others. That ` +
             "wait is INSIDE each job's claim and inside its measured step's clock, so those " +
-            "jobs' `hierarchy` times are that much longer than the work took and their claims had " +
+            "jobs' `structure` times are that much longer than the work took and their claims had " +
             "that much less of the 740 s deadline left.",
         );
       }
@@ -2627,13 +2627,13 @@ async function reportRun(opts: {
   const bookRepeats = ctx.runFile.jobs.filter((j) => j.repeat !== null);
   for (const j of bookRepeats) {
     if (j.stats == null) continue;
-    const hierarchyInput =
-      j.byAiJob?.find((r) => r.step === "hierarchy")?.tokens.input ?? j.stats.usage.inputTokens;
+    const structureInput =
+      j.byAiJob?.find((r) => r.step === "structure")?.tokens.input ?? j.stats.usage.inputTokens;
     const own = checkRepeatBoughtItsWave({
       label: `${j.phase} ${j.label}`,
       stats: j.stats,
-      ledgerHierarchyInputTokens: hierarchyInput,
-      structureInputTokensFloor: structureTokenFloor(
+      ledgerStructureInputTokens: structureInput,
+      wholeDocumentInputTokensFloor: wholeDocumentTokenFloor(
         Number(j.stepOutcomes?.find((s) => s.name === "blocks")?.detail?.match(/^(\d+)/)?.[1] ?? 0),
       ),
       /* **Phase A buys the structure call; that is what phase A is for.** The
@@ -2750,7 +2750,7 @@ async function reportRun(opts: {
         "are deliberately absent rather than printed as zeroes.\n" +
         `  Expect the phase-D concurrency note here: the measured step is \`${measuredStep}\`, ` +
         `which takes milliseconds, so ${PHASE_D_JOB_COUNT} of them rarely overlap however concurrently the jobs ` +
-        "were driven. On the paid path the step is `hierarchy` and runs for minutes, and the same " +
+        "were driven. On the paid path the step is `structure` and runs for minutes, and the same " +
         "note there is the real thing — it makes question 5 unanswerable.",
     );
   } else {

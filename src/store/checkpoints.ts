@@ -153,7 +153,7 @@
  * while the answer did not.**
  *
  * This used to read *"`labels` is not a step — the `revision_step_runs_step`
- * CHECK rejects it, because `labels.json` is one of the `hierarchy` step's
+ * CHECK rejects it, because `labels.json` is one of the `structure` step's
  * outputs"*. It **is** a step now
  * ([260906a](../../docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md)),
  * and this is still not a `StepName`: three of the four names below are
@@ -161,19 +161,18 @@
  * have addressed them. Closed, and matched by a CHECK on the table, so a typo
  * cannot open a namespace nothing ever reads.
  *
- * **`hierarchy-labels` keeps its name, and that is a decision.** It is the
- * `labels` step's namespace now, and renaming it to match would have
- * invalidated every stored row for nothing: `batchFingerprint` (src/labels.ts)
- * carries no step and no job identity, so every checkpoint written before the
- * split is still readable after it — provided the key does not move. The name
- * records which call wrote these rows rather than which step asks for them.
+ * **`structure-labels` names the call, not its owning step.** The split into
+ * a separate `labels` step kept the checkpoint keys: `batchFingerprint`
+ * (src/labels.ts) carries no step or job identity. The Structure rename moves
+ * the namespace's rows in `drizzle/20261002140803_structure_step.sql`, still
+ * preserving those keys, so the old answers remain readable.
  *
- * **Two of these belong to `hierarchy` and one to `labels`, and that is the
- * point of the split.** `hierarchy-structure` is stage 4's one big call — the
- * tree — `hierarchy-deepen` is the scoped calls that split a fat section
- * afterwards, and `hierarchy-labels` is the batches that follow both, now in
+ * **Two of these belong to `structure` and one to `labels`, and that is the
+ * point of the split.** `structure-whole-document` is stage 4's one big call — the
+ * tree — `structure-deepen` is the scoped calls that split a fat section
+ * afterwards, and `structure-labels` is the batches that follow both, now in
  * their own step and their own claim. They were one namespace's worth of work
- * and are three questions: on a 142-page paper the structure call is 508
+ * and are three questions: on a 142-page paper the whole-document call is 508
  * seconds and about two dollars, the batches are 34 rows, and a run that dies
  * in the batches must not buy the tree again. Adding a namespace is a
  * migration, because the CHECK on the table is the other copy of this list.
@@ -188,16 +187,16 @@
  * docs/reusable/silent-success.md.
  */
 export type CheckpointNamespace =
-  | "hierarchy-deepen"
-  | "hierarchy-labels"
-  | "hierarchy-structure"
+  | "structure-deepen"
+  | "structure-labels"
+  | "structure-whole-document"
   | "pdf-chunk";
 
 /** Every namespace, for the CHECK, the tests and anything that has to enumerate. */
 export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = [
-  "hierarchy-deepen",
-  "hierarchy-labels",
-  "hierarchy-structure",
+  "structure-deepen",
+  "structure-labels",
+  "structure-whole-document",
   "pdf-chunk",
 ];
 
@@ -484,10 +483,10 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * be keyed on. And `npm run eval:pdf-read` is in the same position for the
  * same reason.
  *
- * **It used to be three command lines and is now one.** `npm run hierarchy` and
+ * **It used to be three command lines and is now one.** `npm run structure` and
  * `npm run blocks` go through the queue since 2026-09-05 (`scripts/stage.ts`),
  * so they have an article row and **do** resume — measured, and with an edge
- * worth knowing: a `--force` re-run of `hierarchy` on an unchanged article
+ * worth knowing: a `--force` re-run of `structure` on an unchanged article
  * replays its structure and labels out of these rows and buys nothing, because
  * `force` is a flag on the step rather than on the purchase. That is the queue's
  * behaviour and a reader's Refresh gets it too. `npm run labels` was retired

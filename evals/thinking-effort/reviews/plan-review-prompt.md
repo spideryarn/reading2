@@ -8,19 +8,19 @@ in this worktree (an untracked file). Base commit: `git log -1 --format=%H`.
 **What it is for:** an eval that decides whether Sketch, Illustrated, Ideas (Sonnet 5, adaptive
 thinking at `high`) and Hierarchy (already `low`) can think less without getting worse, judged
 blind, so their effort can be lowered to save ~9–10% of a normal article's cost. Background numbers:
-`docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md`. Greg's words
+`docs/investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md`. Greg's words
 and leanings are quoted in the plan.
 
 **Read to check the plan against the code** (start here; it does not limit scope):
 - `src/models.ts` § `STAGE_EFFORT`, `effortFor`, `ArticleStage`, `ARTICLE_RENDERER`
 - `src/illustrated.ts` (the brief call around line 1030), `src/sketch.ts` § generateSketch,
   `src/ideas.ts` § generateIdeas
-- `src/hierarchy-prompt.ts` § EFFORT, `src/hierarchy.ts` § structureRequest,
-  `src/hierarchy-expand.ts` § EXPAND_EFFORT
-- `evals/hierarchy-structure/` (arms.ts, model-arms.ts, run.ts, score.ts, blind.ts) — the existing harness
+- `src/structure-prompt.ts` § EFFORT, `src/structure.ts` § structureRequest,
+  `src/structure-expand.ts` § EXPAND_EFFORT
+- `evals/structure-whole-document/` (arms.ts, model-arms.ts, run.ts, score.ts, blind.ts) — the existing harness
 - `evals/sketch/run.ts`, `evals/illustrated/run.ts`, `evals/results/effort-vs-quality.md` (the prior effort eval)
 - `src/pipeline.ts` § sharesArticleCache, `tests/article-cache-group.test.ts`
-- `docs/project/{sketch,illustrated,ideas,hierarchy}.md`
+- `docs/project/{sketch,illustrated,ideas,structure-step}.md`
 
 **Attack it first, independently:** can the method detect a real quality loss at this sample size?
 Is the control pair (base vs base-repeat) a sound noise floor? Is the decision rule coherent and

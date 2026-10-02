@@ -22,12 +22,20 @@
  * ground rings around every glyph as a JPEG, and a UI screenshot has few enough
  * flat colours that quantised PNG is smaller anyway.
  *
- * **The four retaken shots are 2160 wide and the rest are 1440, and that is not
- * drift.** The pages draw a landscape shot at 1152px now rather than 768px
- * (SiteBits.tsx § Showcase), so 1440 is 1.25× and visibly soft where it used to
- * be 1.9×. The remaining 1440-wide landscape shots — `ask`, `referee`, `library`
- * — are under-resolution for the same reason and are worth retaking next; the
- * portrait panels are drawn at ~360px and are fine.
+ * **Retaken on 2026-10-02**, because every landscape shot from that day showed a
+ * mode bar offering Hierarchy and Outline, two modes that no longer exist, and
+ * one carried a `toc/3` debug pill: `structure` (the hero, in place of
+ * `outline`), `glossary`, `meaning`, `library`, the two below, and `sketch` in
+ * place of `diagram`, whose force picture showed four kinds where there are
+ * five. `skim` is new. Each is on a different article where it could be.
+ * The band-only portraits (`ideas`, `quotes`, `remember`, `quiz`,
+ * `meaningPanel`) show no bar and were still true, so they stayed.
+ * docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md.
+ *
+ * **Every landscape shot is 2160 wide since that retake, and that is the
+ * width to keep.** The pages draw a landscape shot at 1152px (SiteBits.tsx §
+ * Showcase), so 1440 was 1.25× and visibly soft; 2160 is about 1.9×. The
+ * portrait panels are drawn at ~360px and are 720 wide.
  *
  * **What cost the afternoon, so it does not cost the next one** — the whole
  * recipe is in docs/project/marketing-pages.md, but three things in particular:
@@ -43,17 +51,18 @@
  * cannot serve a stale one.
  */
 import askShot from "./assets/ask-in-place.png";
-import diagramShot from "./assets/diagram.png";
 import glossaryShot from "./assets/glossary-card.png";
 import ideasShot from "./assets/ideas.png";
 import libraryShot from "./assets/library.png";
-import outlineShot from "./assets/outline.png";
 import quizShot from "./assets/quiz.png";
 import quotesShot from "./assets/quotes.png";
 import refereeShot from "./assets/referee-criteria.png";
 import rememberShot from "./assets/remember.png";
 import meaningPanelShot from "./assets/search-meaning-panel.png";
 import meaningShot from "./assets/search-meaning.png";
+import sketchShot from "./assets/sketch.png";
+import skimShot from "./assets/skim.png";
+import structureShot from "./assets/structure.png";
 
 export interface Shot {
   src: string;
@@ -69,21 +78,28 @@ export const SHOTS = {
     file: "glossary-card.png",
     w: 2160,
     h: 1350,
-    alt: "The prose of Feynman's “Cargo Cult Science” with its key terms underlined, a panel of their definitions beside it, and a card open over one of them explaining what the author means by it.",
+    alt: "The prose of Feynman's “Cargo Cult Science” with its key terms underlined, the glossary's definitions in the panel beside it, and a card open over the text explaining who Robert Millikan was.",
   },
-  outline: {
-    src: outlineShot,
-    file: "outline.png",
+  structure: {
+    src: structureShot,
+    file: "structure.png",
     w: 2160,
     h: 1350,
-    alt: "A table of contents beside the prose, detailed for the section being read and its neighbours and sparser further away.",
+    alt: "Structure mode beside the prose of an essay: its nine parts in one column, the part being read opened up with its summary, and that part's five sections in a second column.",
+  },
+  skim: {
+    src: skimShot,
+    file: "skim.png",
+    w: 2160,
+    h: 1350,
+    alt: "Skim mode: a route of quotes through an essay, the first stop open with its quote, the terms it uses and the idea it bears on, and the same passage marked in the prose with a Next stop button below it.",
   },
   meaning: {
     src: meaningShot,
     file: "search-meaning.png",
     w: 2160,
     h: 1350,
-    alt: "A search by meaning with its matching passages scored in the panel, marked in the prose and painted as a lane in the narrow strip beside it.",
+    alt: "A search by meaning for why intelligence is not the same as consciousness: five scored passages in the panel, and the same sentences marked in the prose.",
   },
   meaningPanel: {
     src: meaningPanelShot,
@@ -106,19 +122,19 @@ export const SHOTS = {
     h: 1469,
     alt: "The Quotes panel: the article's own sentences worth keeping, in order.",
   },
-  diagram: {
-    src: diagramShot,
-    file: "diagram.png",
+  sketch: {
+    src: sketchShot,
+    file: "sketch.png",
     w: 720,
-    h: 1469,
-    alt: "The force diagram: the article's sections as dots, joined where they share distinctive words, with the current section marked.",
+    h: 918,
+    alt: "Diagram mode's Sketch: the argument of an essay drawn as a flowchart, from an opening question down to two boxed columns, under the five diagram kinds.",
   },
   ask: {
     src: askShot,
     file: "ask-in-place.png",
-    w: 1440,
-    h: 560,
-    alt: "A sentence selected in the prose, and beside it the model's explanation of it, citing the surrounding passages.",
+    w: 2160,
+    h: 1406,
+    alt: "A sentence of an essay selected and marked in the prose, and beside it the question the reader asked about it and the model's answer, which ties the remark to the rest of the piece.",
   },
   remember: {
     src: rememberShot,
@@ -137,15 +153,15 @@ export const SHOTS = {
   referee: {
     src: refereeShot,
     file: "referee-criteria.png",
-    w: 1440,
-    h: 900,
-    alt: "Referee mode on a paper, with the reviewer's own criteria listed and their matching passages marked in the prose.",
+    w: 2160,
+    h: 810,
+    alt: "Referee mode's Criteria view: the reviewer's question about whether the evidence for the central claim is strong, four numbered passages with a note on each, and one of them marked in the essay's prose.",
   },
   library: {
     src: libraryShot,
     file: "library.png",
-    w: 1440,
-    h: 900,
-    alt: "The library: every article on one shelf.",
+    w: 2160,
+    h: 1192,
+    alt: "The library: a search box, sort and topic chips, and three articles on the shelf, each with its one-line gist.",
   },
 } as const satisfies Record<string, Shot>;

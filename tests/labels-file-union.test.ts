@@ -5,7 +5,7 @@
  * `LabelsFile` was one interface with `version` and `generator` required, and
  * stage 2 of
  * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md needs a second
- * shape: the `hierarchy` step now writes a manifest holding the three hashes
+ * shape: the `structure` step now writes a manifest holding the three hashes
  * and no labels at all, because the labels have become their own step. Making
  * those two one bag of optionals would have put the decision at every read
  * site. They are `PendingLabelsFile` and `CompletedLabelsFile` instead, and

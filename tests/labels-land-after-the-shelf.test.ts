@@ -2,7 +2,7 @@
  * **The two orderings the split exists for, asserted rather than raced.**
  *
  * Stage 3 of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
- * Stages 1, 2a, 2b and 2c took the label pass out of the blocking `hierarchy`
+ * Stages 1, 2a, 2b and 2c took the label pass out of the blocking `structure`
  * step and gave it a free successor job. Every test written for those stages
  * asks about one piece — the registrations, the column, the enqueue, the sweep.
  * **None of them watches an ingest publish and a label run finish in that
@@ -47,14 +47,14 @@
  *
  * ## What is faked, and what that costs the claim
  *
- * The job's step list is `["blocks", "hierarchy"]` rather than the whole of
- * `DEFAULT_INGEST_STEPS`. `fetch` reaches the network and `hierarchy` and
+ * The job's step list is `["blocks", "structure"]` rather than the whole of
+ * `DEFAULT_INGEST_STEPS`. `fetch` reaches the network and `structure` and
  * `extract`-on-a-PDF are paid model calls, so the fixture stands in for the
  * first two the way tests/pg-session-real-step.test.ts does — the base revision
- * carries `extracted_html` and `fetch`/`extract` receipts — and `hierarchy` is
+ * carries `extracted_html` and `fetch`/`extract` receipts — and `structure` is
  * a fake whose product is built from the **real** `buildTree` and
  * `mergeLabels`, so the artefacts it hands the session are the shape
- * `generateHierarchy` really produces (src/hierarchy.ts § `pending`). `blocks`
+ * `generateStructure` really produces (src/structure.ts § `pending`). `blocks`
  * is the real step.
  *
  * What that leaves unproven is nothing this file claims: `fetch` and `extract`
@@ -88,7 +88,7 @@ import {
   revisionStepRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { buildTree, type ModelNode } from "../src/hierarchy.js";
+import { buildTree, type ModelNode } from "../src/structure.js";
 import { mintId } from "../src/ids.js";
 import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
 import { LABELS_PROMPT_VERSION, mergeLabels } from "../src/labels.js";
@@ -149,7 +149,7 @@ interface LabelOpts {
   blocks: Block[];
   slug: string;
   checkpoints: {
-    write(slug: string, namespace: "hierarchy-labels", key: string, value: unknown): Promise<void>;
+    write(slug: string, namespace: "structure-labels", key: string, value: unknown): Promise<void>;
   };
 }
 
@@ -220,7 +220,7 @@ const OLD_LABEL = "A LABEL FROM THE PREVIOUS RUN, WHICH THIS INGEST INVALIDATES"
 const NEW_LABEL = "A LABEL THE SUCCESSOR JOB BOUGHT AFTER THE ARTICLE WAS ON THE SHELF";
 
 /**
- * The whole article as one section — the shape `generateHierarchy` hands
+ * The whole article as one section — the shape `generateStructure` hands
  * `buildTree`, minus the model call that chose the sections.
  */
 function rootOver(blocks: Block[]): ModelNode {
@@ -242,7 +242,7 @@ const labelsFor = (blocks: Block[], text: string): Record<string, string> =>
  * `buildTree` then `mergeLabels`, both real, because the invariant both writers
  * of the column keep is `tree === mergeLabels(structure, labels.labels)` — a
  * hand-built literal would satisfy the publication gate while quietly not being
- * that (src/hierarchy.ts § `parts`).
+ * that (src/structure.ts § `parts`).
  */
 function treeFor(slug: string, blocks: Block[], labels: Record<string, string>): Tree {
   return mergeLabels(buildTree(rootOver(blocks), labels, blocks, slug), labels);
@@ -331,11 +331,11 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
     await stepRun(begun.revisionId, name);
   }
   /* The two run rows that carry a real hash: the publication gate compares
-     `hierarchy.input_hash` with `hashBlocks` of the stored blocks and refuses
+     `structure.input_hash` with `hashBlocks` of the stored blocks and refuses
      when they differ, and the `labels` row is the receipt whose deletion this
      fixture is here to make visible. */
   await stepRun(begun.revisionId, "blocks", hashBlocks(blocks));
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   await stepRun(begun.revisionId, "labels", hashBlocks(blocks));
 
   await publishRevision({ slug, revisionId: begun.revisionId });
@@ -346,8 +346,8 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
 /* -------------------------------------------------------------- the steps -- */
 
 /**
- * `hierarchy` without the structure call: a tree over the blocks the real step
- * would have read, and the **empty** manifest src/hierarchy.ts writes beside it.
+ * `structure` without the whole-document call: a tree over the blocks the real step
+ * would have read, and the **empty** manifest src/structure.ts writes beside it.
  *
  * Every field is computed by the same function production computes it with, so
  * what the session is handed is a `PendingLabelsFile` rather than something
@@ -355,10 +355,10 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
  * `writeArtefacts` reads as *set `nav_label_status` to `pending` and delete the
  * labels receipt*.
  */
-function fakeHierarchy(): PipelineStep<"hierarchy"> {
+function fakeStructure(): PipelineStep<"structure"> {
   return {
-    name: "hierarchy",
-    label: STEPS.hierarchy.label,
+    name: "structure",
+    label: STEPS.structure.label,
     produces: ["tree", "labels", "blocks"],
     async run(ctx, store) {
       const file = await store.read(ctx.slug, "blocks", "blocks");
@@ -382,7 +382,7 @@ function fakeHierarchy(): PipelineStep<"hierarchy"> {
 }
 
 /** The registry the jobs are driven with: the real steps, with one fake over them. */
-const REGISTRY: StepRegistry = { ...STEPS, hierarchy: fakeHierarchy() };
+const REGISTRY: StepRegistry = { ...STEPS, structure: fakeStructure() };
 
 const PARTS: AdvanceParts = {
   power: async () => "standard",
@@ -535,7 +535,7 @@ async function checkpointsFor(articleId: string) {
     .select()
     .from(checkpointRows)
     .where(
-      and(eq(checkpointRows.articleId, articleId), eq(checkpointRows.namespace, "hierarchy-labels")),
+      and(eq(checkpointRows.articleId, articleId), eq(checkpointRows.namespace, "structure-labels")),
     )
     .orderBy(asc(checkpointRows.key));
 }
@@ -573,14 +573,14 @@ describe("an ingest that publishes before its labels are bought", () => {
    * **The premise**, and without it the case below could pass over a pipeline
    * that had never had a labels step at all. Stated here rather than borrowed
    * from tests/labels-step-registration.test.ts because it is what makes this
-   * file's fixture — a job of `["blocks", "hierarchy"]` — an *ingest* rather
+   * file's fixture — a job of `["blocks", "structure"]` — an *ingest* rather
    * than an arbitrary two-step job.
    */
   it("runs a step list that does not include the labels", () => {
     expect(DEFAULT_INGEST_STEPS).not.toContain("labels");
-    expect(DEFAULT_INGEST_STEPS).toContain("hierarchy");
+    expect(DEFAULT_INGEST_STEPS).toContain("structure");
     /* And the list the job below actually gets, so the two cannot drift. */
-    expect(INGEST_STEPS).toEqual(["blocks", "hierarchy"]);
+    expect(INGEST_STEPS).toEqual(["blocks", "structure"]);
   });
 
   /**
@@ -753,7 +753,7 @@ describe("an ingest that publishes before its labels are bought", () => {
 
     /* Some batches, then a failure — the shape the property is about. */
     labelGate.handler = async (opts) => {
-      await opts.checkpoints.write(opts.slug, "hierarchy-labels", "0123456789abcdef", {
+      await opts.checkpoints.write(opts.slug, "structure-labels", "0123456789abcdef", {
         labels: labelsFor(opts.blocks.slice(0, 2), NEW_LABEL),
       });
       throw new Error("the model went away half way through the run");
@@ -792,8 +792,8 @@ describe("an ingest that publishes before its labels are bought", () => {
    * there, it *becomes* the tree.
    *
    * What stops it is one line — `checkCoverage(parts.labels.labels, parts.tree,
-   * file.blocks)` in `STEPS.labels.run`, moved there from `generateHierarchy` by
-   * stage 2 — and the hazard tests/hierarchy-leaves-the-labels.test.ts names is
+   * file.blocks)` in `STEPS.labels.run`, moved there from `generateStructure` by
+   * stage 2 — and the hazard tests/structure-step-leaves-the-labels.test.ts names is
    * that removing it from **both** steps leaves no symptom at all. That file
    * pins where the call lives by reading the source; this one pins what happens
    * when it fires, over the real store.

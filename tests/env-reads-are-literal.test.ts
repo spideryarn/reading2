@@ -213,13 +213,13 @@ describe("every environment read under src/ is literal", () => {
    */
   it("every exported constant that duplicates a literal read is named here", async () => {
     const EXPECTED: Record<string, string> = {
-      DEEPEN_ENV: "SPIDERYARN_DEEPEN_HIERARCHY",
+      DEEPEN_ENV: "SPIDERYARN_DEEPEN_STRUCTURE",
       REASK_ENV: "SPIDERYARN_DEEPEN_REASK",
       DEEPEN_RECORDS_ENV: "SPIDERYARN_DEEPEN_RECORDS",
       PINNED: "SPIDERYARN_ENV_PINNED",
     };
     const modules = [
-      { file: "src/hierarchy-deepen.ts", mod: await import("../src/hierarchy-deepen.js") },
+      { file: "src/structure-deepen.ts", mod: await import("../src/structure-deepen.js") },
       { file: "src/env.ts", mod: await import("../src/env.js") },
     ];
     const found: Record<string, string> = {};

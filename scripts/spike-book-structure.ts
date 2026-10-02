@@ -1,7 +1,7 @@
 /**
  * **Throwaway spike for docs/plans/260904d-deepen-fat-sections.md stage 1.**
  *
- * The structure call only — no labels. The question is "what do a book's
+ * The whole-document call only — no labels. The question is "what do a book's
  * sections look like", and the label pass is a batched second stage that costs
  * many times more and answers nothing about it.
  *
@@ -16,10 +16,10 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 import {
   buildTree,
-  parseStructureAnswer,
-  structureRequest,
+  parseWholeDocumentAnswer,
+  wholeDocumentRequest,
   type BuildReport,
-} from "../src/hierarchy.js";
+} from "../src/structure.js";
 import { loadEnvLocal } from "../src/env.js";
 import { streamMessage } from "../src/messages-stream.js";
 import { parseJsonFrom } from "../src/parse-json.js";
@@ -42,14 +42,14 @@ async function main(): Promise<void> {
     `${blocks.length} blocks (${body.length} body, ${groups.length} supplement group(s))`,
   );
 
-  const { maxTokens, params } = structureRequest(body);
+  const { maxTokens, params } = wholeDocumentRequest(body);
   console.log(`max_tokens = ${maxTokens.toLocaleString()}`);
 
   /* The prompt experiment: two of the five fat sections in the corpus carry no
      authored heading, so the model invented that boundary and then declined to
      split it. `SPIKE_SYSTEM_FILE` swaps the system prompt for the run without
-     touching `SYSTEM` in src/hierarchy.ts — which is pinned verbatim by
-     tests/hierarchy-structure-request-parity.test.ts, and should stay pinned
+     touching `SYSTEM` in src/structure.ts — which is pinned verbatim by
+     tests/structure-whole-document-request-parity.test.ts, and should stay pinned
      until an experiment says what to change it to. */
   const override = process.env["SPIKE_SYSTEM_FILE"];
   if (override) {
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
   const started = Date.now();
   let chars = 0;
   let last = 0;
-  const call = streamMessage("hierarchy", params, { power: "standard" });
+  const call = streamMessage("structure", params, { power: "standard" });
   call.onText((delta) => {
     chars += delta.length;
     const now = Date.now();
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   );
 
   const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
-  const { root } = parseStructureAnswer(raw, body, report);
+  const { root } = parseWholeDocumentAnswer(raw, body, report);
   const tree = buildTree(root, {}, body, "spike", report);
   console.log(
     `tree: ${Object.keys(tree.nodes).length} nodes, ${report.repairs.length} repair(s), ` +

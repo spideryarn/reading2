@@ -21,7 +21,7 @@ sweep:
 And his condition: *"If you have questions or concerns ... let's discuss before going ahead."*
 
 The numbers, the queries and the working are in
-[research 261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+[research 261001b](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
 This doc only cites them.
 
 ## What the measurement says
@@ -57,7 +57,7 @@ quiz, faq, cross-references, simple and citations. It is not true for:
 - Live conversation: the instructions and the reader's profile first.
 
 The table is in
-[research § Does every full-article prompt put the article first?](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+[research § Does every full-article prompt put the article first?](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
 
 **Being first is necessary but not enough.** Two modes share a cached article only if all four of
 these hold:
@@ -279,5 +279,5 @@ finding was checked and taken:
 - **F8, "more than B, C and E together".** It is now "B and C", with E deferred.
 
 Up: [prompt-caching.md](../project/prompt-caching.md) · research:
-[261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md) · the
+[261001b](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md) · the
 sweep before it: [261001l](261001l-prompt-caching-across-every-call.md)

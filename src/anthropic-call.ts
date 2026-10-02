@@ -2,7 +2,7 @@
  * Turn a failure from the Anthropic SDK's own request into a safe,
  * reader-facing `Error` — the request-failure analogue of `providerRefused`
  * in src/openrouter-stream.ts, for the ten pipeline stages that talk to the
- * SDK directly (arc, glossary, hierarchy, ideas, labels, quiz, quotes, sketch,
+ * SDK directly (arc, glossary, ideas, labels, quiz, quotes, sketch,
  * timeline, tweets) rather than through OpenRouter. The list is whatever
  * `grep -rn anthropicCallFailed src/` says: it read "six" and named a deleted
  * `summarise` until 2026-09-03, and the counts below reason from it.

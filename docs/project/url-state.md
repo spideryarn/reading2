@@ -81,7 +81,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
 | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
 | `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
-| `summary` | which of Summary's three plain-words levels the slider is on: `brief`, `simple` (the default, and absent) or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `simple`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
+| `summary` | which of Summary's three plain-words levels the slider is on: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `simple` or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
@@ -103,7 +103,7 @@ line.
 
 **Diagram mode's one exception, and it is deliberate**: which sections the
 reader has *collapsed* is not in the URL at all. Node ids are positional and a
-re-run of `npm run hierarchy` renumbers them ([block-ids.md](block-ids.md)), so a
+re-run of `npm run structure` renumbers them ([block-ids.md](block-ids.md)), so a
 pasted link would open the wrong sections on an article that had been
 re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
 they are stable words rather than ids, so no amount of re-ingesting can make

@@ -101,7 +101,7 @@ Structure, the Masthead, the shelf entries, hover cards, Diagram, Debate and the
 down the spine. In principle the tree could be cut first and the gists written later; in practice
 one hierarchy call writes both, a final tree without gists fails validation, and the heading-only
 provisional tree is unfinished infrastructure the pipeline cannot yet publish
-([hierarchy.md](../project/hierarchy.md); Sol's plan review, P2). So deferring the gists means
+([hierarchy.md](../project/structure-step.md); Sol's plan review, P2). So deferring the gists means
 splitting the Hierarchy stage, or deferring it and giving every surface that reads the tree an
 "article with no tree yet" state — the thing 260930c deferred as its own plan. That is the "substantially complicate things" Greg asked to be
 told about, and he has since answered it himself:

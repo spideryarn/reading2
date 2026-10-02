@@ -24,7 +24,7 @@ shared by the dev and prod keys) and three Illustrated calls came back `402 ai-n
 harness stopped itself; those three rows and their claims are moved to
 `evals/results/thinking-effort-261001/outage-402/`, so a resume re-runs exactly them. The Overseer
 has told Greg. Illustrated waits for the top-up; the write-up so far is
-[research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+[research 261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
 
 **Hierarchy is decided already, by the smoke run:** with thinking off, both draws answered with a
 sentence of prose before the JSON ("Looking at this structure, I'll trace the natural argument
@@ -37,7 +37,7 @@ refused answers are in `evals/results/hierarchy-structure/2026-10-01-17-41-52-sm
 
 ## Why
 
-[Research 261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md)
+[Research 261001b](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md)
 found that thinking is about a quarter of a normal article's Claude bill ($12.71 of $50.06 at list
 price over 30 days, 44 normal articles), and that four modes are three-quarters of it: Sketch
 $2.69, Illustrated $2.37, Hierarchy $2.17, Ideas $2.08. Halving all four would save about 9% of a
@@ -182,7 +182,7 @@ gets the article text with block ids.
 ### The rubric per mode
 
 Written from [sketch.md](../project/sketch.md), [illustrated.md](../project/illustrated.md),
-[ideas.md](../project/ideas.md) and [hierarchy.md](../project/hierarchy.md) as 3–5 gradeable
+[ideas.md](../project/ideas.md) and [hierarchy.md](../project/structure-step.md) as 3–5 gradeable
 criteria each, and quoted verbatim in the research write-up.
 
 ### The measure, and the decision rule — fixed before the results
@@ -290,7 +290,7 @@ today, but it constrains the 261001o caching options, and the write-up says so.
 2. **Full runs** for Sketch, Illustrated and Ideas, in tmux. Results committed under `evals/results/`.
 3. **Blind judging**: Sol and Opus; my sample; unblind; tabulate.
 4. **Decide, change, write up**: the research doc
-   (`docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`),
+   (`docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`),
    Sol on the decision with the numbers, the effort changes and the docs that own them, Sol on the
    code, gates, commit, push to `dev`, the feedback note and the awaiting-approval line. No deploy.
 

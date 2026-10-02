@@ -3,7 +3,7 @@
  *
  * One call per (document, arm). The model is shown the article exactly as
  * production shows it — `renderBlocks` over the body blocks, the same function
- * `structureRequest` uses — plus the **fixed** outline of the tree that is
+ * `wholeDocumentRequest` uses — plus the **fixed** outline of the tree that is
  * already on disk, and is asked for a gist and (at depth <= `MAX_QUESTION_DEPTH`)
  * a question per node. It is not asked for structure, ranges, titles or
  * `sourceHeading`, because none of those is what any variant changes.
@@ -14,10 +14,10 @@
  * ## The seam, and why there is no declared bypass
  *
  * Every call goes through [`streamMessage`](../../src/messages-stream.ts) with
- * task `"hierarchy"`, so it is production's model, production's routing and
+ * task `"structure"`, so it is production's model, production's routing and
  * production's cache pin, and it is **metered in-band** — `withLedger("eval", …)`
  * in [`run.ts`](run.ts) opens the collector.
- * `evals/hierarchy-structure` needs a declared bypass because its arms vary
+ * `evals/structure-whole-document` needs a declared bypass because its arms vary
  * model and effort per call and `streamMessage` owns both on purpose; this eval
  * varies neither, so it has nothing to declare and adds no row to
  * `src/spend-declarations.ts`.
@@ -33,8 +33,8 @@
  * lines actually parsed out of the answer.
  */
 
-import { MAX_QUESTION_DEPTH } from "../../src/hierarchy.js";
-import { PRODUCTION_EFFORT, renderBlocks } from "../../src/hierarchy-prompt.js";
+import { MAX_QUESTION_DEPTH } from "../../src/structure.js";
+import { PRODUCTION_EFFORT, renderBlocks } from "../../src/structure-prompt.js";
 import { streamMessage } from "../../src/messages-stream.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
 import { splitBlocks, supplementIndex } from "../../src/supplement.js";
@@ -323,7 +323,7 @@ export type Generator = (req: {
 
 /** The real one: production's model, production's routing, metered in-band. */
 export const liveGenerator: Generator = async ({ system, user, maxTokens }) => {
-  const call = streamMessage("hierarchy", {
+  const call = streamMessage("structure", {
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: PRODUCTION_EFFORT },

@@ -73,7 +73,7 @@ import { costStore } from "./store/ai-calls.js";
  * top of `main` themselves, and that gate still requires it. The call memoises,
  * so the second one does nothing.
  *
- * **This paragraph used to end *"when `src/hierarchy.ts` moves too, the
+ * **This paragraph used to end *"when `src/structure.ts` moves too, the
  * in-`main` calls and the rule that checks for them can go"*. It moved, on
  * 2026-09-05, and they stayed** — deliberately. The rule is stated over
  * `PAID_CLIS`, not over `stageCli`, so it covers the *next* CLI on the day
@@ -85,7 +85,7 @@ import { costStore } from "./store/ai-calls.js";
  * `quiz` — were deleted on 2026-09-01: re-running one stage against one article
  * is a job (`{ slug, steps, force }`), and a second way to do it was a second
  * thing to keep in step. docs/plans/260831b-finish-the-database-move.md §
- * sub-stage I. `hierarchy` and `labels` followed on 2026-09-05, by the two
+ * sub-stage I. `structure` and `labels` followed on 2026-09-05, by the two
  * routes described above.
  *
  * `await`ed by the caller rather than `void`ed, so flushing the ledger and any

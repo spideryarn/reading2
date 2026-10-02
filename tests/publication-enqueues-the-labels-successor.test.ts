@@ -3,7 +3,7 @@
  * that makes them — and buys nothing else.**
  *
  * Stage 2b of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
- * Stage 2a took `labels` out of `DEFAULT_INGEST_STEPS` and out of `hierarchy`,
+ * Stage 2a took `labels` out of `DEFAULT_INGEST_STEPS` and out of `structure`,
  * so a freshly ingested article now publishes with
  * `article_revisions.nav_label_status = 'pending'` and shows the reader
  * *"Paragraph labels are still arriving"*. Until this stage nothing anywhere
@@ -281,9 +281,9 @@ function block(id: string, text: string): Block {
 /**
  * The smallest tree `checkTree` accepts — the publication gate runs the real one.
  *
- * **No `navLabel` on the leaves**, which is what a stage-2a `hierarchy` produces:
+ * **No `navLabel` on the leaves**, which is what a stage-2a `structure` produces:
  * `buildTree` sets the field from the map it is handed and from nothing else, so
- * a structure-only tree carries none (tests/hierarchy-leaves-the-labels.test.ts).
+ * a structure-only tree carries none (tests/structure-step-leaves-the-labels.test.ts).
  * `checkTree`'s complaints about labels are editorial and never refuse.
  */
 function treeFor(slug: string, blocks: Block[]): Tree {
@@ -343,7 +343,7 @@ interface Fixture {
 /**
  * A draft, complete enough to publish, with its `nav_label_status` set by hand.
  *
- * Set by hand rather than by running `hierarchy`: this file is about what
+ * Set by hand rather than by running `structure`: this file is about what
  * publication does with the column, and driving the real step here would be a
  * paid model call to prove something about the queue.
  */
@@ -397,7 +397,7 @@ async function draftReadyToPublish(
   }
   /* The one run row that has to carry a real hash: the publication gate compares
      it with `hashBlocks` of the stored blocks and refuses when they differ. */
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
 
   return { slug, articleId: begun.articleId, revisionId: begun.revisionId, blocks };
 }
@@ -748,7 +748,7 @@ describe("publication enqueues the free labels successor", () => {
           ownerId: OWNER,
           slug,
           url: `https://example.com/${slug}`,
-          steps: stepsOf(["hierarchy"]),
+          steps: stepsOf(["structure"]),
           status: "done",
           workKey: `labels-successor-parent-${parentId}`,
           reservesName: true,
@@ -819,7 +819,7 @@ describe("publication enqueues the free labels successor", () => {
           id: parentId,
           ownerId: OWNER,
           slug,
-          steps: stepsOf(["hierarchy"]),
+          steps: stepsOf(["structure"]),
           status: "done",
           workKey: `labels-successor-parent-${parentId}`,
           reservesName: true,
@@ -1436,12 +1436,12 @@ describe("publication enqueues the free labels successor", () => {
    *
    * The ordering, exactly as Sol set it out:
    *
-   * 1. Job A, `["hierarchy","labels"]`, is asked for while something else is
+   * 1. Job A, `["structure","labels"]`, is asked for while something else is
    *    running on the article.
    * 2. That other job publishes a `pending` revision, which queues successor B,
    *    `["labels"]`.
    * 3. A **predates** B, so A claims first and opens its draft from that revision.
-   * 4. A dies inside `hierarchy`.
+   * 4. A dies inside `structure`.
    * 5. Membership says mark it — but B is still queued to make exactly those
    *    labels, and B then runs and they arrive.
    *
@@ -1462,16 +1462,16 @@ describe("publication enqueues the free labels successor", () => {
 
     /* Job A, asked for before the publication that minted B — which is what lets
        it claim ahead of B rather than queue behind it. */
-    const older = await queueBehind(slug, ["hierarchy", "labels"], new Date(Date.now() - 60_000));
+    const older = await queueBehind(slug, ["structure", "labels"], new Date(Date.now() - 60_000));
     const attempt = mintAttempt();
     await claimWhenSlotFree(older, attempt);
     const session = await openPgStoreSession({ slug, job: { id: older, attemptId: attempt } });
-    await session.beginStep(slug, "hierarchy");
+    await session.beginStep(slug, "structure");
     await db()
       .update(jobsTable)
       .set({
-        steps: stepsOf(["hierarchy", "labels"]).map((step) =>
-          step.name === "hierarchy" ? { ...step, status: "running" as const } : step,
+        steps: stepsOf(["structure", "labels"]).map((step) =>
+          step.name === "structure" ? { ...step, status: "running" as const } : step,
         ),
         leaseExpiresAt: sql`clock_timestamp() - interval '1 second'`,
       })

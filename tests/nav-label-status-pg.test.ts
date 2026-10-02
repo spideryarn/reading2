@@ -81,7 +81,7 @@ beforeAll(async () => {
      happens when the `labels` artefact is written, so a fixture that did not
      bring one would make the whole file green about nothing — the shape
      docs/reusable/silent-success.md is written against. */
-  expect(article.copied).toContain("hierarchy");
+  expect(article.copied).toContain("structure");
 }, 60_000);
 
 afterAll(async () => {

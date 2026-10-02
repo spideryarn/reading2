@@ -176,12 +176,12 @@ describe("splitBlocks", () => {
    * — with `stranded: 0` — before counting anything earlier. So an article
    * whose apparatus sits mid-body and whose last block is an ordinary paragraph
    * reported no apparatus at all: no Notes node built, the note buried under an
-   * ordinary structural branch, `HierarchyRun.strandedSupplement` zero, and the
+   * ordinary structural branch, `StructureRun.strandedSupplement` zero, and the
    * CLI printing its usual "0 nodes over 0 blocks".
    *
    * `openai-huggingface` is exactly that article — a stranded footnote at index
    * 93 followed by a blog footer reading "No posts" — and the root clamp
-   * (src/hierarchy.ts) has just made it publishable, so this stops being a
+   * (src/structure.ts) has just made it publishable, so this stops being a
    * latent hole and starts being something we do. Nothing about `body` or
    * `groups` changes; what changes is that the run says so.
    * docs/reusable/silent-success.md.

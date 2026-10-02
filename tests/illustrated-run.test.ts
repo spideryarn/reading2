@@ -486,7 +486,7 @@ describe("imagePrompt", () => {
 
   /**
    * **The captions, and the three things in them that were measured** —
-   * docs/research/260904a-nano-banana-text-in-generated-images.md § The prompt
+   * docs/investigations/260904a-nano-banana-text-in-generated-images.md § The prompt
    * wording that worked. Each is asserted separately because each was arrived
    * at by looking at plates rather than by reasoning, and a tidy-up that
    * dropped one would leave the other two looking like the whole rule.

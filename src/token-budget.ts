@@ -2,7 +2,7 @@
  * How big one model response is allowed to be — and why that is a function of
  * the article rather than a constant.
  *
- * Three stages (hierarchy, arc, tweets) each make one streamed call and each has to
+ * Three stages (structure, arc, tweets) each make one streamed call and each has to
  * pass a `max_tokens`. All three used to pass a number somebody had typed once:
  * 32,000 for the tree, 16,000 for the other two. On 2026-08-25 the first stage
  * met an article long enough to blow through its number and the ingest failed
@@ -27,7 +27,7 @@
  * - The **thinking** grows with the input, and we do not get to say by how
  *   much. That is what `THINKING_HEADROOM` is: not a promise, a reservation.
  *
- * See docs/project/hierarchy.md#the-budget.
+ * See docs/project/structure-step.md#the-budget.
  */
 import { stageFailure } from "./job-failure.js";
 import {
@@ -72,7 +72,7 @@ export const MODEL_MAX_TOKENS = 128_000;
  * So the caveat: **this constant cannot rescue a call on its own.** It is the
  * slack that stops a well-behaved call from failing at the margin, and it is
  * not a leash. The leash is `effort`, which each stage sets for itself — see
- * `EFFORT` in src/hierarchy.ts and in src/labels.ts. If this stops being enough
+ * `EFFORT` in src/structure.ts and in src/labels.ts. If this stops being enough
  * again, the answer is almost certainly a lower effort rather than a bigger
  * number here.
  *
@@ -95,10 +95,10 @@ export const MODEL_MAX_TOKENS = 128_000;
  *
  * **And a stage that meets longer inputs than this was measured on needs its
  * own, larger figure** — the same argument in the other direction. On
- * 2026-09-04 a 142-page paper's structure call was measured spending 47,289
+ * 2026-09-04 a 142-page paper's whole-document call was measured spending 47,289
  * tokens of reasoning, over this reservation, and came back whole; had it been
  * sized with this number it would have truncated eight minutes and two dollars
- * in. So stage 4 passes `STRUCTURE_HEADROOM` (src/hierarchy.ts) instead. This
+ * in. So stage 4 passes `STRUCTURE_HEADROOM` (src/structure.ts) instead. This
  * constant is a default, not a rule.
  */
 export const THINKING_HEADROOM = 40_000;
@@ -150,7 +150,7 @@ export class TooLongForOnePass extends Error {
       `The ${stage} needs about ${answerTokens.toLocaleString()} tokens for this article, and one ` +
         `model response holds ${MODEL_MAX_TOKENS.toLocaleString()} including the model's own ` +
         `reasoning. This article has to be processed in sections, which is not built yet — see ` +
-        `docs/project/hierarchy.md#long-articles.`,
+        `docs/project/structure-step.md#long-articles.`,
     );
     this.name = "TooLongForOnePass";
   }

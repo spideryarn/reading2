@@ -325,7 +325,7 @@ the index rather than in the id string.
 Blocks are the **finest** unit a reader takes in as one thing — so an `<li>` is a block and the
 `<ul>` around it is not; the list becomes a *node* in the tree instead. See
 [architecture.md § What a block is](architecture.md#what-a-block-is) for that decision and why it
-matters to the hierarchy.
+matters to the tree.
 
 Some blocks get an id but never get a gist (`gistable: false`): images, horizontal rules, and
 pull-quotes that repeat body text verbatim. They stay addressable — Hierarchy may well want to point
@@ -560,7 +560,7 @@ version and let stale caches be *detectable* rather than silently wrong — neve
 
 - [architecture.md](architecture.md) — where stage 3 sits, and the `blocks.json` shape
 - [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) — what is built on top of these ids
-- [hierarchy.md](hierarchy.md) — stage 4's tree, whose rows address blocks by id
+- [structure-step.md](structure-step.md) — stage 4's tree, whose rows address blocks by id
 - [url-state.md](url-state.md) — the `?at=` an id links to, and what else rides in the URL
 - [web-client.md](web-client.md) — the reading view these ids are drawn in
 - [open-questions.md](open-questions.md) — what is still undecided

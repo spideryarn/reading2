@@ -811,7 +811,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
      body made every call fail that way, and the feature reported it as "the
      model could not be reached". Anything added to that body has to be checked
      against the chosen model's upstreams first —
-     docs/research/260902b-env-key-proposal-spike.md. */
+     docs/investigations/260902b-env-key-proposal-spike.md. */
   "env-proposal": {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -1002,7 +1002,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +
-      "posts its own request (evals/hierarchy-structure/model-arms.ts § chatBody), not via here.",
+      "posts its own request (evals/structure-whole-document/model-arms.ts § chatBody), not via here.",
   },
   embeddings: {
     providerDefault: "An embedding model, which does not think; there is nothing to decide.",
@@ -1066,7 +1066,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
  */
 export type ChatJob = Exclude<
   AiJob,
-  | "hierarchy"
+  | "structure"
   | "labels"
   | "arc"
   | "tweets"
@@ -1192,7 +1192,7 @@ export class ProviderRefused extends Error {
  * this function — see `ProviderRefused`.
  *
  * **Exported since 2026-09-05** for the deepening wave
- * (src/hierarchy-deepen.ts), which meets its 429s on the Anthropic SDK's road
+ * (src/structure-deepen.ts), which meets its 429s on the Anthropic SDK's road
  * rather than this one and so has an `APIError` with a `Headers` on it instead
  * of a `ProviderRefused`. The header is the same header; a second parser for it
  * would be a second opinion about what "a minute" means, and the two would
@@ -1956,7 +1956,7 @@ export async function openRouterJson(
  *
  * `POST /v1/images` with `google/gemini-3.1-flash-image`, for the Illustrated
  * diagram sub-mode — docs/plans/260903c-illustrated-diagram-sub-mode.md, and
- * docs/research/260904a-nano-banana-text-in-generated-images.md for the swap.
+ * docs/investigations/260904a-nano-banana-text-in-generated-images.md for the swap.
  *
  * It is in this file, beside `openRouterJson`, rather than in a file of its
  * own, because what this file is *for* is that there is no second way to spend
@@ -2022,7 +2022,7 @@ export interface ImageRequest {
    * the one the 2026-09-04 spike settled at `1K` — cheaper, faster *and* more
    * legible at thumbnail than `2K`, because the model spends extra pixels on
    * detail rather than on type
-   * (docs/research/260904a-nano-banana-text-in-generated-images.md).
+   * (docs/investigations/260904a-nano-banana-text-in-generated-images.md).
    *
    * **What is deliberately not here is `quality`, `output_format` and
    * `output_compression`.** They were sent while `openai/gpt-image-2` drew the

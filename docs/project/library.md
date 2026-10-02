@@ -380,6 +380,19 @@ about your reading), and it says that when either is on.
 Include public on. Plan
 [261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md).
 
+**Under the search's answer, the two chips again, with how much each would add** — since
+2026-10-02. Greg, spya-s9fhmw: *"add an extra button right there next to that empty-results-message
+for including archived (and another one for including public) … include a sense of how many
+archived and public results would have matched"*. Whenever a query is typed and either chip is off,
+one line ([`ShelfSearchAlso.tsx`](../../src/web/ShelfSearchAlso.tsx)) carries a button for each one
+that is off — always, whatever the count — and a number where an honest one exists. The archived
+number is the server's: `/api/library/search` with the archive left out also returns
+`archivedArticles`, a count of archived articles with a matching passage (`countArchivedMatches` in
+[`pg-shelf.ts`](../../src/store/pg-shelf.ts), the same predicates as the passages, uncapped). So it is
+about the text, and says "mention". The public number is the cards that match by the card rule, off
+the one public read `Library` shares with the Include public section. It replaced the sentence
+*"Archived articles aren't searched — turn on Include archived"*. Plan 261002b § Part D.
+
 **On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
 dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
 

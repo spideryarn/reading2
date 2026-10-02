@@ -87,6 +87,7 @@ import {
 } from "../messages.js";
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
+import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
@@ -103,7 +104,7 @@ import {
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
-import { NO_INPUT_HASH, PIPELINE_RUN, hierarchyCurrency } from "./artifacts.js";
+import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
 import { enqueueSuccessorIn, type SuccessorOutcome } from "./pg-successor.js";
 
@@ -455,7 +456,7 @@ export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js
  *
  * `permanent` — the same job, retried, meets the identical refusal. A retry is
  * narrower than a re-run: it **skips every step that finished**, so a bad tree,
- * a `hierarchy` run against different blocks, or a revision that is not this
+ * a `structure` run against different blocks, or a revision that is not this
  * article's is read straight back off the same rows.
  *
  * `transient` — the article moved on underneath this draft. Nothing is wrong
@@ -1540,7 +1541,7 @@ export async function liveJobDraft(
  * the same mistake as the plausible-looking hash above, one column along.
  * ⟨GPT Sol's F2 on stage 2, the half of it that was taken.⟩
  *
- * Those three self-heal on their next `hierarchy` run. Nothing is migrated:
+ * Those three self-heal on their next `structure` run. Nothing is migrated:
  * touching real rows is Greg's call, not this function's.
  */
 export async function beginStepRun(
@@ -1751,7 +1752,7 @@ export async function recordStepRun(
  * change one block's `kind` from `heading` to `text`, and you have caused a
  * fresh `checkTree` failure that a tree-only comparison would wave through —
  * `hashBlocks` fingerprints `id`, `text`, `role` and `treatment` and **not**
- * `kind`, so the hierarchy hash check does not catch it either
+ * `kind`, so the structure step's hash check does not catch it either
  * (`checkTree` reads `b.kind` at src/tree-invariants.ts:167 and :300).
  *
  * So both halves are compared, and both are compared **in the database**: two
@@ -1774,7 +1775,7 @@ export async function recordStepRun(
  * so everything is checked.
  *
  * **This is state-based, and deliberately says nothing about who wrote what.**
- * A `hierarchy` run that rebuilds a byte-identical tree over identical blocks
+ * A `structure` run that rebuilds a byte-identical tree over identical blocks
  * counts as unchanged, because by this definition it *is* unchanged. Proving
  * "built here" rather than "differs from the base" would need a provenance
  * marker maintained by the tree-writing seam, and the case is hypothetical: the
@@ -1866,7 +1867,7 @@ async function reasonsNotToPublish(
    *
    * On 2026-09-05 that cost eleven hours of availability. `c8e2cc7e` added a new
    * `checkTree` rule that morning and fixed the producer in the same commit
-   * (`collapseRestatedRungs`, src/hierarchy.ts), but nothing migrated the trees
+   * (`collapseRestatedRungs`, src/structure.ts), but nothing migrated the trees
    * already stored — so roughly one article in twenty could no longer publish
    * *anything*, for ever, and each attempt completed and paid for its model call
    * before being refused at this line. Four times on `nagel-bat`, one of them
@@ -1879,7 +1880,7 @@ async function reasonsNotToPublish(
    * where this gate was always aimed, and what stops the exemption becoming a
    * way to launder a broken tree in by starting from a broken one
    * (tests/store-publish-guards.test.ts § "still refuses a bad tree that this
-   * draft actually changed"). Re-running `hierarchy` still repairs the article,
+   * draft actually changed"). Re-running `structure` still repairs the article,
    * because `buildTree` splices the shape away.
    *
    * It also fixes the class rather than the instance: the next invariant anybody
@@ -1904,18 +1905,18 @@ async function reasonsNotToPublish(
   const runs = await tx
     .select()
     .from(revisionStepRuns)
-    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")));
-  const hierarchyRun = runs[0];
+    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "structure")));
+  const structureRun = runs[0];
   const blocksHash = hashBlocks(blocks);
 
   /**
-   * **Asked of `hierarchyCurrency` (src/store/artifacts.ts) since 2026-09-07**,
+   * **Asked of `structureCurrency` (src/store/artifacts.ts) since 2026-09-07**,
    * which `articleMetadata` in src/store/pg.ts also asks — so the metadata page
    * and the publication gate cannot answer it differently.
    *
    * That sentence used to be a comment in pg.ts and nothing else, and the half
    * it was wrong about is the one below: this guard read the hash and never the
-   * status, so a `hierarchy` run that crashed left a matching hash and published.
+   * status, so a `structure` run that crashed left a matching hash and published.
    * docs/postmortems/260827d-toc-status-never-checked.md § What would have
    * caught the whole class asks for exactly this function, by name.
    *
@@ -1924,12 +1925,12 @@ async function reasonsNotToPublish(
    * somebody what to do next. The `switch` is exhaustive, so a fifth reason
    * cannot be added to the shared function without landing here.
    */
-  const currency = hierarchyCurrency(hierarchyRun, blocksHash);
+  const currency = structureCurrency(structureRun, blocksHash);
   if (!currency.current) {
     /* **The status arms come before the hash one, and that ordering is the
        fix for 260827d rather than a tidy-up.** `recordStepRun`, which the
        importer and every CLI run use, records a real hash at the moment it says
-       `running` — so a `hierarchy` that ran and *failed* used to publish, as
+       `running` — so a `structure` that ran and *failed* used to publish, as
        long as the hash beside it matched.
 
        The fenced path does not: `beginStepRun` writes `NO_INPUT_HASH` on
@@ -1942,22 +1943,22 @@ async function reasonsNotToPublish(
        failed.
 
        Exhaustive on purpose: a fifth reason cannot be added to
-       `hierarchyCurrency` without the compiler stopping here for a sentence. */
+       `structureCurrency` without the compiler stopping here for a sentence. */
     switch (currency.why) {
       case "no-run":
         reasons.push(
-          "there is no record of the hierarchy step running, so nothing can say the tree describes these blocks",
+          "there is no record of the structure step running, so nothing can say the tree describes these blocks",
         );
         break;
       case "unfinished":
       case "errored":
         reasons.push(
-          `the hierarchy step ${currency.why === "unfinished" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
+          `the structure step ${currency.why === "unfinished" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
         );
         break;
       case "different-blocks":
         reasons.push(
-          `the tree was built from different blocks (hierarchy ran against ${currency.ranAgainst}, these blocks are ${blocksHash}) — re-run hierarchy`,
+          `the tree was built from different blocks (structure ran against ${currency.ranAgainst}, these blocks are ${blocksHash}) — re-run structure`,
         );
         break;
       default: {
@@ -1965,7 +1966,7 @@ async function reasonsNotToPublish(
            `currency` is itself `never`, and reading a property off it is an
            error rather than the exhaustiveness proof it looks like. */
         const never: never = currency;
-        throw new Error(`unhandled hierarchy currency ${JSON.stringify(never)}`);
+        throw new Error(`unhandled structure currency ${JSON.stringify(never)}`);
       }
     }
   }
@@ -2081,11 +2082,11 @@ interface PublicationVerdict {
  *    exact coverage, order, child partitioning. Editorial advice from that same
  *    check is deliberately ignored: refusing to publish an article because a
  *    nav label is five words would train everyone to route around this.
- * 3. **A tree built from different blocks.** The `hierarchy` step-run row's
+ * 3. **A tree built from different blocks.** The `structure` step-run row's
  *    `input_hash` must equal `hashBlocks` of this draft's blocks. Without it, a
  *    text-only re-extraction that keeps every id publishes the old gists and nav
  *    labels **with no stale banner anywhere** — the tree is structurally
- *    perfect and describes an article nobody can read any more. A missing `hierarchy`
+ *    perfect and describes an article nobody can read any more. A missing `structure`
  *    row is refused too, because "I cannot tell" is not "it is fine".
  *
  * 4. **A draft whose base has moved.** `article_revisions.based_on_revision_id`
@@ -2098,7 +2099,7 @@ interface PublicationVerdict {
  *
  * **The third is a behaviour change and it is worth saying out loud:** a job of
  * `{ steps: ["blocks"] }` alone now fails where today it succeeds and quietly
- * diverges. The fix for anyone who hits it is to run `hierarchy` as well, which
+ * diverges. The fix for anyone who hits it is to run `structure` as well, which
  * `DEFAULT_INGEST_STEPS` and `cascadeForce` already do.
  *
  * This is the wrapper: one transaction of its own around `publishRevisionIn`,
@@ -2294,7 +2295,7 @@ export async function publishRevisionIn(
    * attempt having completed and paid for its model call first. It is the
    * `nagel-bat` shape of 2026-09-05, and it is what the `bug` kind is for.
    * `checkTree`'s own problems are exempted before they get here when the input
-   * is carried — but the `hierarchy` run's status and hash are not, and a
+   * is carried — but the `structure` run's status and hash are not, and a
    * poisoned run row on the base wedges the article exactly as a poisoned tree
    * did.
    *
@@ -2305,7 +2306,7 @@ export async function publishRevisionIn(
    * artefacts go with it, so the new attempt's freshness checks find nothing and
    * correctly re-run (docs/project/ingest-queue.md § What makes a failure
    * permanent). The case that shows it is the expensive one: a **first ingest**
-   * whose `hierarchy` draws a tree `checkTree` rejects. There is no base, so
+   * whose `structure` draws a tree `checkTree` rejects. There is no base, so
    * nothing is carried, so nothing is copied forward, and the next draw may well
    * be sound — while `permanent` would withhold the button *and* `retryJob`'s
    * own gate, leaving the reader no route to that article at all.
@@ -2340,7 +2341,7 @@ export async function publishRevisionIn(
    * **A revision that publishes `pending` buys the job that finishes it — here,
    * in the transaction that published it.**
    *
-   * `hierarchy` stopped calling `generateLabels` in stage 2a
+   * `structure` stopped calling `generateLabels` in stage 2a
    * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md), so an
    * article now reaches the shelf saying *"Paragraph labels are still
    * arriving"*. This is what makes that sentence temporary. Inside the
@@ -2399,7 +2400,8 @@ export async function publishRevisionIn(
         await enqueueSuccessorIn(tx, {
           ownerId: article.ownerId as OwnerId,
           slug,
-          steps: [step],
+          // The fenced reset is a raw row, bypassing pg-jobs.ts's toJob.
+          steps: [currentStepName(step) as StepName],
           ...(reset.profile !== undefined && { profile: reset.profile }),
           scope: opts.job.id,
           after: i + 1,
@@ -2621,7 +2623,8 @@ export async function rebaseSharingDraftIn(
   if (row.draftRevisionId !== revisionId) return { kind: "declined", why: "draft-not-owned" };
 
   const shape: JobShape = {
-    steps: row.steps.map((step) => step.name),
+    // Publication reads the row directly, just as the overlap check does.
+    steps: row.steps.map((step) => currentStepName(step.name) as StepName),
     reset: row.reset !== null,
     reservesName: row.reservesName,
   };
@@ -2853,7 +2856,7 @@ export function logPublication(
   sayWhatBecameOfTheSuccessor(opts.slug, published);
   /* After the commit, and only here. The article is now serving a tree that
      `checkTree` rejects — carried forward, not caused by this publication, and
-     already in front of readers before it. Re-running `hierarchy` repairs it.
+     already in front of readers before it. Re-running `structure` repairs it.
      docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md. */
   if (published.carriedTreeProblems.length) {
     logger.warn(
@@ -2862,7 +2865,7 @@ export function logPublication(
         revisionId: published.revisionId,
         problems: published.carriedTreeProblems,
       },
-      "published over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
+      "published over a carried-forward tree that checkTree rejects — re-run structure to repair it",
     );
   }
 }

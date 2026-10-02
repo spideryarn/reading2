@@ -278,7 +278,7 @@ From `data/_ai-calls.jsonl`, the one ingest that logged both steps
 > they ran one after another. They do not — `src/labels.ts` runs them concurrently, and the ledger's
 > timestamps show all three starting at 163.1s and the last finishing at 186.2s. The sum was 65.2s;
 > the wall-clock contribution is 23.1s. Found by GPT Sol reviewing
-> `docs/research/260830a-opening-an-article-before-the-toc.md`, and verified from
+> `docs/investigations/260830a-opening-an-article-before-the-toc.md`, and verified from
 > `data/_ai-calls.jsonl`. The conclusion does not change; the denominator does.
 
 ```

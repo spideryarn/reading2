@@ -12,7 +12,7 @@
  * ```
  *
  * **The arms are separated in time, not in code.** `generate` always sends the
- * prompt production sends *now* — `structureRequest` and `generateGlossary`,
+ * prompt production sends *now* — `wholeDocumentRequest` and `generateGlossary`,
  * the same functions the pipeline calls — so `before` is run on the commit
  * before the prompt change and `after` on the commit with it. There is no copy
  * of either prompt in here to drift. `before-2` is a second sample of the same
@@ -334,13 +334,13 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
-  const { parseStructureAnswer, questionFor, structureRequest } = await import("../../src/hierarchy.js");
-  const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/hierarchy-prompt.js");
+  const { parseWholeDocumentAnswer, questionFor, wholeDocumentRequest } = await import("../../src/structure.js");
+  const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/structure-prompt.js");
   const { splitBlocks } = await import("../../src/supplement.js");
   const { streamMessage } = await import("../../src/messages-stream.js");
   const { generateGlossary, PROMPT_VERSION: GLOSSARY_VERSION } = await import("../../src/glossary.js");
   const sourceSha256 = Object.fromEntries(
-    ["hierarchy.ts", "glossary.ts"].map((file) => [
+    ["structure.ts", "glossary.ts"].map((file) => [
       file,
       createHash("sha256")
         .update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file)))
@@ -374,10 +374,10 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       const article = await loadArticle(slug);
       const summaries = async (): Promise<Line[]> => {
         const { body } = splitBlocks(article.blocks);
-        const { params } = structureRequest(body);
-        const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
+        const { params } = wholeDocumentRequest(body);
+        const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
         const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-        const { root } = parseStructureAnswer(raw, body); // production's own parse and starts converter
+        const { root } = parseWholeDocumentAnswer(raw, body); // production's own parse and starts converter
         return flatten(root, 0, []);
       };
       const glossary = async (): Promise<Entry[]> => {

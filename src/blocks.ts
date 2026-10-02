@@ -48,7 +48,7 @@ import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
  * block and the `<ul>` around it is not. Containers become nodes in the tree
  * instead, which is what lets the ToC choose its own granularity: one row for a
  * list of terse bullets, one row per item for a list of real arguments.
- * See docs/project/hierarchy.md#granularity.
+ * See docs/project/structure-step.md#granularity.
  */
 const LEAF_BLOCKS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
@@ -382,7 +382,7 @@ function describeBlock(
      The consequence was concrete, and GPT Sol traced it: `gistable` is not in
      `hashBlocks` (src/source-hash.ts), so a publisher removing a callout
      wrapper flipped a block from `false` back to `true` with the article's
-     fingerprint unchanged — same tag, same text, same id — and the hierarchy
+     fingerprint unchanged — same tag, same text, same id — and the structure
      step, which has no currency stamp of its own, skipped. The paragraph came
      back into the argument with no navigation label and nothing said so.
 
@@ -807,7 +807,7 @@ const EMPTY_KEY = "e:";
  * id on the rectangle when a page reordered two diagrams, with `minted: 0` and
  * an unchanged fingerprint to say everything was fine. GPT Sol found it and
  * reproduced it, 2026-09-05, and block-ids.md § *A bare `<svg>` gets no id* is
- * explicit that a figure-wrapped diagram is a thing Hierarchy points at.
+ * explicit that a figure-wrapped diagram is a thing the tree points at.
  *
  * So a text-less block **with markup in it** goes on minting, exactly as it did
  * before any of this: a lost anchor is safer than a moved one, and keying it
@@ -1606,7 +1606,7 @@ export interface BlocksRun extends SplitResult {
 /**
  * The contents of a `blocks.json`, cleaned and then stamped. **Every writer of
  * that file must go through this**, and there are three of them: stage 3 here,
- * stage 4 in src/hierarchy.ts, and the Postgres export in src/store/export.ts.
+ * stage 4 in src/structure.ts, and the Postgres export in src/store/export.ts.
  *
  * The stamp is what lets the read seam tell an artefact cleaned by the current
  * policy from one cleaned by nothing (`sanitizeStoredBlocks` in

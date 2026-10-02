@@ -448,13 +448,18 @@ describe("the registry's two answers agree", () => {
     );
   });
 
+  it("writes Simple out now that Brief is Summary's default (8N)", () => {
+    expect(subModeParams({ mode: "summary", view: "simple" })).toEqual({ mode: "summary", summary: "simple" });
+    expect(withSubMode("?mode=plain", { mode: "summary", view: "simple" })).toBe("?mode=summary&summary=simple");
+  });
+
   it("omits parser defaults from both navigation paths", () => {
     for (const sub of [
       { mode: "remember", view: "recall" },
       { mode: "diagram", view: "sketch" },
       { mode: "referee", view: "criteria" },
-      /* Simple, since the outline went and it became Summary's default (plan 261001p). */
-      { mode: "summary", view: "simple" },
+      /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
+      { mode: "summary", view: "brief" },
       { mode: "structure", view: "fisheye" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;

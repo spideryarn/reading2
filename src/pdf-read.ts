@@ -242,13 +242,13 @@ const ATTEMPTS = 2;
  *
  * - **Somebody was waiting on it.** Extract took **394 s** of the Kuhn paper's
  *   19 m 41 s end-to-end run — a third of the wall clock, second only to
- *   hierarchy. "The deadline is met" is not the same as "this is fast enough",
+ *   the structure step. "The deadline is met" is not the same as "this is fast enough",
  *   and the reader watching the progress bar cares about the second one.
  * - **It cost a whole lease window.** Extract finishing at 394 s left 308 s on
- *   the claim, short of `STEP_BUDGET_MS.hierarchy`, so the job handed back and
+ *   the claim, short of `STEP_BUDGET_MS.structure`, so the job handed back and
  *   waited for a fresh window before it could start the table of contents. The
  *   width was buying a hand-back. **It still hands back** — 248 s leaves ~450 s
- *   against a 700 s budget — because `hierarchy` measured 658–778 s and no width
+ *   against a 700 s budget — because `structure` measured 658–778 s and no width
  *   here makes that fit beside anything. What this buys is the *first* window
  *   ending sooner, not one window instead of two.
  *
@@ -928,7 +928,7 @@ export function openRouterReader(
  * **What the gate learnt, logged whether the fan-out succeeded or not.**
  *
  * The lesson 260904c wrote down is *instrument the quantity, not the failure*:
- * nothing recorded the ratio behind `estimateHierarchyTokens`, so an 8x
+ * nothing recorded the ratio behind `estimateStructureTokens`, so an 8x
  * overprediction was invisible until a document crossed the line.
  * `scripts/spike-pdf-width.ts` could not provoke a 429 at 150, 250 or 400
  * concurrent requests on 2026-09-04, so the expected reading of this line for
@@ -2282,7 +2282,7 @@ function figureMarker(
  * Not an oversight: src/pipeline.ts logs one line per step, from the seam it
  * already owns, so that "what did this article cost?" has a single answer
  * rather than one per stage in one format per author. See
- * docs/project/logging.md, and the same shape in src/hierarchy.ts and src/arc.ts.
+ * docs/project/logging.md, and the same shape in src/structure.ts and src/arc.ts.
  */
 export interface PdfExtractResult {
   slug: string;
@@ -3997,7 +3997,7 @@ async function main() {
    missing this, both because the tail was copied without it — which is the whole
    argument for the tail being one call. tests/paid-cli-ledger.test.ts is what
    stops a third appearing, and since 2026-09-05 this is the only file it has
-   left to watch: `npm run labels` was retired and `npm run hierarchy` went
+   left to watch: `npm run labels` was retired and `npm run structure` went
    through the queue, where the job's own `job_step` scope does this job.
 
    **Its spend reaches `npm run cost` again as of 2026-09-05.** It used to open

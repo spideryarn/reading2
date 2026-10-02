@@ -108,7 +108,7 @@ no SSRF guard weakened, no store internals touched.
 
 So the runner drives `advanceJobWith(id, { session: claimSession, steps: { ...evalSteps, fetch: fixtureFetch } })`.
 Stage 1 — the one step that costs nothing and the one the eval wants held byte-constant — is the
-only thing replaced. Extract, blocks, hierarchy, labels and assets are production `STEPS`, run
+only thing replaced. Extract, blocks, structure, labels and assets are production `STEPS`, run
 through the production `claimSession`, the production commit and the production ledger.
 
 The dry pass proves the substitution is real end to end: `fetch` reported `19 KB (fixture)` and
@@ -187,9 +187,9 @@ await drive(job.id, { session: claimSession, steps: evalRegistry });
 ### A free dry pass cannot publish, and that is correct
 
 The dry pass ran `fetch, extract, blocks` and the job ended `error` with *"Refusing to publish …:
-it has no tree"*. Publication requires a `hierarchy` tree, and hierarchy is the step that costs
+it has no tree"*. Publication requires a tree from `structure`, and `structure` is the step that costs
 money. So a no-spend pass proves everything up to publication and cannot prove publication. A real
-(paid) run includes hierarchy and publishes normally. Worth knowing before somebody reads a red
+(paid) run includes `structure` and publishes normally. Worth knowing before somebody reads a red
 job status as a broken harness.
 
 ---
@@ -228,7 +228,7 @@ job status as a broken harness.
 
 ## What a competent implementer builds from this
 
-`evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts`:
+`evals/cost/run.ts`, modelled on `evals/structure-whole-document/run.ts`:
 
 1. `loadEnvLocal()`; assert local `DATABASE_URL` and `STORE === "postgres"`; print `Target:`.
 2. Wrap everything in `withLedger("eval", …)` (`src/cli-ledger.ts:86`) so any call the runner makes

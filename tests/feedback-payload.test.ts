@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import { parseFeedbackDiagnostics, safeDiagnosticName } from "../src/feedback-payload.js";
 import { MODES } from "../src/modes.js";
 import { STEP_ORDER } from "../src/pipeline.js";
+import { RETIRED_STEPS } from "../src/step-order.js";
 import { ARTICLE_VIEWS } from "../src/read-address.js";
 
 /** The blob's `job` field for one step name. */
@@ -63,6 +64,13 @@ describe("the diagnostics vocabularies", () => {
        land under the mode's current name rather than lose the field. */
     expect(parseFeedbackDiagnostics({ article: { mode: "trajectory" } })?.article?.mode).toBe("skim");
     expect(stepOf("trajectory")).toBe("skim");
+  });
+
+  it("reads every retired step name as the step it became, from the real table", () => {
+    /* src/feedback-payload.ts keeps a copy of `RETIRED_STEPS` so as not to put
+       src/step-order.ts in the reader's startup bundle; this is what keeps the
+       copy honest. `hierarchy` became `structure` on 2026-10-02 (plan 261002b). */
+    for (const [old, now] of Object.entries(RETIRED_STEPS)) expect(stepOf(old), old).toBe(now);
   });
 
   it("returns null for a blob with nothing left in it", () => {

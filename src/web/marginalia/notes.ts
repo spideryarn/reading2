@@ -2,8 +2,8 @@
  * **What Marginalia mode puts beside which block** — the pure half.
  *
  * Everything here is drawn from what the article already has: the Socratic
- * question the structure call wrote on each top-level part
- * (src/hierarchy.ts § `questionFor`), the arc, and the ideas where the reader
+ * question the whole-document call wrote on each top-level part
+ * (src/structure.ts § `questionFor`), the arc, and the ideas where the reader
  * has made them. Nothing is generated for this mode.
  *
  * **Sparse on purpose.** The risk this mode runs against vision.md is a second

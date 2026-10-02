@@ -19,18 +19,18 @@ the code; the eval results and docs are evidence for it:
 - **The reader-facing wait**: `src/web/sketch-cost.ts` (`SKETCH_WAIT` is now "about a minute").
   `src/web/DiagramPanel.tsx` and `src/web/ResetArticle.tsx` now use it. Its tests:
   `tests/illustrated-view.test.tsx` and `tests/metadata-rerun-section.test.tsx`.
-- **The parser**: `src/hierarchy.ts` exports `parseStructureAnswer`, and these evals now call it or
+- **The parser**: `src/structure.ts` exports `parseStructureAnswer`, and these evals now call it or
   `parseJsonAnswer`:
-  - `evals/hierarchy-structure/model-arms.ts`;
+  - `evals/structure-whole-document/model-arms.ts`;
   - `evals/plain-words/run.ts`;
   - `evals/illustrated/run.ts`.
 
-  Its test: `tests/hierarchy-structure-eval.test.ts`. Its postmortem:
+  Its test: `tests/structure-whole-document-eval.test.ts`. Its postmortem:
   `docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md`.
 - **`evals/thinking-effort/tally.ts`**: it now reads the candidate arms off the lineup keys, and
   takes `--judging <subdir>`.
-- **Docs**: `docs/project/{sketch,illustrated,ideas,hierarchy,prompt-caching}.md`, and the research
-  doc `docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`.
+- **Docs**: `docs/project/{sketch,illustrated,ideas,structure-step,prompt-caching}.md`, and the research
+  doc `docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`.
   Your decision review is `evals/thinking-effort/reviews/decision-review-sol-r1.md`; check that D1–D7
   are addressed.
 

@@ -215,7 +215,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
  * It is not evidence that a real Postgres ingest writes nothing to scratch.
  * Every step below is a fixture with no body, and real stages legitimately
  * wrote checkpoints under the context's directory while that field existed —
- * `hierarchy` took it as its checkpoint directory, and PDF extraction created
+ * `structure` took it as its checkpoint directory, and PDF extraction created
  * `pdf-chunks` (src/pdf-read.ts). Nor would it catch a real stage that
  * dual-wrote its artefact to disk while still returning correct `parts`.
  * Catching that wants a deterministic real-stage case through `claimSession`,
@@ -308,8 +308,8 @@ function treeFor(slug: string, blocks: Block[]): Tree {
 /**
  * `labels.json`, and its `sourceHash` is the load-bearing field.
  *
- * `STAMP_SOURCE` maps the `hierarchy` step's stamp to the `labels` artefact, and
- * `reasonsNotToPublish` refuses a revision whose `hierarchy` run row was stamped
+ * `STAMP_SOURCE` maps the `structure` step's stamp to the `labels` artefact, and
+ * `reasonsNotToPublish` refuses a revision whose `structure` run row was stamped
  * against different blocks — so this hash is what carries *"this tree was built
  * from these blocks"* all the way to the publication gate.
  *
@@ -332,7 +332,7 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
     structureVersion: "toc/1",
     labels: Object.fromEntries(blocks.map((b) => [b.id, "A paragraph"])),
     /* `[]`, not `null`. Since 2026-09-06 `batches: null` is a
-       `PendingLabelsFile` — the manifest `hierarchy` writes before the labels
+       `PendingLabelsFile` — the manifest `structure` writes before the labels
        step has bought anything — and `writeArtefacts` reads it as an
        instruction to mark the revision `pending` and delete its `labels`
        receipt. This fixture is a finished stage 4. src/labels.ts. */
@@ -358,9 +358,9 @@ function returningStep(
      * What went in, hashed — the field the *publication gate* reads.
      *
      * Not optional decoration: `reasonsNotToPublish` refuses a revision whose
-     * `hierarchy` run row was stamped against blocks other than the ones stored,
+     * `structure` run row was stamped against blocks other than the ones stored,
      * and an unstamped run reads as "built from something else". The real
-     * `hierarchy` returns `stamp: { inputHash: run.inputHash }` for exactly this
+     * `structure` returns `stamp: { inputHash: run.inputHash }` for exactly this
      * (src/pipeline.ts), and a fixture without it fails at the very last
      * statement of the walk with *"the tree was built from different blocks"* —
      * which is the gate working, and was the first thing this file found.
@@ -391,7 +391,7 @@ function returningStep(
  *
  * A step that merely *ignores* the signal is a different path: it runs to
  * completion, lands in `transitionAfter`, and is ended there. This one is the
- * mid-step overrun the pause is for — `hierarchy` cut off at 380 s on a real
+ * mid-step overrun the pause is for — `structure` cut off at 380 s on a real
  * 144-page paper, having already paid for its structure call.
  *
  * `before` runs first, so a case can arrange a race — a Stop pressed while the
@@ -439,8 +439,8 @@ function articleSteps(
         meta: { slug, title: "A fixture article" },
       }),
       blocks: returningStep("blocks", { blocks: { blocks }, stampedHtml: html }),
-      hierarchy: returningStep(
-        "hierarchy",
+      structure: returningStep(
+        "structure",
         { tree: treeFor(slug, blocks), labels: labelsFor(slug, blocks), blocks: { blocks } },
         { inputHash: hashBlocks(blocks) },
       ),
@@ -449,7 +449,7 @@ function articleSteps(
 }
 
 /** The steps a fixture ingest runs, in pipeline order. */
-const INGEST: StepName[] = ["extract", "blocks", "hierarchy"];
+const INGEST: StepName[] = ["extract", "blocks", "structure"];
 
 /* ----------------------------------------------------------------- the job -- */
 
@@ -639,7 +639,7 @@ describe("a claim under Postgres", () => {
     /* Every step of the walk left a finished run row on that revision — the rows
        `stepIsDone` reads on the next claim, and the ones the publication gate
        asks about. */
-    expect(await stepRunsOf(current!)).toEqual({ extract: "done", blocks: "done", hierarchy: "done" });
+    expect(await stepRunsOf(current!)).toEqual({ extract: "done", blocks: "done", structure: "done" });
 
     /* Read it back the way a reader does, through the Postgres reader rather
        than by re-querying the columns the write just set. `loadArticle` refuses
@@ -685,7 +685,7 @@ describe("a claim under Postgres", () => {
     const before = await currentRevisionOf(slug);
     expect(before, "case 1 has to have published before this case runs").not.toBeNull();
 
-    const job = await queueJob(slug, ["hierarchy"]);
+    const job = await queueJob(slug, ["structure"]);
     const advanced = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
@@ -786,7 +786,7 @@ describe("a claim under Postgres", () => {
     expect(await stepRunsOf(after!)).toMatchObject({
       extract: "done",
       blocks: "done",
-      hierarchy: "done",
+      structure: "done",
       arc: "done",
     });
     expect((await jobRow(job.id))?.draftRevisionId).toBeNull();
@@ -804,10 +804,10 @@ describe("a claim under Postgres", () => {
    *
    * 1. R1 is published.
    * 2. A forced job rewrites `extract` and `blocks` into a draft and dies at
-   *    `hierarchy`. The draft is discarded, so that work is gone.
+   *    `structure`. The draft is discarded, so that work is gone.
    * 3. Retry must therefore re-force **everything the refresh forced**, not only
    *    the step that did not finish — because the retry's new draft is copied
-   *    from R1, so a `blocks` that "already finished" would skip and `hierarchy`
+   *    from R1, so a `blocks` that "already finished" would skip and `structure`
    *    would run over last week's article, reporting success.
    *
    * `tests/retry-after-a-failed-refresh.test.ts` proves `forceForRetry`'s
@@ -829,7 +829,7 @@ describe("a claim under Postgres", () => {
     expect(r1).not.toBeNull();
 
     /* The refresh: the same three steps, all forced, with new text — and a
-       `hierarchy` that throws. */
+       `structure` that throws. */
     const second = articleSteps(slug, "rfa", "after the refresh");
     const refresh = await queueJob(slug, INGEST, true);
     let draftId = "";
@@ -844,10 +844,10 @@ describe("a claim under Postgres", () => {
       steps: {
         ...STEPS,
         ...second.steps,
-        hierarchy: {
-          ...second.steps.hierarchy!,
+        structure: {
+          ...second.steps.structure!,
           run: () => {
-            throw new Error("the fixture hierarchy step refuses to run");
+            throw new Error("the fixture structure step refuses to run");
           },
         },
       } as never,
@@ -1194,8 +1194,8 @@ describe("a claim under Postgres", () => {
           label: STEPS.ideas.label,
           produces: STEPS.ideas.produces,
           async run(_ctx: unknown, store: ArtifactStore) {
-            const file = await store.read(slug, "hierarchy", "blocks");
-            const tree = await store.read(slug, "hierarchy", "tree");
+            const file = await store.read(slug, "structure", "blocks");
+            const tree = await store.read(slug, "structure", "tree");
             const meta = await store.read(slug, "extract", "meta");
             if (!file?.blocks || !tree) throw new Error("the queued job could not read the article");
             sawFirstBlockText = file.blocks[0]?.text ?? null;
@@ -1261,7 +1261,7 @@ describe("a claim under Postgres", () => {
    * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md. Until it,
    * a mid-step overrun ended the job `error` with a Retry button the reader had
    * to press, on a claimant that was alive and could have handed back — measured
-   * on a 142-page PDF whose `hierarchy` step needs 658–778 s against a 740 s
+   * on a 142-page PDF whose `structure` step needs 658–778 s against a 740 s
    * deadline, and watched happening to `llm-survey` at 380 s.
    *
    * ## Why the draft is the assertion, and not a detail
@@ -1394,7 +1394,7 @@ describe("a claim under Postgres", () => {
       extractRuns,
       "the resumed claim re-ran a step the paused one had already paid for",
     ).toBe(0);
-    expect(finished?.ran).toBe("hierarchy");
+    expect(finished?.ran).toBe("structure");
 
     /* The published revision **is** the draft the paused claim was writing into,
        so nothing was started again. */
@@ -1533,8 +1533,8 @@ describe("a claim under Postgres", () => {
    * and stages 2 and 3 therefore did not compose. The sequence that breaks is
    * ordinary rather than exotic:
    *
-   * 1. `hierarchy` overruns and pauses cleanly — window one of three spent;
-   * 2. the next claim is deployed over while it is inside `hierarchy`;
+   * 1. `structure` overruns and pauses cleanly — window one of three spent;
+   * 2. the next claim is deployed over while it is inside `structure`;
    * 3. `settleExpired` requeues it and **throws the draft away**;
    * 4. the third window opens an empty draft, so `blocks` runs as a first
    *    ingest and mints every id afresh (src/ids.ts) — the ids are in the
@@ -1578,8 +1578,8 @@ describe("a claim under Postgres", () => {
     /** How many times `blocks` has run, and the ids the last run minted. */
     let blockRuns = 0;
     let minted: Block[] = [];
-    /** How many times `hierarchy` failed to find its answer and had to buy one. */
-    let structureCalls = 0;
+    /** How many times `structure` failed to find its answer and had to buy one. */
+    let wholeDocumentCalls = 0;
 
     const extractHtml = "<html><body><p>the article, as fetched</p></body></html>";
     const extract = returningStep("extract", {
@@ -1611,18 +1611,18 @@ describe("a claim under Postgres", () => {
     } as unknown as PipelineStep;
 
     /**
-     * `hierarchy`, with stage 2's checkpoint in miniature: read the blocks the
+     * `structure`, with stage 2's checkpoint in miniature: read the blocks the
      * draft holds, key the answer on their **ids**, and pay only on a miss.
      *
      * `hang` is the deadline overrun — the checkpoint is written first, because
      * that is the whole shape of the real step: the expensive answer lands, and
      * then the wall clock runs out before the step can finish.
      */
-    const hierarchyStep = (hang: boolean) =>
+    const structureStep = (hang: boolean) =>
       ({
-        name: "hierarchy",
-        label: STEPS.hierarchy.label,
-        produces: STEPS.hierarchy.produces,
+        name: "structure",
+        label: STEPS.structure.label,
+        produces: STEPS.structure.produces,
         async run(
           ctx: { signal: AbortSignal },
           store: ArtifactStore,
@@ -1630,14 +1630,14 @@ describe("a claim under Postgres", () => {
         ): Promise<StepProduct> {
           const file = await store.read(slug, "blocks", "blocks");
           const read = file?.blocks as Block[] | undefined;
-          if (!read?.length) throw new Error("hierarchy could not read the blocks in its draft");
+          if (!read?.length) throw new Error("structure could not read the blocks in its draft");
           /* The key **is** the block identity — lower-case, hyphenated and
              within `CHECKPOINT_KEY_RE` by construction, because a block id is. */
           const key = read.map((b) => b.id).join("-");
-          const found = await checkpoints.read<{ tree: string }>(slug, "hierarchy-structure", [key]);
+          const found = await checkpoints.read<{ tree: string }>(slug, "structure-whole-document", [key]);
           if (!found.has(key)) {
-            structureCalls += 1;
-            await checkpoints.write(slug, "hierarchy-structure", key, {
+            wholeDocumentCalls += 1;
+            await checkpoints.write(slug, "structure-whole-document", key, {
               tree: "as the model gave it",
             });
           }
@@ -1657,20 +1657,20 @@ describe("a claim under Postgres", () => {
               blocks: { blocks: read },
             } as never,
             stamp: { inputHash: hashBlocks(read) },
-            detail: "hierarchy ran",
+            detail: "structure ran",
           };
         },
       }) as unknown as PipelineStep;
 
-    /* --- Window 1: `extract` and `blocks` land; `hierarchy` is handed back. --
+    /* --- Window 1: `extract` and `blocks` land; `structure` is handed back. --
        30 s of deadline: more than `blocks` needs and far less than
-       `STEP_BUDGET_MS.hierarchy`, so the walk puts the claim down between the
+       `STEP_BUDGET_MS.structure`, so the walk puts the claim down between the
        two rather than starting a step it cannot finish. No requeue is spent —
        a between-steps release is free. */
     const first = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, structure: structureStep(false) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 30_000,
     });
     expect(first?.done, "window one ended the job").toBe(false);
@@ -1684,11 +1684,11 @@ describe("a claim under Postgres", () => {
     const paused = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(true) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, structure: structureStep(true) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 6_000,
     });
     expect(paused?.done, "the overrun ended the job instead of putting it down").toBe(false);
-    expect(structureCalls, "the structure answer was not bought in window two").toBe(1);
+    expect(wholeDocumentCalls, "the structure answer was not bought in window two").toBe(1);
     expect((await jobRow(job.id))?.requeues).toBe(1);
     expect((await jobRow(job.id))?.draftRevisionId, "the pause dropped the draft").toBe(draft);
 
@@ -1724,7 +1724,7 @@ describe("a claim under Postgres", () => {
     const finished = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, structure: structureStep(false) } as never,
     });
     expect(finished?.job.error).toBeUndefined();
     expect(finished?.done).toBe(true);
@@ -1732,7 +1732,7 @@ describe("a claim under Postgres", () => {
 
     expect(blockRuns, "the resumed claim re-minted the article's ids").toBe(1);
     expect(
-      structureCalls,
+      wholeDocumentCalls,
       "the checkpoint written in window two was not found in window four — the identity it " +
         "is keyed on moved",
     ).toBe(1);

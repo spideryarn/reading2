@@ -6,7 +6,7 @@
  *
  * ## Every arm here is a `bakeoff`, including the control, and that is a cost
  *
- * `evals/hierarchy-structure/arms.ts` draws the distinction this file inherits:
+ * `evals/structure-whole-document/arms.ts` draws the distinction this file inherits:
  * an `isolated` arm differs from the incumbent in one variable, so a gap is
  * attributable to it; a `bakeoff` arm differs in several and can pick a recipe
  * without ever explaining why it won.
@@ -46,7 +46,7 @@
  * - **Depth-2 gists at two sentences.** Deferred by the plan (§ *The one thing
  *   narrowed rather than accepted*): it raises `TOKENS_PER_NODE`, which pushes
  *   long articles over the pre-call refusal line, and
- *   `evals/hierarchy-structure/score.ts` counts a multi-sentence gist as a
+ *   `evals/structure-whole-document/score.ts` counts a multi-sentence gist as a
  *   defect, so it also breaks that eval's baseline. Not solved — deferred.
  * - **Question-replaces-gist versus question-beside-gist.** That is a rendering
  *   decision (`SummaryPanel`), and Sol's P1-1 moved it out of the plan's
@@ -59,7 +59,7 @@
  *   result from it may be read as covering the cascade.
  */
 
-import { type ModelNode, questionFor } from "../../src/hierarchy.js";
+import { type ModelNode, questionFor } from "../../src/structure.js";
 import { productionGists, productionQuestions } from "./production-prompt.js";
 import { readVariants } from "./variants-file.js";
 
@@ -107,7 +107,7 @@ export interface ArmSpec {
    * This exists because `incumbent` reads the *live* SYSTEM, so the moment a
    * bump lands, `incumbent` **is** the new prompt and cannot be the before half
    * of a before/after. Two pinned arms can be, and they stay pinned when
-   * `src/hierarchy.ts` moves again.
+   * `src/structure.ts` moves again.
    */
   shippedGists?: string;
   /**
@@ -129,7 +129,7 @@ export interface ArmSpec {
   questionRule: QuestionRule;
   /**
    * Everything about this arm's request that differs from production's, listed
-   * rather than implied — the discipline `hierarchy-structure`'s `waves` arm
+   * rather than implied — the discipline `structure-whole-document`'s `waves` arm
    * keeps. The two shared entries are on every arm and say why the whole eval
    * is a bakeoff.
    */
@@ -159,7 +159,7 @@ const SHARED_DELTAS: readonly string[] = [
  * this pair isolated — it moves on both at once — but it is not enough for the
  * pair `questions-toc6` makes with `gists-toc6`, which claims to be V4's wording
  * against the wording it replaced. With a live slice on one half, editing one
- * word of `src/hierarchy.ts` silently changes what that comparison is of, while
+ * word of `src/structure.ts` silently changes what that comparison is of, while
  * the arm's own note claims both halves stay put. ⟨GPT Sol, F13, 2026-09-07.⟩
  *
  * So both length-pair arms name `variant: "V4"`. They sent exactly what
@@ -337,7 +337,7 @@ export const ARMS: readonly ArmSpec[] = [
      * (production's live block at `toc/7`; production has since moved one
      * bullet past it at `toc/8`). This arm is pinned toc/6 GISTS with pinned toc/6
      * QUESTIONS. So the pair differs in **exactly one block**, both halves stay
-     * put when `src/hierarchy.ts` moves again, and the comparison is *V4's
+     * put when `src/structure.ts` moves again, and the comparison is *V4's
      * wording against the wording it replaced* rather than a bakeoff of two
      * recipes. `incumbent` could not play that part: its gists follow the live
      * SYSTEM, so the day the GISTS block moves the pair is two variables and
@@ -464,7 +464,7 @@ export function questionRuleFor(_arm: ArmSpec): QuestionRuleFn {
 }
 
 /**
- * Arms whose winning would require editing `src/hierarchy.ts` beyond the prompt.
+ * Arms whose winning would require editing `src/structure.ts` beyond the prompt.
  *
  * **Empty since 2026-09-07, and that is a fact worth printing rather than a
  * function to delete.** It returned `["v4"]` for two days; V4 won, the patch

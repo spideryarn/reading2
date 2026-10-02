@@ -300,6 +300,6 @@ describe("what the step calls itself", () => {
   it("does not claim to be fetching a page that does not exist", () => {
     expect(stepLabel("fetch", true)).toBe("Checking the file");
     expect(stepLabel("fetch", false)).toBe(STEPS.fetch.label);
-    expect(stepLabel("hierarchy", true)).toBe(STEPS.hierarchy.label);
+    expect(stepLabel("structure", true)).toBe(STEPS.structure.label);
   });
 });

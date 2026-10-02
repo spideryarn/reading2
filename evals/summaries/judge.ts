@@ -2,7 +2,7 @@
  * **The blinded judging pass, and the gate in front of it.**
  *
  * Three things this file does that the template
- * ([`evals/hierarchy-structure/blind.ts`](../hierarchy-structure/blind.ts)) does
+ * ([`evals/structure-whole-document/blind.ts`](../structure-whole-document/blind.ts)) does
  * not, each because of something the plan review found:
  *
  * 1. **Negative anchors in the lineup, and a gate on them.** Blinding does not
@@ -87,7 +87,7 @@ export function rngFrom(seed: number): () => number {
  * Fisher-Yates, in place on a copy.
  *
  * Not a sort comparator returning `random() - 0.5`, for the reason
- * `evals/hierarchy-labels.ts` § `printShuffled` already wrote down: that leaks
+ * `evals/structure-labels.ts` § `printShuffled` already wrote down: that leaks
  * positional bias, and a lineup whose first entry is more often the first file
  * on the command line is not blinded.
  */

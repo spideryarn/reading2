@@ -22,8 +22,8 @@
 import type {
   CandidateRecord,
   OverridingBound,
-} from "../../src/hierarchy-expand.js";
-import type { DeepenStats } from "../../src/hierarchy-deepen.js";
+} from "../../src/structure-expand.js";
+import type { DeepenStats } from "../../src/structure-deepen.js";
 import type { Finding as CostFinding } from "../cost/report.js";
 
 /* --------------------------------------------------------------- findings -- */
@@ -142,7 +142,7 @@ export type BlockRange = readonly [string, string];
  * **The derived range off a record.**
  *
  * `CandidateRecord.range` is what this reads and is the shape that shipped
- * (src/hierarchy-expand.ts, 2026-09-05). The three other spellings below are
+ * (src/structure-expand.ts, 2026-09-05). The three other spellings below are
  * accepted because this harness was written against a `CandidateRecord` that
  * did not have the field yet, and a reader that tolerates the near-misses costs
  * three lines and turns a rename into a working comparison rather than a
@@ -190,7 +190,7 @@ export function requireRanges(passes: readonly RecordsPass[]): void {
     throw new Error(
       `${without.length} of ${pass.records.length} candidate records in "${pass.label}" carry no ` +
         "block range, so they cannot be paired across repeats. `CandidateRecord` " +
-        "(src/hierarchy-expand.ts) needs the node's derived range on it — this harness reads " +
+        "(src/structure-expand.ts) needs the node's derived range on it — this harness reads " +
         "`range: [start, end]`, `rangeStart`/`rangeEnd`, `startBlockId`/`endBlockId` or " +
         "`start`/`end`. Pairing on `where` instead is refused deliberately: it is an ordinal " +
         "path derived from the answer's own fan-out, so a moved boundary would read as a stable " +
@@ -213,7 +213,7 @@ export function parentPath(where: string): string | null {
  *
  * The ordinal path is stable **for a wave-1 parent** — every repeat expands the
  * identical wave-1 tree, because the structure checkpoint is deliberately still
- * resumed (src/hierarchy-deepen.ts § `REASK_ENV`). It would stop being stable
+ * resumed (src/structure-deepen.ts § `REASK_ENV`). It would stop being stable
  * the moment a wave-3 existed, whose parents are themselves wave-2 answers. So
  * the path is used only to *find* the parent record, and the parent's range is
  * what the key is made of — which stays correct when stage 6 adds waves.
@@ -617,7 +617,7 @@ export interface Q2RefusedRates {
  * when we are defeated.
  *
  * A target refused on every draw no longer fails the wave: it keeps the shape
- * wave 1 gave it and is recorded (`RefusedCall` in src/hierarchy-deepen.ts).
+ * wave 1 gave it and is recorded (`RefusedCall` in src/structure-deepen.ts).
  * That is the right behaviour and it converts a loud failure into a quiet
  * absence, so this is what makes the absence loud again.
  *
@@ -938,9 +938,9 @@ export interface StepClock {
    * that wave finish?**
    *
    * It used to mean only "stats are present", which is a weaker fact than it
-   * reads as. When a wave exhausts its redraws, `generateHierarchy` catches the
+   * reads as. When a wave exhausts its redraws, `generateStructure` catches the
    * failure, writes a records file with `failed: true`, falls back to wave 1 and
-   * completes the `hierarchy` step — so three failed waves all carried stats, a
+   * completes the `structure` step — so three failed waves all carried stats, a
    * `done` status and a clock, and question 5 printed "ran at once and finished
    * inside" over three measurements of the FALLBACK path. Named positively so
    * that the thing asserted is the thing the name says. ⟨GPT Sol, DPN-03-R.⟩
@@ -955,7 +955,7 @@ export interface StepClock {
    * question 5 that decides whether a self-abort was survivable. A wave that
    * stopped on time with every answer written down makes the next attempt
    * cheap; one with `uncheckpointed` above zero bought calls the next attempt
-   * will buy again. src/hierarchy-deepen.ts § DeepenStats.uncheckpointed.
+   * will buy again. src/structure-deepen.ts § DeepenStats.uncheckpointed.
    */
   uncheckpointed: number | null;
 }
@@ -1010,7 +1010,7 @@ export function peakConcurrency(
  * ⟨GPT Sol, confirming the argument, 2026-09-05.⟩
  *
  * This one is bounded by the **shortest** job, which is the fact that
- * matters: the load articles' `hierarchy` is far shorter than a book's
+ * matters: the load articles' `structure` is far shorter than a book's
  * 658-778 s, so it says how much of the book's step was really contended rather
  * than letting an instant of overlap stand in for the whole of it.
  *
@@ -1190,10 +1190,10 @@ export function budgetReport(opts: {
           `and the peak concurrency was ${peak}. This is an absence, not a pass — read the ` +
           "findings before quoting any number in this block."
         : overBudget.length === 0
-        ? `All ${completed.length} hierarchy step(s) ran at once (peak ${peak}) and finished ` +
-          `inside STEP_BUDGET_MS.hierarchy (${Math.round(opts.budgetMs / 1000)}s) and the ` +
+        ? `All ${completed.length} structure step(s) ran at once (peak ${peak}) and finished ` +
+          `inside STEP_BUDGET_MS.structure (${Math.round(opts.budgetMs / 1000)}s) and the ` +
           `${Math.round(opts.deadlineMs / 1000)}s self-abort deadline.`
-        : `${overBudget.length} hierarchy step(s) ran past STEP_BUDGET_MS.hierarchy ` +
+        : `${overBudget.length} structure step(s) ran past STEP_BUDGET_MS.structure ` +
           `(${Math.round(opts.budgetMs / 1000)}s) with ${peak} in flight at once. A step past ` +
           `${Math.round(opts.deadlineMs / 1000)}s is one the claimant puts down mid-article; what ` +
           "makes that survivable is the checkpoint rows, which `withheld` counts.",
@@ -1208,7 +1208,7 @@ export function budgetReport(opts: {
  * made checkable.
  *
  * The flag-off run writes **no records file at all** (`saveDeepenRecords`
- * returns early) and its `HierarchyRun.deepen` is `null`. The flag-on run writes
+ * returns early) and its `StructureRun.deepen` is `null`. The flag-on run writes
  * one whose `stats.targets` is 0. So the evidence for inertness is a *pair*: a
  * missing file on one side, a present file reporting zero on the other, and the
  * two trees identical.
@@ -1298,12 +1298,12 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * `SPIDERYARN_DEEPEN_REASK` naming this very slug, a second wave reads its own
  * content-addressed rows back, makes no call, and reports **identical verdicts
  * by construction** — which looks exactly like a perfectly stable signal.
- * src/hierarchy-deepen.ts § `REASK_ENV`.
+ * src/structure-deepen.ts § `REASK_ENV`.
  *
  * And the mirror of it: on a **repeat**, the structure call must not have been
  * re-bought, because a resumed wave 1 is what holds the seed constant. The
  * ledger is what says so — a re-bought structure call on a book is a
- * `job: "hierarchy"` row carrying the whole book's input tokens, which is an
+ * `job: "structure"` row carrying the whole book's input tokens, which is an
  * order of magnitude more than the wave's own.
  *
  * **`structure` is which of those two this pass is**, and getting it wrong
@@ -1316,20 +1316,20 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * evals/results/hierarchy-waves-2026-09-04/2701-h.tree.json § usage.⟩
  *
  * On a `"bought"` pass the same arithmetic is still worth doing, pointed the
- * other way and non-fatally: an ingest whose `hierarchy` bill shows *no*
+ * other way and non-fatally: an ingest whose `structure` bill shows *no*
  * whole-document call resumed a structure checkpoint from somewhere, which is
  * worth knowing and is not a reason to distrust the numbers.
  */
 export function checkRepeatBoughtItsWave(opts: {
   label: string;
   stats: DeepenStats;
-  /** Input tokens on `job: "hierarchy"` rows for this job, out of the ledger. */
-  ledgerHierarchyInputTokens: number;
+  /** Input tokens on `job: "structure"` rows for this job, out of the ledger. */
+  ledgerStructureInputTokens: number;
   /**
    * A structure call re-bought on this article would carry at least this many
    * input tokens. The runner takes it from the article's own estimate.
    */
-  structureInputTokensFloor: number;
+  wholeDocumentInputTokensFloor: number;
   /**
    * `"resumed"` for a forced repeat, which must not re-buy the seed;
    * `"bought"` for the ingest, where buying it is the point.
@@ -1349,29 +1349,29 @@ export function checkRepeatBoughtItsWave(opts: {
     });
   }
   const waveTokens = opts.stats.usage.inputTokens;
-  const beyondTheWave = opts.ledgerHierarchyInputTokens - waveTokens;
-  const looksLikeAStructureCall = beyondTheWave >= opts.structureInputTokensFloor;
-  if (opts.structure === "resumed" && looksLikeAStructureCall) {
+  const beyondTheWave = opts.ledgerStructureInputTokens - waveTokens;
+  const looksLikeAWholeDocumentCall = beyondTheWave >= opts.wholeDocumentInputTokensFloor;
+  if (opts.structure === "resumed" && looksLikeAWholeDocumentCall) {
     findings.push({
       kind: "structure-rebought",
       fatal: true,
       message:
-        `"${opts.label}" billed ${opts.ledgerHierarchyInputTokens.toLocaleString()} input tokens ` +
-        `under job "hierarchy" and the wave accounts for ${waveTokens.toLocaleString()} of them. ` +
-        `The difference is at least one whole-document structure call (${opts.structureInputTokensFloor.toLocaleString()} ` +
+        `"${opts.label}" billed ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens ` +
+        `under job "structure" and the wave accounts for ${waveTokens.toLocaleString()} of them. ` +
+        `The difference is at least one whole-document structure call (${opts.wholeDocumentInputTokensFloor.toLocaleString()} ` +
         "tokens), so the seed was re-bought rather than resumed and this repeat was asked about a " +
         "different tree.",
     });
   }
-  if (opts.structure === "bought" && !looksLikeAStructureCall) {
+  if (opts.structure === "bought" && !looksLikeAWholeDocumentCall) {
     findings.push({
       kind: "note",
       fatal: false,
       message:
         `"${opts.label}" is the ingest, which buys the whole-document structure call — and its ` +
-        `"hierarchy" bill is ${opts.ledgerHierarchyInputTokens.toLocaleString()} input tokens, ` +
+        `"structure" bill is ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens, ` +
         `only ${beyondTheWave.toLocaleString()} of them beyond the wave's own ` +
-        `${waveTokens.toLocaleString()}, under the ${opts.structureInputTokensFloor.toLocaleString()}-token ` +
+        `${waveTokens.toLocaleString()}, under the ${opts.wholeDocumentInputTokensFloor.toLocaleString()}-token ` +
         "floor a structure call on this document would carry. Something resumed a structure " +
         "checkpoint this run did not write, so the seed came from an earlier run. The repeats are " +
         "still comparable with each other; the numbers are not a cold ingest's.",
@@ -1587,7 +1587,7 @@ export function checkDriving(
   jobs: readonly DrivenJob[],
   opts: {
     /**
-     * The step phase D is measured on — `"hierarchy"` on the paid path,
+     * The step phase D is measured on — `"structure"` on the paid path,
      * `"blocks"` under `--dry-run`. Its windows are what the concurrency is
      * taken over, because the *whole-job* windows overlap even when the steps
      * run one after another: all promises are alive while the jobs without slots

@@ -65,7 +65,7 @@ rot — the code merged on; some were wrong from birth — the grep was truncate
 directory — and a bare number cannot tell you which. **Write what produced it, what it covered, and
 when**, so the next reader re-runs it rather than believes it. The evidence, and the guard that
 came out of it, are in
-[260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md).
+[260903b-facts-that-were-wrong.md](../investigations/260903b-facts-that-were-wrong.md).
 
 ## A sentence is not a fix
 

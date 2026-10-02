@@ -30,7 +30,7 @@ A default ingest is `fetch + extract + blocks + toc + assets`. The measured brea
   total    ~350s worst case; ~250s on a more typical article
 ```
 
-And inside `toc`, [hierarchy.md](../project/hierarchy.md) measured the split:
+And inside `toc`, [hierarchy.md](../project/structure-step.md) measured the split:
 
 ```
   structure call   163.1s   ████████████████████████████████  88%
@@ -56,7 +56,7 @@ Four questions were put to Greg on 2026-08-30 and answered:
 1. **Order** — latency first.
 2. **"Safe to open"** — *"I'm not that fussed about image-privacy or if we announce to the
    publisher's CDN."* This overrides the image-suppression requirement that
-   [260830a-opening-an-article-before-the-toc.md § 5](../research/260830a-opening-an-article-before-the-toc.md)
+   [260830a-opening-an-article-before-the-toc.md § 5](../investigations/260830a-opening-an-article-before-the-toc.md)
    treated as a hard prerequisite, and it removes a large piece of work: **a reader may open on
    blocks + a tree, with images loading live.** The `assets` step keeps running and keeps being
    worth running; it simply stops being a gate. Recorded in
@@ -69,7 +69,7 @@ Four questions were put to Greg on 2026-08-30 and answered:
 
 Two documents, both already reviewed by GPT Sol, and this plan does not re-argue them:
 
-- [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md) — the
+- [260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md) — the
   full option space, the measurements, and the recommendation (option **B**: publish a free heading
   tree at once and replace it atomically when the model's arrives). Its § 7b is the load-bearing
   finding: **there is no case in which waiting for the structure call buys a better top-level
@@ -313,7 +313,7 @@ One call, completed, and the tree it returned is structurally invalid. Three thi
 **1. It falsifies a claim this morning's work rested on.** The research doc says of tiling failures:
 *"Every tiling failure anyone has observed … is off by one block. That is decisively the
 repair-sized world."* Four observations, all off by one, **all on HTML articles with headings**. R2
-was sized to exactly that — [`src/toc.ts:604`](../../src/hierarchy.ts) is `Math.abs(lo - cursor) === 1`,
+was sized to exactly that — [`src/toc.ts:604`](../../src/structure.ts) is `Math.abs(lo - cursor) === 1`,
 and the comment is explicit that the bound is a judgement: *"Two blocks out is not a slip, it is a
 different reading of the article, and it still throws."* This gap is **three**. So it is outside the
 repair by design, and the conclusion that followed — *R2 and R3 recover every structure failure we
@@ -372,7 +372,7 @@ Both mechanisms are therefore on the table, and the snap is no longer the only r
 it is not a bigger number but **a count that is reported**: `PartitionRepair` already carries `where`,
 `kind` and `at`, and the pipeline log already prints the repair counts precisely so *"a repair nobody
 is told about is the same shape as the bug it repaired"*
-([`src/toc.ts:475`](../../src/hierarchy.ts)). The size of each repair joins them.
+([`src/toc.ts:475`](../../src/structure.ts)). The size of each repair joins them.
 
 **The argument being overridden is worth preserving, because it is a good one.** The comment above
 the bound says *"Two blocks out is not a slip, it is a different reading of the article"*, and that
@@ -488,7 +488,7 @@ same bytes, and the drop is a property of one line of the prompt rather than of 
 
 **Two gates must move together or a repair does nothing.** `parseLabels` throws per batch
 ([`src/labels.ts:837`](../../src/labels.ts)), and downstream `COVERAGE_FLOOR = 1`
-([`src/toc.ts:254`](../../src/hierarchy.ts)) plus `assertEveryBlockLabelled` demand 100%. `COVERAGE_FLOOR`
+([`src/toc.ts:254`](../../src/structure.ts)) plus `assertEveryBlockLabelled` demand 100%. `COVERAGE_FLOOR`
 was *tightened* from 0.95 to 1 on the argument that *"there is no longer a path by which a block is
 legitimately unlabelled."* **This failure is that path, and it exists** — so the fix restores the old
 floor with a new justification rather than inventing one.

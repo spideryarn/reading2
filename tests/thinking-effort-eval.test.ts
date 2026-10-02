@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ARM_NAMES, DEFAULT_ARMS, levelOf, seededShuffle } from "../evals/thinking-effort/arms.js";
-import { renderForJudging } from "../evals/hierarchy-structure/blind.js";
-import { hierarchyTreeFile, ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
+import { renderForJudging } from "../evals/structure-whole-document/blind.js";
+import { structureTreeFile, ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
 import { assertTreeSound } from "../src/tree-invariants.js";
 import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-effort/tally.js";
 import {
@@ -179,12 +179,12 @@ describe("the lineup", () => {
     expect(labelsFor(5)).toEqual(["A", "B", "C", "D", "E"]);
   });
 
-  it("maps the blind hierarchy aliases onto both repeats of both measured arms", () => {
+  it("maps the blind structure aliases onto both repeats of both measured arms", () => {
     expect([
-      hierarchyTreeFile("base-a", "article"),
-      hierarchyTreeFile("base-b", "article"),
-      hierarchyTreeFile("toc11-a", "article"),
-      hierarchyTreeFile("toc11-b", "article"),
+      structureTreeFile("base-a", "article"),
+      structureTreeFile("base-b", "article"),
+      structureTreeFile("toc11-a", "article"),
+      structureTreeFile("toc11-b", "article"),
     ]).toEqual([
       "toc10-frozen.article.r1.json",
       "toc10-frozen.article.r2.json",
@@ -212,7 +212,7 @@ describe("the lineup", () => {
     ]);
   });
 
-  it("renders Hierarchy's sampled deep gists reproducibly", () => {
+  it("renders Structure's sampled deep gists reproducibly", () => {
     /* Built here rather than read from a run's corpus: evals/results/ is
        gitignored, so a test that read it passed only on the checkout where the
        eval ran (docs/postmortems/261002a). Six deep gisted nodes, so the sample

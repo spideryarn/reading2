@@ -23,12 +23,12 @@
  * - `buildTree` splices the grandchildren up and deletes the rung, keeping the
  *   parent's title and gist — it never *refuses*, because `planChildRanges`'s
  *   whole design is that nothing about the derivation can refuse
- *   (src/hierarchy.ts).
+ *   (src/structure.ts).
  * - `checkTree` says so about a *stored* tree, which it never did before
  *   2026-09-05 (src/tree-invariants.ts, in the children-tile-the-parent loop).
  */
 import { describe, expect, it } from "vitest";
-import { buildTree, type BuildReport, type ModelNode } from "../src/hierarchy.js";
+import { buildTree, type BuildReport, type ModelNode } from "../src/structure.js";
 import { checkTree } from "../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../src/types.js";
 
@@ -180,7 +180,7 @@ describe("buildTree collapses a rung that restates its parent", () => {
               title: "Survivor",
               /* Backwards on purpose: it makes the end ineligible as a fallback
                  split point, which is what leaves the two later children with
-                 nothing to start at. src/hierarchy.ts § `planChildRanges`. */
+                 nothing to start at. src/structure.ts § `planChildRanges`. */
               range: ["spya-bbbbbb", "spya-aaaaaa"],
               gist: "The only one of the three that marks a split point.",
               children: [

@@ -118,9 +118,9 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/embeddings.ts": "asks for vectors, not words",
   "src/pipeline.ts":
     "only builds the PDF front-matter and authors readers, whose prompts are src/pdf-frontmatter.ts and src/pdf-authors.ts",
-  "src/hierarchy-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/hierarchy-expand.ts and carries the rule there",
+  "src/structure-deepen.ts": "sends EXPAND_SYSTEM, which lives in src/structure-expand.ts and carries the rule there",
   "src/spend-declarations.ts": "names a model call inside a string, and makes none",
-  "scripts/spike-book-structure.ts": "a one-off spike that sends production's own hierarchy prompt",
+  "scripts/spike-book-structure.ts": "a one-off spike that sends production's own structure prompt",
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
   "scripts/probes/260930d-quote-stop-repro.ts":
     "a one-off reproduction; it sends production's own INVESTIGATE_SYSTEM, which carries plainWords(\"explain\")",

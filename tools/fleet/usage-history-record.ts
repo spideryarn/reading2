@@ -10,7 +10,7 @@
  * The specification is
  * `docs/plans/260909b-usage-limits-tab-fleet-dashboard-24h-history.md`; the four
  * designs that were tried and abandoned first are in
- * `docs/research/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md`.
+ * `docs/investigations/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md`.
  * Two GPT Sol plan reviews, eleven P0s, nothing overruled. The rules below each
  * exist because one of those findings described a chart that would have lied.
  *

@@ -83,6 +83,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     starting: false,
     find: async () => {},
     more: async () => {},
+    refresh: async () => {},
     cancel: noop,
     look: async () => {},
     looking: null,
@@ -153,6 +154,29 @@ describe("Find more in the glossary's foot", () => {
     await mount(owner(glossary("the-profile"), { more }));
     await pressFindMore();
     expect(more.mock.calls).toEqual([[true]]);
+  });
+
+  /* **Regenerate in the profile panel is the forced run, and that is why it
+     rewrites** (plan 261002b). The glossary has no "replace" verb: `more` is
+     the forced run, and it appends only when the list's profile hash matches
+     the reader's (src/glossary.ts § existingFor). The panel offers Regenerate
+     only when the server says it does *not* match, so this forced run is a
+     rewrite. `find` would be the wrong call — unforced, it can skip — and a
+     panel that wired it would start a job that changed nothing. */
+  it("Regenerate in the badge's panel asks for the forced run, for the profile", async () => {
+    const more = vi.fn(async () => {});
+    const find = vi.fn(async () => {});
+    await mount(owner(glossary("an-old-profile"), { more, find, profileChanged: true }));
+    const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
+    if (!badge) throw new Error("no badge on a list written for a profile");
+    await act(async () => badge.click());
+    const regenerate = [...document.querySelectorAll<HTMLButtonElement>(".prof-panel button")].find((b) =>
+      /regenerate/i.test(b.textContent ?? ""),
+    );
+    if (!regenerate) throw new Error("no Regenerate in the panel for a changed profile");
+    await act(async () => regenerate.click());
+    expect(more.mock.calls).toEqual([[true]]);
+    expect(find).not.toHaveBeenCalled();
   });
 
   it("offers no profile control of any kind beside it", async () => {

@@ -84,6 +84,8 @@ const PROMISES: Record<string, string> = {
   "Library.tsx › Search the library": "search",
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
+  /* Enter goes to the best match by setting the address (plan 261002b). */
+  "HelpPage.tsx › Search Help": "search",
   "SearchPanel.tsx › srch-input": "search",
   /* The sign-in form: the first field moves to the second, the second signs in.
      `next` really moves — SignInControls.tsx says why it has to. */

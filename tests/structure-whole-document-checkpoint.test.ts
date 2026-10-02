@@ -1,0 +1,445 @@
+/**
+ * **The structure answer survives a window that ran out** — stage 2 of
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md.
+ *
+ * Until 2026-09-04 only the label batches were checkpointed. The structure call
+ * is the most expensive thing in the pipeline — 508 seconds and about two
+ * dollars on a 142-page paper — and a run that died in the label pass afterwards
+ * bought it again from scratch. Now it goes through the same `checkpoints`
+ * machinery the batches use.
+ *
+ * **Two things are actually under test, and they are the two GPT Sol's review of
+ * the plan said would go wrong** (finding 4):
+ *
+ * 1. **The key is a digest of the request the call really makes**, assembled on
+ *    the same path, not a hand-copied list of fields. The list the earlier draft
+ *    proposed — system, user, model, effort, PROMPT_VERSION — omits `thinking`,
+ *    `max_tokens`, the routing `streamMessage` injects, and the difference
+ *    between `CAPABLE_MODEL` and the wire id `modelFor("structure")` sends. A
+ *    hand-maintained list is the blind spot `promptFingerprint` in
+ *    src/pdf-read.ts was written to remove, and the mutation test below is
+ *    written over `Object.keys` for that reason: a field added to the request
+ *    tomorrow is covered without anybody remembering to add it here.
+ * 2. **Only an answer that parsed and built is stored.** Storing before
+ *    `parseJsonAnswer` and `buildTree` would replay a malformed-but-complete
+ *    answer for ever, which is worse than paying for the call again.
+ *
+ * No network: `streamMessage` answers the structure call from a canned tree and
+ * `generateLabels` is stubbed, exactly as tests/structure-step-write-guard.test.ts
+ * does and for the same reason — the label protocol is not what is being tested.
+ */
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { CHECKPOINT_KEY_RE, type CheckpointNamespace, type CheckpointStore } from "../src/store/checkpoints.js";
+import type { Block } from "../src/types.js";
+
+/** What the structure call "returns", set per test. */
+let modelAnswer = "";
+/** How many times a structure call was actually made. */
+let wholeDocumentCalls = 0;
+
+vi.mock("../src/messages-stream.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/messages-stream.js")>();
+  return {
+    ...real,
+    streamMessage: () => {
+      wholeDocumentCalls += 1;
+      return {
+        onText: () => {},
+        finalMessage: async () => ({
+          content: [{ type: "text", text: modelAnswer }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+      };
+    },
+  };
+});
+
+let labelsSourceHash = "";
+let labelsFor: Record<string, string> = {};
+/** Set by the test that reproduces the window this whole feature exists for. */
+let labelsThrow = false;
+
+vi.mock("../src/labels.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/labels.js")>();
+  return {
+    ...real,
+    generateLabels: async () => {
+      if (labelsThrow) throw new Error("the label pass ran out of window");
+      return {
+      labels: labelsFor,
+      file: {
+        version: "test",
+        generator: "test",
+        slug: "structure-checkpoint",
+        structureHash: "0000000000000000",
+        sourceHash: labelsSourceHash,
+        structureVersion: "test",
+        batches: [],
+        labels: labelsFor,
+        dropped: [],
+      },
+      batches: 0,
+      oversized: 0,
+      resumed: 0,
+      dropped: [],
+      calls: 0,
+      estimatedCacheable: false,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      };
+    },
+  };
+});
+
+const {
+  canonicalWholeDocumentRequest,
+  generateStructure,
+  wholeDocumentKey,
+  wholeDocumentRequest,
+  PROMPT_VERSION,
+} = await import("../src/structure.js");
+const { modelFor } = await import("../src/models.js");
+const { MESSAGES_PROVIDER, messagesWireBody } = await import("../src/messages-stream.js");
+const { toc10FrozenRequest } = await import("../evals/structure-whole-document/toc10-frozen.js");
+const { isStructural } = await import("../src/block-policy.js");
+const { hashBlocks } = await import("../src/source-hash.js");
+const { blocksArtefact } = await import("../src/blocks.js");
+
+const BLOCKS: Block[] = [
+  { id: "spya-chk001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },
+  { id: "spya-chk002", tag: "p", kind: "text", text: "Some prose about turnips.", words: 4, html: "<p>Some prose about turnips.</p>", gistable: true },
+  { id: "spya-chk003", tag: "p", kind: "text", text: "More prose entirely.", words: 3, html: "<p>More prose entirely.</p>", gistable: true },
+];
+
+/** A schema-valid `toc/11` answer over every block. */
+const SOUND = JSON.stringify({
+  root: {
+    title: "The whole piece",
+    gist: "The whole piece has one part.",
+    question: "Whole piece — what does it claim?",
+    children: [
+      {
+        title: "The part",
+        gist: "The part covers the whole piece.",
+        question: "The part — what does it claim?",
+        start: BLOCKS[0]!.id,
+        children: [
+          {
+            title: "The section",
+            gist: "The section covers the whole piece in detail.",
+            start: BLOCKS[0]!.id,
+          },
+        ],
+      },
+    ],
+  },
+});
+
+/** In-memory, and it refuses the keys the real store refuses. */
+function memoryCheckpoints(): CheckpointStore & { entries: Map<string, unknown> } {
+  const entries = new Map<string, unknown>();
+  return {
+    entries,
+    async read<T>(_slug: string, namespace: CheckpointNamespace, keys: readonly string[]) {
+      const found = new Map<string, T>();
+      for (const key of keys) {
+        const value = entries.get(`${namespace}:${key}`);
+        if (value !== undefined) found.set(key, value as T);
+      }
+      return found;
+    },
+    async write(_slug: string, namespace: CheckpointNamespace, key: string, value: unknown) {
+      if (!CHECKPOINT_KEY_RE.test(key)) throw new Error(`bad checkpoint key: ${key}`);
+      entries.set(`${namespace}:${key}`, value);
+    },
+  };
+}
+
+beforeEach(() => {
+  wholeDocumentCalls = 0;
+  modelAnswer = SOUND;
+  labelsThrow = false;
+  labelsFor = Object.fromEntries(BLOCKS.filter((b) => isStructural(b)).map((b) => [b.id, `Label ${b.id}`]));
+  labelsSourceHash = hashBlocks(blocksArtefact(BLOCKS).blocks);
+});
+
+describe("the structure checkpoint's key", () => {
+  const canonical = () => canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard");
+
+  it("is a digest of the request the call actually makes, not a list somebody keeps", () => {
+    const c = canonical();
+    /* The four fields the naive list omitted, named one by one because each was
+       a real hole: two requests differing only in `thinking`, in `max_tokens`,
+       in the upstream routing, or in the wire spelling of the model would have
+       answered each other's question. */
+    const request = c.request as Record<string, unknown>;
+    expect(request.thinking).toEqual({ type: "adaptive" });
+    expect(request.max_tokens).toBe(wholeDocumentRequest(BLOCKS).maxTokens);
+    expect(request.provider).toEqual(MESSAGES_PROVIDER);
+    /* `modelFor("structure")`, which is the OpenRouter address the call goes to
+       — NOT `CAPABLE_MODEL`, which is the same model's name and is what a
+       hand-copied key would have reached for. src/models.ts § CAPABLE_MODEL. */
+    expect(request.model).toBe(modelFor("structure", "standard"));
+    expect(c.promptVersion).toBe(PROMPT_VERSION);
+  });
+
+  it("takes the injected half from the sender, not from a copy of what it does", () => {
+    /* The second-round finding: restating `provider` and `model` here would
+       cover today's two fields and miss tomorrow's third in silence, because the
+       mutation test below can only enumerate fields the object already has. So
+       `request` is `messagesWireBody`'s own output, byte for byte — the same
+       function `streamMessage` sends. ⟨GPT Sol, 2026-09-04.⟩ */
+    expect(canonical().request).toEqual(messagesWireBody("structure", wholeDocumentRequest(BLOCKS).params, "standard"));
+  });
+
+  it("moves when any field of that request moves — enumerated, not listed", () => {
+    const base = canonical();
+    const key = wholeDocumentKey(base);
+    const paths: [string, () => Record<string, unknown>][] = [];
+    for (const field of Object.keys(base)) {
+      paths.push([field, () => ({ ...base, [field]: "mutated" })]);
+    }
+    for (const field of Object.keys(base.request as Record<string, unknown>)) {
+      paths.push([
+        `request.${field}`,
+        () => ({ ...base, request: { ...(base.request as Record<string, unknown>), [field]: "mutated" } }),
+      ]);
+    }
+    /* Proof the loop is looking at something: if the canonical object ever
+       collapses to one field, the enumeration would still "pass" vacuously. */
+    expect(paths.length).toBeGreaterThan(6);
+    for (const [what, mutate] of paths) {
+      expect(wholeDocumentKey(mutate()), `${what} did not move the key`).not.toBe(key);
+    }
+  });
+
+  it("moves when the article's blocks move, ids included", () => {
+    /* The ordering constraint the plan records: a lost draft re-mints every
+       block id, and the ids are inside the user message, so a cached tree can
+       never be replayed onto blocks it does not name. That is the property, and
+       it is asserted rather than assumed. */
+    const renamed = BLOCKS.map((b) => ({ ...b, id: b.id.replace("chk", "xyz") }));
+    expect(wholeDocumentKey(canonicalWholeDocumentRequest(wholeDocumentRequest(renamed).params, "standard"))).not.toBe(
+      wholeDocumentKey(canonical()),
+    );
+  });
+
+  it("is a key the store will accept", () => {
+    expect(wholeDocumentKey(canonical())).toMatch(CHECKPOINT_KEY_RE);
+  });
+});
+
+describe("generateStructure and the structure checkpoint", () => {
+  it("does not resume a toc/10 ranged checkpoint under toc/11", async () => {
+    const checkpoints = memoryCheckpoints();
+    const toc10Key = wholeDocumentKey({
+      promptVersion: "toc/10",
+      request: messagesWireBody("structure", toc10FrozenRequest(BLOCKS).params, "standard"),
+    });
+    await checkpoints.write("structure-checkpoint", "structure-whole-document", toc10Key, {
+      fingerprint: toc10Key,
+      answer: JSON.stringify({
+        root: {
+          title: "Old ranged answer",
+          gist: "This answer belongs to toc ten.",
+          question: "Old answer — why must it miss?",
+          range: [BLOCKS[0]!.id, BLOCKS.at(-1)!.id],
+        },
+      }),
+    });
+
+    const run = await generateStructure({
+      power: "standard",
+      blocks: BLOCKS,
+      slug: "structure-checkpoint",
+      checkpoints,
+    });
+    expect(wholeDocumentCalls).toBe(1);
+    expect(run.wholeDocumentResumed).toBe(false);
+    expect(checkpoints.entries.has(`structure-whole-document:${toc10Key}`)).toBe(true);
+    expect(checkpoints.entries.size).toBe(2);
+  });
+
+  it("makes the call once and reuses the answer on the next run", async () => {
+    const checkpoints = memoryCheckpoints();
+    const first = await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    expect(wholeDocumentCalls).toBe(1);
+    expect([...checkpoints.entries.keys()]).toHaveLength(1);
+    expect([...checkpoints.entries.keys()][0]).toMatch(/^structure-whole-document:/);
+
+    const second = await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    expect(wholeDocumentCalls, "the second run bought the structure call again").toBe(1);
+    /* Same tree, not merely no call: a resumed run that quietly produced a
+       different structure would be worse than one that paid twice. */
+    expect(second.parts.tree).toEqual(first.parts.tree);
+    expect(second.wholeDocumentResumed).toBe(true);
+    expect(first.wholeDocumentResumed).toBe(false);
+  });
+
+  /**
+   * **The window this feature existed for, and it has been closed twice over.**
+   *
+   * This case used to read *"keeps the tree when the label pass dies after it"*
+   * and asserted a **rejection**: with `labelsThrow` set, `generateStructure`
+   * threw, and the point was that the structure checkpoint had already been
+   * written, so the next attempt did not re-buy 508 seconds of tree. The
+   * checkpoint's position is what the case was really about. ⟨GPT Sol, on the
+   * code, 2026-09-04.⟩
+   *
+   * **Since 2026-09-06 that failure cannot happen at all**, because the label
+   * pass is not in this function: it is the `labels` step, in its own claim
+   * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md). So the
+   * assertion is inverted rather than deleted, and the inversion is the stronger
+   * statement of the same property. `labelsThrow` still arms a mock that throws
+   * on any call to `generateLabels`; this run **resolves**, which is a live
+   * proof that no such call was made — not a claim that a comment can drift away
+   * from.
+   *
+   * The half that is still about the checkpoint is kept underneath: the entry is
+   * there after the run, and the next run resumes from it.
+   */
+  it("never reaches the label pass at all, so no label failure can cost the tree", async () => {
+    const checkpoints = memoryCheckpoints();
+    labelsThrow = true;
+    try {
+      const first = await generateStructure({
+        power: "standard",
+        blocks: BLOCKS,
+        slug: "structure-checkpoint",
+        checkpoints,
+      });
+      /* The tree came back, from a run whose label pass was armed to throw. */
+      expect(first.parts.tree).toBeTruthy();
+      /* And the manifest beside it is the empty one — `batches: null`, which is
+         what `writeArtefacts` reads as *the labels have to be bought*. */
+      expect(first.parts.labels.batches).toBeNull();
+      expect(wholeDocumentCalls).toBe(1);
+      expect(checkpoints.entries.size, "the tree this attempt paid for was not kept").toBe(1);
+
+      const second = await generateStructure({
+        power: "standard",
+        blocks: BLOCKS,
+        slug: "structure-checkpoint",
+        checkpoints,
+      });
+      expect(wholeDocumentCalls, "the second attempt bought the tree again").toBe(1);
+      expect(second.wholeDocumentResumed).toBe(true);
+    } finally {
+      labelsThrow = false;
+    }
+  });
+
+  it("stores nothing when the answer builds a tree the invariants reject", async () => {
+    /* The third way an answer can be worthless, and the one that pins the write
+       *after* `assertTreeSound` rather than merely after `buildTree`: an
+       internal node with no gist builds fine — `buildTree` copies back whatever
+       the model wrote — and has nothing to render at its own zoom level, so the
+       invariants refuse it (src/tree-invariants.ts § the gist rule). Storing it
+       would replay a tree that can never be published. */
+    const checkpoints = memoryCheckpoints();
+    modelAnswer = JSON.stringify({
+      root: { title: "No gist here", question: "Whole — what does it claim?" },
+    });
+    await expect(
+      generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+    ).rejects.toThrow();
+    expect(checkpoints.entries.size).toBe(0);
+  });
+
+  it("stores nothing when the answer will not parse", async () => {
+    const checkpoints = memoryCheckpoints();
+    modelAnswer = "{ this is not JSON at all";
+    await expect(
+      generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+    ).rejects.toThrow();
+    expect(checkpoints.entries.size, "a malformed answer would be replayed for ever").toBe(0);
+  });
+
+  it("stores nothing when the answer parses but will not build a tree", async () => {
+    /* The other half, and the reason "it came back whole" is not the bar: this
+       answer is complete JSON and names a block that does not exist, so
+       `buildTree` throws. Keeping it would turn one bad call into a permanent
+       one. */
+    const checkpoints = memoryCheckpoints();
+    modelAnswer = JSON.stringify({
+      root: {
+        title: "Bad",
+        gist: "Names a block that is not there.",
+        question: "Bad — where did it begin?",
+        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+      },
+    });
+    await expect(
+      generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
+    ).rejects.toThrow();
+    expect(checkpoints.entries.size).toBe(0);
+  });
+
+  /**
+   * **A stored answer that parses and then does not build is not allowed to be
+   * permanent** ⟨GPT Sol, on the code, 2026-09-04, finding 6⟩.
+   *
+   * The gate used to ask only whether the answer parsed. An answer that parses
+   * and then fails `buildTree`, `appendSupplement` or `assertTreeSound` was
+   * accepted, skipped the call, and threw — on this attempt and on every attempt
+   * after it, because the row could only be overwritten by a run that got as far
+   * as the write, and no run ever would. The only lever was a `PROMPT_VERSION`
+   * bump, i.e. a deploy, for one article.
+   *
+   * Shipping code does not write such a row (the write is after every one of
+   * those checks), so both poisons here are planted by hand — which is exactly
+   * how it is reachable: an older row, a hand-written one, or a change to what
+   * this file does with an answer that nobody bumped the version for.
+   */
+  const POISON: [string, string][] = [
+    /* Parses, builds, and the invariants refuse it: an internal node with no
+       gist has nothing to render at its own zoom level. */
+    ["survives the parse and fails the invariants", JSON.stringify({
+      root: { title: "No gist here", question: "Whole — what does it claim?" },
+    })],
+    /* Parses, and `buildTree` throws on a block id the article does not have. */
+    ["survives the parse and fails to build", JSON.stringify({
+      root: {
+        title: "Bad",
+        gist: "Names a block that is not there.",
+        question: "Bad — where did it begin?",
+        children: [{ title: "Lost", gist: "The start is not real.", question: "Lost — where is it?", start: "spya-nope01" }],
+      },
+    })],
+  ];
+
+  for (const [what, answer] of POISON) {
+    it(`buys the tree again when the stored answer ${what}`, async () => {
+      const checkpoints = memoryCheckpoints();
+      const key = wholeDocumentKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"));
+      await checkpoints.write("structure-checkpoint", "structure-whole-document", key, {
+        fingerprint: key,
+        answer,
+      });
+
+      const run = await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+      expect(wholeDocumentCalls, "the stored answer was replayed rather than replaced").toBe(1);
+      expect(run.wholeDocumentResumed).toBe(false);
+      /* And the row is gone, replaced by one that works — otherwise the next
+         attempt pays the same 508 seconds to learn the same thing. */
+      expect(checkpoints.entries.get(`structure-whole-document:${key}`)).toEqual({
+        fingerprint: key,
+        answer: SOUND,
+      });
+    });
+  }
+
+  it("ignores a stored value of the wrong shape rather than trusting it", async () => {
+    /* The store validates nothing — src/store/checkpoints.ts § What the store
+       knows about a key: nothing — so the caller is the gate. A row written by
+       an older format, or by something else entirely, must read as a miss. */
+    const checkpoints = memoryCheckpoints();
+    const key = wholeDocumentKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"));
+    await checkpoints.write("structure-checkpoint", "structure-whole-document", key, { answer: 42 });
+    await generateStructure({ power: "standard", blocks: BLOCKS, slug: "structure-checkpoint", checkpoints });
+    expect(wholeDocumentCalls).toBe(1);
+  });
+});

@@ -18,7 +18,7 @@
  * `tests/public-imports.test.ts` walks this file's imports by pattern and would
  * read a quoted one in prose as a real edge — it did, and went red.)
  *
- *     [vite] src/hierarchy.ts changed, restarting server...
+ *     [vite] src/structure.ts changed, restarting server...
  *     [vite] server restarted.
  *
  * The restart loads the config from a **uniquely named** temp file, so the
@@ -28,7 +28,7 @@
  * model call keeps running, keeps being billed, and keeps believing it holds a
  * claim that the new copy has never heard of.
  *
- * On 2026-08-30 that ran one article's `hierarchy` step **eleven times at once**
+ * On 2026-08-30 that ran one article's `structure` step **eleven times at once**
  * under a single job id. See
  * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  *

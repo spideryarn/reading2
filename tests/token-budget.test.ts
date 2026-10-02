@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateHierarchyTokens, STRUCTURE_HEADROOM } from "../src/hierarchy.js";
+import { estimateStructureTokens, STRUCTURE_HEADROOM } from "../src/structure.js";
 import {
   budgetFor,
   MODEL_MAX_TOKENS,
@@ -61,7 +61,7 @@ function withHeadings(count: number, every: number): Block[] {
 
 describe("budgetFor", () => {
   it("is the answer plus room to think, never the answer alone", () => {
-    expect(budgetFor("hierarchy", 1_000)).toBe(1_000 + THINKING_HEADROOM);
+    expect(budgetFor("structure", 1_000)).toBe(1_000 + THINKING_HEADROOM);
   });
 
   it("keeps the whole headroom even when the answer is tiny", () => {
@@ -75,12 +75,12 @@ describe("budgetFor", () => {
     // Clamping to the ceiling here is the tempting wrong answer: the call would
     // run for minutes, cost money, and come back cut off — the original bug,
     // reached more slowly.
-    expect(() => budgetFor("hierarchy", MODEL_MAX_TOKENS)).toThrow(TooLongForOnePass);
+    expect(() => budgetFor("structure", MODEL_MAX_TOKENS)).toThrow(TooLongForOnePass);
   });
 
   it("never returns more than one response can hold", () => {
     for (const answer of [0, 1_000, 50_000, MODEL_MAX_TOKENS - THINKING_HEADROOM]) {
-      expect(budgetFor("hierarchy", answer)).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
+      expect(budgetFor("structure", answer)).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
     }
   });
 
@@ -98,10 +98,10 @@ describe("budgetFor", () => {
   it("rejects a nonsense estimate instead of passing NaN to the API", () => {
     // `max_tokens: NaN` is a 400 from the API and a confusing one; a negative
     // estimate would silently shrink the budget below the headroom.
-    expect(() => budgetFor("hierarchy", Number.NaN)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", -1)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", 100, Number.NaN)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", 100, -1)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", Number.NaN)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", -1)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", 100, Number.NaN)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", 100, -1)).toThrow(/non-negative/);
   });
 
   it("takes a smaller reservation from a call that reads less than the whole article", () => {
@@ -165,7 +165,7 @@ describe("truncatedMessage", () => {
   });
 });
 
-describe("estimateHierarchyTokens", () => {
+describe("estimateStructureTokens", () => {
   it("grows with the article — the whole point", () => {
     // A fixed number was the bug. Anything that stops this growing brings it back.
     //
@@ -176,11 +176,11 @@ describe("estimateHierarchyTokens", () => {
     // the same floor, and comparing two of them proves nothing either way. What
     // must still be true is that a longer article costs more, and it is the
     // article's own headings and long runs that make it cost more.
-    expect(estimateHierarchyTokens(blocks(4_000))).toBeGreaterThan(
-      estimateHierarchyTokens(blocks(800)) * 2,
+    expect(estimateStructureTokens(blocks(4_000))).toBeGreaterThan(
+      estimateStructureTokens(blocks(800)) * 2,
     );
-    expect(estimateHierarchyTokens(withHeadings(2_000, 4))).toBeGreaterThan(
-      estimateHierarchyTokens(withHeadings(2_000, 40)),
+    expect(estimateStructureTokens(withHeadings(2_000, 4))).toBeGreaterThan(
+      estimateStructureTokens(withHeadings(2_000, 40)),
     );
   });
 
@@ -189,7 +189,7 @@ describe("estimateHierarchyTokens", () => {
     // because it got no navLabel. The labels moved to src/labels.ts, and what is
     // left is the tree — which tiles every block regardless. If this ever starts
     // differing again, a label estimate has crept back into the structure call.
-    expect(estimateHierarchyTokens(blocks(100, false))).toBe(estimateHierarchyTokens(blocks(100)));
+    expect(estimateStructureTokens(blocks(100, false))).toBe(estimateStructureTokens(blocks(100)));
   });
 
   /**
@@ -235,14 +235,14 @@ describe("estimateHierarchyTokens", () => {
     );
     const actualTokens = payload.length / 2.5;
 
-    expect(estimateHierarchyTokens(fixtureBlocks)).toBeGreaterThan(actualTokens * 1.25);
+    expect(estimateStructureTokens(fixtureBlocks)).toBeGreaterThan(actualTokens * 1.25);
   });
 
   it("gives the article that broke it a budget the model will accept", () => {
     // 360 blocks, every one gistable — https://www.anthropic.com/constitution,
     // the article that found this bug. It must fit, and it must fit with the
     // reasoning allowance included.
-    expect(budgetFor("hierarchy", estimateHierarchyTokens(blocks(360)), STRUCTURE_HEADROOM)).toBeLessThan(
+    expect(budgetFor("structure", estimateStructureTokens(blocks(360)), STRUCTURE_HEADROOM)).toBeLessThan(
       MODEL_MAX_TOKENS,
     );
   });
@@ -250,7 +250,7 @@ describe("estimateHierarchyTokens", () => {
   it("refuses an article too long to describe in one response", () => {
     // Not a number worth pinning — what matters is that some length is refused
     // out loud, before the call, instead of producing half a table of contents.
-    expect(() => budgetFor("hierarchy", estimateHierarchyTokens(blocks(5_000)), STRUCTURE_HEADROOM)).toThrow(
+    expect(() => budgetFor("structure", estimateStructureTokens(blocks(5_000)), STRUCTURE_HEADROOM)).toThrow(
       TooLongForOnePass,
     );
   });
@@ -285,13 +285,13 @@ describe("estimateHierarchyTokens", () => {
        47,289 were thinking. Not derived from anything in this repo. */
     const MEASURED_ANSWER = 10_996;
 
-    const estimate = estimateHierarchyTokens(kuhn);
+    const estimate = estimateStructureTokens(kuhn);
     expect(estimate).toBeGreaterThan(MEASURED_ANSWER * 1.25);
-    expect(() => budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).not.toThrow();
+    expect(() => budgetFor("structure", estimate, STRUCTURE_HEADROOM)).not.toThrow();
     /* And with room to spare rather than at the margin: an article somewhat
        longer than this one has to be admitted too, or the fix is a fix for one
        document. */
-    expect(budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).toBeLessThan(120_000);
+    expect(budgetFor("structure", estimate, STRUCTURE_HEADROOM)).toBeLessThan(120_000);
   });
 
   it("leaves that call more room to think than it measurably used", () => {
@@ -300,7 +300,7 @@ describe("estimateHierarchyTokens", () => {
        51,000 tokens — under the 47,289 of thinking plus 10,996 of answer it
        provably spent — so the free refusal would have become an eight-minute
        paid truncation. The reservation is the other half of the fix. */
-    const budget = budgetFor("hierarchy", estimateHierarchyTokens(withHeadings(2_025, 8)), STRUCTURE_HEADROOM);
+    const budget = budgetFor("structure", estimateStructureTokens(withHeadings(2_025, 8)), STRUCTURE_HEADROOM);
     expect(budget).toBeGreaterThan(47_289 + 10_996);
     expect(STRUCTURE_HEADROOM).toBeGreaterThan(47_289);
   });
@@ -326,8 +326,8 @@ describe("estimateHierarchyTokens", () => {
    */
   it("admits the heading-dense handbook, and is under the prompt's own count for it", () => {
     const handbook = withHeadings(2_420, 11);
-    const estimate = estimateHierarchyTokens(handbook);
-    expect(() => budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).not.toThrow();
+    const estimate = estimateStructureTokens(handbook);
+    expect(() => budgetFor("structure", estimate, STRUCTURE_HEADROOM)).not.toThrow();
 
     /* The faithful count, spelled out rather than asserted about vaguely: 220
        headings, each opening a section, each followed by a run of ten that the
@@ -342,6 +342,6 @@ describe("estimateHierarchyTokens", () => {
        that refused the paper above; anything charging per paragraph again lands
        back over it. */
     const perBlock = 500 + (Math.ceil(2_025 / 4) + 6) * 175;
-    expect(estimateHierarchyTokens(withHeadings(2_025, 8))).toBeLessThan(perBlock * 0.7);
+    expect(estimateStructureTokens(withHeadings(2_025, 8))).toBeLessThan(perBlock * 0.7);
   });
 });

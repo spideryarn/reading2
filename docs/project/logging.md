@@ -28,7 +28,7 @@ happened to mention it. That was the gap.
 
 Every `console.log`/`console.error` call in `src/` and `scripts/` is **staying**. They are in
 pipeline stages' `main()` functions and in the standalone scripts — `db-migrate`, `typecheck`,
-`run-codex`, `validate-tree`, `hierarchy-flatten` — and they all write to a terminal somebody is watching:
+`run-codex`, `validate-tree`, `structure-flatten` — and they all write to a terminal somebody is watching:
 
 ```
 Blocks:    412  ({"paragraph":331,"heading":38,…})
@@ -42,7 +42,7 @@ JSON would make it worse for the only purpose it has. The rule is the destinatio
 name: if a human is watching it scroll past, it is output; if you would want it a week later with a
 timestamp and a slug attached, it is a log.
 
-**That example is `npm run hierarchy` before 2026-09-05, and it is worth keeping as the shape rather
+**That example is `npm run structure` before 2026-09-05, and it is worth keeping as the shape rather
 than as a screenshot.** That command drives the queue now, so what a person sees is the step's
 one-line `detail` and the job's status, with the stage's own progress line while it runs — and the
 JSON log goes past underneath it, from the server code the queue is. Two destinations in one
@@ -189,7 +189,7 @@ They are logged from [`src/pipeline.ts`](../../src/pipeline.ts), and that locati
 **log at the seam the queue already owns, not inside another agent's stage.** Every number needed is
 already in scope in the `STEPS` closures, so no stage file has to be reached into
 ([architecture.md § Stage ownership](architecture.md#stage-ownership)). The one exception is `model`,
-which was a private const in `src/hierarchy.ts` and `src/arc.ts` and is now on their returned run objects.
+which was a private const in `src/structure.ts` and `src/arc.ts` and is now on their returned run objects.
 
 ### The two counts that are the only alarm there is
 
@@ -589,7 +589,7 @@ Still not built, and still the better half: the **sentinel non-interference test
 which is one test that replaces the habit, and the closed `PublicFailure` type at every egress.
 
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
-the log are in different files. `src/hierarchy.ts` validated a node's range and threw
+the log are in different files. `src/structure.ts` validated a node's range and threw
 ``Node "${mn.title}" has a range not in blocks.json`` — a label the model wrote *about the article*,
 put into an error message. Nothing logs it there. But a pipeline step that throws is logged by
 [`src/jobs.ts`](../../src/jobs.ts) with `errorFields`, which keeps `message` **and** `stack`, so the
@@ -613,7 +613,7 @@ alongside the node's position in the model's own tree — `root > child 2` — w
 shape of the answer rather than from anything in it, and is what you would go and look at anyway.
 `checkCoverage` had the same hole in its invented-label check and is closed the same way: the count
 is always exact, the well-formed ids are named, the rest are withheld. Both are held by tests in
-[`tests/hierarchy-build.test.ts`](../../tests/hierarchy-build.test.ts) that feed a phrase of article prose where
+[`tests/structure-step-build.test.ts`](../../tests/structure-step-build.test.ts) that feed a phrase of article prose where
 a block id belongs and assert it never reaches the thrown message.
 
 So the rule has a second half: **an error is a value that travels, and where it is thrown is not
@@ -747,7 +747,7 @@ Three things about it are load-bearing:
   wordings for "the input ran out" and only one of them says so; matching that English is a list that
   goes stale in a Node upgrade with nothing going red. Breaking at or past the last character is
   arithmetic, and it means the same thing whatever it was called.
-- **The stage files are the half that is easy to miss.** `src/hierarchy.ts`, `src/arc.ts`,
+- **The stage files are the half that is easy to miss.** `src/structure.ts`, `src/arc.ts`,
   `src/glossary.ts` and `src/tweets.ts` never call the logger — but a step that
   throws is logged by [`src/jobs.ts`](../../src/jobs.ts) with `errorFields`. Same lesson as the
   `mn.title` throw above: an error is a value that travels, and where it is thrown is not where it is

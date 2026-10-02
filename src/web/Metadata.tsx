@@ -27,7 +27,7 @@
  *
  * That is narrower than *nothing here is generated*, which is what this line
  * said until 2026-09-08 and which had stopped being true twice over: the page
- * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
+ * shows the tree's `gist` and `summary` (§ In one sentence), and since
  * 2026-09-07 it can start a run of its own (§ AI processing, below, one
  * button per step). Neither happens on arrival, and *on arrival* is the half a
  * reader here is trusting.
@@ -92,7 +92,7 @@
  *    decision two paragraphs up, and the reversal is narrower than it looks:
  *    what was wrong about mtimes was the *verdict* drawn from them, never the
  *    number. Nothing compares two of these. The staleness question is exactly
- *    as unanswered as it was, and a person reading "hierarchy ran 3 days ago, arc ran
+ *    as unanswered as it was, and a person reading "structure ran 3 days ago, arc ran
  *    in March" can draw the conclusion this page still refuses to draw for them.
  *  - **Where a PDF came from** — `CameFrom`, below. Their Document Information
  *    had a "file type" row and ours never took it, because until 2026-08-26
@@ -146,7 +146,7 @@
  *
  * **Whether anything is stale.** The first version of this page led with a red
  * warning when a later artefact was older than an earlier one. That check is
- * wrong: a *successful* hierarchy run writes the tree and then copies the blocks
+ * wrong: a *successful* structure run writes the tree and then copies the blocks
  * beside it, so every correct run tripped it. More deeply, an mtime records when
  * a file was written, not what it was written *from*. A confident wrong verdict
  * is worse here than no verdict, because this is the page you open once you have
@@ -159,7 +159,7 @@
  * now, though **not** in the shape that sentence imagined, and the difference is
  * worth stating rather than glossing: there is no `tree.json`, and `Tree`
  * carries no `sourceHash` to this day. What carries it for the tree is the
- * **run** — `revision_step_runs.input_hash`, read by `hierarchyCurrency`, the
+ * **run** — `revision_step_runs.input_hash`, read by `structureCurrency`, the
  * very function `reasonsNotToPublish` uses — while `Arc` does carry a
  * `sourceHash` of its own. `articleMetadata` (src/store/pg.ts) puts a per-step
  * `isCurrent` over both, which is why `StageState.done` has meant *ran, and
@@ -264,7 +264,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
-import { savePurpose } from "./purpose.js";
+import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
@@ -279,7 +279,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
+import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -341,7 +341,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   metadata: IdCard,
   extract: FileText,
   blocks: Blocks,
-  hierarchy: ListTree,
+  structure: ListTree,
   /* A luggage tag: the short label each paragraph is given so it can be told
      apart from its neighbours. Beside the tree it is written onto, and
      deliberately not another tree glyph — the two are one stage of the pipeline
@@ -588,12 +588,7 @@ export function Metadata({
       void refresh();
       return stored;
     },
-    leave: (text) =>
-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purpose: text === "" ? null : text }),
-      }),
+    leave: (text) => leavePurpose(slug, text),
   });
   const seedPurpose = purpose.seed;
   /**
@@ -914,7 +909,7 @@ export function Metadata({
             the article's own voice, which makes it read as part of the heading
             rather than as the first of nine cards. */}
         {Boolean(root?.gist || root?.summary || meta.note) && (
-          <Section label="In one sentence">
+          <Section label="In one sentence" keywords="takeaway gist summary short brief one line what is it about">
             <div className={`${CARD} tw:p-5`}>
               {root?.gist && (
                 <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
@@ -948,7 +943,7 @@ export function Metadata({
           <Section
             label="Authors"
             aside={`${meta.authors.length}`}
-            keywords="names writers byline who wrote it affiliations"
+            keywords="names writers byline who wrote it affiliations people person researchers institution university"
             collapsible
           >
             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
@@ -1095,7 +1090,7 @@ export function Metadata({
             rather than about the article. */}
         <Section
           label="Your reading"
-          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off"
+          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off resume continue position"
         >
           {/* The per-article half of the reader profile. The global half is
               read-only here with a link to /profile, because a global value
@@ -1206,7 +1201,7 @@ export function Metadata({
           error={provenanceError}
           slow={slow}
           aside={pipelineLine}
-          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
+          structureGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
@@ -1215,7 +1210,7 @@ export function Metadata({
             takes the article off the shelf, followed only by permanent
             deletion. Both belong past everything somebody might have come here
             to read. */}
-        <Section label="Archive this article" keywords="remove from shelf">
+        <Section label="Archive this article" keywords="remove from shelf put away tidy done unarchive restore library">
           <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
 
@@ -1233,7 +1228,7 @@ export function Metadata({
             and shutting the section only adds a press in front of it. */}
         <Section
           label="Delete this article"
-          keywords="permanent permanently forever"
+          keywords="permanent permanently forever gone wipe for good irreversible"
           collapsible
           keepMounted
         >
@@ -1312,7 +1307,7 @@ function SharingSection({
   return (
     <Section
       label="Access & sharing"
-      keywords="anyone everybody readers signed in account permission public link privacy visible who can read"
+      keywords="anyone everybody readers signed in account permission public link privacy visible who can read send friend colleague republish"
     >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
@@ -1412,7 +1407,7 @@ function RerunSection({
   error,
   slow,
   aside,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   slug: string;
@@ -1431,7 +1426,7 @@ function RerunSection({
   slow: boolean;
   /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
   aside: string | null;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1440,7 +1435,7 @@ function RerunSection({
        a failed metadata request draws the section open, with the error first. */
     <Section
       label="AI processing"
-      keywords="steps stages pipeline models summaries glossary structure hierarchy"
+      keywords={`${AI_PROCESSING_KEYWORDS}${reset ? ` ${WHOLE_ARTICLE_KEYWORDS}` : ""}`}
       collapsible={!error}
       keepMounted
       aside={error ? null : aside}
@@ -1512,7 +1507,7 @@ function RerunSection({
         provenance={provenance}
         error={error}
         slow={slow}
-        hierarchyGenerator={hierarchyGenerator}
+        structureGenerator={structureGenerator}
         arcGenerator={arcGenerator}
       />
     </Section>
@@ -1533,13 +1528,13 @@ function StageRecord({
   provenance,
   error,
   slow,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   provenance: ArticleMetadata | null;
   error: string | null;
   slow: boolean;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1567,8 +1562,8 @@ function StageRecord({
                 key={stage.step}
                 stage={stage}
                 generator={
-                  stage.step === "hierarchy"
-                    ? hierarchyGenerator
+                  stage.step === "structure"
+                    ? structureGenerator
                     : stage.step === "arc"
                       ? arcGenerator
                       : undefined
@@ -1588,6 +1583,33 @@ function StageRecord({
    GPT Sol's F8 on docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
    What stays here is the glossary's verdict-driven override, below, which is a
    fact about this article rather than about the step. */
+
+/**
+ * **What a reader might type looking for *AI processing*** — the section where
+ * everything is asked for again, and so the one with the most ways to say it.
+ * Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to
+ * find ways to regenerate the AI processing, and nothing matched"*.
+ *
+ * The words for *again* that mean only that are a synonym group in
+ * page-search.ts § METADATA_SYNONYMS (*regenerate*, *reprocess*, …). The
+ * broader ones are here, on this section alone: a synonym applies to every
+ * section, so *update* or *over* in that group would rank this above *At a
+ * glance* for *over time* (GPT Sol, plan review of 261002c, P2). Then the
+ * High-powered AI switch and every row `RERUN_LABEL` names — built from it, so
+ * a new row is findable the day it is added.
+ *
+ * The whole-article reset's words are separate because that row is behind the
+ * experimental switch. Advertising *reset* while the switch is off would land
+ * the reader in a section that has no such control. Code review of 261002c.
+ */
+const AI_PROCESSING_KEYWORDS = [
+  "steps stages pipeline models summaries glossary structure hierarchy",
+  "start again update fix generate",
+  "high powered power opus sonnet model better smarter stronger capable",
+  ...Object.values(RERUN_LABEL),
+].join(" ");
+
+const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
 
 /*
  * **`RERUN_COST_NOTE` (now in ./rerun-commands.ts): the four rows for which
@@ -1827,7 +1849,7 @@ function CostSection({ slug }: { slug: string }) {
   return (
     <Section
       label="What it cost"
-      keywords="ai calls models tokens breakdown"
+      keywords="ai calls models tokens breakdown total expensive cheap"
       collapsible={!failed}
       aside={articleCostSummary(load)}
     >
@@ -1940,7 +1962,7 @@ function ExportSection({
        Its error, if one arrives while shut, is inside `hidden` and so is not
        announced until the section is opened — accepted: the reader shut it
        themselves, mid-wait. GPT Sol, plan review. */
-    <Section label="Export" keywords="data files zip" collapsible keepMounted>
+    <Section label="Export" keywords="data files zip markdown take out keep offline" collapsible keepMounted>
       <div className={`${CARD} tw:p-4`}>
         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
@@ -1960,7 +1982,7 @@ function ExportSection({
 
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
           A zip of everything we hold for this article: the text as we read it, and every
-          augmentation on top of it — hierarchy, glossary, ideas, quotes, timeline, quiz, comments,
+          augmentation on top of it — structure, glossary, ideas, quotes, timeline, quiz, comments,
           chats. Plain files, readable without Spideryarn. Not the original page or PDF, which you
           already have, and not the image files themselves — those are listed rather than included.
         </p>
@@ -2216,7 +2238,7 @@ function CameFrom({ meta }: { meta: Meta }) {
        heading now says that. Fable, 2026-09-03. */
     <Section
       label="How well we read the PDF"
-      keywords="transcription missed missing words pages"
+      keywords="transcription missed missing words pages accuracy errors mistakes garbled ocr scanned"
     >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
@@ -2344,7 +2366,7 @@ function TechnicalDetails({
   return (
     <Section
       label="Technical details"
-      keywords="address url source original stored storage location link fingerprint hash slug id revision"
+      keywords="address url source original stored storage location link fingerprint hash slug id revision where from website web page developer"
       collapsible
     >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
@@ -2701,7 +2723,7 @@ function ArchiveArticle({
  *
  * It names the reader's own work first and ours second, which is the order the
  * loss is felt in. Everything in it is true of the cascade: comments, notes,
- * highlights, questions, chats, summaries and the hierarchy all hang off the
+ * highlights, questions, chats, summaries and the structure all hang off the
  * article by a foreign key and go with it (docs/plans/260906h § *What survives
  * a delete, deliberately* has the short list that does not, none of which is
  * anything the reader would look for afterwards).
@@ -2714,7 +2736,7 @@ function ArchiveArticle({
  */
 const DELETE_ERASES =
   "This erases the article and everything you have done with it — your comments, notes, " +
-  "highlights, questions and chats, its summaries and hierarchy — and it cannot be undone. " +
+  "highlights, questions and chats, its summaries and structure — and it cannot be undone. " +
   "If you only want it off the shelf, Archive above does that and can be reversed.";
 
 /** Said only when we KNOW it is public — see `shared` at the call site. */
@@ -3370,10 +3392,17 @@ export function Section({
    * search box above the contents list reads them (`data-keywords`,
    * page-search.ts). Mostly for the sections that unmount their body when
    * shut, whose words are otherwise not on the page to find. The synonyms
-   * every page shares live in page-search.ts § SYNONYMS; these are this
-   * section's own. Plan 261001s.
+   * the whole page shares live in page-search.ts § METADATA_SYNONYMS; these
+   * are this section's own. Plan 261001s.
+   *
+   * **Required, and generous**: the words a reader *types* — *regenerate*,
+   * *get rid of*, *who can see it* — not the words the section prints. A new
+   * section, or a new control in one, comes with its words, and a case in
+   * tests/metadata-contents-reveal.test.tsx § the words a reader brings.
+   * Greg, `spya-nkjpte`, 2026-10-02 — docs/project/web-client.md, the
+   * Metadata.tsx row. Plan 261002c.
    */
-  keywords?: string;
+  keywords: string;
   collapsible?: boolean;
   /**
    * **Shut hides the children rather than unmounting them.** For *AI
@@ -3464,7 +3493,7 @@ export function Section({
       ref={sectionEl}
       id={sectionId(label)}
       data-section={label}
-      {...(keywords ? { "data-keywords": keywords } : {})}
+      data-keywords={keywords}
       className="tw:mt-8 tw:scroll-mt-24"
     >
       {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
@@ -3615,7 +3644,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         <span className="tw:text-sm tw:text-foreground">{label}</span>
         <span className="tw:font-mono tw:text-xs tw:text-ink-faint">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
-            and the arc, which are in hand because the article loaded — so a hierarchy
+            and the arc, which are in hand because the article loaded — so a structure
             stage whose blocks copy is missing would otherwise print a model
             name next to the words "not run". */}
         {done && generator && (

@@ -230,8 +230,8 @@ describe("the card the reader actually sees", () => {
       ...failed("blocked"),
       steps: [
         {
-          name: "hierarchy",
-          label: "Building the hierarchy",
+          name: "structure",
+          label: "Building the structure",
           status: "error",
           error: "This article has to be processed in sections, which is not built yet.",
         },
@@ -289,7 +289,7 @@ describe("the failures a retry cannot change", () => {
   });
 
   it("calls a tree whose root is missing `bug`", async () => {
-    // Stage 5b over stage 4's stored tree. Retry skips the completed `hierarchy`
+    // Stage 5b over stage 4's stored tree. Retry skips the completed `structure`
     // step, so it reads the identical tree.json and fails identically.
     const tree = { rootId: "spya-absent", nodes: {} } as unknown as Tree;
     const err = await threw(() => partsOf(tree));

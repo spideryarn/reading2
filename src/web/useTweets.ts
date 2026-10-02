@@ -54,6 +54,8 @@ export interface UseTweets {
   starting: boolean;
   /** Repeat only the GET after a failed read. Never spends. */
   retryRead(): Promise<void>;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   /** Write it if nobody has — the automatic run's request, and the empty state's button. */
   ensure(): Promise<void>;
   /** The forced run — the stale banner's button. */
@@ -166,6 +168,7 @@ export function useTweets(slug: string): UseTweets {
     stalled: queue.stalled,
     starting: queue.starting,
     retryRead,
+    refresh,
     ensure,
     regenerate,
     cancel: queue.cancel,

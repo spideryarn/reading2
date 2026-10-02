@@ -506,13 +506,13 @@ describe("Retry, and the checkpoints the failed attempt paid for", () => {
        holds the address — the shelf has no revision and the failed row is not
        active — so this mints its own name and reserves it. */
     const holder = await runAsOwner(OWNER, () =>
-      /* `hierarchy` alongside `blocks` because `enqueue` refuses the pair apart
+      /* `structure` alongside `blocks` because `enqueue` refuses the pair apart
          (`unrunnableStepPlan`); the steps are incidental here — this job is
          never run — and only have to differ from attempt 1's. */
       enqueue({
         slug: `${STEM}-handback-live`,
         url,
-        steps: ["fetch", "extract", "blocks", "hierarchy"],
+        steps: ["fetch", "extract", "blocks", "structure"],
       }),
     );
     expect(holder.slug, "the paste should have minted a name of its own").not.toBe(first.slug);
@@ -579,7 +579,7 @@ describe("Retry, and the checkpoints the failed attempt paid for", () => {
   }, 60_000);
 
   /**
-   * **`hierarchy-labels` is fixed by the same change, and is asserted rather
+   * **`structure-labels` is fixed by the same change, and is asserted rather
    * than reasoned about.**
    *
    * Both namespaces are defeated identically — by one line, the
@@ -588,7 +588,7 @@ describe("Retry, and the checkpoints the failed attempt paid for", () => {
    * sound and is still an argument. This is the measurement. Same shape as the
    * upload case above, one word different.
    */
-  it("a retry reaches the hierarchy-labels checkpoints too, not only the PDF chunks", async () => {
+  it("a retry reaches the structure-labels checkpoints too, not only the PDF chunks", async () => {
     const upload = await anUpload("a-long-book-with-a-tree.pdf");
     const first = await runAsOwner(OWNER, () =>
       enqueue({ slug: `${STEM}-labels`, upload, steps: ["fetch", "extract"] }),
@@ -600,12 +600,12 @@ describe("Retry, and the checkpoints the failed attempt paid for", () => {
     await createPgCheckpointStore({
       slug: first.slug,
       articleId: await articleForSlug(first.slug),
-    }).write(first.slug, "hierarchy-labels", KEY, { records: [{ id: "spya-k3m9qt", label: "one" }] });
+    }).write(first.slug, "structure-labels", KEY, { records: [{ id: "spya-k3m9qt", label: "one" }] });
 
     const found = await createPgCheckpointStore({
       slug: retried.slug,
       articleId: await articleForSlug(retried.slug),
-    }).read(retried.slug, "hierarchy-labels", [KEY]);
+    }).read(retried.slug, "structure-labels", [KEY]);
     expect(
       found.has(KEY),
       "attempt 2 could not see the labels attempt 1 paid for",

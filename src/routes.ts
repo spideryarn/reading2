@@ -5017,7 +5017,12 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
   /* `=== "1"`, the same reading as the shelf's own `?archived=1` below. */
   const archived = params.get("archived") === "1";
 
-  const { hits, capped } = await librarySearch.searchLibrary(query, limit, { includeArchived: archived });
+  /* With the archive left out, also count what it would have added — one
+     uncapped count beside the capped list (plan 261002b § Part D). */
+  const [{ hits, capped }, archivedArticles] = await Promise.all([
+    librarySearch.searchLibrary(query, limit, { includeArchived: archived }),
+    archived ? Promise.resolve(undefined) : librarySearch.countArchivedMatches(query),
+  ]);
   return {
     // Echoed so a client can drop a response that arrived after it moved on.
     // Debounced typing produces out-of-order responses as a matter of course —
@@ -5028,6 +5033,7 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
     hits,
     articles: new Set(hits.map((h) => h.slug)).size,
     capped,
+    ...(archivedArticles === undefined ? {} : { archivedArticles }),
   };
 }
 

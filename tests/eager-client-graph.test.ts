@@ -479,6 +479,7 @@ const SHARED_WITH_READER = [
   "src/job-failure.ts",
   "src/job-state.ts",
   "src/messages.ts",
+  "src/mode-catalog.ts",
   "src/modes.ts",
   "src/monitoring-scrub.ts",
   "src/quote-match.ts",
@@ -499,6 +500,19 @@ const SHARED_WITH_READER = [
      same module. Both import only `Link`, `Tooltip` and lucide, which are
      here already. */
   "src/web/BackLink.tsx",
+  /* Nine entries arrived together on 2026-10-02, these two and seven
+     elsewhere in the list
+     (docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md
+     § Stage 3), when `/design` began drawing the band's (i) through the real
+     `ModeSurface` and the two reader-facing switches through the real
+     `HighPowerSwitch` and `SettingsSection`. Each was already in the reader's
+     closure — every mode's band is a `ModeSurface`, and the bar draws the
+     experimental switch — so the reader downloads nothing new; what is new is
+     only that `/design` reaches them too. The seven: `ModeSurface`,
+     `SettingsSection`, `mode-catalog.ts` (the (i)'s words), `useSession.ts`,
+     and the experimental store's three files. */
+  "src/web/BandAbout.tsx",
+  "src/web/HighPowerSwitch.tsx",
   "src/web/IconButton.tsx",
   "src/web/JobProgress.tsx",
   "src/web/Link.tsx",
@@ -510,6 +524,8 @@ const SHARED_WITH_READER = [
      without a slow fetch. About 200 lines, importing only `logo-animation.ts`
      and `LogoGlyphs`, which the reader already has. */
   "src/web/LogoLoader.tsx",
+  "src/web/ModeSurface.tsx",
+  "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",
@@ -531,6 +547,8 @@ const SHARED_WITH_READER = [
      drive, which is the seam this module was made to close. */
   "src/web/debate-levels.ts",
   "src/web/diagram.ts",
+  "src/web/experimental-copy.ts",
+  "src/web/experimental-store.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages
@@ -578,6 +596,8 @@ const SHARED_WITH_READER = [
   /* See `debate-levels.ts` above, which is what brought it here. */
   "src/web/threshold.ts",
   "src/web/useNow.ts",
+  "src/web/useExperimental.ts",
+  "src/web/useSession.ts",
 ];
 
 /**

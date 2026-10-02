@@ -22,15 +22,15 @@ import { appendSupplement, splitBlocks } from "../../src/supplement.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import {
   buildTree,
-  parseStructureAnswer,
+  parseWholeDocumentAnswer,
   type BuildReport,
-} from "../../src/hierarchy.js";
+} from "../../src/structure.js";
 import { MalformedJson } from "../../src/parse-json.js";
 import type { Block } from "../../src/types.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "paperwork", "structure-parse");
 
-export interface StructureAnswerFields {
+export interface WholeDocumentAnswerFields {
   parsed: boolean;
   treeBuilds: boolean | null;
   droppedChildren: number | null;
@@ -50,16 +50,16 @@ const emptyReport = (): BuildReport => ({
 });
 
 /** Parse, convert and build by the same path production uses, without a model call. */
-export function structureAnswerFields(
+export function wholeDocumentAnswerFields(
   raw: string,
   blocks: Block[],
   slug: string,
-): StructureAnswerFields {
+): WholeDocumentAnswerFields {
   const report = emptyReport();
   const { body, groups } = splitBlocks(blocks);
   let depth1Count: number | null = null;
   try {
-    const { root } = parseStructureAnswer(raw, body, report);
+    const { root } = parseWholeDocumentAnswer(raw, body, report);
     depth1Count = root.children?.length ?? 0;
     const tree = appendSupplement(buildTree(root, {}, body, slug, report), groups);
     assertTreeSound(blocks, tree);
@@ -90,8 +90,8 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
-  const { structureRequest } = await import("../../src/hierarchy.js");
-  const { PROMPT_VERSION } = await import("../../src/hierarchy-prompt.js");
+  const { wholeDocumentRequest } = await import("../../src/structure.js");
+  const { PROMPT_VERSION } = await import("../../src/structure-prompt.js");
   const { streamMessage, wasRefused } = await import("../../src/messages-stream.js");
   const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
   const { costStore } = await import("../../src/store/ai-calls.js");
@@ -103,7 +103,7 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
     await Promise.all(
       slugs.map(async (slug) => {
         const article = await loadArticle(slug);
-        const { params } = structureRequest(splitBlocks(article.blocks).body);
+        const { params } = wholeDocumentRequest(splitBlocks(article.blocks).body);
         for (let i = 0; i < draws; i++) {
           const { result: row, report } = await collectSpend(
             async () => {
@@ -115,7 +115,7 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
                 at: new Date().toISOString(),
               };
               try {
-                const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
+                const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
                 const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
                 /* Every answer is kept, including refusals and truncations. */
                 const kept = path.join(OUT, `${label}-${slug}-${i}.raw.txt`);
@@ -130,7 +130,7 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
                     kept: path.basename(kept),
                   };
                 } else {
-                  const fields = structureAnswerFields(raw, article.blocks, slug);
+                  const fields = wholeDocumentAnswerFields(raw, article.blocks, slug);
                   answer = {
                     ...answer,
                     ...fields,

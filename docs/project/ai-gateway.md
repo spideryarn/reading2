@@ -81,7 +81,7 @@ fail without saying so.
 
 ## What it replaced
 
-Until that day there were two vendors. The seven pipeline stages — [`hierarchy`](../../src/hierarchy.ts),
+Until that day there were two vendors. The seven pipeline stages — [`structure`](../../src/structure.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
 [`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
@@ -406,7 +406,7 @@ Two smaller costs, both live:
 [`src/pricing.ts`](../../src/pricing.ts) makes authoritative and against which per-token arithmetic is
 only a cross-check. Model `anthropic/claude-sonnet-5` at `PRODUCTION_EFFORT` `low`, `toc/7`.
 
-| | blocks | words | hierarchy | labels | **total** |
+| | blocks | words | structure | labels | **total** |
 |---|---:|---:|---|---|---:|
 | *How to Work Hard* | 96 | 3,341 | **$0.0620** — 1 call, 8,962 in / 4,406 out (1,487 thinking) | $0.0437 — 2 calls | **$0.1057** |
 | *How to Do Great Work* | 330 | 11,890 | **$0.1671** — 1 call, 27,076 in / 11,294 out (4,917 thinking) | $0.2144 — 9 calls | **$0.3815** |
@@ -416,10 +416,10 @@ only a cross-check. Model `anthropic/claude-sonnet-5` at `PRODUCTION_EFFORT` `lo
 Three things that table is worth reading carefully for.
 
 - **The tree is ONE model call**, whatever the article's size — 96 blocks and 330 blocks each cost
-  exactly one. Both runs recorded `structureResumed: false`, so neither was a cached zero.
+  exactly one. Both runs recorded `wholeDocumentResumed: false`, so neither was a cached zero.
 - **`labels` is the bigger half on a long article and the reader does not wait for it.** It is
   deliberately not in `DEFAULT_INGEST_STEPS` — it was 79.5–92% of the old combined step's wall clock
-  — so the money between pasting a URL and being able to read is the hierarchy row alone:
+  — so the money between pasting a URL and being able to read is the structure row alone:
   **6 cents for a short essay, 17 for a long one.**
 - **The long article's labels figure includes a failed attempt**, and that is the honest number
   rather than a blemish on it. The first pass died on `Nav labels: expected [number, string] pairs`
@@ -430,8 +430,8 @@ Three things that table is worth reading carefully for.
 is about **5.5% higher** than any total this app reports, because OpenRouter earns on the fee when
 credits are bought rather than on a per-token markup.
 
-**Everything else is on demand.** `DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy,
-assets`, of which only `hierarchy` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
+**Everything else is on demand.** `DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, structure,
+assets`, of which only `structure` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
 debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
 
 [open-questions.md § Q7](open-questions.md#q7) is what this answers, and
@@ -690,7 +690,7 @@ eight. The stage commands go through the queue
 `runStep` opens a `scopeKind: "job_step"` collector per step — so a stage driven from a terminal is
 scoped by the same thing that scopes it when a reader presses Add, and a CLI that *also* wrapped the
 run in `withLedger("cli", …)` would put one purchase in two scopes. Verified on the local database
-after the move: every call from `npm run ingest`, `npm run hierarchy` and the rest landed as
+after the move: every call from `npm run ingest`, `npm run structure` and the rest landed as
 `job_step` with a job id and a slug, and none as `cli`.
 
 `withLedger("cli", …)` is still what a CLI that is *not* a stage runner needs, via

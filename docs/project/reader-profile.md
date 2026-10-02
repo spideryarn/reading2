@@ -152,7 +152,7 @@ and Why-are-you-reading"*). Its evaluation did not establish that *About you* ac
 output beyond the old prompt; the measured limits are recorded with the prompt design in Quiz.
 [quiz.md § Shaped by who you are and why you are reading](quiz.md#shaped-by-who-you-are-and-why-you-are-reading).
 
-**Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
+**Not the structural stages.** The structure step, the arc and the section labels never see it. The tree is
 [the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine
 all address, and a reader-specific tree is one that shifts under a reader who edits their profile.
 Structure stays shared; only the prose *about* it is personalised. **Not semantic search** either:
@@ -326,7 +326,8 @@ thing on screen about the profile is a *label* on the text — *written for you*
 below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
 to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
 keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
-the per-article half, on the metadata page. The way to not be profiled is to empty both boxes; that
+the per-article half, on the metadata page — and, since 2026-10-02, in the panel the label opens
+(below). The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
 
 ```
@@ -408,10 +409,14 @@ uses the profile.
 ### And the third thing, which is where the two boxes are actually shown
 
 The label above is also the way in to a **profile panel** — what your
-profile currently says, and a working link to each of the two pages that edit
-it ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
+profile currently says ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
 2026-08-30 from [the plan](../plans/260830c-profile-panel.md)). Until
-2026-09-13 the 👤 button in the *Use your profile* row opened it too.
+2026-09-13 the 👤 button in the *Use your profile* row opened it too. **Since 2026-10-02 both boxes
+are edited in the panel, and it offers Regenerate** when the server says the text was written for a
+profile you have since changed — in Summary, Glossary, Ideas, Tweets and Sketch; Quotes has the
+editing but not yet the button
+([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)). The
+diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
 
 ```
   ✓ written for you
@@ -449,7 +454,7 @@ app already had: `useClick`, `useDismiss`, `useRole({role: "dialog"})`, and
 proves the links are reachable** — jsdom structurally cannot see it, and that is
 the same shared assumption that let the dead link through.
 
-**It is read-only, and that was decided against the alternative.** The plan's
+**It was read-only until 2026-10-02, and that was decided against the alternative.** The plan's
 second draft put both textareas in the panel, editable. GPT Sol's review found
 that [`useDictation`](../../src/web/useDictation.ts)'s unmount cleanup *aborts
 rather than stops, on purpose* — so a popover dismissed on outside press throws
@@ -457,6 +462,15 @@ away whatever was being dictated into it, and on the browsers where words arrive
 only after stopping, throws away all of them. Save-on-blur has the matching
 hole: the outside `pointerdown` unmounts the textarea, so the blur that would
 have flushed it need never fire. Greg chose read-only knowing that, 2026-08-30.
+
+**Reversed on 2026-10-02, at Greg's request** — *"allow them to edit the text inline (rather than
+having to click out to separate pages"* (2026-10-01, SPIDERYARN-READING2-7S) — and on the condition
+that each hole is closed rather than reopened: a dismissal with words unsaved saves both boxes and
+closes only once they have landed (a refusal keeps it open); a dictation in progress blocks
+dismissal; and `useAutosavedText` now sends its `keepalive` save when the box unmounts, for the band
+going away under the panel on a mode switch. An offline copy of the profile is shown and not
+offered for editing. The plan has the review that found the last two:
+[261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md).
 
 **It fetches when it is opened.** The justification first written here was
 wrong and the correction is the useful part: it claimed the separate fetch

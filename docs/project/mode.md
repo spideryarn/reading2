@@ -422,7 +422,7 @@ Then the residue nothing refuses at compile time:
   marks old artefacts outdated — re-run from Metadata if wanted, but **not announced in the
   panel** (Greg, 2026-09-29, SPIDERYARN-READING2-55;
   [260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)); only a
-  *stale* result, where the article moved, gets a banner. `hierarchy`'s
+  *stale* result, where the article moved, gets a banner. `structure`'s
   is a stamp and nothing more; `labels`' has no comparison either but is inside
   `batchFingerprint`, so it invalidates checkpoint reuse. Check the version is
   *one* constant before you bump it: `sketch` had two literal
@@ -555,6 +555,11 @@ One test also goes red without the typecheck being run at all:
 walks `MODES` and requires the new mode to be named a producer or a non-producer — which is the
 guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to make the compiler
 stop.
+
+**Since 2026-10-02 the Help page asks too**, with two more `Record<Mode, …>` tables in
+`src/web/help/`: the mode's own section (when to use it, how to read it) and its row in *Which mode
+when*. Write them for a reader, not a developer — [help-page.md](help-page.md). Retiring a mode keeps
+its `#mode-…` link working on its own, through `RETIRED_MODES`.
 
 ---
 

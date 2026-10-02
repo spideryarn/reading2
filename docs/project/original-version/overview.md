@@ -215,6 +215,6 @@ Two more orientation docs:
 - [architecture.md](../architecture.md) — pipeline, storage, [stage ownership](../architecture.md#stage-ownership)
 - [content-extraction.md](../content-extraction.md) — our Readability stage
 - [block-ids.md](../block-ids.md) — the spine, and the road not taken in [ids.md](ids.md)
-- [hierarchy.md](../hierarchy.md) — the deeply-nested ToC
+- [structure-step.md](../structure-step.md) — the deeply-nested ToC
 - [open-questions.md](../open-questions.md) — several of which the previous version has answered once
 - [`styles/tokens.css`](../../../styles/tokens.css), [`public/`](../../../public/) — what came across

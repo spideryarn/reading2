@@ -1,0 +1,183 @@
+diff --git a/docs/project/summaries.md b/docs/project/summaries.md
+index bcab552c1..318784390 100644
+--- a/docs/project/summaries.md
++++ b/docs/project/summaries.md
+@@ -187,10 +187,15 @@ the other shapes are in [narrow-windows.md](narrow-windows.md).
+ | Parameter | Values | History | Why |
+ |---|---|---|---|
+ | `mode=summary` | | push | A mode is where you are, not a glance — [url-state.md](url-state.md) |
+-| `summary` | `brief`, `simple` (default, absent from the address), `fuller` | push | Which level the slider is on |
++| `summary` | `brief` (default, absent from the address), `simple`, `fuller` | push | Which level the slider is on |
+ 
+ `?deep=` and `?summary=gists` went with the outline on 2026-10-01; an old link carrying either lands
+-on Summary at `simple`, and `deep` is never remembered, so it cannot be restored over a fresh link.
++on Summary at `brief`, and `deep` is never remembered, so it cannot be restored over a fresh link.
++
++**Summary opens on Brief** — Greg, 2026-10-01 (8N): *"In summary mode, default to the brief summary
++when it opens for the first time."* A level chosen afterwards is written into the address and
++remembered with the article's last view, so only the first opening lands on Brief
++([261002c](../plans/261002c-summary-opens-on-brief.md)). Until then the default was `simple`.
+ 
+ ## What this deliberately does not have
+ 
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index ec6e38efd..80e9261d8 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -81,7 +81,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
+ | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
+ | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
+ | `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
+-| `summary` | which of Summary's three plain-words levels the slider is on: `brief`, `simple` (the default, and absent) or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `simple`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
++| `summary` | which of Summary's three plain-words levels the slider is on: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `simple` or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
+ | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
+ | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
+ | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index 55cfc4b41..807818d65 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -281,4 +281,5 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-zfcp5x": "shipped",
+   "spya-zhkutu": "shipped",
+   "spya-zv8dc6": "shipped",
++  "spya-zw479b": "shipped",
+ };
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 91c3a5d82..ae5404a26 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -1130,10 +1130,13 @@ export const diagramHueParam = createParser<ScatterHue>({
+  * `?referee=`: in the URL, because it changes the whole band, and pushed,
+  * because switching is a deliberate act Back should undo.
+  *
+- * **`simple` is the default**, the stop the slider rests on, and is omitted
+- * from the address. `gists`, the outline this mode drew until 2026-10-01, is
+- * no longer a value, so an old `?summary=gists` reads as `simple` — the same
+- * degrade-to-the-default rule as every other parser in this file.
++ * **`brief` is the default**, and is omitted from the address: Greg,
++ * 2026-10-01 (8N, spya-zw479b), *"In summary mode, default to the brief summary
++ * when it opens for the first time"* — a level chosen later is written out and
++ * `last-view.ts` remembers it (docs/plans/261002c-summary-opens-on-brief.md).
++ * `simple` was the default until then. `gists`, the outline this mode drew
++ * until 2026-10-01, is no longer a value, so an old `?summary=gists` reads as
++ * `brief` — the same degrade-to-the-default rule as every other parser here.
+  *
+  * **Writing it never spends.** Only a press on a plain-words control (the
+  * slider, an end button or a command-bar row) arms the run; Back, a pasted link
+@@ -1143,7 +1146,7 @@ export const summaryParam = createParser<SimpleLevel>({
+   parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
+   serialize: (v) => v,
+ })
+-  .withDefault("simple")
++  .withDefault("brief")
+   .withOptions({ history: "push" });
+ 
+ /* ---------------------------------------------------------- structure mode --
+diff --git a/src/web/sub-modes.ts b/src/web/sub-modes.ts
+index 4881c116c..f7ddfe86c 100644
+--- a/src/web/sub-modes.ts
++++ b/src/web/sub-modes.ts
+@@ -221,7 +221,7 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
+  * them (Dock.tsx), so the two cannot land in different places.
+  *
+  * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
+- * Criteria and Simple disappear from the address rather than leaving a redundant
++ * Criteria and Brief disappear from the address rather than leaving a redundant
+  * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
+  * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
+  * and one Back undoes the whole trip.
+@@ -247,7 +247,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
+     case "referee":
+       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
+     case "summary":
+-      return { mode: "summary", summary: sub.view === "simple" ? null : sub.view };
++      return { mode: "summary", summary: sub.view === "brief" ? null : sub.view };
+     case "structure":
+       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
+     default: {
+diff --git a/tests/command-bar-sub-modes.test.tsx b/tests/command-bar-sub-modes.test.tsx
+index ed5a1a7c2..0e8bbbe3e 100644
+--- a/tests/command-bar-sub-modes.test.tsx
++++ b/tests/command-bar-sub-modes.test.tsx
+@@ -448,13 +448,18 @@ describe("the registry's two answers agree", () => {
+     );
+   });
+ 
++  it("writes Simple out now that Brief is Summary's default (8N)", () => {
++    expect(subModeParams({ mode: "summary", view: "simple" })).toEqual({ mode: "summary", summary: "simple" });
++    expect(withSubMode("?mode=plain", { mode: "summary", view: "simple" })).toBe("?mode=summary&summary=simple");
++  });
++
+   it("omits parser defaults from both navigation paths", () => {
+     for (const sub of [
+       { mode: "remember", view: "recall" },
+       { mode: "diagram", view: "sketch" },
+       { mode: "referee", view: "criteria" },
+-      /* Simple, since the outline went and it became Summary's default (plan 261001p). */
+-      { mode: "summary", view: "simple" },
++      /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
++      { mode: "summary", view: "brief" },
+       { mode: "structure", view: "fisheye" },
+     ] as const satisfies readonly SubMode[]) {
+       const key = sub.mode;
+diff --git a/tests/simple-panel.test.tsx b/tests/simple-panel.test.tsx
+index 43221381b..92d7b8be2 100644
+--- a/tests/simple-panel.test.tsx
++++ b/tests/simple-panel.test.tsx
+@@ -539,7 +539,8 @@ describe("Summary's band, arriving on an old outline link", () => {
+   it("draws the owner the default plain-words level, not the outline", async () => {
+     await band("owner");
+     noOutline();
+-    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
++    /* Brief, the default since 8N (plan 261002c). */
++    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+     /* The plain-words body, at its empty state — the GET answered 404. */
+     expect(text()).toContain(SIMPLE_NONE_OWNER);
+     expect(posts, "arriving on a link spends nothing").toEqual([]);
+@@ -548,9 +549,44 @@ describe("Summary's band, arriving on an old outline link", () => {
+   it("draws a visitor the stored paragraphs at the default level", async () => {
+     await band("visitor");
+     noOutline();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
++    expect(text()).toContain(BRIEF_TEXT);
++    expect(text()).not.toContain(WHAT);
++    expect(gets, "a visitor's band reads nothing").toEqual([]);
++  });
++
++  /* Greg, 2026-10-01 (8N, spya-zw479b): "In summary mode, default to the
++     brief summary when it opens for the first time." No `?summary=` at all is
++     the first time; a level chosen later is in the address and remembered. */
++  it("opens on Brief when the address names no level, and Simple only when it says so", async () => {
++    const { NuqsAdapter } = await import("nuqs/adapters/react");
++    const inner = createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
++    history.replaceState(null, "", "/read/a-piece?mode=summary");
++    await act(async () => {
++      root.render(createElement(NuqsAdapter, null, inner));
++    });
++    await settle();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
++    expect(text()).toContain(BRIEF_TEXT);
++    await act(async () => {
++      root.unmount();
++    });
++    root = createRoot(host);
++    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
++    await act(async () => {
++      root.render(createElement(NuqsAdapter, null, inner));
++    });
++    await settle();
+     expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
+     expect(text()).toContain(WHAT);
+-    expect(gets, "a visitor's band reads nothing").toEqual([]);
++    /* Back to Brief, the default: nuqs drops it from the address (plan, Sol P2). */
++    const briefEnd = host.querySelector<HTMLButtonElement>('button[aria-label="Show Brief summary"]');
++    await act(async () => {
++      briefEnd?.click();
++    });
++    await settle();
++    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
++    expect(new URLSearchParams(location.search).has("summary")).toBe(false);
+   });
+ 
+   it("says the slider's three levels without a visible level name beside it", async () => {

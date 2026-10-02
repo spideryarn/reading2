@@ -48,7 +48,7 @@ was standing.
 
 ## Layer 1 — the breakage, at the bottom of the descent
 
-`generateHierarchy` in [`src/hierarchy.ts`](../../src/hierarchy.ts) catches a deepening wave that
+`generateHierarchy` in [`src/hierarchy.ts`](../../src/structure.ts) catches a deepening wave that
 failed, saves the failed records, logs a warning — and then falls through to `generateLabels`
 unconditionally. That is correct production behaviour: a reader whose deepening failed should still
 get a labelled tree from wave 1.

@@ -267,6 +267,16 @@ export type Route =
    */
   | { kind: "changelog" }
   /**
+   * How to use it — `/help`: contents, a search box, and an anchor on every
+   * section. See help/HelpPage.tsx and docs/plans/261002b-help-page.md.
+   *
+   * Signed out for the reason `changelog` is: it is a page somebody is *sent*
+   * — `/help#spine` in a reply to a question — and nothing on it is about the
+   * reader's account. A link into Help that bounced a stranger to the sign-in
+   * page would be a link that does not work.
+   */
+  | { kind: "help" }
+  /**
    * Where the code lives, and what it is licensed under — `/opensource`. See
    * OpenSourcePage.tsx.
    *
@@ -363,6 +373,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   pricing: false,
   contact: false,
   changelog: false,
+  help: false,
   opensource: false,
   callback: false,
   "not-found": false,
@@ -754,6 +765,13 @@ export const CHANGELOG_HREF = "/changelog";
  */
 export const CHANGELOG_LABEL = "What’s new";
 /**
+ * How to use it, section by section — linked from the footer. **Build a link
+ * to one section with `helpHref` (help/help-anchors.ts), never by appending a
+ * fragment to this**: `helpHref` takes a typed anchor, so a link to a section
+ * that does not exist does not compile.
+ */
+export const HELP_HREF = "/help";
+/**
  * The repository, the licence, and how to work on it — linked from the footer
  * under the GitHub mark, and from `/changelog`, which points at that repository
  * on every release.
@@ -842,6 +860,9 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
   /* Same shape as `/changelog` above, and indifferent to order for the same
      reason: top level, sharing a prefix with nothing. */
   [OPENSOURCE_HREF, "opensource"],
+  // The same again. Its sections are fragments, not paths: `/help/spine` is
+  // nobody's address, so it falls through to `not-found` like any other.
+  [HELP_HREF, "help"],
 ] as const;
 
 /**

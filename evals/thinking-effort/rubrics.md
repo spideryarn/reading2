@@ -82,9 +82,9 @@ failure is an assumed idea that launders the model's own reading through the art
 5. **Coverage and balance** — the important ideas present, both kinds where the piece has both,
    no padding. 1 = major ideas missing · 3 = one notable miss · 5 = complete, no padding.
 
-## Hierarchy — the tree Structure, the zoom and the gists all read
+## Structure — the tree the Structure mode, the zoom and the gists all read
 
-From [hierarchy.md](../../docs/project/hierarchy.md) and
+From [structure-step.md](../../docs/project/structure-step.md) and
 [granularity-zoom.md](../../docs/project/granularity-zoom.md): a nested structure of the article
 (ranges, nesting, titles, a one-sentence gist on each internal node) that every reading mode
 depends on. **Held to a higher bar**: a structural regression is disqualifying on its own.

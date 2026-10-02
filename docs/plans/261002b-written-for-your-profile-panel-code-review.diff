@@ -1,0 +1,2161 @@
+diff --git a/docs/project/reader-profile.md b/docs/project/reader-profile.md
+index 3d39668ef..935d1b742 100644
+--- a/docs/project/reader-profile.md
++++ b/docs/project/reader-profile.md
+@@ -326,7 +326,8 @@ thing on screen about the profile is a *label* on the text — *written for you*
+ below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
+ to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
+ keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+-the per-article half, on the metadata page. The way to not be profiled is to empty both boxes; that
++the per-article half, on the metadata page — and, since 2026-10-02, in the panel the label opens
++(below). The way to not be profiled is to empty both boxes; that
+ is a real loss of control, and it is the one Greg asked for.
+ 
+ ```
+@@ -408,10 +409,14 @@ uses the profile.
+ ### And the third thing, which is where the two boxes are actually shown
+ 
+ The label above is also the way in to a **profile panel** — what your
+-profile currently says, and a working link to each of the two pages that edit
+-it ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
++profile currently says ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
+ 2026-08-30 from [the plan](../plans/260830c-profile-panel.md)). Until
+-2026-09-13 the 👤 button in the *Use your profile* row opened it too.
++2026-09-13 the 👤 button in the *Use your profile* row opened it too. **Since 2026-10-02 both boxes
++are edited in the panel, and it offers Regenerate** when the server says the text was written for a
++profile you have since changed — in Summary, Glossary, Ideas, Tweets and Sketch; Quotes has the
++editing but not yet the button
++([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)). The
++diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
+ 
+ ```
+   ✓ written for you
+@@ -449,7 +454,7 @@ app already had: `useClick`, `useDismiss`, `useRole({role: "dialog"})`, and
+ proves the links are reachable** — jsdom structurally cannot see it, and that is
+ the same shared assumption that let the dead link through.
+ 
+-**It is read-only, and that was decided against the alternative.** The plan's
++**It was read-only until 2026-10-02, and that was decided against the alternative.** The plan's
+ second draft put both textareas in the panel, editable. GPT Sol's review found
+ that [`useDictation`](../../src/web/useDictation.ts)'s unmount cleanup *aborts
+ rather than stops, on purpose* — so a popover dismissed on outside press throws
+@@ -458,6 +463,15 @@ only after stopping, throws away all of them. Save-on-blur has the matching
+ hole: the outside `pointerdown` unmounts the textarea, so the blur that would
+ have flushed it need never fire. Greg chose read-only knowing that, 2026-08-30.
+ 
++**Reversed on 2026-10-02, at Greg's request** — *"allow them to edit the text inline (rather than
++having to click out to separate pages"* (2026-10-01, SPIDERYARN-READING2-7S) — and on the condition
++that each hole is closed rather than reopened: a dismissal with words unsaved saves both boxes and
++closes only once they have landed (a refusal keeps it open); a dictation in progress blocks
++dismissal; and `useAutosavedText` now sends its `keepalive` save when the box unmounts, for the band
++going away under the panel on a mode switch. An offline copy of the profile is shown and not
++offered for editing. The plan has the review that found the last two:
++[261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md).
++
+ **It fetches when it is opened.** The justification first written here was
+ wrong and the correction is the useful part: it claimed the separate fetch
+ avoided sending the profile repeatedly on a page. It did not. Six callers used
+diff --git a/src/web/GlossaryPanel.tsx b/src/web/GlossaryPanel.tsx
+index 1a9a10447..956460bf0 100644
+--- a/src/web/GlossaryPanel.tsx
++++ b/src/web/GlossaryPanel.tsx
+@@ -260,9 +260,24 @@ export function GlossaryPanel({
+      `profileHash` never leaves the server (src/public-types.ts). `null` rather
+      than a component that renders nothing, so the sort row's trailing slot
+      is empty when there is nothing to put in it. */
++  /* **Its Regenerate is `more`, the forced run** — the glossary has no
++     replace verb. Forcing appends only when the list's profile hash matches
++     (src/glossary.ts § existingFor), and the panel offers Regenerate only when
++     the server says it does not, so this rewrites. `find` would be unforced
++     and could skip. Plan 261002b. */
+   const badge =
+     glossary && owner?.profiled ? (
+-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
++      <WrittenForYou
++        written
++        changed={owner.profileChanged}
++        slug={owner.slug}
++        compact
++        regenerate={{
++          run: () => void owner.more(true),
++          busy: owner.job !== null || owner.starting,
++          refresh: () => void owner.refresh(),
++        }}
++      />
+     ) : null;
+   const sorts = glossary && glossary.entries.length > 1 ? sortOptions(all) : [];
+   /* What the band's (i) adds after the mode's own words: how many terms, how
+diff --git a/src/web/IdeasPanel.tsx b/src/web/IdeasPanel.tsx
+index 3f52dcb9f..4e4d5a6e5 100644
+--- a/src/web/IdeasPanel.tsx
++++ b/src/web/IdeasPanel.tsx
+@@ -206,6 +206,12 @@ export function IdeasPanel({
+               written={owner.profiled}
+               changed={owner.profileChanged}
+               slug={owner.slug}
++              /* The forced run replaces the list (plan 261002b). */
++              regenerate={{
++                run: () => void owner.regenerate(),
++                busy: owner.job !== null || owner.starting,
++                refresh: () => void owner.refresh(),
++              }}
+             />
+           )}
+         </>
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 8fcf0c077..04e87c16b 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -263,7 +263,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
+ import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
+ import { WPM } from "../reading-time.js";
+ import { isWebUrl } from "../urls.js";
+-import { savePurpose } from "./purpose.js";
++import { leavePurpose, savePurpose } from "./purpose.js";
+ import { Dock } from "./Dock.js";
+ import { Link } from "./Link.js";
+ import { atParam } from "./params.js";
+@@ -278,7 +278,7 @@ import { useNow } from "./useNow.js";
+ import { SLOW_AFTER_MS } from "./useSlow.js";
+ import { useExperimental } from "./useExperimental.js";
+ import { type ArchiveControl, useArchive } from "./useArchive.js";
+-import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
++import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
+ import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
+ import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+ import { isAdmin } from "../admin.js";
+@@ -585,12 +585,7 @@ export function Metadata({
+       void refresh();
+       return stored;
+     },
+-    leave: (text) =>
+-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
+-        method: "PATCH",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ purpose: text === "" ? null : text }),
+-      }),
++    leave: (text) => leavePurpose(slug, text),
+   });
+   const seedPurpose = purpose.seed;
+   /**
+diff --git a/src/web/ProfileBox.tsx b/src/web/ProfileBox.tsx
+index bf253117f..a8b953943 100644
+--- a/src/web/ProfileBox.tsx
++++ b/src/web/ProfileBox.tsx
+@@ -76,6 +76,7 @@ export function ProfileBox({
+   disabled,
+   rows = 4,
+   save,
++  onBusyChange,
+ }: {
+   id: string;
+   label: string;
+@@ -91,6 +92,14 @@ export function ProfileBox({
+   rows?: number;
+   /** Where the save stands. The page owns the save; the box owns saying so. */
+   save: SaveState;
++  /**
++   * Told when the microphone goes on, or its words start or stop being on
++   * their way. For a container that can be dismissed from under the box — the
++   * profile popover — because dictation's unmount *aborts*, and a panel closed
++   * mid-sentence would throw the spoken words away. A page that cannot be
++   * dismissed has no use for it. ProfilePanel.tsx.
++   */
++  onBusyChange?(busy: boolean): void;
+ }) {
+   const box = useRef<HTMLTextAreaElement>(null);
+ 
+@@ -122,6 +131,14 @@ export function ProfileBox({
+   const latest = useRef({ save, onCommit, busy });
+   latest.current = { save, onCommit, busy };
+ 
++  /* Through a ref, so a caller passing a fresh arrow each render does not
++     re-announce an unchanged `busy`. */
++  const tell = useRef(onBusyChange);
++  tell.current = onBusyChange;
++  useEffect(() => {
++    tell.current?.(busy);
++  }, [busy]);
++
+   /* **Saved after a pause.** Keyed on the text, never on the state: a refused
+      save moves the state to `error`, and a timer re-armed by that would retry a
+      refused save every two seconds for as long as the page stayed open. A new
+diff --git a/src/web/ProfilePanel.tsx b/src/web/ProfilePanel.tsx
+index 49fa384ee..c271ae938 100644
+--- a/src/web/ProfilePanel.tsx
++++ b/src/web/ProfilePanel.tsx
+@@ -1,23 +1,79 @@
+ /**
+- * "What am I being written for?" — answered where the question is asked.
++ * "What am I being written for?" — answered, and changed, where the question is
++ * asked.
+  *
+  * A small popover, raised from the *written for you* badge (WrittenForYou.tsx)
+  * — and, until 2026-09-13, from a button beside the *Use your profile*
+- * checkbox, which went with the checkbox — that says what a profile does, shows
+- * both boxes
+- * as the reader currently has them, and carries a working link to each editor.
+- * docs/plans/260830c-profile-panel.md, docs/project/reader-profile.md.
++ * checkbox, which went with the checkbox — that says what a profile does and
++ * holds both boxes, **editable in place since 2026-10-02**, with a *Regenerate*
++ * for the text the badge is on when the server says the profile has changed
++ * since it was written. docs/plans/260830c-profile-panel.md,
++ * docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md,
++ * docs/project/reader-profile.md.
++ *
++ * ## It edits, and that reverses a decision made on purpose
++ *
++ * > And if possible, allow them to edit the text inline (rather than having to
++ * > click out to separate pages.
++ * >
++ * > I suppose if they do edit or if the profile has changed since the mode
++ * > generated, then it should show a handy "Regenerate" button in that mode's
++ * > "This was written for your profile" panel.
++ * >
++ * > — Greg, 2026-10-01, `[SPIDERYARN-READING2-7S]`
++ *
++ * **Until then it was read-only, and that was chosen knowing the alternative.**
++ * On 2026-08-30 GPT Sol found two ways a popover loses text, and Greg kept the
++ * panel to reading rather than open them. Editing is back only because each
++ * hole now has something closing it:
++ *
++ * 1. **Dismissed with words unsaved.** An outside press unmounts the box, so
++ *    save-on-blur need never fire. Here an outside press, Escape or *Done*
++ *    commits both boxes and the panel closes only once both saves have landed
++ *    — `PurposePrompt`'s *Done* latch. A refused save lets go of the latch and
++ *    keeps the panel open with the server's reason in the box's status line.
++ * 2. **Dismissed mid-dictation.** Dictation's unmount *aborts*, on purpose. So
++ *    each box tells the panel when its microphone is on or its words are on
++ *    their way (`ProfileBox`'s `onBusyChange`), and while either is, nothing
++ *    dismisses it.
++ * 3. **Unmounted under the reader** — the dock switching mode, another article.
++ *    The band goes whatever the popover thinks, and an SPA navigation fires
++ *    neither `visibilitychange` nor `pagehide`. `useAutosavedText` now sends
++ *    the `keepalive` save on unmount as well (Sol's plan review). A dictation
++ *    still running then is aborted, as it is in every `ProfileBox`, with the
++ *    device recording kept for recovery: named, not closed.
++ *
++ * The two `Edit →` links went with this. Each was a way out of the panel that
++ * skipped the save, and what they led to is here now; `/profile` stays on the
++ * Command bar.
++ *
++ * **An offline copy is shown, not edited** (Sol). `apiFetch` answers a failed
++ * GET with the cached body as a 200 marked `x-spideryarn-offline: copy`; edited,
++ * that copy would be PATCHed over whatever the reader has written since,
++ * the moment the network came back.
++ *
++ * ## Regenerate: only when the server says so
++ *
++ * Offered only when the badge's `changed` is true — the mode's own read said
++ * `profileChanged`. **Not when a save happened here**: an edit reverted, or
++ * whitespace the server trims, would offer a paid call for text that is still
++ * current — and for a step that appends, append. So once a save from the panel
++ * has settled, the panel asks the mode to read again (`refresh`), and the
++ * server's hash comparison decides. It is held while either box is unsaved or
++ * a save is on the wire, so a run cannot start before the new profile has
++ * landed and then be stamped as current. Pressing it calls the mode's own
++ * forced run and closes the panel; the mode's progress row shows the job.
+  *
+  * ## Why this is not a `<Tooltip>`
+  *
+  * It was going to be. `Tooltip` cannot do it, and the reason is worth keeping
+- * because the same mistake is already shipping one line away.
++ * because the same mistake shipped once already.
+  *
+  * `.tooltip-anchor` is `pointer-events: none` (styles.css § tooltip) and
+  * `Tooltip` passes `handleClose: null` — every card in this app is *read*, never
+- * entered. So **a link inside one cannot be clicked**, and the pointer cannot
+- * travel to it in the first place. The `written for you` badge has carried an
+- * `Edit your profile →` link since it was written, and that link has never
++ * entered. So **a control inside one cannot be pressed**, and the pointer cannot
++ * travel to it in the first place. The `written for you` badge carried an
++ * `Edit your profile →` link from the day it was written, and that link never
+  * worked: measured in headless Chrome with real pointer events,
+  * `document.elementFromPoint` at the link's own centre returns the page behind
+  * it, while the same test on an ordinary in-flow link on the same page returns
+@@ -27,15 +83,15 @@
+  * Passing `Tooltip` a controlled `open` would not have fixed it either: it
+  * installs `useHover` and `useFocus` unconditionally, so a click-opened card
+  * would still close when the pointer left the trigger, and
+- * `useRole({role: "tooltip"})` is wrong for a container with links in it.
++ * `useRole({role: "tooltip"})` is wrong for a container with controls in it.
+  * GPT Sol's review of the plan, 2026-08-30.
+  *
+  * So this follows `ColourPicker` in SearchPanel.tsx instead, which is the one
+- * click-popover this app already has and argues each of its choices in its own
++ * click-popover this app already had and argues each of its choices in its own
+  * docstring: `useClick` where the tooltip has `useHover`, `useDismiss` for
+  * Escape and outside-press, `useRole({role: "dialog"})`, and
+- * `FloatingFocusManager` at `modal={false}` so focus is not trapped, Tab
+- * reaches the links, and focus returns to the trigger on close.
++ * `FloatingFocusManager` at `modal={false}` so focus is not trapped and returns
++ * to the trigger on close.
+  *
+  * ## Why it fetches for itself, and what that argument is NOT
+  *
+@@ -53,13 +109,14 @@
+  * only when it is opened, is now the only one made for the profile panel.
+  *
+  * What the fetch-on-open does buy is that the panel shows what the server holds
+- * *now* rather than what it held when the page mounted. That is only true
+- * because `apiFetch` caches `/api/reader` offline and a `PATCH` to
+- * `/api/library/<slug>` now invalidates it — see `saving` in
+- * [lib/api.ts](./lib/api.ts). Without that line this panel served last week's
+- * sentence as current, and said so confidently.
++ * *now* rather than what it held when the page mounted — and, now that it
++ * edits, that the boxes are seeded from that. That is only true because
++ * `apiFetch` caches `/api/reader` offline and a `PATCH` to `/api/library/<slug>`
++ * invalidates it — see `saving` in [lib/api.ts](./lib/api.ts). Without that
++ * line this panel served last week's sentence as current, and said so
++ * confidently.
+  */
+-import { useEffect, useRef, useState, type ReactNode } from "react";
++import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+ import {
+   FloatingFocusManager,
+   FloatingPortal,
+@@ -73,9 +130,14 @@ import {
+   useInteractions,
+   useRole,
+ } from "@floating-ui/react";
++import { RefreshCw } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "../types.js";
+ import { apiFetch, readJson } from "./lib/api.js";
+-import { Link } from "./Link.js";
+-import { PROFILE_HREF, carriedSearch, readHref } from "./router.js";
++import { ProfileBox } from "./ProfileBox.js";
++import { leavePurpose, savePurpose } from "./purpose.js";
++import { type SaveState, useAutosavedText } from "./useAutosavedText.js";
++import { leaveProfile, saveProfile } from "./useProfile.js";
+ 
+ /**
+  * What `GET /api/reader?slug=` says about the reader.
+@@ -97,7 +159,7 @@ interface ReaderProfile {
+    * must not die over a purpose nobody may have written — and that policy is
+    * exactly wrong for a panel whose whole job is to say what the reader's
+    * profile is. Without this flag the two arrive as the same `null` and a
+-   * reader is told they never wrote the sentence they wrote last week.
++   * reader is offered an empty box over the sentence they wrote last week.
+    * src/routes.ts § resolveProfileParts.
+    */
+   purposeFailed: boolean;
+@@ -109,21 +171,47 @@ interface ReaderProfile {
+  * A profile that could not be *read* must never render as a profile that was
+  * never *written*: a reader told "you haven't said anything about yourself yet"
+  * about the paragraph they wrote last week will go and write it again, and the
+- * app will have lied to them in the calmest possible voice.
++ * app will have lied to them in the calmest possible voice. Now that the panel
++ * edits, it is worse than a lie: an empty box seeded from a failed read is one
++ * a save would erase the paragraph with.
++ *
++ * `offline` is a fourth fact on `ready`: the body is `apiFetch`'s cached copy,
++ * readable and not to be written back.
+  */
+ type Load =
+   | { state: "loading" }
+-  | { state: "ready"; value: ReaderProfile }
++  | { state: "ready"; value: ReaderProfile; offline: boolean }
+   | { state: "failed" };
+ 
++/**
++ * What a mode hands its badge so the panel can offer to write the text again.
++ * Owner-only, like the badge.
++ */
++export interface Regenerate {
++  /** The mode's existing forced run — the same press its own stale banner makes. */
++  run(): void;
++  /** A job is running or starting for this mode, so a press would be a second one. */
++  busy: boolean;
++  /**
++   * Read the mode's artefact again, so `profileChanged` is the server's
++   * verdict on the profile as it now is. Never spends.
++   */
++  refresh(): void;
++}
++
++/** Text the server may not have — `ProfileBox`'s own `pending`. */
++function pending(s: SaveState): boolean {
++  return s.kind === "dirty" || s.kind === "saving" || s.kind === "error";
++}
++
+ /**
+  * The panel, and the provenance badge that raises it.
+  *
+  * **The trigger's looks are the caller's, its behaviour is this component's.**
+  * `WrittenForYou` supplies the `written for you` pill and its changed-profile
+- * state; this component owns the shared act underneath — ask what this was
+- * written for. `className` and `children` keep the trigger's appearance out of
+- * the implementation of focus, dismissal and the fetch.
++ * state; this component owns the shared act underneath — ask, and change, what
++ * this was written for. `className` and `children` keep the trigger's
++ * appearance out of the implementation of focus, dismissal and the fetch.
+  *
+  * It is mounted only for an artefact that was written with a profile. A reader
+  * making their first profile now enters through `/profile` or the Command bar;
+@@ -134,6 +222,8 @@ export function ProfilePanel({
+   className,
+   label,
+   note,
++  changed = false,
++  regenerate,
+   children,
+ }: {
+   slug: string;
+@@ -149,11 +239,26 @@ export function ProfilePanel({
+    * (WrittenForYou.tsx § `compact`).
+    */
+   note?: string | undefined;
++  /** The server says the text was written for a profile the reader has since changed. */
++  changed?: boolean;
++  /** The mode's forced run, if it has one the panel may offer. */
++  regenerate?: Regenerate | undefined;
+ }) {
+   const [open, setOpen] = useState(false);
++  /**
++   * **Whether the panel may close now** — asked by every way of closing it
++   * except a Regenerate press, which is only enabled when the answer is yes.
++   * `PanelBody` installs the real question while it is mounted; it answers
++   * no, and arranges to close itself, when a box still has words the server
++   * does not.
++   */
++  const mayClose = useRef<() => boolean>(() => true);
+   const { refs, floatingStyles, context } = useFloating({
+     open,
+-    onOpenChange: setOpen,
++    onOpenChange: (next) => {
++      if (next) setOpen(true);
++      else if (mayClose.current()) setOpen(false);
++    },
+     placement: "top-start",
+     whileElementsMounted: autoUpdate,
+     /* Padded `flip` and `shift`, like the colour picker's: the trigger lives in
+@@ -184,11 +289,16 @@ export function ProfilePanel({
+       </button>
+       {open && (
+         <FloatingPortal>
+-          <FloatingFocusManager context={context} modal={false}>
++          {/* **Focus goes to the panel, not into the first box.** The default
++              is the first tabbable thing, which is now a textarea — and on a
++              phone or an iPad focusing a textarea raises the keyboard over
++              the panel the reader only opened to read. */}
++          <FloatingFocusManager context={context} modal={false} initialFocus={refs.floating}>
+             <div
+               ref={refs.setFloating}
+               style={floatingStyles}
+               className="prof-panel"
++              tabIndex={-1}
+               /* Written out as well as spread, for the same reason the colour
+                  picker writes it out: a static check cannot see through
+                  `getFloatingProps()`, and `aria-label` on a bare `<div>` is a
+@@ -198,7 +308,13 @@ export function ProfilePanel({
+               {...getFloatingProps()}
+             >
+               {note && <p className="prof-panel-note">{note}</p>}
+-              <PanelBody slug={slug} onLeave={() => setOpen(false)} />
++              <PanelBody
++                slug={slug}
++                mayClose={mayClose}
++                onClose={() => setOpen(false)}
++                changed={changed}
++                regenerate={regenerate}
++              />
+             </div>
+           </FloatingFocusManager>
+         </FloatingPortal>
+@@ -210,9 +326,23 @@ export function ProfilePanel({
+ /**
+  * The contents, mounted only while the panel is open — which is what makes the
+  * fetch happen on opening rather than on page load, and makes it happen again
+- * the next time rather than being cached into staleness.
++ * the next time rather than being cached into staleness. The two saves live
++ * here for the same reason: a box seeded from this opening's read, and nothing
++ * left over from the last.
+  */
+-function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
++function PanelBody({
++  slug,
++  mayClose,
++  onClose,
++  changed,
++  regenerate,
++}: {
++  slug: string;
++  mayClose: RefObject<() => boolean>;
++  onClose(): void;
++  changed: boolean;
++  regenerate: Regenerate | undefined;
++}) {
+   const [load, setLoad] = useState<Load>({ state: "loading" });
+   /**
+    * Which request is the current one.
+@@ -229,11 +359,34 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
+    */
+   const generation = useRef(0);
+ 
++  /* The same two saves the two pages make — `/profile`'s and Metadata's — so
++     the panel is a third place to edit each string, not a third way of
++     storing it. */
++  const about = useAutosavedText({ save: saveProfile, leave: leaveProfile });
++  const purpose = useAutosavedText({
++    /* The server's answer, not what was typed, and an empty box clears — as
++       Metadata.tsx's box. Seeded from this opening's read, so an empty box is
++       one the reader can see is empty. */
++    save: async (text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
++    leave: (text) => leavePurpose(slug, text),
++  });
++  const seedAbout = about.seed;
++  const seedPurpose = purpose.seed;
++
+   useEffect(() => {
+     const mine = ++generation.current;
+     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
+-      .then((r) => readJson<ReaderProfile>(r))
+-      .then((value) => mine === generation.current && setLoad({ state: "ready", value }))
++      .then(async (r) => {
++        const offline = r.headers.get("x-spideryarn-offline") === "copy";
++        const value = await readJson<ReaderProfile>(r);
++        if (mine !== generation.current) return;
++        setLoad({ state: "ready", value, offline });
++        /* **Seeded only from a real read.** A copy is shown and not offered,
++           and a half the server could not read gets no box at all. */
++        if (offline) return;
++        seedAbout(value.profile ?? "");
++        if (!value.purposeFailed) seedPurpose(value.purpose ?? "");
++      })
+       /* No message shown, on purpose: `/profile` reports a read failure
+          properly, and this panel's job is to be clear that it does not know
+          rather than to explain why. */
+@@ -245,7 +398,80 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
+     return () => {
+       generation.current++;
+     };
+-  }, [slug]);
++  }, [slug, seedAbout, seedPurpose]);
++
++  /* The microphone in either box is on, or its words are on their way. */
++  const [aboutBusy, setAboutBusy] = useState(false);
++  const [purposeBusy, setPurposeBusy] = useState(false);
++  const dictating = aboutBusy || purposeBusy;
++
++  /* Every word in both boxes is on the server, and no write is still on the
++     wire to change that. `inFlight` as well as the state, for the reason
++     PurposePrompt.tsx's latch gives: a draft moved back to the loaded value
++     reads `clean` while an older write is still on its way to replace it. */
++  const settled =
++    !pending(about.state) && !pending(purpose.state) && !about.inFlight && !purpose.inFlight;
++  const refused = about.state.kind === "error" || purpose.state.kind === "error";
++
++  /* **Closing, latched.** Set by a dismissal that found words unsaved; this
++     closes once both saves have landed, and lets go on a refusal so the reader
++     can read the reason in the box. */
++  const [closing, setClosing] = useState(false);
++  useEffect(() => {
++    if (!closing || dictating) return;
++    if (settled) {
++      setClosing(false);
++      onClose();
++    } else if (refused) {
++      setClosing(false);
++    }
++  }, [closing, dictating, settled, refused, onClose]);
++
++  /* What the dismissal asks. Read through a ref, because Floating UI calls it
++     from listeners set up on an earlier render. */
++  const now = useRef({ settled, dictating, commitAbout: about.commit, commitPurpose: purpose.commit });
++  now.current = { settled, dictating, commitAbout: about.commit, commitPurpose: purpose.commit };
++  const ask = useCallback((): boolean => {
++    const { settled: clean, dictating: busy, commitAbout, commitPurpose } = now.current;
++    /* Not while a dictation is running — its unmount aborts. The reader stops
++       the microphone, and the next dismissal goes through. */
++    if (busy) return false;
++    if (clean) return true;
++    commitAbout();
++    commitPurpose();
++    setClosing(true);
++    return false;
++  }, []);
++  useEffect(() => {
++    mayClose.current = ask;
++    return () => {
++      mayClose.current = () => true;
++    };
++  }, [mayClose, ask]);
++
++  /* **Ask the mode to read again, once per save that settles here.** Its
++     `profileChanged` is the server comparing the artefact's profile hash with
++     the profile as it now is — the only judge of whether a Regenerate is due,
++     so a reverted edit offers nothing. `saved` is the state after a write
++     this opening; once refreshed, nothing more until a box has something
++     pending again. */
++  const savedHere = about.state.kind === "saved" || purpose.state.kind === "saved";
++  const refreshed = useRef(false);
++  const latestRegenerate = useRef(regenerate);
++  latestRegenerate.current = regenerate;
++  useEffect(() => {
++    if (!settled) {
++      refreshed.current = false;
++      return;
++    }
++    if (savedHere && !refreshed.current) {
++      refreshed.current = true;
++      latestRegenerate.current?.refresh();
++    }
++  }, [settled, savedHere]);
++
++  const ready = load.state === "ready" ? load : null;
++  const editable = ready !== null && !ready.offline;
+ 
+   return (
+     <>
+@@ -256,45 +482,113 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
+         What the glossary, the ideas, chat and explanations are written for. It changes what
+         gets explained and how much — never what the article says.
+       </p>
+-      <Box
+-        label="About you"
+-        text={load.state === "ready" ? load.value.profile : null}
+-        failed={load.state === "failed"}
+-        loading={load.state === "loading"}
+-        empty="You haven't said anything about yourself yet."
+-        href={PROFILE_HREF}
+-        onLeave={onLeave}
+-      />
+-      <Box
+-        label="Why you're reading this one"
+-        text={load.state === "ready" ? load.value.purpose : null}
+-        /* **Two ways this half can fail and only one of them is the request.**
+-           The whole fetch can fall over, or it can come back 200 with the
+-           global profile intact and the shelf read behind `purpose` having
+-           thrown. The second is invisible without `purposeFailed`, and it is
+-           the one that renders as "you never wrote this". */
+-        failed={load.state === "failed" || (load.state === "ready" && load.value.purposeFailed)}
+-        loading={load.state === "loading"}
+-        empty="You haven't said why you're reading this one."
+-        /* `carriedSearch` so leaving the article for its metadata page and
+-           coming back does not lose the reader their place — the same thing
+-           every other link out of the reading view does. */
+-        href={readHref(slug, carriedSearch(location.search), "metadata")}
+-        onLeave={onLeave}
+-      />
++      {ready?.offline && (
++        <p className="prof-panel-offline">
++          You're offline, so this is the copy saved on this device. You can change it once you're
++          back online.
++        </p>
++      )}
++      {editable ? (
++        <ProfileBox
++          id="panel-profile"
++          label="About you"
++          hint="Every article."
++          placeholder="e.g. Cognitive scientist. Rusty on transformer internals."
++          value={about.draft}
++          onChange={about.setDraft}
++          onCommit={about.commit}
++          max={MAX_PROFILE_CHARS}
++          disabled={about.saved === null}
++          rows={3}
++          save={about.state}
++          onBusyChange={setAboutBusy}
++        />
++      ) : (
++        <Shown
++          label="About you"
++          text={ready ? ready.value.profile : null}
++          failed={load.state === "failed"}
++          loading={load.state === "loading"}
++          empty="You haven't said anything about yourself yet."
++        />
++      )}
++      {/* **Two ways this half can fail and only one of them is the request.**
++          The whole fetch can fall over, or it can come back 200 with the global
++          profile intact and the shelf read behind `purpose` having thrown. The
++          second is invisible without `purposeFailed`, and it is the one that
++          would offer an empty box over a sentence the reader wrote. */}
++      {editable && !ready.value.purposeFailed ? (
++        <ProfileBox
++          id="panel-purpose"
++          label="Why you're reading this one"
++          hint="This article only."
++          placeholder="e.g. I want the evidence, not the history"
++          value={purpose.draft}
++          onChange={purpose.setDraft}
++          onCommit={purpose.commit}
++          max={MAX_PURPOSE_CHARS}
++          disabled={purpose.saved === null}
++          rows={2}
++          save={purpose.state}
++          onBusyChange={setPurposeBusy}
++        />
++      ) : (
++        <Shown
++          label="Why you're reading this one"
++          text={ready ? ready.value.purpose : null}
++          failed={load.state === "failed" || ready?.value.purposeFailed === true}
++          loading={load.state === "loading"}
++          empty="You haven't said why you're reading this one."
++        />
++      )}
++      <div className="prof-panel-actions">
++        {changed && regenerate && (
++          <Button
++            type="button"
++            size="xs"
++            variant="outline"
++            /* Held until both boxes are on the server — a run started first
++               would be written for the old words and stamped as current — and
++               while the mode already has a job, so a press is never a second
++               paid call. */
++            disabled={!settled || dictating || regenerate.busy}
++            onClick={() => {
++              regenerate.run();
++              onClose();
++            }}
++          >
++            <RefreshCw aria-hidden="true" />
++            {/* One word whatever the state: a job already running may not be
++                this button's, and the mode's own progress row says what it is. */}
++            Regenerate
++          </Button>
++        )}
++        <Button
++          type="button"
++          size="xs"
++          className="prof-panel-done"
++          disabled={closing}
++          onClick={() => {
++            if (ask()) onClose();
++          }}
++        >
++          Done
++        </Button>
++      </div>
+     </>
+   );
+ }
+ 
+-/** One of the two boxes, shown rather than edited, with its own way in. */
+-function Box({
++/**
++ * One of the two boxes, shown rather than edited — while the read is on its
++ * way, when it failed, or when all there is is an offline copy.
++ */
++function Shown({
+   label,
+   text,
+   failed,
+   loading,
+   empty,
+-  href,
+-  onLeave,
+ }: {
+   label: string;
+   text: string | null;
+@@ -302,22 +596,11 @@ function Box({
+   loading: boolean;
+   /** What to say when this box has never been written. */
+   empty: string;
+-  href: string;
+-  onLeave(): void;
+ }) {
+   return (
+     <div className="prof-panel-box">
+-      <div className="prof-panel-head">
+-        <span className="prof-panel-label">{label}</span>
+-        {/* A real `<a>`, reachable by Tab and by the pointer — which is the
+-            whole reason this is a popover and not a tooltip. `onLeave` closes
+-            the panel on the way out so it is not left hanging over a page the
+-            reader has navigated to. */}
+-        <Link href={href} className="prof-panel-edit" onClick={onLeave}>
+-          Edit →
+-        </Link>
+-      </div>
+-      <p className={`prof-panel-text${text ? "" : " quiet"}`}>
++      <span className="prof-panel-label">{label}</span>
++      <p className={`prof-panel-text${text && !failed ? "" : " quiet"}`}>
+         {loading ? "…" : failed ? "We couldn't read this just now." : (text ?? empty)}
+       </p>
+     </div>
+diff --git a/src/web/PurposePrompt.tsx b/src/web/PurposePrompt.tsx
+index 6d8f09098..aa21b6d0d 100644
+--- a/src/web/PurposePrompt.tsx
++++ b/src/web/PurposePrompt.tsx
+@@ -48,9 +48,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
+ import { Button } from "@/components/ui/button";
+ import { MAX_PURPOSE_CHARS } from "../types.js";
+ import { clearAskPurpose, peekAskPurpose } from "./ask-purpose.js";
+-import { leavingFetch } from "./lib/api.js";
+ import { ProfileBox } from "./ProfileBox.js";
+-import { savePurpose, usePurpose } from "./purpose.js";
++import { leavePurpose, savePurpose, usePurpose } from "./purpose.js";
+ import { useAutosavedText } from "./useAutosavedText.js";
+ import { useVisualViewport } from "./useVisualViewport.js";
+ 
+@@ -69,12 +68,7 @@ function Ask({ slug }: { slug: string }) {
+        empty box clears. Here the box was seeded empty over a purpose that is
+        definitively none, so there is nothing hidden to erase. */
+     save: async (text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
+-    leave: (text) =>
+-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
+-        method: "PATCH",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ purpose: text === "" ? null : text }),
+-      }),
++    leave: (text) => leavePurpose(slug, text),
+   });
+   const seed = purpose.seed;
+   const [open, setOpen] = useState(false);
+diff --git a/src/web/QuotesPanel.tsx b/src/web/QuotesPanel.tsx
+index efec93b8b..a7e71c41e 100644
+--- a/src/web/QuotesPanel.tsx
++++ b/src/web/QuotesPanel.tsx
+@@ -596,7 +596,14 @@ export function QuotesPanel({
+      `profileHash` never leaves the server (src/public-types.ts). An icon since
+      2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
+      that renders nothing, so the rank row's trailing slot is empty when there
+-     is nothing to put in it. */
++     is nothing to put in it.
++
++     **No `regenerate`, on purpose.** Its panel edits the profile like every
++     other, but Quotes' forced run appends to a current list — across a profile
++     change too, keeping the first pass's stamp (src/quotes.ts § existingFor)
++     — so a Regenerate here would lengthen the list and leave this badge saying
++     *changed*. It needs a replace intent in the job contract first. Plan
++     261002b § Deferred. */
+   const badge =
+     quotes && owner?.profiled ? (
+       <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+diff --git a/src/web/SketchView.tsx b/src/web/SketchView.tsx
+index f4598771a..cdbf12517 100644
+--- a/src/web/SketchView.tsx
++++ b/src/web/SketchView.tsx
+@@ -86,6 +86,7 @@ import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
+ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+ import { SKETCH_WAIT } from "./sketch-cost.js";
+ import { useSketch } from "./useSketch.js";
++import { WrittenForYou } from "./WrittenForYou.js";
+ 
+ /** One drawing primitive as an element. Nothing here knows a colour. */
+ function Shape({ p }: { p: Prim }) {
+@@ -258,9 +259,9 @@ function OwnerSketch({
+   if (!view.sketch) return null;
+ 
+   /* The caveats, which are all facts about *this reader's* artefact against
+-     *this reader's* article and profile. A visitor gets none of them: they
+-     cannot regenerate, the profile is not theirs, and "drawn for a profile you
+-     have since changed" is a sentence about somebody else. */
++     *this reader's* article. A visitor gets none of them, nor the badge below:
++     they cannot regenerate, the profile is not theirs, and "drawn for a profile
++     you have since changed" is a sentence about somebody else. */
+   const notes: string[] = [];
+   if (view.stale) {
+     notes.push(
+@@ -271,17 +272,38 @@ function OwnerSketch({
+     const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
+     if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
+   }
+-  if (view.profileChanged) notes.push("It was drawn for a reader profile you have since changed.");
++  /* A changed profile is no longer a caveat line here: since 2026-10-02 the
++     *written for you* badge in the bar says it, as it does in every other
++     personalised mode, and its panel carries the redraw (plan 261002b). Two
++     sentences for one fact would be one too many. */
++  const badge = view.profiled ? (
++    <WrittenForYou
++      written
++      changed={view.profileChanged}
++      slug={slug}
++      compact
++      regenerate={{
++        run: () => void view.regenerate(),
++        busy: view.job !== null || view.starting,
++        refresh: () => void view.refresh(),
++      }}
++    />
++  ) : null;
+ 
+   /* **The two lines that are about a job rather than about a picture**, built
+      here because this is where the job is. Both were inside the drawing until
+      2026-09-04; a visitor has neither.
+ 
+      Not `JobProgress`: that row carries a Stop button and, with no job, a Draw
+-     button — and offering a paid redraw beside a picture that is already there
+-     is a product decision this is not. Greg asked only that a redraw in flight
+-     be visible: *"the diagram/sketch modes show loading spinners if they're
+-     generating"*.
++     button — and a standing paid redraw beside a picture that is already there
++     is still not offered here. **The one redraw that is** sits in the profile
++     badge's panel, and only when the server says the picture was drawn for a
++     profile the reader has since changed — Greg asked for it by name, 2026-10-01:
++     *"if the profile has changed since the mode generated, then it should show a
++     handy "Regenerate" button in that mode's "This was written for your profile"
++     panel"* (docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md).
++     This row's job is only that a redraw in flight be visible: *"the
++     diagram/sketch modes show loading spinners if they're generating"*.
+ 
+      **And the spinner going away is not the same as the work succeeding.** A
+      redraw that came back failed left the picture standing and said nothing,
+@@ -306,6 +328,7 @@ function OwnerSketch({
+       sketch={view.sketch}
+       notes={notes}
+       progress={progress}
++      badge={badge}
+       blocks={blocks}
+       atRow={atRow}
+       onJump={onJump}
+@@ -371,13 +394,19 @@ function SketchBody({
+   sketch,
+   notes,
+   progress,
++  badge,
+   blocks,
+   atRow,
+   onJump,
+ }: {
+   sketch: Sketch | PublicSketch;
+-  /** Owner-only caveats — staleness, lost boxes, a changed profile. Empty for a visitor. */
++  /** Owner-only caveats — staleness, lost boxes. Empty for a visitor. */
+   notes: readonly string[];
++  /**
++   * The owner's *written for you* badge, already rendered, or nothing — a node
++   * for the reason `progress` is one. It goes in the bar, before Enlarge.
++   */
++  badge?: ReactNode;
+   /**
+    * **What the owner's redraw is doing**, already rendered, or nothing.
+    *
+@@ -993,6 +1022,7 @@ function SketchBody({
+             </span>
+           </Tooltip>
+         )}
++        {badge}
+         <Tooltip
+           placement="bottom"
+           keepSide
+@@ -1025,9 +1055,11 @@ function SketchBody({
+           mode show loading spinners if they're generating."*
+ 
+           Not `JobProgress`: that row carries a Stop button and, with no job, the
+-          Draw button — and offering a paid redraw beside a picture that is
+-          already there is a product decision this is not. This says what is
+-          happening and nothing else. The step's own label, off the server, so
++          Draw button — and a standing paid redraw beside a picture that is
++          already there is still not offered; the one redraw there is lives in
++          the profile badge's panel, for a changed profile only, on Greg's
++          request of 2026-10-01 (`OwnerSketch` has his words; plan 261002b).
++          This says what is happening and nothing else. The step's own label, off the server, so
+           the words are the words the shelf shows for the same run. */}
+       {progress}
+ 
+diff --git a/src/web/Tweets.tsx b/src/web/Tweets.tsx
+index 9673a8790..320dac36e 100644
+--- a/src/web/Tweets.tsx
++++ b/src/web/Tweets.tsx
+@@ -117,6 +117,12 @@ export function TweetsPanel({
+                 changed={owner.profileChanged}
+                 slug={slug}
+                 compact
++                /* The forced run replaces the thread (plan 261002b). */
++                regenerate={{
++                  run: () => void owner.regenerate(),
++                  busy: owner.job !== null || owner.starting,
++                  refresh: () => void owner.refresh(),
++                }}
+               />
+             )}
+           </ThreadHead>
+diff --git a/src/web/WrittenForYou.tsx b/src/web/WrittenForYou.tsx
+index cc98b14ad..2640fcc13 100644
+--- a/src/web/WrittenForYou.tsx
++++ b/src/web/WrittenForYou.tsx
+@@ -27,20 +27,39 @@
+  * Every new run now uses the profile, and Find more continues a list in the
+  * setting it was written with (useGlossary.ts § `more`). The label's half of
+  * the split still stands: **`<WrittenForYou>`** states a fact about the text on
+- * screen — this was written for you, or for a profile you have since changed —
+- * and never offers to change that text. The profile itself is edited on
+- * /profile and the metadata page, and the Command bar's Profile row reaches
+- * the first. docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
++ * screen — this was written for you, or for a profile you have since changed.
++ * docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
+  *
+- * ## It opens the profile panel, and it is still not a control
++ * ## It opens the profile panel — and since 2026-10-02 the panel has controls
+  *
+- * The badge is a trigger for `<ProfilePanel>` — what your profile currently
+- * says, and a working link to each of the two places that edit it
+- * (docs/plans/260830c-profile-panel.md). That does not break the rule above: a
+- * *label* must not offer to regenerate the text it describes, and opening an
+- * explanation is not that. It is the question the badge was always being
+- * pointed at, and until 2026-08-30 it answered it with a link nobody could
+- * click — see ProfilePanel.tsx for the measurement.
++ * The badge is a trigger for `<ProfilePanel>` (docs/plans/260830c-profile-panel.md).
++ * Until 2026-10-02 that panel only showed the two boxes, with a link to each
++ * page that edits them, and this docstring said the badge "never offers to
++ * change that text": *a label must not offer to regenerate the text it
++ * describes*. **Greg has asked for exactly that, so it is now a recorded
++ * exception, not a rule broken by accident:**
++ *
++ * > Make that a reusable component that shows up in any modes where the output
++ * > is personalised. And if possible, allow them to edit the text inline …
++ * > I suppose if they do edit or if the profile has changed since the mode
++ * > generated, then it should show a handy "Regenerate" button in that mode's
++ * > "This was written for your profile" panel.
++ * >
++ * > — Greg, 2026-10-01, `[SPIDERYARN-READING2-7S]`
++ *
++ * What survives of Fable's objection is where the spend sits. The *badge* is
++ * still a label — pressing it opens a panel and spends nothing — and the paid
++ * call is a button inside, named for what it does, offered only when the server
++ * says the profile changed, and never pressed for the reader. Both boxes are
++ * edited in the panel itself; ProfilePanel.tsx says how it keeps the words safe
++ * and when Regenerate shows.
++ *
++ * **`regenerate` is the mode's own forced run**, passed only by a mode whose
++ * forced run *replaces* (Summary, Ideas, Tweets, Sketch) or, for the Glossary,
++ * rewrites because the profile no longer matches. Quotes passes none: its
++ * forced run appends to a current list and keeps the first pass's stamp, so it
++ * would lengthen the list and leave the badge saying *changed*. Plan 261002b
++ * § Deferred.
+  *
+  * ## `compact`: an icon without words, in Glossary and Summary (2026-09-29)
+  *
+@@ -70,7 +89,7 @@
+  * docs/project/reader-profile.md.
+  */
+ import { UserRound, UserRoundPen } from "lucide-react";
+-import { ProfilePanel } from "./ProfilePanel.js";
++import { ProfilePanel, type Regenerate } from "./ProfilePanel.js";
+ 
+ /**
+  * The two provenance facts the badge needs before rendering anything.
+@@ -99,12 +118,20 @@ export function WrittenForYou({
+   changed,
+   slug,
+   compact = false,
+-}: ProfileState & { slug: string; compact?: boolean }) {
++  regenerate,
++}: ProfileState & {
++  slug: string;
++  compact?: boolean;
++  /** The mode's forced run, for the panel's Regenerate. See the header for who passes one. */
++  regenerate?: Regenerate | undefined;
++}) {
+   if (!written) return null;
+   const Icon = compact && changed ? UserRoundPen : UserRound;
+   return (
+     <ProfilePanel
+       slug={slug}
++      changed={changed}
++      regenerate={regenerate}
+       className={`prof-badge${changed ? " changed" : ""}${compact ? " icon-only" : ""}`}
+       label={
+         changed
+diff --git a/src/web/modes/summary/SummaryMode.tsx b/src/web/modes/summary/SummaryMode.tsx
+index 0ffa4ae76..f2d55587b 100644
+--- a/src/web/modes/summary/SummaryMode.tsx
++++ b/src/web/modes/summary/SummaryMode.tsx
+@@ -97,10 +97,21 @@ function OwnerSimple({
+   useRenderCount("OwnerSimple");
+   const owner = useSimple(slug);
+   /* Provenance, not a warning — GlossaryPanel.tsx's reasoning. Owner-only:
+-     `profileHash` never reaches a visitor. */
++     `profileHash` never reaches a visitor. Its panel's Regenerate is the
++     forced run, which replaces the paragraphs (plan 261002b). */
+   const badge =
+     owner.simple && owner.profiled ? (
+-      <WrittenForYou written changed={owner.profileChanged} slug={slug} compact />
++      <WrittenForYou
++        written
++        changed={owner.profileChanged}
++        slug={slug}
++        compact
++        regenerate={{
++          run: () => void owner.regenerate(),
++          busy: owner.job !== null || owner.starting,
++          refresh: () => void owner.refresh(),
++        }}
++      />
+     ) : null;
+   /* Who wrote the paragraphs, for the band's (i) — owner only, since a
+      visitor's artefact carries no provenance (src/public-types.ts). Only once
+diff --git a/src/web/purpose.ts b/src/web/purpose.ts
+index 4abea7d25..7906f6d78 100644
+--- a/src/web/purpose.ts
++++ b/src/web/purpose.ts
+@@ -2,13 +2,13 @@
+  * **Why you're reading this one** — the per-article half of the reader profile,
+  * as the client reads and writes it (docs/project/reader-profile.md).
+  *
+- * One module because there are now three places that touch it — the Metadata
+- * page's box, the add page's box, and Skim's line — and two copies of a
++ * One module because there are now four places that touch it — the Metadata
++ * page's box, the add page's box, Skim's line and the profile panel — and two copies of a
+  * `PATCH` are two places to forget `forgetSummaries`.
+  * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md.
+  */
+ import { useEffect, useRef, useState } from "react";
+-import { apiFetch, readJson } from "./lib/api.js";
++import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+ import { forgetSummaries } from "./link-facts.js";
+ 
+ /**
+@@ -40,6 +40,23 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
+   return body.purpose ?? null;
+ }
+ 
++/**
++ * The same write as the page goes away, or the box with it — a `keepalive`
++ * request started at once, with nothing awaited first (`leavingFetch`, and
++ * useProfile.ts § `leaveProfile` for why not `apiFetch`). An empty box clears,
++ * as every caller's `savePurpose` does. For `useAutosavedText`'s `leave`.
++ *
++ * One copy, for the box on Metadata, the first-open prompt and the profile
++ * panel, which until 2026-10-02 each wrote this request out for themselves.
++ */
++export function leavePurpose(slug: string, text: string): void {
++  leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
++    method: "PATCH",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ purpose: text === "" ? null : text }),
++  });
++}
++
+ /**
+  * What `GET /api/reader?slug=` says about this article's purpose.
+  *
+diff --git a/src/web/styles/diagram-sketch.css b/src/web/styles/diagram-sketch.css
+index 450a7aa3a..c18c78677 100644
+--- a/src/web/styles/diagram-sketch.css
++++ b/src/web/styles/diagram-sketch.css
+@@ -70,6 +70,10 @@
+   font-family: inherit; font-size: inherit;
+ }
+ .sk-zoom { margin-left: auto; }
++/* The owner's *written for you* badge (since 2026-10-02, plan 261002b) sits
++   beside Enlarge at the bar's end, so it takes the push and Enlarge follows. */
++.sk-bar > .prof-badge { margin-left: auto; flex: none; }
++.sk-bar > .prof-badge + .sk-zoom { margin-left: 0; }
+ .sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+ .sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+ /* Up sits before the scene row, not after it: it is the way out of where you
+diff --git a/src/web/styles/profile.css b/src/web/styles/profile.css
+index b48786894..ba58d8774 100644
+--- a/src/web/styles/profile.css
++++ b/src/web/styles/profile.css
+@@ -491,10 +491,10 @@
+    docs/plans/260913a-drop-the-use-your-profile-checkbox.md. */
+ 
+ /* ------------------------------------------------- profile: the panel --
+-   What your profile currently says, and a working link to each of the two
+-   places that edit it. src/web/ProfilePanel.tsx.
++   What your profile currently says, editable in place since 2026-10-02, and a
++   Regenerate when the profile has changed. src/web/ProfilePanel.tsx.
+ 
+-   **Not a `.tooltip`.** It is a click-popover with links in it, so it must take
++   **Not a `.tooltip`.** It is a click-popover with controls in it, so it must take
+    pointer events — the whole reason it is not a tooltip is that
+    `.tooltip-anchor` is `pointer-events: none` and the link that used to live in
+    one has never been clickable. It borrows the tooltip's *surface* (the same
+@@ -512,8 +512,9 @@
+   max-width: calc(100vw - 1.75rem);
+   /* And never taller than the window: a 1,500-character profile is a lot of
+      prose, and it scrolls inside the panel rather than growing off the top of
+-     the screen where the close is. */
+-  max-height: min(24rem, calc(100vh - 3rem));
++     the screen where the close is. 30rem since the two boxes became editable,
++     which is both of them and Done without a scroll at their default rows. */
++  max-height: min(30rem, calc(100vh - 3rem));
+   overflow-y: auto;
+   padding: 0.6rem 0.7rem;
+   border: 1px solid var(--rule-strong);
+@@ -524,6 +525,9 @@
+     0 8px 24px -6px rgb(0 0 0 / 0.65);
+   font-family: var(--font-ui);
+ }
++/* Focus lands on the panel itself when it opens (ProfilePanel.tsx says why);
++   the ring belongs on the controls inside, not round the whole card. */
++.prof-panel:focus { outline: none; }
+ .prof-panel-lede {
+   margin: 0 0 0.5rem;
+   color: var(--ink-faint);
+@@ -535,23 +539,55 @@
+   padding-top: 0.4rem;
+   margin-top: 0.4rem;
+ }
+-.prof-panel-head {
+-  display: flex;
+-  align-items: baseline;
+-  justify-content: space-between;
+-  gap: 0.5rem;
+-}
+ .prof-panel-label {
+   color: var(--ink-faint);
+   font-size: 0.72rem;
+   letter-spacing: 0.04em;
+   text-transform: uppercase;
+ }
+-.prof-panel-edit {
+-  color: var(--highlight);
+-  font-size: 0.77rem;
+-  white-space: nowrap;
++/* `.prof-panel-head` and `.prof-panel-edit` lived here until 2026-10-02: the
++   label row and its `Edit →` link. The boxes are edited in the panel now, and
++   the links — each a way out that skipped the save — went. Plan 261002b. */
++
++/* **The two `ProfileBox`es, made to fit a popover** (since 2026-10-02). The
++   page versions are sized for a column of their own; here the panel is 320px
++   at most and may be 390px-wide-phone minus its gutters, so everything is a
++   step smaller and the gaps are halved. The same rules otherwise — a box that
++   looked different here would look like a different mechanism. */
++.prof-panel .prof-box {
++  border-top: 1px solid var(--rule);
++  padding-top: 0.4rem;
++  margin-top: 0.4rem;
++}
++.prof-panel .prof-box-head { margin-bottom: 0.2rem; }
++.prof-panel .prof-box-label { font-size: 0.72rem; letter-spacing: 0.04em; }
++.prof-panel .prof-box-input {
++  padding: 0.35rem 0.45rem;
++  font-size: 0.88rem;
++  line-height: 1.45;
++}
++.prof-panel .prof-box-foot { margin-top: 0.2rem; gap: 0.5rem; }
++.prof-panel .prof-box-hint,
++.prof-panel .prof-count,
++.prof-panel .prof-save { font-size: 0.74rem; }
++.prof-panel .prof-save { margin-top: 0.15rem; min-height: 1.05rem; }
++/* Offline: what follows is a copy, shown and not offered for editing. */
++.prof-panel-offline {
++  margin: 0 0 0.3rem;
++  color: var(--highlight-ink);
++  font-size: 0.8rem;
++  line-height: 1.4;
++}
++/* Regenerate (only when the profile changed) on the left, Done on the right.
++   `wrap` for the narrowest band, where the two may not share a line. */
++.prof-panel-actions {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 0.4rem;
++  margin-top: 0.5rem;
+ }
++.prof-panel-done { margin-left: auto; }
+ .prof-panel-text {
+   margin: 0.2rem 0 0;
+   /* The reader's own prose, in the reading face — it is a paragraph they wrote,
+diff --git a/src/web/useAutosavedText.ts b/src/web/useAutosavedText.ts
+index bcb7e3902..0276310ad 100644
+--- a/src/web/useAutosavedText.ts
++++ b/src/web/useAutosavedText.ts
+@@ -41,7 +41,8 @@
+  * because the ordinary save in flight is exactly the one the browser may kill.
+  * That one can, in principle, be applied after it; the PATCH is idempotent and
+  * the window is the page being torn down, which is the honest limit of doing
+- * this at all.
++ * this at all. **Unmounting fires `leave` too** (2026-10-02): a box inside a
++ * popover can go while the page stays, and that sends neither event.
+  */
+ import { useCallback, useEffect, useRef, useState } from "react";
+ 
+@@ -200,21 +201,37 @@ export function useAutosavedText({
+       });
+   }, []);
+ 
++  /* The page, or the box, is going: send what the server does not have, with
++     nothing awaited first. */
++  const lastChance = useCallback(() => {
++    const { saved: stored, draft: text } = now.current;
++    if (stored !== null && text !== stored) io.current.leave(text);
++  }, []);
++
+   useEffect(() => {
+     const hidden = () => {
+       if (document.visibilityState === "hidden") commit();
+     };
+-    const gone = () => {
+-      const { saved: stored, draft: text } = now.current;
+-      if (stored !== null && text !== stored) io.current.leave(text);
+-    };
+     document.addEventListener("visibilitychange", hidden);
+-    window.addEventListener("pagehide", gone);
++    window.addEventListener("pagehide", lastChance);
+     return () => {
+       document.removeEventListener("visibilitychange", hidden);
+-      window.removeEventListener("pagehide", gone);
++      window.removeEventListener("pagehide", lastChance);
+     };
+-  }, [commit]);
++  }, [commit, lastChance]);
++
++  /* **And when the box goes but the page does not.** Since 2026-10-02 these
++     boxes live inside the profile popover too, which sits in a mode band the
++     dock or an article change unmounts whatever the popover thinks — and an
++     SPA navigation fires neither `visibilitychange` nor `pagehide`. So the
++     unmount sends what `pagehide` would: the `keepalive` request, because an
++     ordinary save started by a component that no longer exists has nobody to
++     report to. The metadata page's box had the same gap. GPT Sol's review of
++     docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md.
++
++     Safe under StrictMode's mount–unmount–mount: nothing is loaded at mount,
++     so the first cleanup finds `saved` null and sends nothing. */
++  useEffect(() => lastChance, [lastChance]);
+ 
+   const state = saveStateOf({
+     loaded: saved !== null,
+diff --git a/src/web/useGlossary.ts b/src/web/useGlossary.ts
+index a9b038f75..2e7ada7ed 100644
+--- a/src/web/useGlossary.ts
++++ b/src/web/useGlossary.ts
+@@ -461,6 +461,8 @@ export interface UseGlossary {
+    *   260913a.
+    */
+   more(useProfile?: boolean): Promise<void>;
++  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
++  refresh(): Promise<void>;
+   cancel(id: string): void;
+   /** Check one term on the web. Resolves when the answer is in `glossary`. */
+   look(id: string): Promise<void>;
+@@ -903,6 +905,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
+     starting: queue.starting,
+     find,
+     more,
++    refresh,
+     cancel: queue.cancel,
+     look,
+     lookDraft,
+diff --git a/src/web/useIdeas.ts b/src/web/useIdeas.ts
+index 5fb9049b8..2ec13a336 100644
+--- a/src/web/useIdeas.ts
++++ b/src/web/useIdeas.ts
+@@ -107,6 +107,8 @@ export interface UseIdeas {
+    * forcing — which is what makes that true rather than a hope.
+    */
+   regenerate(): Promise<void>;
++  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
++  refresh(): Promise<void>;
+   cancel(id: string): void;
+ }
+ 
+@@ -252,6 +254,7 @@ export function useIdeas(slug: string): UseIdeas {
+     starting: queue.starting,
+     ensure,
+     regenerate,
++    refresh,
+     cancel: queue.cancel,
+   };
+ }
+diff --git a/src/web/useProfile.ts b/src/web/useProfile.ts
+index eb0dc9731..deaf41247 100644
+--- a/src/web/useProfile.ts
++++ b/src/web/useProfile.ts
+@@ -34,7 +34,13 @@ import { type AutosavedText, useAutosavedText } from "./useAutosavedText.js";
+ const HEADERS = { "Content-Type": "application/json" };
+ const bodyFor = (text: string) => JSON.stringify({ profile: text === "" ? null : text });
+ 
+-async function saveProfile(text: string): Promise<string> {
++/**
++ * Store "about you", and answer with what the server stored. Exported for the
++ * profile panel (ProfilePanel.tsx), which edits the same string in place —
++ * shared rather than copied, because a copy is a second place to forget
++ * `forgetSummaries`.
++ */
++export async function saveProfile(text: string): Promise<string> {
+   const body = await readJson<{ profile: string | null }>(
+     await apiFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) }),
+   );
+@@ -54,7 +60,7 @@ async function saveProfile(text: string): Promise<string> {
+    lost sentence. `leavingFetch` uses the token the SDK already holds and starts
+    at once; a token that expired in the last few seconds is refused, which is
+    strictly better than not sending. GPT Sol, 2026-08-26. */
+-function leaveProfile(text: string): void {
++export function leaveProfile(text: string): void {
+   leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) });
+ }
+ 
+diff --git a/src/web/useSimple.ts b/src/web/useSimple.ts
+index 8c73963ca..09c2ef517 100644
+--- a/src/web/useSimple.ts
++++ b/src/web/useSimple.ts
+@@ -47,6 +47,12 @@ export interface UseSimple {
+   starting: boolean;
+   /** Repeat only the GET after a failed read. This never starts a model job. */
+   retryRead(): Promise<void>;
++  /**
++   * Read again because something it depends on has changed — the profile
++   * panel's save, so `profileChanged` is the server's verdict on the new
++   * profile. `OrderedRead.refresh`. Never spends. ProfilePanel.tsx § Regenerate.
++   */
++  refresh(): Promise<void>;
+   /** **Write it if nobody has** — unforced, the automatic run's verb and the empty state's. */
+   ensure(): Promise<void>;
+   /** The forced run — the stale notice's button. It replaces the paragraphs. */
+@@ -141,6 +147,7 @@ export function useSimple(slug: string): UseSimple {
+     stalled: queue.stalled,
+     starting: queue.starting,
+     retryRead,
++    refresh,
+     ensure,
+     regenerate,
+     cancel: queue.cancel,
+diff --git a/src/web/useSketch.ts b/src/web/useSketch.ts
+index c9692ca0e..52e73ff9e 100644
+--- a/src/web/useSketch.ts
++++ b/src/web/useSketch.ts
+@@ -82,6 +82,8 @@ export interface UseSketch {
+    * else is swept in with it.
+    */
+   regenerate(): Promise<void>;
++  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
++  refresh(): Promise<void>;
+   cancel(id: string): void;
+ }
+ 
+@@ -217,6 +219,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
+     starting: queue.starting,
+     ensure,
+     regenerate,
++    refresh,
+     cancel: queue.cancel,
+   };
+ }
+diff --git a/src/web/useTweets.ts b/src/web/useTweets.ts
+index 1348a2743..dc4e69a48 100644
+--- a/src/web/useTweets.ts
++++ b/src/web/useTweets.ts
+@@ -54,6 +54,8 @@ export interface UseTweets {
+   starting: boolean;
+   /** Repeat only the GET after a failed read. Never spends. */
+   retryRead(): Promise<void>;
++  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
++  refresh(): Promise<void>;
+   /** Write it if nobody has — the automatic run's request, and the empty state's button. */
+   ensure(): Promise<void>;
+   /** The forced run — the stale banner's button. */
+@@ -166,6 +168,7 @@ export function useTweets(slug: string): UseTweets {
+     stalled: queue.stalled,
+     starting: queue.starting,
+     retryRead,
++    refresh,
+     ensure,
+     regenerate,
+     cancel: queue.cancel,
+diff --git a/tests/autosaved-text.test.tsx b/tests/autosaved-text.test.tsx
+index 02b2e4f1a..21f91f0a4 100644
+--- a/tests/autosaved-text.test.tsx
++++ b/tests/autosaved-text.test.tsx
+@@ -204,6 +204,26 @@ describe("leaving", () => {
+     });
+     expect(left).toEqual([]);
+   });
++
++  /* **The box going away without the page going away.** Since 2026-10-02 the
++     profile panel edits in place (plan 261002b), and its popover lives inside a
++     mode band that the dock or an article change unmounts whatever the panel
++     thinks — an SPA navigation fires neither `visibilitychange` nor
++     `pagehide`. Without this, words typed in the last two seconds before
++     switching mode were dropped without a sound. GPT Sol's plan review, P1. */
++  it("fires the last-chance save when the box unmounts with words unsaved", () => {
++    act(() => get().setDraft("typed, then switched mode"));
++    act(() => root.render(null));
++    expect(left).toEqual(["typed, then switched mode"]);
++  });
++
++  /* The other half, and the one StrictMode leans on: it mounts, unmounts and
++     mounts again in development, and nothing is pending at mount, so the
++     cleanup must be a no-op rather than a PATCH per page load. */
++  it("sends nothing when it unmounts with nothing unsaved", () => {
++    act(() => root.render(null));
++    expect(left).toEqual([]);
++  });
+ });
+ 
+ /* Metadata's box moves to another article without remounting. */
+diff --git a/tests/glossary-compact-header.test.tsx b/tests/glossary-compact-header.test.tsx
+index bd696ff2a..1de5d0e9c 100644
+--- a/tests/glossary-compact-header.test.tsx
++++ b/tests/glossary-compact-header.test.tsx
+@@ -94,6 +94,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
+     starting: false,
+     find: async () => {},
+     more: async () => {},
++    refresh: async () => {},
+     cancel: noop,
+     look: async () => {},
+     looking: null,
+diff --git a/tests/glossary-find-more-keeps-the-lists-profile.test.tsx b/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
+index 2f68e667e..5326159cf 100644
+--- a/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
++++ b/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
+@@ -83,6 +83,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
+     starting: false,
+     find: async () => {},
+     more: async () => {},
++    refresh: async () => {},
+     cancel: noop,
+     look: async () => {},
+     looking: null,
+@@ -155,6 +156,29 @@ describe("Find more in the glossary's foot", () => {
+     expect(more.mock.calls).toEqual([[true]]);
+   });
+ 
++  /* **Regenerate in the profile panel is the forced run, and that is why it
++     rewrites** (plan 261002b). The glossary has no "replace" verb: `more` is
++     the forced run, and it appends only when the list's profile hash matches
++     the reader's (src/glossary.ts § existingFor). The panel offers Regenerate
++     only when the server says it does *not* match, so this forced run is a
++     rewrite. `find` would be the wrong call — unforced, it can skip — and a
++     panel that wired it would start a job that changed nothing. */
++  it("Regenerate in the badge's panel asks for the forced run, for the profile", async () => {
++    const more = vi.fn(async () => {});
++    const find = vi.fn(async () => {});
++    await mount(owner(glossary("an-old-profile"), { more, find, profileChanged: true }));
++    const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
++    if (!badge) throw new Error("no badge on a list written for a profile");
++    await act(async () => badge.click());
++    const regenerate = [...document.querySelectorAll<HTMLButtonElement>(".prof-panel button")].find((b) =>
++      /regenerate/i.test(b.textContent ?? ""),
++    );
++    if (!regenerate) throw new Error("no Regenerate in the panel for a changed profile");
++    await act(async () => regenerate.click());
++    expect(more.mock.calls).toEqual([[true]]);
++    expect(find).not.toHaveBeenCalled();
++  });
++
+   it("offers no profile control of any kind beside it", async () => {
+     await mount(owner(glossary(null), {}));
+     const foot = host.querySelector(".gloss-foot");
+diff --git a/tests/mode-surface-changes-no-markup.test.tsx b/tests/mode-surface-changes-no-markup.test.tsx
+index da39946cf..b22cce3d7 100644
+--- a/tests/mode-surface-changes-no-markup.test.tsx
++++ b/tests/mode-surface-changes-no-markup.test.tsx
+@@ -1288,6 +1288,7 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
+     starting: false,
+     find: async () => {},
+     more: async () => {},
++    refresh: async () => {},
+     cancel: () => {},
+     look: async () => {},
+     looking: null,
+@@ -1320,6 +1321,7 @@ function ideasOwner(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): IdeasO
+     starting: false,
+     ensure: async () => {},
+     regenerate: async () => {},
++    refresh: async () => {},
+     cancel: () => {},
+     ...over,
+   };
+@@ -1548,6 +1550,7 @@ function tweetsOwner(thread: TweetThread | null, over: Partial<UseTweets> = {}):
+     retryRead: async () => {},
+     ensure: async () => {},
+     regenerate: async () => {},
++    refresh: async () => {},
+     cancel: () => {},
+     ...over,
+   };
+diff --git a/tests/no-profile-row-beside-paid-buttons.test.tsx b/tests/no-profile-row-beside-paid-buttons.test.tsx
+index 60b5d8c99..7c12ad0d6 100644
+--- a/tests/no-profile-row-beside-paid-buttons.test.tsx
++++ b/tests/no-profile-row-beside-paid-buttons.test.tsx
+@@ -57,6 +57,7 @@ function owner(over: Partial<UseIdeas> = {}): UseIdeas {
+     starting: false,
+     ensure: async () => {},
+     regenerate: async () => {},
++    refresh: async () => {},
+     cancel: () => {},
+     ...over,
+   };
+diff --git a/tests/profile-panel.test.tsx b/tests/profile-panel.test.tsx
+index 3a31f4668..323bf30e4 100644
+--- a/tests/profile-panel.test.tsx
++++ b/tests/profile-panel.test.tsx
+@@ -1,9 +1,16 @@
+ // @vitest-environment jsdom
+ /**
+- * **The panel that says what you are being written for.**
++ * **The panel that says what you are being written for — and, since
++ * 2026-10-02, lets you change it where you are.**
++ *
++ * > And if possible, allow them to edit the text inline (rather than having to
++ * > click out to separate pages.
++ * >
++ * > — Greg, 2026-10-01, `[SPIDERYARN-READING2-7S]`
+  *
+  * The things a reader hits that no other test covers. Each was watched fail
+- * first, against a mutation aimed at it.
++ * first, against a mutation aimed at it or against the read-only panel this
++ * replaced.
+  *
+  * Opened through the real *written for you* badge (`WrittenForYou`), which has
+  * been the only way into it from a reading view since 2026-09-13, when the
+@@ -13,25 +20,29 @@
+  * tests went in through that row's button, which also served a reader with no
+  * profile; the badge appears only on text that was written for one.
+  *
++ * Most of what follows is about **words not being lost**. The panel was kept
++ * read-only on 2026-08-30 for exactly that reason — a popover can be dismissed
++ * from under a box mid-sentence — and Greg's request reverses that decision on
++ * the condition that the holes are closed rather than reopened.
++ * docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md.
++ *
+  * ## What this file deliberately does NOT test
+  *
+- * **That the two `Edit →` links can be clicked.** That is the whole reason the
+- * panel exists, and jsdom cannot see it: it has no layout, so
+- * `elementFromPoint` and `pointer-events` mean nothing here and every link
++ * **That the panel can be reached with a real pointer.** That is the whole
++ * reason it is a popover, and jsdom cannot see it: it has no layout, so
++ * `elementFromPoint` and `pointer-events` mean nothing here and every control
+  * reports as reachable. That is not a gap in this file, it is *how the bug got
+- * here* — the tooltip this replaces has carried an unreachable
+- * "Edit your profile →" since it was written, and any jsdom assertion about it
+- * would have passed on every day of that. docs/reusable/silent-success.md.
+- *
+- * The reachability check is a browser gate instead, run against a real Chrome
+- * with real pointer events, and it has been seen to *fail* — against the
+- * tooltip version, where `document.elementFromPoint` at the link's centre
+- * returns the page behind it while a control link on the same page returns
+- * itself. docs/plans/260830c-profile-panel.md § Tests.
++ * here* — the tooltip this replaces carried an unreachable "Edit your profile
++ * →" since it was written, and any jsdom assertion about it would have passed
++ * on every day of that. docs/reusable/silent-success.md. The reachability check
++ * is a browser gate instead, at desktop width and at 390px
++ * (docs/plans/261002b § Tests).
+  */
+ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+ 
+ /** What `GET /api/reader?slug=` will answer, and whether it answers at all. */
+ const server: {
+@@ -41,26 +52,71 @@ const server: {
+   fails: boolean;
+   /** A 200 whose shelf half fell over — a different thing, and the sharper one. */
+   purposeFailed: boolean;
+-} = { profile: null, purpose: null, fails: false, purposeFailed: false };
+-/** Every URL the panel asked for, so "it fetches when opened" is checkable. */
++  /** `apiFetch`'s offline answer: the cached body, as a 200 marked a copy. */
++  offline: boolean;
++} = { profile: null, purpose: null, fails: false, purposeFailed: false, offline: false };
++/** Every GET the panel made, so "it fetches when opened" is checkable. */
+ const asked: string[] = [];
+ 
+-vi.mock("../src/web/lib/api.js", () => ({
+-  apiFetch: async (input: string) => {
+-    asked.push(input);
+-    if (server.fails) throw new TypeError("Failed to fetch");
+-    return new Response(
+-      JSON.stringify({
+-        profile: server.profile,
+-        purpose: server.purpose,
+-        purposeFailed: server.purposeFailed,
+-        hasProfile: server.profile !== null || server.purpose !== null,
+-      }),
+-      { status: 200, headers: { "content-type": "application/json" } },
+-    );
+-  },
+-  leavingFetch: async () => undefined,
+-  readJson: async (res: Response) => res.json(),
++/**
++ * Every PATCH, held until the test answers it — the whole of what "closes only
++ * once the save has landed" can be tested against.
++ */
++const patches: Array<{
++  url: string;
++  body: Record<string, unknown>;
++  answer(res: Response): void;
++}> = [];
++/** Each last-chance (`keepalive`) save, as `leavingFetch` was asked for it. */
++const left: Array<{ url: string; body: unknown }> = [];
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  return {
++    ...real,
++    apiFetch: async (input: string, init?: RequestInit) => {
++      if (init?.method === "PATCH") {
++        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
++        return new Promise<Response>((resolve) => {
++          patches.push({ url: input, body, answer: resolve });
++        });
++      }
++      asked.push(input);
++      if (server.fails) throw new TypeError("Failed to fetch");
++      return new Response(
++        JSON.stringify({
++          profile: server.profile,
++          purpose: server.purpose,
++          purposeFailed: server.purposeFailed,
++          hasProfile: server.profile !== null || server.purpose !== null,
++        }),
++        {
++          status: 200,
++          headers: {
++            "content-type": "application/json",
++            ...(server.offline ? { "x-spideryarn-offline": "copy" } : {}),
++          },
++        },
++      );
++    },
++    leavingFetch: (input: string, init?: RequestInit) => {
++      left.push({ url: input, body: JSON.parse(String(init?.body)) });
++    },
++  };
++});
++
++/** The microphone, as far as the panel can see it: on, or not. */
++const mic = { armed: false };
++vi.mock("../src/web/useDictationField.js", () => ({
++  useDictationField: () => ({
++    dictation: { supported: false, armed: mic.armed, transcribing: false },
++    readOnly: false,
++    toggle: () => {},
++  }),
++}));
++vi.mock("../src/web/DictationStrip.js", () => ({
++  DictationButton: () => null,
++  DictationStrip: () => null,
+ }));
+ 
+ const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
+@@ -68,20 +124,37 @@ const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
+ let host: HTMLDivElement;
+ let root: Root;
+ 
++/** A mode's regenerate, recorded. */
++interface Spy {
++  run: Mock<() => void>;
++  refresh: Mock<() => void>;
++  busy: boolean;
++}
++const spy = (busy = false): Spy => ({ run: vi.fn<() => void>(), refresh: vi.fn<() => void>(), busy });
++
+ /** The real badge, on text written for a profile — never the panel on its own,
+  *  so every assertion below is about something a reader can get to. */
+-function render(opts: { changed?: boolean } = {}) {
++function render(opts: { changed?: boolean; regenerate?: Spy } = {}) {
+   act(() => {
+     root.render(
+       createElement(WrittenForYou, {
+         written: true,
+         changed: opts.changed ?? false,
+         slug: "some-article",
++        regenerate: opts.regenerate,
+       }),
+     );
+   });
+ }
+ 
++async function settle(): Promise<void> {
++  for (let i = 0; i < 4; i++) {
++    await act(async () => {
++      await new Promise((resolve) => setTimeout(resolve, 0));
++    });
++  }
++}
++
+ /** Open it the way a reader does, and let the fetch settle. */
+ async function open() {
+   const trigger = host.querySelector<HTMLButtonElement>("button.prof-badge");
+@@ -89,22 +162,54 @@ async function open() {
+   await act(async () => {
+     trigger.click();
+   });
+-  // The fetch resolves a microtask later; the panel is mounted by then but its
+-  // contents are still the loading state.
+-  await act(async () => {
+-    await Promise.resolve();
+-  });
++  await settle();
+   const panel = document.querySelector<HTMLElement>(".prof-panel");
+   if (!panel) throw new Error("the panel did not open");
+   return panel;
+ }
+ 
++const panel = () => document.querySelector<HTMLElement>(".prof-panel");
++const boxes = () => [...document.querySelectorAll<HTMLTextAreaElement>(".prof-panel textarea")];
++function box(n: 0 | 1): HTMLTextAreaElement {
++  const el = boxes()[n];
++  if (!el) throw new Error(`no box ${n} in the panel`);
++  return el;
++}
++function type(el: HTMLTextAreaElement, value: string): void {
++  act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++/** React listens for `focusout`, which is what a real blur sends up the tree. */
++function blur(el: HTMLTextAreaElement): void {
++  act(() => {
++    el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
++  });
++}
++async function pressOutside(): Promise<void> {
++  await act(async () => {
++    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
++  });
++}
++function button(name: RegExp): HTMLButtonElement | undefined {
++  return [...document.querySelectorAll<HTMLButtonElement>(".prof-panel button")].find((b) =>
++    name.test(b.textContent ?? ""),
++  );
++}
++const ok = (body: Record<string, unknown>) =>
++  new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
++
+ beforeEach(() => {
+   server.profile = null;
+   server.purpose = null;
+   server.fails = false;
+   server.purposeFailed = false;
++  server.offline = false;
+   asked.length = 0;
++  patches.length = 0;
++  left.length = 0;
++  mic.armed = false;
+   host = document.createElement("div");
+   document.body.append(host);
+   root = createRoot(host);
+@@ -118,36 +223,56 @@ afterEach(() => {
+ describe("the profile panel", () => {
+   /* The badge is provenance about the text, and it goes on describing an
+      artefact written for a profile the reader has since cleared — so the
+-     panel must say plainly that there is nothing in either box now, rather than
+-     showing two empty headings. */
+-  it("says both boxes are empty when the reader has cleared them since", async () => {
++     panel must offer two empty boxes to write in, not two empty headings and
++     not a box seeded from something it failed to read. */
++  it("offers both boxes empty when the reader has cleared them since", async () => {
+     render({ changed: true });
+-    const panel = await open();
+-    expect(panel.textContent).toContain("You haven't said anything about yourself yet");
+-    expect(panel.textContent).toContain("You haven't said why you're reading this one");
++    await open();
++    expect(boxes().map((b) => b.value)).toEqual(["", ""]);
++    expect(boxes().every((b) => !b.disabled)).toBe(true);
++  });
++
++  /* **The editors are here, and the ways out are not** (Sol). Each `Edit →`
++     link was a way out of the panel that skipped the save, and the editing it
++     led to is now in the panel itself. This replaces the test that the two
++     links were there; it was watched fail against the read-only panel. */
++  it("edits both halves in place, seeded with what the server holds, and links nowhere", async () => {
++    server.profile = "A physicist.";
++    server.purpose = "For the evidence.";
++    render();
++    const p = await open();
++    expect(boxes().map((b) => b.value)).toEqual(["A physicist.", "For the evidence."]);
++    expect(p.querySelectorAll("a")).toHaveLength(0);
+   });
+ 
+-  /* Two links, to the two pages that own the two boxes. The per-article one
+-     must carry the slug: a link to somebody else's metadata page, or to none,
+-     is worse than no link. */
+-  it("links to both halves, and the article's link names the article", async () => {
++  /* Each half goes to its own owner: "about you" to `/api/reader`, the
++     article's half to that article's shelf record. Crossing them would write
++     one article's purpose into the reader's whole profile. */
++  it("saves each half to its own endpoint when the reader leaves the box", async () => {
++    server.profile = "A physicist.";
+     render();
+-    const panel = await open();
+-    const hrefs = [...panel.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+-    expect(hrefs).toContain("/profile");
+-    expect(hrefs.some((h) => h?.startsWith("/read/some-article/metadata"))).toBe(true);
++    await open();
++    type(box(0), "A physicist, rusty on biology.");
++    blur(box(0));
++    type(box(1), "How big brains would think.");
++    blur(box(1));
++    expect(patches.map((x) => [x.url, x.body])).toEqual([
++      ["/api/reader", { profile: "A physicist, rusty on biology." }],
++      ["/api/library/some-article", { purpose: "How big brains would think." }],
++    ]);
+   });
+ 
+   /* Three states, not two. A profile that could not be READ must never render
+-     as one that was never WRITTEN: a reader told "you haven't said anything
+-     about yourself yet" about the paragraph they wrote last week will go and
+-     write it again, and nothing on screen will have looked wrong. */
+-  it("says it could not read a profile, rather than that there is none", async () => {
++     as one that was never WRITTEN — and now that the panel edits, it must not
++     be an empty box either: saving it would erase the paragraph we failed to
++     read. */
++  it("says it could not read a profile, and offers nothing to save over it", async () => {
+     server.fails = true;
+     render();
+-    const panel = await open();
+-    expect(panel.textContent).toContain("We couldn't read this just now");
+-    expect(panel.textContent).not.toContain("haven't said anything about yourself");
++    const p = await open();
++    expect(p.textContent).toContain("We couldn't read this just now");
++    expect(p.textContent).not.toContain("haven't said anything about yourself");
++    expect(boxes()).toHaveLength(0);
+   });
+ 
+   /* **And the sharper half of the same rule**, which the test above cannot
+@@ -155,18 +280,33 @@ describe("the profile panel", () => {
+      the shelf read behind "why you're reading this one" fell over. The server
+      swallows that failure when it is building a prompt — right, because a job
+      must not die over a purpose nobody may have written — so without a flag on
+-     the response the panel says "you haven't said why you're reading this one"
+-     to somebody who has. GPT Sol's review of the built code, 2026-08-30. */
++     the response the panel would offer an empty box over a sentence the reader
++     wrote. GPT Sol's review of the built code, 2026-08-30. */
+   it("tells the two halves apart when only the article's half could not be read", async () => {
+     server.profile = "A physicist.";
+     server.purposeFailed = true;
+     render();
+-    const panel = await open();
+-    // The half that worked still says what it says…
+-    expect(panel.textContent).toContain("A physicist.");
+-    // …and the half that did not is not reported as empty.
+-    expect(panel.textContent).toContain("We couldn't read this just now");
+-    expect(panel.textContent).not.toContain("You haven't said why you're reading this one");
++    const p = await open();
++    // The half that worked can be edited…
++    expect(boxes().map((b) => b.value)).toEqual(["A physicist."]);
++    // …and the half that did not is not reported as empty, nor offered as a box.
++    expect(p.textContent).toContain("We couldn't read this just now");
++    expect(p.textContent).not.toContain("You haven't said why you're reading this one");
++  });
++
++  /* **An offline copy is not a read** (Sol). `apiFetch` answers a failed GET
++     with the cached body as a 200 marked `x-spideryarn-offline: copy`. Edited,
++     that copy would be PATCHed over whatever the reader has written since on
++     another device, the moment the network came back. So it is shown, and
++     said to be a copy, and not offered for editing. */
++  it("shows an offline copy read-only, and says it is one", async () => {
++    server.profile = "Last week's paragraph.";
++    server.offline = true;
++    render();
++    const p = await open();
++    expect(boxes()).toHaveLength(0);
++    expect(p.textContent).toContain("Last week's paragraph.");
++    expect(p.textContent).toMatch(/offline/i);
+   });
+ 
+   /* Not a cache and not a page-load fetch: the text is wanted by one component
+@@ -186,7 +326,7 @@ describe("the profile panel", () => {
+     await act(async () => {
+       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+     });
+-    expect(document.querySelector(".prof-panel")).toBeNull();
++    expect(panel()).toBeNull();
+     await open();
+     expect(asked).toHaveLength(2);
+   });
+@@ -195,10 +335,8 @@ describe("the profile panel", () => {
+      passed no options, and its defaults — read out of
+      node_modules/@floating-ui/react on 2026-09-07, where they are written
+      `outsidePress = true` and `outsidePressEvent = 'pointerdown'` — are what
+-     close this panel for a reader who has finished with it. Until now the only
+-     dismissal any test here dispatched was Escape, so the whole outside-press
+-     default was unpinned: taking `useDismiss` out of `useInteractions` left
+-     every other test in this file green.
++     close this panel for a reader who has finished with it. Taking `useDismiss`
++     out of `useInteractions` once left every other test in this file green.
+ 
+      `pointerdown` rather than `click`, so the panel is gone before the press
+      lands on whatever is underneath it — otherwise the paragraph behind it
+@@ -207,27 +345,171 @@ describe("the profile panel", () => {
+   it("closes when the reader presses somewhere else on the page", async () => {
+     render();
+     await open();
+-    await act(async () => {
+-      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+-    });
+-    expect(document.querySelector(".prof-panel")).toBeNull();
++    await pressOutside();
++    expect(panel()).toBeNull();
+   });
+ 
+   /* The other half of that default, and the half that would make the panel
+      pointless if it went the wrong way: this is a popover rather than a tooltip
+-     precisely so a reader can put a pointer *into* it and press one of the two
+-     `Edit →` links. A press that lands inside must therefore not dismiss it.
+-     Floating UI answers this twice over — a React capture handler on the
+-     floating element and a native containment check — and what is pinned here
+-     is the behaviour, not either mechanism. */
++     precisely so a reader can put a pointer *into* it and type. A press that
++     lands inside must therefore not dismiss it. Floating UI answers this twice
++     over — a React capture handler on the floating element and a native
++     containment check — and what is pinned here is the behaviour, not either
++     mechanism. */
+   it("stays open when the press lands inside the panel itself", async () => {
+     render();
+-    const panel = await open();
+-    const inside = panel.querySelector(".prof-panel-lede");
++    const p = await open();
++    const inside = p.querySelector(".prof-panel-lede");
+     if (!inside) throw new Error("the panel rendered without its lede");
+     await act(async () => {
+       inside.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+     });
+-    expect(document.querySelector(".prof-panel")).not.toBeNull();
++    expect(panel()).not.toBeNull();
++  });
++});
++
++describe("dismissing it with words unsaved", () => {
++  /* **Hazard 1 of the 2026-08-30 decision**: an outside press unmounts the
++     box, so save-on-blur never fires and the sentence goes with it. Here the
++     press saves instead, and the panel waits for the save to land — the *Done*
++     latch PurposePrompt.tsx already uses. */
++  it("saves on an outside press, and closes only once the save has landed", async () => {
++    render();
++    await open();
++    type(box(0), "A physicist.");
++    await pressOutside();
++    expect(patches.map((x) => x.body)).toEqual([{ profile: "A physicist." }]);
++    expect(panel(), "closed before the save had landed").not.toBeNull();
++    await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));
++    await settle();
++    expect(panel()).toBeNull();
++  });
++
++  /* The latch lets go on a refusal rather than closing over it, so the reader
++     sees the server's reason in the box's own status line with their words
++     still in the box. */
++  it("stays open over a refused save, and says why", async () => {
++    render();
++    await open();
++    type(box(1), "Too long, say.");
++    await pressOutside();
++    await act(async () =>
++      patches[0]?.answer(
++        new Response(JSON.stringify({ error: "That is longer than 600 characters." }), {
++          status: 400,
++          headers: { "content-type": "application/json" },
++        }),
++      ),
++    );
++    await settle();
++    expect(panel(), "a refused save was closed over").not.toBeNull();
++    expect(panel()?.textContent).toContain("longer than 600 characters");
++    expect(box(1).value).toBe("Too long, say.");
++  });
++
++  /* The explicit way out, with the same promise. */
++  it("Done saves and closes once both halves are clean", async () => {
++    render();
++    await open();
++    type(box(0), "A physicist.");
++    const done = button(/^Done$/);
++    if (!done) throw new Error("no Done button");
++    await act(async () => done.click());
++    expect(panel()).not.toBeNull();
++    await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));
++    await settle();
++    expect(panel()).toBeNull();
++  });
++
++  /* **Hazard 2**: dictation's unmount aborts, so dismissing the panel
++     mid-dictation would throw the spoken words away. While the microphone is
++     on, or its words are still on their way, the panel does not dismiss. */
++  it("does not dismiss while a dictation is running", async () => {
++    render();
++    await open();
++    mic.armed = true;
++    // Any render lets the box tell the panel it is busy.
++    render();
++    await pressOutside();
++    expect(panel(), "dismissed mid-dictation").not.toBeNull();
++    mic.armed = false;
++    render();
++    await pressOutside();
++    expect(panel()).toBeNull();
++  });
++
++  /* **Hazard 3** (Sol): the band can unmount the panel whatever it thinks —
++     a mode switch from the dock, a different article. That fires neither
++     `visibilitychange` nor `pagehide`, so the words go out as the last-chance
++     `keepalive` PATCH instead. tests/autosaved-text.test.tsx pins the hook's
++     half; this pins that the panel's boxes are wired to it. */
++  it("sends the unsaved words when the whole thing is unmounted under it", async () => {
++    render();
++    await open();
++    type(box(1), "Half a sentence");
++    act(() => root.render(null));
++    expect(left).toEqual([{ url: "/api/library/some-article", body: { purpose: "Half a sentence" } }]);
++  });
++});
++
++describe("Regenerate", () => {
++  /* **Only when the server says the profile changed** (Sol). Not on "a save
++     happened here": an edit reverted, or whitespace the server trims, would
++     offer a paid call for text that is still current. */
++  it("is not offered when the text is current", async () => {
++    const r = spy();
++    render({ changed: false, regenerate: r });
++    await open();
++    expect(button(/regenerate/i)).toBeUndefined();
++  });
++
++  it("is offered when the profile has changed, and pressing it runs and closes", async () => {
++    const r = spy();
++    render({ changed: true, regenerate: r });
++    await open();
++    const b = button(/regenerate/i);
++    if (!b) throw new Error("no Regenerate for a changed profile");
++    expect(b.disabled).toBe(false);
++    await act(async () => b.click());
++    expect(r.run).toHaveBeenCalledTimes(1);
++    expect(panel()).toBeNull();
++  });
++
++  /* A regenerate started before the new profile has landed would be written
++     for the old one and then stamped as current — the badge would stop saying
++     *changed* about text that was never written for the new words. */
++  it("is held while a save is in flight", async () => {
++    const r = spy();
++    render({ changed: true, regenerate: r });
++    await open();
++    type(box(0), "A physicist.");
++    blur(box(0));
++    expect(button(/regenerate/i)?.disabled).toBe(true);
++    await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));
++    await settle();
++    expect(button(/regenerate/i)?.disabled).toBe(false);
++  });
++
++  /* A job already running is the mode's own progress row's business; a second
++     press would queue a second paid call. */
++  it("is held while the mode's own job is running", async () => {
++    render({ changed: true, regenerate: spy(true) });
++    await open();
++    expect(button(/regenerate/i)?.disabled).toBe(true);
++  });
++
++  /* **How it learns the profile changed**: the mode re-reads and the server's
++     hash comparison decides. No client-side hashing — so after a save from
++     the panel has settled, the panel asks the mode to read again, once. */
++  it("asks the mode to read again once a save from the panel has landed", async () => {
++    const r = spy();
++    render({ changed: false, regenerate: r });
++    await open();
++    type(box(0), "A physicist.");
++    blur(box(0));
++    expect(r.refresh).not.toHaveBeenCalled();
++    await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));
++    await settle();
++    expect(r.refresh).toHaveBeenCalledTimes(1);
+   });
+ });
+diff --git a/tests/simple-panel.test.tsx b/tests/simple-panel.test.tsx
+index 43221381b..ad2673f0f 100644
+--- a/tests/simple-panel.test.tsx
++++ b/tests/simple-panel.test.tsx
+@@ -179,6 +179,7 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
+     retryRead: async () => {},
+     ensure: async () => {},
+     regenerate: async () => {},
++    refresh: async () => {},
+     cancel: () => {},
+     ...over,
+   };

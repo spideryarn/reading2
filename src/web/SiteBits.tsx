@@ -37,6 +37,8 @@
  */
 import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { MODE_CATALOG } from "../mode-catalog.js";
+import type { Mode } from "../modes.js";
 import { FeedbackTrigger } from "./FeedbackButton.js";
 import { libraryHomeTitle } from "./library-home-title.js";
 import { Link } from "./Link.js";
@@ -384,11 +386,14 @@ export function Showcase({
   offset = false,
   eager = false,
   under = false,
+  mode,
 }: {
   shot: ShotRecord;
   title: string;
   children: ReactNode;
   eyebrow?: string;
+  /** The mode this shows, if it is one — `ExperimentalTag` says why. */
+  mode?: Mode;
   /** Indent the caption, so consecutive showcases do not march. */
   offset?: boolean;
   eager?: boolean;
@@ -409,12 +414,13 @@ export function Showcase({
 }) {
   const Heading = under ? "h3" : "h2";
   return (
-    <section className={`site-reveal ${under ? "tw:my-10" : "tw:my-16"}`}>
+    <section className={`site-reveal ${under ? "tw:my-10" : "tw:my-16"}`} data-mode={mode}>
       {/* Indented, not right-aligned. A ragged LEFT edge on a five-line
           paragraph costs the reader the one fixed point their eye returns to on
           every line, which is a strange thing to do on a page about reading. */}
       <div className={`tw:max-w-[52ch] ${offset ? "tw:lg:ml-auto" : ""}`}>
         {eyebrow ? <p className="site-eyebrow tw:mb-3">{eyebrow}</p> : null}
+        <ExperimentalTag mode={mode} />
         <Heading
           className={
             under ? "tw:mb-2 tw:font-prose tw:text-lg tw:text-foreground" : "site-h2 tw:mb-3"
@@ -441,15 +447,19 @@ export function Portrait({
   shot,
   title,
   children,
+  mode,
 }: {
   shot: ShotRecord;
   title: string;
   children: ReactNode;
+  /** The mode this shows, if it is one — `ExperimentalTag` says why. */
+  mode?: Mode;
 }) {
   return (
-    <figure className="tw:m-0">
+    <figure className="tw:m-0" data-mode={mode}>
       <Frame shot={shot} />
       <figcaption className="tw:mt-4 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
+        <ExperimentalTag mode={mode} />
         <strong className="tw:text-foreground">{title}</strong> {children}
       </figcaption>
     </figure>
@@ -492,17 +502,37 @@ export function Tile({
   name,
   children,
   span = "",
+  mode,
 }: {
   name: string;
   children: ReactNode;
   span?: "" | "wide" | "featured";
+  /** The mode this tile describes, if it is one — `ExperimentalTag` says why. */
+  mode?: Mode;
 }) {
   return (
-    <div className={`site-panel site-panel-hover tw:p-5 ${span}`}>
+    <div className={`site-panel site-panel-hover tw:p-5 ${span}`} data-mode={mode}>
+      <ExperimentalTag mode={mode} />
       <h3 className="tw:mb-2 tw:font-prose tw:text-base tw:text-foreground">{name}</h3>
       <p className="tw:text-sm tw:leading-relaxed tw:text-muted-foreground">{children}</p>
     </div>
   );
+}
+
+/**
+ * **The small *Experimental* tag over a mode's title, drawn from the code
+ * rather than written into the caption.** Given a `mode`, it appears if and
+ * only if `MODE_CATALOG[mode].experimental` is true, so a mode that leaves the
+ * switch loses its tag with no caption to edit. Typing "(experimental)" into
+ * the words would have gone stale three times already: Structure, Skim and
+ * Tweets each left the switch. docs/plans/261002b-…, Stage 1.
+ *
+ * What the tag means is said once, near the top of `/features`, not here. The
+ * callers' `data-mode` is what tests/features-page-modes.test.tsx finds them by.
+ */
+function ExperimentalTag({ mode }: { mode: Mode | undefined }) {
+  if (!mode || !MODE_CATALOG[mode].experimental) return null;
+  return <span className="site-experimental">Experimental</span>;
 }
 
 /** A row in a plain list, where a tile would be too much furniture. */

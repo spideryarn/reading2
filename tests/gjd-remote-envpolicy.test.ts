@@ -312,7 +312,7 @@ describe("buildProposalRequest", () => {
        every endpoint away and answers 404. A `temperature: 0` here did exactly
        that, and `proposeEnvKeys` reported it as "the model could not be
        reached", which is indistinguishable from a provider having a bad
-       afternoon. docs/research/260902b-env-key-proposal-spike.md.
+       afternoon. docs/investigations/260902b-env-key-proposal-spike.md.
 
        Pinned as an exact set rather than as "no temperature", because the next
        one will not be called temperature. Adding a key here means checking
@@ -493,7 +493,7 @@ describe("the call itself", () => {
  * unsupported parameter into a 404 with every upstream filtered out, and the
  * feature reported that as "the model could not be reached". A stub of
  * `ProposalCall` cannot notice, because the parameter is legal all the way to
- * OpenRouter's router — docs/research/260902b-env-key-proposal-spike.md.
+ * OpenRouter's router — docs/investigations/260902b-env-key-proposal-spike.md.
  */
 describe("the real call, on a stubbed transport and a real ledger", () => {
   const NAMES = ["LOCAL_PORT", "PROVIDER_KEY"];

@@ -24,9 +24,9 @@
  *   structure checkpoint" becomes an observation rather than a claim.
  * - **The estimate**, so the paid path prints what it is about to buy.
  *
- * **Nothing here may import `src/hierarchy.ts`**, and that is a rule rather than
+ * **Nothing here may import `src/structure.ts`**, and that is a rule rather than
  * an accident: this file is imported by `tests/deepen-eval.test.ts`, and
- * `src/hierarchy.ts` imports the app, which reaches the filesystem ledger
+ * `src/structure.ts` imports the app, which reaches the filesystem ledger
  * adapter — so a value import of `buildTree` here put a suite that touches no
  * store at all into `tests/store-migration-registry.ts` needing an entry to
  * excuse one. `proveTheSeam` lives in `run.ts` for that reason;
@@ -39,7 +39,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { type DeepenRecordsFile, reaskExpansions, REASK_ENV } from "../../src/hierarchy-deepen.js";
+import { type DeepenRecordsFile, reaskExpansions, REASK_ENV } from "../../src/structure-deepen.js";
 import {
   assertCheckpointRequest,
   type CheckpointArticleRef,
@@ -96,7 +96,7 @@ export async function fileFixture(filePath: string, name: string): Promise<{ fix
 /* ------------------------------------------ the checkpoint store, recorded -- */
 
 export interface RecordingCheckpoints extends CheckpointStore {
-  /** Every read and write, in order, as `read hierarchy-deepen/<key>`. */
+  /** Every read and write, in order, as `read structure-deepen/<key>`. */
   readonly touched: string[];
   /** Which namespaces were touched at all. The question the seam probe asks. */
   namespaces(): Set<CheckpointNamespace>;
@@ -171,7 +171,7 @@ export function assertReaskNames(opts: {
           "A repeat that is not named reads its own checkpoint rows back, buys nothing, and " +
           "reports verdicts identical to the previous repeat BY CONSTRUCTION — which looks " +
           "exactly like a perfectly stable signal and is worth nothing. Refusing to spend " +
-          "anything until the lever works. src/hierarchy-deepen.ts § REASK_ENV.",
+          "anything until the lever works. src/structure-deepen.ts § REASK_ENV.",
       );
     }
     const over = opts.mustNotName.filter((slug) => reaskExpansions(slug));
@@ -265,7 +265,7 @@ export interface RendezvousOutcome {
    * Not decoration. The hold is *inside* the load job's claim and after its
    * step's clock has started, so every one of these milliseconds is both a
    * millisecond off that claim's 740 s deadline and a millisecond added to the
-   * `hierarchy` window question 5 reads. `runPhaseD` says so out loud when it is
+   * `structure` window question 5 reads. `runPhaseD` says so out loud when it is
    * more than a moment.
    */
   held: { slug: string; ms: number }[];
@@ -276,9 +276,9 @@ export interface RendezvousOutcome {
  * actually intersect.**
  *
  * The arithmetic in `peakConcurrency` was right and the phase did not arrange
- * the thing it measures. The book's job is a forced `hierarchy` and begins its
+ * the thing it measures. The book's job is a forced `structure` and begins its
  * measured step at once; the load articles begin at `fetch` and reach
- * `hierarchy` only after stages 1-3. Whether all windows shared a common
+ * `structure` only after stages 1-3. Whether all windows shared a common
  * intersection was left to how long those stages happened to take — and a peak
  * below the planned width makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
@@ -289,7 +289,7 @@ export interface RendezvousOutcome {
  * only the two load steps and then releasing them before driving the book left
  * the same hole one party over: with another job holding the third queue slot,
  * both released loads could finish their measured step before the book ever
- * reached `hierarchy`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
+ * reached `structure`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
  *
  * **So there are two waits, and only the second one opens the gate.**
  *
@@ -301,7 +301,7 @@ export interface RendezvousOutcome {
  *    the same hook, and every job is released together.
  *
  * **The book does arrive inside its own claim, and that is sound rather than a
- * concession.** Its `hierarchy` needs 658-778 s against a 740 s deadline and can
+ * concession.** Its `structure` needs 658-778 s against a 740 s deadline and can
  * give up none of it — but by the time it is driven, everybody else is already
  * waiting *for it*, so its own wait is one microtask. The load steps are the
  * ones that really hold, inside their claims, and what they pay is in `held`.
@@ -506,7 +506,7 @@ export function abandonStep(opts: {
  * book is queued and before a penny of it is spent.
  *
  * Phase D used to drive it unconditionally. So both load jobs could fail before
- * `hierarchy`, the readiness wait end `"jobs finished first"` with their DPN-18
+ * `structure`, the readiness wait end `"jobs finished first"` with their DPN-18
  * findings already on the record, and the run then buy the book's whole wave
  * into a phase that could not answer the only question that pass exists for.
  * Question 1 is phases A and B only; **the phase-D book pass is for question 5
@@ -548,7 +548,7 @@ export function loadReadiness(ready: RendezvousOutcome): {
  * That function reads findings and only findings, so anything not made into one
  * is, to the run, a clean job — and the next phase is purchased over it.
  *
- * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `hierarchy`
+ * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `structure`
  *    writes valid deepening records and then label generation throws; the job
  *    ends `error`, `driveJob` records that, and phase C is bought anyway.
  * 2. **`done`, deepening on, and no records file** (DPN-19). `saveDeepenRecords`
@@ -593,7 +593,7 @@ export function jobIntegrityFindings(opts: {
   }
   /* **Only on a job that finished**, and that is DPN-27 rather than caution.
      "The records were LOST" is a claim about something having been asked for,
-     and a job that ended `error` may have failed before `hierarchy` ran at all —
+     and a job that ended `error` may have failed before `structure` ran at all —
      a step this eval abandoned at the rendezvous never runs, so it never
      requests anything. Saying "lost" over that is inventing the very fact DPN-19
      was about not inventing, one branch further on. The status finding above
@@ -629,7 +629,7 @@ export function jobIntegrityFindings(opts: {
  * so one nominal pass of the book could buy its wave three times, none of it in
  * the printed estimate. ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
  *
- * An ordinary pass is re-driven and must be: a book's `hierarchy` step needs
+ * An ordinary pass is re-driven and must be: a book's `structure` step needs
  * 658–778 s against a 740 s deadline, so a requeue there is routine, and without
  * the lever the re-drive resumes every answer it has already paid for.
  *
@@ -708,7 +708,7 @@ export function requeueFinding(opts: {
  * Four separate guards had already been fitted for four separate ways of buying
  * something the run already knew it could not use, and here was a fifth: the
  * measured jobs were driven concurrently and *drained* together, and
- * nothing else passed between them. Load 1's `hierarchy` could fail on its
+ * nothing else passed between them. Load 1's `structure` could fail on its
  * structure call while the book and load 2 went on admitting expansion and label
  * calls — for a question 5 that could no longer reach every required completion.
  * ⟨GPT Sol, DPN-26.⟩
@@ -729,8 +729,8 @@ export function requeueFinding(opts: {
  *
  * - **Before each claim**, `lost()` refuses: no further step and no re-drive.
  * - **Inside a running claim**, `signal` cancels. One claim runs the *whole*
- *   `hierarchy` step — structure call, expansion wave **and a full pass of
- *   labels**, which `generateHierarchy` starts even after the wave failed — so
+ *   `structure` step — structure call, expansion wave **and a full pass of
+ *   labels**, which `generateStructure` starts even after the wave failed — so
  *   "stops starting" was true of steps and false of calls, and up to ~$10.80 of
  *   phase D could still be bought after question 5 was lost.
  *
@@ -752,10 +752,10 @@ export interface PhaseFate {
    *
    * This is the half that reaches *inside* a claim, and it exists because
    * stopping before the next claim was not enough (DPN-30). One claim runs the
-   * whole `hierarchy` step, and that step buys a structure call, an expansion
-   * wave **and a whole pass of labels** — `generateHierarchy` catches a failed
+   * whole `structure` step, and that step buys a structure call, an expansion
+   * wave **and a whole pass of labels** — `generateStructure` catches a failed
    * wave and falls straight through to `generateLabels` regardless
-   * (src/hierarchy.ts § the `deepenFailed` catch). So a sibling could *begin* an
+   * (src/structure.ts § the `deepenFailed` catch). So a sibling could *begin* an
    * entire label pass after question 5 was already unanswerable.
    *
    * `announcing` combines this into the measured step's `ctx.signal`, and `src/`
@@ -763,7 +763,7 @@ export interface PhaseFate {
    * assumed**: label batches are queued *with* it (`src/labels.ts` §
    * `queue.add(…, { signal })`), so an abort drops the ones that have not
    * started; the wave's own calls carry it through `liveExpansionExecutor`; and
-   * `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+   * `src/structure-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
    * wait, never a call in flight"*, which is exactly the bound to quote.
    *
    * **Only a lost fate aborts.** `ctx.signal` keeps doing its own job beside it.
@@ -907,13 +907,13 @@ export function assertSeamProof(proof: SeamProof): void {
     throw new Error(
       `The re-asking pass made ${proof.readsWhileReasking} checkpoint read(s). The lever skips ` +
         "the read rather than reading and discarding, deliberately, so that `found` cannot " +
-        "report rows nobody used. src/hierarchy-deepen.ts § REASK_ENV.",
+        "report rows nobody used. src/structure-deepen.ts § REASK_ENV.",
     );
   }
-  if (proof.namespaces.some((n) => n !== "hierarchy-deepen")) {
+  if (proof.namespaces.some((n) => n !== "structure-deepen")) {
     throw new Error(
       `The deepening path touched ${proof.namespaces.join(", ")}. It must touch ` +
-        "`hierarchy-deepen` and nothing else — the structure checkpoint being left alone is what " +
+        "`structure-deepen` and nothing else — the structure checkpoint being left alone is what " +
         "holds the seed constant across repeats, and it is the half of the mechanism that would " +
         "otherwise be taken on trust.",
     );
@@ -941,7 +941,7 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
   if (value.version !== RECORDS_VERSION) {
     throw new Error(
       `${where} says version ${JSON.stringify(value.version ?? null)}, and this harness reads ` +
-        `${JSON.stringify(RECORDS_VERSION)}. The format moved; read src/hierarchy-deepen.ts ` +
+        `${JSON.stringify(RECORDS_VERSION)}. The format moved; read src/structure-deepen.ts ` +
         "§ DeepenRecordsFile before reading any number out of it. `deepen-records/1` in " +
         "particular carries no `range` on its candidates, and pairing repeats without one is " +
         "exactly the mistake this harness refuses to make; `deepen-records/3` has no " +
@@ -969,7 +969,7 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
  * before asking whose it was: a parse failure on a sibling's file rejected the
  * whole read, marked the *asking* job fatal and left its own `recordsFiles`
  * empty. ⟨GPT Sol, DPN-14.⟩ Both halves matter, and the name is the cheap one —
- * the writer's atomic publication (`src/hierarchy-deepen.ts § saveDeepenRecords`)
+ * the writer's atomic publication (`src/structure-deepen.ts § saveDeepenRecords`)
  * is what makes a file that IS ours whole when we open it.
  */
 export async function readRecordsDir(
@@ -1005,7 +1005,7 @@ export async function readRecordsDir(
  * A second copy of a rule about names is how a filter silently stops matching,
  * so it is one exported function with a test rather than an inline regex — and
  * it stays deliberately *loose*: it is a prefilter, and the parsed `slug` is
- * still what decides. src/hierarchy-deepen.ts § `saveDeepenRecords`.
+ * still what decides. src/structure-deepen.ts § `saveDeepenRecords`.
  */
 export function recordsFilePrefix(slug: string): string {
   return slug.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "article";
@@ -1094,8 +1094,8 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 " +
       "for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound.",
   },
-  bookHierarchyRepeat: {
-    what: "book, forced hierarchy, structure + labels resumed",
+  bookStructureRepeat: {
+    what: "book, forced structure step, whole-document call + labels resumed",
     jobs: 0,
     usdEach: 7.4,
     basis:
@@ -1114,8 +1114,8 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "nothing is eligible the wave makes no call either way. That equality is the thing phase C " +
       "is measuring, so it is an assumption here and a result there.",
   },
-  articleHierarchyResumed: {
-    what: "ordinary article, forced hierarchy, everything resumed",
+  articleStructureResumed: {
+    what: "ordinary article, forced structure step, everything resumed",
     jobs: 0,
     usdEach: 0.1,
     basis:
@@ -1135,7 +1135,7 @@ export interface CostEstimate {
    * nothing caps it.
    *
    * The nominal total was printed as an "upper bound" and was not one. A
-   * claimant that reaches its own 740 s deadline inside the `hierarchy` step
+   * claimant that reaches its own 740 s deadline inside the `structure` step
    * requeues the job (src/jobs.ts § `REQUEUE_BUDGET`, which permits three
    * windows), and the driver used to re-claim it immediately — with the slug
    * still named in `SPIDERYARN_DEEPEN_REASK`, so the next claim ignored the
@@ -1160,7 +1160,7 @@ export interface CostEstimate {
 }
 
 /** Rows whose wave is re-bought by the re-ask lever — the ones a requeue could multiply. */
-const REASKING_ROWS: readonly (keyof typeof ESTIMATE_BASIS)[] = ["bookHierarchyRepeat"];
+const REASKING_ROWS: readonly (keyof typeof ESTIMATE_BASIS)[] = ["bookStructureRepeat"];
 
 export function estimate(counts: Readonly<Record<keyof typeof ESTIMATE_BASIS, number>>): CostEstimate {
   const keys = Object.keys(ESTIMATE_BASIS) as (keyof typeof ESTIMATE_BASIS)[];

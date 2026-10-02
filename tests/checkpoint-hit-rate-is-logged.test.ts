@@ -49,9 +49,9 @@ import {
   planExpansionBatches,
   type ExpansionBatch,
   type ExpansionTarget,
-} from "../src/hierarchy-cascade.js";
-import { renderFrozenOutline, type OutlineEntry } from "../src/hierarchy-expand.js";
-import { freeAnswer, runExpansionWave, type FrozenSeed } from "../src/hierarchy-deepen.js";
+} from "../src/structure-cascade.js";
+import { renderFrozenOutline, type OutlineEntry } from "../src/structure-expand.js";
+import { freeAnswer, runExpansionWave, type FrozenSeed } from "../src/structure-deepen.js";
 import { structureHash } from "../src/source-hash.js";
 import { generateLabels } from "../src/labels.js";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
@@ -254,8 +254,8 @@ describe("the label batch checkpoints", () => {
       });
     });
 
-    expect(written).toContain("hierarchy-labels");
-    const said = lines(written, "hierarchy-labels", '"found":0');
+    expect(written).toContain("structure-labels");
+    const said = lines(written, "structure-labels", '"found":0');
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/"asked":[1-9]/);
   });
@@ -267,7 +267,7 @@ describe("the label batch checkpoints", () => {
  * One parent of twelve paragraphs, one call, one answer that divides it in two.
  *
  * Nothing here is about what a good division looks like — the protocol's own
- * tests are tests/hierarchy-deepen.test.ts — only about the read that happens
+ * tests are tests/structure-step-deepen.test.ts — only about the read that happens
  * before the first call goes out.
  */
 function expansionFixture(): {
@@ -361,8 +361,8 @@ describe("the scoped expansion checkpoints", () => {
       });
     });
 
-    expect(written).toContain("hierarchy-deepen");
-    const said = lines(written, "hierarchy-deepen", '"found":0');
+    expect(written).toContain("structure-deepen");
+    const said = lines(written, "structure-deepen", '"found":0');
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/"asked":[1-9]/);
     expect(said[0]).toMatch(/"usable":0/);
@@ -387,8 +387,8 @@ describe("the scoped expansion checkpoints", () => {
     await run();
 
     const written = await logLinesWhile(run);
-    expect(written).toContain("hierarchy-deepen");
-    const said = lines(written, "hierarchy-deepen", '"found":');
+    expect(written).toContain("structure-deepen");
+    const said = lines(written, "structure-deepen", '"found":');
     expect(said).toHaveLength(1);
     /* All three track something, which is what stops the pair of tests passing
        on two constants. */

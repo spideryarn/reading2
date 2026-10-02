@@ -9,7 +9,7 @@
  * ```
  *
  * `package.json` keeps the familiar names: `npm run ingest`, `npm run extract`,
- * `npm run blocks`, `npm run hierarchy`.
+ * `npm run blocks`, `npm run structure`.
  *
  * ## Why the command line had to leave the stage modules
  *
@@ -20,7 +20,7 @@
  * `main()` inside `blocks.ts` reaching for the queue would close an import
  * cycle, and `npm run cycles` is a gate rather than advice. **So the stage CLIs
  * became one script that takes a step name**, and five `main()`s went — `fetch`,
- * `extract`, `blocks`, `hierarchy` and `labels`. Stage E of
+ * `extract`, `blocks`, `structure` and `labels`. Stage E of
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
  *
  * Reusing the queue is also what keeps *one code path per stage* true, and it
@@ -65,17 +65,17 @@
  * gives every run the article's own checkpoints, so a killed run does not.
  *
  * **And that has a second consequence, measured 2026-09-05 and pointed at by
- * GPT Sol before it was measured: `--force` on `hierarchy` does not buy a fresh
+ * GPT Sol before it was measured: `--force` on `structure` does not buy a fresh
  * answer from the model.** `force` is a *step* flag — it makes the step run
  * again rather than skip — and the step then finds its structure and label
  * batches already in `checkpoints` and replays them. Two consecutive
- * `npm run hierarchy -- <slug> --force` runs on an unchanged article: the first
+ * `npm run structure -- <slug> --force` runs on an unchanged article: the first
  * bought two model calls, the second bought **none**, and both printed
  * `13 sections over 19 blocks`.
  *
  * So `--force` re-runs the *step* and not the *purchase*. That matters most
  * where the plan leaned on it: **re-labelling after a prompt change is not
- * `hierarchy --force`**, because the labels come back out of the checkpoint. It
+ * `structure --force`**, because the labels come back out of the checkpoint. It
  * is the same behaviour a reader's Refresh gets from the browser, so it is a
  * property of the queue rather than of this script — which is exactly why this
  * script does not work round it. Changing what `force` means to a checkpoint is
@@ -126,7 +126,7 @@ const USAGE =
   "  npm run ingest    -- <file>               make an article from a PDF or HTML file here\n" +
   "  npm run extract   -- <slug> [--force]     re-run one stage on an article you have\n" +
   "  npm run blocks    -- <slug> [--force]\n" +
-  "  npm run hierarchy -- <slug> [--force]\n" +
+  "  npm run structure -- <slug> [--force]\n" +
   `\n  any step: ${STEP_ORDER.join(", ")}\n`;
 
 function die(message: string): never {
@@ -212,7 +212,7 @@ async function drive(job: Job): Promise<Job> {
 /**
  * The one thing this command cannot finish, said where somebody will read it.
  *
- * **A `hierarchy` that ran leaves the paragraph labels unbought**, and that is
+ * **A `structure` that ran leaves the paragraph labels unbought**, and that is
  * by construction rather than by luck: the step writes a `PendingLabelsFile`
  * and the store deletes the article's `labels` receipt in the same transaction
  * (src/store/artifacts-pg.ts). Publication queues a free job to finish them —
@@ -230,7 +230,7 @@ async function drive(job: Job): Promise<Job> {
  * so what it owes the operator is the next command, not a fix.
  *
  * **`done` and not `skipped`**, which is the whole precision of it: a skipped
- * `hierarchy` wrote no manifest and took no receipt, so its article's labels are
+ * `structure` wrote no manifest and took no receipt, so its article's labels are
  * whatever they already were. Saying otherwise on every run is how a hint stops
  * being read.
  *
@@ -239,12 +239,12 @@ async function drive(job: Job): Promise<Job> {
  * command — and adding an `import.meta` guard to a script several agents share,
  * to cover two lines of `console.log`, is a worse trade than leaving it
  * uncovered. What could actually go stale is the invariant underneath, and that
- * *is* pinned: tests/labels-receipt-invalidation.test.ts holds `hierarchy` to
+ * *is* pinned: tests/labels-receipt-invalidation.test.ts holds `structure` to
  * writing a pending manifest and taking the receipt with it. If that test ever
  * changes shape, this sentence is the other thing to correct.
  */
 function labelsHint(job: Job): string[] {
-  const ran = job.steps.find((s) => s.name === "hierarchy" && s.status === "done");
+  const ran = job.steps.find((s) => s.name === "structure" && s.status === "done");
   if (!ran) return [];
   return [
     "  Paragraph labels are queued, not generated — this command drives only its own job.",

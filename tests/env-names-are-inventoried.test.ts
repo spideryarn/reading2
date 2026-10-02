@@ -234,7 +234,7 @@ const ALLOWED: readonly AllowGroup[] = [
   {
     /* Whole-run switches somebody sets for one command: the reasoning effort
        every pipeline stage asks for (`effortFor`, src/models.ts), and the three
-       hierarchy-deepening experiments (src/hierarchy-deepen.ts, whose exported
+       structure-deepening experiments (src/structure-deepen.ts, whose exported
        `DEEPEN_ENV`, `REASK_ENV` and `DEEPEN_RECORDS_ENV` are the same three
        strings). A deployment has no opinion about any of them, and reporting
        them would put four lines of tuning above the credentials that actually
@@ -242,7 +242,7 @@ const ALLOWED: readonly AllowGroup[] = [
     why: "Per-run pipeline switches, set for one command on the machine running it",
     names: [
       "SPIDERYARN_PIPELINE_EFFORT",
-      "SPIDERYARN_DEEPEN_HIERARCHY",
+      "SPIDERYARN_DEEPEN_STRUCTURE",
       "SPIDERYARN_DEEPEN_REASK",
       "SPIDERYARN_DEEPEN_RECORDS",
     ],

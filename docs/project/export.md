@@ -2,7 +2,7 @@
 
 A reader presses **Export** on an article's Metadata page and gets back a zip of everything
 Spideryarn holds for that article — the HTML as we read it, every block id, and every augmentation:
-hierarchy and gists, glossary, ideas, quotes, timeline, quiz, diagram, comments, chats, searches,
+the tree and its gists, glossary, ideas, quotes, timeline, quiz, diagram, comments, chats, searches,
 referee mode. Plain text files, readable without Spideryarn. It is the reader's data, and this is
 how it leaves.
 

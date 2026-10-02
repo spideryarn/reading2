@@ -35,7 +35,7 @@ new answer at the same odds.
 The gate is right to refuse an answer it cannot use, and wrong to make one refusal final. The stage
 had already learned this for one fault family: since 2026-08-31 a boundary the model got wrong is
 derived away rather than refused ([hierarchy.md § The partition is derived, not
-checked](../project/hierarchy.md)). The rangeless node and the broken bracket were two faults
+checked](../project/structure-step.md)). The rangeless node and the broken bracket were two faults
 that rule did not reach. The same class applies anywhere one generated artefact is long and is
 accepted or refused whole.
 

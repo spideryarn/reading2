@@ -1,6 +1,6 @@
 /**
  * The corpus, as a committed manifest rather than a directory listing — the
- * shape [`evals/hierarchy-structure/corpus.ts`](../hierarchy-structure/corpus.ts)
+ * shape [`evals/structure-whole-document/corpus.ts`](../structure-whole-document/corpus.ts)
  * argued for, and for the same two reasons: a directory that grows joins every
  * later run with nothing saying so, and a results file naming only a slug names
  * bytes nothing can recover.
@@ -34,7 +34,7 @@
  *
  * ## Why the tree is hashed as well as the blocks
  *
- * `hierarchy-structure` hashes `blocks.json` alone because the tree is its
+ * `structure-whole-document` hashes `blocks.json` alone because the tree is its
  * *output*. Here the tree is an **input**: this eval runs the variants over a
  * fixed existing tree and asks only for wording, so a re-run against a
  * re-carved tree is a different measurement wearing the same slug. Both hashes
@@ -165,7 +165,7 @@ export const CORPUS: readonly CorpusEntry[] = [
     storedQuestions: 0,
     gistWords: [53, 30, 26],
     role: "dev",
-    why: "The longest article in the set by words (16,855) and the densest in headings. Shared with `evals/hierarchy-structure`'s corpus, so the two evals have one document in common — deliberately, since a variant that reads well here can be checked against what that eval already knows about the tree.",
+    why: "The longest article in the set by words (16,855) and the densest in headings. Shared with `evals/structure-whole-document`'s corpus, so the two evals have one document in common — deliberately, since a variant that reads well here can be checked against what that eval already knows about the tree.",
   },
   {
     slug: "openai-huggingface",

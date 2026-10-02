@@ -18,16 +18,17 @@
  * and the same anonymous read (`usePublicShelf`) that page makes: no new route,
  * no new query, nothing new in the public import graph.
  *
- * The results child is mounted only while the chip is on and a live owner
- * shelf has established whose slugs must be removed, so the public read happens
- * only then. A saved shelf copy may paint the owner's cards but cannot make
- * that ownership claim.
+ * The read itself is `Library`'s — one `usePublicShelf`, shared with the count
+ * beside the search's answer (ShelfSearchAlso.tsx), so the number and what this
+ * section then shows are the same snapshot. It starts only once a live owner
+ * shelf has established whose slugs must be removed: a saved shelf copy may
+ * paint the owner's cards but cannot make that ownership claim.
  *
  * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part A.
  */
 import { useMemo } from "react";
 import { PUBLIC_SHELF_FAILED, PUBLIC_SHELF_RETRY } from "../messages.js";
-import { PublicCard, usePublicShelf } from "./PublicLibraryPage.js";
+import { PublicCard, type usePublicShelf } from "./PublicLibraryPage.js";
 import { filterEntries } from "./shelf-narrow.js";
 import { useSlow } from "./useSlow.js";
 
@@ -53,6 +54,8 @@ export function ShelfPublicSection({
 }
 
 interface ShelfPublicProps {
+  /** `Library`'s one read of the public listing. */
+  listing: ReturnType<typeof usePublicShelf>;
   /** The shelf's search box — the one narrowing that applies here. */
   query: string;
   /**
@@ -69,11 +72,11 @@ interface ShelfPublicProps {
 }
 
 function ShelfPublicResults({
+  listing: { state, again },
   query,
   ownSlugs,
   narrowedElsewhere,
 }: ShelfPublicProps) {
-  const { state, again } = usePublicShelf();
   const slow = useSlow(state.kind === "loading");
 
   const others = useMemo(

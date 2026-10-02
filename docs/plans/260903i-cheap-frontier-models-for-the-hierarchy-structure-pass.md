@@ -1,6 +1,6 @@
 # Cheap frontier models for the hierarchy structure pass
 
-Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+Investigation write-up: [docs/investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
 
 Greg, 2026-09-03:
 
@@ -24,7 +24,7 @@ won by the arm the judges ranked below. And **`low` beat `medium`** for Sonnet, 
 
 Greg's constraint is a routing constraint, and it is real rather than a formality. Challenger arms
 send `provider: { zdr: true, require_parameters: true }`
-([`arms.ts` § `ZDR`](../../evals/hierarchy-structure/arms.ts)), which narrows each model to the
+([`arms.ts` § `ZDR`](../../evals/structure-whole-document/arms.ts)), which narrows each model to the
 upstreams OpenRouter lists at `GET /api/v1/endpoints/zdr`. `tencent/hy4-preview` has exactly one, so
 its latency is that one provider's latency and nobody else's.
 
@@ -60,7 +60,7 @@ here can say a candidate is intrinsically better or worse than Sonnet.
 
 Pinned two ways: `tests/hierarchy-structure-eval.test.ts` § "the challenger field" compares the arm
 against the table, seen red — and because both are literals in one file, which proves only
-consistent typing, [`preflight.ts`](../../evals/hierarchy-structure/preflight.ts) asks OpenRouter's
+consistent typing, [`preflight.ts`](../../evals/structure-whole-document/preflight.ts) asks OpenRouter's
 live catalogue immediately before the first call and archives the answer into `run.json`.
 
 **2. `max_completion_tokens` made the routing set empty.** It had been sent beside `max_tokens` as
@@ -75,7 +75,7 @@ the requested parameters"**, with and without `zdr`. Dropped — every model thi
 
 Eight models, chosen to span vendors and price tiers rather than to be a top-eight of anything, all
 with at least one zero-retention endpoint able to serve the ~48k `max_tokens` this stage asks for.
-The table lives in [`arms.ts` § `CANDIDATES`](../../evals/hierarchy-structure/arms.ts) with prices
+The table lives in [`arms.ts` § `CANDIDATES`](../../evals/structure-whole-document/arms.ts) with prices
 and effort lists; Sonnet is $2.00/$10.00 per MTok for comparison.
 
 Three models were considered and dropped — `nvidia/nemotron-3.5-lightning`, `minimax/minimax-m3`,

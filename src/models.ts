@@ -8,7 +8,7 @@
  * > later.
  *
  * Before this, four files each declared `const MODEL = "claude-opus-5"` at the
- * top — src/hierarchy.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
+ * top — src/structure.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
  * fourth of them spelled it differently from the other three. Changing the
  * model meant finding all four and knowing which spelling each wanted.
  *
@@ -188,7 +188,7 @@ import {
 
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
- * (src/hierarchy.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
+ * (src/structure.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
  * src/glossary.ts) pass this straight to `messages.create`.
  *
  * They all ask for `thinking: { type: "adaptive" }`, which is the only on-mode
@@ -557,7 +557,7 @@ export type Tier = "capable" | "quick";
  * below, so that "not a tier decision" stops meaning "invisible".
  */
 export type Task =
-  | "hierarchy"
+  | "structure"
   | "labels"
   | "arc"
   | "tweets"
@@ -973,12 +973,12 @@ export type AiJob =
  *   gistable block, every article — so it is where the tenth-of-the-price would
  *   actually be felt. It is also the core of the product: the gist columns *are*
  *   granularity zoom. Cheapest to move, most expensive to get wrong.
- * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `hierarchy`** all
+ * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `structure`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
  */
 export const TASK_TIER: Record<Task, Tier> = {
-  hierarchy: "capable",
+  structure: "capable",
   labels: "capable",
   arc: "capable",
   tweets: "capable",
@@ -1242,7 +1242,7 @@ export type Wire =
  * what ran. Two copies of that pair disagree silently.
  */
 export const TASK_WIRE: Record<Task, Wire> = {
-  hierarchy: "messages",
+  structure: "messages",
   labels: "messages",
   arc: "messages",
   tweets: "messages",
@@ -1367,7 +1367,7 @@ export const REQUEST_PATH_TASKS: readonly Task[] = ALL_TASKS.filter(
  * `effortFor` is where it lives.
  */
 export const MODEL_ENV_VAR: Record<Task, string | null> = {
-  hierarchy: null,
+  structure: null,
   labels: null,
   arc: null,
   tweets: null,
@@ -1761,7 +1761,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      ways, and no direction holds. It is 58% cheaper and about four times faster
      per call ($0.235 → $0.100, 176 s → 42 s), and validity was the same at both
      levels, 1 malformed draw in 16.
-     docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md
+     docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md
      § Sketch.
 
      The argument this comment used to make for `high` — the stage has to hold a
@@ -1775,7 +1775,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      group; distinct schemas now separate every member anyway. It shares a
      cached article with nothing. That costs close to nothing today, because each
      mode is its own job and two jobs share no cache
-     (docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+     (docs/investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
      It is a constraint on plan 261001o's caching options, which assumed one
      effort per group. */
   sketch: "low",
