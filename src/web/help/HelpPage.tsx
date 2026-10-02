@@ -299,10 +299,15 @@ function HelpSectionView({ entry: e }: { entry: Entry }) {
     <section id={e.anchor} data-section className="tw:group tw:mt-7 tw:scroll-mt-20">
       <h3 className="tw:m-0 tw:mb-2 tw:flex tw:items-baseline tw:gap-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
         <span>{e.title}</span>
+        {/* A link to the section that says how to turn it on, so no mode's
+            section has to repeat that itself. */}
         {e.experimental && (
-          <span className="tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint">
+          <a
+            href="#experimental-features"
+            className="tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+          >
             Experimental
-          </span>
+          </a>
         )}
         {/* **Shown on hover or focus, and always on a touch screen**, where
             there is no hover to reveal it — the same pair of variants
@@ -316,7 +321,9 @@ function HelpSectionView({ entry: e }: { entry: Entry }) {
           #
         </a>
       </h3>
-      <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground tw:[&_p]:m-0">
+      {/* The sections' words are plain elements — p, ul, strong, kbd, code,
+          table — styled here once rather than by a class on each. */}
+      <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm tw:leading-relaxed tw:text-muted-foreground tw:[&_p]:m-0 tw:[&_ul]:m-0 tw:[&_ul]:pl-5 tw:[&_li]:mt-1 tw:[&_li:first-child]:mt-0 tw:[&_strong]:font-semibold tw:[&_strong]:text-foreground tw:[&_kbd]:rounded tw:[&_kbd]:border tw:[&_kbd]:border-rule tw:[&_kbd]:px-1 tw:[&_kbd]:font-sans tw:[&_kbd]:text-xs tw:[&_kbd]:text-foreground tw:[&_code]:font-mono tw:[&_code]:text-xs tw:[&_code]:break-all">
         {e.body}
       </div>
     </section>

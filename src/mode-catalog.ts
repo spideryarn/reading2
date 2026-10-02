@@ -302,8 +302,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        the Sketch takes 121–194 s (docs/project/diagram.md) and Debate's spike
        run took 146.7 s (docs/plans/260905f-debate-mode-stage-0-spike-results.md
        § the completed run), so the two are the same size and the claim was one
-       measurement away from being false. */
-    how: "The Sketch — the picture you get unless you ask for another — is a model reading the argument and drawing it, which is minutes of work the first time and stored afterwards. Its empty state names what that costs before anything runs.",
+       measurement away from being false. "About a minute" since 2026-10-02:
+       the Sketch moved to a lower effort and now takes 30–101 s, averaging
+       42 s (research 261001c), which is `SKETCH_WAIT` in src/job-state.ts —
+       the words every pre-press surface quotes. */
+    how: "The Sketch — the picture you get unless you ask for another — is a model reading the argument and drawing it, which is about a minute of work the first time and stored afterwards. Its empty state names what that costs before anything runs.",
     /* `sketch` is the artefact a press actually draws, and it is the word the
        empty state and the pipeline both use, so a reader who has seen the mode
        once will type it. */

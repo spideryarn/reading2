@@ -63,12 +63,21 @@ export const HELP_TOPIC_IDS = [
 export type HelpTopic = (typeof HELP_TOPIC_IDS)[number];
 
 /**
- * **The questions people ask**, each `faq-…`. Empty until the entries are
- * written from docs/user-feedback/ — the things readers have actually been
- * confused by. Typed as a tuple of `faq-` strings so an entry without the
- * prefix does not compile, and so `HELP_FAQ` in help-content.tsx stays total.
+ * **The questions people ask**, each `faq-…`, in page order — drawn from
+ * docs/user-feedback/, the things readers have actually been confused by.
+ * Typed as a tuple of `faq-` strings so an entry without the prefix does not
+ * compile, and so `HELP_FAQ` in help-faq.tsx stays total.
  */
-export const FAQ_IDS = [] as const satisfies readonly `faq-${string}`[];
+export const FAQ_IDS = [
+  "faq-is-the-ai-reading-for-me",
+  "faq-why-slow-first-time",
+  "faq-does-a-mode-use-my-allowance",
+  "faq-missing-parts",
+  "faq-beyond-the-article",
+  "faq-older-profile",
+  "faq-find-archived",
+  "faq-shared-personalised",
+] as const satisfies readonly `faq-${string}`[];
 export type FaqId = (typeof FAQ_IDS)[number];
 
 /** A mode's own section. */

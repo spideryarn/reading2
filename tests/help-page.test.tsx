@@ -79,6 +79,14 @@ const PINNED_ANCHORS = [
   "mode-skim",
   "mode-tweets",
   "mode-marginalia",
+  "faq-is-the-ai-reading-for-me",
+  "faq-why-slow-first-time",
+  "faq-does-a-mode-use-my-allowance",
+  "faq-missing-parts",
+  "faq-beyond-the-article",
+  "faq-older-profile",
+  "faq-find-archived",
+  "faq-shared-personalised",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);
@@ -219,6 +227,29 @@ describe("the page", () => {
     }
     // The control: without one experimental mode the last line proves nothing.
     expect(MODES.some((m) => MODE_CATALOG[m].experimental)).toBe(true);
+  });
+
+  /* `HelpRef` is typed, but the Experimental tag and anything written as a
+     bare `<a href="#…">` are not — this is the check that covers both. */
+  it("links only to places that exist on the page", () => {
+    mountAt("/help");
+    const links = [...host.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')];
+    // The control: the sections do cross-refer, so an empty scan proves nothing.
+    const inBodies = links.filter((a) => a.closest("section") && !a.closest("h3"));
+    expect(inBodies.length).toBeGreaterThan(20);
+    for (const a of links) {
+      const id = a.getAttribute("href")?.slice(1) ?? "";
+      expect(host.querySelector(`section[data-section][id="${id}"]`), `${a.textContent} → #${id}`).not.toBeNull();
+    }
+  });
+
+  it("lists every mode in the Which mode when table, linked to its section", () => {
+    mountAt("/help");
+    const rows = [...host.querySelectorAll("#modes tbody tr")];
+    expect(rows.map((r) => r.querySelector("a")?.getAttribute("href"))).toEqual(MODES.map((m) => `#mode-${m}`));
+    for (const [i, m] of MODES.entries()) {
+      expect(rows[i]?.textContent?.includes("experimental"), m).toBe(MODE_CATALOG[m].experimental);
+    }
   });
 });
 
