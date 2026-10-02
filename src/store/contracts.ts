@@ -2472,7 +2472,11 @@ export type RateBucket =
      an answer on the high-power model over the whole article, per press
      (src/dig-deeper.ts § `DIG_DEEPER_RATE_POLICY`). One bucket for both
      buttons, because it is one action. */
-  | "dig-deeper";
+  | "dig-deeper"
+  /* The mail to the admin about a reader's feedback — not a fetch and not
+     money, but the shared Resend quota auth mail also needs
+     (src/feedback-notice.ts § `FEEDBACK_NOTICE_POLICY`, plan 261002j). */
+  | "feedback-notice";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**
