@@ -44,7 +44,7 @@ import {
   limitForPeriod,
   nextQuotaAdjustment,
 } from "../src/billing/quota-adjustment.js";
-import { articles } from "../src/billing/half-units.js";
+import { articles } from "../src/billing/points.js";
 import type { QuotaAdjustment, QuotaRules } from "../src/billing/quota-adjustment.js";
 import { syncSubscriptionFromStripe } from "../src/billing/sync.js";
 import { loadEnvLocal } from "../src/env.js";

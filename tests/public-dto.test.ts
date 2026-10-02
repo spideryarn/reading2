@@ -45,7 +45,7 @@ import type {
   Quotes,
   NodeId,
   Timeline,
-  Trajectory,
+  Skim,
   Tree,
   TreeNode,
   TweetThread,
@@ -65,7 +65,7 @@ const NO_ARTEFACTS = {
   quotes: null,
   tweets: null,
   timeline: null,
-  trajectory: null,
+  skim: null,
   faq: null,
   simpleSummary: null,
   citations: null,
@@ -981,9 +981,9 @@ describe("the artefacts a shared link carries", () => {
    * the route was planned for, and an assertion about a route with a `null`
    * hash would pass a projection that spread the document. One stop carries a
    * `cue` and one does not (routes before `trajectory/5`), so `opt` is
-   * exercised both ways. src/public-types.ts § `PublicTrajectory`.
+   * exercised both ways. src/public-types.ts § `PublicSkim`.
    */
-  const TRAJECTORY: Trajectory = {
+  const SKIM: Skim = {
     version: "trajectory/7",
     generator: "some-model",
     slug: "noema",
@@ -1267,7 +1267,7 @@ describe("the artefacts a shared link carries", () => {
     quotes: QUOTES,
     tweets: THREAD,
     timeline: TIMELINE,
-    trajectory: TRAJECTORY,
+    skim: SKIM,
     faq: FAQ,
     simpleSummary: SIMPLE,
     citations: CITATIONS,
@@ -1690,10 +1690,10 @@ describe("the artefacts a shared link carries", () => {
    * string search would not.
    */
   it("carries the route's stops and the offered count, and not who it was planned for", () => {
-    expect(pathsUnder("trajectory")).toEqual(
+    expect(pathsUnder("skim")).toEqual(
       ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
     );
-    expect(built.trajectory).toEqual({
+    expect(built.skim).toEqual({
       stops: [
         { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
@@ -1701,7 +1701,7 @@ describe("the artefacts a shared link carries", () => {
       offered: 12,
     });
     /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
-    expect("cue" in (built.trajectory?.stops[1] ?? {})).toBe(false);
+    expect("cue" in (built.skim?.stops[1] ?? {})).toBe(false);
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");
@@ -1979,7 +1979,7 @@ describe("the artefacts a shared link carries", () => {
       quotes: null,
       tweets: null,
       timeline: null,
-      trajectory: null,
+      skim: null,
       faq: null,
       simpleSummary: null,
       citations: null,
@@ -2014,7 +2014,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "trajectory", "faq", "simpleSummary", "citations", "debate"]) {
+    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate"]) {
       expect(key in bare, key).toBe(false);
     }
   });

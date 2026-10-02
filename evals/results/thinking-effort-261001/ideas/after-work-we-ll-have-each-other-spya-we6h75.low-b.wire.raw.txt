@@ -1,0 +1,53 @@
+{"ideas": [
+  {
+    "name": "Dignity needs a social framework, not necessarily work itself",
+    "provenance": "introduced",
+    "statement": "What humans actually require is some system for placing themselves relative to others and earning peer respect; work is only one possible vehicle for that, not a precondition of meaning.",
+    "occurrences": [
+      {"blockId": "spya-zd83ts", "quote": "What we absolutely can’t live without is a social framework for understanding ourselves in relation to the rest of our society and gaining the respect of our peers.", "reasoning": "States the core reframing that work is a means, not the end, of meaning."},
+      {"blockId": "spya-ms0vr5", "quote": "Like all other human beings in history, workers want to be respected.", "reasoning": "Generalizes the need for respect across both relational and work societies."}
+    ]
+  },
+  {
+    "name": "Impersonal achievement enables freer, less clannish relationships",
+    "provenance": "introduced",
+    "statement": "When status comes from impersonal skills and contributions rather than group membership, people don't need to police group boundaries, so relationships can be chosen freely instead of being transactional obligations.",
+    "whyYouNeedIt": "This is the mechanism that explains why losing work would make relationships more fraught, not just different.",
+    "occurrences": [
+      {"blockId": "spya-hdbtc0", "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.", "reasoning": "Directly states the causal link between group-based dignity and exclusionary policing."},
+      {"blockId": "spya-hb8vvc", "quote": "In the bad old days before impersonal markets and bureaucracies, the only way to survive was through personal ties to allies or to kin. As a result, every personal relationship was transactional.", "reasoning": "Explains why removing impersonal paths to subsistence makes relationships transactional."},
+      {"blockId": "spya-d6v2bb", "quote": "even if our material needs are met, relying on our personal relationships to meet all our needs for identity and belonging creates a similar kind of dependence.", "reasoning": "Extends the mechanism to a post-work future, the article's main speculative claim."}
+    ]
+  },
+  {
+    "name": "Status-seeking without survival pressure becomes about display, not substance",
+    "provenance": "assumed",
+    "statement": "When people no longer need to produce anything of practical value to survive or advance, their competitive energy redirects into symbolic status games whose outcomes don't need to matter in the world.",
+    "whyYouNeedIt": "Without this, the reader can't see why idle elites across eras converge on empty gossip and symbolic one-upmanship rather than just relaxing or pursuing varied interests.",
+    "occurrences": [
+      {"blockId": "spya-mc24jb", "quote": "It’s that illusion of being useful that’s satisfying.", "reasoning": "Only makes sense if volunteering is understood as symbolic status activity rather than goal-directed work."},
+      {"blockId": "spya-x4w0zk", "quote": "Most of his life was spent in incomprehensible litigation over which families might be entitled to a certain heraldic emblem", "reasoning": "The absurdity of the stakes only reads as predictable, not anomalous, given this idea."},
+      {"blockId": "spya-r62wzn", "quote": "Aristocrats tend to be sensitive social observers who are also extremely self-involved, which makes them talented and prolific memoirists.", "reasoning": "Assumes that removing practical stakes concentrates attention onto self and status rather than external achievement."}
+    ]
+  },
+  {
+    "name": "Material security changes what people want, not just what they have",
+    "provenance": "introduced",
+    "statement": "Changing economic conditions reshape people's values and norms over time, so removing scarcity or necessity doesn't just free existing preferences — it eventually produces different preferences.",
+    "occurrences": [
+      {"blockId": "spya-t4xpae", "quote": "In other words, our material conditions don’t just change what we have, but what we want. We may not have a choice.", "reasoning": "States the idea directly as the lesson of the West End chapter."},
+      {"blockId": "spya-b3pf45", "quote": "As economic conditions improve,” Gans writes, “the ethos which Banfield calls amoral familism has begun to recede in importance.", "reasoning": "Shows the mechanism of changing conditions producing changing norms, which the article generalizes to AI's future effect."}
+    ]
+  },
+  {
+    "name": "Past social arrangements are a guide to future ones under similar conditions",
+    "provenance": "assumed",
+    "statement": "If the structural conditions of a possible future (no need to work) match those of a past society, the cultural patterns of that past society are evidence for what the future will look like, despite different technology and era.",
+    "whyYouNeedIt": "The entire method of the piece — studying aristocrats, heiresses, and peasants to predict a post-AI world — only works if shared structural conditions transfer across eras despite vast differences in circumstance.",
+    "occurrences": [
+      {"blockId": "spya-xcg5en", "quote": "If the future looks anything like the past — and there’s good reason to believe it will — then we can make progress with case studies.", "reasoning": "Explicitly licenses using historical cases as predictive evidence."},
+      {"blockId": "spya-c4s3en", "quote": "Aristocrats are (typically) rich, which we certainly will be if we have robots capable of all normal nonrelational labor.", "reasoning": "Treats shared material condition (wealth without need to work) as sufficient basis for comparison despite everything else being different."},
+      {"blockId": "spya-k26ath": "spya-k26ath", "quote": "Our own society will be evolving from a much saner starting point. Should we expect to do better?", "reasoning": "Only a worry if the historical analogy is taken as genuinely predictive rather than merely illustrative."}
+    ]
+  }
+]}

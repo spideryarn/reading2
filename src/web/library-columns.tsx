@@ -38,7 +38,7 @@ import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { Actions, ArchivedMark, SharedBadge } from "./ShelfEntry.js";
+import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -243,7 +243,9 @@ export function libraryColumns(
     {
       id: "length",
       header: "Words",
-      accessorFn: (e) => e.words,
+      /* None to count on a paper not read through yet: missing, so it sorts
+         last whichever way the arrow points, rather than as the shortest. */
+      accessorFn: (e) => (e.processing === "minimal" ? undefined : e.words),
       sortDescFirst: true,
       sortingFn: numberOrMissing<LibraryEntry>(),
       meta: {
@@ -252,7 +254,15 @@ export function libraryColumns(
         ends: ["shortest first", "longest first"],
         numeric: true,
       },
-      cell: ({ row }) => <Count value={row.original.words} />,
+      cell: ({ row }) =>
+        row.original.processing === "minimal" ? (
+          <span className="tw:opacity-40">
+            <span aria-hidden="true">—</span>
+            <span className="tw:sr-only">not read through yet</span>
+          </span>
+        ) : (
+          <Count value={row.original.words} />
+        ),
     },
     {
       id: "actions",
@@ -375,6 +385,12 @@ function TitleCell({
           {archived && (
             <>
               <ArchivedMark />{" "}
+            </>
+          )}
+          {/* A paper with only its title and abstract read (plan 261001m). */}
+          {entry.processing === "minimal" && (
+            <>
+              <NotProcessedBadge />{" "}
             </>
           )}
           {entry.visibility === "public" && (

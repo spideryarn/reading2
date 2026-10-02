@@ -1,0 +1,729 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel, converge, loop back",
+  "caption": "The essay funnels from cultural hype about conscious machines into a hub of psychological biases, then into four independent arguments that converge on one verdict — real machine consciousness looks unlikely — which fans out into two live ethical worries, and finally loops back, changed, to the opening worry about mistaking machines for ourselves.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1100,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Fantasies of conscious machines",
+          "size": "sm",
+          "sub": "Lemoine's LaMDA claim, 2022",
+          "detail": "From Frankenstein to a Google engineer insisting a chatbot has feelings.",
+          "block": "spya-u6w37a"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 260,
+          "y": 130,
+          "w": 240,
+          "h": 70,
+          "text": "Why machine consciousness matters",
+          "size": "sm",
+          "detail": "It matters for AI welfare, for our own psychology, and for how we see ourselves.",
+          "block": "spya-e68t9h"
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 240,
+          "w": 240,
+          "h": 80,
+          "text": "Why AI seems conscious",
+          "size": "md",
+          "sub": "3 overlapping biases",
+          "detail": "Anthropocentrism, human exceptionalism, and anthropomorphism bundle intelligence with consciousness.",
+          "tone": 1,
+          "block": "spya-cvaqgs"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "note",
+          "x": 20,
+          "y": 350,
+          "w": 200,
+          "h": 70,
+          "text": "Fluent language fuels illusion",
+          "size": "sm",
+          "detail": "Chatbots that talk well feel conscious; protein-folders that don't talk don't.",
+          "tone": 1,
+          "block": "spya-k6fpme"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "note",
+          "x": 520,
+          "y": 350,
+          "w": 200,
+          "h": 70,
+          "text": "Exponential hype & tech-rapture",
+          "size": "sm",
+          "detail": "Every point on an exponential curve feels like the brink of transcendence.",
+          "tone": 1,
+          "block": "spya-cke6sj"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 450,
+          "w": 712,
+          "h": 180,
+          "style": "band",
+          "label": "FOUR ARGUMENTS AGAINST COMPUTATIONAL AI",
+          "opens": "inside-the-case",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "b1",
+          "shape": "box",
+          "x": 40,
+          "y": 495,
+          "w": 150,
+          "h": 80,
+          "text": "Brains aren't computers",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-sk4su6"
+        },
+        {
+          "kind": "node",
+          "id": "b2",
+          "shape": "box",
+          "x": 220,
+          "y": 495,
+          "w": 150,
+          "h": 80,
+          "text": "Beyond algorithms",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-affgsh"
+        },
+        {
+          "kind": "node",
+          "id": "b3",
+          "shape": "box",
+          "x": 400,
+          "y": 495,
+          "w": 150,
+          "h": 80,
+          "text": "Being alive may matter",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-e7jqx4"
+        },
+        {
+          "kind": "node",
+          "id": "b4",
+          "shape": "box",
+          "x": 580,
+          "y": 495,
+          "w": 150,
+          "h": 80,
+          "text": "Simulating ≠ creating",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-cqh5wq"
+        },
+        {
+          "kind": "node",
+          "id": "concl",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 660,
+          "w": 240,
+          "h": 80,
+          "text": "Functionalism looks shaky",
+          "size": "md",
+          "sub": "AI consciousness seems unlikely",
+          "tone": 2,
+          "block": "spya-uzr60x"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 770,
+          "w": 712,
+          "h": 170,
+          "style": "band",
+          "label": "REAL VS. SEEMING CONSCIOUSNESS",
+          "opens": "inside-the-ethics",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "d1",
+          "shape": "box",
+          "x": 40,
+          "y": 820,
+          "w": 320,
+          "h": 80,
+          "text": "Don't deliberately build conscious AI",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-e7fdmb"
+        },
+        {
+          "kind": "node",
+          "id": "d2",
+          "shape": "box",
+          "x": 400,
+          "y": 820,
+          "w": 320,
+          "h": 80,
+          "text": "AI that merely seems conscious is risky",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-mxxutn"
+        },
+        {
+          "kind": "node",
+          "id": "loop",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 980,
+          "w": 240,
+          "h": 80,
+          "text": "More breath than machine",
+          "size": "md",
+          "sub": "soul as embodied awareness",
+          "detail": "Recovering an embodied sense of soul, against the mechanizing mirror of AI.",
+          "block": "spya-zv36xq"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "none",
+          "tone": 1
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "none",
+          "tone": 1
+        },
+        {
+          "kind": "edge",
+          "from": "b1",
+          "to": "concl",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end",
+          "tone": 2
+        },
+        {
+          "kind": "edge",
+          "from": "b2",
+          "to": "concl",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end",
+          "tone": 2
+        },
+        {
+          "kind": "edge",
+          "from": "b3",
+          "to": "concl",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end",
+          "tone": 2
+        },
+        {
+          "kind": "edge",
+          "from": "b4",
+          "to": "concl",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end",
+          "tone": 2
+        },
+        {
+          "kind": "edge",
+          "from": "concl",
+          "to": "d1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "concl",
+          "to": "d2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d1",
+          "to": "loop",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d2",
+          "to": "loop",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "loop:left",
+          "to": "n2:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "loops back"
+        }
+      ],
+      "caption": "Hype and bias feed the dream of conscious AI; four arguments converge against it; the practical fallout fans into two risks that both lead back to a renewed, embodied sense of what makes us conscious."
+    },
+    {
+      "id": "inside-the-case",
+      "title": "Four arguments against computational AI",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "a0",
+          "shape": "box",
+          "x": 270,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "Assumes computation suffices",
+          "size": "sm",
+          "detail": "Computational functionalism: the right information processing is enough for consciousness.",
+          "block": "spya-d3g67c"
+        },
+        {
+          "kind": "node",
+          "id": "a1",
+          "shape": "box",
+          "x": 25,
+          "y": 150,
+          "w": 160,
+          "h": 70,
+          "text": "Brains aren't computers",
+          "size": "sm",
+          "block": "spya-sk4su6"
+        },
+        {
+          "kind": "node",
+          "id": "a2",
+          "shape": "box",
+          "x": 205,
+          "y": 150,
+          "w": 160,
+          "h": 70,
+          "text": "Beyond algorithms",
+          "size": "sm",
+          "block": "spya-affgsh"
+        },
+        {
+          "kind": "node",
+          "id": "a3",
+          "shape": "box",
+          "x": 385,
+          "y": 150,
+          "w": 160,
+          "h": 70,
+          "text": "Being alive may matter",
+          "size": "sm",
+          "block": "spya-e7jqx4"
+        },
+        {
+          "kind": "node",
+          "id": "a4",
+          "shape": "box",
+          "x": 565,
+          "y": 150,
+          "w": 160,
+          "h": 70,
+          "text": "Simulating ≠ creating",
+          "size": "sm",
+          "block": "spya-cqh5wq"
+        },
+        {
+          "kind": "node",
+          "id": "b1",
+          "shape": "note",
+          "x": 25,
+          "y": 260,
+          "w": 160,
+          "h": 80,
+          "text": "No software/hardware divide",
+          "size": "xs",
+          "detail": "A biological neuron can't be swapped for silicon without inventing a silicon metabolism.",
+          "block": "spya-b0086e"
+        },
+        {
+          "kind": "node",
+          "id": "b2",
+          "shape": "note",
+          "x": 205,
+          "y": 260,
+          "w": 160,
+          "h": 80,
+          "text": "Steam valves aren't computers",
+          "size": "xs",
+          "detail": "The Watt governor regulates an engine with plain mechanics, not calculation.",
+          "block": "spya-sq9v5k"
+        },
+        {
+          "kind": "node",
+          "id": "b3",
+          "shape": "note",
+          "x": 385,
+          "y": 260,
+          "w": 160,
+          "h": 80,
+          "text": "Perception ties mind to body",
+          "size": "xs",
+          "detail": "Conscious experience as controlled hallucination, rooted in keeping a body alive.",
+          "block": "spya-xhvztm"
+        },
+        {
+          "kind": "node",
+          "id": "b4",
+          "shape": "note",
+          "x": 565,
+          "y": 260,
+          "w": 160,
+          "h": 80,
+          "text": "Simulated rain never gets wet",
+          "size": "xs",
+          "detail": "A simulation of X brings about X only if X is itself computational.",
+          "block": "spya-npjt4j"
+        },
+        {
+          "kind": "node",
+          "id": "c",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 390,
+          "w": 240,
+          "h": 80,
+          "text": "The arguments reinforce each other",
+          "size": "md",
+          "block": "spya-nv6tp0"
+        },
+        {
+          "kind": "node",
+          "id": "d",
+          "shape": "box",
+          "x": 260,
+          "y": 510,
+          "w": 240,
+          "h": 80,
+          "text": "Unlikely, but not impossible",
+          "size": "md",
+          "sub": "for silicon digital computers",
+          "block": "spya-c5ve5t"
+        },
+        {
+          "kind": "edge",
+          "from": "a0",
+          "to": "a1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a0",
+          "to": "a2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a0",
+          "to": "a3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a0",
+          "to": "a4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a1",
+          "to": "b1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "a2",
+          "to": "b2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "a3",
+          "to": "b3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "a4",
+          "to": "b4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "b1",
+          "to": "c",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "b2",
+          "to": "c",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "b3",
+          "to": "c",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "b4",
+          "to": "c",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c",
+          "to": "d",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Each argument opens onto a concrete detail, and all four reinforce one guarded conclusion: machine consciousness is unlikely, though not strictly impossible."
+    },
+    {
+      "id": "inside-the-ethics",
+      "title": "Real versus seeming consciousness",
+      "height": 560,
+      "items": [
+        {
+          "kind": "node",
+          "id": "e0",
+          "shape": "box",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Don't deliberately create conscious AI",
+          "size": "sm",
+          "block": "spya-yverz7"
+        },
+        {
+          "kind": "node",
+          "id": "f1",
+          "shape": "box",
+          "x": 40,
+          "y": 150,
+          "w": 320,
+          "h": 80,
+          "text": "Real conscious AI: new moral subjects, suffering",
+          "size": "sm",
+          "block": "spya-vs0vpj"
+        },
+        {
+          "kind": "node",
+          "id": "f2",
+          "shape": "box",
+          "x": 400,
+          "y": 150,
+          "w": 320,
+          "h": 80,
+          "text": "Seeming-conscious AI is already here",
+          "size": "sm",
+          "block": "spya-x63ycg"
+        },
+        {
+          "kind": "node",
+          "id": "g2",
+          "shape": "note",
+          "x": 40,
+          "y": 270,
+          "w": 320,
+          "h": 80,
+          "text": "No test can settle the question",
+          "size": "sm",
+          "sub": "the 'Garland test' problem",
+          "block": "spya-kqs33c"
+        },
+        {
+          "kind": "node",
+          "id": "g1",
+          "shape": "note",
+          "x": 400,
+          "y": 270,
+          "w": 320,
+          "h": 80,
+          "text": "The feeling persists like a visual illusion",
+          "size": "sm",
+          "sub": "Müller-Lyer",
+          "block": "spya-xk9gne"
+        },
+        {
+          "kind": "node",
+          "id": "k",
+          "shape": "note",
+          "x": 560,
+          "y": 370,
+          "w": 160,
+          "h": 70,
+          "text": "Leaders flag the danger too",
+          "size": "xs",
+          "block": "spya-fdefb5"
+        },
+        {
+          "kind": "node",
+          "id": "h",
+          "shape": "box",
+          "x": 260,
+          "y": 420,
+          "w": 280,
+          "h": 90,
+          "text": "Here, false positives are the bigger risk",
+          "size": "md",
+          "sub": "unlike historical denial of animal minds",
+          "block": "spya-d89xf7"
+        },
+        {
+          "kind": "edge",
+          "from": "e0",
+          "to": "f1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e0",
+          "to": "f2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "f1",
+          "to": "g2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "f2",
+          "to": "g1",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "g1",
+          "to": "k",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "g2",
+          "to": "h",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "g1",
+          "to": "h",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Two risks run side by side rather than forking: actually-conscious AI and merely conscious-seeming AI raise distinct, equally live worries, both resisting any clean test."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "sourceHash": "be7b898c72125fc5.2fd04a5eb4dc04ad.c739bef19c4aba3e",
+  "profileHash": null
+}

@@ -172,8 +172,15 @@ review that reshaped it):
 
 - **To the recipient**, when the voucher is made and again when an unclaimed voucher's address
   actually changes: *A gift of N free articles on Spideryarn*, HTML in the auth templates' shape plus
-  a plain-text part, with one link, `https://www.spideryarn.com/login`. The only value in it is N.
-  **Never the note or the creator.**
+  a plain-text part. **Never the note or the creator.** It is one of two letters, chosen before the
+  event's transaction by `giftAudienceFor` ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)):
+  - **An existing reader** — exactly one account with that address *confirmed*, found in the same
+    count-checked account list `/admin/users` reads — is told the articles they had left on Free and
+    have with the gift (the wall's own `ingestHeadroom` arithmetic), or on a paid plan that the gift
+    waits for Free; the link is `https://www.spideryarn.com/`.
+  - **Anybody else** — no account, an unconfirmed or duplicated one, or a lookup that failed — gets
+    the invitation, which explains Spideryarn and links to `/login`. It is true for a reader too,
+    which is why it is the answer to any doubt.
 - **To the voucher's creator**, when it is claimed: plain text, the claimant's address and account
   id, the articles, and when. The address is `accountEmail(created_by)`; if that lookup fails,
   **nothing is sent** (`failed: creator address unavailable`, retryable), because `hello@` is not
@@ -190,8 +197,10 @@ reads only the row, after the response, in three steps in
 1. **Reserve**: one `UPDATE … RETURNING attempts` moves it to `sending`, bumps `attempts` and stamps
    `attempt_started_at`, so of any number of contenders one wins. The automatic send reserves only a
    `queued` row; Retry may also take `failed`, `skipped`, or a `sending` whose attempt started over
-   ten minutes ago — **never `sent`**. Retry's predicate is one SQL fragment, which also gives the
-   page its `retryable` flag.
+   ten minutes ago — **never `sent`**. A gift's Retry also needs its voucher unrevoked and still at
+   the address the email was frozen with, **claimed or not**: an existing reader claims the moment
+   they open Spideryarn, so refusing after a claim made their failures permanent (261002a). Retry's
+   predicate is one SQL fragment, which also gives the page its `retryable` flag.
 2. **Send**, with `Idempotency-Key: voucher-email/<row id>`. Resend keeps a key for 24 hours and
    answers a repeat with the first result, so retrying a send that Resend did accept (a timeout, a
    crash before step 3) does not send it twice within that window. The same key with a different

@@ -82,6 +82,8 @@ const PROMISES: Record<string, string> = {
      the keyboard, so the promise has something behind it. */
   "GlossaryPanel.tsx › Look up a term in this article": "search",
   "Library.tsx › Search the library": "search",
+  /* Enter goes to the first matching section (plan 261001s). */
+  "PageContents.tsx › Search this page's sections": "search",
   "SearchPanel.tsx › srch-input": "search",
   /* The sign-in form: the first field moves to the second, the second signs in.
      `next` really moves — SignInControls.tsx says why it has to. */
@@ -102,10 +104,10 @@ const PROMISES: Record<string, string> = {
   "CriteriaPanel.tsx › crit-text": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
   "ProfileBox.tsx › prof-box-input": "newline",
-  /* Why you are reading, asked on the add page and in Trajectory (plan 260930e).
+  /* Why you are reading, asked on the add page and in Skim (plan 260930e).
      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */
   "AddPage.tsx › add-purpose": "newline",
-  "TrajectoryPurpose.tsx › traj-purpose-input": "newline",
+  "SkimPurpose.tsx › skim-purpose-input": "newline",
   "QuizPanel.tsx › Your answer": "newline",
 };
 

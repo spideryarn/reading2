@@ -75,6 +75,7 @@ import {
   revisionStepRuns,
 } from "../db/schema.js";
 import { isReservedSlug, shortIdInSlug } from "../ingest.js";
+import { isAdmin } from "../admin.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import {
@@ -213,6 +214,12 @@ export const REVISION_CARRY_POLICY: Record<
      article, which is exactly the kind of fact stage 2's other columns carry. */
   publishedAt: "carry",
   note: "carry",
+  /* The `metadata` step's reading of a minimal paper (plan 261001m). They carry
+     with the rest of `meta`, so *Read this* — whose draft is copied from the
+     minimal revision — starts with them; `extract` keeps them when it finds
+     none of its own. */
+  abstract: "carry",
+  doi: "carry",
 
   // Stage 1: what was fetched, and what came back.
   requestedUrl: "carry",
@@ -352,7 +359,7 @@ export const REVISION_CARRY_POLICY: Record<
      quotes is its `sourceHash`, answered at read time. Minting would empty the
      band until somebody paid for the call again.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  trajectory: "carry",
+  skim: "carry",
   /* Carries like the seven above, and it is the one where carrying costs
      nothing at all: the plates are content-addressed objects in the blob store
      and the column holds only their hashes, so a new draft inherits pictures
@@ -750,6 +757,14 @@ export async function lockArticlesInSlugOrder<
 export async function lockOrCreateArticle(
   tx: Tx,
   slug: string,
+  /**
+   * **What the row is born as, when this call is the one that creates it** —
+   * `'minimal'` for the job a minimal upload queues (plan 261001m). Ignored for a
+   * row that already exists: nothing here ever changes a live article's
+   * `processing`; only the publication that lands a tree does
+   * (src/store/pg-session.ts).
+   */
+  birth: { readonly processing?: "minimal" } = {},
 ): Promise<typeof articles.$inferSelect> {
   const found = await lockArticle(tx, slug);
   if (found) return found;
@@ -782,7 +797,12 @@ export async function lockOrCreateArticle(
      handle rather than a substring. src/db/schema.ts § `shortId`. */
   const inserted = await tx
     .insert(articles)
-    .values({ ownerId: currentOwnerId(), slug, shortId: shortIdInSlug(slug) ?? mintId() })
+    .values({
+      ownerId: currentOwnerId(),
+      slug,
+      shortId: shortIdInSlug(slug) ?? mintId(),
+      ...(birth.processing ? { processing: birth.processing } : {}),
+    })
     /* Another transaction may have inserted this slug between our lock
        attempt and here — the lock cannot protect a row that does not exist
        yet. `do nothing` plus a re-read is the honest handling; `do update`
@@ -1199,6 +1219,8 @@ export async function openOrBeginJobDraft(opts: {
   readonly job: { readonly id: string; readonly attemptId: string };
   /** Tests only: the mode defaults to `STEP_START_DRAFT_SWEEP`. */
   readonly sweep?: Partial<DraftSweepOptions>;
+  /** What the article is born as if this claim creates it — `lockOrCreateArticle`'s `birth`. */
+  readonly processing?: "minimal";
 }): Promise<OpenDraftResult> {
   const { slug, job } = opts;
   requireSlug(slug);
@@ -1228,7 +1250,7 @@ export async function openOrBeginJobDraft(opts: {
      * is precisely the orphaned-draft bug this function exists to prevent. A row
      * that does not exist cannot be locked, so the row has to exist.
      */
-    const article = await lockOrCreateArticle(tx, slug);
+    const article = await lockOrCreateArticle(tx, slug, opts.processing ? { processing: opts.processing } : {});
 
     /**
      * **Locked, not merely selected.**
@@ -1804,9 +1826,29 @@ async function reasonsNotToPublish(
    * already serving — see the branch that reads it below.
    */
   inputIsCarriedForward: boolean,
+  /** `articles.processing` of the article this draft would become. */
+  processing: ArticleProcessing,
 ): Promise<PublicationVerdict> {
   const reasons: string[] = [];
   const carriedTreeProblems: string[] = [];
+
+  /* **The thin article, and the only revision with no blocks and no tree that
+     may publish** — plan 261001m § The thin article. It needs both halves: the
+     article was born minimal (`lockOrCreateArticle`'s `birth`, from the job
+     that runs `metadata`), and the `metadata` step finished for this revision.
+     Either alone is refused below exactly as it always was, so a full article
+     that lost its tree cannot be published as a thin one, and a minimal article
+     whose metadata never arrived cannot reach the shelf as a blank card. */
+  if (!blocks.length && !tree && processing === "minimal") {
+    const [run] = await tx
+      .select({ status: revisionStepRuns.status })
+      .from(revisionStepRuns)
+      .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "metadata")))
+      .limit(1);
+    if (run?.status === "done") return { reasons, carriedTreeProblems };
+    reasons.push("it is a minimal paper whose metadata step has not finished");
+    return { reasons, carriedTreeProblems };
+  }
 
   if (!blocks.length) reasons.push("it has no blocks");
   if (!tree) reasons.push("it has no tree");
@@ -2007,6 +2049,13 @@ export interface PublishRevisionResult {
    * docs/plans/260928a-reset-and-regenerate-article.md.
    */
   readonly regenerated: readonly SuccessorOutcome[];
+  /**
+   * **A tree landed on a minimal paper** — `processing` flipped to `'full'` in
+   * this transaction. The caller holding the job's reservation must charge it
+   * and then `supersedeMinimal` the paper's minimal row, in the same
+   * transaction (src/store/pg-session.ts § `settleIn`).
+   */
+  readonly upgradedFromMinimal: boolean;
 }
 
 /** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
@@ -2214,7 +2263,23 @@ export async function publishRevisionIn(
      draft was copied from" and "what readers are being served" are the same row,
      and no second lock or read is needed to say so. */
   const carried = await publicationInputUnchanged(tx, revisionId, draft.basedOnRevisionId);
-  const { reasons, carriedTreeProblems } = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
+  const processing = article.processing as ArticleProcessing;
+  const { reasons, carriedTreeProblems } = await reasonsNotToPublish(
+    tx,
+    revisionId,
+    blocks,
+    tree,
+    carried,
+    processing,
+  );
+  /* **A tree landing on a minimal paper is *Read this*, and it is paid for or
+     it does not land.** Asked before anything is written, so a refusal leaves
+     nothing to roll back but the reads. The charge and the supersession are the
+     caller's, after the job's ending — `settleIn` (src/store/pg-session.ts) —
+     because the ledger trigger requires the ingest charged before anything may
+     point at it. */
+  const upgradedFromMinimal = processing === "minimal" && tree !== null && reasons.length === 0;
+  if (upgradedFromMinimal) await requirePaidUpgrade(tx, slug, article, opts.job);
 
   /**
    * **A refusal about input this draft *carried* cannot come out differently; a
@@ -2264,7 +2329,11 @@ export async function publishRevisionIn(
 
   await tx
     .update(articles)
-    .set({ currentRevisionId: revisionId })
+    /* `processing` flips here and nowhere else: the publication that lands a
+       tree on a minimal paper. `requirePaidUpgrade` above has already said it
+       is paid for (or the administrator's), and the caller supersedes the
+       paper's minimal row in this same transaction. */
+    .set({ currentRevisionId: revisionId, ...(upgradedFromMinimal ? { processing: "full" } : {}) })
     .where(eq(articles.id, article.id));
 
   /**
@@ -2348,7 +2417,52 @@ export async function publishRevisionIn(
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
     regenerated,
+    upgradedFromMinimal,
   };
+}
+
+/** `articles.processing` — the CHECK `articles_processing` holds it to these two. */
+export type ArticleProcessing = "minimal" | "full";
+
+/**
+ * **Is this tree on a minimal paper paid for?** Throws `PublishRefused`
+ * (`permanent`) unless it is — plan 261001m, Sol's P1: *no free upgrade*.
+ *
+ * - **The administrator**, who reserves nothing anywhere, may.
+ * - **A job carrying a *Read this* reservation for this article** may: an
+ *   unsettled `'ingest'` row whose `article_id` is this article
+ *   (`reserveUpgrade` sets it at birth, and nothing else does). The caller
+ *   charges it and supersedes the minimal row after the job's ending.
+ * - **Anything else is refused**: a job with no reservation (a re-run, a
+ *   successor), a job carrying some other row, or no job at all from a reader
+ *   who is not the administrator. Without this, a bulk add at 0.01 then a free
+ *   re-run from `extract` would be the whole pipeline at a hundredth of the
+ *   price; `enqueue` refuses that job too (src/jobs.ts), and this is the guard
+ *   that holds even if a path round `enqueue` is ever found.
+ */
+async function requirePaidUpgrade(
+  tx: Tx,
+  slug: string,
+  article: typeof articles.$inferSelect,
+  job: PublishRevisionOptions["job"],
+): Promise<void> {
+  if (isAdmin(article.ownerId)) return;
+  if (job) {
+    const paid = await tx.execute(sql`
+      select 1
+        from spideryarn.jobs j
+        join spideryarn.ingest_events e on e.id = j.ingest_event_id
+       where j.id = ${job.id}
+         and e.kind = 'ingest'
+         and e.article_id = ${article.id}::uuid
+         and e.succeeded_at is null and e.released_at is null
+       limit 1`);
+    if (paid.rows.length === 1) return;
+  }
+  throw new PublishRefused(slug, "permanent", [
+    "this is a paper that has not been read yet, and a full reading of it is only made by " +
+      "Read this, which this job is not",
+  ]);
 }
 
 /* ------------------------------------------------ rebasing a sharing draft -- */

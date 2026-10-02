@@ -48,7 +48,6 @@ import {
   DRIVER_STALLED,
   KEEP_A_TAB_OPEN,
   RUNNING_A_WHILE,
-  STEP_USUALLY_A_COUPLE_OF_MINUTES,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -211,19 +210,32 @@ it("puts its timer down when it unmounts", () => {
 });
 
 /**
- * **And starts no clock at all for a card with nothing to count.**
+ * **A finished card keeps a minute clock, not a second one.**
  *
- * This used to be `useNow(86_400_000)`, described in the code as "one timer
- * that never fires". It fired: once a day, per finished card, for the life of
- * the tab. `useNow` takes `null` now, and this is what says so — GPT Sol,
- * 2026-09-01, *"supporting a disabled interval would be cleaner"*.
+ * This said *"starts no clock at all"* until 2026-10-01, and that was right
+ * while nothing on a finished card changed with time. The source line now says
+ * how long ago it was added, which a poll will not refresh (`sameJobs`
+ * suppresses identical snapshots), so the card ticks once a minute — plan
+ * 261001s, GPT Sol's review item 9; Greg, spya-a5gzb9. What is still pinned is
+ * the part the old test was really about: not once a second, which is what a
+ * card that confused itself with a running one would do.
+ *
+ * Before that it was `useNow(86_400_000)`, "one timer that never fires", which
+ * fired once a day — GPT Sol, 2026-09-01.
  */
-it("starts no clock for a card that has nothing to count", () => {
+it("keeps a minute clock, not a second one, for a finished card", () => {
   card(job({ status: "done", steps: [], finishedAt: ago(1000) }));
   expect(host.textContent, "no card rendered, so the count below proves nothing").toContain(
     "An import in progress",
   );
-  expect(vi.getTimerCount(), "an idle card is holding a timer").toBe(0);
+  expect(vi.getTimerCount(), "a finished card holds more than one timer").toBe(1);
+  const before = host.textContent;
+  act(() => void vi.advanceTimersByTime(1_000));
+  expect(host.textContent, "a finished card re-rendered after a second").toBe(before);
+  /* Added 200 seconds before `NOW`: "3 minutes ago", and after one tick "4". */
+  expect(host.textContent).toContain("3 minutes ago");
+  act(() => void vi.advanceTimersByTime(60_000));
+  expect(host.textContent, "the how-long-ago froze").toContain("4 minutes ago");
 });
 
 it("only counts the step the reader is waiting on", () => {
@@ -257,7 +269,7 @@ it("says a step usually takes minutes only where that was measured", () => {
       ],
     }),
   );
-  expect(row("Drawing the argument")?.textContent).toContain(STEP_USUALLY_A_COUPLE_OF_MINUTES);
+  expect(row("Drawing the argument")?.textContent).toContain("This step usually takes about a minute.");
 
   card(
     job({
@@ -269,7 +281,7 @@ it("says a step usually takes minutes only where that was measured", () => {
   expect(row("Fetching the page"), "no step row rendered, so the assertion below proves nothing")
     .toBeDefined();
   expect(host.textContent, "invented a duration for an unmeasured step").not.toContain(
-    STEP_USUALLY_A_COUPLE_OF_MINUTES,
+    "This step usually takes about a minute.",
   );
 
   /* `hierarchy` is the one that lost its sentence, and it is the case worth
@@ -278,7 +290,7 @@ it("says a step usually takes minutes only where that was measured", () => {
   card(job());
   expect(row("Building the hierarchy")).toBeDefined();
   expect(host.textContent, "promised a duration off one successful run").not.toContain(
-    STEP_USUALLY_A_COUPLE_OF_MINUTES,
+    "This step usually takes about a minute.",
   );
 });
 

@@ -1200,13 +1200,13 @@ export interface QuotesResponse {
   profileChanged: boolean;
 }
 
-/* ------------------------------------------------------------- trajectory --
+/* ------------------------------------------------------------- skim --
    A route through the article's Quotes, walked at three depths — the
-   `trajectory` column on `article_revisions`. docs/project/trajectory.md is the
+   `skim` column on `article_revisions`. docs/project/skim.md is the
    vision; docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
    is the build.
 
-   Here rather than in src/trajectory.ts for the reason `Quiz` and `Faq` are:
+   Here rather than in src/skim.ts for the reason `Quiz` and `Faq` are:
    the panel needs the shape and `src/web/` may import only the pure leaves.
 
    **No block ids anywhere in it.** A stop names a quote, and the quote holds
@@ -1215,16 +1215,16 @@ export interface QuotesResponse {
 
 /**
  * The pass a stop belongs to. **The model plans the passes as nesting** (depth
- * *d* covering every stop with `depth ≤ d`, which is what `Trajectory.visible`
+ * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
  * counts); **the reader walks each pass as only its own stops** — plan 260929e,
- * src/web/trajectory-route.ts.
+ * src/web/skim-route.ts.
  */
-export type TrajectoryDepth = 1 | 2 | 3;
+export type SkimDepth = 1 | 2 | 3;
 
-export interface TrajectoryStop {
+export interface SkimStop {
   /** An id in the Quotes artefact. The stop's passage is that quote's block. */
   quoteId: string;
-  depth: TrajectoryDepth;
+  depth: SkimDepth;
   /**
    * **Routes written before `trajectory/5` only**: what the passage *does*, at
    * most 80 characters. The prompt no longer asks for it and every new stop's
@@ -1234,7 +1234,7 @@ export interface TrajectoryStop {
   role: string | null;
   /**
    * What to **look for** in this passage — an instruction or a question, never
-   * what it found — at most `MAX_CUE_CHARS` (src/trajectory.ts). Context-free
+   * what it found — at most `MAX_CUE_CHARS` (src/skim.ts). Context-free
    * on purpose: a reader can reach a stop from anywhere, so it never says how
    * this stop follows another (Sol F18). `null` when the model's was missing,
    * empty or over-long, and the stop is kept (F8, F25). **Absent** on routes
@@ -1248,7 +1248,7 @@ export interface TrajectoryStop {
  * a quote or a role. A dropped stop looks exactly like one the model never
  * offered, which is why they ride on the artefact and in the log.
  */
-export interface TrajectoryDrops {
+export interface SkimDrops {
   /**
    * Usable Quotes omitted before the call because a higher-priority quote
    * shares their block.
@@ -1278,30 +1278,30 @@ export interface TrajectoryDrops {
   overCap: number;
 }
 
-/** The artefact. The `trajectory` column on `article_revisions`. */
-export interface Trajectory {
+/** The artefact. The `skim` column on `article_revisions`. */
+export interface Skim {
   version: string;
   generator: string;
   slug: string;
   /**
-   * **The input hash** — `trajectoryInputHash` in src/trajectory.ts, over
+   * **The input hash** — `skimInputHash` in src/skim.ts, over
    * exactly what the prompt rendered, plus the quote id each Q-label resolves
    * to: the offered quotes' section paths, priorities, words and Idea
    * associations, the Ideas (or `null` for none), and the top-level outline.
    * Spelled `sourceHash` because that is the name `stampOf` reads
    * (src/store/artifacts.ts); it is not a hash of the article. Routes before
    * `trajectory/7` hold the old quotes-only hash, which never matches;
-   * `loadTrajectory` reports them outdated, not stale.
+   * `loadSkim` reports them outdated, not stale.
    */
   sourceHash: string;
   /**
    * The rendered profile's hash, or `null` for none. **In the stamp**, and
    * compared more strictly than every other artefact's: none → some is stale
-   * here. src/trajectory.ts § `routeProfileIsStale`.
+   * here. src/skim.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Each pass walks its own stops in this order (see `TrajectoryDepth`). */
-  stops: TrajectoryStop[];
+  /** **The array order is the route.** Each pass walks its own stops in this order (see `SkimDepth`). */
+  stops: SkimStop[];
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
    * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
@@ -1312,14 +1312,14 @@ export interface Trajectory {
    * unusable ones were removed.
    */
   offered: number;
-  dropped: TrajectoryDrops;
+  dropped: SkimDrops;
   generatedAt: string;
   elapsedMs: number;
 }
 
-/** `GET /api/trajectory/:slug`. */
-export interface TrajectoryResponse {
-  trajectory: Trajectory;
+/** `GET /api/skim/:slug`. */
+export interface SkimResponse {
+  skim: Skim;
   /**
    * What the route was planned from has changed underneath it — the Quotes
    * (*Find more* added some, or they were chosen again), the Ideas (found
@@ -1342,7 +1342,7 @@ export interface TrajectoryResponse {
 }
 
 /** As `QuotesFound`: everything but the one question about the reader. */
-export type TrajectoryFound = Omit<TrajectoryResponse, "profileChanged">;
+export type SkimFound = Omit<SkimResponse, "profileChanged">;
 
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
@@ -1484,6 +1484,15 @@ export interface Meta {
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
+  /**
+   * **A minimal paper's abstract and DOI**, as the `metadata` step read them off
+   * its first pages (src/paper-metadata.ts) — the paper's own claims through a
+   * cheap model, checked for shape and nothing else. Absent on everything
+   * `extract` made; *Read this* keeps them. Owner-facing only, like `filename`:
+   * not in `PublicMeta`. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md.
+   */
+  abstract?: string;
+  doi?: string;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1782,6 +1791,21 @@ export interface Article {
   visibility?: Visibility;
 
   /**
+   * **When the owner archived this article — `null` while it is on the shelf.**
+   * For the masthead's Archive button (Masthead.tsx § `ArchiveMark`), which
+   * must know which way round the article is on arrival, or it could only ever
+   * offer *Archive*. Free, off the `articles` row the read already selects, as
+   * `visibility` is. docs/plans/261002a-….
+   *
+   * **Optional for `visibility`'s reason: absent means *nobody could say*.**
+   * A visitor's payload is built from `PublicArticle`, an allowlist that does
+   * not carry it — whether the owner archived a piece is not a stranger's
+   * business — and the masthead draws no button over an absent answer
+   * (`useArchive`'s third state).
+   */
+  archivedAt?: string | null;
+
+  /**
    * **Our guess at where an uploaded paper lives on the web** — `SourceGuess`
    * below, off `upload_source_guesses`.
    * docs/plans/260929g-canonical-link-for-an-uploaded-paper.md.
@@ -1951,6 +1975,44 @@ export interface LibraryEntry {
    * A count would mean reading the artefact for every card on every load.
    */
   has: { arc: boolean; tweets: boolean; glossary: boolean };
+  /**
+   * **`'minimal'` for a paper on the shelf with only its title, authors and
+   * abstract read** — no blocks and no tree, so its `words`, `blocks`, `parts`
+   * and `sections` are 0 and opening it shows the not-yet-read page with *Read
+   * this* (plan 261001m). `'full'` for everything else.
+   *
+   * The server always sends it. **Optional only for shelf rows cached in the
+   * browser before this field existed**, as `revisionId` is — and every one of
+   * those is a full article, because no minimal paper existed then, so a
+   * missing value reads as `'full'`.
+   */
+  processing?: "minimal" | "full";
+  /** A minimal paper's abstract and DOI, as the `metadata` step read them. Absent otherwise. */
+  abstract?: string;
+  doi?: string;
+}
+
+/**
+ * **What a reader is told about a paper that has not been read through yet** —
+ * the body of the `409 not-processed` that `loadArticle` answers for a minimal
+ * article (`NotProcessed`, src/not-processed.ts), and enough to draw the page:
+ * `{ error, code: "not-processed", paper: UnreadPaper }`.
+ *
+ * Owner-facing only: it is only ever thrown from the owner's own reads.
+ */
+export interface UnreadPaper {
+  slug: string;
+  title: string;
+  /** In the paper's order; empty when nobody was named. */
+  authors: string[];
+  abstract?: string;
+  doi?: string;
+  /** The reader's own name for the file, when it came off their disk. */
+  filename?: string;
+  /** What the file is, for the download link's wording. Null when nothing recorded it. */
+  kind: "pdf" | "html" | null;
+  /** When it was added, ISO — the shelf's `addedAt`. */
+  addedAt: string;
 }
 
 /**
@@ -2311,13 +2373,13 @@ export interface PublicArtefacts {
    */
   sketch: boolean;
   /**
-   * **The eighth, since 2026-09-29** — a stored Trajectory route. It was
+   * **The eighth, since 2026-09-29** — a stored Skim route. It was
    * `owners-only` for the cost of *planning* one, which a visitor was never
    * going to pay; reading one is a column on the row the public read already
    * fetches. SPIDERYARN-READING2-56,
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  trajectory: boolean;
+  skim: boolean;
   /**
    * **The ninth, since 2026-09-29** — a stored FAQ. `owners-only` until then
    * for the cost of *asking* for one; showing one is a column on the row the
@@ -2842,7 +2904,13 @@ interface CommentFields {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy"
+  | "fetch"
+  /* A minimal paper's whole AI work: title, authors, abstract and DOI off the
+     first pages, one cheap call (src/paper-metadata.ts). Only ever in the
+     two-step job a minimal upload queues, `["fetch", "metadata"]` — `enqueue`
+     refuses it anywhere else. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
+  | "metadata"
+  | "extract" | "blocks" | "hierarchy"
   /* The per-paragraph navigation labels, which left the `hierarchy` step on
      2026-09-06 because they were 79.5–92% of its wall clock and one measured
      call took 602s of a 682s pass — past what the job lease allows.
@@ -2861,7 +2929,7 @@ export type StepName =
      Its input is another step's artefact, like `illustrated`: it reads the
      stored Quotes and never the article's prose, so it is in no cached prefix
      and is not an `ArticleStage`. */
-  | "trajectory"
+  | "skim"
   | "ideas"
   /* When the things the piece narrates happened, and how sure it is —
      docs/project/timeline.md. Beside `ideas` because the two send byte-identical
@@ -2871,17 +2939,20 @@ export type StepName =
   /* The questions the piece can ask you back, the second sub-mode of Remember —
      docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
      for the third time and the same reason: `articleWithIds` at `high` effort,
-     so all four share one cached article prefix and `STEP_ORDER` keeps them
-     contiguous. */
+     so the group shares one cached article prefix. `STEP_ORDER` keeps its calls
+     close inside the provider's five-minute lifetime; cache lookup itself is
+     position-blind. */
   | "quiz"
   /* The questions a careful reader would put to this piece while reading it,
      and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
      Beside `quiz` for the same reason `quiz` is beside `timeline`:
      `articleWithIds` over the body at `high` effort, so it joins the
-     `ideas`/`timeline`/`quiz`/`sketch` cached article prefix. */
+     `ideas`/`timeline`/`quiz` cached article prefix. */
   | "faq"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Nothing reads what it writes except the one below. */
+     Nothing reads what it writes except the one below. The same bytes as
+     `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
+     (src/models.ts § STAGE_EFFORT). */
   | "sketch"
   /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
      step here whose input is another step's artefact rather than the article**,

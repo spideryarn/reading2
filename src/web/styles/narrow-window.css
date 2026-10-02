@@ -304,7 +304,7 @@
 
    `fitMode` returning `modeW: 0` is what makes the rest of the page need no
    changes at all: every rule that reserves horizontal room for a band reserves
-   none, so the two sticky bars keep their full `100vw` and `.reader` keeps its
+   none, so the two sticky bars keep their full `--page-w` and `.reader` keeps its
    ordinary padding. All that is left is to widen the band, which is
    `position: fixed` and therefore costs the layout underneath it nothing.
 
@@ -325,7 +325,10 @@
    "full width" meant here. */
 .reader.band-covers .mode-band {
   left: calc(var(--spine-w) + var(--safe-left));
-  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+  /* `right` rather than a `100vw` width, which counts a classic scrollbar and
+     ran the panel under it — dock.css § `.dock` has the same change and why. */
+  right: var(--safe-right);
+  width: auto;
   border-right: none;
 }
 
@@ -373,10 +376,10 @@
 /* **A band that has stepped aside.** `band-away` is written by `Reader` beside
    `band-covers`, only while that is on, after a reader follows a passage link
    out of the band — any mode's since 2026-09-29 (Reader.tsx § `bandJump`),
-   Trajectory's stops since the day before: the band is lying over the whole
+   Skim's stops since the day before: the band is lying over the whole
    article, and what they asked for is in the article. So the band stops
    painting and the prose is the page again; "↩ back to ⟨mode⟩"
-   (BandBackChip.tsx) offers the band back, as do Trajectory's door and
+   (BandBackChip.tsx) offers the band back, as do Skim's door and
    pressing the mode in the Dock (Reader.tsx § `bandAway`).
    docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
 

@@ -325,19 +325,29 @@ export async function readReportRows(client: pg.Client, reportId: string): Promi
 }
 
 /** Production's rows for this report id — or `CannotTell`. */
+/**
+ * An unconnected client for production, and the `Target:` it reaches — or
+ * `CannotTell`. The one place a `pg.Client` is built from `.env.prod`, so
+ * tests/db-ssl.test.ts's named exception covers every script that reads
+ * production this way (scripts/feedback-unswept.ts too) rather than one more.
+ */
+export function productionClient(): { client: pg.Client; target: string } {
+  const prod = readEnvProd();
+  const url = prod?.values.DATABASE_URL;
+  if (prod === null || url === undefined || url === "") {
+    throw new CannotTell(
+      "no .env.prod with a DATABASE_URL in this checkout or the primary one, so production cannot be read here (the box has one)",
+    );
+  }
+  const connection = productionConnection(url);
+  return { client: new pg.Client(connection.config), target: `${prod.file} → ${connection.host}` };
+}
+
 export const lookupProduction: Lookup = async (reportId) => {
   try {
-    const prod = readEnvProd();
-    const url = prod?.values.DATABASE_URL;
-    if (prod === null || url === undefined || url === "") {
-      throw new CannotTell(
-        "no .env.prod with a DATABASE_URL in this checkout or the primary one, so production cannot be read here (the box has one)",
-      );
-    }
-    const connection = productionConnection(url);
-    const client = new pg.Client(connection.config);
+    const { client, target } = productionClient();
     const rows = await readReportRows(client, reportId);
-    return { target: `${prod.file} → ${connection.host}`, rows };
+    return { target, rows };
   } catch (error) {
     if (error instanceof CannotTell) throw error;
     /* Database and parser errors are not safe prose: some carry connection

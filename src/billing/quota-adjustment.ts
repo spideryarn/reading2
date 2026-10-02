@@ -123,8 +123,8 @@
  * the rest, including when the answer is "the same as before".
  */
 
-import { articles } from "./half-units.js";
-import type { Articles } from "./half-units.js";
+import { articles } from "./points.js";
+import type { Articles } from "./points.js";
 
 /** What the tier table answers. Filled in by `quotaRules` in ./tiers.ts. */
 export interface QuotaRules {
@@ -252,7 +252,7 @@ export function nextQuotaAdjustment(args: {
   /* **Stored relative to the new tier**, so that raising that tier tomorrow
      raises this account with it. Branded here rather than left plain: the
      column is a signed count of *whole ingests*, and the whole point of the
-     two units is that a half-unit cannot reach it by accident. */
+     two units is that a count of points cannot reach it by accident. */
   return { delta: articles(allowedNow - after), periodStart: incoming.periodStart };
 }
 
@@ -293,7 +293,7 @@ function clamp(limit: number, maxAllowance: number): number {
  * **In articles, in and out, and that is load-bearing rather than tidy.** The
  * stored delta is a signed count of *whole ingests*, so doubling the tier before
  * this line and subtracting afterwards gives ninety-one articles to somebody
- * entitled to thirty-three — see src/billing/half-units.ts, where the two units
+ * entitled to thirty-three — see src/billing/points.ts, where the two units
  * are kept apart by the type system for exactly this reason. The enforcement
  * budget is derived from what this returns, at the admission seam, and never
  * before it.

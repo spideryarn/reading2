@@ -1,0 +1,620 @@
+{
+  "version": "sketch/3",
+  "title": "Problem-to-theory chain",
+  "caption": "A chain: the problem of flexible cognition funnels through successive mechanisms (mixed selectivity → oscillations → spatial computing → traveling waves/analog computation) to a final hybrid synapse/wave account of consciousness.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From synapses to waves to consciousness",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Flexible cognition needs fast, brain-wide coordination",
+          "size": "md",
+          "block": "spya-f6m6jv"
+        },
+        {
+          "kind": "node",
+          "id": "classic",
+          "shape": "box",
+          "x": 260,
+          "y": 140,
+          "w": 240,
+          "h": 70,
+          "text": "Classical model: fixed, specialized neurons fails to explain data",
+          "size": "sm",
+          "block": "spya-k046f6"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 250,
+          "w": 680,
+          "h": 260,
+          "style": "band",
+          "label": "MIXED SELECTIVITY & OSCILLATIONS",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "mixed",
+          "shape": "box",
+          "x": 70,
+          "y": 300,
+          "w": 200,
+          "h": 70,
+          "text": "Neurons are multifunctional (mixed selectivity)",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-v0gbwq"
+        },
+        {
+          "kind": "node",
+          "id": "osc",
+          "shape": "box",
+          "x": 300,
+          "y": 300,
+          "w": 200,
+          "h": 70,
+          "text": "Brain waves organize & route spiking",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-jnp59d"
+        },
+        {
+          "kind": "node",
+          "id": "ephaptic",
+          "shape": "hex",
+          "x": 530,
+          "y": 300,
+          "w": 160,
+          "h": 70,
+          "text": "Waves act via ephaptic coupling",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-mapqhv"
+        },
+        {
+          "kind": "node",
+          "id": "spatial",
+          "shape": "box",
+          "x": 260,
+          "y": 420,
+          "w": 240,
+          "h": 80,
+          "text": "Spatial Computing: alpha/beta 'stencils' gate gamma/spiking",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-qck2sw",
+          "opens": "inside-spatial"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 550,
+          "w": 680,
+          "h": 260,
+          "style": "band",
+          "label": "TRAVELING WAVES & ANALOG COMPUTATION",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "travel",
+          "shape": "box",
+          "x": 70,
+          "y": 600,
+          "w": 220,
+          "h": 70,
+          "text": "Traveling waves shift coding states",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-y09vju"
+        },
+        {
+          "kind": "node",
+          "id": "analog",
+          "shape": "hex",
+          "x": 330,
+          "y": 600,
+          "w": 200,
+          "h": 70,
+          "text": "Wave interference computes (analog computation)",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-h5qjz4"
+        },
+        {
+          "kind": "node",
+          "id": "efficient",
+          "shape": "box",
+          "x": 560,
+          "y": 600,
+          "w": 140,
+          "h": 70,
+          "text": "Efficient, parallel wave computing",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-szhg6f"
+        },
+        {
+          "kind": "node",
+          "id": "anes",
+          "shape": "box",
+          "x": 260,
+          "y": 850,
+          "w": 240,
+          "h": 70,
+          "text": "Anesthesia disrupts waves, not receptors",
+          "size": "sm",
+          "block": "spya-uvev07"
+        },
+        {
+          "kind": "node",
+          "id": "hybrid",
+          "shape": "box",
+          "x": 260,
+          "y": 950,
+          "w": 240,
+          "h": 80,
+          "text": "Hybrid synapse/wave framework of cognition & consciousness",
+          "size": "md",
+          "block": "spya-dnv2tp",
+          "opens": "inside-consciousness"
+        },
+        {
+          "kind": "node",
+          "id": "compare",
+          "shape": "note",
+          "x": 550,
+          "y": 950,
+          "w": 170,
+          "h": 80,
+          "text": "Compared to Global Workspace, IIT, Higher-Order theories",
+          "size": "sm",
+          "block": "spya-xn7mdj"
+        },
+        {
+          "kind": "node",
+          "id": "conclude",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 1070,
+          "w": 240,
+          "h": 70,
+          "text": "Waves, not discrete circuits, organize mind",
+          "size": "md",
+          "block": "spya-smkrcs"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "classic",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "classic",
+          "to": "mixed",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mixed",
+          "to": "osc",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "osc",
+          "to": "ephaptic",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mixed",
+          "to": "spatial",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ephaptic",
+          "to": "spatial",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spatial",
+          "to": "travel",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "travel",
+          "to": "analog",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "analog",
+          "to": "efficient",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "efficient",
+          "to": "anes",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "anes",
+          "to": "hybrid",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hybrid",
+          "to": "compare",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "hybrid",
+          "to": "conclude",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Each stage solves a gap left by the one above, ending in a hybrid framework that is compared to rival theories of consciousness."
+    },
+    {
+      "id": "inside-spatial",
+      "title": "Spatial Computing theory",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "core",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 40,
+          "w": 220,
+          "h": 80,
+          "text": "Alpha/beta 'stencils' suppress gamma/spiking in targeted locations",
+          "size": "md",
+          "block": "spya-qck2sw"
+        },
+        {
+          "kind": "node",
+          "id": "push",
+          "shape": "box",
+          "x": 280,
+          "y": 180,
+          "w": 220,
+          "h": 70,
+          "text": "Push-pull: feedforward gamma vs feedback alpha/beta",
+          "size": "sm",
+          "block": "spya-gkfdys"
+        },
+        {
+          "kind": "node",
+          "id": "confirm",
+          "shape": "box",
+          "x": 60,
+          "y": 320,
+          "w": 200,
+          "h": 80,
+          "text": "Primate PFC data confirm context coded in alpha/beta spatial patterns",
+          "size": "sm",
+          "block": "spya-azz3c8"
+        },
+        {
+          "kind": "node",
+          "id": "scale",
+          "shape": "box",
+          "x": 300,
+          "y": 320,
+          "w": 200,
+          "h": 80,
+          "text": "Alpha/beta's mid spatial scale suits top-down control",
+          "size": "sm",
+          "block": "spya-q606tk"
+        },
+        {
+          "kind": "node",
+          "id": "mixedexp",
+          "shape": "box",
+          "x": 540,
+          "y": 320,
+          "w": 170,
+          "h": 80,
+          "text": "Explains mixed selectivity without dedicated context neurons",
+          "size": "sm",
+          "block": "spya-zmknun"
+        },
+        {
+          "kind": "node",
+          "id": "subspace",
+          "shape": "box",
+          "x": 280,
+          "y": 460,
+          "w": 220,
+          "h": 80,
+          "text": "Explains orthogonal subspace coding of population activity",
+          "size": "sm",
+          "block": "spya-m63zb9"
+        },
+        {
+          "kind": "edge",
+          "from": "core",
+          "to": "push",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "push",
+          "to": "confirm",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "push",
+          "to": "scale",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "push",
+          "to": "mixedexp",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "scale",
+          "to": "subspace",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "mixedexp",
+          "to": "subspace",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A hub: the stencil idea at the center explains both why it's tuned to alpha/beta and the two puzzles (mixed selectivity, subspace coding) it resolves."
+    },
+    {
+      "id": "inside-consciousness",
+      "title": "Hybrid framework vs. rival theories",
+      "height": 620,
+      "items": [
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 60,
+          "w": 320,
+          "h": 480,
+          "style": "band",
+          "label": "THE HYBRID PROPOSAL",
+          "tone": 1
+        },
+        {
+          "kind": "region",
+          "x": 400,
+          "y": 60,
+          "w": 330,
+          "h": 480,
+          "style": "band",
+          "label": "RIVAL THEORIES",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "synstore",
+          "shape": "box",
+          "x": 60,
+          "y": 120,
+          "w": 260,
+          "h": 70,
+          "text": "Synapses store long-term information",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-f0dqyd"
+        },
+        {
+          "kind": "node",
+          "id": "wavegate",
+          "shape": "box",
+          "x": 60,
+          "y": 220,
+          "w": 260,
+          "h": 70,
+          "text": "Waves gate which representations are active now",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-tdqde5"
+        },
+        {
+          "kind": "node",
+          "id": "bind",
+          "shape": "box",
+          "x": 60,
+          "y": 320,
+          "w": 260,
+          "h": 70,
+          "text": "Waves bind distributed activity into unified conscious states",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-tdqde5"
+        },
+        {
+          "kind": "node",
+          "id": "anesevid",
+          "shape": "box",
+          "x": 60,
+          "y": 420,
+          "w": 260,
+          "h": 70,
+          "text": "Anesthesia: diverse drugs converge on slow desynchronized waves",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-wnqgmn"
+        },
+        {
+          "kind": "node",
+          "id": "gw",
+          "shape": "box",
+          "x": 430,
+          "y": 120,
+          "w": 270,
+          "h": 70,
+          "text": "Global Workspace: broadcasting, not field dynamics",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-m3dn2u"
+        },
+        {
+          "kind": "node",
+          "id": "iit",
+          "shape": "box",
+          "x": 430,
+          "y": 220,
+          "w": 270,
+          "h": 70,
+          "text": "IIT: integration located in wave dynamics, not a 'hot zone'",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-m3dn2u"
+        },
+        {
+          "kind": "node",
+          "id": "hot",
+          "shape": "box",
+          "x": 430,
+          "y": 320,
+          "w": 270,
+          "h": 70,
+          "text": "Higher-Order Theories: top-down organization itself is consciousness",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-nkg5v2"
+        },
+        {
+          "kind": "node",
+          "id": "exec",
+          "shape": "box",
+          "x": 430,
+          "y": 420,
+          "w": 270,
+          "h": 70,
+          "text": "Executive control: wave dynamics replace winner-take-all gating",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-j6qfz4"
+        },
+        {
+          "kind": "node",
+          "id": "concl2",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 540,
+          "w": 260,
+          "h": 70,
+          "text": "Wave-based organization, not broadcasting or hot zones",
+          "size": "md",
+          "block": "spya-xnpbyc"
+        },
+        {
+          "kind": "edge",
+          "from": "synstore",
+          "to": "wavegate",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "wavegate",
+          "to": "bind",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bind",
+          "to": "anesevid",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "anesevid",
+          "to": "concl2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "exec",
+          "to": "concl2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Two columns side by side: the hybrid synapse/wave proposal on one side, matched point-for-point against existing theories of consciousness on the other."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null
+}

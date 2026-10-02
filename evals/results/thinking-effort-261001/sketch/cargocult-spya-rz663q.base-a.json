@@ -1,0 +1,786 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel into a loop",
+  "caption": "The talk funnels a broad hunt through pseudoscience down into one named failure, 'Cargo Cult Science', crystallizes a single rule ('you are the easiest person to fool'), fans that rule out into real case studies, then loops back at the end to the same demand for honesty it opened with.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1820,
+      "items": [
+        {
+          "kind": "region",
+          "x": 190,
+          "y": 40,
+          "w": 380,
+          "h": 450,
+          "style": "band",
+          "label": "SURVEYING PSEUDOSCIENCE",
+          "opens": "inside-pseudoscience",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 90,
+          "w": 300,
+          "h": 70,
+          "text": "Science learns to test ideas, discard failures",
+          "size": "md",
+          "detail": "Science arose from trying an idea and throwing it out if it didn't work; yet many still believe things that never work.",
+          "tone": 1,
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 230,
+          "y": 190,
+          "w": 300,
+          "h": 70,
+          "text": "Mysticism, ESP, Geller's keys — nothing works",
+          "size": "sm",
+          "detail": "Isolation tanks, Esalen, reflexology, and Uri Geller's key-bending all failed to show anything real.",
+          "tone": 1,
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 230,
+          "y": 290,
+          "w": 300,
+          "h": 70,
+          "text": "Reading and crime 'science' shows no real gains",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 230,
+          "y": 390,
+          "w": 300,
+          "h": 70,
+          "text": "Cocktail-party test flags empty topics",
+          "size": "sm",
+          "detail": "If you can talk about it at a party without seeming to talk shop, nobody really knows anything about it.",
+          "tone": 1,
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "region",
+          "x": 190,
+          "y": 510,
+          "w": 540,
+          "h": 400,
+          "style": "band",
+          "label": "NAMING THE PROBLEM",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "hex",
+          "x": 230,
+          "y": 560,
+          "w": 300,
+          "h": 80,
+          "text": "Names it: Cargo Cult Science",
+          "size": "md",
+          "detail": "Like islanders who build fake runways and control towers, hoping planes land — the form of science without the substance that makes it work.",
+          "tone": 2,
+          "block": "spya-fd2muf"
+        },
+        {
+          "kind": "node",
+          "id": "n6",
+          "shape": "box",
+          "x": 230,
+          "y": 680,
+          "w": 300,
+          "h": 70,
+          "text": "Integrity: report evidence against yourself",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-afgs74"
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "note",
+          "x": 560,
+          "y": 680,
+          "w": 170,
+          "h": 70,
+          "text": "Unlike ads' true-but-misleading claims",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bpyx8n"
+        },
+        {
+          "kind": "node",
+          "id": "n8",
+          "shape": "box",
+          "x": 230,
+          "y": 780,
+          "w": 300,
+          "h": 70,
+          "text": "Careless work eventually gets exposed",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-az6z7k"
+        },
+        {
+          "kind": "region",
+          "x": 190,
+          "y": 920,
+          "w": 380,
+          "h": 440,
+          "style": "band",
+          "label": "GUARDING AGAINST SELF-DECEPTION",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "box",
+          "x": 230,
+          "y": 960,
+          "w": 300,
+          "h": 70,
+          "text": "Millikan's electron charge crept upward for years",
+          "size": "sm",
+          "detail": "Later measurements inched toward the true value because researchers distrusted results too far from Millikan's flawed original.",
+          "tone": 3,
+          "block": "spya-s9msxy"
+        },
+        {
+          "kind": "node",
+          "id": "n10",
+          "shape": "hex",
+          "x": 230,
+          "y": 1060,
+          "w": 300,
+          "h": 80,
+          "text": "Rule one: you are easiest to fool",
+          "size": "md",
+          "detail": "The first principle of scientific integrity — after that, being honest with others is easy.",
+          "tone": 3,
+          "block": "spya-bvx2u8"
+        },
+        {
+          "kind": "node",
+          "id": "n11",
+          "shape": "box",
+          "x": 230,
+          "y": 1170,
+          "w": 300,
+          "h": 70,
+          "text": "Owe the public the same honesty",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-c46yyu"
+        },
+        {
+          "kind": "node",
+          "id": "n12",
+          "shape": "box",
+          "x": 230,
+          "y": 1270,
+          "w": 300,
+          "h": 70,
+          "text": "Publish every outcome, not just favorable ones",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-jk7mj4"
+        },
+        {
+          "kind": "region",
+          "x": 190,
+          "y": 1380,
+          "w": 380,
+          "h": 280,
+          "style": "band",
+          "label": "CASE STUDIES IN POOR SCIENCE",
+          "opens": "inside-case-studies",
+          "tone": 4
+        },
+        {
+          "kind": "node",
+          "id": "n13a",
+          "shape": "box",
+          "x": 230,
+          "y": 1410,
+          "w": 300,
+          "h": 60,
+          "text": "Psychology skips repeating prior experiments",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "n13b",
+          "shape": "box",
+          "x": 230,
+          "y": 1490,
+          "w": 300,
+          "h": 60,
+          "text": "Young's careful rat clues later ignored",
+          "size": "sm",
+          "detail": "Young eliminated every stray clue a rat could use to find the right door; later researchers never adopted his controls.",
+          "tone": 4,
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "n13c",
+          "shape": "box",
+          "x": 230,
+          "y": 1570,
+          "w": 300,
+          "h": 60,
+          "text": "Rhine's ESP effects shrink toward zero",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "n14",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 1700,
+          "w": 300,
+          "h": 80,
+          "text": "Final wish: freedom to keep your integrity",
+          "size": "md",
+          "detail": "Feynman's closing wish: may you work somewhere you're free to hold to this honesty without institutional pressure to drop it.",
+          "tone": 1,
+          "block": "spya-ndyj3t"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "n7",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "n8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n8",
+          "to": "n9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n9",
+          "to": "n10",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n10",
+          "to": "n11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n11",
+          "to": "n12",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n12",
+          "to": "n13a",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n13a",
+          "to": "n13b",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n13b",
+          "to": "n13c",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n13c",
+          "to": "n14",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n14:left",
+          "to": "n1:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "same demand for honesty"
+        }
+      ],
+      "caption": "Four movements stacked in reading order: a survey of failed pseudosciences narrows into the named problem and its core rule, which then branches into examples, before the closing wish loops back to the opening demand for honest testing."
+    },
+    {
+      "id": "inside-pseudoscience",
+      "title": "Surveying pseudoscience",
+      "height": 860,
+      "items": [
+        {
+          "kind": "node",
+          "id": "p1",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "Science tests ideas and discards the failures",
+          "size": "md",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "p2",
+          "shape": "box",
+          "x": 230,
+          "y": 140,
+          "w": 300,
+          "h": 70,
+          "text": "Yet UFOs, astrology, ESP still thrive today",
+          "size": "sm",
+          "block": "spya-bcgpc3"
+        },
+        {
+          "kind": "node",
+          "id": "p3",
+          "shape": "box",
+          "x": 230,
+          "y": 240,
+          "w": 300,
+          "h": 70,
+          "text": "Tries isolation tanks, Esalen, reflexology",
+          "size": "sm",
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "p4",
+          "shape": "note",
+          "x": 560,
+          "y": 240,
+          "w": 170,
+          "h": 70,
+          "text": "A masseur hunts for the 'pituitary' in a toe",
+          "size": "sm",
+          "block": "spya-xm9a87"
+        },
+        {
+          "kind": "node",
+          "id": "p5",
+          "shape": "box",
+          "x": 230,
+          "y": 340,
+          "w": 300,
+          "h": 70,
+          "text": "Uri Geller's key-bending fails, even underwater",
+          "size": "sm",
+          "block": "spya-mmhbvn"
+        },
+        {
+          "kind": "node",
+          "id": "p6",
+          "shape": "box",
+          "x": 230,
+          "y": 440,
+          "w": 300,
+          "h": 70,
+          "text": "Reading and crime 'science' shows no progress",
+          "size": "sm",
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "p7",
+          "shape": "box",
+          "x": 230,
+          "y": 540,
+          "w": 300,
+          "h": 70,
+          "text": "Pseudoscience intimidates people with good sense",
+          "size": "sm",
+          "block": "spya-re4634"
+        },
+        {
+          "kind": "node",
+          "id": "p8",
+          "shape": "box",
+          "x": 230,
+          "y": 640,
+          "w": 300,
+          "h": 60,
+          "text": "So we should study the sciences that don't work",
+          "size": "sm",
+          "block": "spya-g2cwvy"
+        },
+        {
+          "kind": "node",
+          "id": "p9",
+          "shape": "box",
+          "x": 230,
+          "y": 720,
+          "w": 300,
+          "h": 70,
+          "text": "Cocktail-party test spots empty topics",
+          "size": "sm",
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "p10",
+          "shape": "note",
+          "x": 560,
+          "y": 720,
+          "w": 170,
+          "h": 70,
+          "text": "Psychotherapy added to the list",
+          "size": "sm",
+          "block": "spya-ankp3d"
+        },
+        {
+          "kind": "edge",
+          "from": "p1",
+          "to": "p2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p3",
+          "to": "p4",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "p3",
+          "to": "p5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5",
+          "to": "p6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p6",
+          "to": "p7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p7",
+          "to": "p8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p8",
+          "to": "p9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p9",
+          "to": "p10",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        }
+      ],
+      "caption": "A chain of Feynman's own investigations, each one failing to produce anything real, leading to the rule of thumb that lets him spot an empty field."
+    },
+    {
+      "id": "inside-case-studies",
+      "title": "Case studies in poor science",
+      "height": 850,
+      "items": [
+        {
+          "kind": "node",
+          "id": "c1",
+          "shape": "box",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "A student wants to test rats under new conditions",
+          "size": "sm",
+          "block": "spya-w9nnq6"
+        },
+        {
+          "kind": "node",
+          "id": "c2",
+          "shape": "box",
+          "x": 230,
+          "y": 140,
+          "w": 300,
+          "h": 70,
+          "text": "First repeat the original experiment exactly",
+          "size": "sm",
+          "block": "spya-tf8rj2"
+        },
+        {
+          "kind": "node",
+          "id": "c3",
+          "shape": "box",
+          "x": 230,
+          "y": 240,
+          "w": 300,
+          "h": 70,
+          "text": "Her professor forbids it as a waste of time",
+          "size": "sm",
+          "block": "spya-v0xcd7"
+        },
+        {
+          "kind": "node",
+          "id": "c4",
+          "shape": "box",
+          "x": 230,
+          "y": 340,
+          "w": 300,
+          "h": 70,
+          "text": "A physics lab skips a needed comparison run too",
+          "size": "sm",
+          "block": "spya-m95kqm"
+        },
+        {
+          "kind": "node",
+          "id": "c5",
+          "shape": "hex",
+          "x": 230,
+          "y": 440,
+          "w": 300,
+          "h": 80,
+          "text": "Young rules out every stray rat clue",
+          "size": "sm",
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "c6",
+          "shape": "note",
+          "x": 560,
+          "y": 440,
+          "w": 170,
+          "h": 80,
+          "text": "Only sand under the floor finally stops them",
+          "size": "sm",
+          "block": "spya-npdc6n"
+        },
+        {
+          "kind": "node",
+          "id": "c7",
+          "shape": "box",
+          "x": 230,
+          "y": 550,
+          "w": 300,
+          "h": 70,
+          "text": "Later researchers ignore Young's careful method",
+          "size": "sm",
+          "block": "spya-wye8g6"
+        },
+        {
+          "kind": "node",
+          "id": "c8",
+          "shape": "box",
+          "x": 230,
+          "y": 650,
+          "w": 300,
+          "h": 70,
+          "text": "Rhine's ESP effects shrink as controls improve",
+          "size": "sm",
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "c9",
+          "shape": "box",
+          "x": 230,
+          "y": 750,
+          "w": 300,
+          "h": 70,
+          "text": "Trains only students who get 'results'",
+          "size": "sm",
+          "block": "spya-g203mu"
+        },
+        {
+          "kind": "edge",
+          "from": "c1",
+          "to": "c2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c2",
+          "to": "c3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c3",
+          "to": "c4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c4",
+          "to": "c5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c5",
+          "to": "c6",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "none"
+        },
+        {
+          "kind": "edge",
+          "from": "c5",
+          "to": "c7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c7",
+          "to": "c8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "c8",
+          "to": "c9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Four episodes, in the order Feynman tells them, each showing the same gap: a check that was skipped, and what happened because nobody insisted on it."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null
+}

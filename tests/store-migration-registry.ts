@@ -2583,11 +2583,19 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `pgReady`, seeds its own owner and writes its own articles and ledger rows,
      and its oracle is those rows — so the private lane is right and nothing in
      it needs the shared stack. */
-  "tests/billing-half-units.test.ts": "private-postgres",
+  "tests/billing-points.test.ts": "private-postgres",
   /* 260930k: High-powered AI as a second charged row. `pgReady`, its own two
      seeded owners, its own articles, ledger rows and one inactive tier, and its
-     oracle is those rows — the private lane, as billing-half-units. */
+     oracle is those rows — the private lane, as billing-points. */
   "tests/billing-high-power.test.ts": "private-postgres",
+  /* 261001m Stage 2: a minimal paper at a hundredth of an article. `pgReady`,
+     its own two seeded owners, its own articles, ledger rows and jobs, and its
+     oracle is those rows — the private lane, as billing-points. */
+  "tests/billing-minimal.test.ts": "private-postgres",
+  /* 261001m Stage 3: the thin article. `pgReady`, its own two seeded readers,
+     and uploads through the real routes — so Storage too, as
+     `an-upload-is-queued-…` below — and its oracle is the rows it wrote. */
+  "tests/minimal-paper.test.ts": "private-postgres",
   "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
@@ -2973,11 +2981,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `loadQuotes` — the reader's own path — so there is no honest version of it
      without a database. */
   "tests/rerun-failure-keeps-the-old-artefact.test.ts": "private-postgres",
-  /* Plan 260928a stage 6: `loadTrajectory` judges a route on the `quotes` and
+  /* Plan 260928a stage 6: `loadSkim` judges a route on the `quotes` and
      `ideas` columns, the tree and the blocks rows beside it — the read path
      that has to agree with the pipeline's stamp, and there is no honest
      version of that without the rows. */
-  "tests/trajectory-freshness-pg.test.ts": "private-postgres",
+  "tests/skim-freshness-pg.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is
@@ -3331,12 +3339,27 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   /* Stage 5's reader. `seedAuthUser` in `beforeEach`, and every row it writes —
      the articles, the billing account, the ingest events — hangs off the
      `auth.users` foreign key. */
-  "tests/billing-half-units.test.ts": {
+  "tests/billing-points.test.ts": {
     "0b110a1f-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
   /* 260930k's two owners: the one charged, and the one whose article it must
      not reach. `seedAuthUser` in `beforeEach`; articles, ledger rows and the
      billing anchor all hang off the `auth.users` foreign key. */
+  /* 261001m Stage 2's two owners: the reader, and the stranger whose ingest
+     may not pay for the reader's paper. `seedAuthUser` in `beforeEach`;
+     articles, ledger rows, jobs and the billing anchor hang off the
+     `auth.users` foreign key. */
+  "tests/billing-minimal.test.ts": {
+    "0b11a1a0-0000-4000-8000-0000000d0c01": { kind: "seeded" },
+    "0b11a1a0-0000-4000-8000-0000000d0c02": { kind: "seeded" },
+  },
+  /* 261001m Stage 3's two readers: one who adds and reads papers, one whose
+     duplicates are counted apart. `seedAuthUser` in `beforeAll`; uploads,
+     articles, ledger rows and jobs all hang off the `auth.users` foreign key. */
+  "tests/minimal-paper.test.ts": {
+    "3e1ec7ed-0000-4000-8000-00000000ab01": { kind: "seeded" },
+    "3e1ec7ed-0000-4000-8000-00000000ab02": { kind: "seeded" },
+  },
   "tests/billing-high-power.test.ts": {
     "0b1f0a1e-0000-4000-8000-0000000c6c01": { kind: "seeded" },
     "0b1f0a1e-0000-4000-8000-0000000c6c02": { kind: "seeded" },

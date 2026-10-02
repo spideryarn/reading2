@@ -1,0 +1,931 @@
+{
+  "startedAt": "2026-10-01T21:08:55.700Z",
+  "commit": "59fc48a0491882d78cab14acda66ae4d166872b0",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off-repeat",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "incumbent",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "incumbent-repeat",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    },
+    {
+      "arm": "smart-off-repeat",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 88207,
+      "blocksSha256": {
+        "measured": "fce9f65f14192af39b159ae84279c18a0e8454b5783519d7958554b483473a71",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "blocks": 99,
+        "bodyBlocks": 99,
+        "headingBlocks": 26,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 95
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            809,
+            909,
+            286,
+            1775,
+            2579,
+            1199,
+            636,
+            387
+          ],
+          "balanceCv": 0.671898230289984
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.3902439024390243,
+          "max": 8,
+          "within5to9": 0.21951219512195122
+        },
+        "headings": {
+          "boundaries": 31,
+          "boundariesOnHeadings": 0.7741935483870968,
+          "headingsCut": 0.96,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6585365853658537,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 7,
+            "words": 527
+          }
+        },
+        "titles": {
+          "count": 41,
+          "meanWords": 4.585365853658536,
+          "within2to6": 0.9024390243902439,
+          "copiedHeadings": 25,
+          "retention": 0.6520833333333333
+        },
+        "gists": {
+          "count": 41,
+          "coverage": 1,
+          "meanWords": 26.26829268292683,
+          "multiSentence": 0,
+          "templateRepetition": 0.2682926829268293,
+          "retention": 0.6231437673698966
+        }
+      },
+      "calls": [
+        {
+          "ms": 88160,
+          "inputTokens": 21865,
+          "outputTokens": 11249,
+          "reasoningTokens": 5843,
+          "generationId": "gen-1790888935-Pc6QNTJP5fUBu160PE1k",
+          "costUsd": 0.15622,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 6,
+          "endedOffsetMs": 88166,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 9,
+        "blocks": 9,
+        "largest": 1,
+        "where": [
+          "root > child 2 (overlap, 1)",
+          "root > child 3 (overlap, 1)",
+          "root > child 4 (overlap, 1)",
+          "root > child 2 > child 3 (over, 1)",
+          "root > child 5 > child 4 (overlap, 1)",
+          "root > child 5 > child 6 (overlap, 1)",
+          "root > child 7 > child 2 (overlap, 1)",
+          "root > child 7 > child 2 (heading, 1)",
+          "root > child 8 > child 2 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 9,
+        "l1Boundaries": 0.875,
+        "allBoundaries": 0.8387096774193549,
+        "boundaryDistance": {
+          "mean": 0.15789473684210525,
+          "within1Block": 0.9298245614035088
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "run": 1,
+      "callOrder": 2,
+      "elapsedMs": 110178,
+      "blocksSha256": {
+        "measured": "fce9f65f14192af39b159ae84279c18a0e8454b5783519d7958554b483473a71",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "blocks": 99,
+        "bodyBlocks": 99,
+        "headingBlocks": 26,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 95
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            376,
+            433,
+            909,
+            286,
+            1775,
+            2579,
+            1199,
+            636,
+            387
+          ],
+          "balanceCv": 0.7701102727958098
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.1777777777777776,
+          "max": 9,
+          "within5to9": 0.2
+        },
+        "headings": {
+          "boundaries": 34,
+          "boundariesOnHeadings": 0.7352941176470589,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5333333333333333,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 7,
+            "words": 527
+          }
+        },
+        "titles": {
+          "count": 45,
+          "meanWords": 4.111111111111111,
+          "within2to6": 0.8,
+          "copiedHeadings": 25,
+          "retention": 0.6708333333333332
+        },
+        "gists": {
+          "count": 45,
+          "coverage": 1,
+          "meanWords": 26.466666666666665,
+          "multiSentence": 0,
+          "templateRepetition": 0.17777777777777778,
+          "retention": 0.5842645080931078
+        }
+      },
+      "calls": [
+        {
+          "ms": 110169,
+          "inputTokens": 21865,
+          "outputTokens": 14286,
+          "reasoningTokens": 8654,
+          "generationId": "gen-1790889024-g4xJP2jxOCeMLU469oI1",
+          "costUsd": 0.18659,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 110170,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 3,
+        "largest": 1,
+        "where": [
+          "root > child 5 (gap, 1)",
+          "root > child 4 > child 2 (short, 1)",
+          "root > child 6 > child 2 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 9,
+        "partCountB": 9,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.7647058823529411,
+        "boundaryDistance": {
+          "mean": 0.25,
+          "within1Block": 0.9166666666666666
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "run": 1,
+      "callOrder": 3,
+      "elapsedMs": 48315,
+      "blocksSha256": {
+        "measured": "fce9f65f14192af39b159ae84279c18a0e8454b5783519d7958554b483473a71",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "The table of contents is not a valid tree, so it was not written (2 problems): n0003: internal node has no gist — nothing to render at its level; n0130: internal node has no gist — nothing to render at its level",
+      "calls": [
+        {
+          "ms": 48305,
+          "inputTokens": 21865,
+          "outputTokens": 5269,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889134-gTaj9zTCYSe1VOwwtvRB",
+          "costUsd": 0.09642,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 48306,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 10,
+        "blocks": 36,
+        "largest": 14,
+        "where": [
+          "root > child 2 (overlap, 1)",
+          "root > child 5 (overlap, 14)",
+          "root > child 1 > child 2 (over, 1)",
+          "root > child 4 > child 2 (over, 14)",
+          "root > child 5 > child 1 (gap, 2)",
+          "root > child 6 > child 2 (gap, 1)",
+          "root > child 6 > child 4 (overlap, 1)",
+          "root > child 6 > child 5 (overlap, 1)",
+          "root > child 8 > child 1 (gap, 2)",
+          "root > child 9 > child 2 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 3 > child 1",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 6 > child 1",
+          "root > child 6 > child 5",
+          "root > child 7 > child 1",
+          "root > child 7 > child 3",
+          "root > child 9",
+          "root > child 9 > child 2"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3",
+          "root > child 6 > child 4",
+          "root > child 6 > child 5",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 9",
+          "root > child 9 > child 1",
+          "root > child 9 > child 2"
+        ]
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "run": 1,
+      "callOrder": 4,
+      "elapsedMs": 47398,
+      "blocksSha256": {
+        "measured": "fce9f65f14192af39b159ae84279c18a0e8454b5783519d7958554b483473a71",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "blocks": 99,
+        "bodyBlocks": 99,
+        "headingBlocks": 26,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 94
+        },
+        "parts": {
+          "count": 10,
+          "words": [
+            809,
+            909,
+            1372,
+            689,
+            2003,
+            576,
+            780,
+            419,
+            636,
+            387
+          ],
+          "balanceCv": 0.5414550138143711
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.6486486486486487,
+          "max": 10,
+          "within5to9": 0.1891891891891892
+        },
+        "headings": {
+          "boundaries": 25,
+          "boundariesOnHeadings": 0.84,
+          "headingsCut": 0.84,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7297297297297297,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 7,
+            "words": 527
+          }
+        },
+        "titles": {
+          "count": 37,
+          "meanWords": 4.081081081081081,
+          "within2to6": 0.8648648648648649,
+          "copiedHeadings": 1,
+          "retention": 0.8240740740740741
+        },
+        "gists": {
+          "count": 37,
+          "coverage": 1,
+          "meanWords": 27.972972972972972,
+          "multiSentence": 0,
+          "templateRepetition": 0.10810810810810811,
+          "retention": 0.5736051901555334
+        }
+      },
+      "calls": [
+        {
+          "ms": 47384,
+          "inputTokens": 21865,
+          "outputTokens": 5401,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889182-3LodlpqyYX9MzBNLEWrN",
+          "costUsd": 0.09774,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 47384,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 11,
+        "blocks": 11,
+        "largest": 3,
+        "where": [
+          "root > child 3 (overlap, 1)",
+          "root > child 4 (overlap, 1)",
+          "root > child 5 (gap, 1)",
+          "root > child 6 (gap, 3)",
+          "root > child 7 (overlap, 1)",
+          "root > child 2 > child 1 (gap, 1)",
+          "root > child 3 > child 1 (gap, 1)",
+          "root > child 5 > child 1 (gap, 1)",
+          "root > child 6 > child 2 (overlap, 1)",
+          "root > child 7 > child 1 (gap, 1)",
+          "root > child 9 > child 1 (gap, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 3 > child 1",
+          "root > child 5 > child 1",
+          "root > child 6 > child 3",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 10 > child 2"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 10,
+        "partCountB": 9,
+        "l1Boundaries": 0.5454545454545454,
+        "allBoundaries": 0.7586206896551724,
+        "boundaryDistance": {
+          "mean": 0.17647058823529413,
+          "within1Block": 0.9607843137254902
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "run": 1,
+      "callOrder": 5,
+      "elapsedMs": 46690,
+      "blocksSha256": {
+        "measured": "981b97bf3d04141a21173baf903d2d49b57454a5cc7f7375fbd6d9f49fe27401",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+        "blocks": 97,
+        "bodyBlocks": 97,
+        "headingBlocks": 6,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 86
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            288,
+            1160,
+            1094,
+            1272,
+            1573,
+            302,
+            5
+          ],
+          "balanceCv": 0.6856250485259163
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.979381443298969
+        },
+        "fanout": {
+          "mean": 4.555555555555555,
+          "max": 8,
+          "within5to9": 0.48148148148148145
+        },
+        "headings": {
+          "boundaries": 19,
+          "boundariesOnHeadings": 0.2631578947368421,
+          "headingsCut": 1,
+          "l1OnHeadings": 0.8333333333333334,
+          "sourceHeadingShare": 0.2222222222222222,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 30,
+            "words": 1869
+          }
+        },
+        "titles": {
+          "count": 27,
+          "meanWords": 3.7037037037037037,
+          "within2to6": 0.9629629629629629,
+          "copiedHeadings": 6,
+          "retention": 0.5753968253968254
+        },
+        "gists": {
+          "count": 27,
+          "coverage": 1,
+          "meanWords": 27.074074074074073,
+          "multiSentence": 0,
+          "templateRepetition": 0.07407407407407407,
+          "retention": 0.49263448782908936
+        }
+      },
+      "calls": [
+        {
+          "ms": 46677,
+          "inputTokens": 15279,
+          "outputTokens": 4871,
+          "reasoningTokens": 1622,
+          "generationId": "gen-1790889230-Kpj16m2mAeLRYfzQtPdg",
+          "costUsd": 0.079268,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 46677,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 3 > child 1",
+          "root > child 4 > child 1"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 6,
+        "l1Boundaries": 0.8333333333333334,
+        "allBoundaries": 0.36,
+        "boundaryDistance": {
+          "mean": 0.9117647058823529,
+          "within1Block": 0.7647058823529411
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "run": 1,
+      "callOrder": 6,
+      "elapsedMs": 57849,
+      "blocksSha256": {
+        "measured": "981b97bf3d04141a21173baf903d2d49b57454a5cc7f7375fbd6d9f49fe27401",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+        "blocks": 97,
+        "bodyBlocks": 97,
+        "headingBlocks": 6,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 86
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            288,
+            1160,
+            1094,
+            1272,
+            1573,
+            307
+          ],
+          "balanceCv": 0.5105182864123794
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5,
+          "max": 11,
+          "within5to9": 0.5416666666666666
+        },
+        "headings": {
+          "boundaries": 16,
+          "boundariesOnHeadings": 0.3125,
+          "headingsCut": 1,
+          "l1OnHeadings": 0.8,
+          "sourceHeadingShare": 0.25,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 30,
+            "words": 1869
+          }
+        },
+        "titles": {
+          "count": 24,
+          "meanWords": 3.875,
+          "within2to6": 0.9583333333333334,
+          "copiedHeadings": 6,
+          "retention": 0.5814814814814815
+        },
+        "gists": {
+          "count": 24,
+          "coverage": 1,
+          "meanWords": 24.291666666666668,
+          "multiSentence": 0.08333333333333333,
+          "templateRepetition": 0,
+          "retention": 0.4820228975302561
+        }
+      },
+      "calls": [
+        {
+          "ms": 57837,
+          "inputTokens": 15279,
+          "outputTokens": 6736,
+          "reasoningTokens": 3985,
+          "generationId": "gen-1790889277-yUppslWSYy5yizSXZwZ4",
+          "costUsd": 0.097918,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 57838,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 6,
+        "partCountB": 6,
+        "l1Boundaries": 0.6666666666666666,
+        "allBoundaries": 0.2916666666666667,
+        "boundaryDistance": {
+          "mean": 1.096774193548387,
+          "within1Block": 0.5806451612903226
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "run": 1,
+      "callOrder": 7,
+      "elapsedMs": 32315,
+      "blocksSha256": {
+        "measured": "981b97bf3d04141a21173baf903d2d49b57454a5cc7f7375fbd6d9f49fe27401",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "The table of contents is not a valid tree, so it was not written (4 problems): n0002: internal node has no gist — nothing to render at its level; n0111: internal node has no gist — nothing to render at its level; n0112: internal node has no gist — nothing to render at its level; n0124: internal node has no gist — nothing to render at its level",
+      "calls": [
+        {
+          "ms": 32306,
+          "inputTokens": 15279,
+          "outputTokens": 3344,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889334-Zo3DdVg8KZvwLWBDm3wR",
+          "costUsd": 0.063998,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 32306,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 4,
+        "largest": 2,
+        "where": [
+          "root > child 4 > child 1 (gap, 2)",
+          "root > child 5 > child 1 (gap, 1)",
+          "root > child 6 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      }
+    },
+    {
+      "arm": "smart-off-repeat",
+      "comparison": "isolated",
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "run": 1,
+      "callOrder": 8,
+      "elapsedMs": 32202,
+      "blocksSha256": {
+        "measured": "981b97bf3d04141a21173baf903d2d49b57454a5cc7f7375fbd6d9f49fe27401",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "The table of contents is not a valid tree, so it was not written (4 problems): n0002: internal node has no gist — nothing to render at its level; n0109: internal node has no gist — nothing to render at its level; n0110: internal node has no gist — nothing to render at its level; n0122: internal node has no gist — nothing to render at its level",
+      "calls": [
+        {
+          "ms": 32194,
+          "inputTokens": 15279,
+          "outputTokens": 3391,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790889367-FEdMQDBzoNnsTcbOwLhW",
+          "costUsd": 0.064468,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 1,
+          "endedOffsetMs": 32195,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 5,
+        "largest": 2,
+        "where": [
+          "root > child 2 > child 2 (gap, 1)",
+          "root > child 3 > child 1 (gap, 2)",
+          "root > child 4 > child 1 (gap, 1)",
+          "root > child 5 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 3 > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 5 > child 5",
+          "root > child 6",
+          "root > child 6 > child 1"
+        ],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-10-01T21:16:39.461Z"
+}

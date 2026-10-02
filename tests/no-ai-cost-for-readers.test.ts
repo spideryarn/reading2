@@ -476,7 +476,9 @@ vi.mock("../src/store/pg-billing.js", async () => {
       chargedHalfPrice: 1,
       highPowerFullPrice: 0,
       highPowerHalfPrice: 0,
-      inFlight: 0,
+      inFlightIngest: 0,
+      inFlightMinimal: 0,
+      minimalCharged: 0,
     }),
   };
 });

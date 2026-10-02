@@ -38,6 +38,7 @@ import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
 import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
+import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
@@ -46,7 +47,9 @@ import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
+import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
+import { UnreadPaperPage } from "./UnreadPaperPage.js";
 
 /**
  * One article, fetched **once for all of its views**.
@@ -98,7 +101,11 @@ export function ArticlePage({
      re-runs that file. src/web/last-view.ts has the whole of it, including why
      a shared link always beats the memory. */
   useLastView(slug);
-  const access = useArticleAccess(slug, readerId);
+  /* Bumped by the not-yet-read page once *Read this* is done, to load the
+     article it made in place. */
+  const [attempt, setAttempt] = useState(0);
+  const reread = useCallback(() => setAttempt((n) => n + 1), []);
+  const access = useArticleAccess(slug, readerId, attempt);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -150,6 +157,12 @@ export function ArticlePage({
      this one, and the error page is a `<pre>` with nothing to press. It draws
      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
+
+  /* **Yours, and not read through yet** (plan 261001m): the paper's title,
+     authors and abstract, and *Read this*. It draws its own corner pair. Every
+     view of the article — the metadata page, the thread — lands here too,
+     because none of them has an article to draw. */
+  if (access.kind === "unread") return <UnreadPaperPage paper={access.paper} onRead={reread} />;
 
   /* **The corner pair, on the two branches with no bar to put it in.**
      `App` stopped drawing the corner Feedback trigger on the `read` route on
@@ -308,6 +321,15 @@ function OwnedArticle({
   const visibility = shared?.slug === slug ? shared.visibility : null;
 
   /**
+   * **One archive controller across both views.** A request begun from the
+   * masthead can settle after Metadata has replaced it, and a failed write can
+   * leave the answer honestly unknown. Keeping the hook here preserves both
+   * states across that switch; relaying only its known answers from an effect
+   * in each child lost them when that child unmounted (code review 261002a).
+   */
+  const archive = useArchive(slug, fetched.archivedAt, "archivedAt" in fetched, false);
+
+  /**
    * **Where an uploaded paper probably lives on the web, once somebody has
    * looked** — the third thing layered over the payload, for the rename's
    * reason: it is drawn in the masthead and on the metadata page, and the
@@ -324,16 +346,16 @@ function OwnedArticle({
        truthy that would silently fall through to `fetched`, which is still
        carrying the override that was just cleared. */
     const titled = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
-    const named = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
-    if (visibility === null) return named;
+    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
          makes those different values, and the one that means *we cannot say*
          is the absent key. */
-      const { visibility: _cleared, ...rest } = named;
+      const { visibility: _cleared, ...rest } = guessedAt;
       return rest;
     }
-    return { ...named, visibility };
+    return { ...guessedAt, visibility };
   }, [fetched, title, guessed, visibility]);
 
   const renameTo = useCallback(
@@ -397,9 +419,10 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        archive={archive}
       />
     );
-  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
+  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} archive={archive} />;
 }
 /**
  * **Where the private hooks are mounted, and the only place they are.**
@@ -421,10 +444,12 @@ function OwnedReader({
   slug,
   article,
   onRenamed,
+  archive,
 }: {
   slug: string;
   article: Article;
   onRenamed: (slug: string, title: string) => void;
+  archive: ArchiveControl;
 }) {
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
@@ -525,23 +550,32 @@ function OwnedReader({
   const readingTime = useReadingTime(slug, words, experimental.on);
 
   return (
-    <Reader
-      slug={slug}
-      article={article}
-      capability={{
-        kind: "owner",
-        comments,
-        chatAnchors,
-        glossary,
-        quotes,
-        citations,
-        quiz,
-        crossrefs,
-        arc,
-        readingTime,
-      }}
-      onRenamed={onRenamed}
-    />
+    <>
+      <Reader
+        slug={slug}
+        article={article}
+        capability={{
+          kind: "owner",
+          comments,
+          chatAnchors,
+          glossary,
+          quotes,
+          citations,
+          quiz,
+          crossrefs,
+          arc,
+          readingTime,
+        }}
+        onRenamed={onRenamed}
+        archive={archive}
+      />
+      {/* **"Why are you reading this?", asked once** after a silent import —
+          Greg, 2026-10-01, spya-hbqezu; plan 261001s § Stage 3. Owner-only by
+          being here, which is the point (Sol's item 5): it reads and writes
+          the reader's purpose. Without the add page's mark it renders nothing
+          and asks the server nothing. Keyed so another article peeks afresh. */}
+      <PurposePrompt key={slug} slug={slug} />
+    </>
   );
 }
 

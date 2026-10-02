@@ -378,6 +378,21 @@ describe("Marginalia's old name", () => {
   });
 });
 
+describe("Skim's old name", () => {
+  /* The mode was called Trajectory until 2026-10-01 (plan 261001r), and Greg
+     asked for the old word to keep finding it. */
+  it.each(["trajectory", "traj"])("selects Skim from %j", (query) => {
+    const onMode = vi.fn();
+    reading({ onMode, experimental: EXPERIMENTAL_ON, drawer: A_DRAWER });
+    openBar();
+    type(query);
+
+    expect(selected()).toBe("Skim");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("skim");
+  });
+});
+
 describe("a query that matches nothing", () => {
   /**
    * **Exactly this sentence and nothing beside it**, which is Greg's answer 3
@@ -560,7 +575,9 @@ const GENERATES: Record<Mode, boolean> = {
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */
   structure: false,
-  summary: false,
+  /* Since 2026-10-02 the press writes the plain-words levels when there are
+     none (Greg, 7T; docs/plans/261002a-summary-generates-on-open.md). */
+  summary: true,
   search: false,
   chat: false,
   referee: false,
@@ -573,7 +590,7 @@ const GENERATES: Record<Mode, boolean> = {
   diagram: true,
   citations: true,
   faq: true,
-  trajectory: true,
+  skim: true,
   /* A mode since 2026-09-29, and it spends: the band writes the thread on
      arrival when there is none (useTweets.ts § `useAutoRunOnArrival`). The
      marker it wore as a page row is now the mode row's. */
@@ -1230,6 +1247,37 @@ describe("off the reading view", () => {
     type("glossary");
     press("Enter");
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
+  });
+
+  it("arms nothing when the reading view's visitor drawer presses a mode on the bar", () => {
+    /* A visitor's band mounts no `useAutoRun` to claim the token, so it would
+       wait, and a reader seen as a visitor for a moment (a private read that
+       returned 401) could later claim it as the owner and spend on arrival.
+       The real Reader signals that footing through `drawer.visitor`, not the
+       standalone prop used by public non-reading pages. GPT Sol's plan review
+       of 261002a, P1. */
+    const onMode = vi.fn();
+    reading({
+      drawer: {
+        visitor: true,
+        comments: [],
+        paragraphs: new Map(),
+        panel: null,
+        onPanel: () => {},
+        onOpenComment: () => {},
+      },
+      onMode,
+    });
+    for (const mode of ["glossary", "summary"] as const) {
+      const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
+        (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],
+      );
+      expect(button, `${mode}: a bar button`).toBeDefined();
+      act(() => button?.click());
+      expect(onMode).toHaveBeenCalledWith(mode);
+    }
+    expect(pendingActivation("a-piece", "glossary")).toBeNull();
+    expect(pendingActivation("a-piece", "simple")).toBeNull();
   });
 
   it("still navigates a page row", () => {

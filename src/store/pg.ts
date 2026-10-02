@@ -33,6 +33,8 @@ import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "driz
 
 import type { Assets } from "../assets.js";
 import { decodeAuthors } from "../authors.js";
+import { NOT_READ_YET } from "../messages.js";
+import { NotProcessed } from "../not-processed.js";
 import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
@@ -84,10 +86,10 @@ import {
   simplePromptVersion,
 } from "../simple-summary.js";
 import {
-  PROMPT_VERSION as TRAJECTORY_PROMPT_VERSION,
-  trajectoryInput,
-  trajectoryInputHash,
-} from "../trajectory.js";
+  PROMPT_VERSION as SKIM_PROMPT_VERSION,
+  skimInput,
+  skimInputHash,
+} from "../skim.js";
 import {
   inputFingerprint as debateFingerprint,
   isDebateDocument,
@@ -172,8 +174,8 @@ import type {
   CrossrefsFound,
   SimpleSummary,
   SimpleSummaryFound,
-  Trajectory,
-  TrajectoryFound,
+  Skim,
+  SkimFound,
   Glossary,
   GlossaryFound,
   Quiz,
@@ -195,6 +197,7 @@ import type {
   ThreadFound,
   Tree,
   TweetThread,
+  UnreadPaper,
   Visibility,
 } from "../types.js";
 import { isUsableSimpleSummary } from "../types.js";
@@ -513,7 +516,7 @@ type RevisionReader =
   | "debate"
   | "citations"
   | "faq"
-  | "trajectory"
+  | "skim"
   | "crossrefs"
   | "simpleSummary"
   | "arc"
@@ -562,7 +565,7 @@ const REVISION_READ_POLICY: Record<
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
-    trajectory: "value", crossrefs: "value", simpleSummary: "value",
+    skim: "value", crossrefs: "value", simpleSummary: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -667,6 +670,10 @@ const REVISION_READ_POLICY: Record<
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
+  /* A minimal paper's card shows them (`LibraryEntry.abstract`, `.doi`), and
+     `metaFrom` puts them on every owner-facing `Meta`. No prompt reads either. */
+  abstract: { article: "value", library: "value" },
+  doi: { article: "value", library: "value" },
   /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
      is the one stage whose freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
@@ -789,7 +796,7 @@ const REVISION_READ_POLICY: Record<
     /* The route's prompt prints each quote's section path and the top-level
        outline with its gists, and says which quotes carry which Idea by
        position in it — all hashed into its `sourceHash` (plan 260928a stage 6). */
-    trajectory: "value",
+    skim: "value",
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
@@ -839,16 +846,16 @@ const REVISION_READ_POLICY: Record<
   quotes: {
     metadata: "value",
     quotes: "value",
-    /* **The Trajectory read takes the QUOTES**, as the Illustrated read takes
+    /* **The Skim read takes the QUOTES**, as the Illustrated read takes
        the Sketch: the route's `sourceHash` is a hash of this column, and the
        band says how many quotes are not on the route. No fingerprint columns,
        because the route never read the article's prose; since stage 6 it
        takes the Ideas and the tree as well (their entries). */
-    trajectory: "value",
+    skim: "value",
   },
-  /* The Trajectory read takes the Ideas since stage 6 of plan 260928a: the
+  /* The Skim read takes the Ideas since stage 6 of plan 260928a: the
      route's prompt is given them, so its `sourceHash` covers them. */
-  ideas: { metadata: "value", ideas: "value", trajectory: "value" },
+  ideas: { metadata: "value", ideas: "value", skim: "value" },
   /* Its own reader and the metadata page, and **not the library**, on the same
      call `quotes` and `sketch` make: a card shows four ticks and a fifth would
      not fit. */
@@ -908,7 +915,7 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
-  trajectory: { metadata: "value", trajectory: "value" },
+  skim: { metadata: "value", skim: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. */
   crossrefs: { metadata: "value", crossrefs: "value" },
@@ -1031,6 +1038,8 @@ const META_COLUMNS = {
   excerpt: articleRevisions.excerpt,
   publishedAt: articleRevisions.publishedAt,
   note: articleRevisions.note,
+  abstract: articleRevisions.abstract,
+  doi: articleRevisions.doi,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
@@ -1211,7 +1220,7 @@ export const REVISION_PROJECTIONS = {
     simpleSummary: articleRevisions.simpleSummary,
     /* For `isCurrent`'s arm, and a seventh artefact that can carry a
        `profileHash` — `personalisedSteps` must be exhaustive. */
-    trajectory: articleRevisions.trajectory,
+    skim: articleRevisions.skim,
   },
   publish: {
     id: articleRevisions.id,
@@ -1308,14 +1317,14 @@ export const REVISION_PROJECTIONS = {
   /**
    * **The second projection that takes other artefacts' columns**, after
    * `illustrated`, and **no fingerprint columns**: the route's `sourceHash` is
-   * `trajectoryInputHash` — over the quotes, the Ideas they carry and the
+   * `skimInputHash` — over the quotes, the Ideas they carry and the
    * top-level outline — and it never read the article's prose. So it takes the
-   * `quotes` and `ideas` columns and the tree; `loadTrajectory` reads the
+   * `quotes` and `ideas` columns and the tree; `loadSkim` reads the
    * blocks beside it, for the positions the Idea associations are made from.
    */
-  trajectory: {
+  skim: {
     id: articleRevisions.id,
-    trajectory: articleRevisions.trajectory,
+    skim: articleRevisions.skim,
     quotes: articleRevisions.quotes,
     ideas: articleRevisions.ideas,
     tree: articleRevisions.tree,
@@ -1694,6 +1703,40 @@ function withAuthors(meta: Meta, stored: Author[] | null): Meta {
   return authors ? { ...meta, authors } : meta;
 }
 
+/** A minimal paper's shelf numbers: it has no blocks to count. */
+const NO_SCALARS: LibraryScalars = {
+  wordCount: 0,
+  blockCount: 0,
+  partCount: 0,
+  sectionCount: 0,
+  rootGist: null,
+};
+
+/**
+ * **The not-yet-read page's whole content**, off the row `loadArticle` already
+ * holds — the body of `NotProcessed`. Through `metaFrom` and `titleFor`, so
+ * the page calls the paper what the shelf calls it.
+ */
+function unreadPaperFrom(
+  slug: string,
+  found: { article: typeof articles.$inferSelect; revision: RevisionRowFor<"article"> },
+): UnreadPaper {
+  const meta = titleFor(metaFrom(slug, found.revision, null), shelfFrom(found.article));
+  const authors = decodeAuthors(found.revision.authors)?.map((a) => a.name) ?? [];
+  return {
+    slug,
+    title: meta.title,
+    authors,
+    ...(meta.abstract ? { abstract: meta.abstract } : {}),
+    ...(meta.doi ? { doi: meta.doi } : {}),
+    ...(meta.filename ? { filename: meta.filename } : {}),
+    /* `source` is set for a PDF and nothing else; an uploaded web page has a
+       filename and no source. */
+    kind: meta.source === "pdf" ? "pdf" : meta.filename ? "html" : null,
+    addedAt: (found.revision.fetchedAt ?? found.article.createdAt).toISOString(),
+  };
+}
+
 function metaFrom(
   slug: string,
   /* **`MetaRow`, not `$inferSelect`** — the columns this function actually
@@ -1733,6 +1776,8 @@ function metaFrom(
        the whole content of this field. src/db/schema.ts § `publishedAt`. */
     ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
     ...(revision.note === null ? {} : { note: revision.note }),
+    ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
+    ...(revision.doi === null ? {} : { doi: revision.doi }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of
        `source === "pdf"` — which is the media kind and stopped being a proxy
@@ -1788,6 +1833,8 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      describing it. This said `article_revisions.raw_bytes` until 2026-09-01,
      when the column that held the document itself was dropped. */
   fetch: ["article_revisions.raw_source_sha256", "raw_sources"],
+  /* The meta columns `extract` also writes, and the two only a minimal paper has. */
+  metadata: ["article_revisions.title", "article_revisions.abstract", "article_revisions.doi"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   hierarchy: ["article_revisions.tree", "article_revisions.labels"],
@@ -1817,7 +1864,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   debate: ["article_revisions.debate"],
   citations: ["article_revisions.citations"],
   faq: ["article_revisions.faq"],
-  trajectory: ["article_revisions.trajectory"],
+  skim: ["article_revisions.skim"],
   crossrefs: ["article_revisions.crossrefs"],
   simple: ["article_revisions.simple_summary"],
 };
@@ -2441,7 +2488,7 @@ function personalisedSteps(revision: {
   ideas: Ideas | null;
   sketch: Sketch | null;
   illustrated: Illustrated | null;
-  trajectory: Trajectory | null;
+  skim: Skim | null;
   simpleSummary: SimpleSummary | null;
 }): StepName[] {
   /* `Record`, not `Partial<Record>`: another artefact gaining a `profileHash`
@@ -2461,7 +2508,7 @@ function personalisedSteps(revision: {
     /* The seventh: the route is ordered for the reader's own profile, and its
        stamp says whose. Its stored output is public but the stamp is not, and
        an owner about to publish is owed the fact. */
-    trajectory: revision.trajectory,
+    skim: revision.skim,
     /* The eighth, since 2026-10-01: all plain-words levels are pitched at
        the owner's profile and goal, and a visitor reads the owner's. Plan
        261001b. */
@@ -2506,7 +2553,7 @@ export function shareableArtefacts(revision: {
   quotes: Quotes | null;
   timeline: Timeline | null;
   sketch: Sketch | null;
-  trajectory: Trajectory | null;
+  skim: Skim | null;
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
@@ -2520,7 +2567,7 @@ export function shareableArtefacts(revision: {
     quotes: revision.quotes,
     timeline: revision.timeline,
     sketch: revision.sketch,
-    trajectory: revision.trajectory,
+    skim: revision.skim,
     faq: revision.faq,
     /* Public DTOs omit an unusable Simple rather than publishing an empty or
        malformed band. The owner's inventory must answer the same question or
@@ -2540,7 +2587,7 @@ export function shareableArtefacts(revision: {
     quotes: present.quotes !== null,
     timeline: present.timeline !== null,
     sketch: present.sketch !== null,
-    trajectory: present.trajectory !== null,
+    skim: present.skim !== null,
     faq: present.faq !== null,
     simpleSummary: present.simpleSummary !== null,
     citations: present.citations !== null,
@@ -2619,6 +2666,13 @@ const rawPgArticleReader: ArticleReader = {
     requireSlug(slug);
     const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
+    /* **A minimal paper is not an article yet, and every reader of one is told
+       so the same way** — `NotProcessed`, a 409 carrying the paper's title,
+       authors and abstract, where this used to be the 404 below (it has no
+       tree). Before the blocks are read: there are none, and every caller —
+       chat, live, comments, citations, term lookup, similar, link previews —
+       refuses here, before it spends. Plan 261001m § The thin article. */
+    if (found.article.processing === "minimal") throw new NotProcessed(NOT_READ_YET.message, unreadPaperFrom(slug, found));
 
     /* The guess is one primary-key read beside the blocks, not after them.
        Owner-scoped already: `found` came through `ownedSlug`. */
@@ -2676,6 +2730,8 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* Off the same row, for the masthead's Archive button (plan 261002a). */
+      archivedAt: found.article.archivedAt?.toISOString() ?? null,
       /* Named, for `assets`' reason: required on `Article`, so a projection
          that forgot it is a type error (src/types.ts § `sourceGuess`). */
       sourceGuess,
@@ -2699,7 +2755,9 @@ const rawPgArticleReader: ArticleReader = {
        **Only the rows that survive `hasTree`.** A revision with no tree is not
        a readable article and is dropped below, so recomputing its scalars would
        be work and a warning about a row nobody is going to see. */
-    const scalarsById = await scalarsForShelf(rows.filter((row) => row.revision.hasTree));
+    const scalarsById = await scalarsForShelf(
+      rows.filter((row) => row.revision.hasTree && row.article.processing !== "minimal"),
+    );
 
     const entries: LibraryEntry[] = [];
     for (const row of rows) {
@@ -2713,9 +2771,15 @@ const rawPgArticleReader: ArticleReader = {
          blocks.json to exist and parse, then guards its insert with
          `if (blocks.length)`, so an empty array publishes as a revision with no
          blocks and `block_count = 0`, and the pointer moves to it. */
-      if (!row.revision.hasTree) continue;
-      const scalars = scalarsById.get(row.revision.id);
-      if (!scalars || !scalars.blockCount) continue;
+      /* **A minimal paper is on the shelf with no tree and no blocks**, and it is
+         the one row that may be (plan 261001m): `publishRevisionIn` publishes
+         it only when the article is `'minimal'` and its `metadata` step ran.
+         Its numbers are zero rather than recomputed, and the card says it has
+         not been read through yet. */
+      const minimal = row.article.processing === "minimal";
+      if (!minimal && !row.revision.hasTree) continue;
+      const scalars = minimal ? NO_SCALARS : scalarsById.get(row.revision.id);
+      if (!scalars || (!minimal && !scalars.blockCount)) continue;
 
       entries.push(
         describeArticle({
@@ -2763,6 +2827,7 @@ const rawPgArticleReader: ArticleReader = {
              the draft copied from this current revision: the raw manifest is
              readable and its completed run row is carried with it. */
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
+          processing: minimal ? "minimal" : "full",
         }),
       );
     }
@@ -3162,26 +3227,26 @@ const rawPgArticleReader: ArticleReader = {
           );
         }
         /* **Judged against what its prompt renders, not the article** — the
-           route's `sourceHash` is `trajectoryInputHash` over the `quotes` and
+           route's `sourceHash` is `skimInputHash` over the `quotes` and
            `ideas` columns beside it and the tree, the same value
-           `STEPS.trajectory.stamp` computes. The profile is the artefact's own
+           `STEPS.skim.stamp` computes. The profile is the artefact's own
            on both sides, for the reason `ideasAreCurrent` gives: this read has
            no access to the profile a job would stamp with today, and
-           `loadTrajectory` is where a changed profile is reported. */
-        case "trajectory": {
-          const trajectory = revision.trajectory as Trajectory | null;
+           `loadSkim` is where a changed profile is reported. */
+        case "skim": {
+          const skim = revision.skim as Skim | null;
           const quotes = revision.quotes as Quotes | null;
-          if (!trajectory || !quotes || !Array.isArray(quotes.quotes) || !tree) return false;
+          if (!skim || !quotes || !Array.isArray(quotes.quotes) || !tree) return false;
           const ideas = revision.ideas as Ideas | null;
           return sameStamp(
             {
-              inputHash: trajectory.sourceHash,
-              promptVersion: trajectory.version,
-              model: trajectory.generator,
+              inputHash: skim.sourceHash,
+              promptVersion: skim.version,
+              model: skim.generator,
             },
             {
-              inputHash: trajectoryInputHash(trajectoryInput({ quotes, blocks, tree, ideas })),
-              promptVersion: TRAJECTORY_PROMPT_VERSION,
+              inputHash: skimInputHash(skimInput({ quotes, blocks, tree, ideas })),
+              promptVersion: SKIM_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3322,7 +3387,7 @@ const rawPgArticleReader: ArticleReader = {
           quotes: revision.quotes as Quotes | null,
           timeline: revision.timeline as Timeline | null,
           sketch: revision.sketch as Sketch | null,
-          trajectory: revision.trajectory as Trajectory | null,
+          skim: revision.skim as Skim | null,
           faq: revision.faq as Faq | null,
           simpleSummary: revision.simpleSummary as SimpleSummary | null,
           citations: revision.citations as Citations | null,
@@ -3683,46 +3748,46 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The route through the Quotes — the Postgres half of `loadTrajectory`.
+   * The route through the Quotes — the Postgres half of `loadSkim`.
    *
    * **Judged against its own input, never the article's prose**: `stale` when
-   * `trajectoryInputHash` has moved (*Find more* added quotes, they were chosen
+   * `skimInputHash` has moved (*Find more* added quotes, they were chosen
    * again, the Ideas were regenerated or arrived, the outline changed) or there
    * are no quotes at all; `notOnRoute` counts the current quotes the route does
    * not stop at, other than the abstract's, which were never offered. It is a coverage fact, not evidence of which input changed.
-   * The profile half is the route's (`withTrajectoryProfile`
+   * The profile half is the route's (`withSkimProfile`
    * in src/routes.ts), because a store adapter does not read the profile.
    *
    * **A 404 is the ordinary case** — the step is off `DEFAULT_INGEST_STEPS`.
    */
-  async loadTrajectory(slug: string): Promise<TrajectoryFound> {
+  async loadSkim(slug: string): Promise<SkimFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug, "trajectory");
+    const found = await currentRevision(slug, "skim");
     if (!found) throw notFound(slug);
-    const trajectory = found.revision.trajectory as Trajectory | null;
-    if (!trajectory || !Array.isArray(trajectory.stops)) {
+    const skim = found.revision.skim as Skim | null;
+    if (!skim || !Array.isArray(skim.stops)) {
       throw Object.assign(
         new Error(
-          `No trajectory for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "trajectory"] }.`,
+          `No Skim route for "${slug}" yet. Build it with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
         ),
         { status: 404 },
       );
     }
     const quotes = found.revision.quotes as Quotes | null;
     const current = quotes && Array.isArray(quotes.quotes) ? quotes.quotes : [];
-    const onRoute = new Set(trajectory.stops.map((s) => s.quoteId));
+    const onRoute = new Set(skim.stops.map((s) => s.quoteId));
     const tree = found.revision.tree as Tree | null;
     const ideas = found.revision.ideas as Ideas | null;
     /* The blocks for positions only — which quote carries which Idea, and
-       which section each sits in. `trajectoryInput` reads no prose. */
+       which section each sits in. `skimInput` reads no prose. */
     const blocks = current.length > 0 && tree ? await blocksFor(found.revision.id) : [];
-    const input = tree ? trajectoryInput({ quotes, blocks, tree, ideas }) : null;
+    const input = tree ? skimInput({ quotes, blocks, tree, ideas }) : null;
     /* A quote left out because it sits in the abstract is not missing from
-       the route — it was never offered (`inAbstract` in src/trajectory.ts). */
+       the route — it was never offered (`inAbstract` in src/skim.ts). */
     const leftOut = new Set(input?.abstractQuoteIds ?? []);
     return {
-      trajectory,
+      skim,
       /* No quotes any more counts as stale, the same way round as its
          neighbours; so does no tree. Otherwise stale when anything the prompt
          would render has moved — the Quotes, the Ideas (regenerated, or
@@ -3734,9 +3799,9 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         current.length === 0 ||
         !input ||
-        (trajectory.version === TRAJECTORY_PROMPT_VERSION &&
-          trajectory.sourceHash !== trajectoryInputHash(input)),
-      outdated: trajectory.version !== TRAJECTORY_PROMPT_VERSION,
+        (skim.version === SKIM_PROMPT_VERSION &&
+          skim.sourceHash !== skimInputHash(input)),
+      outdated: skim.version !== SKIM_PROMPT_VERSION,
       notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
     };
   },

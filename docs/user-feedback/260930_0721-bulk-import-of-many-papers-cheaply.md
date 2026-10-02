@@ -1,13 +1,14 @@
 ---
-reports: spya-chhzxv
-ending: awaiting
+reports: spya-chhzxv, spya-eym66s
+ending: shipped
 ---
 
 # Bulk import of many papers, cheaply
 
 Report `spya-chhzxv`, a suggestion from Greg (admin: its production row was proved by
 `scripts/feedback-reporter.ts`), filed 2026-09-30 07:21 UTC from the shelf. No Sentry issue was
-found for it by report id.
+found for it by report id. A second report of Greg's, `spya-eym66s` (2026-10-01 16:37 UTC, from
+`/changelog`), asked for the same thing and was folded in by the Overseer; its words are below.
 
 > Increasingly, I'm getting feedback from people that they want the system to know them, to
 > understand them and their needs and their background and their expertise and their interests and
@@ -48,15 +49,41 @@ found for it by report id.
 >
 > — Greg, 2026-09-30
 
-**Ending: awaiting Greg.** Researched, planned, reviewed, nothing built.
+> I suppose the thing I was going to say was, if you upload multiple PDFs at the same time,
+> ideally it would be possible to do that. … by default, maybe it wouldn't run AI processing when
+> you do that, only when you open each of them for the first time. Whereas if you upload just one at
+> a time or import one at a time, then it would automatically trigger at least some of the AI
+> processing, much as it does now. … In conclusion: let's look for an 80-20 v1 for a) allowing
+> uploading multiple at the same time; and b) when uploading multiple at a time, minimise the AI
+> processing on them until they're opened for the first time.
+>
+> — Greg, 2026-10-01 (`spya-eym66s`)
 
-- **The cost question is answered:** a cheap model reading only the text of pages 1–2 got title and
-  authors right on all 13 test PDFs, found every abstract, and costs about $0.0005 a paper (50p per
-  thousand). Without a model the title is right about half the time. No new library is needed —
-  pdf.js is already a dependency. Spikes in `evals/pdf/minimal-metadata/`.
-- **No simple 80/20 was found, so this stopped, as the report asks.** Batch full-imports turned out
-  to need an atomic claim, a server-side per-reader limit and more (GPT Sol: *rethink*), and would
-  still import only a reader's remaining quota. The near-free "minimal" level is the real stepping
-  stone, and it depends on the billing change, which is Greg's.
-- Four questions for Greg, and the design they unblock:
-  [261001m § Questions for Greg](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md).
+**Ending: shipped**, on `dev` (the last code commit is `2a9956b0e`, stages 1–4 are the `261001m` commits before it), not yet deployed (the Overseer deploys; the
+migration is `20261001211225_bulk_import_minimal`). Built after Greg answered the plan's four
+questions on 2026-10-01. His words, and everything below, are in
+[261001m](../plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md).
+
+- **Drop or choose two or more files on the shelf**, PDFs and HTML mixed. Each is stored, gets its
+  title, authors, abstract and DOI read by DeepSeek v4.1 Flash on zero-data-retention providers
+  (Fireworks first), and lands on the shelf marked *Not AI-processed yet*. It runs three at a
+  time, skips anything already on the shelf (archived too), and costs **0.01 of an article**, so
+  1,000 papers are 10. One file at a time is today's full import, unchanged.
+- **Read this** on a paper's card or page runs the full import over the stored file, for the
+  other 0.99, so a paper never costs more than one article. Opening a paper shows its title,
+  authors and abstract, with *Read this* one click away. It does not start the import by itself,
+  because that would spend 0.99 on a click that did not say so. That is the one place where this
+  differs from `spya-eym66s`'s "until they're opened".
+- **For Greg to know:**
+  - **The model.** DeepSeek was level with Luna on authors, abstracts and DOIs, and perfect on the
+    production route. On the matched comparison it kept the byline in one catalogue-style scan's
+    title, which did not recur on the final prompt. Switching to Luna is one constant
+    ([the eval](../../evals/results/paper-metadata-2026-10-01.md)).
+  - **The providers.** Fireworks' shared pool alone refused about half the calls at two in
+    flight, so DeepInfra and Together are zero-retention fallbacks behind it. A BYOK Fireworks key
+    on OpenRouter would give the account its own limit, if you want only Fireworks.
+  - **What is deferred.** The free-allowance box is not re-read when a batch finishes. Searching
+    the abstracts, and the reader profile reading them, are also deferred. All three are in the
+    plan's § Deferred.
+- **Privacy:** nothing changed, as Greg said. `/privacy` already says an uploaded file is kept, and
+  any article can be deleted. The page's model list gained DeepSeek.

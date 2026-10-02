@@ -1,0 +1,72 @@
+{"ideas": [
+  {
+    "name": "Nanoscale structure dictates bulk mechanical behavior",
+    "provenance": "introduced",
+    "statement": "Spider silk's exceptional strength, elasticity and toughness come from how hard, ordered protein segments (beta-sheets) are mixed with soft, stretchy, disordered segments in the fibre, not from any single ingredient.",
+    "whyYouNeedIt": "This is the explanatory key the article offers for why one fibre can be both strong and stretchy.",
+    "analogy": "Like a rope woven from stiff wire strands and elastic rubber strands together, so the whole rope can both resist pulling and absorb a jolt without snapping.",
+    "occurrences": [
+      {"blockId": "spya-p263u9", "quote": "The interplay between the hard crystalline segments and the strained elastic semi-amorphous regions gives spider silk its extraordinary properties.", "reasoning": "States directly that the mix of ordered and disordered regions, not either alone, produces the fibre's properties."},
+      {"blockId": "spya-dadew4", "quote": "Ordered regions (i) mainly reorient by deformation for low-stretched fibres and (ii) the fraction of ordered regions increases progressively for higher fibre stretching.", "reasoning": "Links microstructural rearrangement directly to macroscopic stretching behavior."},
+      {"blockId": "spya-b7usb3", "quote": "The large amount of β-spiral structure gives elastic properties to the capture part of the orb web.", "reasoning": "Ties a specific structural feature to a specific mechanical role in the web."}
+    ]
+  },
+  {
+    "name": "Strength, stiffness and toughness are separate properties",
+    "provenance": "introduced",
+    "statement": "A material can be strong (resists breaking), stiff (resists stretching), or tough (absorbs energy before breaking) in different degrees, and ranking materials by one of these can give a misleading picture compared to another.",
+    "whyYouNeedIt": "Without separating these, comparisons like 'silk is stronger than steel but weaker than Kevlar, yet tougher than both' read as contradictory rather than coherent.",
+    "occurrences": [
+      {"blockId": "spya-hv4xng", "quote": "Strength and toughness are distinct quantities. Weight for weight, silk is stronger than steel, but not as strong as Kevlar. Spider silk is, however, tougher than both.", "reasoning": "Explicitly separates strength and toughness as independent axes of comparison."},
+      {"blockId": "spya-n5mzfc", "quote": "An illustration of the differences between toughness, stiffness and strength", "reasoning": "Signals the three properties are distinct dimensions needing separate illustration."},
+      {"blockId": "spya-dq9b7q", "quote": "Unlike steel or Kevlar, which are stiff, spider silk is ductile and elastic, having a lower Young's modulus.", "reasoning": "Shows a material can be less stiff yet still perform better on another axis like toughness."},
+      {"blockId": "spya-gfykz5", "quote": "The combination of strength and ductility gives dragline silks a high toughness (or work to fracture)", "reasoning": "Shows toughness as a derived combination rather than a property read off strength alone."}
+    ]
+  },
+  {
+    "name": "Silk is pulled into being, not extruded or grown",
+    "provenance": "introduced",
+    "statement": "Spider silk fibre only forms as it is being pulled out of the spider's body; the act of pulling itself, together with chemical changes along a narrowing duct, is what converts the liquid protein into a solid fibre.",
+    "whyYouNeedIt": "This explains why the process is called 'spinning' despite no rotation, and why artificial production must replicate pulling forces and duct conditions, not just mix the right proteins.",
+    "analogy": "Like pulling taffy: the stretching itself, not just the ingredients, is what gives the final strand its texture.",
+    "occurrences": [
+      {"blockId": "spya-mepbwz", "quote": "It is pulled on demand from a precursor out of specialised glands, rather than continuously grown like plant cell walls.", "reasoning": "States the defining mechanism: pulling on demand rather than passive growth."},
+      {"blockId": "spya-g2gw42", "quote": "The term \"spinning\" is misleading because no rotation occurs. It comes from analogy to the textile spinning wheels. Silk production is a pultrusion, similar to extrusion, with the subtlety that the force is induced by pulling at the finished fibre rather than squeezing it out of a reservoir.", "reasoning": "Directly defines pulling-based pultrusion as the actual mechanism behind the misleading name."},
+      {"blockId": "spya-ba6knb": "spya-ba6knb", "quote": "Collectively, the shear stress and the ion and pH changes induce the liquid silk dope to undergo a phase transition and condense into a solid protein fibre with high molecular organisation.", "reasoning": "Shows the solidification depends on the pulling-induced shear plus chemical changes together, not on composition alone."},
+      {"blockId": "spya-wgee6t", "quote": "These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions (the funnel, valve, tapering duct, and spigot).", "reasoning": "Shows engineers must reproduce the pulling/duct conditions, not just the protein, confirming the mechanism is the idea at stake."}
+    ]
+  },
+  {
+    "name": "Fair material comparisons must account for weight, not just raw numbers",
+    "provenance": "assumed",
+    "statement": "When comparing how good a material is, its performance per unit of weight (or density) matters as much as its raw strength number, because a lighter material can outperform a heavier, nominally stronger one for the same mass.",
+    "whyYouNeedIt": "The claims that silk 'is stronger than steel' or that a strand circling the Earth would weigh only 2 kilograms only make sense, and only avoid contradicting the lower raw tensile-strength figures given elsewhere, if the reader supplies this per-weight framing themselves.",
+    "analogy": "A lightweight backpack frame can out-carry a heavier one of the same bulk, even if a steel beam of the same size would hold more in absolute terms.",
+    "occurrences": [
+      {"blockId": "spya-hv4xng", "quote": "Weight for weight, silk is stronger than steel, but not as strong as Kevlar.", "reasoning": "The comparison only holds under a per-weight framing; read as absolute strength it would contradict the GPa figures given elsewhere."},
+      {"blockId": "spya-hng89u", "quote": "so that a given weight of spider silk is five times as strong as the same weight of steel", "reasoning": "Requires the reader to already accept that density-normalized strength, not raw tensile strength, is the right measure of 'how strong' a material is."},
+      {"blockId": "spya-hng89u", "quote": "Consisting of mainly protein, silks are about a sixth of the density of steel (1.3 g/cm3). As a result, a strand long enough to circle the Earth would weigh about 2 kilograms (4.4 lb).", "reasoning": "The dramatic lightness claim is offered as evidence of silk's quality, which only follows if weight-normalized performance is the implicit criterion of merit."}
+    ]
+  },
+  {
+    "name": "Each silk type is a specialized tool matched to one job",
+    "provenance": "introduced",
+    "statement": "A spider does not have one general-purpose silk; it produces several chemically and structurally distinct silks, each from its own gland, each optimized for a single mechanical or ecological task such as framing, wrapping, gluing, or egg protection.",
+    "occurrences": [
+      {"blockId": "spya-bgtqr0", "quote": "Some types of fibres are used for structural support, others for protective structures. Some can absorb energy effectively, whereas others transmit vibration efficiently. These silk types are produced in different glands; so the silk from a particular gland can be linked to its use.", "reasoning": "Directly states the one-gland-one-function mapping."},
+      {"blockId": "spya-m3rk4n", "quote": "Tubiliform (a.k.a. cylindriform) silk Protective egg sacs. Stiffest silk. Aciniform silk Wrap and secure prey. Two to three times as tough as the other silks, including dragline.", "reasoning": "Shows distinct silks tuned to distinct mechanical requirements for distinct tasks."},
+      {"blockId": "spya-pn8bvd", "quote": "a single spider can produce up to seven different types of silk for different uses.", "reasoning": "States the multiplicity of specialized silks per individual spider directly."}
+    ]
+  },
+  {
+    "name": "Copying a natural material means copying its process, not just its recipe",
+    "provenance": "assumed",
+    "statement": "Reproducing a biological material artificially requires reproducing both its molecular ingredients and the physical process that assembles them, since the same proteins spun under different conditions yield a weaker product.",
+    "whyYouNeedIt": "This is why the article treats genetically engineered proteins as only half the problem, and why fibres made from those proteins are repeatedly described as falling short unless the spinning apparatus is also replicated.",
+    "occurrences": [
+      {"blockId": "spya-wgee6t", "quote": "To artificially synthesise spider silk into fibres, two broad tasks are required. These are synthesis of the feedstock (the unspun silk dope in spiders), and synthesis of the production conditions", "reasoning": "Lays out the two-part requirement, but never states the general principle that recipe and process are both necessary for any biomaterial; the reader must bring that generalization to see why both tasks matter."},
+      {"blockId": "spya-jzcepa", "quote": "Artificial spider silks have fewer and simpler proteins than natural dragline silk, and consequently offer half the diameter, strength, and flexibility of natural dragline silk.", "reasoning": "The shortfall is attributed partly to protein simplicity, but the broader point that process fidelity also matters is assumed rather than argued."},
+      {"blockId": "spya-brz8bx", "quote": "Nexia used wet spinning and squeezed the silk protein solution through small extrusion holes to simulate the spinneret, but this was not sufficient to replicate native spider silk properties.", "reasoning": "Shows correct protein plus wrong process still fails, which only makes sense if the reader already holds that both ingredients and process must match."}
+    ]
+  }
+]}

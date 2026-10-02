@@ -265,13 +265,13 @@ const READS = [
      like `crossrefs`: its article head carries the cited metadata fields.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simpleSummary",
-  /* Added 2026-09-28 with the `trajectory` stage. Its own column and the
+  /* Added 2026-09-28 with the `skim` stage. Its own column and the
      `quotes` column — the second read to take another artefact's column, after
      `illustrated` — and **no fingerprint columns**, because the route never
      read the article. Stage 6 added the `ideas` column and the tree, which
      its prompt now renders and its `sourceHash` covers.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
-  "trajectory",
+  "skim",
   /* Added 2026-09-06 with `pgArticleReader.loadAssets`, for the route that
      serves one asset's bytes (src/routes.ts § `sendArticleAsset`). The
      narrowest projection in the map — one `jsonb` column and the id, and no

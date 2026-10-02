@@ -306,6 +306,15 @@ describe("the Simple view", () => {
     expect(text()).toContain(WHAT);
   });
 
+  it("does not say nobody has asked while the press's own run is starting", async () => {
+    /* Since 2026-10-02 opening Summary starts the run (plan 261002a), so the
+       empty state is drawn with a job under way; "Nobody has asked" beside
+       "Writing it in plain words" read as a contradiction in the browser check. */
+    await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
+    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
+    expect(text()).toContain("All three levels are written together");
+  });
+
   it("offers to write it when there is none, and shows why a run failed", async () => {
     await draw({ kind: "owner", owner: owner({ status: "none", simple: null }) });
     expect(text()).toContain(SIMPLE_NONE_OWNER);

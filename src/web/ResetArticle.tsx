@@ -50,6 +50,7 @@ import type { ArticleMetadata, Job, StepName } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
 import { useJobs } from "./useJobs.js";
+import { SKETCH_WAIT } from "./sketch-cost.js";
 import type { StepFailure } from "./useStepJob.js";
 
 /**
@@ -65,7 +66,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   tweets: "Thread",
   glossary: "Glossary",
   quotes: "Quotes",
-  trajectory: "Trajectory",
+  skim: "Skim",
   ideas: "Ideas",
   timeline: "Timeline",
   quiz: "Quiz",
@@ -399,7 +400,7 @@ function ResetConfirm({
           model call when you next open the reading view.
           {regenerate ? " Most extras cost roughly one model call each." : null}
           {regenerate && extras.includes("debate") ? " Debate uses two." : null}
-          {regenerate && extras.includes("sketch") ? " Sketch takes about two minutes." : null}
+          {regenerate && extras.includes("sketch") ? ` Sketch takes ${SKETCH_WAIT}.` : null}
           {regenerate && extras.includes("illustrated")
             ? " Illustrated uses a brief plus one image call per plate."
             : null}

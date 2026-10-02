@@ -22,7 +22,13 @@ has the whole story, including the 651MB of stale cache that a rebuild will not 
 ```js
 import { chromium } from "playwright-core";       // a pinned devDependency of this repo
 
-const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/google-chrome-stable" });
+/* `--hide-scrollbars` off: classic 15px scrollbars, like a Mac with a mouse. With
+   them hidden a box sized from `100vw` cannot overflow here — postmortem 261002a. */
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: "/usr/bin/google-chrome-stable",
+  ignoreDefaultArgs: ["--hide-scrollbars"],
+});
 const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 } });
 const page = await ctx.newPage();
 await page.goto("http://localhost:5273/?at=spya-k6fpme", { waitUntil: "domcontentloaded" });

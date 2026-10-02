@@ -467,8 +467,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
-  /* The Trajectory's two refusals: no usable Quotes, or only abstract Quotes.
-     See `TRAJECTORY_NO_QUOTES` and `TRAJECTORY_ONLY_ABSTRACT_QUOTES`. */
+  /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
+     See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
   "jb-only-abstract-quotes": "blocked",
   /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
@@ -558,6 +558,20 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the ingest's address before the bytes have finished moving. Another go is
      exactly what helps. See `UPLOAD_STILL_ARRIVING`. */
   "up-wait": "retry",
+  /* A file whose bytes are already on this reader's shelf, or on their way
+     there in another tab. `blocked`: another go is the same file. See
+     `alreadyOnYourShelf` and `ALREADY_ON_ITS_WAY`; three codes because three sentences. */
+  "up-dup": "blocked",
+  "up-dup-archived": "blocked",
+  "up-dup-wait": "blocked",
+  /* A paper on the shelf with only its title and abstract read, and something
+     asked of it that needs the whole article — plan 261001m. `blocked`: the
+     same request gets the same answer until *Read this* has run, and that is
+     what every one of these sentences says. See `NOT_READ_YET` below. */
+  "np-read": "blocked",
+  "np-share": "blocked",
+  "np-power": "blocked",
+  "np-reset": "blocked",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -611,6 +625,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* Switching an article to High-powered AI with too little allowance left.
      `blocked` like the three quota refusals: another press is the same sum. */
   "pay-high-power": "blocked",
+  /* A paper added without AI processing that does not fit, and *Read this*
+     pressed twice on one paper — `minimalQuotaReached` and
+     `READ_THIS_ALREADY_RUNNING`. `blocked`: another press is the same answer. */
+  "pay-minimal": "blocked",
+  "pay-reading": "blocked",
   /* Stripe had a bad minute. The one `pay-` code where another go is exactly
      the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
      different situation from `pay-off`, which is a deployment with no Stripe. */
@@ -1393,7 +1412,7 @@ export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
 }
 
 /**
- * **The Trajectory refuses without Quotes**, the way painting refuses without
+ * **The Skim refuses without Quotes**, the way painting refuses without
  * a Sketch: its stops *are* the quotes, so there is nothing to put in order.
  * `blocked` because a retry would find the same empty list. The client asks for
  * `quotes` first in the same job when it knows there are none
@@ -1401,19 +1420,19 @@ export function articleHadNoText(origin: DocumentOrigin): ReaderFacingFailure {
  * a reader meets this only when Quotes ran and kept nothing, or when the quotes
  * all sit on paragraphs the article no longer has.
  */
-export const TRAJECTORY_NO_QUOTES: ReaderFacingFailure = {
+export const SKIM_NO_QUOTES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "There are no quotes for this article yet, and the trajectory is a route through its quotes. " +
+    "There are no quotes for this article yet, and Skim is a route through its quotes. " +
     "Open Quotes and choose them first, then open this again. Until there are some, this will " +
     "come back the same way. [jb-no-quotes]",
 };
 
 /** Quotes exist, but the route deliberately cannot use the abstract's. */
-export const TRAJECTORY_ONLY_ABSTRACT_QUOTES: ReaderFacingFailure = {
+export const SKIM_ONLY_ABSTRACT_QUOTES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "The only quotes Trajectory can use are in this article's abstract. Trajectory leaves the " +
+    "The only quotes Skim can use are in this article's abstract. Skim leaves the " +
     "abstract out, so it has no stops to plan. Planning it again now will come back the same way. " +
     "Open Quotes and use Find more; once it finds a line from the body, plan the route again. " +
     "[jb-only-abstract-quotes]",
@@ -3710,7 +3729,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  */
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, every zoom level, and the reading " +
-  "aids written for it — including the summaries, glossary, ideas, quotes, timeline, trajectory, " +
+  "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
   "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
@@ -3743,7 +3762,7 @@ export const SHARING_CANNOT_UNRING =
  * **What taking it down costs, said as a consequence and not as a gate.**
  *
  * A public article counts as **half** an article against the allowance
- * (src/billing/half-units.ts), so making one private again puts the other half
+ * (src/billing/points.ts), so making one private again puts the other half
  * back — and on the free tier, whose allowance is lifetime, there is no next
  * month to rescue anybody from that.
  *
@@ -3888,7 +3907,7 @@ export const OWNED_ARTEFACT = {
   illustrated: "your illustrated diagram",
   /* Owner-only, and listed all the same, for `illustrated`'s reason: its
      `profileHash` is the reader's own, and `ProfileCarrying` asks. */
-  trajectory: "your route through the quotes",
+  skim: "your route through the quotes",
   simple: "your plain-words summary",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
@@ -4301,8 +4320,8 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   faq:
     "The questions the model thought a careful reader would ask this piece, each with the passages where it responds.",
   /* The stops are the article's own quotes; the order, the depth and the role
-     line are the model's reading (src/trajectory.ts). */
-  trajectory:
+     line are the model's reading (src/skim.ts). */
+  skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
   /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
      mode and the sweep over `MODES` started listing it. */
@@ -4852,8 +4871,8 @@ interface NamedArticle {
  * **The most articles an offer will name before it goes back to counting.**
  *
  * Three is where a sentence stops being readable, and the cases beyond it are
- * rare: the offer needs `used − budget + 1` half-units freed, which is one for
- * the ordinary refusal and only grows for a reader who has unshared their way
+ * rare: the offer needs enough points freed for `admitsIngest` to pass again,
+ * which is one article's worth for the ordinary refusal and only grows for a reader who has unshared their way
  * well past the wall.
  */
 const MOST_NAMED_ARTICLES = 3;
@@ -4977,7 +4996,7 @@ export function ingestQuotaReached(quota: {
    *
    * **All three refusals carry it.** Excluding `pay-lapsed` was the plan's first
    * answer and was wrong as a class — a Reader who added three private articles
-   * and then lapsed is at six half-units against a free budget of six, and
+   * and then lapsed is at 600 points against a free budget of 600, and
    * sharing one of them makes room. GPT Sol, 2026-09-04.
    */
   shareToMakeRoom?: readonly [NamedArticle, ...NamedArticle[]];
@@ -5044,7 +5063,7 @@ export function ingestQuotaReached(quota: {
  *
  * Its own sentence rather than `ingestQuotaReached`, for two reasons. The rule is
  * a different one: an upgrade must fit whole (`used + cost <= budget`), where an
- * ingest may overdraw by one half-unit, so "the allowance is spent" can be false
+ * ingest may overdraw by half an article, so "the allowance is spent" can be false
  * while this still refuses. And it carries **no sharing offer**: that list answers
  * the ingest wall's question, and following it could publish an article and
  * still leave the switch refused. GPT Sol, plan review finding 2, 2026-09-30.
@@ -5071,7 +5090,126 @@ export function highPowerNoRoom(quota: {
 }
 
 /**
- * The three codes `ingestQuotaReached` can end with — *the wall said no*.
+ * **A paper added without AI processing does not fit** — the refusal a minimal
+ * reservation answers with a 402 (`withMinimalSlot`, src/billing/admission.ts).
+ *
+ * Its own sentence rather than `ingestQuotaReached`, because the rule is its
+ * own: a minimal paper must fit whole (`admitsMinimal`, `used + 2 <= budget`),
+ * where an ingest may overdraw by half an article, so "the allowance is spent"
+ * would sometimes be false. It carries **no sharing offer**, for the reason
+ * `highPowerNoRoom` gives.
+ *
+ * **It says how many papers still fit**, which is `minimalHeadroom` — an exact
+ * count of the adds that would be admitted, not a rounding of usage. A single
+ * refused paper always has `fits: 0`; a batch's door can ask before it starts,
+ * and then the number is the one worth saying. Plan 261001m.
+ */
+export function minimalQuotaReached(quota: {
+  /** How many more papers would be admitted. */
+  fits: number;
+  /** When a paid allowance starts again. Absent for the free tier, whose allowance is lifetime. */
+  resetAt?: Date;
+}): ReaderFacingFailure {
+  const room =
+    quota.fits === 0
+      ? "There is no room left in your allowance for another paper"
+      : `Your allowance has room for ${quota.fits} more ${quota.fits === 1 ? "paper" : "papers"}`;
+  const more = quota.resetAt
+    ? `until your allowance starts again on ${readableDay(quota.resetAt)}`
+    : "until you subscribe, and the pricing page sets that up";
+  return {
+    kind: "blocked",
+    message:
+      `A paper added without AI processing counts as 1/100 of an article. ${room}, and ` +
+      `trying again will not help ${more}. Everything you have added stays where it is, and ` +
+      "reading is never limited. [pay-minimal]",
+  };
+}
+
+/**
+ * ***Read this* pressed on a paper that is already being read through.** One
+ * at a time per paper, so the credit for what it already paid is taken once
+ * (`reserveUpgrade`, src/store/pg-billing.ts). `blocked` rather than `retry`:
+ * pressing again while it runs gives the same answer, and when it finishes the
+ * paper is read and there is nothing to press.
+ */
+export const READ_THIS_ALREADY_RUNNING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This paper is already being read through. Pressing again will not help, because it is the " +
+    "same paper, and it opens in full when that finishes. [pay-reading]",
+};
+
+/* ------------------------------------------- a paper not yet read through --
+   Plan 261001m § The thin article. A *minimal* paper is on the shelf with only
+   its title, authors and abstract read; anything that needs the whole article
+   refuses it, and every sentence says the one thing that changes the answer —
+   *Read this*. "Read through" rather than "AI-processed" in the reader's own
+   words: Greg's phrase is the shelf's marker, and a refusal is about what the
+   reader asked for, not about how we work. */
+
+/**
+ * **The general refusal**: chat, a mode, a search, anything that reads the
+ * article's text. `loadArticle` throws it as `NotProcessed`
+ * (src/not-processed.ts), so every caller gets the same sentence.
+ */
+export const NOT_READ_YET: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This paper has not been read through yet — only its title and abstract are here — so " +
+    "trying again will not help. Press Read this to make the full article first. [np-read]",
+};
+
+/** Sharing a minimal paper. Nothing to share but a title and an abstract. */
+export const NOT_READ_YET_SHARE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "A paper that has not been read through yet cannot be shared, and trying again will not " +
+    "help. Press Read this first, and then you can share the full article. [np-share]",
+};
+
+/** High-powered AI on a minimal paper: there is no article for it to power yet. */
+export const NOT_READ_YET_HIGH_POWER: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "High-powered AI works on a paper that has been read through, and this one has not been " +
+    "yet, so trying again will not help. Press Read this first. [np-power]",
+};
+
+/** *Start again* on a minimal paper: there is nothing made yet to start again from. */
+export const NOT_READ_YET_RESET: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is nothing to start again yet: this paper has not been read through, so trying again " +
+    "will not help. Press Read this to make the full article. [np-reset]",
+};
+
+/**
+ * **A file already on this reader's shelf**, or on its way there from another
+ * tab — the minimal upload's duplicate check (src/minimal-paper.ts). The
+ * response carries the existing article's slug beside it when there is one.
+ */
+export function alreadyOnYourShelf(where: { archived: boolean }): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    message: where.archived
+      ? "That file is already on your shelf, in your archived articles, so it was not added " +
+        "again. Adding the same file will not help. [up-dup-archived]"
+      : "That file is already on your shelf, so it was not added again. Adding the same file " +
+        "will not help. [up-dup]",
+  };
+}
+
+/** The same, while the other copy is still being added. */
+export const ALREADY_ON_ITS_WAY: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That file is already being added to your shelf, from another upload of the same file, so " +
+    "it was not added twice. Adding it again will not help. [up-dup-wait]",
+};
+
+/**
+ * The codes a refusal of the article allowance can end with — *the wall said no*.
  *
  * A list rather than a prefix test, and the difference is the point: `pay-off`,
  * `pay-down` and `pay-none` are also `pay-` codes and none of them is a quota
@@ -5082,23 +5220,27 @@ export function highPowerNoRoom(quota: {
  *
  * **Kept beside the function that produces them**, so a fourth refusal added
  * above is one line away from the list that decides what is drawn around it —
- * and `tests/billing-plan.test.ts` asserts the two agree, by building all three
- * messages and comparing their codes against this array.
+ * and `tests/billing-plan.test.ts` asserts the producers agree with this array.
  */
-export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed";
+export type QuotaCode = "pay-free" | "pay-limit" | "pay-lapsed" | "pay-minimal";
 
-/* A union rather than three loose strings, so that a fourth refusal added above
+/* A union rather than loose strings, so that another refusal added above
    makes every `switch` over this go red at compile time — `QuotaNotice` chooses
    a *destination* per code, and a code with no destination must not be able to
    fall through to a default that sends somebody to the wrong page. */
-export const QUOTA_CODES: readonly QuotaCode[] = ["pay-free", "pay-limit", "pay-lapsed"];
+export const QUOTA_CODES: readonly QuotaCode[] = [
+  "pay-free",
+  "pay-limit",
+  "pay-lapsed",
+  "pay-minimal",
+];
 
 /**
  * **Is this failure the quota refusing an ingest?**
  *
  * The one question `QuotaNotice` (src/web/QuotaNotice.tsx) asks before putting a
  * link beside a sentence. **Which** page that link goes to is
- * `quotaRefusalCode`'s answer, below, and it is not the same for all three.
+ * `quotaRefusalCode`'s answer, below, and it is not the same for all of them.
  *
  * Asked of the **message**, because that is all a client has where these are
  * read: `readJson` throws the server's own sentence and the code is the last
@@ -5119,7 +5261,7 @@ export function isQuotaRefusal(message: string | null | undefined): boolean {
  * **Which** quota refusal this is, or `null` for anything else.
  *
  * The same question as `isQuotaRefusal` and one answer further on, because the
- * three refusals do not share a remedy: a free account can buy, a subscriber at
+ * the refusals do not share a remedy: a free account can buy, a subscriber at
  * their monthly limit has nothing to buy and is waiting for a date, and a lapsed
  * one may or may not be able to start again. `QuotaNotice` sends each of them
  * somewhere different, and the finding that made this necessary is in the

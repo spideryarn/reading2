@@ -1,0 +1,108 @@
+{
+  "caption": "A single spine runs top to bottom through the article's stages — properties, uses, silk types, natural spinning, artificial synthesis, research, human uses — with the two richest stages (properties, artificial synthesis) drawn as hubs branching into their sub-topics before the spine continues.",
+  "title": "Silk's Spine and Hubs",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Spider silk: from biology to imitation",
+      "caption": "Down the page follows the article's own order; the two hub regions (Properties, Artificial synthesis) are where the piece has the most going on and open into their own scenes.",
+      "height": 1440,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":230,"y":30,"w":300,"h":70,"text":"Spider silk: a multipurpose protein fibre","sub":"prey capture, shelter, courtship, mobility","size":"md","tone":0,"block":"spya-gp4t9x","detail":"Nearly all spiders make silk, even species that build no web at all."},
+
+        {"kind":"region","x":24,"y":120,"w":712,"h":300,"label":"PROPERTIES","style":"band","tone":1,"opens":"inside-properties"},
+        {"kind":"node","id":"propHub","shape":"box","x":230,"y":160,"w":300,"h":50,"text":"Strength, stretch, stickiness","size":"md","tone":1,"block":"spya-py9zw6","detail":"A layered molecular structure gives silk its mix of toughness and give."},
+        {"kind":"node","id":"structural","shape":"box","x":50,"y":260,"w":200,"h":90,"text":"Hard crystals in a stretchy matrix","size":"sm","tone":1,"block":"spya-p263u9","detail":"Stiff beta-sheet crystals sit inside soft, folded protein regions."},
+        {"kind":"node","id":"mechanical","shape":"box","x":280,"y":260,"w":200,"h":90,"text":"Tougher than steel, stretchier too","size":"sm","tone":1,"block":"spya-nwva2u","detail":"High strength plus high stretch lets silk absorb huge energy before it snaps."},
+        {"kind":"node","id":"adhesive","shape":"box","x":510,"y":260,"w":200,"h":90,"text":"Glue that sets on contact","size":"sm","tone":1,"block":"spya-m8z9e7","detail":"Pyriform silk forms attachment discs that bond instantly and later biodegrade."},
+
+        {"kind":"node","id":"uses","shape":"box","x":230,"y":460,"w":300,"h":60,"text":"Many jobs: trapping, escaping, mating","sub":"up to 7 silk types per spider","size":"sm","tone":2,"block":"spya-rty5kb","detail":"From orb webs to ballooning threads to pheromone-laced trails."},
+        {"kind":"node","id":"silktypes","shape":"box","x":230,"y":560,"w":300,"h":60,"text":"Each gland makes its own silk","sub":"dragline, capture-spiral, wrapping, egg case","size":"sm","tone":2,"block":"spya-hg7j7e","detail":"A silk's job can be traced back to the specific gland that made it."},
+        {"kind":"node","id":"spinning","shape":"box","x":230,"y":680,"w":300,"h":60,"text":"Pulled, not squeezed out","sub":"liquid protein hardens as it's drawn","size":"sm","tone":2,"block":"spya-g3h8qq","detail":"Spinning is pultrusion: the fibre forms as it is pulled, not pumped out under pressure."},
+
+        {"kind":"region","x":24,"y":860,"w":712,"h":300,"label":"ARTIFICIAL SYNTHESIS","style":"band","tone":3,"opens":"inside-synthesis"},
+        {"kind":"node","id":"synthHub","shape":"box","x":230,"y":900,"w":300,"h":50,"text":"Copying silk: protein plus machine","size":"md","tone":3,"block":"spya-d7d7m8","detail":"Making artificial silk means recreating both the liquid protein and the spinning duct."},
+        {"kind":"node","id":"feedstock","shape":"box","x":40,"y":1000,"w":150,"h":90,"text":"Borrowed proteins, mixed results","size":"xs","tone":3,"block":"spya-rw0wtg","detail":"E. coli, silkworms and goats have all been engineered to make silk-like protein."},
+        {"kind":"node","id":"geometry","shape":"box","x":210,"y":1000,"w":150,"h":90,"text":"Syringes, microfluidics, electrospinning","size":"xs","tone":3,"block":"spya-x4bwhf","detail":"Simple protein still needs a duct-like device to become a real fibre."},
+        {"kind":"node","id":"othershapes","shape":"box","x":380,"y":1000,"w":150,"h":90,"text":"Beyond fibres: capsules, membranes","size":"xs","tone":3,"block":"spya-r4r9au","detail":"The same protein can self-assemble into sheets, nanowires and drug capsules."},
+        {"kind":"node","id":"syntheticsilk","shape":"box","x":550,"y":1000,"w":150,"h":90,"text":"Still short of natural silk","size":"xs","tone":3,"block":"spya-j7hems","detail":"Lab-made fibres come out thicker and weaker than a spider's own dragline silk."},
+
+        {"kind":"node","id":"research","shape":"box","x":230,"y":1200,"w":300,"h":50,"text":"Decades of mapping silk's chemistry","size":"sm","tone":4,"block":"spya-jvxbb8","detail":"From 1960s amino-acid analysis to 2000s X-ray studies of silk as it's spun."},
+        {"kind":"node","id":"humanuses","shape":"box","x":230,"y":1280,"w":300,"h":60,"text":"From stockings to violin strings","sub":"textiles, medicine, optics","size":"sm","tone":4,"block":"spya-chy97m","detail":"Centuries of attempts to harvest spider silk for cloth, wound care and instruments."},
+        {"kind":"node","id":"backmatter","shape":"note","x":230,"y":1360,"w":300,"h":50,"text":"References & further reading","size":"xs","tone":0,"block":"spya-jdybu5","detail":"Citations, external links and related topics."},
+
+        {"kind":"edge","from":"intro","to":"propHub","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"propHub","to":"structural","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"propHub","to":"mechanical","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"propHub","to":"adhesive","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"mechanical","to":"uses","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"uses","to":"silktypes","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"silktypes","to":"spinning","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"spinning","to":"synthHub","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthHub","to":"feedstock","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthHub","to":"geometry","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthHub","to":"othershapes","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"synthHub","to":"syntheticsilk","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"syntheticsilk","to":"research","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"research","to":"humanuses","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"humanuses","to":"backmatter","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-properties",
+      "title": "Inside Properties",
+      "caption": "A hub shape: structural basis above feeds a cluster of five mechanical measures, which funnel down into the separate story of adhesive glue.",
+      "height": 480,
+      "items": [
+        {"kind":"node","id":"z-structural","shape":"box","x":230,"y":30,"w":300,"h":60,"text":"Hard crystal blocks in a soft, stretchy web","size":"sm","tone":1,"block":"spya-p263u9","detail":"Stiff beta-sheet crystals are linked by softer, helix-and-turn regions."},
+        {"kind":"node","id":"z-mechHub","shape":"box","x":230,"y":130,"w":300,"h":60,"text":"Strong, stretchy and tough, together","size":"md","tone":1,"block":"spya-nwva2u","detail":"Dragline silk's rare combination of high strength and high stretch."},
+        {"kind":"node","id":"z-stiffness","shape":"box","x":24,"y":240,"w":125,"h":80,"text":"Softer, bendier than steel","size":"xs","tone":1,"block":"spya-dq9b7q","detail":"Silk's Young's modulus is far lower than steel's or Kevlar's — it gives more easily."},
+        {"kind":"node","id":"z-strength","shape":"box","x":160,"y":240,"w":125,"h":80,"text":"Near steel, half of Kevlar","size":"xs","tone":1,"block":"spya-mhe2r5","detail":"Dragline silk's tensile strength rivals high-grade steel."},
+        {"kind":"node","id":"z-density","shape":"box","x":296,"y":240,"w":125,"h":80,"text":"A sixth the density of steel","size":"xs","tone":1,"block":"spya-hng89u","detail":"A silk strand long enough to circle the Earth would weigh about 2 kg."},
+        {"kind":"node","id":"z-toughness","shape":"box","x":432,"y":240,"w":125,"h":80,"text":"Matches top synthetic fibres","size":"xs","tone":1,"block":"spya-gfykz5","detail":"Dragline silk's toughness rivals the best commercial polyaramid fibres."},
+        {"kind":"node","id":"z-supercontract","shape":"box","x":568,"y":240,"w":125,"h":80,"text":"Shrinks and softens when wet","size":"xs","tone":1,"block":"spya-qdjb0x","detail":"Dragline silk can shrink up to 50% in water, possibly to re-tension webs."},
+        {"kind":"node","id":"z-adhesive","shape":"box","x":230,"y":360,"w":300,"h":70,"text":"Glue that sets on contact, then biodegrades","size":"md","tone":1,"block":"spya-m8z9e7","detail":"Attachment-disc silk polymerises immediately and stays usable indefinitely."},
+
+        {"kind":"edge","from":"z-structural","to":"z-mechHub","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"z-mechHub","to":"z-stiffness","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-mechHub","to":"z-strength","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-mechHub","to":"z-density","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-mechHub","to":"z-toughness","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-mechHub","to":"z-supercontract","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-density","to":"z-adhesive","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-synthesis",
+      "title": "Inside Artificial synthesis",
+      "caption": "Two columns off one starting claim — matching feedstock attempts against matching spinning-duct attempts — converge on one verdict, with a side note on non-fibre uses.",
+      "height": 560,
+      "items": [
+        {"kind":"node","id":"z-hub","shape":"box","x":220,"y":30,"w":320,"h":60,"text":"Two tasks: make the protein, build the duct","sub":"feedstock and spinning conditions","size":"md","tone":3,"block":"spya-wgee6t","detail":"Few strategies so far have managed both well enough to spin usable fibre."},
+
+        {"kind":"node","id":"z-feedHead","shape":"box","x":40,"y":150,"w":300,"h":60,"text":"Feedstock: borrowed silk proteins","size":"sm","tone":3,"block":"spya-rw0wtg","detail":"Silk's protein is long and complex, so stand-in organisms are used instead."},
+        {"kind":"node","id":"z-ecoli","shape":"box","x":40,"y":240,"w":300,"h":70,"text":"E. coli-made protein matches real silk","size":"sm","tone":3,"block":"spya-f399m7","detail":"Engineered bacteria produced fibre matching natural dragline silk's strength and stretch."},
+        {"kind":"node","id":"z-goats","shape":"box","x":40,"y":340,"w":300,"h":70,"text":"Goat milk: silk protein, weaker fibre","size":"sm","tone":3,"block":"spya-brz8bx","detail":"Goats secreted silk protein in their milk, but spun fibres fell short of natural silk."},
+
+        {"kind":"node","id":"z-geoHead","shape":"box","x":420,"y":150,"w":300,"h":60,"text":"Geometry: copying the spinning duct","size":"sm","tone":3,"block":"spya-x4bwhf","detail":"Simple protein still needs a duct-like apparatus to become a working fibre."},
+        {"kind":"node","id":"z-syringe","shape":"box","x":420,"y":240,"w":300,"h":70,"text":"Syringe & needle: cheap, crude","size":"sm","tone":3,"block":"spya-y4ay23","detail":"Easy to build, but needs chemicals or stretching to harden the fibre properly."},
+        {"kind":"node","id":"z-microfluidics","shape":"box","x":420,"y":340,"w":300,"h":70,"text":"Microfluidics: precise, costly","size":"sm","tone":3,"block":"spya-qbrkma","detail":"Controllable small-scale spinning, now reaching commercial continuous fibre."},
+
+        {"kind":"node","id":"z-otherShapes","shape":"note","x":600,"y":440,"w":130,"h":70,"text":"Also: capsules, membranes, nanowires","size":"xs","tone":3,"block":"spya-r4r9au","detail":"The same proteins can self-assemble into shapes besides fibres."},
+        {"kind":"node","id":"z-result","shape":"box","x":190,"y":440,"w":380,"h":70,"text":"Close, but still short of natural silk","size":"md","tone":3,"block":"spya-j7hems","detail":"Artificial fibres end up thicker, weaker and less flexible than a spider's own."},
+
+        {"kind":"edge","from":"z-hub","to":"z-feedHead","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-hub","to":"z-geoHead","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-feedHead","to":"z-ecoli","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-feedHead","to":"z-goats","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-geoHead","to":"z-syringe","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-geoHead","to":"z-microfluidics","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-geoHead","to":"z-otherShapes","via":"curve","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"z-ecoli","to":"z-result","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-goats","to":"z-result","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-syringe","to":"z-result","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"z-microfluidics","to":"z-result","via":"curve","arrow":"end"}
+      ]
+    }
+  ]
+}

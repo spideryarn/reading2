@@ -12,7 +12,7 @@ with ~35% more per call and no loss of section or word coverage beyond noise.
 
 ## Method
 
-- **Script:** [`scripts/eval/trajectory-coverage-eval.ts`](../../scripts/eval/trajectory-coverage-eval.ts).
+- **Script:** [`scripts/eval/trajectory-coverage-eval.ts`](../../scripts/eval/skim-coverage-eval.ts).
   Each arm is that version's own `generateTrajectory`: it renders its own prompt, calls the model
   through `streamMessage` (the gateway, `CAPABLE_MODEL`, effort `low`, same token budget), parses and
   validates with its own `buildTrajectory`. NEW gets `trajectoryInput` exactly as

@@ -1,0 +1,872 @@
+{
+  "version": "sketch/3",
+  "title": "Funnel into hub, fanning back out",
+  "caption": "A funnel (one opening claim) splits into two converging strands of evidence — broken machines, and the proofs that sometimes rescue them — which meet at a single hub (computational irreducibility), then fan back out into the piece's wider implications, and loop back to reframe the opening claim as a discovery rather than a failure.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Towards a Theory of Bugs — overview",
+      "height": 960,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 270,
+          "y": 40,
+          "w": 220,
+          "h": 90,
+          "text": "Programs often do more than we expect",
+          "size": "md",
+          "sub": "why bugs happen",
+          "detail": "A program's actual computation can be far more sophisticated than the simple picture in our heads.",
+          "tone": 0,
+          "block": "spya-d46wsq"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 150,
+          "w": 712,
+          "h": 150,
+          "style": "band",
+          "label": "CONCRETE DEMONSTRATIONS",
+          "opens": "inside-demonstrations",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 44,
+          "y": 190,
+          "w": 210,
+          "h": 90,
+          "text": "Simple Turing machines built for n+1 still fail",
+          "size": "sm",
+          "sub": "e.g. at n=7, n=15",
+          "tone": 1,
+          "block": "spya-s7uc4u"
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 275,
+          "y": 190,
+          "w": 210,
+          "h": 90,
+          "text": "A 'bug' is only a bug relative to some chosen rule",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-gjut02"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 506,
+          "y": 190,
+          "w": 210,
+          "h": 90,
+          "text": "Cellular automata built to double also glitch",
+          "size": "sm",
+          "sub": "first bug at n=14",
+          "tone": 1,
+          "block": "spya-cy4dgs"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 320,
+          "w": 712,
+          "h": 150,
+          "style": "band",
+          "label": "PROVING OR DISPROVING BUGS",
+          "opens": "inside-proofs",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "hex",
+          "x": 130,
+          "y": 360,
+          "w": 230,
+          "h": 90,
+          "text": "Some complex rules can be proven bug-free",
+          "size": "sm",
+          "sub": "via the rule-122 trick",
+          "tone": 2,
+          "block": "spya-gagsuk"
+        },
+        {
+          "kind": "node",
+          "id": "n6",
+          "shape": "hex",
+          "x": 400,
+          "y": 360,
+          "w": 230,
+          "h": 90,
+          "text": "A proof exists only when there's truly no bug",
+          "size": "sm",
+          "sub": "no proof = a bug",
+          "tone": 2,
+          "block": "spya-ypka68"
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "hex",
+          "x": 230,
+          "y": 530,
+          "w": 300,
+          "h": 100,
+          "text": "You can only know a program's behavior by running it",
+          "size": "lg",
+          "sub": "computational irreducibility",
+          "detail": "Because this is ubiquitous even in simple systems, bounded analysis will always eventually be surprised.",
+          "tone": 3,
+          "block": "spya-wcnws7"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 660,
+          "w": 712,
+          "h": 150,
+          "style": "dashed",
+          "label": "WIDER IMPLICATIONS",
+          "tone": 4
+        },
+        {
+          "kind": "node",
+          "id": "n8",
+          "shape": "box",
+          "x": 44,
+          "y": 700,
+          "w": 160,
+          "h": 90,
+          "text": "Testing can't rule out rare bugs",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-yc9e2z"
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "box",
+          "x": 224,
+          "y": 700,
+          "w": 160,
+          "h": 90,
+          "text": "Simple rules keep surprising us",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-kjsjh5"
+        },
+        {
+          "kind": "node",
+          "id": "n10",
+          "shape": "box",
+          "x": 404,
+          "y": 700,
+          "w": 160,
+          "h": 90,
+          "text": "Even math 'laws' break eventually",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-bhwh4d"
+        },
+        {
+          "kind": "node",
+          "id": "n11",
+          "shape": "box",
+          "x": 584,
+          "y": 700,
+          "w": 152,
+          "h": 90,
+          "text": "Good language design is the best defense",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-kdks69"
+        },
+        {
+          "kind": "node",
+          "id": "n12",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 840,
+          "w": 300,
+          "h": 80,
+          "text": "A bug can be a discovery, not just a failure",
+          "size": "md",
+          "tone": 0,
+          "block": "spya-xdwm97"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n10",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n11",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n8",
+          "to": "n12",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n9",
+          "to": "n12",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n10",
+          "to": "n12",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n11",
+          "to": "n12",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n12:left",
+          "to": "n1:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "loops back"
+        }
+      ],
+      "caption": "Evidence from broken Turing machines and automata, and from proofs that sometimes succeed and sometimes can't, converges on one explanation — then that explanation fans out into the piece's closing lessons, which loop back to recast the opening claim."
+    },
+    {
+      "id": "inside-demonstrations",
+      "title": "Where bugs are caught in the act",
+      "height": 950,
+      "items": [
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 20,
+          "w": 712,
+          "h": 400,
+          "style": "band",
+          "label": "TURING MACHINE BUGS",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "d1",
+          "shape": "box",
+          "x": 280,
+          "y": 60,
+          "w": 260,
+          "h": 70,
+          "text": "A simple Turing machine seems to compute n+1",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-scjxv8"
+        },
+        {
+          "kind": "node",
+          "id": "d2",
+          "shape": "box",
+          "x": 280,
+          "y": 150,
+          "w": 260,
+          "h": 70,
+          "text": "At n=7 it suddenly outputs 9 instead of 8",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-h3jx6h"
+        },
+        {
+          "kind": "node",
+          "id": "d3",
+          "shape": "box",
+          "x": 280,
+          "y": 240,
+          "w": 260,
+          "h": 70,
+          "text": "Thousands succeed, but first bugs appear all over the place",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-y7nwnj"
+        },
+        {
+          "kind": "node",
+          "id": "d4",
+          "shape": "box",
+          "x": 60,
+          "y": 330,
+          "w": 220,
+          "h": 70,
+          "text": "One works perfectly until n=15, then fails",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-pt0hmz"
+        },
+        {
+          "kind": "node",
+          "id": "d5",
+          "shape": "box",
+          "x": 300,
+          "y": 330,
+          "w": 220,
+          "h": 70,
+          "text": "Bigger machines hide bugs even longer, failing at n=63",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-hqukdz"
+        },
+        {
+          "kind": "node",
+          "id": "d6",
+          "shape": "box",
+          "x": 540,
+          "y": 330,
+          "w": 180,
+          "h": 70,
+          "text": "Riskiest inputs are all-1s in binary",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-u3d2ws"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 450,
+          "w": 712,
+          "h": 210,
+          "style": "band",
+          "label": "SPEC-DEPENDENT BUGS",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "d7",
+          "shape": "box",
+          "x": 280,
+          "y": 480,
+          "w": 260,
+          "h": 70,
+          "text": "Two seemingly identical machines diverge at n=27",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-txuteu"
+        },
+        {
+          "kind": "node",
+          "id": "d8",
+          "shape": "box",
+          "x": 60,
+          "y": 570,
+          "w": 220,
+          "h": 70,
+          "text": "Built to avoid infinite loops—still falls into one",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-fmdw58"
+        },
+        {
+          "kind": "node",
+          "id": "d9",
+          "shape": "box",
+          "x": 300,
+          "y": 570,
+          "w": 220,
+          "h": 70,
+          "text": "'Always even' output rule breaks at n=32",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-hz8ymk"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 690,
+          "w": 712,
+          "h": 210,
+          "style": "band",
+          "label": "CELLULAR AUTOMATON BUGS",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "d10",
+          "shape": "box",
+          "x": 280,
+          "y": 720,
+          "w": 260,
+          "h": 70,
+          "text": "A doubling cellular automaton fails first at n=14",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-htqcgc"
+        },
+        {
+          "kind": "node",
+          "id": "d11",
+          "shape": "box",
+          "x": 280,
+          "y": 810,
+          "w": 260,
+          "h": 70,
+          "text": "Other doubling rules last to n=24 or n=32",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-sk8qh9"
+        },
+        {
+          "kind": "edge",
+          "from": "d1",
+          "to": "d2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d2",
+          "to": "d3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d3",
+          "to": "d4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d3",
+          "to": "d5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d5",
+          "to": "d6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d6",
+          "to": "d7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d7",
+          "to": "d8",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d7",
+          "to": "d9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d9",
+          "to": "d10",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "d10",
+          "to": "d11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of concrete failures: Turing machines built for n+1 break at ever-later, ever-stranger inputs, two machines that look identical suddenly disagree, and cellular automata built to double also glitch — each movement seeding the next."
+    },
+    {
+      "id": "inside-proofs",
+      "title": "Where proof succeeds or fails",
+      "height": 1060,
+      "items": [
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 20,
+          "w": 712,
+          "h": 580,
+          "style": "band",
+          "label": "VISUAL & STRUCTURAL PROOFS",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "p1",
+          "shape": "box",
+          "x": 280,
+          "y": 60,
+          "w": 260,
+          "h": 70,
+          "text": "Some patterns are visually simple enough to guarantee no bugs",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-rhda0x"
+        },
+        {
+          "kind": "node",
+          "id": "p2",
+          "shape": "box",
+          "x": 280,
+          "y": 150,
+          "w": 260,
+          "h": 70,
+          "text": "A trickier rule shows no bugs even after 100,000 tests",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-asw9eq"
+        },
+        {
+          "kind": "node",
+          "id": "p3",
+          "shape": "box",
+          "x": 280,
+          "y": 240,
+          "w": 260,
+          "h": 70,
+          "text": "But timing fluctuations leave the question open",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-mj9p5j"
+        },
+        {
+          "kind": "node",
+          "id": "p4",
+          "shape": "box",
+          "x": 280,
+          "y": 330,
+          "w": 260,
+          "h": 70,
+          "text": "Looking at the whole computation reveals hidden structure",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-hcdcqp"
+        },
+        {
+          "kind": "node",
+          "id": "p5",
+          "shape": "box",
+          "x": 60,
+          "y": 420,
+          "w": 220,
+          "h": 70,
+          "text": "The pattern's edge always moves left or stays put",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-r7ty6m"
+        },
+        {
+          "kind": "node",
+          "id": "p6",
+          "shape": "box",
+          "x": 320,
+          "y": 420,
+          "w": 220,
+          "h": 70,
+          "text": "Inside, it follows the well-known rule 122",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-gagsuk"
+        },
+        {
+          "kind": "node",
+          "id": "p7",
+          "shape": "box",
+          "x": 280,
+          "y": 510,
+          "w": 260,
+          "h": 70,
+          "text": "That rule can never die out, so it must finish correctly",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-n5acnw"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 630,
+          "w": 712,
+          "h": 390,
+          "style": "band",
+          "label": "SYMBOLIC PROOFS",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "p8",
+          "shape": "box",
+          "x": 280,
+          "y": 660,
+          "w": 260,
+          "h": 70,
+          "text": "Can a machine's correctness be proved, not just observed?",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-qr6x2h"
+        },
+        {
+          "kind": "node",
+          "id": "p9",
+          "shape": "box",
+          "x": 280,
+          "y": 750,
+          "w": 260,
+          "h": 70,
+          "text": "A symbolic notation sets up exact statements to prove",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-jqmftv"
+        },
+        {
+          "kind": "node",
+          "id": "p10",
+          "shape": "box",
+          "x": 280,
+          "y": 840,
+          "w": 260,
+          "h": 70,
+          "text": "Automated proof search plus induction proves it always computes n+1",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-q8fg9q"
+        },
+        {
+          "kind": "node",
+          "id": "p11",
+          "shape": "box",
+          "x": 280,
+          "y": 930,
+          "w": 260,
+          "h": 70,
+          "text": "For a machine with a real bug, the search finds no proof—ever",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-ypka68"
+        },
+        {
+          "kind": "edge",
+          "from": "p1",
+          "to": "p2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p2",
+          "to": "p3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p3",
+          "to": "p4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p4",
+          "to": "p5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p4",
+          "to": "p6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p5",
+          "to": "p7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p6",
+          "to": "p7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p7",
+          "to": "p8",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p8",
+          "to": "p9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p9",
+          "to": "p10",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "p10",
+          "to": "p11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Visual and structural reasoning can sometimes prove an odd-looking rule has no bugs; a fully symbolic version of the same idea proves a Turing machine correct by induction — and, for a machine that really has a bug, no amount of searching ever finds a proof."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "sourceHash": "fa2d01c869c0a26f.94c19520d2431db5.893f578d23ba5f72",
+  "profileHash": null
+}

@@ -16,7 +16,7 @@
  *   two numbers stop being a ratio (`isRatio`). Nothing here computes
  *   `limit − used`.
  * - **`remaining` is the server's** — further *private* articles the wall would
- *   admit (`privateHeadroom`). A public one costs half, so the reader may well
+ *   admit (`ingestHeadroom`). A public one costs half, so the reader may well
  *   add more than this; the expanded text says so.
  * - **Gifts appear only when `plan.gifts` exists**, and the server omits the
  *   field when there are none, so a reader without one meets neither word.

@@ -17,7 +17,7 @@
  * **The visitor twin, `VisitorFaqBand`**, draws the stored FAQ off the public
  * payload with no `useFaq` under it, so it can neither read the owner's FAQ nor
  * ask for one. It was `owners-only` until a signed-out reader of a public
- * article was refused a stored Trajectory for the cost of making one
+ * article was refused a stored Skim for the cost of making one
  * (SPIDERYARN-READING2-56,
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *

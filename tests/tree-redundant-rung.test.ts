@@ -57,6 +57,7 @@ const BLOCKS: Block[] = [
 const report = (): BuildReport => ({
   repairs: [],
   droppedChildren: [],
+  rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
   droppedQuestions: [],

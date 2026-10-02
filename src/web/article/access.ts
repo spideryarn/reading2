@@ -13,10 +13,10 @@
  */
 
 import { useEffect, useState } from "react";
-import type { Article, Comment, Crossref } from "../../types.js";
+import type { Article, Comment, Crossref, UnreadPaper } from "../../types.js";
 import { sanitizeArticle } from "../sanitize.js";
 import type { SavedSearch } from "../useSearch.js";
-import { apiFetch, readJson } from "../lib/api.js";
+import { apiFetch, detailsOf, readJson } from "../lib/api.js";
 import { loadPublicArticle } from "../public-api.js";
 import { beginArticleLoad, rehostImages, type ArticleLoad } from "../rehost.js";
 import { renderArticleMaths } from "../maths.js";
@@ -67,6 +67,14 @@ type ArticleAccess =
    */
   | { kind: "reauth-required" }
   | { kind: "owned"; article: Article }
+  /**
+   * **Yours, and not read through yet** — a paper added with only its title,
+   * authors and abstract (plan 261001m). The owned route answers 409
+   * `not-processed` with the paper in the body, and the page draws it with
+   * *Read this* (UnreadPaperPage.tsx). Never the public route: a minimal paper
+   * cannot be shared.
+   */
+  | { kind: "unread"; paper: UnreadPaper }
   | {
       kind: "public";
       article: Article;
@@ -174,7 +182,15 @@ const LOADING: ArticleAccess = { kind: "loading" };
  * `{res, path, method}` and never the request, so it cannot read a header even
  * by accident. docs/reusable/silent-success.md.
  */
-export function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
+export function useArticleAccess(
+  slug: string,
+  readerId: string | null,
+  /**
+   * Bumped to ask again with nothing else changed — the not-yet-read page does,
+   * once *Read this* has finished, so the article it made is loaded in place.
+   */
+  attempt = 0,
+): ArticleAccess {
   /**
    * The answer, **and both facts it is an answer about**: which article, and
    * **which reader**.
@@ -208,6 +224,7 @@ export function useArticleAccess(slug: string, readerId: string | null): Article
     access: ArticleAccess;
   } | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is the ask-again signal, deliberately unread inside.
   useEffect(() => {
     /* Both can change under us — the slug via back/forward or a pasted link,
        the reader by signing in or out in another tab. Guard the response so a
@@ -253,7 +270,8 @@ export function useArticleAccess(slug: string, readerId: string | null): Article
          a load fetching and its blobs allocated for the rest of the session. */
       load.release();
     };
-  }, [slug, readerId]);
+    /* `attempt` is read only as a dependency: a new value is a new load. */
+  }, [slug, readerId, attempt]);
 
   /**
    * **Both, and synchronously.**
@@ -316,7 +334,7 @@ export async function resolveAccess(
   load: ArticleLoad,
 ): Promise<ResolvedAccess> {
   const found = await findArticle(slug, signedIn, load.signal);
-  if (found.kind === "not-shared" || found.kind === "reauth-required") {
+  if (found.kind === "not-shared" || found.kind === "reauth-required" || found.kind === "unread") {
     return { access: found, withImages: NO_SECOND_ANSWER };
   }
   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
@@ -361,7 +379,10 @@ export async function resolveAccess(
     found.kind === "owned"
       ? found.article
       : /* Nor whether the owner switched High-powered AI on — that is the
-           owner's spend, not the visitor's business (plan 260930f). */
+           owner's spend, not the visitor's business (plan 260930f). Whether
+           they archived it is not here to strip: `PublicArticle` is an
+           allowlist without `archivedAt`, so the masthead draws no Archive
+           button for a visitor (plan 261002a). */
         { ...found.article, sourceGuess: undefined, highPowerSince: null };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
@@ -444,6 +465,7 @@ async function findArticle(
   | { kind: "not-shared" }
   | { kind: "reauth-required" }
   | { kind: "owned"; article: Article }
+  | { kind: "unread"; paper: UnreadPaper }
   | { kind: "public"; article: PublicArticle; sessionUnconfirmed: boolean }
 > {
   /**
@@ -462,7 +484,11 @@ async function findArticle(
        quietly retried against the public route and rendered as somebody else's
        shared document. */
     if (res.status === 401) sessionUnconfirmed = true;
-    else if (res.status !== 404) {
+    else if (res.status === 409) {
+      /* **Yours, not read through yet**, or some other 409 — which goes on to
+         the error page with its own sentence, as before. */
+      return { kind: "unread", paper: await unreadPaperFrom(res, slug) };
+    } else if (res.status !== 404) {
       return { kind: "owned", article: await readJson<Article>(res) };
     }
   }
@@ -488,4 +514,45 @@ async function findArticle(
   if (read.kind === "not-shared")
     return sessionUnconfirmed ? { kind: "reauth-required" } : { kind: "not-shared" };
   return { kind: "public", article: read.body, sessionUnconfirmed };
+}
+
+/**
+ * The paper a `409 not-processed` carries, or the refusal itself rethrown.
+ *
+ * Checked for shape rather than cast: it is our own server's body, but a
+ * different 409 on this route must reach the reader as its own sentence, not
+ * as a page drawn from `undefined`.
+ */
+async function unreadPaperFrom(res: Response, expectedSlug: string): Promise<UnreadPaper> {
+  try {
+    await readJson<unknown>(res);
+  } catch (err) {
+    const details = detailsOf(err);
+    if (
+      details.code === "not-processed" &&
+      isUnreadPaper(details.paper) &&
+      details.paper.slug === expectedSlug
+    ) {
+      return details.paper;
+    }
+    throw err;
+  }
+  throw new Error("The article route answered 409 with no refusal in it.");
+}
+
+function isUnreadPaper(value: unknown): value is UnreadPaper {
+  const p = value as Partial<UnreadPaper> | null;
+  return (
+    typeof p === "object" &&
+    p !== null &&
+    typeof p.slug === "string" &&
+    typeof p.title === "string" &&
+    Array.isArray(p.authors) &&
+    p.authors.every((a) => typeof a === "string") &&
+    (p.abstract === undefined || typeof p.abstract === "string") &&
+    (p.doi === undefined || typeof p.doi === "string") &&
+    (p.filename === undefined || typeof p.filename === "string") &&
+    (p.kind === "pdf" || p.kind === "html" || p.kind === null) &&
+    typeof p.addedAt === "string"
+  );
 }

@@ -1,0 +1,397 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique hand-drawn map on aged vellum, sepia ink with faded watercolor washes, where each claim becomes a town, road, or creature on the parchment — fitting because the article itself describes a landscape of machines and rules to be explored, surprised by, and charted.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Map of Bugs",
+      "prompt": "An antique hand-drawn map on aged, slightly torn vellum, sepia ink linework with faint watercolor washes in ochre, dull blue-green, and rust. Top to bottom, reading like a traveler's route. At the very top, a cartouche-style vignette: a robed scribe at a writing table in a walled study stares wide-eyed at a tablet of numbers — titled MY PROGRAM DID THE WRONG THING!. Three dotted roads fan downward from this village into a bordered territory containing three walled sites side by side: left, a tape-reel device at a milestone post '7' with an inked 9 where an 8 should be — titled BUG AT INPUT SEVEN; center, the same device at milestone '42' with ink spilling wildly past its walls — titled BUG AT N=42; right, a row of cell-blocks scrambled at milestone '14' — titled DOUBLING BREAKS AT N=14. From the left site a road leads to a maze of branching dotted paths looping back on themselves with no destination — titled NEVER FIND A PROOF. From the right site a road leads to a small alcove holding a complete, undamaged tapestry of nested triangles — titled RULE 122 INSIDE THE RIND. All three threads — the overflowing-ink site, the maze, and the alcove — converge toward the map's center, at the torn, frayed edge of the parchment, where a great coiled sea-serpent lurks half in the margin — titled LURKING AT THE EDGES, drawn as the map's central focal hub. From the serpent's margin four roads fan outward to four distant scenes arranged in a row: a burrow with a small gear-toothed weasel creature peering out — titled THE WILY WEASEL MACHINE; a hillside with a chaotic triangular pattern erupting from one seed-cell — titled RULE 30 APPEARS; a carved stone tablet of plus/minus-one marks with one anomalous 2 — titled COEFFICIENT OF TWO APPEARS; a workshop craftsman shaping a tool across tree-ring years on a timber beam — titled DECADES BUILDING A LANGUAGE. All four roads converge at the bottom of the map to one final scene: a figure turning over a broken tablet to reveal a laurel mark on its reverse — titled FAILURE BECOMES DISCOVERY. A long looping road winds from this bottom scene back up the left margin of the map to the scribe's village at the top, closing the loop. Small compass rose and faint cross-hatched hills fill empty corners sparingly; no other lettering appears anywhere except the eleven titles, hand-lettered in capitals beneath their scenes.",
+      "vignettes": [
+        {
+          "block": "spya-d46wsq",
+          "quote": "“My Program Did the Wrong Thing!”",
+          "depicts": "At the top of the map, a robed scribe sits at a writing table in a walled study, staring wide-eyed at a tablet covered in numbers that are not what he expected.",
+          "title": "MY PROGRAM DID THE WRONG THING!",
+          "node": "n1"
+        },
+        {
+          "block": "spya-h3jx6h",
+          "quote": "for input 7, there’s a bug! Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "A small walled site shows a tape-reel device marked with a milestone post reading 7; the tape that should read 8 instead shows a crossed-out 8 and a freshly inked 9.",
+          "title": "BUG AT INPUT SEVEN",
+          "node": "n2"
+        },
+        {
+          "block": "spya-wtm5p7",
+          "quote": "But then suddenly, at n = 42, there’s a “bug”",
+          "depicts": "A second walled site shows the same kind of tape-device, but at its milestone post marked 42 ink is spilling outward in a widening uncontrolled pattern, overflowing the site's walls.",
+          "title": "BUG AT N=42",
+          "node": "n3"
+        },
+        {
+          "block": "spya-zkkrs3",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "A road from the n=7 site winds into a maze of branching dotted paths that loop endlessly back on themselves without ever reaching a marked destination stone.",
+          "title": "NEVER FIND A PROOF",
+          "node": "n6"
+        },
+        {
+          "block": "spya-gagsuk",
+          "quote": "Rule 122 has the feature that when there are pairs of identical cells together, it emulates rule 90",
+          "depicts": "A road from the n=14 site leads to a small alcove where a tapestry of nested triangles is woven inside a protective border, undamaged and complete.",
+          "title": "RULE 122 INSIDE THE RIND",
+          "node": "n5"
+        },
+        {
+          "block": "spya-gj554s",
+          "quote": "“lurking at the edges” is computational irreducibility",
+          "depicts": "At the map's center, roads from the n=42 site, the maze, and the tapestry alcove all converge at the torn, unfinished edge of the parchment, where a great sea-serpent coils half-hidden in the margin.",
+          "title": "LURKING AT THE EDGES",
+          "node": "n7"
+        },
+        {
+          "block": "spya-wem6ht",
+          "quote": "one might whimsically call a wily weasel machine",
+          "depicts": "A road from the serpent's margin leads to a distant burrow where a small weasel-shaped creature with gears for teeth peers out, almost impossible to catch.",
+          "title": "THE WILY WEASEL MACHINE",
+          "node": "n8"
+        },
+        {
+          "block": "spya-zbsh70",
+          "quote": "there was rule 30, with all its complexity",
+          "depicts": "Another road leads to a hillside where a tangled, chaotic triangular pattern bursts upward from a single small seed-cell planted in the ground.",
+          "title": "RULE 30 APPEARS",
+          "node": "n9"
+        },
+        {
+          "block": "spya-y7q6q3",
+          "quote": "you try x105 – 1. And suddenly there’s something different—a coefficient of 2",
+          "depicts": "A third road leads to a stone tablet carved with rows of plus-one and minus-one marks, except for one line where a lone carved numeral 2 stands out.",
+          "title": "COEFFICIENT OF TWO APPEARS",
+          "node": "n10"
+        },
+        {
+          "block": "spya-jdrtne",
+          "quote": "the better part of the past many decades trying to make the Wolfram Language",
+          "depicts": "A fourth road leads to a workshop where a craftsman stands at a long bench, shaping a single tool across many stacked years shown as growth-rings on a timber beam.",
+          "title": "DECADES BUILDING A LANGUAGE",
+          "node": "n11"
+        },
+        {
+          "block": "spya-j4tprn",
+          "quote": "if we’re doing science, we might consider it a success.",
+          "depicts": "All four roads meet at the bottom of the map where a figure turns over a broken tablet to reveal a laurel mark carved on its other face.",
+          "title": "FAILURE BECOMES DISCOVERY",
+          "node": "n12"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "At the top of the map, a robed scribe sits at a writing table in a walled study, staring wide-eyed at a tablet covered in numbers that are not what he expected.",
+          "title": "MY PROGRAM DID THE WRONG THING!"
+        },
+        {
+          "where": "A small walled site shows a tape-reel device marked with a milestone post reading 7; the tape that should read 8 instead shows a crossed-out 8 and a freshly inked 9.",
+          "title": "BUG AT INPUT SEVEN"
+        },
+        {
+          "where": "A second walled site shows the same kind of tape-device, but at its milestone post marked 42 ink is spilling outward in a widening uncontrolled pattern, overflowing the site's walls.",
+          "title": "BUG AT N=42"
+        },
+        {
+          "where": "A third walled site shows a row of small cell-blocks meant to double in number at a milestone post marked 14, but the blocks there are scrambled and miscounted.",
+          "title": "DOUBLING BREAKS AT N=14"
+        },
+        {
+          "where": "A road from the n=7 site winds into a maze of branching dotted paths that loop endlessly back on themselves without ever reaching a marked destination stone.",
+          "title": "NEVER FIND A PROOF"
+        },
+        {
+          "where": "A road from the n=14 site leads to a small alcove where a tapestry of nested triangles is woven inside a protective border, undamaged and complete.",
+          "title": "RULE 122 INSIDE THE RIND"
+        },
+        {
+          "where": "At the map's center, roads from the n=42 site, the maze, and the tapestry alcove all converge at the torn, unfinished edge of the parchment, where a great sea-serpent coils half-hidden in the margin.",
+          "title": "LURKING AT THE EDGES"
+        },
+        {
+          "where": "A road from the serpent's margin leads to a distant burrow where a small weasel-shaped creature with gears for teeth peers out, almost impossible to catch.",
+          "title": "THE WILY WEASEL MACHINE"
+        },
+        {
+          "where": "Another road leads to a hillside where a tangled, chaotic triangular pattern bursts upward from a single small seed-cell planted in the ground.",
+          "title": "RULE 30 APPEARS"
+        },
+        {
+          "where": "A third road leads to a stone tablet carved with rows of plus-one and minus-one marks, except for one line where a lone carved numeral 2 stands out.",
+          "title": "COEFFICIENT OF TWO APPEARS"
+        },
+        {
+          "where": "A fourth road leads to a workshop where a craftsman stands at a long bench, shaping a single tool across many stacked years shown as growth-rings on a timber beam.",
+          "title": "DECADES BUILDING A LANGUAGE"
+        },
+        {
+          "where": "All four roads meet at the bottom of the map where a figure turns over a broken tablet to reveal a laurel mark carved on its other face.",
+          "title": "FAILURE BECOMES DISCOVERY"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "The Three Provinces of Breakage",
+      "prompt": "An antique hand-drawn map on aged vellum, sepia ink linework with faint watercolor washes, same hand and palette as a larger map it zooms into. At the top, a small prologue roundel: a scribe nodding over a scroll of neat tally marks — titled CONCLUDING IT COMPUTES N+1. Below it, the first full scene, matching the opening map's own vignette for this province: a tape-reel device at milestone post 7 with a crossed-out 8 and a fresh 9 — titled BUG AT INPUT SEVEN, framed slightly larger as the entry point into this territory. A road leads from it to a hillside chart of many identical small towers in rows — titled PLOTTING THOUSANDS OF MACHINES. From this chart two paths fork: one to a quiet stone marker reading 15 standing undisturbed — titled NO BUG UNTIL N=15; the other continuing to an ornate tape-device correct all the way to milestone 62 — titled CORRECT UP TO N=62 — which leads on to a weathered signpost carved with repeating 1s marking a dangerous stretch of road — titled HIGHEST-RISK: ALL ONES. This signpost's road crosses into a second bordered province, where two identical tape-devices diverge at a fork marked 27 — titled DIVERGING AT N=27. From here two paths fork again: one to a tape-device spinning helplessly in a small whirlpool at milestone 151 — titled INFINITE LOOP AT N=151; the other to a counting-table where an odd coin marked 9 has rolled out at milestone 32 — titled SUDDENLY NINE AT N=32. This second path crosses into a third bordered province of cell-blocks meant to double: first, blocks scrambled at milestone 14 — titled DOUBLING RULE'S FIRST BUG; then, further down, another row of blocks holding correct until milestone 24 — titled FIRST BUG AT N=24. The three provinces are drawn as three loosely bordered regions of the parchment, connected by dotted roads, arranged top to bottom in this order. Sparse cross-hatched hills and a faint compass rose fill empty corners; no lettering anywhere on the page except the eleven titles, hand-lettered in capitals beneath their scenes.",
+      "vignettes": [
+        {
+          "block": "spya-scjxv8",
+          "quote": "we’d probably conclude that the Turing machine is computing the function n n + 1.",
+          "depicts": "A small prologue scene at the top: a scribe studies a neat row of correct tally marks on a scroll, nodding in satisfied agreement.",
+          "title": "CONCLUDING IT COMPUTES N+1",
+          "node": "d1"
+        },
+        {
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9.",
+          "depicts": "The same walled site as on the overview map: a tape-reel device at milestone post 7, with a crossed-out 8 and a freshly inked 9 beside it — the anchor scene of this province.",
+          "title": "BUG AT INPUT SEVEN",
+          "node": "d2"
+        },
+        {
+          "block": "spya-qdvs0y",
+          "quote": "the number of 3-state, 2-color machines that “correctly compute” n + 1",
+          "depicts": "A hillside chart of many small identical towers standing in neat rows, representing the great number of machines counted as succeeding.",
+          "title": "PLOTTING THOUSANDS OF MACHINES",
+          "node": "d3"
+        },
+        {
+          "block": "spya-pt0hmz",
+          "quote": "The “most insidious” bugs do not occur until n = 15.",
+          "depicts": "A side path off the chart leads to a quiet stone marker reading 15, standing undisturbed, with no visible damage — the fault lying hidden just past it.",
+          "title": "NO BUG UNTIL N=15",
+          "node": "d4"
+        },
+        {
+          "block": "spya-hqukdz",
+          "quote": "which “correctly” computes n + 1 for all values of n up to 62",
+          "depicts": "A larger, more ornate tape-device stands proudly at a milestone marked 62, tape wound correctly and neatly all the way up to that point.",
+          "title": "CORRECT UP TO N=62",
+          "node": "d5"
+        },
+        {
+          "block": "spya-u3d2ws",
+          "quote": "the “highest risk” values of n for bugs are those of the form 2i – 1",
+          "depicts": "A weathered signpost at a crossroads bears carved numerals made entirely of the digit 1 repeated, marking a stretch of road known to travelers as dangerous.",
+          "title": "HIGHEST-RISK: ALL ONES",
+          "node": "d6"
+        },
+        {
+          "block": "spya-txuteu",
+          "quote": "but then suddenly, at n = 27, do something different",
+          "depicts": "Two identical-looking tape-devices stand side by side at a fork marked 27, their tapes beginning to show different symbols from this point onward.",
+          "title": "DIVERGING AT N=27",
+          "node": "d7"
+        },
+        {
+          "block": "spya-fmdw58",
+          "quote": "for n = 151, something pathological happens—and the machine goes into an infinite loop",
+          "depicts": "A side path leads to a tape-device caught spinning in a small whirlpool-like circle at a milestone marked 151, never able to move on.",
+          "title": "INFINITE LOOP AT N=151",
+          "node": "d8"
+        },
+        {
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "Another path continues to a counting-table meant to produce only even coins, where at milestone 32 an odd coin marked 9 has rolled out instead.",
+          "title": "SUDDENLY NINE AT N=32",
+          "node": "d9"
+        },
+        {
+          "block": "spya-sk8qh9",
+          "quote": "the first “bug” shows up at n = 24",
+          "depicts": "Further along, another row of doubling cell-blocks stands correct much longer, only glitching at a milestone marked 24.",
+          "title": "FIRST BUG AT N=24",
+          "node": "d11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A small prologue scene at the top: a scribe studies a neat row of correct tally marks on a scroll, nodding in satisfied agreement.",
+          "title": "CONCLUDING IT COMPUTES N+1"
+        },
+        {
+          "where": "The same walled site as on the overview map: a tape-reel device at milestone post 7, with a crossed-out 8 and a freshly inked 9 beside it — the anchor scene of this province.",
+          "title": "BUG AT INPUT SEVEN"
+        },
+        {
+          "where": "A hillside chart of many small identical towers standing in neat rows, representing the great number of machines counted as succeeding.",
+          "title": "PLOTTING THOUSANDS OF MACHINES"
+        },
+        {
+          "where": "A side path off the chart leads to a quiet stone marker reading 15, standing undisturbed, with no visible damage — the fault lying hidden just past it.",
+          "title": "NO BUG UNTIL N=15"
+        },
+        {
+          "where": "A larger, more ornate tape-device stands proudly at a milestone marked 62, tape wound correctly and neatly all the way up to that point.",
+          "title": "CORRECT UP TO N=62"
+        },
+        {
+          "where": "A weathered signpost at a crossroads bears carved numerals made entirely of the digit 1 repeated, marking a stretch of road known to travelers as dangerous.",
+          "title": "HIGHEST-RISK: ALL ONES"
+        },
+        {
+          "where": "Two identical-looking tape-devices stand side by side at a fork marked 27, their tapes beginning to show different symbols from this point onward.",
+          "title": "DIVERGING AT N=27"
+        },
+        {
+          "where": "A side path leads to a tape-device caught spinning in a small whirlpool-like circle at a milestone marked 151, never able to move on.",
+          "title": "INFINITE LOOP AT N=151"
+        },
+        {
+          "where": "Another path continues to a counting-table meant to produce only even coins, where at milestone 32 an odd coin marked 9 has rolled out instead.",
+          "title": "SUDDENLY NINE AT N=32"
+        },
+        {
+          "where": "The road enters a new province of cell-blocks meant to double; at milestone 14 the blocks are visibly miscounted and scrambled.",
+          "title": "DOUBLING RULE'S FIRST BUG"
+        },
+        {
+          "where": "Further along, another row of doubling cell-blocks stands correct much longer, only glitching at a milestone marked 24.",
+          "title": "FIRST BUG AT N=24"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "The Country of Proof",
+      "prompt": "An antique hand-drawn map on aged vellum, sepia ink linework with faint watercolor washes, same hand and palette as a larger map it zooms into. The plate's border is decorated with the two motifs from that larger map's own proof country — a small nested-triangle tapestry and a looping dead-end maze — woven into the corner scrollwork as a frame, so the reader recognizes this as that same territory seen closer. Top to bottom: first, a plain tidy block pattern sitting whole in an open field — titled VISUALLY OBVIOUS, NO BUG. A road leads to a long winding path marked with a milestone reading 100,000, walked its whole length without trouble — titled NO BUGS TO N=100,000. Beside it, a surveyor studies unpredictable ripples in the ground, unsure if they could ever grow dangerous — titled NO WAY TO BE SURE. The surveyor sets down his tools and instead unrolls a careful diagram, pointing to a confident conclusion — titled A PROOF IT NEVER HAPPENS. From this diagram two paths fork: one to a pale border creeping steadily leftward around a patterned field — titled THE WHITE RIND'S EDGE; the other to the alcove holding the nested-triangle tapestry, now labeled as a known weaving pattern — titled INSIDE: RULE 122. Both paths meet at a finished monument of blocks settled cleanly into exactly double their start — titled DOUBLING WITH NO BUGS. The road then crosses into a second bordered province, where a scholar stands before a tape-device posing a question chalked on a slate — titled CAN WE FORMALLY PROVE THIS?. The scholar writes a chain of linked symbols like beads on a scroll — titled A NOTATION FOR THE MACHINE. The scroll feeds a mechanical loom that weaves it into a finished proof-pattern — titled FINDEQUATIONALPROOF AT WORK. Beside this loom, a second loom fed from a known-faulty machine runs endlessly, producing only loose unraveling thread, never a finished pattern — titled NEVER FIND A PROOF. The two provinces — visual/structural proof above, symbolic proof below — are drawn as two loosely bordered regions connected by a single dotted road running top to bottom. Sparse hills and a faint compass rose fill empty corners; no lettering anywhere on the page except the eleven titles, hand-lettered in capitals beneath their scenes.",
+      "vignettes": [
+        {
+          "block": "spya-qm284b",
+          "quote": "patterns that are simple enough that it’s “visually obvious” that they’ll “correctly double” for all input sizes",
+          "depicts": "At the top of this province, a plain, tidy block pattern sits in an open field, clearly whole and complete at a glance, with no hidden corners.",
+          "title": "VISUALLY OBVIOUS, NO BUG",
+          "node": "p1"
+        },
+        {
+          "block": "spya-asw9eq",
+          "quote": "if we run this case up to n = 100000, no bugs appear",
+          "depicts": "A long winding road marked with a milestone reading 100,000 shows travelers who have walked its whole length without finding any trouble.",
+          "title": "NO BUGS TO N=100,000",
+          "node": "p2"
+        },
+        {
+          "block": "spya-f89kx4",
+          "quote": "there’s no obvious way to be sure—and to guarantee that nothing crazy will ever happen",
+          "depicts": "Beside the long road, a surveyor studies irregular, unpredictable ripples in the ground, unable to say whether they might ever grow dangerous.",
+          "title": "NO WAY TO BE SURE",
+          "node": "p3"
+        },
+        {
+          "block": "spya-hcdcqp",
+          "quote": "there’s an argument we can give that this will never happen",
+          "depicts": "The surveyor sets down tools and instead unrolls a careful diagram of the whole territory, pointing confidently to a conclusion drawn from it.",
+          "title": "A PROOF IT NEVER HAPPENS",
+          "node": "p4"
+        },
+        {
+          "block": "spya-r7ty6m",
+          "quote": "the white “rind” always either stays in the same place, or moves to the left",
+          "depicts": "One path from the diagram leads to a scene of a pale outer border steadily creeping leftward around a patterned field, never once moving the other way.",
+          "title": "THE WHITE RIND'S EDGE",
+          "node": "p5"
+        },
+        {
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A second path from the diagram leads to the same alcove seen on the outer map, where the nested triangle tapestry hangs, now labeled as a known and well-understood weaving pattern.",
+          "title": "INSIDE: RULE 122",
+          "node": "p6"
+        },
+        {
+          "block": "spya-n5acnw",
+          "quote": "they must always eventually stabilize—and the underlying cellular automaton must always correctly “double its input”",
+          "depicts": "The rind-path and the tapestry-path meet at a finished monument showing a field of blocks settled cleanly into exactly double their start, carved as a lasting record.",
+          "title": "DOUBLING WITH NO BUGS",
+          "node": "p7"
+        },
+        {
+          "block": "spya-ycgxn9",
+          "quote": "it must always compute n + 1. But can we formally prove this?",
+          "depicts": "The road crosses into a second province where a scholar stands before a tape-device, posing a question chalked on a slate beside it.",
+          "title": "CAN WE FORMALLY PROVE THIS?",
+          "node": "p8"
+        },
+        {
+          "block": "spya-jqmftv",
+          "quote": "we need a notation that can encompass both the behavior of the Turing machine",
+          "depicts": "The scholar now writes a chain of linked symbols on a long scroll, each cell tied to the next like beads on a string.",
+          "title": "A NOTATION FOR THE MACHINE",
+          "node": "p9"
+        },
+        {
+          "block": "spya-z8v9v0",
+          "quote": "we can do this essentially just using the Wolfram Language FindEquationalProof",
+          "depicts": "The scroll of linked symbols feeds into a mechanical loom-like device that weaves the chain automatically into a finished proof-pattern.",
+          "title": "FINDEQUATIONALPROOF AT WORK",
+          "node": "p10"
+        },
+        {
+          "block": "spya-zkkrs3",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "A second loom, fed with the chain from a known-faulty machine, runs and runs but never produces a finished pattern, only loose, unraveling thread.",
+          "title": "NEVER FIND A PROOF",
+          "node": "p11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "At the top of this province, a plain, tidy block pattern sits in an open field, clearly whole and complete at a glance, with no hidden corners.",
+          "title": "VISUALLY OBVIOUS, NO BUG"
+        },
+        {
+          "where": "A long winding road marked with a milestone reading 100,000 shows travelers who have walked its whole length without finding any trouble.",
+          "title": "NO BUGS TO N=100,000"
+        },
+        {
+          "where": "Beside the long road, a surveyor studies irregular, unpredictable ripples in the ground, unable to say whether they might ever grow dangerous.",
+          "title": "NO WAY TO BE SURE"
+        },
+        {
+          "where": "The surveyor sets down tools and instead unrolls a careful diagram of the whole territory, pointing confidently to a conclusion drawn from it.",
+          "title": "A PROOF IT NEVER HAPPENS"
+        },
+        {
+          "where": "One path from the diagram leads to a scene of a pale outer border steadily creeping leftward around a patterned field, never once moving the other way.",
+          "title": "THE WHITE RIND'S EDGE"
+        },
+        {
+          "where": "A second path from the diagram leads to the same alcove seen on the outer map, where the nested triangle tapestry hangs, now labeled as a known and well-understood weaving pattern.",
+          "title": "INSIDE: RULE 122"
+        },
+        {
+          "where": "The rind-path and the tapestry-path meet at a finished monument showing a field of blocks settled cleanly into exactly double their start, carved as a lasting record.",
+          "title": "DOUBLING WITH NO BUGS"
+        },
+        {
+          "where": "The road crosses into a second province where a scholar stands before a tape-device, posing a question chalked on a slate beside it.",
+          "title": "CAN WE FORMALLY PROVE THIS?"
+        },
+        {
+          "where": "The scholar now writes a chain of linked symbols on a long scroll, each cell tied to the next like beads on a string.",
+          "title": "A NOTATION FOR THE MACHINE"
+        },
+        {
+          "where": "The scroll of linked symbols feeds into a mechanical loom-like device that weaves the chain automatically into a finished proof-pattern.",
+          "title": "FINDEQUATIONALPROOF AT WORK"
+        },
+        {
+          "where": "A second loom, fed with the chain from a known-faulty machine, runs and runs but never produces a finished pattern, only loose, unraveling thread.",
+          "title": "NEVER FIND A PROOF"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "profileHash": null
+}

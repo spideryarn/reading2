@@ -1,0 +1,668 @@
+{
+  "version": "sketch/3",
+  "title": "Spine with a fan",
+  "caption": "A spine running from the problem (how do neurons combine signals?) through a method built to answer it (PID), into a fan of empirical findings about where synergy lives, and out to the method's limits and what comes next.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From the problem to the payoff",
+      "height": 1200,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "Brains process information — but how?",
+          "size": "md",
+          "detail": "New recording tech and new analysis tools now make this question tractable.",
+          "tone": 1,
+          "block": "spya-yb735k"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 230,
+          "y": 140,
+          "w": 300,
+          "h": 70,
+          "text": "Mutual information vs. transfer entropy",
+          "size": "sm",
+          "sub": "shared pattern vs. directed flow",
+          "detail": "Mutual information shows undirected similarity between neurons; transfer entropy shows directed information flow from one to another.",
+          "tone": 1,
+          "block": "spya-mx45r0"
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "note",
+          "x": 230,
+          "y": 240,
+          "w": 300,
+          "h": 70,
+          "text": "But flow alone can't show how inputs combine",
+          "size": "sm",
+          "detail": "Transfer entropy tracks propagation, not how a neuron integrates multiple sources into a new signal.",
+          "tone": 1,
+          "block": "spya-dhy39x"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "hex",
+          "x": 230,
+          "y": 345,
+          "w": 300,
+          "h": 85,
+          "text": "PID: split joint information into redundant, unique, synergistic parts",
+          "size": "md",
+          "detail": "Partial information decomposition formally separates overlapping, individual, and combination-only information.",
+          "tone": 2,
+          "block": "spya-u0wm5e"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "box",
+          "x": 230,
+          "y": 460,
+          "w": 300,
+          "h": 70,
+          "text": "Needs a choice of redundancy measure — none is universal",
+          "size": "sm",
+          "detail": "The decomposition is underdetermined until one defines redundancy; a dozen competing definitions exist.",
+          "tone": 2,
+          "block": "spya-d2quz5"
+        },
+        {
+          "kind": "node",
+          "id": "n6",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 565,
+          "w": 300,
+          "h": 80,
+          "text": "Applying PID to real recordings",
+          "size": "md",
+          "detail": "Hundreds of cultured cortical neurons, decomposed triad by triad, reveal where synergy concentrates.",
+          "tone": 3,
+          "block": "spya-cc282b"
+        },
+        {
+          "kind": "node",
+          "id": "s1",
+          "shape": "box",
+          "x": 30,
+          "y": 685,
+          "w": 160,
+          "h": 85,
+          "text": "Rich-club neurons hold most of the network's synergy",
+          "size": "xs",
+          "detail": "A minority of best-connected neurons account for about 88% of all synergy.",
+          "tone": 3,
+          "block": "spya-e3ghxj"
+        },
+        {
+          "kind": "node",
+          "id": "s2",
+          "shape": "box",
+          "x": 210,
+          "y": 765,
+          "w": 160,
+          "h": 85,
+          "text": "Recurrent connections raise synergy; feedback doesn't",
+          "size": "xs",
+          "detail": "Loops between source neurons add to synergy; feedback to the sources mostly doesn't.",
+          "tone": 3,
+          "block": "spya-p8by2y"
+        },
+        {
+          "kind": "node",
+          "id": "s3",
+          "shape": "box",
+          "x": 400,
+          "y": 765,
+          "w": 160,
+          "h": 85,
+          "text": "Synergy peaks, then falls, as inputs grow more alike",
+          "size": "xs",
+          "detail": "Mildly correlated sources produce the most synergy; highly correlated ones become redundant instead.",
+          "tone": 3,
+          "block": "spya-zfs2z7"
+        },
+        {
+          "kind": "node",
+          "id": "s4",
+          "shape": "box",
+          "x": 570,
+          "y": 685,
+          "w": 160,
+          "h": 85,
+          "text": "In monkeys, redundancy rises during movement",
+          "size": "xs",
+          "detail": "Behaving-animal recordings show the balance of synergy and redundancy shifts with the task at hand.",
+          "tone": 3,
+          "block": "spya-aqcngt"
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "box",
+          "x": 230,
+          "y": 885,
+          "w": 300,
+          "h": 70,
+          "text": "Practical limits: data type, sample size, software tools",
+          "size": "sm",
+          "detail": "Choosing a redundancy function and gathering enough data are both real constraints in practice.",
+          "tone": 4,
+          "block": "spya-kmgwhs"
+        },
+        {
+          "kind": "node",
+          "id": "n8",
+          "shape": "box",
+          "x": 230,
+          "y": 985,
+          "w": 300,
+          "h": 70,
+          "text": "Future: moment-by-moment and multi-target PID",
+          "size": "sm",
+          "detail": "Local PID resolves synergy over time; integrated information decomposition extends it to multiple targets.",
+          "tone": 4,
+          "block": "spya-zz5xxs"
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 1085,
+          "w": 300,
+          "h": 80,
+          "text": "Synergy: neurons compute on patterns, not just totals",
+          "size": "md",
+          "detail": "The closing summary ties the empirical findings back to what synergy means for neural computation.",
+          "tone": 4,
+          "block": "spya-rc5z33"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "s1",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "s2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "s3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "s4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s1",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s2",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s3",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s4",
+          "to": "n7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n8",
+          "to": "n9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 320,
+          "w": 680,
+          "h": 230,
+          "style": "dashed",
+          "label": "BUILDING THE PID FRAMEWORK",
+          "opens": "pid-framework",
+          "tone": 2
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 540,
+          "w": 712,
+          "h": 335,
+          "style": "band",
+          "label": "EMPIRICAL FINDINGS",
+          "opens": "empirical-findings",
+          "tone": 3
+        }
+      ],
+      "caption": "Down the page is the article's own order: motivation, tools, the gap those tools leave, the PID framework built to fill it, a fan of empirical discoveries about synergy, then the method's limits, its future, and a closing summary."
+    },
+    {
+      "id": "pid-framework",
+      "title": "Inside: building partial information decomposition",
+      "height": 720,
+      "items": [
+        {
+          "kind": "node",
+          "id": "a1",
+          "shape": "box",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "Joint information isn't just the sum of each source's part",
+          "size": "sm",
+          "detail": "Summing each parent neuron's individual information about the target doesn't equal the information from all of them together.",
+          "tone": 2,
+          "block": "spya-h5dz45"
+        },
+        {
+          "kind": "node",
+          "id": "a2",
+          "shape": "box",
+          "x": 230,
+          "y": 140,
+          "w": 300,
+          "h": 80,
+          "text": "Whole > parts means synergy; whole < parts means redundancy",
+          "size": "sm",
+          "detail": "Extra information beyond the sum signals genuine integration (synergy); a shortfall signals double-counted overlap (redundancy).",
+          "tone": 2,
+          "block": "spya-e94ury"
+        },
+        {
+          "kind": "node",
+          "id": "a3",
+          "shape": "note",
+          "x": 230,
+          "y": 250,
+          "w": 300,
+          "h": 70,
+          "text": "Williams & Beer found how to split it algebraically",
+          "size": "sm",
+          "detail": "Their partial information decomposition framework made this split exact, not just descriptive.",
+          "tone": 2,
+          "block": "spya-t02v4p"
+        },
+        {
+          "kind": "node",
+          "id": "a4",
+          "shape": "box",
+          "x": 230,
+          "y": 350,
+          "w": 300,
+          "h": 80,
+          "text": "Two parents: redundant + unique(1) + unique(2) + synergistic",
+          "size": "sm",
+          "detail": "With two source neurons, the joint information splits into four distinct, non-overlapping pieces.",
+          "tone": 2,
+          "block": "spya-q2b0e5"
+        },
+        {
+          "kind": "node",
+          "id": "a5",
+          "shape": "diamond",
+          "x": 255,
+          "y": 460,
+          "w": 250,
+          "h": 75,
+          "text": "Underdetermined — pick one piece to define",
+          "size": "xs",
+          "detail": "Three known mutual-information values but four unknown pieces: defining any one term yields the rest.",
+          "tone": 2,
+          "block": "spya-bgsd4n"
+        },
+        {
+          "kind": "node",
+          "id": "a6",
+          "shape": "hex",
+          "x": 230,
+          "y": 565,
+          "w": 300,
+          "h": 75,
+          "text": "More than two parents: need the partial information lattice",
+          "size": "sm",
+          "detail": "With three or more sources the simple algebra isn't enough; a structured lattice of all possible source combinations is required.",
+          "tone": 2,
+          "block": "spya-k378fv"
+        },
+        {
+          "kind": "node",
+          "id": "a7",
+          "shape": "box",
+          "x": 230,
+          "y": 665,
+          "w": 300,
+          "h": 55,
+          "text": "Lattice atoms computed by Möbius inversion",
+          "size": "xs",
+          "detail": "A recursive formula extracts each unique information atom once a redundancy measure is chosen.",
+          "tone": 2,
+          "block": "spya-m37w5y"
+        },
+        {
+          "kind": "edge",
+          "from": "a1",
+          "to": "a2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a2",
+          "to": "a3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a3",
+          "to": "a4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a4",
+          "to": "a5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a5",
+          "to": "a6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "a6",
+          "to": "a7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain of logical steps: the discovery that information doesn't simply add up, the algebra that first split it into parts for two sources, and the lattice machinery needed once there are more than two — all resting on one still-unsettled choice, the definition of redundancy."
+    },
+    {
+      "id": "empirical-findings",
+      "title": "Inside: what PID found in real circuits",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "e1",
+          "shape": "ellipse",
+          "x": 230,
+          "y": 40,
+          "w": 300,
+          "h": 70,
+          "text": "512-channel recordings from cultured mouse cortex",
+          "size": "sm",
+          "detail": "Hundreds of neurons recorded at once, with thousands of source-source-target triads analyzed by PID.",
+          "tone": 3,
+          "block": "spya-sw5ukx"
+        },
+        {
+          "kind": "node",
+          "id": "e2",
+          "shape": "box",
+          "x": 230,
+          "y": 140,
+          "w": 300,
+          "h": 70,
+          "text": "Synergy tracks the strength of feedforward information flow",
+          "size": "sm",
+          "detail": "Across 25 recordings, synergy was reliably about a quarter of the feedforward transfer entropy.",
+          "tone": 3,
+          "block": "spya-kqkb58"
+        },
+        {
+          "kind": "node",
+          "id": "e3",
+          "shape": "box",
+          "x": 40,
+          "y": 260,
+          "w": 200,
+          "h": 90,
+          "text": "Rich-club triads: 2.7x more synergy, ~88% of total",
+          "size": "xs",
+          "detail": "Densely interconnected 'rich club' neurons are small in number but dominant in synergy.",
+          "tone": 3,
+          "block": "spya-fud8q3"
+        },
+        {
+          "kind": "node",
+          "id": "e4",
+          "shape": "box",
+          "x": 270,
+          "y": 260,
+          "w": 200,
+          "h": 90,
+          "text": "Recurrent links help synergy; feedback links don't",
+          "size": "xs",
+          "detail": "Connections between source neurons raised synergy; connections back from target to sources mostly didn't.",
+          "tone": 3,
+          "block": "spya-sd9fzd"
+        },
+        {
+          "kind": "node",
+          "id": "e5",
+          "shape": "box",
+          "x": 500,
+          "y": 260,
+          "w": 200,
+          "h": 90,
+          "text": "Synergy peaks then falls as sources grow more alike",
+          "size": "xs",
+          "detail": "Mild similarity between source neurons boosts synergy; too much similarity turns it into redundancy instead.",
+          "tone": 3,
+          "block": "spya-ybmve2"
+        },
+        {
+          "kind": "node",
+          "id": "e6",
+          "shape": "note",
+          "x": 230,
+          "y": 400,
+          "w": 300,
+          "h": 70,
+          "text": "Caveats: bias from simple pairwise flow estimates; culture, not living brain",
+          "size": "xs",
+          "detail": "Results depend on bivariate transfer-entropy networks and on in-vitro cortical cultures, not behaving animals.",
+          "tone": 3,
+          "block": "spya-j4cy9j"
+        },
+        {
+          "kind": "node",
+          "id": "e7",
+          "shape": "box",
+          "x": 230,
+          "y": 500,
+          "w": 300,
+          "h": 70,
+          "text": "In behaving monkeys, redundancy rises during movement execution",
+          "size": "sm",
+          "detail": "Task demands shift the balance: redundancy increases when reliable transmission to distant muscles matters most.",
+          "tone": 3,
+          "block": "spya-t8fayf"
+        },
+        {
+          "kind": "edge",
+          "from": "e1",
+          "to": "e2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e2",
+          "to": "e3",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e2",
+          "to": "e4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e2",
+          "to": "e5",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e3",
+          "to": "e6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e4",
+          "to": "e6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e5",
+          "to": "e6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "e6",
+          "to": "e7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain into a fan and back: recordings feed one overall finding (synergy tracks feedforward flow), which splits into three parallel discoveries about where and why synergy concentrates, which converge on caveats and then on a result from behaving animals."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+  "profileHash": null
+}

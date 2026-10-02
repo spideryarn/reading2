@@ -135,7 +135,7 @@ list page now agree, and agreeing is the whole of it:
 | shadcn `size="sm"` | 32px | `rounded-md` |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
 | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
-| Trajectory's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
+| Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
 
 **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
 [`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger

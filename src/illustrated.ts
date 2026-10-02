@@ -116,7 +116,7 @@ import {
 } from "./illustrated-plate.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { generatorFor, type ModelPower } from "./models.js";
+import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
@@ -1007,6 +1007,15 @@ export async function generateIllustrated(opts: {
   systemOverride?: string;
   /** Injected so tests and the eval can run without a network. */
   draw?: DrawPlate;
+  /**
+   * An explicit `output_config.effort` for the brief call, for the effort eval
+   * only (plan 261001p). Never set in the app. **Unset sends no `output_config`
+   * at all**, which is today's request byte for byte: the API's own default,
+   * `high` on Sonnet 5, or the explicit `high` `messagesWireBody` injects on a
+   * high-powered article. This is not an `ArticleStage` and so has no row in
+   * `STAGE_EFFORT` (src/models.ts § `ArticleStage`).
+   */
+  effort?: Effort;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
   /**
@@ -1040,6 +1049,7 @@ export async function generateIllustrated(opts: {
       {
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
         system: [
           {
             /* Fenced explicitly, because the brief model reads a stranger's page

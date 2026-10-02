@@ -178,10 +178,10 @@ const MANIFEST = [
      beside it, borrowing glossary.css and timeline.css, and setting nothing they
      set on the same element — faq.css's header. */
   "faq.css",
-  /* After faq.css, and for its reason: `.trajectory` is `.gloss` with a class
+  /* After faq.css, and for its reason: `.skim` is `.gloss` with a class
      beside it, and sets nothing the sheets it borrows from set on the same
-     element — trajectory.css's header. */
-  "trajectory.css",
+     element — skim.css's header. */
+  "skim.css",
   "quiz.css",
   /* Marginalia's column. Shares no selector with its neighbours, so its place
      is only "after the reader's own sheets": `.reader`'s padding-right here

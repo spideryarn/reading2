@@ -111,6 +111,7 @@ const ALICE: AdminUser = {
   ingestsShared: 0,
   highPower: 0,
   highPowerShared: 0,
+  minimal: 0,
   ingestLimit: 20,
   ingestWindow: "period",
 };
@@ -141,6 +142,7 @@ const BOB: AdminUser = {
   ingestsShared: 0,
   highPower: 0,
   highPowerShared: 0,
+  minimal: 0,
   ingestLimit: 3,
   ingestWindow: "lifetime",
 };
@@ -260,18 +262,18 @@ describe("the users page", () => {
   /**
    * **`6 / 3` in this cell reads as the wall having failed**, and it is what the
    * page drew for an account that shared six articles and then made them all
-   * private again: nothing public, twelve half-units against a budget of six.
-   * The half-slot form was chosen on *is anything public* alone, which is the
+   * private again: nothing public, 1,200 points against a budget of 600.
+   * The points form (half-slots until 2026-10-01) was chosen on *is anything public* alone, which is the
    * wrong question — the fraction stops being a fraction the moment the count
    * passes the allowance, whichever way it got there. GPT Sol, 2026-09-05.
    */
-  it("shows half-slots when the count is over the allowance, even with nothing public", async () => {
+  it("shows points when the count is over the allowance, even with nothing public", async () => {
     const unshared: AdminUser = { ...BOB, ingests: 6, ingestsShared: 0, ingestLimit: 3 };
     vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [unshared] })));
     const el = await show();
 
     const row = (rows(el)[0] ?? []).join("|");
-    expect(row).toContain("12 / 6 half");
+    expect(row).toContain("1200 / 600 pts");
     expect(row).not.toContain("6 / 3");
   });
 
@@ -282,6 +284,7 @@ describe("the users page", () => {
       ingestsShared: 1,
       highPower: 2,
       highPowerShared: 1,
+      minimal: 0,
       ingestLimit: 20,
       ingestWindow: "stale",
     };
@@ -289,9 +292,28 @@ describe("the users page", () => {
     const el = await show();
 
     const row = (rows(el)[0] ?? []).join("|");
-    expect(row).toContain("8 / 40 half ?");
+    expect(row).toContain("800 / 4000 pts ?");
     const usage = el.querySelector<HTMLElement>('span[title*="lifetime of the account"]');
     expect(usage?.title).toContain("2 switched to High-powered AI");
+  });
+
+  /**
+   * **Minimal papers count 2 points each in the cell, and have a column of their
+   * own.** One private article and forty papers not yet AI-processed is 280
+   * points of 600 — not `1 / 3`, which would hide the papers, and not a
+   * fraction of an article. Plan 261001m.
+   */
+  it("counts minimal papers in points and gives them a column", async () => {
+    const papers: AdminUser = { ...BOB, ingests: 1, ingestsShared: 0, minimal: 40, ingestLimit: 3 };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [papers] })));
+    const el = await show();
+
+    const row = rows(el)[0] ?? [];
+    expect(row.join("|")).toContain("280 / 600 pts");
+    expect(row.join("|")).not.toContain("1 / 3");
+    expect(row).toContain("40");
+    const usage = el.querySelector<HTMLElement>('span[title*="not yet AI-processed"]');
+    expect(usage?.title).toContain("40 papers not yet AI-processed, at 2 points each");
   });
 
   it("draws exactly as many rows as it says there are accounts", async () => {

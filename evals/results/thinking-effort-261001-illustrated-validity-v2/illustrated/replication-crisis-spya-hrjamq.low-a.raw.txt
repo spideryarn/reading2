@@ -1,0 +1,215 @@
+{
+  "style": "An antique hand-drawn map style, like a 17th-century cartographer's chart, fits an article that traces failures spreading across whole fields of knowledge like territories",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "Map of the Replication Crisis",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-pcnqxn",
+          "quote": "widespread failures to reproduce published scientific results",
+          "depicts": "A cracked stone tablet inscribed with a scientific finding, the crack running through it, set at the top of the map as the source spring of a river.",
+          "title": "THE CRACKED TABLET"
+        },
+        {
+          "node": "n2",
+          "block": "spya-xrc2re",
+          "quote": "Certain terms commonly used in discussions of the replication crisis have technically precise meanings",
+          "depicts": "A small glossary scroll unrolled beside the spring, with symbols for p-value, power, and effect size drawn as measuring instruments rather than words.",
+          "title": "INSTRUMENTS OF MEASURE"
+        },
+        {
+          "node": "n3",
+          "block": "spya-t3scy3",
+          "quote": "two direct replication attempts failed to reproduce results from social psychologist John Bargh's much-cited \"elderly-walking\" study",
+          "depicts": "An elderly figure walking slowly down a path, watched by two separate groups of researchers with notebooks who shake their heads at each other.",
+          "title": "THE ELDERLY-WALKING STUDY"
+        },
+        {
+          "node": "n4",
+          "block": "spya-dg8j93",
+          "quote": "declare a \"crisis of confidence\" in psychology and other fields",
+          "depicts": "A council of robed scholars standing before a banner with a broken seal, declaring an alarm as smoke rises from a watchtower.",
+          "title": "CRISIS OF CONFIDENCE"
+        },
+        {
+          "node": "n6",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A field of 97 small flags planted in soil, only 36 of them standing upright and the rest fallen flat.",
+          "title": "97 FLAGS, 36 STANDING"
+        },
+        {
+          "node": "n7",
+          "block": "spya-k59a2x",
+          "quote": "only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions from the original studies",
+          "depicts": "A row of 53 sealed laboratory jars on a shelf, only 6 glowing with a confirming light, the rest dark.",
+          "title": "53 JARS, FEW CONFIRMED"
+        },
+        {
+          "node": "n9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "A crowded assembly of robed researchers from many lands, seven in ten of them holding broken instruments, converging at a central crossroads on the map.",
+          "title": "SEVEN IN TEN FAILED"
+        },
+        {
+          "node": "n10",
+          "block": "spya-cw2g6v",
+          "quote": "incentivizes researchers to prioritize publishable results over validity",
+          "depicts": "A scribe at a press weighing two stacks of paper on a scale, the 'publishable' stack far heavier and tipping the balance.",
+          "title": "THE TIPPED SCALE"
+        },
+        {
+          "node": "n12",
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting",
+          "depicts": "A figure standing at a fork with many branching paths, each path leading to a different doorway, choosing freely among them.",
+          "title": "THE GARDEN OF FORKS"
+        },
+        {
+          "node": "n14",
+          "block": "spya-t88q4a",
+          "quote": "\"methodological terrorist\" and \"self-appointed data police\"",
+          "depicts": "Two armored figures facing off at a gate, one labeled with a banner of accusation, the other holding a ledger of corrections.",
+          "title": "TERRORIST AND POLICE"
+        },
+        {
+          "node": "n15",
+          "block": "spya-qthy2u",
+          "quote": "emphasizing transparency and openness, preregistering research projects, and replicating research with higher standards for evidence",
+          "depicts": "A new open gate at the map's base with scrolls laid flat and unsealed for all to read, builders raising a clean stone archway.",
+          "title": "THE OPEN GATE"
+        }
+      ],
+      "prompt": "Draw a single antique hand-drawn map, sepia ink and faded watercolor wash on aged parchment, depicting the course of an argument as a river running from a spring at the top to a gate at the bottom. At the top, a cracked stone tablet marks THE CRACKED TABLET, beside it a small glossary scroll with instrument symbols for INSTRUMENTS OF MEASURE. The river flows down to a vignette of an elderly figure walking a path, watched by two groups of researchers, titled THE ELDERLY-WALKING STUDY, leading to a council of scholars before a broken seal and rising smoke, titled CRISIS OF CONFIDENCE. The river widens into a delta of evidence: a field of 97 flags with only 36 standing (97 FLAGS, 36 STANDING), a shelf of 53 jars mostly dark (53 JARS, FEW CONFIRMED), converging into a crowded crossroads of robed researchers from many lands holding broken instruments (SEVEN IN ten FAILED). From this crossroads the map forks into two riverbanks: on the left bank a scribe weighs two stacks of paper on an unbalanced scale (THE TIPPED SCALE); on the right bank a figure stands at a crossroads of many branching paths choosing freely (THE GARDEN OF FORKS). The two banks rejoin lower on the map at a gate where two armored figures face off, one accusing, one holding a ledger (TERRORIST AND POLICE), and finally the river reaches a wide open archway with unsealed scrolls laid flat, builders raising clean stone (THE OPEN GATE). Use fine cross-hatching, faded compass roses, sea-monster-style marginal flourishes only at the page edges (never crowding the scenes), and a muted palette of browns, ochres, and faded blue-green wash throughout. Each vignette should be large enough to read clearly, arranged top-to-bottom following the course of the river, with no bare symbols substituting for the described scenes. Letter each title in small antique capitals directly beneath its vignette, and place no other lettering anywhere on the page — no banners, no scroll text, no signature."
+    },
+    {
+      "sceneId": "inside-evidence",
+      "title": "The Delta of Evidence",
+      "vignettes": [
+        {
+          "node": "e1",
+          "block": "spya-bha57y",
+          "quote": "Of 97 original studies with significant effects, 36% replicated successfully",
+          "depicts": "A field of 97 small flags, only 36 standing upright, the rest fallen — the same scene as the overview's crossing point, now shown as the first tributary.",
+          "title": "97 FLAGS, 36 STANDING"
+        },
+        {
+          "node": "e2",
+          "block": "spya-ekg3fe",
+          "quote": "replication of such studies requires samples from thousands of individuals due to small effect sizes",
+          "depicts": "A single tiny coin being weighed on an enormous scale that requires thousands of small weights on the other side to balance it, representing a brain study's tiny effect.",
+          "title": "THOUSANDS TO WEIGH A COIN"
+        },
+        {
+          "node": "e3",
+          "block": "spya-d8g53k",
+          "quote": "Results from The Reproducibility Project: Cancer Biology suggest most studies of the cancer research sector may not be replicable",
+          "depicts": "A field hospital tent with banners of cancer research, many of the banners torn and drooping, a single investigator inspecting the torn cloth.",
+          "title": "THE TORN BANNERS"
+        },
+        {
+          "node": "e4",
+          "block": "spya-esjmns",
+          "quote": "Of 49 medical studies from 1990 to 2003 with more than 1000 citations, 92% found that the studied therapies were effective",
+          "depicts": "A long shelf of 49 medicine bottles each marked with a laurel of praise, nearly all of them glowing, while a shadow falls across a few at the end.",
+          "title": "49 BOTTLES OF CLAIMED CURE"
+        },
+        {
+          "node": "e6",
+          "block": "spya-s2xfzn",
+          "quote": "approximately 61% of studies successfully replicated, though the replicated effect sizes were only 66%",
+          "depicts": "A merchant's ledger-table with coin stacks representing economic studies, six in ten stacks still standing but each shrunk to two-thirds its original height.",
+          "title": "SHRUNKEN COIN STACKS"
+        },
+        {
+          "node": "e7",
+          "block": "spya-gvvmwj",
+          "quote": "study results might be reproduced for only 0.6% to 6.8%",
+          "depicts": "A great river-gauge chart for water studies, nearly the entire scale shaded out, only a thin sliver at the bottom marked as reproducible.",
+          "title": "A THIN SLIVER OF A RIVER"
+        },
+        {
+          "node": "e9",
+          "block": "spya-fuynra",
+          "quote": "more than 70% of researchers have tried and failed to reproduce another scientist's experiment results",
+          "depicts": "All the tributaries above converging into one wide confluence where a crowd of robed researchers from many lands gather, seven in ten holding broken instruments.",
+          "title": "THE GREAT CONFLUENCE"
+        },
+        {
+          "node": "e10",
+          "block": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited",
+          "depicts": "Downstream of the confluence, a cracked tablet (like the one from the overview) is shown being carried in a place of honor on a litter by admiring scholars, more decorated than the sound ones nearby.",
+          "title": "THE CRACKED TABLET HONORED"
+        }
+      ],
+      "prompt": "Draw a single antique hand-drawn map in sepia ink and faded watercolor, the continuation of a river delta spreading into many separate tributary channels, each one a field of study, all converging at a great confluence and then flowing onward to an ironic final bend. First channel: a field of 97 flags with only 36 standing (97 FLAGS, 36 STANDING). Second channel: a tiny coin on one side of a huge scale balanced by thousands of small weights (THOUSANDS TO WEIGH A COIN). Third channel: a field hospital tent with torn banners of cancer research (THE TORN BANNERS). Fourth channel: a long shelf of 49 glowing medicine bottles, a shadow falling over a few (49 BOTTLES OF CLAIMED CURE). Fifth channel: a merchant's ledger table with six of ten coin stacks standing but shrunken (SHRUNKEN COIN STACKS). Sixth channel: a river-gauge chart almost entirely shaded out except a thin sliver (A THIN SLIVER OF A RIVER). All six channels converge into one wide confluence crowded with robed researchers from many lands, most holding broken instruments (THE GREAT CONFLUENCE). Downstream of the confluence, the river bends toward a final scene: a cracked tablet carried on a decorated litter by admiring scholars, shown more honored than whole tablets nearby (THE CRACKED TABLET HONORED). Arrange the channels top-to-bottom in reading order, each large enough to read clearly, using fine cross-hatching, a muted palette of browns, ochres and faded blue-green wash, antique compass-rose and wave ornament only at the page margins, never crowding the scenes. Letter each title in small antique capitals beneath its vignette. No other lettering appears anywhere on the page."
+    },
+    {
+      "sceneId": "inside-causes",
+      "title": "Two Banks of the River of Causes",
+      "vignettes": [
+        {
+          "node": "c1",
+          "block": "spya-x52rky",
+          "quote": "desperation to publish or perish\" and failure to adhere to good scientific practice",
+          "depicts": "On the left bank, a scribe racing against a bell-tower clock, scrolls spilling from his arms as he dashes toward a printing press, titled for the publication-system shore.",
+          "title": "RACE AGAINST THE BELL"
+        },
+        {
+          "node": "c2",
+          "block": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\"",
+          "depicts": "A great wooden cabinet with one drawer open and overflowing with published scrolls, and many other drawers shut tight and stuffed, labeled with hidden null results.",
+          "title": "THE FILE DRAWER"
+        },
+        {
+          "node": "c3",
+          "block": "spya-wahvbn",
+          "quote": "11% of statistical results published in Nature and BMJ in 2001 are \"incongruent\"",
+          "depicts": "A stonemason's tablet of calculations with visible chisel-slips and mismatched numbers, inspected by a frowning clerk with a magnifying lens.",
+          "title": "THE MISCARVED NUMBERS"
+        },
+        {
+          "node": "c4",
+          "block": "spya-cw2g6v",
+          "quote": "incentivizes researchers to prioritize publishable results over validity",
+          "depicts": "A scribe at a scale weighing two stacks of paper, the 'publishable' side far heavier and tipping down, echoing the overview's scene but placed on this bank.",
+          "title": "THE TIPPED SCALE AGAIN"
+        },
+        {
+          "node": "d1",
+          "block": "spya-kqvxfb",
+          "quote": "exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting",
+          "depicts": "On the right bank, a traveler standing at a crossroads with many branching paths, each marked by a different doorway, choosing freely among them.",
+          "title": "THE GARDEN OF FORKS"
+        },
+        {
+          "node": "d2",
+          "block": "spya-zvfgme",
+          "quote": "psychology studies have between 33.1% and 36.4% statistical power",
+          "depicts": "An archer's range with a weak bow that barely reaches a third of the way to its target, arrows scattered short of the mark.",
+          "title": "THE WEAK BOW"
+        },
+        {
+          "node": "d3",
+          "block": "spya-r42sms",
+          "quote": "Underpowered studies have a large effect size bias",
+          "depicts": "A merchant's scale displaying an inflated weight on one pan, while a smaller true weight sits unnoticed in a drawer beside it.",
+          "title": "THE INFLATED WEIGHT"
+        },
+        {
+          "node": "d6",
+          "block": "spya-cjt38s",
+          "quote": "null hypothesis testing is itself inappropriate, especially in \"soft sciences\" like social psychology",
+          "depicts": "A judge's bench built for one kind of trial being used, ill-fitting, to judge a very different kind of case, the gavel too large for the table.",
+          "title": "THE ILL-FITTING BENCH"
+        }
+      ],
+      "prompt": "Draw a single antique hand-drawn map in sepia ink and faded watercolor, showing a river with two distinct banks running in parallel down the page, each bank a chain of connected vignettes, joined at top by a shared confluence and meeting again faintly at the bottom. Label the left bank's ground lightly with the sense of 'publication system' and the right bank's ground with the sense of 'research practice and statistics' through the imagery alone, not words. Left bank, top to bottom: a scribe racing a bell-tower clock with scrolls spilling from his arms (RACE AGAINST THE BELL); a great wooden cabinet with one drawer overflowing and others shut tight and stuffed (THE FILE DRAWER); a stonemason's tablet of calculations with chisel-slips, inspected by a frowning clerk (THE MISCARVED NUMBERS); a scribe weighing two stacks of paper on a tipped scale (THE TIPPED SCALE AGAIN). Right bank, top to bottom: a traveler at a crossroads of many branching doorways (THE GARDEN OF FORKS); an archer's range with a weak bow falling short of its target (THE WEAK BOW); a merchant's scale showing an inflated weight while the true smaller weight sits forgotten in a drawer (THE INFLATED WEIGHT); a judge's bench built for one kind of trial, ill-fitted to judge a different case (THE ILL-FITTING BENCH). Render both banks in the same fine cross-hatched antique style, muted browns, ochres and faded blue-green wash, with marginal wave and compass ornament only at the page edges, never crowding the scenes, each vignette large enough to read clearly and using the full width of the plate. Letter each title in small antique capitals beneath its vignette. No other lettering appears anywhere on the page."
+    }
+  ]
+}

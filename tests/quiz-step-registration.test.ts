@@ -351,7 +351,7 @@ describe("the reader's reason for reading", () => {
 
   it("goes after the article, in the user message, and nowhere in the system part", async () => {
     /* The article is the first system block and carries the cache breakpoint,
-       shared with ideas, sketch and timeline; a reader's words anywhere in the
+       shared with ideas and timeline; a reader's words anywhere in the
        system part would split that entry per reader. GPT Sol's plan review, 4. */
     await runAndWrite(PROFILE);
     const params = JSON.parse(sent[0] ?? "{}") as {

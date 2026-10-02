@@ -216,6 +216,7 @@ import {
   ExternalLink,
   FileArchive,
   FileText,
+  IdCard,
   FileQuestion,
   FileType,
   Fingerprint,
@@ -276,6 +277,7 @@ import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
+import { type ArchiveControl, useArchive } from "./useArchive.js";
 import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
@@ -286,7 +288,8 @@ import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
-import { PageContents } from "./PageContents.js";
+import { flushSync } from "react-dom";
+import { PageContents, SECTION_REVEAL } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
@@ -331,6 +334,8 @@ const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
  */
 const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   fetch: Download,
+  /* The title and abstract off a minimal paper's first pages: a card, not a page. */
+  metadata: IdCard,
   extract: FileText,
   blocks: Blocks,
   hierarchy: ListTree,
@@ -346,9 +351,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   ideas: Lightbulb,
   quotes: Quote,
-  /* A route: the stops are the quotes one row up, in an order. The Trajectory
+  /* A route: the stops are the quotes one row up, in an order. The Skim
      band is stage 2 of docs/plans/260928a and may choose its own glyph. */
-  trajectory: Route,
+  skim: Route,
   /* The same clock the Dock puts on the Timeline button, so the stage row and
      the mode button a reader has already met say the same thing. */
   timeline: Clock,
@@ -431,6 +436,7 @@ export function Metadata({
   article,
   onRenamed,
   onVisibility,
+  archive: sharedArchive,
 }: {
   slug: string;
   article: Article;
@@ -451,6 +457,8 @@ export function Metadata({
    * is one of the values.
    */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  /** The owner's controller. Optional only for focused tests that mount this page alone. */
+  archive?: ArchiveControl | undefined;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -670,13 +678,17 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
-  /* One archive state for the two buttons that change it — `useArchive`. */
-  const archive = useArchive(
+  /* A local controller for focused mounts; the app hands in OwnedArticle's. */
+  const metadataArchive = useArchive(
     slug,
     provenance?.archivedAt,
     provenance !== null,
     Boolean(provenanceError),
   );
+  /* In the app, one controller survives the switch between Reader and
+     Metadata. The local controller keeps this page independently mountable in
+     its focused tests. */
+  const archive = sharedArchive ?? metadataArchive;
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
   const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
@@ -748,20 +760,37 @@ export function Metadata({
       {/* The contents list in the left margin. It reads its entries off the
           `[data-section]` elements inside `main`, so there is no second list of
           section names to keep in step — PageContents.tsx says why that matters
-          more here than usual. Hidden below `xl`, where there is no margin to
-          put it in. */}
+          more here than usual. Hidden below `lg`, where there is no margin to
+          put it in; from `lg` until the centred margin is wide enough there is
+          only room once `main` steps right to clear it, which is the
+          `tw:lg:ml-…` below. */}
       <PageContents containerRef={body} label="Sections of this page" />
 
-      {/* `metadata-page` carries exactly one rule, and it is a typography fix
-          rather than a layout one: every `<button>` on this page inherits its
-          font (styles.css § metadata). We import no preflight, on purpose, so a
-          button otherwise keeps the UA's 13.3px Arial — which is why the
-          collapsible section headings drew half again the size of the ones
-          beside them. Greg, 2026-09-03: *"some of them seem larger than others
-          somehow?"* */}
+      {/* `metadata-page` carries no rule now. It once held a typography fix —
+          every `<button>` on this page inheriting its font, because we import
+          no preflight and a button otherwise keeps the UA's 13.3px Arial
+          (Greg, 2026-09-03: *"some of them seem larger than others
+          somehow?"*). That reset is app-wide since 2026-09-04 (tailwind.css §
+          the bit of preflight we need; feedback.css § metadata keeps the
+          diagnosis).
+
+          **`tw:lg:ml-…` is room for the contents list, and nothing else.** It is
+          `mx-auto`'s own left margin for a 48rem column, but never less than
+          12rem plus the left safe inset: the list ends at 12.5rem plus that
+          inset (it is fixed chrome, so it adds it — tokens.css § safe areas),
+          and this column's text starts 1.5rem inside it, so a 1rem gap. The
+          `max` picks the centred margin from 1152px plus twice the left inset
+          of containing-block width (a little more window width with a classic
+          scrollbar, since `100%` is the width beside it). Below that the page
+          sits right of centre — by up to 4rem when the inset is zero — so an
+          iPad in landscape gets the list. Greg, SPIDERYARN-READING2-9M,
+          2026-10-01: *"not visible
+          on my iPad, even in landscape mode, even though there's quite a lot of
+          space on either side."*
+          docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md. */}
       <main
         ref={body}
-        className={`metadata-page tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
+        className={`metadata-page tw:mx-auto tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))] tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
       >
         <Link
           href={backHref}
@@ -895,7 +924,12 @@ export function Metadata({
           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
              *"we can have more of the sections be default collapsed, like
              authors, export, delete"*. The count stays on the heading. */
-          <Section label="Authors" aside={`${meta.authors.length}`} collapsible>
+          <Section
+            label="Authors"
+            aside={`${meta.authors.length}`}
+            keywords="names writers byline who wrote it affiliations"
+            collapsible
+          >
             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
               {meta.authors.map((author, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: two authors can share a name; order is the identity
@@ -918,7 +952,10 @@ export function Metadata({
             One TooltipGroup so that once the pointer has opened one card's
             explanation, sweeping across the rest is instant rather than six
             separate waits — the same reasoning as the spine's bands. */}
-        <Section label="At a glance">
+        <Section
+          label="At a glance"
+          keywords="words read time reading duration long blocks parts sections levels length size count statistics"
+        >
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:sm:grid-cols-3">
               <Stat
@@ -1035,7 +1072,10 @@ export function Metadata({
         {/* ------------------------------------------------ 6. your reading --
             Reader state, and the only section on the page that is about you
             rather than about the article. */}
-        <Section label="Your reading">
+        <Section
+          label="Your reading"
+          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off"
+        >
           {/* The per-article half of the reader profile. The global half is
               read-only here with a link to /profile, because a global value
               edited inside one article's page is a global value nobody can
@@ -1154,7 +1194,7 @@ export function Metadata({
             takes the article off the shelf, followed only by permanent
             deletion. Both belong past everything somebody might have come here
             to read. */}
-        <Section label="Archive this article">
+        <Section label="Archive this article" keywords="remove from shelf">
           <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
 
@@ -1170,7 +1210,12 @@ export function Metadata({
             Authors and Export). Kept mounted, so a confirm half-way through
             survives the reader shutting it; the confirm itself is unchanged,
             and shutting the section only adds a press in front of it. */}
-        <Section label="Delete this article" collapsible keepMounted>
+        <Section
+          label="Delete this article"
+          keywords="permanent permanently forever"
+          collapsible
+          keepMounted
+        >
           <DeletePermanently
             slug={slug}
             /* **`||`, not `??`, and a browser pass is what found that.** An
@@ -1244,7 +1289,10 @@ function SharingSection({
 }) {
   if (!offer) return null;
   return (
-    <Section label="Access & sharing" landing>
+    <Section
+      label="Access & sharing"
+      keywords="anyone everybody readers signed in account permission public link privacy visible who can read"
+    >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
           page background — Greg: *"the section should be inside a box like the
@@ -1369,7 +1417,13 @@ function RerunSection({
     /* **Collapsible only while nothing has gone wrong** — the rule the stage
        rows brought with them from *Technical details* (`StageRecord` below):
        a failed metadata request draws the section open, with the error first. */
-    <Section label="AI processing" collapsible={!error} keepMounted aside={error ? null : aside}>
+    <Section
+      label="AI processing"
+      keywords="steps stages pipeline models summaries glossary structure hierarchy"
+      collapsible={!error}
+      keepMounted
+      aside={error ? null : aside}
+    >
       {error && (
         <p
           className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
@@ -1524,7 +1578,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   quiz: "Quiz",
   faq: "FAQ",
   sketch: "Sketch",
-  trajectory: "Trajectory",
+  skim: "Skim",
   debate: "Debate",
   citations: "Citations",
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
@@ -1562,7 +1616,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * run cost $0.3527, and per-pass cost varied 2.4× with how much the model
  * chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
  * § Stage 3½ § 1; the ~$0.27 in comments across `src/` is the superseded
- * ceiling. Trajectory refuses before any model call when there are
+ * ceiling. Skim refuses before any model call when there are
  * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
  * than learning from the failure.
  *
@@ -1603,7 +1657,7 @@ const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
     "Adds more terms to an up-to-date list; otherwise writes a new one",
   sketch: `One model call, ${SKETCH_WAIT}`,
   debate: "Up to two model calls, each of which searches the web",
-  trajectory: "Needs Quotes first; without them it stops before any model call",
+  skim: "Needs Quotes first; without them it stops before any model call",
 };
 
 /**
@@ -1780,7 +1834,12 @@ function CostSection({ slug }: { slug: string }) {
   const load = useArticleCost(slug);
   const failed = load.kind === "failed";
   return (
-    <Section label="What it cost" collapsible={!failed} aside={articleCostSummary(load)}>
+    <Section
+      label="What it cost"
+      keywords="ai calls models tokens breakdown"
+      collapsible={!failed}
+      aside={articleCostSummary(load)}
+    >
       <ArticleCostBody load={load} />
     </Section>
   );
@@ -1890,7 +1949,7 @@ function ExportSection({
        Its error, if one arrives while shut, is inside `hidden` and so is not
        announced until the section is opened — accepted: the reader shut it
        themselves, mid-wait. GPT Sol, plan review. */
-    <Section label="Export" collapsible keepMounted>
+    <Section label="Export" keywords="data files zip" collapsible keepMounted>
       <div className={`${CARD} tw:p-4`}>
         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
@@ -2164,7 +2223,10 @@ function CameFrom({ meta }: { meta: Meta }) {
        "uploaded from a file" line under the title, three inches up. What is
        actually in here is a transcription and how far to trust it, so the
        heading now says that. Fable, 2026-09-03. */
-    <Section label="How well we read the PDF">
+    <Section
+      label="How well we read the PDF"
+      keywords="transcription missed missing words pages"
+    >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           <Row icon={FileType} label="Made from">
@@ -2289,7 +2351,11 @@ function TechnicalDetails({
   rawSha256: string | undefined;
 }) {
   return (
-    <Section label="Technical details" collapsible>
+    <Section
+      label="Technical details"
+      keywords="address url source original stored storage location link fingerprint hash slug id revision"
+      collapsible
+    >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {/* **The slug, called what it is to the person reading.** "Slug" is
@@ -2372,193 +2438,6 @@ function TechnicalDetails({
       </TooltipGroup>
     </Section>
   );
-}
-
-/**
- * Archive — and Put back, which is the whole reason it may.
- *
- * **It was called Delete until 2026-09-04**, and the handler behind it has
- * never done anything but archive. That gap is the whole of report
- * SPIDERYARN-READING2-19: Greg asked for an archive feature, from this page and
- * from the shelf, that had existed since 2026-08-26 — because the word on the
- * button told him he was looking at something else. Renaming a control is a
- * smaller act than building one and it was the entire fix.
- *
- * ## Why the placeholder that stood here for two days was right, and what changed
- *
- * This was a dimmed `SOON` row until 2026-08-27, and its stated reason was not
- * that the endpoint was missing — `PATCH /api/library/:slug` has taken
- * `{ archived }` since 2026-08-26 — but that the shelf's confirmation is a
- * nine-second Undo strip, and *"a page you can navigate away from is a bad
- * place to put the only chance to change your mind"*.
- *
- * That reason has been answered twice over. The shelf grew a **Show archived**
- * disclosure the same week, so the strip stopped being the only way back
- * ([Library.tsx](Library.tsx)); and this control does not use a strip at all.
- * An archived article stays readable by direct link — only the shelf filters
- * (docs/project/library.md) — so the reader who archives it from here is still
- * looking at its page afterwards, and the honest thing for that page to show is
- * the state it is now in, with the way out of it, and no clock. **The undo here
- * never expires.** That is a stronger promise than the shelf's, not a weaker
- * one, and it is available precisely because this page is about one article.
- *
- * ## Three states, and the third is the one to get right
- *
- * `undefined` is *we have not been told yet* — the metadata request is in
- * flight, or it failed. Neither may show a button at all, and the failed one
- * must not say which way round things are: a page that shows Archive over an
- * already-archived article, or Put back over a live one, has made a claim about
- * the reader's library out of a request that established nothing. The same rule
- * `AboutYou` above is arranged around, found by the same review.
- *
- * There is a fourth state above those three, and it is a refusal rather than an
- * ignorance: an address with **no article of its own**, which `loadArticle` and
- * `articleMetadata` both answer with the fixture. Nothing to archive, and the
- * PATCH would 404, so the section says so instead of offering a button whose
- * only outcome is an error. `showingFixture` at the call site.
- *
- * Nothing here needs a `key`: App.tsx already mounts this whole page as
- * `<Metadata key={slug}>`, so switching article remounts everything below it
- * and none of this state can cross from one article to another. An inner key
- * was written first and removed as redundant when a review pointed at the outer
- * one.
- */
-type ArchiveControl = {
-  /** An ISO date, `null` for *on the shelf*, `undefined` for *we do not know*. */
-  at: string | null | undefined;
-  /** Unknown because something failed, rather than because nothing has answered yet. */
-  lost: boolean;
-  busy: boolean;
-  error: string | null;
-  set: (archived: boolean) => Promise<void>;
-};
-
-/** A real answer to the archive question, or `undefined` when the wire did not say. */
-function archiveAt(value: unknown): string | null | undefined {
-  if (value === null) return null;
-  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return undefined;
-  return value;
-}
-
-/** Read the PATCH representation without turning a malformed success into *on the shelf*. */
-function archiveAtFromPatch(value: unknown, slug: string): string | null | undefined {
-  if (value === null || typeof value !== "object") return undefined;
-  const entry = (value as Record<string, unknown>).entry;
-  if (entry === null || typeof entry !== "object") return undefined;
-  const row = entry as Record<string, unknown>;
-  if (row.slug !== slug) return undefined;
-  /* `LibraryEntry.archivedAt` is absent when the article is on the shelf; an
-     explicit null says the same thing in tests and is harmless on the wire. */
-  return "archivedAt" in row ? archiveAt(row.archivedAt) : null;
-}
-
-/**
- * **The page's one answer to "is this archived", and the one way to change it.**
- *
- * Lifted out of `ArchiveArticle` on 2026-09-30, when Archive got a second
- * button near the top of the page (`TopActions`, SPIDERYARN-READING2-6Z). Two
- * buttons with a state each could disagree on one screen — the top saying
- * *Archive* while the section says *Put back* — so both read this, and a press
- * on either flips both.
- * docs/plans/260930h-metadata-collapses-more-sections-and-archive-and-share-near-the-top.md.
- *
- * **`failed` makes `at` unknown**, which it did not before the lift: a failed
- * *refresh* keeps the old `provenance` on the page (see `readProvenance`), so
- * reading `archivedAt` off it alone offered Archive or Put back from an answer
- * the latest request could no longer vouch for. What the reader has done since
- * (`acted`) still wins, because the server told us that after the stale read.
- * GPT Sol, plan review, 2026-09-30.
- */
-function useArchive(
-  slug: string,
-  /** From the server, still `unknown` here because `readJson<T>` only casts. */
-  archivedAt: unknown,
-  /** Distinguishes an unanswered request from an answered body missing its required field. */
-  answered: boolean,
-  failed: boolean,
-): ArchiveControl {
-  /* What the reader has just done, if anything — `null` means they have not
-     touched it, and the server's answer stands. A sentinel object rather than
-     seeding a `useState` from the prop in an effect, because the prop arrives
-     late and a seeding effect would need to know whether a later `provenance`
-     is fresher than a click, which is a question with no good answer.
-
-     `at: undefined` inside it is the third answer: *we asked, and we no longer
-     know*. See the catch below. */
-  const [acted, setActed] = useState<{ at: string | null | undefined } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /* `disabled` lands on both buttons at the next render. This closes the
-     smaller window before that render, when the two controls can both dispatch
-     their click and would otherwise send the same PATCH twice. */
-  const inFlight = useRef(false);
-
-  const fromServer = archiveAt(archivedAt);
-  const unreadable = answered && fromServer === undefined;
-  const at = acted ? acted.at : failed || unreadable ? undefined : fromServer;
-
-  /* One function for both directions, because they are one PATCH with one
-     boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
-     deliberately the same request on the shelf side. Two functions here would
-     be two places to get the field name wrong. */
-  async function set(archived: boolean): Promise<void> {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived }),
-      });
-      /* The server's own answer, not the boolean we sent. Both stores build
-         this entry through `describeArticle`, so the date on it is the date
-         that was stored — including the case that makes this worth doing:
-         archiving something already archived keeps the ORIGINAL date
-         (src/shelf.ts), and a locally-invented `new Date()` would print a
-         timestamp the store disagrees with. */
-      const stored = archiveAtFromPatch(await readJson<unknown>(r), slug);
-      if (stored === undefined) {
-        throw new Error("The server's answer did not say whether this article is archived.");
-      }
-      setActed({ at: stored });
-    } catch (e) {
-      /* **A failed request is not proof that nothing was written**, and saying
-         so was this control's one dishonest sentence until a cross-model review
-         took it apart, 2026-08-27. The route writes and *then* reads again to
-         answer `purpose` (src/routes.ts § patchShelf), both stores persist and
-         then rebuild the entry to return it, and a response can simply be lost
-         on the way back. Every one of those fails after the archive has
-         happened. A page that then says "Nothing changed" and offers Archive
-         again is telling the reader something it has no way to know — and the
-         Archive they press next is the one that looks like it did nothing.
-
-         So: ask. The answer to "did that work" is a fresh read, not the
-         request's own exit code. If even the re-read fails we are honestly
-         lost, and `at: undefined` says so by taking the button away. */
-      setError((e as Error).message);
-      try {
-        const m = await readJson<ArticleMetadata>(
-          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
-        );
-        setActed({ at: archiveAt(m.archivedAt) });
-      } catch {
-        setActed({ at: undefined });
-      }
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-  }
-
-  return {
-    at,
-    lost: at === undefined && (failed || unreadable || acted !== null),
-    busy,
-    error,
-    set,
-  };
 }
 
 /** The quiet inline button this page uses for an act with a sentence beside it. */
@@ -3477,14 +3356,23 @@ function sectionId(label: string): string {
 function Section({
   label,
   aside,
+  keywords,
   collapsible,
   keepMounted,
-  landing,
   children,
 }: {
   label: string;
   /** One line answering the section's question, on the heading row. */
   aside?: ReactNode;
+  /**
+   * **Words a reader might search for that the section does not print** — the
+   * search box above the contents list reads them (`data-keywords`,
+   * page-search.ts). Mostly for the sections that unmount their body when
+   * shut, whose words are otherwise not on the page to find. The synonyms
+   * every page shares live in page-search.ts § SYNONYMS; these are this
+   * section's own. Plan 261001s.
+   */
+  keywords?: string;
   collapsible?: boolean;
   /**
    * **Shut hides the children rather than unmounting them.** For *AI
@@ -3496,15 +3384,6 @@ function Section({
    * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
    */
   keepMounted?: boolean;
-  /**
-   * **The heading can take focus from a script**, for a button elsewhere on the
-   * page that sends the reader here — *Share…* in `TopActions`, which lands on
-   * *Access & sharing*. The heading rather than the first control inside,
-   * because that control changes with the card's state (a link box, *Share with
-   * anyone…*, or nothing while it loads), and a landing that puts an action
-   * under Enter is the wrong kind of arrival. GPT Sol, plan review, 2026-09-30.
-   */
-  landing?: boolean;
   children: ReactNode;
 }) {
   /* Local state, not a URL parameter, and this page's own `at` two hundred
@@ -3539,6 +3418,25 @@ function Section({
    */
   const [open, setOpen] = useState(false);
   const showing = !collapsible || open;
+  /* **Opened from outside** — the contents list and its search box send
+     `SECTION_REVEAL` to the section they are taking the reader to
+     (PageContents.tsx § reveal; Greg, SPIDERYARN-READING2-7Y: *"expand that
+     section (if needed)"*). An event on this element rather than lifted state,
+     because lifting it would need a list of the page's sections — the second
+     list PageContents exists not to have. Opens, never shuts: a reveal of an
+     open section leaves it open. A section that is not collapsible is already
+     showing, and setting `open` on it changes nothing. */
+  const sectionEl = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = sectionEl.current;
+    if (!el) return;
+    /* `flushSync` so the body is in the DOM when the event returns: the
+       sender scrolls next, and near the foot of the page a shut section may
+       not leave the scroll range to bring its heading up. Sol, plan review. */
+    const reveal = () => flushSync(() => setOpen(true));
+    el.addEventListener(SECTION_REVEAL, reveal);
+    return () => el.removeEventListener(SECTION_REVEAL, reveal);
+  }, []);
   const head = (
     <>
       <span
@@ -3558,9 +3456,24 @@ function Section({
        the section the list then marks, and setting the two equal put that on a
        knife edge that a browser lost. See the constant's docstring; if you
        change this 24, that number has to stay above it. */
-    <section id={sectionId(label)} data-section={label} className="tw:mt-8 tw:scroll-mt-24">
+    <section
+      ref={sectionEl}
+      id={sectionId(label)}
+      data-section={label}
+      {...(keywords ? { "data-keywords": keywords } : {})}
+      className="tw:mt-8 tw:scroll-mt-24"
+    >
+      {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
+          Tab stop), for whatever sends the reader here — *Share…* in
+          `TopActions`, which lands on *Access & sharing*, and the contents list
+          and its search box, which land on any section (PageContents.tsx §
+          reveal). The heading rather than the first control inside, because
+          that control changes with the card's state, and a landing that puts
+          an action under Enter is the wrong kind of arrival. GPT Sol, plan
+          reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
+          until the contents list needed the same for all of them. */}
       <h2
-        {...(landing ? { tabIndex: -1 } : {})}
+        tabIndex={-1}
         className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
@@ -3582,7 +3495,10 @@ function Section({
         {/* Shown open or shut, and that is the point of it: shutting the
             section must not take the answer away, only the detail. */}
         {aside && (
-          <span className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint">
+          <span
+            data-section-aside=""
+            className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint"
+          >
             {aside}
           </span>
         )}

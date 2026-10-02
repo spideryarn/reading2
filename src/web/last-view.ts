@@ -69,7 +69,7 @@ export const REMEMBERED = [
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
-  "summary", // which of three plain-words levels — only a slider gesture spends
+  "summary", // which of three plain-words levels — only a press spends, never arrival
   "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
@@ -94,8 +94,8 @@ export const REMEMBERED = [
   "idea", // selected idea
   "quote", // selected quote
   "event", // selected timeline event
-  "depth", // which pass of a Trajectory — Gist, More or Most
-  "stop", // which quote-sized Trajectory stop you were reading
+  "depth", // which pass of a Skim — Gist, More or Most
+  "stop", // which quote-sized Skim stop you were reading
 ] as const;
 
 /**

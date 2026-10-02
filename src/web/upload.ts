@@ -58,7 +58,7 @@ export interface Grant {
  * are and a plain-`http` LAN address is not. Nothing in this app is served over
  * plain http to another machine, and if it ever is, this is where it fails.
  */
-async function sha256Hex(file: File): Promise<string> {
+export async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -255,13 +255,28 @@ const NETWORK_FAILED =
  * (see `sha256Hex`). It is also the slow part for a large file — tens of
  * milliseconds per megabyte — which is why `uploadEngine` shows a phase for it.
  */
-export async function requestGrant(file: File, signal?: AbortSignal): Promise<Grant> {
-  const sha256 = await sha256Hex(file);
+export async function requestGrant(
+  file: File,
+  signal?: AbortSignal,
+  /**
+   * What a batch already knows. `sha256` is the digest it took once, in its
+   * one hashing worker (`batchUpload.ts`), so the file is not read a second
+   * time here; `level: "minimal"` asks for a paper added with only its title,
+   * authors and abstract read (plan 261001m). A single upload passes neither.
+   */
+  claim: { sha256?: string; level?: "minimal" } = {},
+): Promise<Grant> {
+  const sha256 = claim.sha256 ?? (await sha256Hex(file));
   return readJson<Grant>(
     await apiFetch("/api/uploads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, bytes: file.size, sha256 }),
+      body: JSON.stringify({
+        filename: file.name,
+        bytes: file.size,
+        sha256,
+        ...(claim.level ? { level: claim.level } : {}),
+      }),
       ...(signal ? { signal } : {}),
     }),
   );

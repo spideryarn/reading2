@@ -1,0 +1,73 @@
+{
+  "startedAt": "2026-10-01T17:41:52.751Z",
+  "commit": "cfd0428e5a95c2da2bb5e86f8233c915bfa62bff",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "smart-off",
+      "slug": "cargocult-spya-rz663q"
+    }
+  ],
+  "results": [
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 45799,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "the structure-arm response is not valid JSON: it does not begin with { or [ — 13247 characters, so this is probably not JSON at all",
+      "calls": [
+        {
+          "ms": 45770,
+          "inputTokens": 9886,
+          "outputTokens": 4875,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790876512-yhbhXdvWAXOI9g9I5MK9",
+          "costUsd": 0.068522,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 45772,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      }
+    }
+  ],
+  "effortCatalogue": [],
+  "completedAt": "2026-10-01T17:42:38.593Z"
+}

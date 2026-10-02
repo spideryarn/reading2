@@ -152,6 +152,12 @@ const LAYOUT: {
   [S in StepName]: Partial<Record<ArtifactKind, (at: FixtureLocations) => string>>;
 } = {
   fetch: { raw: (at) => path.join(at.dir, "raw.json") },
+  /* **Where a minimal paper's `meta` would be, and no fixture has one.** The
+     corpus's meta is `extract`'s (`meta.json` below); a fixture that is ever a
+     minimal paper writes this file instead. Absent, it reads as `null` and
+     `copyArtefacts` skips the step — an empty entry would throw instead, because
+     `copyArtefacts` asks every step for every kind it produces. */
+  metadata: { meta: (at) => path.join(at.dir, "metadata.json") },
   extract: {
     extractedHtml: (at) => at.htmlFile,
     meta: (at) => path.join(at.dir, "meta.json"),
@@ -182,7 +188,7 @@ const LAYOUT: {
   timeline: { timeline: (at) => path.join(at.dir, "timeline.json") },
   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
   faq: { faq: (at) => path.join(at.dir, "faq.json") },
-  trajectory: { trajectory: (at) => path.join(at.dir, "trajectory.json") },
+  skim: { skim: (at) => path.join(at.dir, "skim.json") },
   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },
   debate: { debate: (at) => path.join(at.dir, "debate.json") },

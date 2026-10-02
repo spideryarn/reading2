@@ -1,0 +1,222 @@
+{
+  "style": "An illuminated manuscript page — small hand-painted vignettes in gold-leaf-edged frames, linked by ribbons of red ink, suits an article about tiny rule-machines that behave like wayward creatures.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Book of Bugs",
+      "vignettes": [
+        {
+          "node": "n1",
+          "block": "spya-d46wsq",
+          "quote": "“My Program Did the Wrong Thing!”",
+          "depicts": "An illuminated capital scene at the top of the page: a robed scholar at a writing-desk, throwing up his hands as a small mechanical tape-creature on the desk does something he did not draw.",
+          "title": "MY PROGRAM DID THE WRONG THING"
+        },
+        {
+          "node": "n2",
+          "block": "spya-h3jx6h",
+          "quote": "for input 7, there’s a bug! Instead of outputting 7 + 1 = 8, the Turing machine outputs 9",
+          "depicts": "A tape-machine with a reading head standing over a strip of 0s and 1s, with the numeral 9 scrawled where an 8 should be.",
+          "title": "OUTPUTS 9 INSTEAD OF 8"
+        },
+        {
+          "node": "n3",
+          "block": "spya-tzs7f4",
+          "quote": "if a compiler optimizer changes what a program does, then it’s a bug",
+          "depicts": "Two scribes copying the same scroll into different hands, one holding up his copy against the other's and frowning at a mismatched line.",
+          "title": "TWO COPIES, ONE BUG"
+        },
+        {
+          "node": "n4",
+          "block": "spya-b6uxy4",
+          "quote": "suddenly there’s a “bug”—like here at n = 14",
+          "depicts": "A row of painted cells doubling neatly in size, then at the fourteenth cell suddenly scattering into a wrong, broken pattern.",
+          "title": "BREAKS AT FOURTEEN"
+        },
+        {
+          "node": "n5",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A monk pulling back the edge of a complicated woven pattern to reveal a simpler nested pattern underneath, like rule 122.",
+          "title": "THE PATTERN BENEATH THE PATTERN"
+        },
+        {
+          "node": "n6",
+          "block": "spya-ypka68",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "A cartographer's hand tracing many branching paths on a map that all dead-end before reaching a marked goal.",
+          "title": "NO PROOF IS FOUND"
+        },
+        {
+          "node": "n7",
+          "block": "spya-z3ryqd",
+          "quote": "our inability to know in general what a program will do except in effect by explicitly running it",
+          "depicts": "At the page's center, all the ribbons from the machine-scenes and the proof-scenes are tied into a single knotted cord held by a hooded figure who only knows the knot's shape by pulling it taut.",
+          "title": "THE KNOT THAT MUST BE PULLED"
+        },
+        {
+          "node": "n8",
+          "block": "spya-yc9e2z",
+          "quote": "Did I Test Enough Cases? The Failure of Ruliological Induction",
+          "depicts": "A tester with a tally-stick counting many identical successful trials, unaware of one hidden failing case just off the edge of his ledger.",
+          "title": "DID I TEST ENOUGH CASES"
+        },
+        {
+          "node": "n9",
+          "block": "spya-kjsjh5",
+          "quote": "Some Typical Ruliological Surprises",
+          "depicts": "A traveler peering through a simple gate and recoiling as an unexpectedly tangled thicket grows up on the other side.",
+          "title": "SOME TYPICAL SURPRISES"
+        },
+        {
+          "node": "n10",
+          "block": "spya-y7q6q3",
+          "quote": "you try x105 – 1. And suddenly there’s something different—a coefficient of 2",
+          "depicts": "A mathematician's tablet of clean carved numbers, with one tablet further down the row bearing an anomalous carved '2' where all the rest show only 1s.",
+          "title": "A COEFFICIENT OF TWO"
+        },
+        {
+          "node": "n11",
+          "block": "spya-p2f2cx",
+          "quote": "Language design, I believe, is key.",
+          "depicts": "A smith forging well-shaped tools on an anvil, each tool fitting a worker's hand exactly, in contrast to the scattered rough tape-fragments nearby.",
+          "title": "LANGUAGE DESIGN IS KEY"
+        },
+        {
+          "node": "n12",
+          "block": "spya-j4tprn",
+          "quote": "if we’re doing science, we might consider it a success",
+          "depicts": "At the bottom, the same scholar from the opening scene now smiling at his wayward tape-creature, a loop of ribbon curling back up to the first vignette.",
+          "title": "A SUCCESS, NOT A FAILURE"
+        }
+      ],
+      "prompt": "Illuminated manuscript page, vellum-toned, gold leaf edges on every framed vignette, fine red-ink ribbons linking the scenes, in the hand of a medieval bestiary illustrator painting small mechanical creatures instead of animals. Top of page: a large illuminated capital scene of a robed scholar at a writing-desk throwing up his hands as a small tape-creature on the desk misbehaves, titled MY PROGRAM DID THE WRONG THING. Below, three scenes side by side, linked downward by ribbon from the first: on the left a tape-machine with a reading head over a strip of 0s and 1s with a wrong 9 scrawled where an 8 should be, titled OUTPUTS 9 INSTEAD OF 8; in the middle two scribes comparing mismatched copies of the same scroll, titled TWO COPIES, ONE BUG; on the right a row of painted doubling cells that scatter into a broken pattern at the fourteenth cell, titled BREAKS AT FOURTEEN. These three ribbons converge downward into two more scenes: a monk pulling back a woven pattern to reveal a simpler nested pattern beneath, titled THE PATTERN BENEATH THE PATTERN, and a cartographer's hand tracing branching paths on a map that all dead-end, titled NO PROOF IS FOUND. Both ribbons tie into a central knot held by a hooded figure, titled THE KNOT THAT MUST BE PULLED — this is the page's hub, drawn larger than the rest. From the knot, four ribbons fan outward and down to four scenes arranged in a row: a tester with a tally-stick counting successes unaware of a hidden failure off his ledger, titled DID I TEST ENOUGH CASES; a traveler recoiling as a tangled thicket grows past a simple gate, titled SOME TYPICAL SURPRISES; a mathematician's carved number-tablets with one anomalous '2' among a row of 1s, titled A COEFFICIENT OF TWO; a smith forging well-fitted tools at an anvil beside scattered rough fragments, titled LANGUAGE DESIGN IS KEY. All four ribbons gather at the bottom into one final scene: the opening scholar now smiling at his tape-creature, with a ribbon looping back up to the top of the page, titled A SUCCESS, NOT A FAILURE. Palette: aged parchment cream, iron-gall brown ink linework, muted gold, deep red and blue pigment accents. No lettering anywhere except the short capitalized titles beneath each framed vignette."
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "Where the Bugs Were Caught",
+      "vignettes": [
+        {
+          "node": "d1",
+          "block": "spya-scjxv8",
+          "quote": "we’d probably conclude that the Turing machine is computing the function n n + 1",
+          "depicts": "This plate opens with the same desk-scholar scene from the overview, now bent over a tape-machine, writing down 'n+1' with satisfaction as early trials go well.",
+          "title": "IT SEEMS TO COMPUTE N PLUS ONE"
+        },
+        {
+          "node": "d2",
+          "block": "spya-h3jx6h",
+          "quote": "for input 7, there’s a bug! Instead of outputting 7 + 1 = 8, the Turing machine outputs 9",
+          "depicts": "The tape-machine's head sits over a strip ending in three 1s, scratching a wrong 9 onto the tape instead of the expected 8.",
+          "title": "AT SEVEN, THE MACHINE SCRIBBLES A NINE"
+        },
+        {
+          "node": "d4",
+          "block": "spya-pt0hmz",
+          "quote": "The “most insidious” bugs do not occur until n = 15.",
+          "depicts": "A long unrolled scroll of correct tape-outputs stretching smoothly until the fifteenth mark, where the scroll suddenly tears and a wrong number spills out.",
+          "title": "FLAWLESS UNTIL FIFTEEN"
+        },
+        {
+          "node": "n58qub",
+          "block": "spya-n58qub",
+          "quote": "at n = 63 doesn’t give 64 but instead gives 72",
+          "depicts": "A much larger, more ornate tape-machine with many gears runs sixty-two perfect trials laid in a neat row, then its sixty-third output tile reads 72 instead of 64.",
+          "title": "AT SIXTY-THREE, SEVENTY-TWO APPEARS"
+        },
+        {
+          "node": "d6",
+          "block": "spya-u3d2ws",
+          "quote": "the “highest risk” values of n for bugs are those of the form 2i – 1",
+          "depicts": "A cluster of tape-strips each ending in an unbroken run of 1s, marked with small red warning flags by an unseen hand.",
+          "title": "ALL-ONES TAPES ARE RISKIEST"
+        },
+        {
+          "node": "d7",
+          "block": "spya-txuteu",
+          "quote": "suddenly, at n = 27, do something different",
+          "depicts": "Two identical-looking tape-machines running side by side in lockstep, until at the twenty-seventh step their two heads swerve apart onto different squares.",
+          "title": "TWO MACHINES PART WAYS AT 27"
+        },
+        {
+          "node": "d9",
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "A row of tape-outputs all marked with neat even numbers, until the thirty-second tile shows an odd 9 standing out among them.",
+          "title": "AN ODD NINE AMONG EVENS"
+        },
+        {
+          "node": "d11",
+          "block": "spya-sk8qh9",
+          "quote": "Here’s an example where the first “bug” shows up at n = 24",
+          "depicts": "At the bottom, a cellular-automaton pattern of cells doubling cleanly for many steps, breaking apart into a wrong shape at the twenty-fourth step, closing the plate's chain of failures.",
+          "title": "DOUBLING FAILS AT TWENTY-FOUR"
+        }
+      ],
+      "prompt": "Illuminated manuscript page, vellum-toned, gold-edged frames, fine brown-ink ribbons chaining the scenes top to bottom, in the hand of a medieval bestiary illustrator painting small mechanical tape-creatures instead of animals. Open with the overview's desk-scholar bent over a tape-machine writing 'n+1' with satisfaction, titled IT SEEMS TO COMPUTE N PLUS ONE. Below it, the same machine's head scratches a wrong 9 onto a tape strip ending in three 1s, titled AT SEVEN, THE MACHINE SCRIBBLES A NINE. A ribbon leads to a long unrolled scroll of correct outputs that tears open at its fifteenth mark, titled FLAWLESS UNTIL FIFTEEN, and from there to a grander, many-geared machine whose sixty-third output tile reads 72 instead of 64 after sixty-two perfect trials, titled AT SIXTY-THREE, SEVENTY-TWO APPEARS. Beside these, a cluster of tape-strips ending in unbroken runs of 1s are marked with small red warning flags, titled ALL-ONES TAPES ARE RISKIEST — this begins a second row of scenes. Next, two identical tape-machines running in lockstep suddenly swerve their heads onto different squares at the twenty-seventh step, titled TWO MACHINES PART WAYS AT 27, leading to a row of neat even-numbered output tiles interrupted by one odd 9 at the thirty-second tile, titled AN ODD NINE AMONG EVENS. The plate closes at the bottom with a cellular-automaton pattern of doubling cells breaking apart into a wrong shape at its twenty-fourth step, titled DOUBLING FAILS AT TWENTY-FOUR. Arrange the seven scenes in three loose clusters (tape machines, diverging machines, automaton), each cluster lightly bordered, connected by ribbons flowing downward in the order described. Palette: aged parchment cream, iron-gall brown linework, muted gold, small red accent flags, deep blue tape-markings. No lettering anywhere except the short capitalized titles beneath each framed vignette."
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "Where Proof Succeeds or Fails",
+      "vignettes": [
+        {
+          "node": "p1",
+          "block": "spya-qm284b",
+          "quote": "simple enough that it’s “visually obvious” that they’ll “correctly double” for all input sizes",
+          "depicts": "Opening the plate, the same doubling-cell pattern from the overview's hub scene, now drawn plain and simple, admired by a monk who nods confidently without needing to check further.",
+          "title": "SIMPLE ENOUGH TO TRUST BY EYE"
+        },
+        {
+          "node": "p2",
+          "block": "spya-asw9eq",
+          "quote": "But if we run this case up to n = 100000, no bugs appear",
+          "depicts": "A different, more tangled woven pattern being unrolled by two assistants across a very long table, counting a hundred thousand marks without finding a flaw.",
+          "title": "A HUNDRED THOUSAND TRIALS, NO FLAW"
+        },
+        {
+          "node": "p4",
+          "block": "spya-hcdcqp",
+          "quote": "It’d be very difficult to see this if one just looked at something like stabilization times",
+          "depicts": "A frustrated timekeeper with an hourglass and tally-marks sets these aside and instead unrolls the whole woven pattern to study it directly.",
+          "title": "LOOKING AT THE WHOLE WEAVE"
+        },
+        {
+          "node": "p6",
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A scholar lifts a corner flap of the tangled weave to reveal a simpler, nested pattern hidden underneath it, labelled by its familiar shape.",
+          "title": "THE RULE 122 HIDDEN WITHIN"
+        },
+        {
+          "node": "p7",
+          "block": "spya-n5acnw",
+          "quote": "the underlying cellular automaton must always correctly “double its input”, with no bugs",
+          "depicts": "The scholar closes a scroll with a satisfied seal, the woven pattern finally shown complete and whole beneath it.",
+          "title": "SEALED: NO BUGS, EVER"
+        },
+        {
+          "node": "p9",
+          "block": "spya-jqmftv",
+          "quote": "a notation that can encompass both the behavior of the Turing machine",
+          "depicts": "A second scholar at a lectern writes linked symbols and brackets on a fresh page, building a formal symbolic notation beside the tape-machine it describes.",
+          "title": "A NOTATION FOR THE MACHINE"
+        },
+        {
+          "node": "p10",
+          "block": "spya-muu0c5",
+          "quote": "we’ve been able to prove that for all inputs n the machine correctly computes n + 1, with no bugs",
+          "depicts": "The scholar completes a chain of linked symbolic statements climbing the page like a ladder, reaching a final sealed line at the top proving the machine correct for every input.",
+          "title": "A LADDER OF PROOF TO THE TOP"
+        },
+        {
+          "node": "p11",
+          "block": "spya-ypka68",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "At the bottom, a different scholar follows the same ladder of symbols far beyond where the first one stopped, and finds every rung leads only to blank, unfinished parchment.",
+          "title": "THE LADDER NEVER REACHES A PROOF"
+        }
+      ],
+      "prompt": "Illuminated manuscript page, vellum-toned, gold-edged frames, fine brown-ink ribbons chaining scenes top to bottom, in the hand of a medieval bestiary illustrator. Open the plate with the overview's doubling-cell pattern drawn plain and simple, admired by a nodding monk, titled SIMPLE ENOUGH TO TRUST BY EYE. A ribbon leads down to two assistants unrolling a tangled woven pattern across a long table, counting a hundred thousand marks without finding a flaw, titled A HUNDRED THOUSAND TRIALS, NO FLAW. Below, a frustrated timekeeper sets aside his hourglass and tally-sticks to unroll the whole weave directly, titled LOOKING AT THE WHOLE WEAVE, leading to a scholar lifting a corner flap of the weave to reveal a simpler nested pattern hidden beneath, titled THE RULE 122 HIDDEN WITHIN, and then to the same scholar sealing a scroll over the now-complete pattern, titled SEALED: NO BUGS, EVER — this closes the left-hand cluster of 'visual and structural proofs,' lightly bordered together. On the right, begin a second cluster: a scholar at a lectern writing linked symbols and brackets beside a tape-machine, titled A NOTATION FOR THE MACHINE, leading down to the same scholar completing a climbing ladder of symbolic statements that reaches a sealed line at the top, titled A LADDER OF PROOF TO THE TOP. At the very bottom of the page, a different, searching scholar follows the same kind of ladder far further, each rung ending only in blank unfinished parchment, titled THE LADDER NEVER REACHES A PROOF. Palette: aged parchment cream, iron-gall brown linework, muted gold leaf, small deep-blue and red ink accents. No lettering anywhere except the short capitalized titles beneath each framed vignette."
+    }
+  ]
+}

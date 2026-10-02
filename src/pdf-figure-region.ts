@@ -899,6 +899,8 @@ export type LocatedRegionRefusal =
   | "caption-not-adjacent"
   /** Another figure's or table's caption is in the region, or as near to it as its own. */
   | "another-caption"
+  /** A high-confidence captionless table occupies the proposed figure region. */
+  | "mostly-table"
   | "mostly-prose"
   | "too-small"
   | "too-large";
@@ -942,15 +944,31 @@ export function judgeLocatedRegion(input: LocatedRegionInput): LocatedRegionVerd
   const own = found.lines;
   const captionBox = own.map((l) => l.box).reduce(union);
 
+  const ink = withoutFurniture(layout.ink, page).filter((b) => !b.white);
+  /* Long text inside a small, isolated closed box is a flowchart/node label,
+     not body prose. A table's touching cell rectangles do not qualify, nor
+     does one large frame around a page or table. */
+  const labelFrameCandidates = ink.filter(
+    (frame, index, all) =>
+      frame.rect &&
+      area(frame) <= 0.15 * page.width * page.height &&
+      !all.some((other, otherIndex) => otherIndex !== index && other.rect && touches(frame, other, 0)) &&
+      lines.filter((line) => contains(frame, line.box)).length <= 6,
+  );
+  const labelFrames = labelFrameCandidates.length >= 2 ? labelFrameCandidates : [];
+  const isFigureLabel = (line: Line) => labelFrames.some((frame) => contains(frame, line.box));
   const isProse = (l: Line): boolean =>
-    l.upright && l.words >= PROSE_MIN_WORDS && width(l.box) >= PROSE_MIN_WIDTH_FRACTION * page.width;
+    l.upright &&
+    l.words >= PROSE_MIN_WORDS &&
+    width(l.box) >= PROSE_MIN_WIDTH_FRACTION * page.width &&
+    !isFigureLabel(l);
   const isCaption = (l: Line): boolean =>
     l.upright && (ANY_CAPTION_START.test(l.text) || PRINTED_CAPTION_START.test(l.text.normalize("NFKD").trim()));
 
   /* Rule 3: snap outwards to whole things that are mostly inside. */
   const things: PageBox[] = [
     ...input.pictures.filter((p) => p.op === "xobject").map((p) => (p.clip ? meetBox(p.box, p.clip) : p.box)),
-    ...withoutFurniture(layout.ink, page).filter((b) => !b.white),
+    ...ink,
     ...lines
       .filter((l) => !own.includes(l) && !isProse(l) && !isCaption(l) && !inFurnitureMargin(l.box, page))
       .map((l) => l.box),
@@ -976,9 +994,29 @@ export function judgeLocatedRegion(input: LocatedRegionInput): LocatedRegionVerd
     return refuse("another-caption");
   }
 
+  /* A table caption is decisive above. This catches the other high-confidence
+     table case: a ruled grid with cell text inside it but no printed caption.
+     Ordinary chart gridlines have their tick labels outside the grid. */
+  const otherText = lines.filter((line) => !own.includes(line) && !isCaption(line));
+  const pictureInCrop = input.pictures.some(
+    (picture) => picture.op === "xobject" && intersects(crop, picture.clip ? meetBox(picture.box, picture.clip) : picture.box),
+  );
+  const inkInCrop = ink.some((box) => intersects(crop, box));
+  if (
+    isRuledTable(otherText, ink, crop) ||
+    (!pictureInCrop && !inkInCrop && isBorderlessTable(otherText, crop))
+  ) {
+    return refuse("mostly-table");
+  }
+
   /* Rule 6: not a column of text. */
+  const isRegionProse = (line: Line): boolean =>
+    line.upright &&
+    line.words >= PROSE_MIN_WORDS &&
+    width(meetBox(line.box, crop)) >= PROSE_MIN_WIDTH_FRACTION * width(crop) &&
+    !isFigureLabel(line);
   const prose = lines
-    .filter((l) => !own.includes(l) && isProse(l))
+    .filter((l) => !own.includes(l) && isRegionProse(l))
     .reduce((sum, l) => sum + area(meetBox(l.box, crop)), 0);
   if (prose >= MAX_PROSE_SHARE * area(crop)) return refuse("mostly-prose");
 
@@ -1010,6 +1048,56 @@ function mostlyInside(thing: PageBox, region: PageBox): boolean {
     y1: Math.max(thing.y1, thing.y0) + 0.25,
   };
   return area(meetBox(grown, region)) >= SNAP_SHARE * area(grown);
+}
+
+function contains(outer: PageBox, inner: PageBox): boolean {
+  return (
+    inner.x0 >= outer.x0 - EPS_PT &&
+    inner.y0 >= outer.y0 - EPS_PT &&
+    inner.x1 <= outer.x1 + EPS_PT &&
+    inner.y1 <= outer.y1 + EPS_PT
+  );
+}
+
+function isRuledTable(lines: readonly Line[], ink: readonly InkBox[], crop: PageBox): boolean {
+  const boxes = ink
+    .map((box) => meetBox(box, crop))
+    .filter((box) => box.x1 >= box.x0 && box.y1 >= box.y0);
+  const horizontal = boxes.filter(
+    (box) => height(box) <= RULE_MAX_THICKNESS_PT && width(box) >= 0.4 * width(crop),
+  );
+  const vertical = boxes.filter(
+    (box) => width(box) <= RULE_MAX_THICKNESS_PT && height(box) >= 0.4 * height(crop),
+  );
+  if (horizontal.length < 3 || vertical.length < 3) return false;
+  const grid = {
+    x0: Math.min(...vertical.map((box) => box.x0)),
+    y0: Math.min(...horizontal.map((box) => box.y0)),
+    x1: Math.max(...vertical.map((box) => box.x1)),
+    y1: Math.max(...horizontal.map((box) => box.y1)),
+  };
+  const cells = lines.filter((line) => {
+    const x = (line.box.x0 + line.box.x1) / 2;
+    const y = (line.box.y0 + line.box.y1) / 2;
+    return x > grid.x0 && x < grid.x1 && y > grid.y0 && y < grid.y1;
+  });
+  return cells.length >= 4;
+}
+
+/** A text-only regular row grid: the high-confidence shape of a borderless table. */
+function isBorderlessTable(lines: readonly Line[], crop: PageBox): boolean {
+  const inside = lines
+    .filter((line) => line.upright && contains(crop, line.box))
+    .sort((a, b) => b.box.y0 - a.box.y0);
+  if (inside.length < 4) return false;
+  const rows: Line[][] = [];
+  for (const line of inside) {
+    const row = rows.find((candidate) => Math.abs((candidate[0]?.box.y0 ?? 0) - line.box.y0) <= 2);
+    if (row) row.push(line);
+    else rows.push([line]);
+  }
+  const tabular = rows.filter((row) => row.length >= 2);
+  return tabular.length >= 2 && tabular.reduce((sum, row) => sum + row.length, 0) >= 0.75 * inside.length;
 }
 
 function meetBox(a: PageBox, b: PageBox): PageBox {

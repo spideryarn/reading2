@@ -33,6 +33,8 @@ const control = vi.hoisted(() => ({
   /** Make the claim's outbox insert throw, inside the claim's transaction. */
   failQueueClaimed: false,
   auth: new Map<string, import("../src/store/admin-accounts.js").AccountConfirmation>(),
+  /** Who has each address, for the gift email's audience (261002a). Anybody not in it is `none`. */
+  byEmail: new Map<string, import("../src/store/admin-accounts.js").AccountByEmail>(),
 }));
 
 vi.mock("../src/store/admin-accounts.js", async (importOriginal) => {
@@ -42,6 +44,7 @@ vi.mock("../src/store/admin-accounts.js", async (importOriginal) => {
     confirmedAccountEmail: async (ownerId: string) =>
       control.auth.get(ownerId) ?? { kind: "unavailable", reason: "not in this test's map" },
     accountEmail: async () => ({ kind: "unavailable", reason: "not asked in this test" }),
+    confirmedAccountByEmail: async (email: string) => control.byEmail.get(email) ?? { kind: "none" },
   };
 });
 
@@ -69,6 +72,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { handleApi } from "../src/routes.js";
 import type { AccountEmail } from "../src/store/admin-accounts.js";
 import {
+  type GiftAudience,
   type VoucherEmailDeps,
   deliverReservedVoucherEmail,
   giftMessage,
@@ -76,7 +80,8 @@ import {
   sendQueuedVoucherEmail,
   voucherEmailsFor,
 } from "../src/store/pg-voucher-emails.js";
-import { claimVouchersFor, createVoucher, listVouchers, updateVoucher } from "../src/store/pg-vouchers.js";
+import { claimVouchersFor, createVoucher, giftAudienceFor, listVouchers, updateVoucher } from "../src/store/pg-vouchers.js";
+import { articles, points } from "../src/billing/points.js";
 import { ADMIN_VOUCHERS_URL } from "../src/urls.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -121,6 +126,7 @@ afterEach(async () => {
   control.deps = {};
   control.failQueueClaimed = false;
   control.auth.clear();
+  control.byEmail.clear();
   await sweep();
 });
 
@@ -138,6 +144,8 @@ async function sweep(): Promise<void> {
     "delete from spideryarn.billing_vouchers where email like 'vmail-0000b0c5-%' or claimed_by::text like $1",
     [RUBBLE],
   );
+  await pool.query("delete from spideryarn.ingest_events where owner_id::text like $1", [RUBBLE]);
+  await pool.query("delete from spideryarn.articles where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.billing_accounts where owner_id::text like $1", [RUBBLE]);
 }
 
@@ -474,22 +482,44 @@ describe("at most once", () => {
     expect(await reserveVoucherEmailRetry(fresh)).toEqual({ kind: "refused" });
   });
 
-  it("refuses a gift Retry once the voucher is claimed, revoked or readdressed — but never blocks a queued automatic send", async () => {
-    const box = mailbox();
-    /* Claimed after its event: the queued automatic send still goes (event time). */
-    const claimedOne = await givenVoucher(READER, 2);
+  it("refuses a gift Retry once sent, revoked or readdressed, but lets a genuinely failed gift retry after claim", async () => {
+    /* A delivered gift remains at most once after claim. This is distinct from
+       the unclaimed `sent` case above: claimed gifts are the predicate changed
+       in 261002a. */
+    const delivered = mailbox();
+    const sent = await givenVoucher(READER, 2);
+    await sendQueuedVoucherEmail(sent.delivery, delivered.deps);
     expect((await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).claimed).toBe(1);
+    expect(await reserveVoucherEmailRetry(sent.delivery)).toEqual({ kind: "refused" });
+    expect(delivered.fetch).toHaveBeenCalledTimes(1);
+
+    /* A definite provider refusal, followed by a claim before anybody looked:
+       Retry still takes it (261002a, Sol F1), and sends its first copy. */
+    let refuse = true;
+    const box = mailbox({
+      answer: async () =>
+        refuse
+          ? new Response("{}", { status: 500 })
+          : new Response(JSON.stringify({ id: "re_retry" }), { status: 200 }),
+    });
+    const claimedOne = await givenVoucher(OTHER, 2);
     await sendQueuedVoucherEmail(claimedOne.delivery, box.deps);
-    expect(box.fetch).toHaveBeenCalledTimes(1);
-    await pool?.query("update spideryarn.billing_voucher_emails set status = 'failed' where id = $1", [claimedOne.delivery]);
-    expect(await reserveVoucherEmailRetry(claimedOne.delivery)).toEqual({ kind: "refused" });
+    expect(await delivery(claimedOne.delivery)).toMatchObject({ status: "failed", detail: "Resend answered 500" });
+    expect((await claimVouchersFor({ id: OTHER, email: emailOf(OTHER) }, { lookup: confirmed(OTHER) })).claimed).toBe(1);
+    refuse = false;
+    const reserved = await reserveVoucherEmailRetry(claimedOne.delivery);
+    expect(reserved.kind).toBe("reserved");
+    if (reserved.kind === "reserved") await deliverReservedVoucherEmail(claimedOne.delivery, reserved.attempts, box.deps);
+    expect(box.fetch).toHaveBeenCalledTimes(2);
+    expect(await delivery(claimedOne.delivery)).toMatchObject({ status: "sent" });
+    box.fetch.mockClear();
 
     /* Revoked: its queued gift is skipped in the revoke's transaction, and not retryable. */
     const revoked = await givenVoucher(OTHER, 2);
     await updateVoucher(revoked.id, { revoked: true });
     expect(await delivery(revoked.delivery)).toMatchObject({ status: "skipped", detail: "voucher revoked" });
     await sendQueuedVoucherEmail(revoked.delivery, box.deps);
-    expect(box.fetch).toHaveBeenCalledTimes(1);
+    expect(box.fetch).not.toHaveBeenCalled();
     expect(await reserveVoucherEmailRetry(revoked.delivery)).toEqual({ kind: "refused" });
     /* Restored, it may be retried again. */
     await updateVoucher(revoked.id, { revoked: false });
@@ -742,6 +772,205 @@ describe("changing an unclaimed voucher's address", () => {
       status: "failed",
       detail: "request outcome unknown (TypeError)",
     });
+  });
+});
+
+/* --------------------------------- an existing reader, or an invitation -- */
+
+/* docs/plans/261002a-fb99-voucher-email-for-existing-user.md. */
+describe("the recipient's email is written for who they are", () => {
+  const noLeaks = (part: string, voucherId: string) => {
+    expect(part).not.toContain(SECRET_NOTE);
+    expect(part).not.toContain(CREATOR_A);
+    expect(part).not.toContain(ADMIN_USER_ID_LOCAL);
+    expect(part).not.toContain(voucherId);
+  };
+
+  it("tells an existing reader on Free how many articles they had left, and have now", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    control.byEmail.set(emailOf(READER), { kind: "one", id: READER });
+    const id = randomUUID();
+    const reply = await drive(
+      "POST",
+      "/api/admin/vouchers",
+      JSON.stringify({ id, email: emailOf(READER), articles: 20, note: SECRET_NOTE }),
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(reply.status).toBe(201);
+    const [mail] = box.sent;
+    expect(mail?.to).toEqual([emailOf(READER)]);
+    expect(mail?.subject).toBe("A gift of 20 free articles on Spideryarn");
+    for (const part of [mail?.text ?? "", mail?.html ?? ""]) {
+      /* A fresh account: the three every free account starts with, then twenty-three. */
+      expect(part).toContain("Before this gift you had 3 articles left on your free allowance. With it, you have 23 articles.");
+      expect(part).toContain("https://www.spideryarn.com/");
+      expect(part).not.toContain("/login");
+      expect(part).not.toContain("create an account");
+      noLeaks(part, id);
+    }
+  });
+
+  it("counts before and after with the wall's own arithmetic, including at the edge", () => {
+    const free = (limit: number, used: number, waiting = 0): GiftAudience => ({
+      kind: "reader",
+      plan: { kind: "free", limit: articles(limit), wallUsed: points(used), waiting: articles(waiting) },
+    });
+    /* Exactly at the budget: nothing left, and one gift makes one. */
+    expect(giftMessage(1, free(3, 600)).text).toContain("you had 0 articles left on your free allowance. With it, you have 1 article.");
+    /* A half-price public add in `used`: two left, then three. */
+    expect(giftMessage(1, free(3, 300)).text).toContain("you had 2 articles left on your free allowance. With it, you have 3 articles.");
+    /* Gifts already waiting are claimed with this one, so they are in the after. */
+    expect(giftMessage(1, free(3, 0, 10)).text).toContain(
+      "you had 3 articles left on your free allowance. With it, and 10 articles given to you earlier and still waiting, you have 14 articles.",
+    );
+  });
+
+  it("counts a gift already waiting at the address in the after, read from the database", async () => {
+    await givenVoucher(READER, 10);
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 3, wallUsed: 0, waiting: 10 },
+    });
+  });
+
+  it("writes the reader's email without numbers when their plan cannot be read", async () => {
+    const audience = await giftAudienceFor(emailOf(READER), {
+      lookup: async () => ({ kind: "one", id: READER }),
+      standing: async () => {
+        throw new Error("database down");
+      },
+    });
+    expect(audience).toEqual({ kind: "reader", plan: { kind: "unknown" } });
+  });
+
+  it("tells a paid reader the gift waits for Free, and says no numbers when the plan is unknown", () => {
+    const paid = giftMessage(5, { kind: "reader", plan: { kind: "paid" } });
+    expect(paid.text).toContain("You are on a paid plan, so you do not need them today.");
+    expect(paid.text).not.toContain("Before this gift");
+    const unknown = giftMessage(5, { kind: "reader", plan: { kind: "unknown" } });
+    expect(unknown.text).not.toContain("Before this gift");
+    expect(unknown.text).not.toContain("paid plan");
+    expect(unknown.text).toContain("Open Spideryarn: https://www.spideryarn.com/");
+  });
+
+  it("invites anybody it cannot name as one reader: nobody, several, or a failed lookup", async () => {
+    const standing = vi.fn(async () => {
+      throw new Error("billing must not be read");
+    });
+    for (const found of [
+      { kind: "none" },
+      { kind: "several" },
+      { kind: "unavailable", reason: "timed out" },
+    ] as const) {
+      expect(await giftAudienceFor(emailOf(READER), { lookup: async () => found, standing })).toEqual({ kind: "invite" });
+    }
+    expect(standing).not.toHaveBeenCalled();
+    const box = mailbox();
+    control.deps = box.deps;
+    control.byEmail.set(emailOf(READER), { kind: "several" });
+    const id = randomUUID();
+    await drive("POST", "/api/admin/vouchers", JSON.stringify({ id, email: emailOf(READER), articles: 2 }), ADMIN_USER_ID_LOCAL);
+    expect(box.sent[0]?.text).toContain("Sign in or create an account: https://www.spideryarn.com/login");
+  });
+
+  it("falls back to the invitation when the audience lookup throws, without failing a create or PATCH", async () => {
+    const failed = async () => {
+      throw new Error(`${emailOf(READER)} must not reach a log`);
+    };
+    const said = await logLinesWhile(async () => {
+      expect(await giftAudienceFor(emailOf(READER), { lookup: failed })).toEqual({ kind: "invite" });
+
+      const made = await createVoucher(
+        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null },
+        CREATOR_A,
+        { audience: failed },
+      );
+      expect(made.kind).toBe("created");
+      if (made.kind !== "created") throw new Error("expected a created voucher");
+      expect((await delivery(made.delivery)).body_text).toContain("Sign in or create an account");
+
+      const original = await givenVoucher(OTHER, 3);
+      const updated = await updateVoucher(original.id, { email: emailOf(READER) }, { audience: failed });
+      expect(updated).toMatchObject({ kind: "updated", giftDelivery: expect.any(String) });
+      if (updated.kind !== "updated" || !updated.giftDelivery) throw new Error("expected a queued address-change email");
+      expect((await delivery(updated.giftDelivery)).body_text).toContain("Sign in or create an account");
+    });
+    expect(said).toContain("account lookup failed, inviting");
+    expect(said).toContain("audience unavailable, inviting");
+    expect(said).not.toContain(emailOf(READER));
+  });
+
+  it("reads a found reader's plan from the database", async () => {
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 3, wallUsed: 0, waiting: 0 },
+    });
+  });
+
+  it("reads the wall's public, minimal, in-flight and high-power costs for the email", async () => {
+    if (!pool) return;
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
+       values ($1, $2, 'public', now()) returning id`,
+      [READER, `voucher-email-usage-${randomUUID()}`],
+    );
+    const article = rows[0]?.id;
+    if (!article) throw new Error("expected an article id");
+    await pool.query(
+      `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at, article_id)
+       values
+         ($1, 'ingest', now(), now(), $2),
+         ($1, 'minimal', now(), now(), null),
+         ($1, 'ingest', now(), null, null),
+         ($1, 'high_power', now(), now(), $2)`,
+      [READER, article],
+    );
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 3, wallUsed: 402, waiting: 0 },
+    });
+  });
+
+  it("includes claimed gifts in a lapsed reader's Free limit", async () => {
+    const old = await givenVoucher(READER, 4);
+    expect((await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) })).claimed).toBe(1);
+    await pool?.query(
+      `update spideryarn.billing_accounts
+          set status = 'canceled', stripe_subscription_id = $2, stripe_customer_id = $3
+        where owner_id = $1`,
+      [READER, `sub_lapsed_${READER}`, `cus_lapsed_${READER}`],
+    );
+    expect(await giftAudienceFor(emailOf(READER), { lookup: async () => ({ kind: "one", id: READER }) })).toEqual({
+      kind: "reader",
+      plan: { kind: "free", limit: 7, wallUsed: 0, waiting: 0 },
+    });
+    expect((await deliveriesOf(old.id)).filter((row) => row.kind === "gift")).toHaveLength(1);
+  });
+
+  it("uses the new count when a PATCH changes the address and the articles together", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const { id } = await givenVoucher(OTHER, 4);
+    control.byEmail.set(emailOf(READER), { kind: "one", id: READER });
+    await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: emailOf(READER), articles: 9 }), ADMIN_USER_ID_LOCAL);
+    const toReader = box.sent.find((m) => m.to[0] === emailOf(READER));
+    expect(toReader?.subject).toBe("A gift of 9 free articles on Spideryarn");
+    expect(toReader?.text).toContain("With it, you have 12 articles.");
+  });
+
+  it("writes the reader's email when an address is changed to a reader's", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const { id, delivery: original } = await givenVoucher(OTHER, 4);
+    await sendQueuedVoucherEmail(original, box.deps);
+    control.byEmail.set(emailOf(READER), { kind: "one", id: READER });
+    const reply = await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: emailOf(READER) }), ADMIN_USER_ID_LOCAL);
+    expect(reply.body).toEqual({ ok: true, email: "queued" });
+    expect(box.sent.map((m) => m.to)).toEqual([[emailOf(OTHER)], [emailOf(READER)]]);
+    expect(box.sent[0]?.text).toContain("/login");
+    expect(box.sent[1]?.text).toContain("With it, you have 7 articles.");
+    noLeaks(box.sent[1]?.text ?? "", id);
   });
 });
 

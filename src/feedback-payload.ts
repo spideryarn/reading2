@@ -60,7 +60,7 @@
  * before anybody has to notice.
  */
 import { isSpideryarnId } from "./ids.js";
-import { MODES } from "./modes.js";
+import { MODES, RETIRED_MODES } from "./modes.js";
 import { ARTICLE_VIEWS } from "./read-address.js";
 
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
@@ -165,6 +165,8 @@ const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
  */
 const STEPS = [
   "fetch",
+  /* A minimal paper's title, authors and abstract (plan 261001m). */
+  "metadata",
   "extract",
   "blocks",
   "hierarchy",
@@ -177,7 +179,7 @@ const STEPS = [
   "tweets",
   "glossary",
   "quotes",
-  "trajectory",
+  "skim",
   "ideas",
   "timeline",
   "quiz",
@@ -189,6 +191,22 @@ const STEPS = [
   "crossrefs",
   "simple",
 ] as const;
+
+/**
+ * **Step names a tab loaded before a rename may still send**, and the step each
+ * became. `trajectory` was the Skim step's name until 2026-10-01 (plan 261001r);
+ * a report from a stale tab should keep its step rather than lose it. The mode
+ * goes through `RETIRED_MODES` in src/modes.ts instead, the same table `?mode=`
+ * links use.
+ */
+const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
+  trajectory: "skim",
+};
+
+/** A retired name's successor, or the value as it came. */
+function current(value: unknown, retired: Readonly<Record<string, string>>): unknown {
+  return typeof value === "string" && Object.hasOwn(retired, value) ? retired[value] : value;
+}
 
 /** `JobStatus` in src/types.ts, which is a type and so cannot be imported as one. */
 const JOB_STATUSES = ["queued", "running", "done", "error", "cancelled"] as const;
@@ -519,7 +537,7 @@ function article(value: unknown): FeedbackArticleState | null {
     slug: shaped(source.slug, SLUG),
     revisionId: shaped(source.revisionId, UUID),
     view: oneOf(source.view, ARTICLE_VIEWS),
-    mode: oneOf(source.mode, MODES),
+    mode: oneOf(current(source.mode, RETIRED_MODES), MODES),
     /* The granularity ladder is short. 100 was a cap on nothing. */
     level: num(source.level, 0, 20),
     blockCount: num(source.blockCount, 0, 1_000_000),
@@ -537,7 +555,7 @@ function job(value: unknown): FeedbackJobState | null {
   return {
     /* A job id is a minted Spideryarn id — src/db/schema.ts § `jobs_id_format`. */
     id: typeof source.id === "string" && isSpideryarnId(source.id) ? source.id : null,
-    step: oneOf(source.step, STEPS),
+    step: oneOf(current(source.step, RETIRED_STEPS), STEPS),
     status: oneOf(source.status, JOB_STATUSES),
   };
 }

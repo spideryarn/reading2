@@ -101,9 +101,19 @@ else would show it.
 
 ## What it costs, and what that decides
 
-**One model call, 121–194 seconds, about $0.20** — measured over seven draws of
-five articles. That is the slowest single thing in the app and four times the
-glossary, and three consequences follow from it rather than from taste:
+**The effort is `low` since 2026-10-01**, down from `high`. Eight articles, two
+draws per arm, two blind judges (GPT Sol ranking, Opus scoring): no visible loss
+(mean U 1.56 and 1.69, where 2.0 is no difference), and a call went from $0.235
+to $0.100 and from 176 s to 42 s on average. Validity was 1 malformed draw in 16
+at both levels. It also took the Sketch out of the `ids` cache group — see
+[prompt-caching.md](prompt-caching.md).
+[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
+has the lineups and what the judges said.
+
+**One model call, 30–101 seconds, about $0.10** — measured over sixteen draws of
+eight articles at `low`, averaging 42 seconds. It still costs enough, and waits
+long enough, that the product consequences below follow from it rather than from
+taste. The old `high` measurements were 121–194 seconds and about $0.20.
 
 - **Never run by the pipeline, and never in an ingest.** `sketch` is off
   `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`, so nothing sweeps it in.
@@ -113,7 +123,7 @@ glossary, and three consequences follow from it rather than from taste:
 - **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
   and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
   state, so Back and Forward move it, and a pasted
-  `?mode=diagram&diagram=sketch` must not buy a two-minute call. *Opening
+  `?mode=diagram&diagram=sketch` must not buy a model call. *Opening
   Diagram costs nothing*: with nothing drawn the mode lands on the empty state
   below, so the bar's Diagram button arms nothing at all — `diagram` is
   deliberately absent from `MODE_TARGET`, and that mattered more from 2026-09-04,
@@ -129,28 +139,25 @@ glossary, and three consequences follow from it rather than from taste:
   which stage 1 does not de-duplicate, and the reader would pay twice.
   `regenerate` is forced and keeps the reasoning the old single verb had: a
   redraw is offered beside a picture that is current, where an unforced run
-  would skip while the reader watched two minutes go by.
+  would skip while the reader waited about a minute.
 - **The empty state says the price before the press**, not after it — a reader
-  who presses a button and then watches a spinner for two minutes with no idea
+  who presses a button and then watches a spinner for about a minute with no idea
   why is owed the sentence.
 - **And a redraw somebody else started still shows.** `useStepJob` reads the
   queue rather than remembering the click, precisely so a run from the CLI, the
   shelf or another tab appears — and this panel was the one surface that did
   nothing with the answer, so a picture already on screen changed under the
-  reader two minutes later with nothing having said it would. `.sk-busy` is one
+  reader later with nothing having said it would. `.sk-busy` is one
   line with the spinner and the step's own label. Deliberately **not**
   `JobProgress`: that row carries a Stop button and, with no job running, the
-  Draw button — and offering a $0.20 redraw beside a picture that is already
+  Draw button — and offering a paid redraw beside a picture that is already
   there is a product decision, not a loading state.
   [`tests/sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx).
-- **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
-  and it is about the clock rather than the money: every step self-aborts at 400s
-  inside an 800s invocation that must also fit a `hierarchy` measured at 320s. A
-  positional cascade that swept this in beside `hierarchy` would not *merely* waste
-  a call, it would run the invocation out of time — and that fails as a platform
-  kill that takes the whole job rather than as a recorded failure. (The *merely*
-  went missing here and nowhere else, which inverted the sentence;
-  `src/pipeline.ts` § `FORCE_ONLY_WHEN_NAMED` has always had it.)
+- **It remains in `FORCE_ONLY_WHEN_NAMED`.** At `high`, its 194-second measured
+  maximum supplied a third, timeout-specific reason: a positional cascade beside
+  a 320-second Hierarchy could run an invocation out of time. Moving to `low`
+  removes that measured reason, not the two ordinary ones: it is a model call the
+  reader asks for, and nothing except Illustrated reads what it writes.
 
 **The first converted step, and for a while the only one.** Writing a file inside
 `run()` works on a laptop and cannot work through a store that puts the artefact

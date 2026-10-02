@@ -1,0 +1,104 @@
+```json
+{"root": {
+  "title": "The Scaling Hypothesis",
+  "gist": "Simply scaling up neural networks' size and training data, not cleverer algorithms, drives them toward general intelligence.",
+  "question": "AI progress — does merely scaling up neural networks lead to general intelligence? (GPT-3 as evidence)",
+  "range": ["spya-dfggb3", "spya-vbpzva"],
+  "children": [
+    {
+      "title": "Introduction",
+      "gist": "GPT-3's unexpected meta-learning ability, gained from scale alone, suggests raw size, not cleverer algorithms, is the fastest path to powerful AI.",
+      "question": "GPT-3 — why did making a language model vastly larger produce surprising new abilities instead of just better text? (an argument)",
+      "range": ["spya-dfggb3", "spya-ewxv9q"],
+      "children": [
+        {"title": "The Scaling Hypothesis", "gist": "The essay's title, naming its central claim.", "range": ["spya-dfggb3","spya-dfggb3"]},
+        {"title": "Byline", "gist": "Author credit and estimated reading time.", "range": ["spya-m444tq","spya-m444tq"]},
+        {"title": "Abstract", "gist": "GPT-3's scaling produces unexpected generalization and meta-learning, supporting the idea that raw scale, not new tricks, drives AI toward general ability.", "range": ["spya-suzdvz","spya-ewxv9q"]}
+      ]
+    },
+    {
+      "title": "Meta-Learning and Flexing GPT",
+      "gist": "GPT-3's few-shot task-solving without fine-tuning shows that scaling alone teaches a text predictor to learn new tasks from mere examples.",
+      "question": "GPT-3's few-shot learning — why can a model trained only to predict text learn new tasks from a handful of examples? (an explanation)",
+      "range": ["spya-k8ta9q", "spya-s8rx6n"],
+      "children": [
+        {"title": "Meta-Learning", "sourceHeading": "Meta-Learning", "gist": "GPT-3, a 175-billion-parameter model 117 times larger than GPT-2, solves arithmetic, translation, and analogies purely from prompted examples, suggesting its attention layers learned to learn.", "range": ["spya-k8ta9q","spya-aqts9c"]},
+        {"title": "Flexing GPT", "sourceHeading": "Flexing GPT", "gist": "Despite using an outdated, simple architecture trained on limited single-modality data, GPT-3 shows unbent scaling curves and creative output existing benchmarks fail to capture.", "range": ["spya-dqwd2g","spya-s8rx6n"]}
+      ]
+    },
+    {
+      "title": "Baking The Cake and Scaling",
+      "gist": "GPT-3's scaling curves keep improving smoothly with size, showing no sign of leveling off, which justifies training far larger and costlier models.",
+      "question": "GPT-3's scaling curves — why do the gains from a bigger model keep growing instead of flattening out? (evidence from benchmarks)",
+      "range": ["spya-kab3fn", "spya-kc39vs"],
+      "children": [
+        {"title": "Baking The Cake", "sourceHeading": "Baking The Cake", "gist": "GPT-3 is not complete general intelligence but a real step toward it, since its loss keeps dropping predictably as size grows, justifying bigger and costlier models despite objections.", "range": ["spya-kab3fn","spya-dfjr4c"]},
+        {"title": "Scaling", "sourceHeading": "Scaling", "gist": "Published scaling laws show GPT-3's loss keeps following the same smooth power-law curve seen in smaller models, implying substantial further gains remain available.", "range": ["spya-w83b0m","spya-kc39vs"]}
+      ]
+    },
+    {
+      "title": "Blessings Of Scale and the Scaling Hypothesis",
+      "gist": "Across many domains, simply making networks and data much larger makes hard problems easier, the pattern the author calls the scaling hypothesis for intelligence.",
+      "question": "the blessings of scale — why do bigger neural networks solve problems that defeat smaller ones? (many examples)",
+      "range": ["spya-jwq3zr", "spya-emqjaa"],
+      "children": [
+        {"title": "Blessings Of Scale", "sourceHeading": "Blessings Of Scale", "gist": "Many deep learning systems, from GPT-3 to AlphaZero to robotic hand control, spontaneously gain stability, generalization, and meta-learning simply by scaling size and data.", "range": ["spya-jwq3zr","spya-evn08w"]},
+        {"title": "Why Scale Works", "gist": "Large models act as ensembles of countless sub-models biased toward simple solutions, so given enough data and compute, memorized shortcuts eventually lose to genuine general algorithms.", "range": ["spya-djq0xk","spya-wq498y"]},
+        {"title": "Scaling Hypothesis", "sourceHeading": "Scaling Hypothesis", "gist": "The strong scaling hypothesis claims that once a flexible architecture like self-attention exists, simply training ever larger versions on more data will make sophisticated behavior emerge.", "range": ["spya-ag750z","spya-emqjaa"]}
+      ]
+    },
+    {
+      "title": "Why Does Pretraining Work?",
+      "gist": "Predicting text forces a model to learn ever harder regularities, because only genuine understanding keeps lowering the remaining prediction error.",
+      "question": "pretraining on text — why does merely predicting the next word push a model toward real understanding? (a step-by-step account)",
+      "range": ["spya-ce0ts7", "spya-sm7bx4"],
+      "children": [
+        {"title": "Crude Beginnings", "gist": "Early in training a language model quickly cuts its error merely by learning letter and space frequencies, progress so fast it can be missed if not logged closely.", "range": ["spya-ce0ts7","spya-r465ug"]},
+        {"title": "Words And Associations", "gist": "Training continues by learning real words, spelling, and which words cluster together, each new regularity buying smaller but still substantial reductions in prediction error.", "range": ["spya-hbr5sy","spya-x3c389"]},
+        {"title": "Toward Human-Level Prediction", "gist": "As errors shrink into the hundredths and ten-thousandths of a bit, a model must master pronoun consistency and genre, and the pretraining thesis argues the remaining gap to human-level prediction, under one bit per character, still demands real understanding.", "range": ["spya-rz8jsm","spya-nhgv5g"]},
+        {"title": "Why The Last Bits Matter Most", "gist": "The final, hardest-to-predict fraction of text requires the deepest reasoning, much as most human actions are easy but rare high-stakes choices separate individuals in outcome.", "range": ["spya-kmyg3w","spya-e5n86h"]},
+        {"title": "Doubts About Pretraining", "gist": "The pretraining argument is logically tidy but historically unconvincing, since many theoretically universal methods never work in practice without enough data, compute, or the right architecture.", "range": ["spya-faees7","spya-s0h95g"]},
+        {"title": "Unanswered Questions", "gist": "Nobody predicted GPT-3's scaling quantitatively in advance, and nobody yet knows what capabilities a further, much larger model would gain or how close it would get to human-level loss.", "range": ["spya-uett4g","spya-sm7bx4"]}
+      ]
+    },
+    {
+      "title": "Prospects and Critiquing The Critics",
+      "gist": "Whether labs push scaling further depends less on available compute than on whether they actually believe scale itself can produce intelligence.",
+      "question": "after GPT-3 — will any major lab commit to scaling further, and why have most hesitated? (an assessment of labs and critics)",
+      "range": ["spya-b6zcpu", "spya-hfcz8w"],
+      "children": [
+        {"title": "Conviction Over Hardware", "gist": "Historical precedent from the atomic bomb suggests that once people know a hard problem has a workable solution and enough resources exist, belief and conviction become the limiting factor.", "range": ["spya-b6zcpu","spya-rbx2kz"]},
+        {"title": "Why DeepMind Didn't Scale", "gist": "Unlike OpenAI, DeepMind holds a weaker version of the scaling hypothesis, believing intelligence must be assembled module by module from brain-like pieces rather than scaled as one giant model.", "range": ["spya-khnsat","spya-hr5xnj"]},
+        {"title": "OpenAI's Bet", "gist": "Lacking Google-scale funding, OpenAI restructured as a hybrid nonprofit-for-profit to earn the money needed to bet everything on the scaling hypothesis being true.", "range": ["spya-arrq35","spya-fyy04z"]},
+        {"title": "A Decade Of Underestimation", "gist": "A small number of long-dismissed researchers like Moravec correctly predicted decades ago that cheap enough hardware would make large neural networks work, while mainstream experts called it numerology.", "range": ["spya-bp9mm2","spya-mpden3"]},
+        {"title": "Dismissing The Machine", "gist": "Critics habitually explain away capable systems as merely simple mechanisms, but real success in artificial intelligence must look exactly like reducing intelligent behavior to such mechanisms.", "range": ["spya-ta3e6d","spya-epwrdb"]},
+        {"title": "The Voice Of Authority", "gist": "Experts who confidently dismissed deep learning's prospects for years were repeatedly proven wrong, yet rarely admit error, because their calm authoritative tone persists regardless of outcome.", "range": ["spya-b93jbz","spya-me38yq"]}
+      ]
+    },
+    {
+      "title": "Appendix",
+      "gist": "Because powerful text predictors learn to imitate real and fictional agents from human data, they can acquire real-world goal-directed agency even unintentionally.",
+      "question": "emergent agency in language models — can scale alone produce agent-like behavior, and can it be avoided by filtering training data? (an extended argument)",
+      "range": ["spya-hfcz8w", "spya-hjpau9"],
+      "children": [
+        {"title": "It From Byte", "sourceHeading": "It From Byte", "gist": "Generative language models like GPT-3 learn to imitate real and fictional agents from human text, so they acquire genuine goal-directed agency whenever given tools to act in the world.", "range": ["spya-hfcz8w","spya-ueb3d2"]},
+        {"title": "Agency From Atoms", "gist": "Because agency is built from ordinary physical parts with no special agency-particle, there is no principled line separating agentic from merely natural data, though humans naturally apply goal-seeking explanations to many natural systems too.", "range": ["spya-yb6wsc","spya-zh9cmm"]},
+        {"title": "Variational Interpretations", "gist": "Describing a system as minimizing or maximizing some quantity, as physics does with rivers or orbits, is a cheap computational shortcut that a sufficiently trained network is likely to adopt broadly, once a problem rewards it.", "range": ["spya-tyue6z","spya-ufadea"]},
+        {"title": "Triggers For Agency", "gist": "It is an open empirical question what mix of data richness pushes a model toward goal-directed behavior, and even the simple cellular automaton Conway's Game of Life may already invite an intentional reading of its patterns.", "range": ["spya-nxp8hh","spya-q88ypt"]},
+        {"title": "Turing Machine", "sourceHeading": "Turing Machine", "gist": "Training on a single random Turing machine teaches rules without anything like agency, but training across many different machines may require inferring hidden instructions, resembling a rudimentary theory of mind.", "range": ["spya-p5tx6f","spya-usu3q6"]},
+        {"title": "Ambient Agency", "sourceHeading": "Ambient Agency", "gist": "Agency behaves like Turing-completeness, a capability so broadly useful and convergent that it is hard to guarantee a sufficiently powerful system lacks it, making data filtering an unreliable safeguard.", "range": ["spya-c8qwnc","spya-hjpau9"]}
+      ]
+    },
+    {
+      "title": "Backmatter",
+      "gist": "Navigation links and the bibliography of references.",
+      "range": ["spya-g9ffua", "spya-vbpzva"],
+      "children": [
+        {"title": "Backlinks", "gist": "Links to pages citing this article.", "range": ["spya-g9ffua","spya-nd2ux3"]},
+        {"title": "Similar Links", "gist": "Links to related pages by topic.", "range": ["spya-p056me","spya-njg345"]},
+        {"title": "Bibliography", "gist": "List of references and sources cited.", "range": ["spya-bahxu0","spya-vbpzva"]}
+      ]
+    }
+  ]
+}}
+```

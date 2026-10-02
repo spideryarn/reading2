@@ -19,10 +19,11 @@
  * project with two accounts on it — docs/reusable/silent-success.md, and see
  * `pages()` below for how the fake is built.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   accountFrom,
+  confirmedAccountByEmail,
   gotruePages,
   listAccounts,
   type AccountPage,
@@ -585,5 +586,118 @@ describe("the request itself", () => {
     };
     await withFetch(spy, () => gotruePages("https://project.supabase.co/", "k")(2, 50));
     expect(url).toBe("https://project.supabase.co/auth/v1/admin/users?page=2&per_page=50");
+  });
+
+  it("hands its abort signal to fetch, where aborting it ends the request", async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | null | undefined;
+    const hung: typeof globalThis.fetch = async (_input, init) => {
+      seen = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    };
+    const request = withFetch(hung, () =>
+      gotruePages("https://project.supabase.co", "service-role-key", controller.signal)(1, 200),
+    );
+    controller.abort(new Error("deadline"));
+    await expect(request).rejects.toThrow("deadline");
+    expect(seen).toBe(controller.signal);
+  });
+});
+
+/* The gift voucher's email asks who has an address (261002a). */
+describe("the one account with this address, and only if confirmed", () => {
+  const user = (id: string, email: string | null, confirmed: boolean) =>
+    raw(id, { email, email_confirmed_at: confirmed ? "2026-09-01T00:00:00Z" : null });
+  /** Real pages through `listAccounts`, one account each, so matching and paging are both exercised. */
+  const served =
+    (users: Record<string, unknown>[], opts: { total?: number } = {}) =>
+    (): GetAccountPage =>
+    async (page) => ({
+      users: users.slice(page - 1, page),
+      total: opts.total ?? users.length,
+      hasNext: page < users.length,
+    });
+
+  it("finds it across pages, whatever its case and spaces", async () => {
+    const pages = served([user("1", "b@x.test", true), user("2", "c@x.test", true), user("3", " A@X.test ", true)]);
+    expect(await confirmedAccountByEmail("a@x.test", { pages })).toEqual({ kind: "one", id: "3" });
+  });
+
+  it("is none for an unconfirmed address, no address, or nobody", async () => {
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([user("1", "a@x.test", false)]) })).toEqual({
+      kind: "none",
+    });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([user("1", null, true)]) })).toEqual({ kind: "none" });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: served([]) })).toEqual({ kind: "none" });
+  });
+
+  it("is several for two accounts with the address, even when only one has confirmed it", async () => {
+    for (const second of [true, false]) {
+      const pages = served([user("1", "a@x.test", true), user("2", "A@x.test", second)]);
+      expect(await confirmedAccountByEmail("a@x.test", { pages })).toEqual({ kind: "several" });
+    }
+  });
+
+  it("is unavailable, never a throw, for a short listing or a refusal — and repeats nothing it was told", async () => {
+    const short = served([user("1", "a@x.test", true)], { total: 5 });
+    expect(await confirmedAccountByEmail("a@x.test", { pages: short })).toEqual({
+      kind: "unavailable",
+      reason: "the account list failed",
+    });
+    const refused = (): GetAccountPage => async () => {
+      throw new Error("refused for project abcdef a@x.test");
+    };
+    expect(await confirmedAccountByEmail("a@x.test", { pages: refused })).toEqual({
+      kind: "unavailable",
+      reason: "the account list failed",
+    });
+  });
+
+  it("gives up at its deadline, and the signal it hands the pages is what aborts them", async () => {
+    let seen: AbortSignal | undefined;
+    const hung = (signal: AbortSignal): GetAccountPage => {
+      seen = signal;
+      return () =>
+        new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        });
+    };
+    expect(await confirmedAccountByEmail("a@x.test", { pages: hung })).toEqual({
+      kind: "unavailable",
+      reason: "timed out",
+    });
+    expect(seen?.aborted).toBe(true);
+  }, 10_000);
+
+  it("refuses an Auth/database project mismatch before making a request", async () => {
+    const before = {
+      database: process.env.DATABASE_URL,
+      supabase: process.env.SUPABASE_URL,
+      key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+    const realFetch = globalThis.fetch;
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    globalThis.fetch = fetch;
+    process.env.DATABASE_URL =
+      "postgresql://postgres:password@db.aaaaaaaaaaaaaaaaaaaa.supabase.co:5432/postgres";
+    process.env.SUPABASE_URL = "https://bbbbbbbbbbbbbbbbbbbb.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    try {
+      expect(await confirmedAccountByEmail("a@x.test")).toEqual({
+        kind: "unavailable",
+        reason: "the account list failed",
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = realFetch;
+      if (before.database === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = before.database;
+      if (before.supabase === undefined) delete process.env.SUPABASE_URL;
+      else process.env.SUPABASE_URL = before.supabase;
+      if (before.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = before.key;
+    }
   });
 });

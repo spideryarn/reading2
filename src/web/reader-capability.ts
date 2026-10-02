@@ -291,7 +291,7 @@ export const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   quotes: true,
   timeline: true,
   sketch: true,
-  trajectory: true,
+  skim: true,
   faq: true,
   simpleSummary: true,
   citations: true,

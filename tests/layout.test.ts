@@ -211,13 +211,18 @@ describe("a wide band", () => {
     expect(wide(at).widths).toEqual([at - SPINE_W]);
   });
 
-  it("leaves the standard band exactly as it was", () => {
+  it("leaves the standard band to its own rule", () => {
     const standard = (windowWidth: number, rootFontPx = DEFAULT_ROOT_PX) =>
       fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx });
-    expect(standard(1440).modeW).toBe(400);
-    expect(standard(1440, 20).modeW).toBe(400);
+    /* Past the prose's measure it grows to the same 34rem ceiling (plan
+       261002a, § a band past the prose's measure below), but by what the prose
+       cannot use rather than by a share: 1440 − 12 − 808 = 620, capped at 544;
+       at a 20px root 1428 − 1010 = 418. */
+    expect(standard(1440).modeW).toBe(544);
+    expect(standard(1440, 20).modeW).toBe(418);
+    expect(standard(1100).modeW).toBe(400);
     // The default shape is the standard one.
-    expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(400);
+    expect(fitView({ windowWidth: 1440, modeBand: true }).modeW).toBe(544);
   });
 });
 
@@ -241,8 +246,10 @@ describe("a roomy band", () => {
     fitView({ windowWidth, modeBand: true, bandShape: "standard", rootFontPx, showSpine });
 
   it("is a touch wider than the standard band on a wide window", () => {
-    expect(roomy(1440).modeW).toBe(448);
-    expect(roomy(1440).widths).toEqual([1440 - SPINE_W - 448]);
+    // 1004 − 12 − 544 = 448, the roomy ceiling; the standard band stops at 400.
+    expect(roomy(1100).modeW).toBe(448);
+    expect(standard(1100).modeW).toBe(400);
+    expect(roomy(1100).widths).toEqual([1100 - SPINE_W - 448]);
   });
 
   it("is the standard band where the prose has nothing to spare", () => {
@@ -254,7 +261,7 @@ describe("a roomy band", () => {
 
   it("never comes out narrower than an ordinary band at a small root", () => {
     // 28rem at a 12px root is 336, under `MODE_IDEAL`.
-    expect(roomy(1440, 12).modeW).toBe(MODE_IDEAL);
+    expect(roomy(1000, 12).modeW).toBe(MODE_IDEAL);
     expect(roomy(1440, 20).modeW).toBe(560);
   });
 
@@ -270,11 +277,74 @@ describe("a roomy band", () => {
             continue;
           }
           expect(f.modeW).toBeGreaterThanOrEqual(s.modeW);
-          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root));
+          expect(f.modeW).toBeLessThanOrEqual(Math.max(MODE_IDEAL, 28 * root, wideIdeal(root)));
           expect(f.modeW + (f.widths[0] ?? 0)).toBe(w - (spine === false ? 0 : SPINE_W));
         }
       }
     }
+  });
+});
+
+/**
+ * **A band past the prose's measure** — plan 261002a, since 2026-10-02.
+ *
+ * > if the window is really wide and there's space, the left-hand column should
+ * > expand up to that sort of width … I think the way it works right now for
+ * > slightly narrow windows is pretty good, so we don't want to screw that up.
+ * >
+ * > — Greg, 2026-10-01 (spya-xebdgz)
+ *
+ * The rule before this change is written out here as `before`, so the sweep can
+ * say exactly what did and did not move: the band is `before` until the prose
+ * cell is wider than the prose can use (`proseAloneMaxPx`), and only the excess
+ * goes to the band, up to `wideIdeal`.
+ */
+describe("a band past the prose's measure", () => {
+  const before = (avail: number, shape: "standard" | "roomy", root: number) => {
+    const ideal = shape === "roomy" ? Math.max(MODE_IDEAL, Math.round(28 * root)) : MODE_IDEAL;
+    return Math.min(Math.max(avail - 544, MODE_MIN), ideal);
+  };
+
+  it("starts where the prose has its measure, and stops at 34rem", () => {
+    const chat = (w: number) => fitView({ windowWidth: w, modeBand: true, bandShape: "standard" });
+    // 808 is `proseAloneMaxPx(16)`: 49rem and one gutter cell.
+    expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBe(808);
+    expect(chat(1220).modeW).toBe(400);
+    expect(chat(1280).modeW).toBe(460);
+    expect(chat(1364).modeW).toBe(544);
+    expect(chat(1920).modeW).toBe(544);
+    expect(chat(1920).widths).toEqual([1920 - SPINE_W - 544]);
+  });
+
+  it("changes nothing until the prose cell is wider than the prose can use", () => {
+    for (const shape of ["standard", "roomy"] as const) {
+      for (const root of [9, 12, 16, 20]) {
+        for (const spine of [null, false] as const) {
+          for (let w = 320; w <= 2400; w++) {
+            const f = fitView({ windowWidth: w, modeBand: true, bandShape: shape, rootFontPx: root, showSpine: spine });
+            if (f.modeW === 0) continue; // the covering band, untouched
+            const avail = w - (spine === false ? 0 : SPINE_W);
+            const old = before(avail, shape, root);
+            const measure = proseAloneMaxPx(root);
+            if (avail - old <= measure) {
+              expect(f.modeW, `${shape} ${w}px @${root}`).toBe(old);
+            } else {
+              // Only the excess, and the prose keeps every pixel it can use.
+              expect(f.modeW).toBe(Math.max(old, Math.min(avail - measure, wideIdeal(root))));
+              expect(f.widths[0]).toBeGreaterThanOrEqual(measure);
+            }
+            expect(f.modeW).toBeLessThanOrEqual(Math.max(old, wideIdeal(root)));
+          }
+        }
+      }
+    }
+  });
+
+  it("is the same rule beside the marginalia column", () => {
+    const both = fitView({ windowWidth: 1920, modeBand: true, margin: true });
+    // 1908 − 288 of notes = 1620 of rest; 1620 − 808 > 544, so the band is at its ceiling.
+    expect(both.modeW).toBe(544);
+    expect(both.widths[0]).toBe(808);
   });
 });
 

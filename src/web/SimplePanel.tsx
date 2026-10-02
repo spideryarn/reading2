@@ -110,7 +110,10 @@ export function SimplePanel({
       {owner?.status === "loading" && <p className="summ-quiet">Looking for the plain-words version…</p>}
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>{SIMPLE_NONE_OWNER}</p>
+          {/* Not while a run is under way: opening Summary starts one since
+              2026-10-02 (docs/plans/261002a-summary-generates-on-open.md), and
+              "nobody has asked" beside its progress reads as a contradiction. */}
+          {!(owner.job || owner.starting) && <p>{SIMPLE_NONE_OWNER}</p>}
           <p className="gloss-hint">
             All three levels are written together, usually in under half a minute. Written once and kept —
             you will not be asked again unless the article changes.

@@ -33,7 +33,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import type { Verifier } from "../src/auth.js";
-import { articles } from "../src/billing/half-units.js";
+import { articles } from "../src/billing/points.js";
 import { FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
 import type { TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -64,6 +64,8 @@ vi.mock("../src/store/admin-accounts.js", async (importOriginal) => {
     confirmedAccountEmail: async (ownerId: string) =>
       auth.answers.get(ownerId) ?? { kind: "unavailable", reason: "not in this test's map" },
     accountEmail: async () => ({ kind: "unavailable", reason: "not asked in this test" }),
+    /* Who the gift email is for (261002a) is tested in billing-voucher-emails. */
+    confirmedAccountByEmail: async () => ({ kind: "none" }),
   };
 });
 

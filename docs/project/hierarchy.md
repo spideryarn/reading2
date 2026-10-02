@@ -218,6 +218,20 @@ up: **an endpoint that is not a block id**. One unresolvable child leaves its wh
 underived, so the precise error survives instead of being buried by a tree built as though that child
 had never been proposed.
 
+**A child with no range at all is not that** (since 2026-10-01). Only an absent `range` or `null`
+counts — a half-stated one (`[start]`, `[start, 3]`) still carries a start and is refused as
+malformed. The model named nothing, which is a start that carries no information, so it is derived by
+the rule above — pinned if first, the previous child's end + 1 otherwise, dropped if neither — and
+lends no end to the child after it. Counted in `rangelessChildren`. One of these cost a 1,041-block
+book its whole tree.
+
+**And an answer that still cannot become a tree is asked for once more, inside the step** — any
+failure of `treeFrom` (parse, build, supplement, invariants) on a freshly bought answer, if the
+step's deadline leaves room for a second call as long as the first, and never after a truncation, a
+refusal or an abort. Two calls is the worst case; `structureCalls` says which happened. Long answers
+have more places for one local fault, and the reader pressing Retry was the retry loop:
+[261001s](../plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
+
 #### A child's backwards range is a disagreement, not a lie <a id="backwards-child"></a>
 
 **That list had a second entry — a range that runs backwards — until 2026-09-04.** The refusal was
@@ -1448,5 +1462,7 @@ four siblings, and would be useless at telling five adjacent paragraphs apart.
 - [block-ids.md](block-ids.md) — the id contract these ranges are built on
 - [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
 - [architecture.md](architecture.md) — where stage 4 sits in the pipeline
+- [261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — effort vs quality for the structure call: `low` stays,
+  because with thinking off 5 of 16 trees failed (internal nodes with no gist), against 0 of 16 at `low`
 - [`src/types.ts`](../../src/types.ts) — the canonical schema
 - [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts)

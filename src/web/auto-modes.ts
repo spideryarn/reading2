@@ -18,11 +18,13 @@
  *
  * **Derived, never listed**: every mode not behind the experimental switch
  * (`MODE_CATALOG[mode].experimental`), mapped to the step it makes
- * (`modeStep`, src/web/activation.ts). Structure and Summary make nothing —
- * they read the tree the import already built — and Plain, Chat and Search wait
- * on the reader. A mode moved in or out of the switch changes this with no
- * second edit; tests/auto-modes.test.tsx pins today's answer so the change is
- * seen.
+ * (`modeStep`, src/web/activation.ts). Structure and Plain make nothing — one
+ * reads the tree the import already built, the other is the article — while
+ * Chat and Search wait on the reader. Summary is in since 2026-10-02, when its
+ * press began writing the plain-words levels
+ * (docs/plans/261002a-summary-generates-on-open.md). A mode
+ * moved in or out of the switch changes this with no second edit;
+ * tests/auto-modes.test.tsx pins today's answer so the change is seen.
  *
  * ## One job per mode
  *
@@ -81,7 +83,7 @@ export function autoModesDetail(): string {
   const names = autoModes().map(({ mode }) => MODE_LABEL[mode]);
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
-  return `${list} are prepared in the background, with Trajectory after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;
+  return `${list} are prepared in the background, with Skim after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;
 }
 
 /**
@@ -94,18 +96,18 @@ export function autoModesDetail(): string {
  */
 export const STEP_READS: Partial<Record<StepName, readonly StepName[]>> = {
   illustrated: ["sketch"],
-  trajectory: ["quotes", "ideas"],
+  skim: ["quotes", "ideas"],
 };
 
 /**
  * **What each job asks for**: the mode's step, with the steps it reads in
  * front of it (`STEP_READS` above), in `STEP_ORDER`.
  *
- * So Trajectory's job is `["quotes", "ideas", "trajectory"]` — the same steps
- * the Trajectory panel posts when it has neither (`precededBy`,
- * src/web/useTrajectory.ts). If one of those reads has become ready by the time
+ * So Skim's job is `["quotes", "ideas", "skim"]` — the same steps
+ * the Skim panel posts when it has neither (`precededBy`,
+ * src/web/useSkim.ts). If one of those reads has become ready by the time
  * the panel opens, the panel can post a narrower, differently keyed job; the
- * article line keeps it behind this one and its Trajectory step then skips as
+ * article line keeps it behind this one and its Skim step then skips as
  * current, so it is a redundant row rather than a second paid run.
  *
  * This job's correctness does not depend on age, which it would otherwise:
@@ -126,7 +128,7 @@ export function autoModeRequests(): StepName[][] {
  * Queue one job per main mode on `slug`.
  *
  * **The ones that read nothing go together, and the rest after them.** Only
- * the second group's ordering is wanted — Trajectory should find the Quotes and
+ * the second group's ordering is wanted — Skim should find the Quotes and
  * Ideas jobs already in the line, so it waits for them rather than making them
  * itself, one after another — and firing the first group together shortens the
  * window in which a closed tab loses the rest (Sol, P4).
@@ -147,7 +149,7 @@ export async function queueAutoModes(run: UseJobs["run"], slug: string): Promise
  * **The order `queueAutoModes` posts in**: the jobs that read nothing, fired
  * together, then the rest one after another. Not `autoModeRequests()`'s order
  * since `crossrefs` joined (260930f): it sorts last in `STEP_ORDER` but reads
- * nothing, so it goes out before Trajectory. Exported so the tests that pin
+ * nothing, so it goes out before Skim. Exported so the tests that pin
  * what the add page posts read this answer rather than a copy of it.
  */
 export function autoModePosts(): { together: StepName[][]; after: StepName[][] } {

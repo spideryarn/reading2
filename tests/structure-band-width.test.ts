@@ -89,8 +89,11 @@ describe("fitView with Structure's band", () => {
     expect(band(at - 1, { rootFontPx: 20 }).modeW).toBe(MODE_IDEAL);
   });
 
+  /* Up to 1165 only since 2026-10-02: past about 1220 a standard band grows
+     into what the prose cannot use, which layout.test.ts § a band past the
+     prose's measure owns (plan 261002a). */
   it("leaves every other mode's band exactly as it was", () => {
-    for (const w of [700, 900, 1165, 1440, 2560]) {
+    for (const w of [700, 900, 1165]) {
       const standard = fitView({ windowWidth: w, modeBand: true });
       expect(standard.modeW, `${w}`).toBe(Math.min(MODE_IDEAL, Math.max(288, w - SPINE_W - PROSE_MIN)));
     }

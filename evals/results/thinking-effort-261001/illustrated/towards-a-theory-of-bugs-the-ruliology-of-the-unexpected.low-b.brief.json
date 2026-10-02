@@ -1,0 +1,376 @@
+{
+  "version": "illustrated/4",
+  "style": "An antique ruliology atlas: hand-drawn map plates with small labeled vignettes of machines and glyphs, in the manner of an old explorer's notebook of a strange computational land.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Map of Bugs",
+      "prompt": "An antique hand-drawn map in sepia and faded ochre ink on aged parchment, in the style of an old explorer's atlas of a strange computational land, arranged in a single flowing composition read top to bottom. At the very top, a small gear-and-tape machine sits inside a thought-bubble while lines of intricate machinery spill out far beyond it, labeled SIMPLE MACHINE, VAST WORKINGS. Below and to one side, a tape marked 7 feeds a toy machine producing a crooked 9, labeled INPUT SEVEN FAILS. Beside it, a machine's tape unspools off the map's edge into blank parchment while a hand tries to stop it, labeled TAPE RUNS WILD. Next, a row of neat triangular patterns with the fourteenth torn and bent, labeled THE FOURTEENTH PATTERN TEARS. Nearby, a scholar peels a rind from a woven pattern to reveal a simple diamond lattice beneath, labeled THE HIDDEN SIMPLE RULE. Beside it, a web of branching paths on a scroll trailing into blankness, labeled NO PATH TO PROOF. These four converge toward the center of the page into one great tangled loom-hub with startled small figures recoiling from it, labeled THE TANGLED HUB — drawn larger than the others, as the single point all threads above feed into. From this hub, four threads fan back out below: a figure casting dice across a checkered field with a hidden trap door, labeled TOO FEW DICE CAST; an ornate chaotic triangular pattern amid plain striped ones, labeled THE ODD ONE: RULE 30; a scribe at carved tablets, one bearing a strange doubled mark, labeled THE TABLET MARKED 2; and an architect laying finely cut stones into a naturally straight wall, labeled WELL-CUT BUILDING BLOCKS. All four converge again at the bottom into a final vignette: a robed scholar holding up a cracked, broken machine triumphantly like a prized specimen, labeled THE BROKEN MACHINE, PRIZED, with a thin looping ink line curling from this scene back up to the small gear machine at the very top of the page. Compass roses, faint parchment creases, and small decorative sea-serpents or border flourishes may fill empty margins sparingly, but the page must not be crowded — each vignette drawn large enough to read clearly, using the full width of the plate. No lettering anywhere except the titles specified beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-b9z7g9",
+          "quote": "even programs (or fragments of them) that are very simple in their structure can end up doing computation",
+          "depicts": "A single small gear-and-tape machine at the top of the page, radiating lines far beyond a small thought-bubble drawn around it, showing its workings outgrow the simple picture in a mind above it.",
+          "title": "SIMPLE MACHINE, VAST WORKINGS",
+          "node": "n1"
+        },
+        {
+          "block": "spya-h3jx6h",
+          "quote": "for input 7, there’s a bug!",
+          "depicts": "A tape marked with the number 7 feeding into a toy machine, which spits out a crooked 9 instead of an 8, with a small jagged crack in the drawn tape at that spot.",
+          "title": "INPUT SEVEN FAILS",
+          "node": "n2"
+        },
+        {
+          "block": "spya-rt2gb2",
+          "quote": "we never want them to “go out of control” and start using unbounded amounts of memory",
+          "depicts": "A machine with a tape unspooling off the edge of the map into a swirl of blank parchment, a hand gesturing to stop it in vain.",
+          "title": "TAPE RUNS WILD",
+          "node": "n3"
+        },
+        {
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "A scholar's hand peeling back the outer rind of a complex woven pattern to reveal a simpler nested diamond pattern underneath, like lifting a husk from a seed.",
+          "title": "THE HIDDEN SIMPLE RULE",
+          "node": "n5"
+        },
+        {
+          "block": "spya-zkkrs3",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "A web of branching paths on a scroll, all of them trailing off into blank parchment with no path ever reaching a marked destination seal.",
+          "title": "NO PATH TO PROOF",
+          "node": "n6"
+        },
+        {
+          "block": "spya-s247px",
+          "quote": "with a bounded amount of computational work it’s always possible for the system to surprise us",
+          "depicts": "At the center of the map, a great knotted loom of threads converging into one tangled hub, from which smaller surprised figures recoil, representing the single hub all the evidence feeds into.",
+          "title": "THE TANGLED HUB",
+          "node": "n7"
+        },
+        {
+          "block": "spya-f7mn34",
+          "quote": "the number of samples might just not be large enough to ever hit a bug",
+          "depicts": "A figure casting handfuls of dice across a vast checkered field, most landing in a small tested patch while a hidden trap door elsewhere goes undiscovered.",
+          "title": "TOO FEW DICE CAST",
+          "node": "n8"
+        },
+        {
+          "block": "spya-zbsh70",
+          "quote": "quite unexpectedly, there was rule 30, with all its complexity",
+          "depicts": "A single ornate, chaotic triangular pattern standing out amid a row of plain, orderly striped patterns on the map's border.",
+          "title": "THE ODD ONE: RULE 30",
+          "node": "n9"
+        },
+        {
+          "block": "spya-y7q6q3",
+          "quote": "you try x105 – 1. And suddenly there’s something different—a coefficient of 2",
+          "depicts": "A scribe examining a long row of carved tablets all marked with plus-one and minus-one symbols, until one tablet near the end bears a strange doubled mark.",
+          "title": "THE TABLET MARKED 2",
+          "node": "n10"
+        },
+        {
+          "block": "spya-jdrtne",
+          "quote": "if you write your program in a sufficiently well-designed language",
+          "depicts": "An architect's hand laying finely cut stone blocks of many shapes into a wall that naturally stands straight, as if the shapes themselves prevent crookedness.",
+          "title": "WELL-CUT BUILDING BLOCKS",
+          "node": "n11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A single small gear-and-tape machine at the top of the page, radiating lines far beyond a small thought-bubble drawn around it, showing its workings outgrow the simple picture in a mind above it.",
+          "title": "SIMPLE MACHINE, VAST WORKINGS"
+        },
+        {
+          "where": "A tape marked with the number 7 feeding into a toy machine, which spits out a crooked 9 instead of an 8, with a small jagged crack in the drawn tape at that spot.",
+          "title": "INPUT SEVEN FAILS"
+        },
+        {
+          "where": "A machine with a tape unspooling off the edge of the map into a swirl of blank parchment, a hand gesturing to stop it in vain.",
+          "title": "TAPE RUNS WILD"
+        },
+        {
+          "where": "A row of neat triangular cellular-automaton patterns marching along, the fourteenth one suddenly bent and torn.",
+          "title": "THE FOURTEENTH PATTERN TEARS"
+        },
+        {
+          "where": "A scholar's hand peeling back the outer rind of a complex woven pattern to reveal a simpler nested diamond pattern underneath, like lifting a husk from a seed.",
+          "title": "THE HIDDEN SIMPLE RULE"
+        },
+        {
+          "where": "A web of branching paths on a scroll, all of them trailing off into blank parchment with no path ever reaching a marked destination seal.",
+          "title": "NO PATH TO PROOF"
+        },
+        {
+          "where": "At the center of the map, a great knotted loom of threads converging into one tangled hub, from which smaller surprised figures recoil, representing the single hub all the evidence feeds into.",
+          "title": "THE TANGLED HUB"
+        },
+        {
+          "where": "A figure casting handfuls of dice across a vast checkered field, most landing in a small tested patch while a hidden trap door elsewhere goes undiscovered.",
+          "title": "TOO FEW DICE CAST"
+        },
+        {
+          "where": "A single ornate, chaotic triangular pattern standing out amid a row of plain, orderly striped patterns on the map's border.",
+          "title": "THE ODD ONE: RULE 30"
+        },
+        {
+          "where": "A scribe examining a long row of carved tablets all marked with plus-one and minus-one symbols, until one tablet near the end bears a strange doubled mark.",
+          "title": "THE TABLET MARKED 2"
+        },
+        {
+          "where": "An architect's hand laying finely cut stone blocks of many shapes into a wall that naturally stands straight, as if the shapes themselves prevent crookedness.",
+          "title": "WELL-CUT BUILDING BLOCKS"
+        },
+        {
+          "where": "At the bottom of the page, a cracked, broken machine held up triumphantly by a robed explorer-scholar, like a prized specimen rather than a ruin, with an arrow looping back up to the small gear machin",
+          "title": "THE BROKEN MACHINE, PRIZED"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-demonstrations",
+      "title": "Where Bugs Are Caught in the Act",
+      "prompt": "An antique hand-drawn map plate in sepia and faded ochre ink on aged parchment, continuing the register of the overview map. At the top, echo the overview's torn-triangle vignette style: a small explorer-scholar watches a toy machine tap numbers onto a scroll, nodding, labeled THE PATTERN SEEMS CLEAR — this opens the plate as the same scene the overview showed smaller. Below it, the same machine suddenly produces a crooked 9 instead of 8, the scholar's hand raised in surprise, labeled OUTPUT NINE, NOT EIGHT. Beside these, a ledger-chart pinned to the parchment with scattered marks at many positions, labeled A SCATTERED TALLY OF FAILURES. The composition then forks into two columns running down the page. Left column: a long unbroken row of tally marks to 14 breaking jaggedly at the fifteenth, labeled FIFTEEN MARKS, THEN A BREAK; below it a much longer row breaking near the sixty-third mark with 72 scrawled beside it, labeled FAILURE HIDDEN TILL SIXTY-THREE; below that a scroll fragment of all-ones binary digits marked with a small warning sign, labeled ALL-ONES ARE RISKIEST. Right column, beginning where the warning sign points: two near-identical twin toy machines running in step until one veers off at the twenty-seventh mark, labeled TWINS PART AT TWENTY-SEVEN; below it a machine's tape coiling endlessly while figures watch, labeled CAUGHT IN AN ENDLESS LOOP; below that a row of even tiles interrupted by an odd tile numbered 9, labeled AN ODD NINE APPEARS. Both columns converge at the bottom into a final pair of vignettes side by side: a cellular pattern meant to double, fraying apart at its fourteenth step, labeled DOUBLING FAILS AT FOURTEEN, beside a longer-lived doubling pattern fraying at its twenty-fourth step, labeled ANOTHER FAILS AT TWENTY-FOUR. Faint compass marks and parchment creases may fill sparse margins, but each vignette must be large and legible, filling the plate's width. No lettering anywhere except the specified titles beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-scjxv8",
+          "quote": "Looking at these examples, we’d probably conclude that the Turing machine is computing the function",
+          "depicts": "An explorer-scholar watching a small machine tap out a steady sequence of numbers on a scroll, nodding in satisfaction at the pattern.",
+          "title": "THE PATTERN SEEMS CLEAR",
+          "node": "d1"
+        },
+        {
+          "block": "spya-h3jx6h",
+          "quote": "Instead of outputting 7 + 1 = 8, the Turing machine outputs 9",
+          "depicts": "The same machine suddenly producing a crooked 9 where an 8 should sit, with the scholar's satisfied nod turning to a startled hand raised.",
+          "title": "OUTPUT NINE, NOT EIGHT",
+          "node": "d2"
+        },
+        {
+          "block": "spya-ak7n5c",
+          "quote": "here’s a summary of where the “first bugs” occur",
+          "depicts": "A ledger-like chart pinned to the map showing scattered marks at many different positions, like a tally of scattered first failures.",
+          "title": "A SCATTERED TALLY OF FAILURES",
+          "node": "d3"
+        },
+        {
+          "block": "spya-k8dhyb",
+          "quote": "if one runs this machine for inputs from 0 to 14 everything works just fine—but suddenly at n = 15",
+          "depicts": "A long unbroken row of correct tally marks numbered up to 14, then a sudden jagged break at the fifteenth mark.",
+          "title": "FIFTEEN MARKS, THEN A BREAK",
+          "node": "d4"
+        },
+        {
+          "block": "spya-n58qub",
+          "quote": "but then suddenly at n = 63 doesn’t give 64 but instead gives 72",
+          "depicts": "A much longer row of correct tally marks reaching deep into the sixties, with the sixty-third mark crossed out and a wrong number 72 scrawled beside it.",
+          "title": "FAILURE HIDDEN TILL SIXTY-THREE",
+          "node": "d5"
+        },
+        {
+          "block": "spya-u3d2ws",
+          "quote": "the “highest risk” values of n for bugs are those of the form 2i – 1",
+          "depicts": "A warning banner-like scroll fragment showing a string of binary digits that are all ones, marked with a small danger symbol.",
+          "title": "ALL-ONES ARE RISKIEST",
+          "node": "d6"
+        },
+        {
+          "block": "spya-txuteu",
+          "quote": "but then suddenly, at n = 27, do something different",
+          "depicts": "Two near-identical twin machines running side by side in perfect step, until at the twenty-seventh mark one veers off a different path than the other.",
+          "title": "TWINS PART AT TWENTY-SEVEN",
+          "node": "d7"
+        },
+        {
+          "block": "spya-hz8ymk",
+          "quote": "But then at n = 32, it suddenly gives 9!",
+          "depicts": "A row of even-numbered tiles laid neatly, suddenly interrupted by an odd tile marked 9 popping up out of place at the thirty-second spot.",
+          "title": "AN ODD NINE APPEARS",
+          "node": "d9"
+        },
+        {
+          "block": "spya-sk8qh9",
+          "quote": "Here’s an example where the first “bug” shows up at n = 24",
+          "depicts": "A second, longer-lived doubling pattern drawn growing correctly much further before fraying apart at its twenty-fourth step.",
+          "title": "ANOTHER FAILS AT TWENTY-FOUR",
+          "node": "d11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "An explorer-scholar watching a small machine tap out a steady sequence of numbers on a scroll, nodding in satisfaction at the pattern.",
+          "title": "THE PATTERN SEEMS CLEAR"
+        },
+        {
+          "where": "The same machine suddenly producing a crooked 9 where an 8 should sit, with the scholar's satisfied nod turning to a startled hand raised.",
+          "title": "OUTPUT NINE, NOT EIGHT"
+        },
+        {
+          "where": "A ledger-like chart pinned to the map showing scattered marks at many different positions, like a tally of scattered first failures.",
+          "title": "A SCATTERED TALLY OF FAILURES"
+        },
+        {
+          "where": "A long unbroken row of correct tally marks numbered up to 14, then a sudden jagged break at the fifteenth mark.",
+          "title": "FIFTEEN MARKS, THEN A BREAK"
+        },
+        {
+          "where": "A much longer row of correct tally marks reaching deep into the sixties, with the sixty-third mark crossed out and a wrong number 72 scrawled beside it.",
+          "title": "FAILURE HIDDEN TILL SIXTY-THREE"
+        },
+        {
+          "where": "A warning banner-like scroll fragment showing a string of binary digits that are all ones, marked with a small danger symbol.",
+          "title": "ALL-ONES ARE RISKIEST"
+        },
+        {
+          "where": "Two near-identical twin machines running side by side in perfect step, until at the twenty-seventh mark one veers off a different path than the other.",
+          "title": "TWINS PART AT TWENTY-SEVEN"
+        },
+        {
+          "where": "A machine's tape drawn coiling round and round in an endless closed spiral, with small figures watching it never stop.",
+          "title": "CAUGHT IN AN ENDLESS LOOP"
+        },
+        {
+          "where": "A row of even-numbered tiles laid neatly, suddenly interrupted by an odd tile marked 9 popping up out of place at the thirty-second spot.",
+          "title": "AN ODD NINE APPEARS"
+        },
+        {
+          "where": "A cellular-automaton pattern meant to double in size, drawn growing correctly then suddenly fraying apart at its fourteenth step.",
+          "title": "DOUBLING FAILS AT FOURTEEN"
+        },
+        {
+          "where": "A second, longer-lived doubling pattern drawn growing correctly much further before fraying apart at its twenty-fourth step.",
+          "title": "ANOTHER FAILS AT TWENTY-FOUR"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-proofs",
+      "title": "Where Proof Succeeds or Fails",
+      "prompt": "An antique hand-drawn map plate in sepia and faded ochre ink, continuing the same register as the overview. At the top, echo the overview's rind-peeling vignette as the opening scene, slightly enlarged: a scholar glances at a clean triangular pattern and stamps it approved, labeled OBVIOUS AT A GLANCE. Below, the scholar wearily checks a vast scroll of tally marks stretching far off the page, labeled A HUNDRED THOUSAND TESTS, CLEAN, and beside it frowns at a jittery uneven line, labeled NO GUARANTEE IN THE JITTER. These lead down into a sequence of four vignettes forming a chain: the scholar unrolling a full woven pattern across a table, labeled THE WHOLE PATTERN UNROLLED; a close-up of its pale bordering rind with small arrows showing it creeping only leftward or holding still, labeled THE RIND MOVES LEFT OR HOLDS; the rind peeled back to reveal a simple nested-diamond weave beneath, labeled RULE 122 BENEATH; and the scholar stamping a final seal of certainty on the whole unrolled pattern, labeled PROVED CORRECT, NO BUGS. Below this chain, the composition shifts to a second, parallel column: a different scholar at a lectern pausing with a raised quill over a machine, labeled CONFIDENT, BUT UNPROVEN; below, the scholar writing chains of linked symbolic beads on a scroll, labeled SYMBOLS FOR THE TAPE; below that, a finished scroll of symbolic steps stamped with a seal reaching one conclusion for all inputs, labeled ONE PROOF FOR ALL INPUTS. Beside this sealed scroll at the bottom of the page, a second scholar traces branching paths on another scroll that all trail off into blank parchment without ever reaching a seal, labeled NO PROOF EVER FOUND — drawn as a mirrored failure beside the successful sealed scroll. Faint parchment creases and sparse corner flourishes may fill empty space, but every vignette must be large and clearly legible, using the plate's full width. No lettering anywhere except the specified titles beneath each vignette.",
+      "vignettes": [
+        {
+          "block": "spya-qm284b",
+          "quote": "it’s “visually obvious” that they’ll “correctly double” for all input sizes",
+          "depicts": "A scholar glancing at a simple, clean triangular pattern and immediately marking it with a seal of approval, no further work needed.",
+          "title": "OBVIOUS AT A GLANCE",
+          "node": "p1"
+        },
+        {
+          "block": "spya-asw9eq",
+          "quote": "if we run this case up to n = 100000, no bugs appear",
+          "depicts": "A scholar wearily checking a vast scroll of tally marks stretching far off the page, counting to a hundred thousand with no breaks found.",
+          "title": "A HUNDRED THOUSAND TESTS, CLEAN",
+          "node": "p2"
+        },
+        {
+          "block": "spya-f89kx4",
+          "quote": "there’s no obvious way to be sure—and to guarantee that nothing crazy will ever happen",
+          "depicts": "The same scholar now frowning at a jittery, uneven line scrawled across the parchment, unable to tell if it will ever spike.",
+          "title": "NO GUARANTEE IN THE JITTER",
+          "node": "p3"
+        },
+        {
+          "block": "spya-hcdcqp",
+          "quote": "it looks at the whole process of computation—which is easy to do for a cellular automaton—things become clearer",
+          "depicts": "The scholar unrolling the full woven pattern across the whole table instead of just its edge, gaining a clearer view of the whole shape.",
+          "title": "THE WHOLE PATTERN UNROLLED",
+          "node": "p4"
+        },
+        {
+          "block": "spya-r7ty6m",
+          "quote": "the white “rind” always either stays in the same place, or moves to the left",
+          "depicts": "A close-up of the pattern's edge, drawn as a pale rind bordering the dense weave, with small arrows showing it only ever holds still or creeps leftward.",
+          "title": "THE RIND MOVES LEFT OR HOLDS",
+          "node": "p5"
+        },
+        {
+          "block": "spya-gagsuk",
+          "quote": "it’s exactly the rule 122 elementary cellular automaton",
+          "depicts": "Peeling back the rind to reveal a simpler nested diamond weave underneath, labeled as a known, well-understood pattern.",
+          "title": "RULE 122 BENEATH",
+          "node": "p6"
+        },
+        {
+          "block": "spya-n5acnw",
+          "quote": "the underlying cellular automaton must always correctly “double its input”, with no bugs",
+          "depicts": "The scholar stamping a final seal of certainty on the unrolled pattern, having traced the rind and the weave beneath it to a sure conclusion.",
+          "title": "PROVED CORRECT, NO BUGS",
+          "node": "p7"
+        },
+        {
+          "block": "spya-jqmftv",
+          "quote": "represent everything using symbolic expressions (yes, as in Wolfram Language)",
+          "depicts": "The scholar now writing chains of linked symbols and markers on a scroll, laying out the tape as a string of symbolic beads.",
+          "title": "SYMBOLS FOR THE TAPE",
+          "node": "p9"
+        },
+        {
+          "block": "spya-muu0c5",
+          "quote": "we’ve been able to prove that for all inputs n the machine correctly computes n + 1, with no bugs",
+          "depicts": "A finished scroll of symbolic steps stamped with a seal at the bottom, reaching a final conclusion that covers every possible input at once.",
+          "title": "ONE PROOF FOR ALL INPUTS",
+          "node": "p10"
+        },
+        {
+          "block": "spya-zkkrs3",
+          "quote": "But now—however far we go—we never find a proof",
+          "depicts": "Beside the sealed scroll, a second scholar tracing branching paths on another scroll that all trail off into blank parchment, never reaching a seal.",
+          "title": "NO PROOF EVER FOUND",
+          "node": "p11"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A scholar glancing at a simple, clean triangular pattern and immediately marking it with a seal of approval, no further work needed.",
+          "title": "OBVIOUS AT A GLANCE"
+        },
+        {
+          "where": "A scholar wearily checking a vast scroll of tally marks stretching far off the page, counting to a hundred thousand with no breaks found.",
+          "title": "A HUNDRED THOUSAND TESTS, CLEAN"
+        },
+        {
+          "where": "The same scholar now frowning at a jittery, uneven line scrawled across the parchment, unable to tell if it will ever spike.",
+          "title": "NO GUARANTEE IN THE JITTER"
+        },
+        {
+          "where": "The scholar unrolling the full woven pattern across the whole table instead of just its edge, gaining a clearer view of the whole shape.",
+          "title": "THE WHOLE PATTERN UNROLLED"
+        },
+        {
+          "where": "A close-up of the pattern's edge, drawn as a pale rind bordering the dense weave, with small arrows showing it only ever holds still or creeps leftward.",
+          "title": "THE RIND MOVES LEFT OR HOLDS"
+        },
+        {
+          "where": "Peeling back the rind to reveal a simpler nested diamond weave underneath, labeled as a known, well-understood pattern.",
+          "title": "RULE 122 BENEATH"
+        },
+        {
+          "where": "The scholar stamping a final seal of certainty on the unrolled pattern, having traced the rind and the weave beneath it to a sure conclusion.",
+          "title": "PROVED CORRECT, NO BUGS"
+        },
+        {
+          "where": "A different scholar at a lectern, confident in a machine's behavior but pausing with a quill raised, uncertain how to write it down as formal proof.",
+          "title": "CONFIDENT, BUT UNPROVEN"
+        },
+        {
+          "where": "The scholar now writing chains of linked symbols and markers on a scroll, laying out the tape as a string of symbolic beads.",
+          "title": "SYMBOLS FOR THE TAPE"
+        },
+        {
+          "where": "A finished scroll of symbolic steps stamped with a seal at the bottom, reaching a final conclusion that covers every possible input at once.",
+          "title": "ONE PROOF FOR ALL INPUTS"
+        },
+        {
+          "where": "Beside the sealed scroll, a second scholar tracing branching paths on another scroll that all trail off into blank parchment, never reaching a seal.",
+          "title": "NO PROOF EVER FOUND"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "profileHash": null
+}

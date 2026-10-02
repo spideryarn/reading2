@@ -890,9 +890,9 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   /* No route on the payload either, so the *nobody built one* sentence — it
      moved out of the owners-only group below on 2026-09-29, when the payload
      grew a flag for it, exactly as `timeline` did (SPIDERYARN-READING2-56).
-     The drawn route is "draws a stored trajectory from the payload" below.
+     The drawn route is "draws a stored skim from the payload" below.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  trajectory: { where: VISITOR_BAND, says: "Nobody has built a trajectory for this piece yet" },
+  skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this piece yet" },
   /* And the FAQ and the Citations list, the same day and the same way: out of
      the owners-only group below once the payload grew a flag for each. The
      drawn ones are "draws a stored faq" and "draws a stored citations list"
@@ -1188,7 +1188,7 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Trajectory is shown to a visitor, and nothing is spent.**
+   * **A stored Skim is shown to a visitor, and nothing is spent.**
    *
    * SPIDERYARN-READING2-56, Greg, 2026-09-29: a public article whose route had
    * already been built told a signed-out reader *"Trajectory is for whoever
@@ -1198,7 +1198,7 @@ describe("a signed-out browser on a shared document", () => {
    * its cue — and the trace stays the one public GET.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
-  it("draws a stored trajectory from the payload, asking nothing", async () => {
+  it("draws a stored skim from the payload, asking nothing", async () => {
     await remount();
     served = {
       ...ARTICLE,
@@ -1208,7 +1208,7 @@ describe("a signed-out browser on a shared document", () => {
           { id: "spya-qte002", blockId: "spya-cccccc", text: "an argument made elsewhere", importance: 0.8 },
         ],
       },
-      trajectory: {
+      skim: {
         stops: [
           { quoteId: "spya-qte002", depth: 1, role: null, cue: PUBLIC_CUE },
           { quoteId: "spya-qte001", depth: 2, role: null, cue: "Where it starts." },
@@ -1235,14 +1235,14 @@ describe("a signed-out browser on a shared document", () => {
         ],
       },
     };
-    await open("?mode=trajectory&depth=1&stop=spya-qte002");
+    await open("?mode=skim&depth=1&stop=spya-qte002");
 
     const band = host.querySelector(".mode-band");
     expect(band, "a band is open").not.toBeNull();
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     expect(readable(band as Element)).toContain(PUBLIC_CUE);
     expect(readable(band as Element)).toContain("an argument made elsewhere");
-    expect(host.textContent).not.toContain("Trajectory is for whoever added this article");
+    expect(host.textContent).not.toContain("Skim is for whoever added this article");
     /* None of the owner's verbs: no plan, no re-plan, no retry. */
     expect(host.textContent).not.toContain("Plan it again");
     expect(host.textContent).not.toContain("Plan the route");
@@ -1260,14 +1260,14 @@ describe("a signed-out browser on a shared document", () => {
     const stopCardLink = host.querySelector<HTMLButtonElement>('button[aria-label="Open in Ideas"]');
     expect(stopCardLink, "the open idea has no link into the stored public Ideas").not.toBeNull();
     await act(async () => stopCardLink?.click());
-    expect(await modeAfterPress("trajectory")).toBe("ideas");
+    expect(await modeAfterPress("skim")).toBe("ideas");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**
    * **A stored FAQ is shown to a visitor, and nothing is spent** — the same bug
-   * as the Trajectory's above, one mode along (SPIDERYARN-READING2-56, plan
+   * as the Skim's above, one mode along (SPIDERYARN-READING2-56, plan
    * 260929c stage 2). The question and the article's own passage are drawn;
    * none of the owner's verbs is, and the trace is the one public GET.
    */
@@ -2028,7 +2028,7 @@ describe("a signed-out browser on a shared document", () => {
       "ideas",
       "quotes",
       "timeline",
-      "trajectory",
+      "skim",
       "faq",
       "citations",
       "debate",
@@ -2534,6 +2534,26 @@ describe("when the reader changes underneath the page", () => {
 describe("a signed-in reader who does not own it", () => {
   /** Every request, as a comparable line. Method included: a POST is not a GET. */
   const lines = () => trace.map((r) => `${r.method} ${r.url}`);
+
+  it("does not mount the owner's first-open purpose prompt, even if this tab has its mark", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    const key = "spideryarn.ask-purpose";
+    window.sessionStorage.setItem(key, SLUG);
+    try {
+      await open();
+      expect(
+        trace.filter((r) => r.url === `/api/reader?slug=${SLUG}`),
+        "the visitor mounted the owner-only purpose reader",
+      ).toEqual([]);
+      expect(
+        window.sessionStorage.getItem(key),
+        "the visitor consumed an owner's first-open mark",
+      ).toBe(SLUG);
+    } finally {
+      window.sessionStorage.removeItem(key);
+    }
+  });
 
   /**
    * Open a view and **use it**, then report what was asked for.

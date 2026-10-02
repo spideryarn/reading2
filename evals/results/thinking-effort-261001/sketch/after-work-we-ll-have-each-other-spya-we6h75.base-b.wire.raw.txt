@@ -1,0 +1,158 @@
+{
+  "caption": "The piece funnels from one forecast into three independent case studies of relationship-only societies that all land on the same finding, then follows that finding forward into a claim about what paid work actually gives us — ending in a hedge that loops back to the opening worry.",
+  "title": "Funnel into converge, then chain",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "One forecast (AI ends work) opens into three unrelated case studies of relationship-only life, which converge on the same pattern, and that pattern is then carried forward into a claim about work and friendship — with a closing hedge that loops back to the start.",
+      "height": 1080,
+      "items": [
+        {"kind":"label","x":380,"y":16,"text":"AFTER WORK, WE'LL HAVE EACH OTHER","size":"xs","align":"middle"},
+
+        {"kind":"node","id":"thesis","shape":"ellipse","x":230,"y":40,"w":300,"h":80,
+         "text":"AI ends work: relationships take over","sub":"the relational-sector thesis",
+         "size":"md","block":"spya-eq7rkm",
+         "detail":"If machines do all economically necessary labor, status and meaning may revert to who you know."},
+
+        {"kind":"region","x":24,"y":170,"w":220,"h":280,"label":"ARISTOCRATS","style":"band","tone":1,"opens":"zoom-aristocrats"},
+        {"kind":"region","x":260,"y":170,"w":220,"h":280,"label":"LADIES WHO LUNCH","style":"band","tone":2},
+        {"kind":"region","x":496,"y":170,"w":220,"h":280,"label":"WORKING CLASS","style":"band","tone":3,"opens":"zoom-workingclass"},
+
+        {"kind":"node","id":"a1","shape":"box","x":40,"y":210,"w":188,"h":60,
+         "text":"Court life ran on heraldic precedence","size":"sm","tone":1,"block":"spya-y827zc"},
+        {"kind":"node","id":"a2","shape":"box","x":40,"y":290,"w":188,"h":60,
+         "text":"Salons and courts ran on gossip, not ideas","size":"sm","tone":1,"block":"spya-bm2xyv"},
+        {"kind":"node","id":"a3","shape":"box","x":40,"y":370,"w":188,"h":60,
+         "text":"Etiquette curbed ape-like instincts","size":"sm","tone":1,"block":"spya-cz0cgg",
+         "detail":"Elias: not an inevitable regression, so a future workless world need not repeat it."},
+
+        {"kind":"node","id":"b1","shape":"box","x":276,"y":210,"w":188,"h":60,
+         "text":"Upper-class wives never work, feel no need to","size":"sm","tone":2,"block":"spya-uum3xk"},
+        {"kind":"node","id":"b2","shape":"box","x":276,"y":290,"w":188,"h":60,
+         "text":"Fundraising gives an 'illusion of being useful'","size":"sm","tone":2,"block":"spya-mdncme"},
+        {"kind":"node","id":"b3","shape":"box","x":276,"y":370,"w":188,"h":60,
+         "text":"A comfortable but narrow social world","size":"sm","tone":2,"block":"spya-r7r7ap"},
+
+        {"kind":"node","id":"c1","shape":"box","x":512,"y":210,"w":188,"h":60,
+         "text":"West End peer groups replaced careers","size":"sm","tone":3,"block":"spya-y02mr5"},
+        {"kind":"node","id":"c2","shape":"box","x":512,"y":290,"w":188,"h":60,
+         "text":"Conformity enforced, outsiders excluded","size":"sm","tone":3,"block":"spya-j337dx"},
+        {"kind":"node","id":"c3","shape":"box","x":512,"y":370,"w":188,"h":60,
+         "text":"That mistrust fades as conditions improve","size":"sm","tone":3,"block":"spya-dma27v"},
+
+        {"kind":"node","id":"syn1","shape":"hex","x":230,"y":500,"w":300,"h":80,
+         "text":"All three: gossip defends group reputation","size":"md","block":"spya-qsfkqr",
+         "detail":"When dignity depends on group membership, policing the group's reputation becomes everyone's main activity."},
+        {"kind":"node","id":"syn2","shape":"box","x":230,"y":620,"w":300,"h":80,
+         "text":"Work offers respect for what you do, not who you know","size":"sm","block":"spya-zd83ts"},
+        {"kind":"node","id":"syn3","shape":"box","x":230,"y":740,"w":300,"h":80,
+         "text":"Surveys and oral histories: workers want competence and respect","size":"sm","block":"spya-t9qyhk"},
+        {"kind":"node","id":"syn4","shape":"box","x":230,"y":860,"w":300,"h":80,
+         "text":"Commercial markets freed friendship from necessity","size":"sm","block":"spya-hdbtc0"},
+        {"kind":"node","id":"syn5","shape":"note","x":230,"y":980,"w":300,"h":60,
+         "text":"Still, I'll miss my job and liberal individualism","size":"sm","block":"spya-dhj4jr"},
+
+        {"kind":"edge","from":"thesis","to":"a1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"thesis","to":"b1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"thesis","to":"c1","via":"curve","arrow":"end"},
+
+        {"kind":"edge","from":"a1","to":"a2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"a2","to":"a3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b1","to":"b2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"b2","to":"b3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c1","to":"c2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c2","to":"c3","via":"straight","arrow":"end"},
+
+        {"kind":"edge","from":"a3","to":"syn1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"b3","to":"syn1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"c3","to":"syn1","via":"curve","arrow":"end"},
+
+        {"kind":"edge","from":"syn1","to":"syn2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"syn2","to":"syn3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"syn3","to":"syn4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"syn4","to":"syn5","via":"straight","arrow":"end"},
+
+        {"kind":"edge","from":"syn5:left","to":"thesis:left","via":"curve","arrow":"end","line":"dashed","label":"the worry returns"}
+      ]
+    },
+
+    {
+      "id": "zoom-aristocrats",
+      "title": "Power and sex among apes",
+      "caption": "A chain down the page, with the salons and Catherine the Great's court set beside Saint-Simon's Versailles as a second confirming example before the two rejoin into the same conclusion about honor and status.",
+      "height": 800,
+      "items": [
+        {"kind":"node","id":"ar1","shape":"box","x":280,"y":40,"w":260,"h":70,
+         "text":"Wealth came from connections, not labor","sub":"no need to work","size":"sm","block":"spya-c4s3en"},
+        {"kind":"node","id":"ar2","shape":"box","x":280,"y":140,"w":260,"h":70,
+         "text":"They didn't work, and work gave them no meaning","size":"sm","block":"spya-w7jf25"},
+        {"kind":"node","id":"ar3","shape":"box","x":280,"y":240,"w":260,"h":80,
+         "text":"Saint-Simon: brilliant court, petty memoirist","sub":"obsessed with precedence","size":"sm","block":"spya-x4w0zk"},
+        {"kind":"node","id":"ar4","shape":"box","x":280,"y":350,"w":260,"h":70,
+         "text":"Court life's real activity was intrigue","size":"sm","block":"spya-bm2xyv"},
+
+        {"kind":"node","id":"ar5","shape":"note","x":560,"y":420,"w":170,"h":70,
+         "text":"Salons too ran on gossip, not philosophy","size":"xs","block":"spya-wue7zn"},
+        {"kind":"node","id":"ar6","shape":"note","x":560,"y":510,"w":170,"h":70,
+         "text":"Catherine's court: the same favor-seeking","size":"xs","block":"spya-f90g2h"},
+
+        {"kind":"node","id":"ar7","shape":"box","x":280,"y":460,"w":260,"h":70,
+         "text":"Their dignity was honor: family and rank","size":"sm","block":"spya-de69sf"},
+        {"kind":"node","id":"ar8","shape":"box","x":280,"y":560,"w":260,"h":70,
+         "text":"Elias: etiquette curbed ape-like instinct","size":"sm","block":"spya-cz0cgg"},
+        {"kind":"node","id":"ar9","shape":"box","x":280,"y":660,"w":260,"h":70,
+         "text":"Not fate: Versailles's history isn't ours","size":"sm","block":"spya-k26ath"},
+
+        {"kind":"edge","from":"ar1","to":"ar2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar2","to":"ar3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar3","to":"ar4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar4","to":"ar5","via":"curve","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"ar5","to":"ar6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar6","to":"ar7","via":"curve","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"ar4","to":"ar7","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar7","to":"ar8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ar8","to":"ar9","via":"straight","arrow":"end"}
+      ]
+    },
+
+    {
+      "id": "zoom-workingclass",
+      "title": "The working classes",
+      "caption": "Another chain, with the quote on what counted as status set beside the main line before both feed into the same ending: the ethos was a rational response to poverty, and it fades as poverty does.",
+      "height": 870,
+      "items": [
+        {"kind":"node","id":"wc1","shape":"box","x":280,"y":40,"w":260,"h":70,
+         "text":"Gans studied Boston's Italian-American West End","size":"sm","block":"spya-ftk9a7"},
+        {"kind":"node","id":"wc2","shape":"box","x":280,"y":140,"w":260,"h":70,
+         "text":"Rooted in peasant Sicily, not the Yankee ethic","size":"sm","block":"spya-urfe43"},
+        {"kind":"node","id":"wc3","shape":"box","x":280,"y":240,"w":260,"h":70,
+         "text":"Life centered on the peer group, not the job","size":"sm","block":"spya-ghqg2t"},
+        {"kind":"node","id":"wc4","shape":"box","x":280,"y":340,"w":260,"h":70,
+         "text":"Deviance was punished, even too much success","size":"sm","block":"spya-tyj2mt"},
+
+        {"kind":"node","id":"wc5","shape":"note","x":560,"y":410,"w":170,"h":70,
+         "text":"Status came from loyalty, not achievement","size":"xs","block":"spya-weazcy"},
+
+        {"kind":"node","id":"wc6","shape":"box","x":280,"y":460,"w":260,"h":70,
+         "text":"Unable to organize, they lost their homes","size":"sm","block":"spya-dma27v"},
+        {"kind":"node","id":"wc7","shape":"box","x":280,"y":560,"w":260,"h":70,
+         "text":"Banfield: 'amoral familism' — trust only family","size":"sm","block":"spya-sd6cmd"},
+        {"kind":"node","id":"wc8","shape":"box","x":280,"y":660,"w":260,"h":70,
+         "text":"Gans: a rational answer to real poverty","size":"sm","block":"spya-x5hb7k"},
+        {"kind":"node","id":"wc9","shape":"box","x":280,"y":760,"w":260,"h":70,
+         "text":"As conditions improved, the old ethos faded","size":"sm","block":"spya-t4xpae"},
+
+        {"kind":"edge","from":"wc1","to":"wc2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc2","to":"wc3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc3","to":"wc4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc4","to":"wc5","via":"curve","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"wc5","to":"wc6","via":"curve","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"wc4","to":"wc6","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc6","to":"wc7","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc7","to":"wc8","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"wc8","to":"wc9","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

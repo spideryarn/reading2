@@ -558,6 +558,23 @@ export function estimateHierarchyTokens(blocks: Block[]): number {
 export const STRUCTURE_HEADROOM = 64_000;
 
 /**
+ * **How long the deadline must still be, for a structure call to be asked
+ * again** — the first call's own length, plus half of it again, plus at least
+ * `REASK_MARGIN_MS`. A second answer is not the same length as the first: the
+ * book this was written for took 129 s once and 94 s the next time, so a margin
+ * that admitted a second call on the first one's length alone would pay for
+ * most of a call and then be killed by the deadline (GPT Sol on the plan,
+ * 2026-10-01). Not `DEADLINE_MARGIN_MS`: that lies *outside* `deadlineAt`
+ * already, for unwinding before the platform kill.
+ */
+export function reaskReserveMs(firstCallMs: number): number {
+  return firstCallMs + Math.max(REASK_MARGIN_MS, firstCallMs / 2);
+}
+
+/** The floor under `reaskReserveMs`' slack — a guess, and labelled one. */
+export const REASK_MARGIN_MS = 30_000;
+
+/**
  * The structure call's request, assembled in the one place `generateHierarchy`
  * itself uses.
  *
@@ -693,7 +710,7 @@ export { checkpointKey as structureKey } from "./source-hash.js";
  * One structure answer, kept so a later attempt does not buy it again.
  *
  * **The raw text, not the tree.** Everything between the answer and the tree —
- * `parseJson`, `buildTree`, `appendSupplement`, the repairs — is this stage's
+ * `parseStructureAnswer`, `buildTree`, `appendSupplement`, the repairs — is this stage's
  * code, and storing its output would freeze a version of it into the row. The
  * answer is the thing that was paid for; the rest is free and re-runs.
  */
@@ -738,7 +755,7 @@ function usableStructure(value: unknown, fingerprint: string): string | null {
    * different fact from "the answer still builds".
    */
   try {
-    parseJson(entry.answer);
+    parseStructureAnswer(entry.answer);
   } catch {
     return null;
   }
@@ -857,8 +874,15 @@ export function checkCoverage(
  * the leak, and again on 2026-09-03, when a model put 8,138 characters after a
  * complete tree and the step died where `stripFence` plus `parseJsonFrom` used
  * to be. That is what `parseJsonAnswer` exists for.
+ *
+ * **Exported so the evals call this rather than copy it**, the way
+ * `structureRequest` is exported for the request. Until 2026-10-01 the
+ * structure eval and the plain-words eval kept their own copy of the
+ * pre-2026-09-03 recipe, and the structure eval refused a thinking-off answer
+ * this function accepts —
+ * docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md.
  */
-function parseJson(raw: string): { root: ModelNode } {
+export function parseStructureAnswer(raw: string): { root: ModelNode } {
   return parseJsonAnswer(raw, "the table-of-contents response");
 }
 
@@ -987,6 +1011,19 @@ export interface BuildReport {
    * exactly the sort of thing nobody notices unless it is printed.
    */
   droppedChildren: string[];
+  /**
+   * **Children that stated no range at all**, by position in the model's
+   * proposal — derived like a child whose start says nothing (`planChildRanges`
+   * § `spanOf`), rather than refusing the whole answer. A rangeless child that
+   * also had nowhere to start is in `droppedChildren` as well.
+   *
+   * Its own figure for the reason `collapsedRungs` has one: it is not a boundary
+   * that moved by a measurable amount, so as a `PartitionRepair` it would be a
+   * repair of no size. It cost a 1,041-block book its whole tree on 2026-10-01
+   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md). Normally empty,
+   * and reported at zero.
+   */
+  rangelessChildren: string[];
   /**
    * Nodes whose `sourceHeading` claim no heading block in their range backed
    * up, by position in the model's proposal. The node keeps its title; it
@@ -1276,10 +1313,11 @@ function planChildRanges(
   where: string,
   repairs: PartitionRepair[],
   droppedChildren: string[],
+  rangelessChildren: string[],
 ): ChildPlan[] | null {
   /**
-   * A child's range as block indices, or null if either endpoint is not a block
-   * id at all.
+   * A child's range as block indices; `"none"` if it states no range at all;
+   * or null if an endpoint is a string that is not a block id.
    *
    * **A pair that runs backwards is resolved, not rejected** — 2026-09-04. It
    * used to return `null` here, which took the whole sibling set down and cost
@@ -1296,26 +1334,63 @@ function planChildRanges(
    * exactly this, one block backwards
    * (evals/results/hierarchy-waves-real-corpus-2026-09-04.md).
    *
-   * An **invented id** still returns null and still refuses. That is the model
-   * naming something that does not exist, and the message that names it is more
-   * use than a tree built as though the child had never been proposed.
+   * An **invented id** still refuses, and so does a range of the wrong shape.
+   * That is the model naming something that does not exist, and the message
+   * that names it is more use than a tree built as though the child had never
+   * been proposed. Both throw **here, before any sibling is visited** — they
+   * used to return null and leave the throw to `buildTree`'s visit, which met
+   * the siblings in order, so a rangeless child ahead of an invented id
+   * reported itself and buried the precise error (GPT Sol on the plan,
+   * 2026-10-01). Same messages as the visit's own.
+   *
+   * **A child with no range at all is `"none"`, and is derived** — 2026-10-01.
+   * Only an absent property or `null`: the model named *nothing*, which is the
+   * opposite of naming something that does not exist. It is the case this
+   * function already has a rule for, a start that carries no information, so it
+   * goes through that rule — pinned if it is first, the previous child's end + 1
+   * otherwise, dropped if neither — and lends no end to the child after it. A
+   * 1,041-block book lost its whole tree to one of these until then
+   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md). **A half-stated
+   * range is not "none"**: `[start]` or `[start, 3]` still carries a start
+   * claim, and discarding it would attach the child's title to the wrong prose
+   * with nothing measured — so it is refused as malformed, as before.
    */
-  const spanOf = (mn: ModelNode): [number, number] | null => {
+  const spanOf = (mn: ModelNode, i: number): [number, number] | "none" => {
     const raw: unknown = mn.range;
-    if (!Array.isArray(raw) || raw.length !== 2) return null;
-    const [a, b] = raw as unknown[];
-    if (typeof a !== "string" || typeof b !== "string") return null;
+    const at = `${where} > child ${i + 1}`;
+    if (raw === undefined || raw === null) return "none";
+    const pair = Array.isArray(raw) && raw.length === 2 ? (raw as unknown[]) : [];
+    const [a, b] = pair;
+    if (typeof a !== "string" || typeof b !== "string") {
+      throw new Error(`The node at ${at} has no [start, end] block range.`);
+    }
     const lo = index.get(a);
     const hi = index.get(b);
-    return lo === undefined || hi === undefined ? null : [lo, hi];
+    if (lo === undefined || hi === undefined) {
+      if (mn.children?.length) {
+        throw new Error(
+          `The node at ${at} has a range not in blocks.json: ` +
+            `start ${nameValue(a)}; end ${nameValue(b)}`,
+        );
+      }
+      const bad = [
+        ...(lo === undefined ? [`start ${nameValue(a)}`] : []),
+        ...(hi === undefined ? [`end ${nameValue(b)}`] : []),
+      ];
+      throw new Error(`Node range not in blocks.json — at ${at}: ${bad.join("; ")}`);
+    }
+    return [lo, hi];
   };
 
-  const spans: ([number, number] | null)[] = children.map(spanOf);
-  /* One unresolvable child and the whole node is left alone — see `spanOf`. */
-  if (spans.some((s) => s === null)) return null;
+  const resolved = children.map(spanOf);
+  /** `undefined` is a child that made no claim; every other entry resolved. */
+  const spans: ([number, number] | undefined)[] = resolved.map((s) => (s === "none" ? undefined : s));
+  for (const [i, s] of resolved.entries()) {
+    if (s === "none") rangelessChildren.push(`${where} > child ${i + 1}`);
+  }
 
   /** Did this child state its own extent backwards? Its end is then unusable. */
-  const backwards = spans.map((s) => s![0] > s![1]);
+  const backwards = spans.map((s) => s !== undefined && s[0] > s[1]);
 
   const [p0, p1] = parent;
 
@@ -1356,7 +1431,8 @@ function planChildRanges(
       kept.push({ childIndex: i, start: p0 });
       continue;
     }
-    const claimed = clamp(span![0]);
+    /* No range, no claim: straight to the fallback below. */
+    const claimed = span === undefined ? undefined : clamp(span[0]);
     /* **A backwards end is ineligible for the fallback**, and that is the one
        thing keeping a backwards child costs. The fallback exists for the case
        where a start carries no information and the previous child's *end* is
@@ -1364,10 +1440,10 @@ function planChildRanges(
        invent a split point from a bad number and attach BOTH neighbours to the
        wrong prose. So when there is no usable fallback either, the child is
        dropped exactly as it always was when neither claim stood up. ⟨GPT Sol⟩ */
-    const fallback = backwards[previous.childIndex]
-      ? undefined
-      : clamp(spans[previous.childIndex]![1] + 1);
-    const start = claimed > previous.start ? claimed : fallback;
+    const before = spans[previous.childIndex];
+    const fallback =
+      before === undefined || backwards[previous.childIndex] ? undefined : clamp(before[1] + 1);
+    const start = claimed !== undefined && claimed > previous.start ? claimed : fallback;
     if (start === undefined || start <= previous.start) {
       droppedChildren.push(`${where} > child ${i + 1}`);
       continue;
@@ -1422,9 +1498,24 @@ function planChildRanges(
  * `size` is how far apart they were, which is the same number as how many blocks
  * changed hands (`PartitionRepair.size` has the arithmetic).
  */
+function interiorBoundaryKind(
+  settled: number,
+  afterPrevious: number | undefined,
+  nextStart: number | undefined,
+): "gap" | "overlap" {
+  if (nextStart !== undefined) {
+    if (afterPrevious !== undefined && nextStart !== afterPrevious) {
+      return nextStart > afterPrevious ? "gap" : "overlap";
+    }
+    return nextStart > settled ? "gap" : "overlap";
+  }
+  return afterPrevious !== undefined && settled > afterPrevious ? "gap" : "overlap";
+}
+
 function recordBoundaryFaults(
   kept: KeptChild[],
-  spans: ([number, number] | null)[],
+  /** `undefined` for a child that stated no range — it made no claim to measure. */
+  spans: ([number, number] | undefined)[],
   parent: readonly [number, number],
   where: string,
   repairs: PartitionRepair[],
@@ -1453,9 +1544,9 @@ function recordBoundaryFaults(
 
   // The node's own start, against what its first child claimed. One claim.
   const head = kept[0];
-  if (head !== undefined) {
-    const claimed = spans[head.childIndex]![0];
-    fault(head, claimed > p0 ? "gap" : "overlap", p0, Math.abs(p0 - claimed));
+  const headClaim = head === undefined ? undefined : spans[head.childIndex]?.[0];
+  if (head !== undefined && headClaim !== undefined) {
+    fault(head, headClaim > p0 ? "gap" : "overlap", p0, Math.abs(p0 - headClaim));
   }
 
   /* Each interior boundary, where the model states it twice: as the previous
@@ -1463,14 +1554,18 @@ function recordBoundaryFaults(
      and the distance between them is how many blocks change hands. */
   for (let k = 1; k < kept.length; k++) {
     const child = kept[k]!;
-    const after = spans[kept[k - 1]!.childIndex]![1] + 1;
-    const claimed = spans[child.childIndex]![0];
-    const size = Math.abs(child.start - claimed) + Math.abs(child.start - after);
+    const before = spans[kept[k - 1]!.childIndex];
+    const after = before === undefined ? undefined : before[1] + 1;
+    const claimed = spans[child.childIndex]?.[0];
+    /* A rangeless child on either side leaves one claim, or none, about this
+       boundary; only the claims that were made are measured. */
+    const size =
+      (claimed === undefined ? 0 : Math.abs(child.start - claimed)) +
+      (after === undefined ? 0 : Math.abs(child.start - after));
     /* Which way the answer was wrong: by its own two claims where they
        disagree, and otherwise by how far we had to move the boundary from the
        one place it did name. */
-    const late = claimed === after ? child.start > claimed : claimed > after;
-    fault(child, late ? "gap" : "overlap", child.start, size);
+    fault(child, interiorBoundaryKind(child.start, after, claimed), child.start, size);
   }
 
   /* The closing boundary, at one *past* the parent's last block so it can never
@@ -1484,9 +1579,9 @@ function recordBoundaryFaults(
      parent's range was itself derived one level up, so it is the claim with a
      tiling behind it, and the child's overrun gives way. */
   const tail = kept.at(-1);
-  if (tail !== undefined) {
-    const claimed = spans[tail.childIndex]![1];
-    fault(tail, claimed < p1 ? "short" : "over", p1 + 1, Math.abs(p1 - claimed));
+  const tailClaim = tail === undefined ? undefined : spans[tail.childIndex]?.[1];
+  if (tail !== undefined && tailClaim !== undefined) {
+    fault(tail, tailClaim < p1 ? "short" : "over", p1 + 1, Math.abs(p1 - tailClaim));
   }
 }
 
@@ -1567,6 +1662,7 @@ function collapseRestatedRungs(
   where: string,
   repairs: PartitionRepair[],
   droppedChildren: string[],
+  rangelessChildren: string[],
   collapsedRungs: string[],
   droppedQuestions: string[],
 ): { children: ModelNode[]; plans: ChildPlan[] | null; where: string; absorbed: ModelNode[] } {
@@ -1579,7 +1675,11 @@ function collapseRestatedRungs(
 
   for (;;) {
     const faults: PartitionRepair[] = [];
-    const plans = planChildRanges(here, parent, index, blocks, at, faults, droppedChildren);
+    /* Rangeless children are counted from every sibling set planned, a rung
+       spliced away included: each pass plans a different set, so nothing is
+       counted twice, and the figure is there to watch the prompt drift, which
+       a collapsed rung's missing range is as much evidence of as any. */
+    const plans = planChildRanges(here, parent, index, blocks, at, faults, droppedChildren, rangelessChildren);
     /* **The rule as a range statement**: no child may cover its parent's whole
        range. With ordered starts and derived ends that coincides with "exactly
        one child kept" — the first kept child is pinned to the parent's start
@@ -1691,6 +1791,7 @@ export function buildTree(
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   const repairs = report?.repairs ?? [];
   const droppedChildren = report?.droppedChildren ?? [];
+  const rangelessChildren = report?.rangelessChildren ?? [];
   const dropped = report?.droppedHeadings ?? [];
   const collapsed = report?.collapsedRungs ?? [];
   const droppedQuestions = report?.droppedQuestions ?? [];
@@ -1798,6 +1899,7 @@ export function buildTree(
               where,
               repairs,
               droppedChildren,
+              rangelessChildren,
               collapsed,
               droppedQuestions,
             )
@@ -2148,6 +2250,15 @@ export interface HierarchyRun {
    */
   structureResumed: boolean;
   /**
+   * **How many structure calls this attempt made**: 0 when it was resumed, 1
+   * ordinarily, 2 when the first answer could not become a tree and was asked
+   * for again — `REASK_STRUCTURE`. Logged at every value, because a re-ask that
+   * has quietly become the common case doubles the stage's bill and its wait.
+   */
+  structureCalls: 0 | 1 | 2;
+  /** Children that stated no range and were derived — `BuildReport.rangelessChildren`. */
+  rangelessChildren: number;
+  /**
    * **What the deepening wave did**, or `null` where it was not run at all —
    * which is every reader today, because the flag is off
    * (src/hierarchy-deepen.ts § `DEEPEN_ENV`).
@@ -2355,8 +2466,8 @@ export async function generateHierarchy(opts: {
    * docs/postmortems/260830a-the-article-with-one-heading.md.
    */
   const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
-    const { root } = parseJson(answer);
-    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+    const { root } = parseStructureAnswer(answer);
+    const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
     /**
      * **The tree before the apparatus is appended**, kept because the deepening
@@ -2508,7 +2619,17 @@ export async function generateHierarchy(opts: {
    * small.
    */
   let structureUsage = { input_tokens: 0, output_tokens: 0 };
-  if (raw === null) {
+  /**
+   * **One structure call, from request to an answer we can try to build** —
+   * everything that refuses an answer *before* it is read as a tree (transport,
+   * refusal, truncation) throws in here, so none of them is ever asked again.
+   */
+  const askForStructure = async (
+    /* Prefixed to every progress line of this call, so "asking again" is not
+       overwritten by the second stream's first "Nk characters" a moment later. */
+    attempt = "",
+  ): Promise<{ answer: string; usage: Anthropic.Usage; ms: number }> => {
+    const began = Date.now();
     let message: Anthropic.Message;
     try {
       const call = streamMessage("hierarchy", params, {
@@ -2527,7 +2648,7 @@ export async function generateHierarchy(opts: {
           const now = Date.now();
           if (now - last < 500) return;
           last = now;
-          report(`${Math.round(chars / 1000)}k characters of tree so far`);
+          report(`${attempt}${Math.round(chars / 1000)}k characters of tree so far`);
         });
       }
 
@@ -2538,8 +2659,7 @@ export async function generateHierarchy(opts: {
     } catch (err) {
       throw anthropicCallFailed(err);
     }
-    structureUsage = message.usage;
-    raw = message.content
+    const answer = message.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("");
@@ -2558,26 +2678,79 @@ export async function generateHierarchy(opts: {
         "table of contents",
         maxTokens,
         answerTokens,
-        { outputTokens: message.usage.output_tokens, answerChars: raw.length },
+        { outputTokens: message.usage.output_tokens, answerChars: answer.length },
         /* This stage's own reservation, not the general one — otherwise the
            sentence that exists to say which half overran quotes a number the call
            was never sized with. */
         STRUCTURE_HEADROOM,
       );
     }
-  }
+    return { answer, usage: message.usage, ms: Date.now() - began };
+  };
 
-  /* Built already if it came out of the checkpoint — the gate up there is this
-     same function, because an answer that cannot become a tree has to read as a
-     miss rather than as a resumption. */
-  const wave1 = cached ?? treeFrom(raw);
+  /**
+   * **A fresh answer that cannot become a tree is asked for once more**, inside
+   * the step — 2026-10-01, docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md.
+   *
+   * A 1,041-block book is a 25,000-character answer, and one local fault
+   * anywhere in it — a node with no range, a bracket closed in the wrong order
+   * three characters from the end — threw the whole answer away. The reader then
+   * pressed Retry, which drew a new answer with the same odds: the reader was
+   * the retry loop, paying a step each time. Both of that book's answers failed,
+   * each on a different fault.
+   *
+   * Four limits, each of them load-bearing:
+   *
+   * - **Only a failure of `treeFrom`** — parse, build, supplement, invariants.
+   *   Truncation, refusal and transport errors throw inside `askForStructure`
+   *   and keep their own dispositions; a truncation asked again truncates again.
+   * - **Once.** The second failure is the step's failure, the first is logged
+   *   beside it. Two calls is the worst case, never a loop —
+   *   docs/postmortems/260902c-the-truncation-retry-cost-storm.md is what a loop
+   *   costs.
+   * - **Only if the deadline admits another call half as long again as the
+   *   first** — `reaskReserveMs`. Otherwise the step fails now, as
+   *   it always did, rather than being killed part-way through a call it
+   *   started. No deadline (the CLI, the evals) admits it.
+   * - **Not after an abort.**
+   *
+   * A stored answer that will not build is a different case and is not counted
+   * here: it is demoted to a miss above, and the call below is its first.
+   */
+  let structureCalls: 0 | 1 | 2 = 0;
+  let wave1 = cached;
+  if (wave1 === null) {
+    const first = await askForStructure();
+    structureCalls = 1;
+    structureUsage = first.usage;
+    raw = first.answer;
+    try {
+      wave1 = treeFrom(raw);
+    } catch (err) {
+      const left = opts.deadlineAt === undefined ? Infinity : opts.deadlineAt - Date.now();
+      if (opts.signal?.aborted || left < reaskReserveMs(first.ms)) throw err;
+      log("pipeline").warn(
+        { slug, err, firstCallMs: first.ms, leftMs: Number.isFinite(left) ? left : null },
+        "the table of contents did not become a tree; asking for it once more",
+      );
+      opts.onProgress?.("the first table of contents did not hold together; asking again");
+      const second = await askForStructure("asking again: ");
+      structureCalls = 2;
+      structureUsage = {
+        input_tokens: first.usage.input_tokens + second.usage.input_tokens,
+        output_tokens: first.usage.output_tokens + second.usage.output_tokens,
+      };
+      raw = second.answer;
+      wave1 = treeFrom(raw);
+    }
+  }
   let structure = wave1.tree;
   const built = wave1.built;
 
   /**
    * **Kept only now, and the lateness is the design.**
    *
-   * An answer stored before `parseJson` and `buildTree` had agreed with it would
+   * An answer stored before `parseStructureAnswer` and `buildTree` had agreed with it would
    * be a malformed-but-complete answer replayed for ever — every later attempt
    * "resuming" straight onto the same throw, with no call left to make that
    * could come out differently. So the write is after every check that an answer
@@ -2595,7 +2768,9 @@ export async function generateHierarchy(opts: {
    * store's last-write-wins replaces it (src/store/checkpoints-pg.ts). Without
    * that there would be no way out of a bad row but a deploy.
    */
-  if (!structureResumed) {
+  /* `raw` is the answer `wave1` was built from on every path that reaches
+     here; the null check is for the compiler, which cannot see that. */
+  if (!structureResumed && raw !== null) {
     const entry: StructureCheckpointEntry = { fingerprint: structureFingerprint, answer: raw };
     try {
       await opts.checkpoints.write(slug, "hierarchy-structure", structureFingerprint, entry);
@@ -2677,6 +2852,7 @@ export async function generateHierarchy(opts: {
         const rebuilt: BuildReport = {
           repairs: [],
           droppedChildren: [],
+          rangelessChildren: [],
           droppedHeadings: [],
           collapsedRungs: [],
           droppedQuestions: [],
@@ -2690,6 +2866,7 @@ export async function generateHierarchy(opts: {
         for (const from of [deepened.report, rebuilt]) {
           built.repairs.push(...from.repairs);
           built.droppedChildren.push(...from.droppedChildren);
+          built.rangelessChildren.push(...from.rangelessChildren);
           built.droppedHeadings.push(...from.droppedHeadings);
           built.collapsedRungs.push(...from.collapsedRungs);
           built.droppedQuestions.push(...from.droppedQuestions);
@@ -2936,11 +3113,13 @@ export async function generateHierarchy(opts: {
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
+    rangelessChildren: built.rangelessChildren.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
     structureResumed,
+    structureCalls,
     deepen,
     deepenFailed,
     /* **Both remaining passes, and the label pass is no longer one of them.**

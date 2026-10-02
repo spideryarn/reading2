@@ -1,0 +1,215 @@
+{
+  "startedAt": "2026-10-01T17:39:07.688Z",
+  "commit": "cfd0428e5a95c2da2bb5e86f8233c915bfa62bff",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-off",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "thinking": "off"
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "incumbent",
+      "slug": "cargocult-spya-rz663q"
+    },
+    {
+      "arm": "smart-off",
+      "slug": "cargocult-spya-rz663q"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 1,
+      "elapsedMs": 56364,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "cargocult-spya-rz663q",
+        "blocks": 41,
+        "bodyBlocks": 41,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 41
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            27,
+            843,
+            960,
+            785,
+            1104,
+            103
+          ],
+          "balanceCv": 0.6548443785748297
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.975609756097561
+        },
+        "fanout": {
+          "mean": 2.9047619047619047,
+          "max": 6,
+          "within5to9": 0.14285714285714285
+        },
+        "headings": {
+          "boundaries": 14,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.047619047619047616,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 40,
+            "words": 3819
+          }
+        },
+        "titles": {
+          "count": 21,
+          "meanWords": 3.5714285714285716,
+          "within2to6": 0.8571428571428571,
+          "copiedHeadings": 1,
+          "retention": 0.45083333333333336
+        },
+        "gists": {
+          "count": 21,
+          "coverage": 1,
+          "meanWords": 23.761904761904763,
+          "multiSentence": 0.047619047619047616,
+          "templateRepetition": 0,
+          "retention": 0.4220938436343318
+        }
+      },
+      "calls": [
+        {
+          "ms": 56332,
+          "inputTokens": 9886,
+          "outputTokens": 6521,
+          "reasoningTokens": 4022,
+          "generationId": "gen-1790876348-sL117xTCvfTFm57fig13",
+          "costUsd": 0.084982,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 2,
+          "endedOffsetMs": 56334,
+          "stopReason": "end_turn",
+          "thinkingSent": "adaptive"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [
+          "root > child 6 > child 1"
+        ],
+        "droppedQuestions": []
+      },
+      "vsDisk": {
+        "partCountA": 6,
+        "partCountB": 5,
+        "l1Boundaries": 0.5,
+        "allBoundaries": 0.7777777777777778,
+        "boundaryDistance": {
+          "mean": 0.1875,
+          "within1Block": 0.9375
+        }
+      }
+    },
+    {
+      "arm": "smart-off",
+      "comparison": "isolated",
+      "slug": "cargocult-spya-rz663q",
+      "run": 1,
+      "callOrder": 2,
+      "elapsedMs": 43509,
+      "blocksSha256": {
+        "measured": "65b5d2ab43fef457940e9c3f806d5776be464df0badba11f4798387e686d1e44",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "the structure-arm response is not valid JSON: it does not begin with { or [ — 12354 characters, so this is probably not JSON at all",
+      "calls": [
+        {
+          "ms": 43505,
+          "inputTokens": 9886,
+          "outputTokens": 4497,
+          "reasoningTokens": 0,
+          "generationId": "gen-1790876404-9p5H50CY46qnlT2GqxKl",
+          "costUsd": 0.064742,
+          "providerCostUsd": null,
+          "upstream": "Anthropic",
+          "wave": 1,
+          "startedOffsetMs": 0,
+          "endedOffsetMs": 43505,
+          "stopReason": "end_turn",
+          "thinkingSent": "disabled"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [],
+        "collapsedRungs": [],
+        "droppedQuestions": []
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-10-01T17:40:48.142Z"
+}

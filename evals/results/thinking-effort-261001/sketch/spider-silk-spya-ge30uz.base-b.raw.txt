@@ -1,0 +1,96 @@
+{
+  "caption": "The article runs as one spine from what silk is, through its properties and natural uses, to how humans try to copy and then apply it — with the properties section fanning out into several measured traits that reconverge, and the artificial-synthesis section splitting into the two separate problems (protein and apparatus) that engineers must solve before silk becomes useful to people.",
+  "title": "Spine with two branch-outs",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "From spider biology to human use",
+      "caption": "Down the page follows the article's own order: what silk does for spiders, how it's built and performs, where it's used in nature, the gland types behind it, how spiders spin it, then how people try to copy and finally apply it.",
+      "height": 1160,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":230,"y":30,"w":300,"h":70,"text":"Silk serves many functions","size":"md","tone":1,"block":"spya-gp4t9x","detail":"Spiders use silk for traps, restraint, signalling, nests, flight, and even food."},
+
+        {"kind":"node","id":"prop","shape":"box","x":230,"y":150,"w":300,"h":70,"text":"Properties: strength, toughness, stickiness","size":"md","tone":1,"block":"spya-py9zw6","detail":"A hierarchical molecular structure gives silk its mechanical and adhesive traits."},
+
+        {"kind":"region","x":20,"y":260,"w":720,"h":160,"label":"PROPERTIES","style":"band","tone":1,"opens":"inside-properties"},
+        {"kind":"node","id":"struct","shape":"box","x":40,"y":300,"w":200,"h":70,"text":"Hard crystals, stretchy matrix","size":"sm","tone":1,"block":"spya-p263u9"},
+        {"kind":"node","id":"mech","shape":"box","x":280,"y":300,"w":200,"h":70,"text":"Strong, stretchy, tough fibres","size":"sm","tone":1,"block":"spya-b0sewq"},
+        {"kind":"node","id":"adh","shape":"box","x":520,"y":300,"w":200,"h":70,"text":"Glue-like attachment discs","size":"sm","tone":1,"block":"spya-m8z9e7"},
+
+        {"kind":"node","id":"uses","shape":"box","x":230,"y":460,"w":300,"h":70,"text":"Silk used for prey capture, nests, courtship","size":"sm","tone":1,"block":"spya-rty5kb"},
+        {"kind":"node","id":"types","shape":"box","x":230,"y":560,"w":300,"h":70,"text":"Seven silk types, matched to glands","size":"sm","tone":1,"block":"spya-hg7j7e"},
+        {"kind":"node","id":"spin","shape":"hex","x":230,"y":660,"w":300,"h":80,"text":"Spun on demand, not grown","size":"sm","tone":1,"block":"spya-g3h8qq","detail":"Silk is pulled from glands as a liquid-to-solid phase change, not continuously grown."},
+
+        {"kind":"node","id":"art","shape":"hex","x":230,"y":770,"w":300,"h":80,"text":"Replicating silk in the lab","size":"md","tone":2,"block":"spya-d7d7m8","opens":"inside-synthesis","detail":"Needs both the right protein and the right spinning apparatus."},
+        {"kind":"node","id":"res","shape":"note","x":230,"y":880,"w":300,"h":70,"text":"Decades of research map silk's chemistry","size":"sm","tone":2,"block":"spya-jvxbb8"},
+        {"kind":"node","id":"human","shape":"box","x":230,"y":980,"w":300,"h":70,"text":"Textiles, medicine, technology","size":"sm","tone":2,"block":"spya-chy97m"},
+        {"kind":"node","id":"back","shape":"note","x":230,"y":1080,"w":300,"h":50,"text":"References & further resources","size":"xs","tone":7,"block":"spya-jdybu5"},
+
+        {"kind":"edge","from":"intro","to":"prop","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"prop","to":"struct","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"prop","to":"mech","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"prop","to":"adh","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"struct","to":"uses","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"mech","to":"uses","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"adh","to":"uses","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"uses","to":"types","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"types","to":"spin","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"spin","to":"art","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"art","to":"res","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"res","to":"human","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"human","to":"back","via":"straight","arrow":"end","line":"dashed"}
+      ]
+    },
+    {
+      "id": "inside-properties",
+      "title": "Properties: one structure, several measured traits",
+      "caption": "A hub-and-satellite picture: the layered molecular structure is a single central idea, and the measured traits (stiffness, strength, toughness, stretchiness under water, stickiness) are separate elaborations of it, not a sequence or a ranking.",
+      "height": 480,
+      "items": [
+        {"kind":"node","id":"p-hub","shape":"ellipse","x":280,"y":40,"w":200,"h":80,"text":"Structure shapes mechanical traits","size":"md","block":"spya-py9zw6","detail":"Crystalline beta-sheets plus an elastic amorphous matrix explain all the traits below."},
+
+        {"kind":"node","id":"p-struct","shape":"box","x":30,"y":200,"w":210,"h":80,"text":"Hard crystals, stretchy matrix","size":"sm","tone":1,"block":"spya-p263u9","detail":"Alanine blocks form crystalline sheets; glycine-rich regions form the flexible matrix between them."},
+        {"kind":"node","id":"p-young","shape":"box","x":275,"y":200,"w":210,"h":80,"text":"Stiffness: Young's modulus","size":"sm","tone":2,"block":"spya-dq9b7q","detail":"Spider silk is far more elastic than steel or Kevlar, which are stiffer but less yielding."},
+        {"kind":"node","id":"p-tensile","shape":"box","x":520,"y":200,"w":210,"h":80,"text":"Tensile strength rivals steel","size":"sm","tone":2,"block":"spya-mhe2r5","detail":"Comparable to high-grade alloy steel, about half as strong as Kevlar fibres."},
+
+        {"kind":"node","id":"p-tough","shape":"box","x":30,"y":340,"w":210,"h":80,"text":"Toughness beats Kevlar","size":"sm","tone":2,"block":"spya-gfykz5","detail":"The combination of strength and stretch lets silk absorb more energy before breaking than aramid fibres."},
+        {"kind":"node","id":"p-super","shape":"box","x":275,"y":340,"w":210,"h":80,"text":"Water causes supercontraction","size":"sm","tone":2,"block":"spya-qdjb0x","detail":"Wet dragline silk can shrink by half in length and behave like a weak rubber."},
+        {"kind":"node","id":"p-adh","shape":"box","x":520,"y":340,"w":210,"h":80,"text":"Glue-like attachment discs","size":"sm","tone":3,"block":"spya-k8bh7d","detail":"A separate adhesive secretion that sets instantly and stays usable indefinitely."},
+
+        {"kind":"edge","from":"p-hub","to":"p-struct","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p-hub","to":"p-young","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p-hub","to":"p-tensile","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p-hub","to":"p-tough","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p-hub","to":"p-super","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p-hub","to":"p-adh","via":"curve","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-synthesis",
+      "title": "Artificial synthesis: two separate problems",
+      "caption": "A fork into two independent requirements — copying the protein and copying the spinning apparatus — each pursued by its own methods, which then come back together in today's still-imperfect synthetic silks; a side branch shows the apparatus work also enables non-fibre products.",
+      "height": 640,
+      "items": [
+        {"kind":"node","id":"s-hub","shape":"ellipse","x":190,"y":40,"w":300,"h":70,"text":"Two tasks: protein + apparatus","size":"md","block":"spya-wgee6t","detail":"Making artificial silk needs both the right unspun protein feedstock and a way to spin it."},
+
+        {"kind":"node","id":"s-feed","shape":"box","x":60,"y":160,"w":260,"h":70,"text":"Feedstock: copy the silk protein","size":"sm","tone":1,"block":"spya-rw0wtg"},
+        {"kind":"node","id":"s-geo","shape":"box","x":400,"y":160,"w":260,"h":70,"text":"Geometry: copy the spinning duct","size":"sm","tone":2,"block":"spya-x4bwhf"},
+
+        {"kind":"node","id":"s-feedex","shape":"note","x":60,"y":280,"w":260,"h":70,"text":"Drawn from E. coli, silkworms, goats","size":"sm","tone":1,"block":"spya-gjan3e","detail":"Each source yields fibres with different strength and stretch, none matching nature exactly."},
+        {"kind":"node","id":"s-geoex","shape":"note","x":400,"y":280,"w":260,"h":70,"text":"Syringes, microfluidics, electrospinning","size":"sm","tone":2,"block":"spya-up6vkg","detail":"Methods of varying cost and control for pulling or pushing the protein into a fibre."},
+
+        {"kind":"node","id":"s-other","shape":"note","x":400,"y":400,"w":260,"h":70,"text":"Also: capsules, nanowires, membranes","size":"sm","tone":2,"block":"spya-r4r9au","detail":"The same apparatus work enables non-fibre forms, for drug delivery and tissue scaffolds."},
+
+        {"kind":"node","id":"s-final","shape":"box","x":190,"y":520,"w":300,"h":70,"text":"Engineered silk: commercial, still weaker","size":"md","block":"spya-j7hems","detail":"Thicker, simpler, and less strong than natural dragline silk, but now sold commercially."},
+
+        {"kind":"edge","from":"s-hub","to":"s-feed","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s-hub","to":"s-geo","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s-feed","to":"s-feedex","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s-geo","to":"s-geoex","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"s-feedex","to":"s-final","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s-geoex","to":"s-final","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s-geoex","to":"s-other","via":"straight","arrow":"end","line":"dashed"}
+      ]
+    }
+  ]
+}

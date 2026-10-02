@@ -25,14 +25,21 @@ wiring.
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
 | **About you** | you, always | `reader_profiles.profile` | `/profile` |
-| **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Trajectory's band |
+| **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata`; also asked on the add page and, when unset, in Skim's band |
 
 The purpose is asked for in two more places since 2026-09-30, both writing through
 [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
-before the modes are queued, and Trajectory's *What do you want from this piece?* over a ready
-route with none set ([trajectory.md](trajectory.md),
+before the modes are queued, and Skim's *What do you want from this piece?* over a ready
+route with none set ([skim.md](skim.md),
 [plan 260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md)).
 Metadata is still where it is edited.
+
+And once more since 2026-10-01: when the add page opens an article by itself because the box was
+never touched, the reading view asks *Why are you reading this?* once, in a small autosaving dialog,
+if the article still has none — a one-shot `sessionStorage` mark from the add page, owner only
+([`src/web/PurposePrompt.tsx`](../../src/web/PurposePrompt.tsx),
+[plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
+The add page's box also says, under it, that it is not saved until Save and open.
 
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.

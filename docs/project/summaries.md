@@ -85,15 +85,17 @@ the paragraphs.
   call for all three was measured and is far slower. Below the cache floor they run together, as
   before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
   streaming question for Greg.
-- **The door rule.** Opening Summary spends nothing — the Summary button arms nothing
-  ([mode.md](mode.md), `useAutoRun`), and arriving on `?summary=` — a link, Back, a restored view —
-  reads what is stored. With nothing stored the owner sees an empty state with **Write it**; choosing
-  a level on the slider with nothing stored runs the `simple` job. A visitor on a public article gets
-  the stored paragraphs off the payload, or a line saying none has been made. **This is new as a
-  cost**: while the outline was the default, Summary showed something free on every article; now an
-  article nobody has pressed for opens empty. Whether opening should start the run is the open
-  question in [261001p](../plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md)
-  § Deferred.
+- **The door rule.** Pressing Summary — the bar button, or any of its command-bar rows — writes the
+  plain-words levels when none are stored, and shows the job's progress; with them stored it only
+  reads them (since 2026-10-02, Greg's 7T:
+  > When I open any of the Summary submodes, if they haven't already been generated, automatically
+  > kick off the generation.
+
+  [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
+  Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
+  with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
+  main modes* box includes Summary for the same reason. A visitor on a public article gets the
+  stored paragraphs off the payload, or a line saying none has been made.
 - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
   [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
@@ -209,9 +211,6 @@ already hidden — real money spent generating text nobody could see.
 - **No evidence it helps.** The same criticism the previous version earned, and repeating their
   mistake would mean never asking. [Q6](open-questions.md) is where "how would we know we are failing
   at this" lives.
-- **Whether opening Summary should write it** — or ingest should — now that there is nothing free to
-  show first. [261001p](../plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md)
-  § Deferred, and the Overseer's queue.
 - **Simple can collapse two terms that the paper keeps distinct.** On the PID paper it calls the
   recurrent connections, which raise synergy, "feedback loops", borrowing the paper's term for the
   different kind that lowers it. This happened in 6 of 18 outputs across six fresh unchanged-prompt,
@@ -266,7 +265,7 @@ git show 9e5cb2ccac385a0615fecbaea22f28b8472d6cdf^:src/web/SummaryPanel.tsx
 ```
 
 The follow-the-reader scroll itself lives on in [`follow.ts`](../../src/web/follow.ts), which
-Trajectory now uses ([trajectory.md](trajectory.md)); its header holds the reasoning (move only when
+Skim now uses ([skim.md](skim.md)); its header holds the reasoning (move only when
 the target changes, never fight the reader's own scroll, why the slide is ours and not the
 browser's).
 

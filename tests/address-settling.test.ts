@@ -190,6 +190,8 @@ const QUERIES: { search: string; view: ArticleView }[] = [
      they have a non-default meaning on both sides — Structure. */
   { search: "?mode=hierarchy", view: "article" },
   { search: "?mode=outline", view: "article" },
+  /* Skim's name until 2026-10-01 (261001r). */
+  { search: "?mode=trajectory", view: "article" },
   { search: "?mode=toc", view: "article" },
   { search: "?mode=nonsense", view: "article" },
   { search: "?at=spya-k3m9qt", view: "article" },

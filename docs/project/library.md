@@ -285,6 +285,14 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
+**Off the shelf, the same act has three more buttons, all off one hook** (`src/web/useArchive.ts`):
+two on the article's metadata page, and since 2026-10-02 one on the reading view's masthead beside
+the sharing mark (Greg, spya-br27ef: *"Add a button at the top of the reading view to archive the
+article, next to the button to share it publicly"*). None of them navigates or needs an Undo strip:
+an archived article stays readable by its link, so each shows the state it is now in and Put back.
+The masthead learns that state from `Article.archivedAt`, which only the owner's payload carries —
+[261002a](../plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md).
+
 The **Include archived** chip beside Unread (it read just *Archived* until 2026-09-30, below) is the other way back, and it is not optional decoration:
 without it Archive is permanent from the interface the moment the nine-second Undo strip goes, which
 would make "nothing is destroyed" true of the database and false of the product. It is off by
@@ -849,6 +857,15 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
+**A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
+the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks
+and no tree, so `listArticles` keeps it by its `processing` rather than dropping it as it drops any
+other row with no tree: `LibraryEntry.processing` is `"minimal"`, its words, blocks, parts and
+sections are 0, and it carries `abstract` and `doi` where a full card has a blurb. Every other row
+says `"full"`; the field is optional only for rows a browser cached before it existed, all of them
+full. How the server makes one is
+[ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
+
 ### The Shared badge
 
 An article anyone can read without signing in wears a small globe and the word **Shared**, on the
@@ -912,6 +929,43 @@ visibility = 'public'` so the row cap bounds the database's work and not only th
 came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
 [security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
+
+### A paper not read through yet
+
+> Each paper should be shown on the shelf as normal, but indicate in the UI that it hasn't been
+> AI-processed yet.
+>
+> — Greg, 2026-10-01
+
+A file added in a batch has only its title, authors, abstract and DOI read
+([ingest-queue.md § Many at once](ingest-queue.md#many-at-once)), and its `LibraryEntry` says
+`processing: "minimal"`, with `abstract` and `doi` beside it and every count at 0. It is an ordinary
+card, with four differences, all in [`ShelfCard`](../../src/web/ShelfEntry.tsx):
+
+- **The marker.** *Not AI-processed yet*, in `ArchivedMark`'s shape (`NotProcessedBadge`), on the
+  meta line of the card and in the title cell of the table.
+- **No numbers it does not have.** The meta line keeps the byline and drops length and blocks; the
+  word count goes; the table's Words cell is a dash and sorts last.
+- **The abstract, behind a closed `<details>`**, because forty open abstracts would be a wall.
+- ***Read this*, with its cost beside it** — *Uses 0.99 of an article from your allowance*
+  ([billing.md § A minimal paper costs a hundredth](billing.md#a-minimal-paper-costs-a-hundredth)).
+  It is `ReadThisButton` ([`ReadThis.tsx`](../../src/web/ReadThis.tsx)), handed to the card by
+  `Library` as a slot, because `ShelfEntry.tsx` is shared with the lazy `/admin` and `/design`
+  routes and the button brings the job engine behind it (`tests/eager-client-graph.test.ts`). It
+  reads the job engine, so a press here and one on the paper's own page are the same job, and the
+  card shows it running. The table has no button: a row opens the paper's page, which has one.
+
+**Rebuild is not drawn** on a minimal card, in the row or in the "⋯" menu. That breaks *five
+buttons, always five* (§ When a button cannot do its job) on purpose: there is nothing built to
+rebuild, the server refuses it, and *Read this* is the action. Edit, Open, Copy and Archive stay.
+
+**Opening it is free.** The card's link goes to the reading address as usual, where the owned route
+answers `409 not-processed` and the page draws the paper — title, authors, abstract, DOI as a
+`doi.org` link when it has the DOI shape, *Open the PDF* for a PDF, and *Read this*
+([`UnreadPaperPage.tsx`](../../src/web/article/UnreadPaperPage.tsx)). Nothing starts by itself: the
+plan's answer 6, so a reader skimming twenty titles spends nothing. When a *Read this* job on that
+paper ends `done`, the page loads the article in place. `tests/minimal-paper-ui.test.tsx` holds the
+card and the page.
 
 ### Where the numbers on it come from, and why nobody derives them twice
 

@@ -4,7 +4,7 @@ Stage 6 of [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
 measurement of how much of an article Trajectory's route actually touches, replacing the
 hand-computed numbers in
 [stage1-real-runs.md](260928a-trajectory-mode-stage1-real-runs.md). The script is
-[`scripts/trajectory-coverage.ts`](../../scripts/trajectory-coverage.ts); this is one baseline run
+[`scripts/trajectory-coverage.ts`](../../scripts/skim-coverage.ts); this is one baseline run
 of it, on the local database, on the same three articles stage 1 used.
 
 ## What "in" and "next to" mean
