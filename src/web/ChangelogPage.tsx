@@ -370,6 +370,7 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const linkSha = version.deployment_id === null ? version.deployed_sha ?? version.sha : version.sha;
   return (
     <details
       id={releaseAnchor(release)}
@@ -431,25 +432,30 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
 
             A pending release is linked by the build carrying it, so "Built
             from" is exact. A promoted line normally holds that same commit,
-            but after a forced deploy it deliberately stops at the last commit
+            but when late changes shipped it deliberately stops at the last commit
             its notes cover. Calling that watermark the build commit would be a
             false claim, so historical lines say exactly what their sha means. */}
         <p className="tw:mt-5 tw:mb-0 tw:border-t tw:border-rule tw:pt-3 tw:text-xs tw:text-ink-faint">
           <a
-            href={commitUrl(version.sha)}
+            href={commitUrl(linkSha)}
             target="_blank"
             rel="noreferrer noopener"
             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
           >
             <GitHubMark size={12} className="tw:opacity-70" />
             {version.deployment_id === null ? "Built from commit " : "Changes through commit "}
-            <span className="tw:font-mono">{version.sha.slice(0, 7)}</span>
+            <span className="tw:font-mono">{linkSha.slice(0, 7)}</span>
           </a>
           {/* The notes were written a little before the deploy, and what landed
               in between is the next release's to describe — docs/plans/261002h. */}
           {version.deployed_sha !== null && version.deployed_sha !== version.sha ? (
             <span className="tw:ml-1">
-              — a few later changes in this release are described under the next one.
+              {version.deployment_id === null ? (
+                <>
+                  — Notes cover changes through commit <a href={commitUrl(version.sha)} className="tw:font-mono">{version.sha.slice(0, 7)}</a>.
+                  {" Any later changes in this release are described under the next one."}
+                </>
+              ) : "— a few later changes in this release are described under the next one."}
             </span>
           ) : null}
         </p>
@@ -793,7 +799,10 @@ export function withPending(history: ChangelogVersion[], pending: PendingRelease
     {
       ...pending,
       version: stamp ?? pending.version,
-      sha: commit !== null && /^[0-9a-f]{40}$/.test(commit) ? commit : pending.sha,
+      /* Keep the notes' coverage separate from the build that carries them.
+         The browser cannot tell a notes-only commit from late release work,
+         so the live pending notice says "any later changes" conditionally. */
+      deployed_sha: commit !== null && /^[0-9a-f]{40}$/.test(commit) ? commit : null,
     },
   ];
 }

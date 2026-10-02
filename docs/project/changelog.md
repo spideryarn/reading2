@@ -487,7 +487,8 @@ split).
 **Not a step inside `npm run deploy`**, though it now runs before it rather than after. The model
 stages take ten minutes or more and carry their own Sol review; inside the deploy, a review timeout
 would fail a deploy. So it is its own command, and the deploy's `changelog` gate is what joins them:
-a deploy whose commit does not carry notes for everything it ships is refused. And a failure here
+invalid notes are refused, as is a deploy with no pending notes and uncovered release commits. Valid
+pending notes may leave late commits for the next release (§ The pending release). And a failure here
 does not look like a failure: the copy stage can strengthen *"code intended to do X"* into *"X is now
 available"* while every structural check passes — which is why step 4 is not optional. The earlier
 reasoning for publishing one deploy late is in

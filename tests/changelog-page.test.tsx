@@ -182,8 +182,24 @@ describe("the pending release", () => {
 
     expect(withPending(history, pending).at(-1)).toMatchObject({
       version: "2026-12-02T03:04:05Z",
-      sha: SHA_E,
+      sha: SHA_F,
+      deployed_sha: SHA_E,
     });
+  });
+
+  it("shows the pending notes' coverage and build, including their possible roll-forward", async () => {
+    vi.stubGlobal("__SPIDERYARN_BUILD_COMMIT__", SHA_E);
+    const versions = fixtureVersions();
+    const { pending } = parsePending(JSON.stringify({
+      ...JSON.parse(FIXTURE_LINES.at(-1) ?? "{}"),
+      version: "2026-12-01T00:00:00Z", deployment_id: null,
+      sha: SHA_F, previous_sha: SHA_D,
+    }), versions);
+    await act(async () => root.render(<ChangelogBody versions={withPending(versions, pending)} />));
+    expect(host.textContent).toContain("Any later changes in this release are described under the next one");
+    expect(host.textContent).toContain(`Notes cover changes through commit ${SHA_F.slice(0, 7)}`);
+    const buildLink = [...host.querySelectorAll("a")].find(a => a.textContent?.includes("Built from commit"));
+    expect(buildLink?.getAttribute("href")).toBe(commitUrl(SHA_E));
   });
 
   it("does not claim a promoted coverage watermark was the commit the release was built from", async () => {

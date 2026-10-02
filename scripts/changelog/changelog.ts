@@ -1987,10 +1987,16 @@ function promotedRelease(
   servingPendingText: string,
   history: ChangelogVersion[],
   root: string,
+  servingSha: string,
 ): ChangelogVersion | null {
   for (let i = history.length - 1; i >= 0; i--) {
     const candidate = history[i];
     if (candidate === undefined) continue;
+    /* Coverage can stop before the build. Equal notes do not make a rollback
+       to an earlier build a redeploy of the build we actually recorded. */
+    /* Legacy forced-deploy lines carried only coverage, so an absent build
+       sha cannot disprove identity; retain their existing notes matching. */
+    if (candidate.deployed_sha !== null && candidate.deployed_sha !== servingSha) continue;
     /* Parse against the history that existed before this line was promoted.
        Parsing against today's longer history necessarily reports a stale
        chain, and then matching its lossy normalized value could hide a real
@@ -2023,6 +2029,7 @@ function promotedRelease(
     const suffixIsRedeploys = history.slice(i + 1).every(
       (v) =>
         v.sha === candidate.sha &&
+        (v.deployed_sha === null || v.deployed_sha === servingSha) &&
         v.previous_sha === candidate.sha &&
         v.commit_count === 0 &&
         v.entries.length === 0,
@@ -2077,6 +2084,13 @@ export function planPromotion(a: {
   if (!gitOk(["cat-file", "-e", `${serving.commit}^{commit}`], root)) {
     die(`production is serving ${serving.commit.slice(0, 8)}, which this checkout does not have — fetch origin main`);
   }
+  /* The coverage watermark may lag behind the last build. A rollback can be
+     ahead of that watermark, including with null notes, and is still a rollback. */
+  const lastBuild = last.deployed_sha ?? last.sha;
+  if (!gitOk(["merge-base", "--is-ancestor", lastBuild, serving.commit], root)) {
+    die(`the serving build ${serving.commit.slice(0, 8)} does not contain the last deployed build ` +
+      `${lastBuild.slice(0, 8)} — a rollback or diverged deploy. Nothing appended.`);
+  }
   if (a.servingPendingText === null) {
     die(
       `production is serving ${serving.commit.slice(0, 8)} (${serving.deploymentId}), which has no ` +
@@ -2096,7 +2110,7 @@ export function planPromotion(a: {
   if (rawPending !== null) {
     const parsed = parsePending(a.servingPendingText, history);
     const pending = parsed.pending;
-    const promoted = pending !== null ? promotedRelease(a.servingPendingText, history, root) : null;
+    const promoted = pending !== null ? promotedRelease(a.servingPendingText, history, root, serving.commit) : null;
     if (parsed.problems.length === 0 && isRecord(rawPending)) {
       release = rawPending;
     } else if (promoted !== null) {

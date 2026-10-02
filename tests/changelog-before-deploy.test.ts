@@ -19,6 +19,7 @@
  * are asked of git and a fixture repo would be testing a different history
  * shape; `repoWithALateCommit` builds the one shape the history lacks.
  */
+import * as childProcess from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,9 +37,12 @@ import {
   Refused,
   servingFrom,
 } from "../scripts/changelog/changelog.js";
-import { fastForwardTo, Stop } from "../scripts/changelog/release-notes.js";
+import * as changelogModule from "../scripts/changelog/changelog.js";
+import { main as releaseNotes, fastForwardTo, Stop } from "../scripts/changelog/release-notes.js";
 import { isReleasePath, notesAt, releaseCommits } from "../scripts/changelog/release-paths.js";
 import { changelogGap, servingUnrecorded } from "../scripts/deploy-checks.js";
+
+vi.mock("node:child_process", { spy: true });
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,6 +65,9 @@ function scratch(): string {
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   vi.restoreAllMocks();
+  /* Module spies keep their mock implementations after restoreAllMocks. */
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function line(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -367,6 +374,87 @@ describe("promote", () => {
     expect(releaseCommits(`${String(p.line.sha)}..${late}`, repo)).toEqual([late]);
   });
 
+  it("records repeated redeploys of a rolled release without advancing its coverage", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = [line({ sha: first })];
+    for (let i = 1; i <= 3; i++) {
+      const p = promote({
+        root: repo, history: history(...rows),
+        serving: { commit: late, deploymentId: `dpl_${i}`, builtAt: `2026-10-01T0${i + 1}:00:00Z` },
+        servingPendingText: notesText, localPendingText: "null\n",
+      });
+      expect(p.kind).toBe("append");
+      if (p.kind !== "append") throw new Error("unreachable");
+      expect(p.line).toMatchObject({ sha: noted, deployed_sha: late });
+      if (i > 1) expect(p.line).toMatchObject({ commit_count: 0, entries: [] });
+      rows.push(p.line);
+    }
+    expect(releaseCommits(`${noted}..${late}`, repo)).toEqual([late]);
+  });
+
+  it("still records a redeploy of a legacy rolled line with no deployed_sha", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", version: "2026-10-01T02:00:00Z",
+    }));
+    const p = promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: late, deploymentId: "dpl_two", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: notesText,
+    });
+    expect(p.kind === "append" && p.line).toMatchObject({
+      sha: noted, deployed_sha: late, commit_count: 0, entries: [],
+    });
+  });
+
+  it("does not call a rollback to the notes commit a redeploy of a rolled build", () => {
+    const { repo, first, noted, notesCommit, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: `${SERVING.builtAt.slice(0, 19)}Z`,
+    }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: notesCommit, deploymentId: "dpl_rollback", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: notesText,
+    })).toThrow(/rollback/);
+  });
+
+  it("refuses a rollback with null notes even when it is ahead of the coverage watermark", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: "2026-10-01T02:00:00Z",
+    }));
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: noted, deploymentId: "dpl_rollback", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: "null\n",
+    })).toThrow(/rollback/);
+  });
+
+  it("does not match quiet coverage rows from a different build as repeated redeploys", () => {
+    const { repo, first, noted, notesCommit, late } = repoWithALateCommit();
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: "2026-10-01T02:00:00Z",
+    }), line({
+      sha: noted, previous_sha: noted, deployed_sha: notesCommit,
+      deployment_id: "dpl_wrong", commit_count: 0, version: "2026-10-01T03:00:00Z",
+    }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: late, deploymentId: "dpl_two", builtAt: "2026-10-01T04:00:00Z" },
+      servingPendingText: JSON.stringify(pending({ sha: noted, previous_sha: first })),
+    })).toThrow(/does not chain/);
+  });
+
   it("records a redeploy of a release already promoted as a line with nothing in it", () => {
     const promoted = line({ ...pending(), deployment_id: "dpl_one", version: "2026-10-01T01:20:30Z" });
     const p = promote({
@@ -551,12 +639,10 @@ describe("servingUnrecorded — the deploy gate's second question", () => {
  * on 261002h — so `fastForwardTo` asks ancestry first and checks after.
  */
 describe("fastForwardTo — prepare's only way of moving HEAD", () => {
-  function repo(): { dir: string; run: (...args: string[]) => string; commit: (file: string, msg: string) => string } {
-    const dir = scratch();
+  function inRepo(dir: string) {
     const run = (...args: string[]) =>
       execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], {
-        cwd: dir,
-        encoding: "utf8",
+        cwd: dir, encoding: "utf8",
       }).trim();
     const commit = (file: string, msg: string): string => {
       writeFileSync(path.join(dir, file), `${msg}\n`);
@@ -564,15 +650,24 @@ describe("fastForwardTo — prepare's only way of moving HEAD", () => {
       run("commit", "--quiet", "-m", msg);
       return run("rev-parse", "HEAD");
     };
-    run("init", "--quiet");
-    return { dir, run, commit };
+    const at = (sha: string) => {
+      const tree = path.join(scratch(), "tree");
+      run("worktree", "add", "--quiet", "--detach", tree, sha);
+      return inRepo(tree);
+    };
+    return { dir, run, commit, at };
+  }
+  function repo() {
+    const result = inRepo(scratch());
+    result.run("init", "--quiet");
+    return result;
   }
 
   it("moves a HEAD that is behind to exactly the target, keeping an unrelated edit", () => {
-    const { dir, run, commit } = repo();
-    const a = commit("a.txt", "a");
-    const b = commit("b.txt", "b");
-    run("reset", "--quiet", "--hard", a);
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("b.txt", "b");
+    const { dir, run } = source.at(a);
     writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
 
     fastForwardTo(b, dir);
@@ -590,24 +685,143 @@ describe("fastForwardTo — prepare's only way of moving HEAD", () => {
   });
 
   it("stops on a HEAD that has diverged", () => {
-    const { dir, run, commit } = repo();
-    const a = commit("a.txt", "a");
-    const b = commit("b.txt", "b");
-    run("reset", "--quiet", "--hard", a);
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("b.txt", "b");
+    const { dir, run, commit } = source.at(a);
     const c = commit("c.txt", "c");
     expect(() => fastForwardTo(b, dir)).toThrow(/ahead or has diverged/);
     expect(run("rev-parse", "HEAD")).toBe(c);
   });
 
+  it("detects a concurrent HEAD move during the fast-forward", () => {
+    const heads = [CODE_PARENT, DOCS];
+    vi.spyOn(childProcess, "execFileSync").mockImplementation(() => heads.shift() ?? DOCS);
+    vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      pid: 1, output: [], signal: null, status: 0, stdout: "", stderr: "",
+    });
+    expect(() => fastForwardTo(CODE, scratch())).toThrow(/fast-forwarded, but HEAD is/);
+  });
+
+  it("keeps an ignored local file when the target starts tracking that path", () => {
+    const source = repo();
+    const a = source.commit(".gitignore", "local.txt");
+    writeFileSync(path.join(source.dir, "local.txt"), "the deployed version\n");
+    source.run("add", "--force", "local.txt");
+    source.run("commit", "--quiet", "-m", "start tracking local.txt");
+    const b = source.run("rev-parse", "HEAD");
+    const { dir, run } = source.at(a);
+    writeFileSync(path.join(dir, "local.txt"), "somebody's ignored work\n");
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "local.txt"), "utf8")).toBe("somebody's ignored work\n");
+  });
+
+  it("refuses an overlapping edit even when merge.autoStash is enabled", () => {
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("a.txt", "a again");
+    const { dir, run } = source.at(a);
+    run("config", "merge.autoStash", "true");
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+    expect(run("for-each-ref", "refs/stash")).toBe("");
+  });
+
   it("stops, and keeps the edit, when the target would change a file somebody is editing", () => {
-    const { dir, run, commit } = repo();
-    const a = commit("a.txt", "a");
-    const b = commit("a.txt", "a again");
-    run("reset", "--quiet", "--hard", a);
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("a.txt", "a again");
+    const { dir, run } = source.at(a);
     writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
 
     expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
     expect(run("rev-parse", "HEAD")).toBe(a);
     expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+  });
+});
+
+describe("prepare after the model stages (external commands stubbed)", () => {
+  function setup({ fetchFails = false, headMoved = false, remoteMoved = false } = {}) {
+    const cwd = scratch();
+    mkdirSync(path.join(cwd, ".git"));
+    mkdirSync(path.join(cwd, "src/web"), { recursive: true });
+    mkdirSync(path.join(cwd, "scripts/changelog"), { recursive: true });
+    writeFileSync(path.join(cwd, "src/web/changelog-versions.ndjson"), JSON.stringify(line()));
+    writeFileSync(path.join(cwd, "src/web/changelog-pending.json"), "null\n");
+    writeFileSync(path.join(cwd, "scripts/changelog/prepare-prompt.md"), "{{SHA}} {{WORK}}");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(SERVING))));
+    let modeled = false;
+    let currentHead = CODE;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(changelogModule, "main").mockImplementation((args) => {
+      if (args[0] === "plan") {
+        const work = args[args.indexOf("--work") + 1] as string;
+        mkdirSync(work, { recursive: true });
+        writeFileSync(path.join(work, "upcoming.json"), '{"release_commits":1}');
+      }
+    });
+    vi.spyOn(childProcess, "execFileSync").mockImplementation(((_cmd: string, args: string[]) => {
+      if (args[0] === "branch") return "dev";
+      if (args[0] === "log") return modeled && remoteMoved ? `\0${DOCS}\nsrc/late.ts\n` : "";
+      const refs: Record<string, string> = {
+        "--show-toplevel": cwd,
+        "--git-common-dir": ".git",
+        "origin/dev": modeled && remoteMoved ? DOCS : CODE,
+        HEAD: modeled && headMoved ? DOCS : currentHead,
+      };
+      return refs[args[1] ?? ""] ?? currentHead;
+    }) as typeof execFileSync);
+    const commands: string[][] = [];
+    vi.spyOn(childProcess, "spawnSync").mockImplementation(((_cmd: string, args: string[]) => {
+      commands.push(args);
+      if (args.includes("scripts/run-claude.ts")) {
+        writeFileSync(path.join(cwd, "src/web/changelog-pending.json"), JSON.stringify(pending()));
+        modeled = true;
+      }
+      if (args[0] === "merge" && remoteMoved) currentHead = DOCS;
+      if (args[0] === "show") {
+        return { status: 0, stdout: args[1]?.endsWith(".ndjson") ? JSON.stringify(line()) : JSON.stringify(pending()), stderr: "" };
+      }
+      const refused = (modeled && fetchFails && args[0] === "fetch") ||
+        (modeled && headMoved && args[0] === "merge-base" && args[2] === DOCS);
+      return { status: refused || (modeled && args[0] === "diff") ? 1 : 0, stdout: "", stderr: refused ? "simulated refusal" : "" };
+    }) as typeof childProcess.spawnSync);
+    return { cwd, commands };
+  }
+
+  it("finishes one model round when the checkout stays level with dev", async () => {
+    const { commands } = setup();
+    expect(await releaseNotes(["prepare"])).toBe(0);
+    expect(commands.filter(args => args.includes("scripts/run-claude.ts"))).toHaveLength(1);
+    expect(commands.filter(args => args[0] === "fetch")).toHaveLength(3);
+    expect(commands.some(args => args[0] === "commit")).toBe(true);
+    expect(commands.some(args => args[0] === "push")).toBe(true);
+  });
+
+  it("does one model round and fast-forwards over late release work", async () => {
+    const { commands } = setup({ remoteMoved: true });
+    expect(await releaseNotes(["prepare"])).toBe(0);
+    expect(commands.filter(args => args.includes("scripts/run-claude.ts"))).toHaveLength(1);
+    expect(commands.some(args => args[0] === "merge" && args.at(-1) === DOCS)).toBe(true);
+    expect(commands.some(args => args[0] === "push")).toBe(true);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("1 later release commit(s) roll"));
+  });
+
+  it("stops before committing when the post-model fetch fails, keeping the generated notes", async () => {
+    const { cwd, commands } = setup({ fetchFails: true });
+    expect(await releaseNotes(["prepare"])).toBe(1);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("could not fetch origin"));
+    expect(commands.some((args) => args[0] === "commit" || args[0] === "push")).toBe(false);
+    expect(JSON.parse(readFileSync(path.join(cwd, "src/web/changelog-pending.json"), "utf8")).sha).toBe(CODE);
+  });
+
+  it("rechecks a locally moved HEAD even when origin/dev stayed at the planned tip", async () => {
+    const { commands } = setup({ headMoved: true });
+    expect(await releaseNotes(["prepare"])).toBe(1);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("ahead or has diverged"));
+    expect(commands.some((args) => args[0] === "commit" || args[0] === "push")).toBe(false);
   });
 });

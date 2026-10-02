@@ -127,7 +127,9 @@ export function fastForwardTo(target: string, cwd: string): void {
         "push or merge it by hand first",
     );
   }
-  const ff = gitRun(["merge", "--ff-only", "--quiet", target], cwd);
+  /* Do not inherit merge.autoStash, or git's default of overwriting ignored
+     files newly tracked by the target. Both can move another agent's work. */
+  const ff = gitRun(["merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", "--quiet", target], cwd);
   if (ff.code !== 0) throw new Stop(`could not fast-forward to origin/${TRUNK} ${target.slice(0, 8)}: ${ff.out}`);
   const now = git(["rev-parse", "HEAD"], cwd);
   if (now !== target) throw new Stop(`fast-forwarded, but HEAD is ${now.slice(0, 8)}, not ${target.slice(0, 8)}`);
@@ -245,10 +247,10 @@ async function prepare(cwd: string): Promise<void> {
      roll to the next release's notes, because `promote` stops this release's
      line at `tip` and the next `prepare` plans from there (261002h). Until
      2026-10-02 they sent this round again, up to three times. */
-  gitRun(["fetch", "origin", TRUNK, "--quiet"], cwd);
-  const trunk = git(["rev-parse", `origin/${TRUNK}`], cwd);
+  /* Fetch must succeed, and today's HEAD must still be on dev and behind its
+     captured tip even when origin/dev did not move during the model run. */
+  const trunk = levelWithTrunk(cwd);
   if (trunk !== tip) {
-    fastForwardTo(trunk, cwd);
     const late = releaseCommits(`${tip}..${trunk}`, cwd);
     if (late.length > 0) log(cwd, `${late.length} release commits landed meanwhile — the next release's notes describe them`);
   }

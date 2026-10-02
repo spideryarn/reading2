@@ -1746,6 +1746,25 @@ describe("the deploys tab", () => {
     expect(closed).not.toContain("See where a link goes");
   });
 
+  it("labels a rolled release's count as notes coverage beside the deployed SHA", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys" || !one.versions[0]) throw new Error("unreachable");
+    const base = one.versions[0];
+    const deployedSha = "f".repeat(40);
+    mount(feed.transport, recordingDeploys(() => deploysView({
+      versions: [{ ...base, deployedSha }],
+    })).api);
+    await act(async () => undefined);
+    const closed = container.querySelector("summary")?.textContent ?? "";
+    expect(closed).toContain("fffffff");
+    expect(closed).not.toContain(base.sha.slice(0, 7));
+    expect(closed).toContain("137 commits covered by notes");
+    expect(container.textContent).toContain("built from");
+    expect([...container.querySelectorAll("a")].some(a => a.href.endsWith(`/commit/${deployedSha}`))).toBe(true);
+  });
+
   it("puts each deploy under the day it happened on, in the zone the rows are drawn in", async () => {
     window.location.hash = "#deploys";
     const feed = manualTransport();

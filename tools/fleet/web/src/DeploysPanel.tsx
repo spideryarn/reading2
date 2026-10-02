@@ -407,7 +407,7 @@ function DeployRow({
           <span className="tw:text-[12px] tw:text-ink-faint">
             {version.commitCount === null
               ? "commit count not recorded"
-              : `${version.commitCount} ${version.commitCount === 1 ? "commit" : "commits"}`}
+              : `${version.commitCount} ${version.commitCount === 1 ? "commit" : "commits"} covered by notes`}
           </span>
           {/* **The pill only when it says something the gist does not.** The
               record's `invisible` flag and a gist of *nothing a reader would

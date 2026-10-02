@@ -536,8 +536,8 @@ Every few hours, as a tmux loop like the feedback sweep's:
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
    for the notes; say so in the report. If it fails only because `dev` moved during the run
-   (*"level with origin/dev"*), pull and deploy once more — the notes still pass. `changelog` asks for
-   step 3 again only when the candidate carries no notes at all.
+   (*"level with origin/dev"*), pull and deploy once more — valid pending notes still pass. If
+   `changelog` refuses missing, invalid or stale notes, read its reason and recover through step 3.
 6. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
    HEAD and `origin/main`. The success line alone is not evidence —
