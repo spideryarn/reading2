@@ -256,8 +256,10 @@ so a deploy whose step did not run, or died part way, is caught up by the next. 
 - **The ledger's three states.** `sent` is never sent again. `failed` (Resend refused, or no key) is
   retried by the next deploy. `sending` is in flight, or a send that may have gone (the request
   threw), or a crash mid-send; every deploy lists it as needing a person, who checks Resend's log
-  and then runs `--retry <owner_id>/<report_id> --send` or marks the row `sent`. Resend's
-  `Idempotency-Key` (`feedback-shipped/<owner>/<report>`) makes a retry within a day safe.
+  and then runs `--retry <owner_id>/<report_id> --send` or marks the row `sent`. A retry cannot take
+  a fresh in-flight reservation; an interrupted one becomes retryable after ten minutes. Resend's
+  stable, opaque `Idempotency-Key` makes a retry within a day safe without sending either internal
+  id to Resend.
 - **More than 20 letters in one run sends none** unless a person passes `--cap`, and a map line it
   cannot parse is an error, not "nothing shipped" — the two ways a bug could become a mass mailing.
 - **A failure is an after-the-fact check** (`AFTER_THE_FACT_CHECKS`): the deploy goes red, says the

@@ -54,8 +54,8 @@ npm run deploy
        confirmed address (auth.users), and its row in the new ledger, if any
     3. a letter for each row that is not an admin's, whose id no second owner shares, that has an
        address, and whose ledger row is absent or `failed`
-    4. for each: reserve (insert/update the ledger row to `sending`), send with
-       Idempotency-Key feedback-shipped/<owner_id>/<report_id>, then mark `sent` or `failed`
+    4. for each: reserve (insert/update the ledger row to `sending`), send with an opaque, stable
+       Idempotency-Key derived from the owner and report ids, then mark `sent` or `failed`
     5. print counts and ids — never an address
 ```
 
@@ -70,12 +70,15 @@ Why this shape, after GPT Sol's plan review (below) rejected the first draft:
   other way is caught up by the next `npm run deploy`. No "which commit was live before" question,
   which the first draft got wrong.
 - **One email per report**, so the idempotency key is one report's and never changes with what
-  else shipped alongside it. Two reports in one deploy is two short emails; rare enough.
+  else shipped alongside it. It hashes the two internal ids rather than sending them to Resend.
+  Two reports in one deploy is two short emails; rare enough.
 - **Only a definite failure is retried automatically.** `failed` (Resend refused, or no key) is
   retried on the next deploy. A send that may or may not have gone (the request threw) stays
   `sending` with its detail, and so does a crash between reserve and complete; both are printed
   every deploy as needing a person, because a retry more than a day later could send a duplicate.
-  The re-run for a person is the CLI below with `--retry <owner_id>/<report_id>`.
+  Resend's two idempotency-conflict responses are ambiguous too, rather than definite failures. The
+  re-run for a person is the CLI below with `--retry <owner_id>/<report_id>`; a fresh reservation
+  cannot be taken as a retry, while an interrupted one becomes eligible after ten minutes.
 - **After verification**, because the email says "now live" — the same moment the Earlier tab says
   *shipped*.
 - **The current confirmed address from `auth.users`**, not the row's `reporter_email` snapshot.
@@ -199,3 +202,25 @@ Verdict: revise before build. No P0. What changed:
   response to it"; the changelog link is gone. The date stays, so the reader can tell which report.
 - **P3, the address policy and `reporter_email`.** Accepted as wording: this table never copies an
   address, and banned accounts are skipped on purpose.
+
+### GPT Sol, code, 2026-10-02 ([findings](261002f-email-readers-when-their-feedback-ships-code-review-sol.md))
+
+Run with `--sandbox workspace-write` on commit `630cc665e`; it fixed all seven of its findings in
+place, and I read the diff before committing it. Two P1s: a malformed `--retry` could have widened
+into a broad `--send` (now strict argument parsing), and Resend's idempotency-conflict answers were
+being retried automatically (now left `sending` for a person). Five P2s: a fenced retry with a
+ten-minute lease and a check that the completion actually landed; shipped ids with no row are now
+printed; an ineligible `--retry` exits non-zero; the idempotency key is a hash rather than the raw
+ids; the deploy summary's after-the-fact line no longer contradicts a forced gate.
+
+Its sandbox could not reach local Postgres, so it could not run the ledger tests it added. I ran
+them afterwards: the private-postgres lane, ledger and schema-drift files, 31 passed. Before that,
+the ledger test was shown to go red with the deleted-account filter removed from the SQL. Two reds
+from the full suite were mine and are fixed: `db-schema-drift` needed the new table counted (43),
+and `fixture-ids` caught the pure test reusing two uuids from `upload-records.test.ts`.
+
+**Not exercised for real**: no email was sent, and the CLI could not be dry-run against production
+because the ledger table only exists there once the deploy applies its migration. The first draft's
+dry run against production (before the ledger) did run, over 2026-10-01→now, and skipped all 37
+newly shipped reports as an admin's — every report so far is Greg's. The first real email will be a
+reader's first shipped report.

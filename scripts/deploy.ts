@@ -58,6 +58,7 @@ import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
+  afterTheFactSummary,
   codeMayNotHaveShipped,
   deployBranchProblem,
   describeRedirect,
@@ -1814,8 +1815,9 @@ function summarise(previous: string | null): void {
      plainly: the banner and the rollback advice below are both about code that
      may not have shipped, and this is not that. */
   if (didDeploy && !codeMayNotHaveShipped(failures)) {
-    say(`${GREEN}Deployed, and the functional checks passed.${OFF} Only checks made after the fact failed`);
-    say(`(${failures.join(", ")}) — the deployment is live; that is not a reason to roll back.`);
+    const [headline, detail] = afterTheFactSummary(failures);
+    say(`${GREEN}${headline}${OFF}`);
+    say(detail);
   }
 
   if (schemaAdvanced > 0 && codeMayNotHaveShipped(failures)) {

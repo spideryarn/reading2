@@ -8,10 +8,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { AFTER_THE_FACT_CHECKS, codeMayNotHaveShipped } from "../scripts/deploy-checks.js";
+import { AFTER_THE_FACT_CHECKS, afterTheFactSummary, codeMayNotHaveShipped } from "../scripts/deploy-checks.js";
 import { GENERATED_PATH, renderModule } from "../scripts/feedback-endings.js";
 import {
   planShippedEmails,
+  parseCliArgs,
+  type Queryable,
+  ledgerOutcome,
+  runShippedEmails,
   type ShippedRow,
   shippedEmail,
   shippedIdsIn,
@@ -22,14 +26,15 @@ import type { FeedbackEnding } from "../src/feedback-ending-values.js";
 
 const map = (endings: Record<string, FeedbackEnding>) => renderModule(new Map(Object.entries(endings).sort()));
 const NOW = new Date("2026-10-02T15:00:00Z");
-const READER = "11111111-1111-4111-8111-111111111111";
-const OTHER = "22222222-2222-4222-8222-222222222222";
+const READER = "0000f5e1-0000-4000-8000-000000000001";
+const OTHER = "0000f5e1-0000-4000-8000-000000000002";
 const row = (over: Partial<ShippedRow> & { reportId: string }): ShippedRow => ({
   ownerId: READER,
   kind: "suggestion",
   createdAt: new Date("2026-10-02T10:00:09Z"),
   email: "reader@example.com",
   ledger: null,
+  ledgerAttempts: null,
   ...over,
 });
 
@@ -52,6 +57,29 @@ describe("the shipped map", () => {
     expect(() => shippedIdsIn(`${map({ "spya-aaaaaa": "shipped" })}  "spya-bbbbbb": { ending: "shipped" },\n`)).toThrow(
       /does not understand/,
     );
+  });
+});
+
+describe("the command line", () => {
+  it("refuses missing values and unknown or duplicate flags", () => {
+    for (const args of [
+      ["--send", "--retry"],
+      ["--send", "--sha"],
+      ["--send", "--cap"],
+      ["--send", "--unknown"],
+      ["--send", "--send"],
+    ]) {
+      expect(() => parseCliArgs(args)).toThrow(/invalid command line/);
+    }
+  });
+
+  it("parses a deliberately targeted send", () => {
+    expect(parseCliArgs(["--send", "--sha", "abc123", "--cap", "4", "--retry", `${READER}/spya-good01`])).toEqual({
+      send: true,
+      sha: "abc123",
+      cap: 4,
+      retry: { ownerId: READER, reportId: "spya-good01" },
+    });
   });
 });
 
@@ -82,7 +110,9 @@ describe("who gets a letter", () => {
     expect(plan.noRow).toBe(1);
     /* A definite failure goes again. */
     expect(plan.letters.map((l) => l.reportId)).toEqual(["spya-fail00", "spya-good01"]);
-    expect(plan.letters[1]?.email.idempotencyKey).toBe(`feedback-shipped/${READER}/spya-good01`);
+    expect(plan.letters[1]?.email.idempotencyKey).toMatch(/^feedback-shipped\/[0-9a-f]{64}$/);
+    expect(plan.letters[1]?.email.idempotencyKey).not.toContain(READER);
+    expect(plan.letters[1]?.email.idempotencyKey).not.toContain("spya-good01");
   });
 
   it("a retry names one report, and may take a stuck one", () => {
@@ -109,6 +139,63 @@ describe("who gets a letter", () => {
     const plan = planShippedEmails(["spya-aaaaa1", "spya-aaaaa2"], rows, { now: NOW, cap: 1 });
     expect(plan.letters).toEqual([]);
     expect(plan.refused).toMatch(/more than the cap of 1/);
+  });
+});
+
+describe("recording an attempted letter", () => {
+  it("keeps provider idempotency conflicts out of automatic retry", () => {
+    for (const providerError of ["concurrent_idempotent_requests", "invalid_idempotent_request"] as const) {
+      expect(ledgerOutcome({ kind: "failed", reason: `Resend answered 409 ${providerError}`, providerError })).toEqual({
+        status: "sending",
+        detail: `may have gone: Resend answered 409 ${providerError}`,
+      });
+    }
+  });
+
+  it("reports a shipped id that has no feedback row", async () => {
+    const said: string[] = [];
+    const result = await runShippedEmails(map({ "spya-gone00": "shipped" }), { send: true }, {
+      db: { query: async () => ({ rows: [] }) },
+      send: async () => ({ kind: "sent", id: "must not run" }),
+      say: (line) => said.push(line),
+      now: NOW,
+    });
+    expect(result).toEqual({ sent: 0, problems: [] });
+    expect(said.join("\n")).toContain("spya-gone00");
+  });
+
+  it("does not claim success when completion no longer owns the ledger row", async () => {
+    let query = 0;
+    const db: Queryable = {
+      query: async () => {
+        query++;
+        if (query === 1) {
+          return {
+            rows: [
+              {
+                owner_id: READER,
+                id: "spya-good01",
+                kind: "suggestion",
+                created_at: NOW,
+                email: "reader@example.com",
+                ledger: null,
+              },
+            ],
+          };
+        }
+        if (query === 2 || query === 3) return { rows: [{ attempts: 1 }] };
+        return { rows: [] };
+      },
+    };
+    const result = await runShippedEmails(map({ "spya-good01": "shipped" }), { send: true }, {
+      db,
+      send: async () => ({ kind: "sent", id: "fake" }),
+      say: () => {},
+      now: NOW,
+    });
+
+    expect(result.sent).toBe(0);
+    expect(result.problems.join("\n")).toMatch(/ledger/);
   });
 });
 
@@ -143,5 +230,12 @@ describe("in the deploy", () => {
   it("is an after-the-fact check: a failed letter never says the code may not have shipped", () => {
     expect(AFTER_THE_FACT_CHECKS).toContain(STEP_NAME);
     expect(codeMayNotHaveShipped([STEP_NAME])).toBe(false);
+  });
+
+  it("does not claim that no earlier gate was forced", () => {
+    expect(afterTheFactSummary([STEP_NAME]).join("\n")).toBe(
+      "Deployed, and its live functional checks passed. The failures listed here happened after it was live\n" +
+        "(feedback shipped emails) — any forced gates are listed above; this is not a reason to roll back.",
+    );
   });
 });

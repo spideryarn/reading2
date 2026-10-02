@@ -25,6 +25,7 @@
  * address.
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,6 +89,8 @@ export interface ShippedRow {
   readonly email: string | null;
   /** Its ledger row's status, null when it has none. */
   readonly ledger: LedgerStatus | null;
+  /** The reservation generation observed while planning. */
+  readonly ledgerAttempts: number | null;
 }
 
 export type SkipReason =
@@ -101,6 +104,8 @@ export interface Letter {
   readonly ownerId: string;
   readonly reportId: string;
   readonly email: Email;
+  /** Compare-and-swap fence for a person's retry. */
+  readonly observedAttempts: number | null;
 }
 
 export interface ShippedPlan {
@@ -108,6 +113,8 @@ export interface ShippedPlan {
   readonly skipped: ReadonlyMap<SkipReason, readonly string[]>;
   /** Shipped ids with no row at all — notes written for a report filed before the table, say. */
   readonly noRow: number;
+  /** The ids behind `noRow`, so an operator can repair a typo or investigate erasure. */
+  readonly missingRowIds: readonly string[];
   /** Set when there are more letters than the cap: send none. */
   readonly refused?: string;
 }
@@ -128,14 +135,14 @@ export function planShippedEmails(shippedIds: readonly string[], rows: readonly 
   const skipped = new Map<SkipReason, string[]>();
   const skip = (reason: SkipReason, id: string) => skipped.set(reason, [...(skipped.get(reason) ?? []), id]);
   const letters: Letter[] = [];
-  let noRow = 0;
+  const missingRowIds: string[] = [];
   const shipped = new Set(shippedIds);
   const ids = options.retry ? [options.retry.reportId].filter((id) => shipped.has(id)) : [...shipped].sort();
   for (const reportId of ids) {
     const matches = rows.filter((row) => row.reportId === reportId);
     const only = matches[0];
     if (!only) {
-      noRow++;
+      missingRowIds.push(reportId);
       continue;
     }
     /* Report ids are unique per owner, not globally — the key is (owner_id, id)
@@ -153,7 +160,8 @@ export function planShippedEmails(shippedIds: readonly string[], rows: readonly 
       letters.push({
         ownerId: only.ownerId,
         reportId,
-        email: { to: only.email, subject, text, idempotencyKey: `feedback-shipped/${only.ownerId}/${reportId}` },
+        email: { to: only.email, subject, text, idempotencyKey: feedbackIdempotencyKey(only.ownerId, reportId) },
+        observedAttempts: only.ledgerAttempts,
       });
     }
   }
@@ -162,11 +170,18 @@ export function planShippedEmails(shippedIds: readonly string[], rows: readonly 
     return {
       letters: [],
       skipped,
-      noRow,
+      noRow: missingRowIds.length,
+      missingRowIds,
       refused: `${letters.length} letters to send, more than the cap of ${cap}; sent none. Look at why, then re-run with --cap`,
     };
   }
-  return { letters, skipped, noRow };
+  return { letters, skipped, noRow: missingRowIds.length, missingRowIds };
+}
+
+/** Stable at Resend without disclosing an account id or report id to it. */
+export function feedbackIdempotencyKey(ownerId: string, reportId: string): string {
+  const delivery = createHash("sha256").update(ownerId).update("\0").update(reportId).digest("hex");
+  return `feedback-shipped/${delivery}`;
 }
 
 /** "2 October", with the year only when it is not this one. London time. */
@@ -217,7 +232,7 @@ export function shippedEmail(kind: FeedbackKind | null, createdAt: Date, now: Da
  */
 export const SHIPPED_ROWS_SQL = `
   select f.owner_id::text as owner_id, f.id, f.kind, f.created_at,
-         nullif(u.email, '') as email, l.status as ledger
+         nullif(u.email, '') as email, l.status as ledger, l.attempts as ledger_attempts
   from spideryarn.feedback f
   left join auth.users u
     on u.id = f.owner_id
@@ -237,14 +252,30 @@ const RESERVE_SQL = (retry: boolean) => `
   values ($1::uuid, $2, 'sending', 1)
   on conflict (owner_id, report_id) do update
      set status = 'sending', attempts = feedback_shipped_emails.attempts + 1, detail = null, updated_at = now()
-   where feedback_shipped_emails.status ${retry ? "in ('failed', 'sending')" : "= 'failed'"}
+   where ${
+     retry
+       ? `(feedback_shipped_emails.status = 'failed'
+          or (feedback_shipped_emails.status = 'sending'
+              and feedback_shipped_emails.attempts = $3
+              and (feedback_shipped_emails.detail is not null
+                   or feedback_shipped_emails.updated_at < now() - interval '10 minutes')))`
+       : "feedback_shipped_emails.status = 'failed'"
+   }
+  returning attempts`;
+
+/** Renew the attempt immediately before the provider call, or discover that a newer retry took it. */
+const RENEW_SQL = `
+  update spideryarn.feedback_shipped_emails
+     set updated_at = now()
+   where owner_id = $1::uuid and report_id = $2 and status = 'sending' and attempts = $3
   returning attempts`;
 
 /** **Complete**, only if the row is still this attempt's. */
 const COMPLETE_SQL = `
   update spideryarn.feedback_shipped_emails
      set status = $3, detail = $4, updated_at = now()
-   where owner_id = $1::uuid and report_id = $2 and status = 'sending' and attempts = $5`;
+   where owner_id = $1::uuid and report_id = $2 and status = 'sending' and attempts = $5
+  returning attempts`;
 
 /** The two calls this needs from `pg`; a `Pool` has both. */
 export interface Queryable {
@@ -271,6 +302,18 @@ export interface RunResult {
   readonly problems: readonly string[];
 }
 
+/** Provider outcomes which prove another same-key request exists are ambiguous, not safe to auto-retry. */
+export function ledgerOutcome(result: SendResult): { status: LedgerStatus; detail: string | null } {
+  const idempotencyConflict =
+    result.kind === "failed" &&
+    (result.providerError === "concurrent_idempotent_requests" || result.providerError === "invalid_idempotent_request");
+  if (result.kind === "sent") return { status: "sent", detail: null };
+  if (result.kind === "failed" && (result.ambiguous || idempotencyConflict)) {
+    return { status: "sending", detail: `may have gone: ${result.reason}` };
+  }
+  return { status: "failed", detail: `${result.kind}: ${result.reason}` };
+}
+
 async function shippedRows(db: Queryable, ids: readonly string[]): Promise<ShippedRow[]> {
   const result = await db.query(SHIPPED_ROWS_SQL, [ids]);
   return (
@@ -281,6 +324,7 @@ async function shippedRows(db: Queryable, ids: readonly string[]): Promise<Shipp
       created_at: Date | string;
       email: string | null;
       ledger: LedgerStatus | null;
+      ledger_attempts: number | null;
     }[]
   ).map((r) => ({
     ownerId: r.owner_id,
@@ -289,6 +333,7 @@ async function shippedRows(db: Queryable, ids: readonly string[]): Promise<Shipp
     createdAt: new Date(r.created_at),
     email: r.email,
     ledger: r.ledger,
+    ledgerAttempts: r.ledger_attempts == null ? null : Number(r.ledger_attempts),
   }));
 }
 
@@ -317,6 +362,16 @@ export async function runShippedEmails(generated: string, options: RunOptions, d
       `${stuck.length} report(s) stuck in 'sending': ${stuck.join(", ")} — check Resend's log, then --retry <owner_id>/<report_id> or mark the row 'sent'`,
     );
   }
+  if (plan.missingRowIds.length > 0) {
+    deps.say(
+      `not emailed, ${plan.missingRowIds.length} shipped report id(s) have no feedback row: ${plan.missingRowIds.join(", ")} — check the note or whether the report was erased`,
+    );
+  }
+  if (options.retry && plan.letters.length === 0) {
+    problems.push(
+      `retry target ${options.retry.ownerId}/${options.retry.reportId} is not eligible in this map and database; nothing was sent`,
+    );
+  }
   if (plan.refused) return { sent: 0, problems: [...problems, plan.refused] };
   if (plan.letters.length === 0) {
     deps.say("no reader is owed a letter");
@@ -330,20 +385,35 @@ export async function runShippedEmails(generated: string, options: RunOptions, d
       deps.say(`would email ${what}`);
       continue;
     }
-    const reserved = await deps.db.query(RESERVE_SQL(options.retry !== undefined), [letter.ownerId, letter.reportId]);
+    const retrying = options.retry !== undefined;
+    const reserved = await deps.db.query(
+      RESERVE_SQL(retrying),
+      retrying ? [letter.ownerId, letter.reportId, letter.observedAttempts] : [letter.ownerId, letter.reportId],
+    );
     const attempts = (reserved.rows[0] as { attempts?: number } | undefined)?.attempts;
     if (attempts === undefined) {
       deps.say(`another run has ${what}; left alone`);
+      if (options.retry) problems.push(`retry target could not be reserved because another attempt has ${what}`);
+      continue;
+    }
+    const renewed = await deps.db.query(RENEW_SQL, [letter.ownerId, letter.reportId, attempts]);
+    if (renewed.rows.length === 0) {
+      problems.push(`attempt no longer owns ${what}; no email was sent`);
       continue;
     }
     const result = await deps.send(letter.email, "feedback shipped");
-    const [status, detail]: [LedgerStatus, string | null] =
-      result.kind === "sent"
-        ? ["sent", null]
-        : result.kind === "failed" && result.ambiguous
-          ? ["sending", `may have gone: ${result.reason}`]
-          : ["failed", `${result.kind}: ${result.reason}`];
-    await deps.db.query(COMPLETE_SQL, [letter.ownerId, letter.reportId, status, detail?.slice(0, 200) ?? null, attempts]);
+    const { status, detail } = ledgerOutcome(result);
+    const completed = await deps.db.query(COMPLETE_SQL, [
+      letter.ownerId,
+      letter.reportId,
+      status,
+      detail?.slice(0, 200) ?? null,
+      attempts,
+    ]);
+    if (completed.rows.length === 0) {
+      problems.push(`email outcome was not recorded because a newer ledger attempt owns ${what}; check it before retrying`);
+      continue;
+    }
     if (status === "sent") {
       sent++;
       deps.say(`emailed ${what}`);
@@ -408,25 +478,61 @@ async function readOnly<T>(pool: Pool, work: (db: Queryable) => Promise<T>): Pro
   }
 }
 
+export interface CliOptions extends RunOptions {
+  readonly sha: string;
+}
+
+const CLI_VALUE_FLAGS = new Set(["--sha", "--cap", "--retry"]);
+
+function positiveCap(value: string): number {
+  const cap = Number(value);
+  if (!(Number.isInteger(cap) && cap > 0)) throw new Error("invalid command line");
+  return cap;
+}
+
+function retryTarget(value: string): NonNullable<RunOptions["retry"]> {
+  const match = /^([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\/(spya-[a-z0-9]{6})$/.exec(value);
+  if (!match?.[1] || !match[2]) throw new Error("invalid command line");
+  return { ownerId: match[1], reportId: match[2] };
+}
+
+/** Strict because a missing retry target must never widen `--send` to every report. */
+export function parseCliArgs(args: readonly string[]): CliOptions {
+  let send = false;
+  let sha = "origin/main";
+  let cap: number | undefined;
+  let retry: RunOptions["retry"];
+  const seen = new Set<string>();
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i];
+    if (!flag || seen.has(flag)) throw new Error("invalid command line");
+    seen.add(flag);
+    if (flag === "--send") {
+      send = true;
+      continue;
+    }
+    if (!CLI_VALUE_FLAGS.has(flag)) throw new Error("invalid command line");
+    const supplied = args[++i];
+    if (!supplied || supplied.startsWith("--")) throw new Error("invalid command line");
+    if (flag === "--sha") sha = supplied;
+    else if (flag === "--cap") cap = positiveCap(supplied);
+    else retry = retryTarget(supplied);
+  }
+  return { send, sha, ...(cap === undefined ? {} : { cap }), ...(retry === undefined ? {} : { retry }) };
+}
+
 async function cli(): Promise<void> {
-  const args = process.argv.slice(2);
-  const value = (flag: string) => {
-    const i = args.indexOf(flag);
-    return i >= 0 ? args[i + 1] : undefined;
-  };
-  const send = args.includes("--send");
-  const sha = value("--sha") ?? "origin/main";
-  const capText = value("--cap");
-  const retryText = value("--retry");
-  const cap = capText === undefined ? undefined : Number(capText);
-  const retryMatch = retryText === undefined ? null : /^([0-9a-f-]{36})\/(spya-[a-z0-9]{6})$/.exec(retryText);
-  if ((cap !== undefined && !(Number.isInteger(cap) && cap > 0)) || (retryText !== undefined && !retryMatch)) {
+  let options: CliOptions;
+  try {
+    options = parseCliArgs(process.argv.slice(2));
+  } catch {
     console.log(
       "usage: npx tsx scripts/feedback-shipped-emails.ts [--sha <commit>] [--cap <n>] [--retry <owner_id>/<report_id>] [--send]",
     );
     process.exitCode = 2;
     return;
   }
+  const { send, sha } = options;
   if (sha === "origin/main") execFileSync("git", ["fetch", "origin", "main", "--quiet"], { cwd: ROOT, stdio: "ignore" });
   const generated = generatedAt(sha);
   if (generated === null) {
@@ -434,11 +540,6 @@ async function cli(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const options: RunOptions = {
-    send,
-    ...(cap === undefined ? {} : { cap }),
-    ...(retryMatch?.[1] && retryMatch[2] ? { retry: { ownerId: retryMatch[1], reportId: retryMatch[2] } } : {}),
-  };
   const { deps, close } = productionDeps((line) => console.log(line));
   try {
     console.log(`the map at ${sha}`);

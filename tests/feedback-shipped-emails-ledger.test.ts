@@ -142,7 +142,9 @@ describe("the reconcile against a real database", () => {
     expect(result).toEqual({ sent: 1, problems: [] });
     expect(d.sent.map((e) => e.to)).toEqual([addressOf(READER)]);
     expect(d.sent[0]?.text).not.toContain("SECRET-BODY");
-    expect(d.sent[0]?.idempotencyKey).toBe(`feedback-shipped/${READER}/${good}`);
+    expect(d.sent[0]?.idempotencyKey).toMatch(/^feedback-shipped\/[0-9a-f]{64}$/);
+    expect(d.sent[0]?.idempotencyKey).not.toContain(READER);
+    expect(d.sent[0]?.idempotencyKey).not.toContain(good);
     expect(await ledger()).toEqual([{ owner_id: READER, report_id: good, status: "sent", attempts: 1, detail: null }]);
     expect(d.said.join("\n")).toContain(`no confirmed address: ${[unconfirmed, deleted, banned].sort().join(", ")}`);
     expect(d.said.join("\n")).toContain(`id shared by several owners: ${shared}`);
@@ -188,6 +190,77 @@ describe("the reconcile against a real database", () => {
     expect(person.sent).toHaveLength(1);
     expect(retried).toEqual({ sent: 1, problems: [] });
     expect(await ledger()).toMatchObject([{ status: "sent", attempts: 2 }]);
+  });
+
+  it("keeps Resend idempotency conflicts for a person instead of retrying them automatically", async () => {
+    for (const providerError of ["concurrent_idempotent_requests", "invalid_idempotent_request"] as const) {
+      const id = mintId();
+      await file(READER, id);
+      const first = deps([{ kind: "failed", reason: `Resend answered 409 ${providerError}`, providerError }]);
+      expect((await runShippedEmails(shippedMap([id]), { send: true }, first)).problems).toHaveLength(1);
+      expect(await ledger()).toMatchObject([{ report_id: id, status: "sending", attempts: 1 }]);
+
+      const deploy = deps();
+      expect((await runShippedEmails(shippedMap([id]), { send: true }, deploy)).problems.join("\n")).toContain("stuck");
+      expect(deploy.sent).toEqual([]);
+      await pool.query("delete from spideryarn.feedback where owner_id = $1 and id = $2", [READER, id]);
+    }
+  });
+
+  it("lets only one overlapping retry call the provider", async () => {
+    const id = mintId();
+    await file(READER, id);
+    await runShippedEmails(shippedMap([id]), { send: true }, deps([{ kind: "failed", reason: "TypeError", ambiguous: true }]));
+
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const firstBase = deps();
+    const first: RunDeps & { sent: Email[]; said: string[] } = {
+      ...firstBase,
+      send: async (email) => {
+        firstBase.sent.push(email);
+        started();
+        await held;
+        return { kind: "sent", id: "fake" };
+      },
+    };
+    const retry = { send: true, retry: { ownerId: READER, reportId: id } } as const;
+    const firstRun = runShippedEmails(shippedMap([id]), retry, first);
+    await entered;
+    const second = deps();
+    const secondResult = await runShippedEmails(shippedMap([id]), retry, second);
+    release();
+    await firstRun;
+
+    expect(firstBase.sent).toHaveLength(1);
+    expect(second.sent).toEqual([]);
+    expect(secondResult.problems).toHaveLength(1);
+  });
+
+  it("reports a shipped id that has no feedback row", async () => {
+    const missing = mintId();
+    const d = deps();
+    const result = await runShippedEmails(shippedMap([missing]), { send: true }, d);
+    expect(result.sent).toBe(0);
+    expect(d.said.join("\n")).toContain(missing);
+  });
+
+  it("reports a targeted retry that does not name an eligible owner and report", async () => {
+    const id = mintId();
+    await file(READER, id);
+    const result = await runShippedEmails(
+      shippedMap([id]),
+      { send: true, retry: { ownerId: OTHER, reportId: id } },
+      deps(),
+    );
+    expect(result.sent).toBe(0);
+    expect(result.problems.join("\n")).toContain("retry target");
   });
 
   it("a dry run sends nothing and writes nothing", async () => {

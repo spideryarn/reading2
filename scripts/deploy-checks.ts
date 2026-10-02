@@ -938,6 +938,14 @@ export function codeMayNotHaveShipped(failed: readonly string[]): boolean {
   return failed.some((f) => !afterwards.has(f));
 }
 
+/** Wording that stays true when an earlier red gate was explicitly forced; those overrides are reported separately. */
+export function afterTheFactSummary(failed: readonly string[]): readonly [string, string] {
+  return [
+    "Deployed, and its live functional checks passed. The failures listed here happened after it was live",
+    `(${failed.join(", ")}) — any forced gates are listed above; this is not a reason to roll back.`,
+  ];
+}
+
 /* ------------------------------------------------------------------ */
 /* The bundle                                                          */
 /* ------------------------------------------------------------------ */
