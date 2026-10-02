@@ -29,8 +29,8 @@ describe("expectedSeconds", () => {
 });
 
 describe("readLevel", () => {
-  /* Each level needs twice the time of the one before — diminishing returns of
-     brightness (Greg, 2026-10-01, spya-d940uu). 300 words take 78.26 s. */
+  /* Each level's elapsed threshold doubles — progressively delayed brightness
+     (Greg, 2026-10-01, spya-d940uu). 300 words take 78.26 s. */
   const cases: [number, number, ReadLevel][] = [
     [0, 300, 0],
     [-1, 300, 0],
@@ -48,6 +48,10 @@ describe("readLevel", () => {
     [0.5, 0, 1], // a figure: half a second of its one
     [1, 0, 2],
     [3, 0, 4],
+    [21, 230, 1], // exactly 0.35
+    [42, 230, 2], // exactly 0.70
+    [84, 230, 3], // exactly 1.40
+    [168, 230, 4], // exactly 2.80
   ];
   it.each(cases)("%s seconds on %s words is level %s", (seconds, words, level) => {
     expect(readLevel(seconds, words)).toBe(level);

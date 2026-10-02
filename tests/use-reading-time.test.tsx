@@ -470,4 +470,18 @@ describe("useReadingTime's timeFor — the seconds behind the card (261002e)", (
     });
     expect(latest.timeFor(A)?.seconds).toBe(25);
   });
+
+  it("makes a retained lookup inert on unmount", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 25 };
+    await render();
+    const timeFor = latest.timeFor;
+    expect(timeFor(A)?.seconds).toBe(25);
+
+    await act(async () => root.unmount());
+    expect(timeFor(A)).toBeNull();
+    /* Give afterEach a live root; React roots cannot be rendered again after
+       unmounting, and the shared teardown owns the ordinary cleanup. */
+    root = createRoot(host);
+  });
 });

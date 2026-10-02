@@ -341,10 +341,9 @@ The batch is still written over the whole article; the filter is the panel's, co
 browser from the levels the page already has. The plan and GPT Sol's six changes to it are
 [260930e](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
 
-- **Read** is on screen for 70% of the time the block takes to read (reading-time level 2 or more since
-  2026-10-02; level 3 before the levels slowed down, the same 70%)
-  — and a question is read when **every** one of its evidence blocks is, and is still in the
-  article. The share counts body words only, the reading-time clock's rule.
+- **Read** is on screen for 70% of the time the block takes to read (reading-time level 2 or more),
+  and a question is read when **every** one of its evidence blocks is, and is still in the article.
+  The share counts body words only, the reading-time clock's rule.
   [`src/web/read-filter.ts`](../../src/web/read-filter.ts).
 - **The path is not rebuilt.** `at` is still an index into the artefact's array; the filter only
   changes which indices can be landed on. "Question *n* of *N*" and *Show all* count what can be

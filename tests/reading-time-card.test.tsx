@@ -202,6 +202,21 @@ describe("the reading-time line", () => {
     expect(card()?.textContent).not.toMatch(/You have spent/);
   });
 
+  it("drops the time when an open card outlives the recorder run", async () => {
+    let running = true;
+    const timeFor: ReadingTimeFor = () => (running ? { seconds: 80, expected: 26 } : null);
+    const line = paintRows([ID], timeFor)[0]!;
+    await hover(line);
+    expect(card()?.textContent).toContain("You have spent 1 min 20 s here.");
+
+    running = false;
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(card()?.textContent).not.toMatch(/You have spent/);
+    expect(card()?.textContent).toContain("This line grows stronger");
+  });
+
   it("dismisses the open card when a finger takes over — nothing yet on touch", async () => {
     const line = paint(4);
     await hover(line);

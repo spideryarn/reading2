@@ -41,7 +41,7 @@ reached, which is what this report is about. The two reports do not pull against
 
 ## What we do
 
-### 1. Thresholds that double — diminishing returns
+### 1. Thresholds that double — progressively delayed levels
 
 Each level needs **twice** the time of the one before, starting later:
 
@@ -132,3 +132,18 @@ All six findings checked and taken (`…-plan-review-sol.md`). No P0.
    off → null, another article, StrictMode replay. Removing both clears turns the off test red.
 5. **P3** "Diminishing returns" overclaimed the combined curve; corrected above.
 6. **P3** "Under a second" is now below 1 s, with 0.5 and 0.99 pinned.
+
+## Code review (GPT Sol, 2026-10-02) and the browser check
+
+No P0–P1 (`…-code-review-sol.md`). Sol fixed in place: tests for an unmounted hook's lookup and for an
+open card when recording ends (mutation-checked); exact-boundary cases at 0.35 / 0.7 / 1.4 / 2.8; and
+comments that still said each step "costs twice" or that two reads reach full strength. Its one
+wider P3, two CSS comments (gutter.css, spine.css) that said a glance shows a sliver, is fixed too.
+
+Browser, on the box (Playwright, Sonnet subagent, `fowler-phrenology`): the card opens on hover with
+"You have spent 1 min 58 s here. It takes about 3 s to read."; moving straight to another row's line
+changes it at once ("4 min 27 s … 9 s"); no "darker"; no console errors from the change
+([shot](261002e-shot-card.png)). The time ticks up, but slowly: a second is shared by area between
+the ~19 rows on screen, so one row gains about a tenth of a second per second. That is the
+recorder's design (reading-time.ts § `shareVisible`), not a fault in the card. The seeded rows were
+all at level 4, so the opacity ladder was not re-measured across levels; it is unchanged CSS.

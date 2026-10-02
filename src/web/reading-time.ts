@@ -12,7 +12,7 @@
  */
 import type { BlockId } from "../types.js";
 
-/** How read a block looks: 0 draws nothing, 2 is "read once", 4 is "read slowly, or again" — `readLevel`. */
+/** How read a block looks: 0 draws nothing, 2 is "read once", 4 is "read slowly, or several times" — `readLevel`. */
 export type ReadLevel = 0 | 1 | 2 | 3 | 4;
 
 /** Words per minute a block's expected reading time is measured at. */
@@ -39,8 +39,9 @@ export function expectedSeconds(words: number): number {
  * rather than a width in pixels, so that neighbouring blocks merge into runs on
  * the spine and the gutter's style sheet changes only when a block crosses one.
  *
- * **Each step costs twice the time of the one before** (0.35, 0.7, 1.4, 2.8
- * of the reading time), so brightness grows with the log of time spent:
+ * **Each level's elapsed-time threshold is twice the preceding threshold**
+ * (0.35, 0.7, 1.4, 2.8 of the reading time), so the later levels grow
+ * progressively farther apart:
  *
  * > It seems to get brighter too fast. […] Or make it kind of […] like
  * > finishing marginal returns of brightness with passing of time.
@@ -48,7 +49,7 @@ export function expectedSeconds(words: number): number {
  * > — Greg, 2026-10-01 (spya-d940uu)
  *
  * A glance draws nothing; one brisk read is a faint line; full strength is a
- * slow read or a second one. 0.7 is a boundary on purpose: it is what the
+ * slow read or nearly three. 0.7 is a boundary on purpose: it is what the
  * quiz calls read (read-filter.ts § `READ_ENOUGH`), and it did not move.
  * docs/plans/261002e-reading-time-line-brightens-more-slowly-and-its-card-says-the-time.md.
  */

@@ -28,9 +28,9 @@ and the drawing.
 - **Thickness is per block and absolute**: four steps of the time spent over the time the block takes
   to read at 230 words a minute, never under a second. Not relative to the most-read block, which
   would make everything else look unread. `readLevel`.
-- **Each step costs twice the time of the one before**, since 2026-10-02: 0.35, 0.7, 1.4 and 2.8 of
-  the reading time (it was 0.1, 0.35, 0.7, 1). A glance draws nothing, one brisk read is faint, full
-  strength is a slow read or nearly three. 0.7 stays a boundary because it is the quiz's "read".
+- **Each level's elapsed-time threshold doubles**: 0.35, 0.7, 1.4 and 2.8 of the reading time. A
+  glance draws nothing, one brisk read is faint, and full strength takes a slow read or nearly
+  three. 0.7 is a boundary because it is the quiz's "read".
 
   > It seems to get brighter too fast. There's lots of blocks that have lines next to them that I
   > think I haven't spent that much time on. So maybe increase the threshold or basically slow down
@@ -69,7 +69,7 @@ and the drawing.
   pointer's height rather than the paragraph's top. **It says the time** since 2026-10-02 — "You have
   spent 1 min 20 s here. It takes about 26 s to read." — live while open, from `useReadingTime`'s
   `timeFor`, which only the owner's Reader hands the card
-  ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+  ([261002e](../plans/261002e-reading-time-line-brightens-more-slowly-and-its-card-says-the-time.md)).
   Nothing yet on touch.
   **The line is drawn inside its own strip** since 2026-10-01: it used to sit 2px outside it, so
   pointing at the line found nothing and Greg asked again (SPIDERYARN-READING2-84,
