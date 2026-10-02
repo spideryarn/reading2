@@ -313,11 +313,13 @@ function date(value: unknown): Date | null {
  * to route the request at all, and a request carrying only one of them fails
  * in a way that reads like the other problem.
  */
-export function gotruePages(url: string, key: string): GetAccountPage {
+export function gotruePages(url: string, key: string, signal?: AbortSignal): GetAccountPage {
   const base = url.replace(/\/+$/, "");
   return async (page, perPage) => {
     const res = await fetch(`${base}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
+      /* One signal across every page, when the caller has a deadline. */
+      ...(signal ? { signal } : {}),
     });
     if (!res.ok) {
       /* The status and nothing else. A body from an auth endpoint is not a
@@ -484,6 +486,63 @@ export async function confirmedAccountEmail(
   if (typeof body.email !== "string" || body.email === "") return { kind: "unconfirmed" };
   if (date(body.email_confirmed_at) === null) return { kind: "unconfirmed" };
   return { kind: "confirmed", email: body.email };
+}
+
+/** Who, if anyone, has this address as their account's. */
+export type AccountByEmail =
+  | { readonly kind: "one"; readonly id: string }
+  /** No live account has it, or the one that does has not confirmed it. */
+  | { readonly kind: "none" }
+  /** Two or more live accounts have it, confirmed or not — an email account and an unlinked Google one, say. */
+  | { readonly kind: "several" }
+  | { readonly kind: "unavailable"; readonly reason: string };
+
+/** A seam, for tests: where the pages come from. Given the deadline's signal. */
+export interface AccountByEmailDeps {
+  readonly pages?: (signal: AbortSignal) => GetAccountPage;
+}
+
+/**
+ * **The one account whose address this is, and only if confirmed** — for the
+ * gift voucher's email (src/store/pg-vouchers.ts § `giftAudienceFor`), which
+ * tells an existing reader their own remaining allowance.
+ * docs/plans/261002a-fb99-voucher-email-for-existing-user.md.
+ *
+ * The whole list, as `/admin/users` reads it (`listAccounts`, count-checked;
+ * `authAdminEndpoint`'s same-project check), matched on the trimmed,
+ * lower-cased address — the claim's own comparison. **Ambiguity is decided
+ * before confirmation** (Sol, 261002a F2): two live accounts with the address
+ * are `several` even if only one has confirmed it, so the allowance of one of
+ * two people who might own an inbox is never written into it. Confirmed means
+ * `email_confirmed_at`, as the claim requires.
+ *
+ * **Never throws**, and has its own deadline, one signal across every page:
+ * any doubt is `unavailable`, and the caller's answer to doubt is the
+ * invitation, which is true for anybody.
+ */
+export async function confirmedAccountByEmail(
+  normalisedEmail: string,
+  deps: AccountByEmailDeps = {},
+): Promise<AccountByEmail> {
+  const signal = AbortSignal.timeout(ACCOUNT_LOOKUP_TIMEOUT_MS);
+  try {
+    const pages =
+      deps.pages?.(signal) ??
+      (() => {
+        const { url, key } = authAdminEndpoint();
+        return gotruePages(url, key, signal);
+      })();
+    const rows = await listAccounts(pages);
+    const matches = rows.filter((row) => row.email !== null && row.email.trim().toLowerCase() === normalisedEmail);
+    const [only, second] = matches;
+    if (!only) return { kind: "none" };
+    if (second) return { kind: "several" };
+    if (only.emailConfirmedAt === null) return { kind: "none" };
+    return { kind: "one", id: only.id };
+  } catch {
+    /* The class of failure, never a message: a listing's error can name the project. */
+    return { kind: "unavailable", reason: signal.aborted ? "timed out" : "the account list failed" };
+  }
 }
 
 /**

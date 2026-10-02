@@ -149,6 +149,15 @@ describe("the privacy page", () => {
     expect(prose).toContain("That note goes through Resend, then our domain’s mail forwarding at Namecheap");
   });
 
+  it("says a gift email to an existing reader carries their own remaining allowance", () => {
+    /* Plan 261002a: giftMessage's reader letter, in src/store/pg-voucher-emails.ts,
+       puts the before and after counts through Resend into that inbox. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "if it is already your account’s, the email also says how many articles you had left and how many you have with the gift",
+    );
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

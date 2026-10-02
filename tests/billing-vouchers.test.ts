@@ -64,6 +64,8 @@ vi.mock("../src/store/admin-accounts.js", async (importOriginal) => {
     confirmedAccountEmail: async (ownerId: string) =>
       auth.answers.get(ownerId) ?? { kind: "unavailable", reason: "not in this test's map" },
     accountEmail: async () => ({ kind: "unavailable", reason: "not asked in this test" }),
+    /* Who the gift email is for (261002a) is tested in billing-voucher-emails. */
+    confirmedAccountByEmail: async () => ({ kind: "none" }),
   };
 });
 
