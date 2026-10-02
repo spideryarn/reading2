@@ -36,6 +36,7 @@
  * titles drop to a second line under the chip.
  */
 import { Link } from "./Link.js";
+import { PaperCard } from "./PaperCard.js";
 import { readHref } from "./router.js";
 import type { ShelfTerm } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope, TopicDot, topArticles } from "./ShelfTermChip.js";
@@ -147,7 +148,16 @@ function CountBar({
 }
 
 /**
- * The articles that use the topic most, one per title, as links.
+ * The articles that use the topic most, one per title, as links — each with
+ * the paper card on hover or focus (PaperCard.tsx; Greg's `spya-f28vqj`:
+ * *"add rich tooltips … to the paper-links that are matched for each
+ * faceted-text-search-pill"*, plan 261002f). A slug on no list loaded keeps
+ * the bare link: there is nothing true to put on its card.
+ *
+ * Inside the view's `TooltipGroup`, so running the pointer down the titles
+ * opens each card at once rather than waiting out the delay every time. The
+ * card has nothing to press, so it is an ordinary card, and a tap on a phone
+ * simply follows the link, as the shelf table's title does.
  *
  * **No *"7 of 38 on the shelf"* in front, since 2026-10-01** — the bar says
  * the proportion, and the chip's own card still gives both denominators
@@ -157,17 +167,32 @@ function Titles({ term, scope }: { term: ShelfTerm; scope: TermTipScope }) {
   const top = topArticles(term, scope.inScope, ROW_ARTICLES, scope.titleOf);
   return (
     <span className="tw:text-muted-foreground">
-      {top.map((a, i) => (
-        <span key={a.slug}>
-          {i > 0 && <span aria-hidden="true"> · </span>}
+      {top.map((a, i) => {
+        const entry = scope.entryOf(a.slug);
+        const link = (
           <Link
             href={readHref(a.slug)}
             className="tw:text-muted-foreground tw:underline-offset-2 tw:hover:text-foreground tw:hover:underline"
           >
             {scope.titleOf(a.slug) ?? a.slug}
           </Link>
-        </span>
-      ))}
+        );
+        return (
+          <span key={a.slug}>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            {entry ? (
+              <Tooltip
+                placement="bottom-start"
+                content={<PaperCard entry={entry} topics={scope.topicsOf(a.slug)} />}
+              >
+                {link}
+              </Tooltip>
+            ) : (
+              link
+            )}
+          </span>
+        );
+      })}
     </span>
   );
 }

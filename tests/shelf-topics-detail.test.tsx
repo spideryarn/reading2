@@ -22,7 +22,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { LibraryTermsResponse } from "../src/types.js";
+import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
 import { ShelfTerms } from "../src/web/ShelfTerms.js";
 import { topArticles } from "../src/web/ShelfTermChip.js";
 import { topicHueStops } from "../src/web/topic-colour.js";
@@ -58,6 +58,29 @@ const countOf = (key: string) => 14 - KEYS.indexOf(key);
 let data: LibraryTermsResponse = DATA;
 let scopeSlugs: string[] = SLUGS;
 let titleOf = (slug: string): string | undefined => `Title of ${slug}`;
+
+/** A shelf entry for a slug, titled by `titleOf` — what the paper card draws. */
+function entryFor(slug: string): LibraryEntry | undefined {
+  const title = titleOf(slug);
+  if (title === undefined) return undefined;
+  return {
+    slug,
+    title,
+    byline: `Author of ${slug}`,
+    siteName: "The Example Review",
+    addedAt: "2026-08-12T09:15:00.000Z",
+    words: 2400,
+    minutes: 11,
+    blocks: 40,
+    parts: 2,
+    sections: 5,
+    comments: 0,
+    opens: 0,
+    sourceReusable: true,
+    gist: `The gist of ${slug}.`,
+    has: { arc: false, tweets: false, glossary: false },
+  };
+}
 let liveCountOf = (key: string): number =>
   KEYS.includes(key) ? countOf(key) : (data.terms.find((t) => t.key === key)?.articles.length ?? 0);
 
@@ -78,7 +101,7 @@ function Harness() {
       setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]));
     },
     onClear: () => setSelected([]),
-    titleOf,
+    entryOf: entryFor,
     inScope: new Set(scopeSlugs),
     archived: false,
   });
@@ -273,6 +296,46 @@ describe("?topicsView=detail", () => {
     expect(pills().length).toBeGreaterThan(0);
   });
 
+});
+
+describe("the paper card on an article link", () => {
+  /** The links in the detail row for this topic. */
+  const linksOf = (key: string) => {
+    const row = [...(detailList()?.querySelectorAll(":scope > li") ?? [])].find(
+      (li) => li.querySelector("button[aria-pressed]")?.getAttribute("aria-label")?.split(" ")[0] === key,
+    );
+    return [...(row?.querySelectorAll<HTMLAnchorElement>("a") ?? [])];
+  };
+
+  it("opens on hovering a link: title, authors and site, gist, dates, and every topic it is in", async () => {
+    await show("/?topicsView=detail");
+    /* a2 is used by topic00, topic01 and topic02 (the fixture's i, i+1, i+2). */
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a2");
+    expect(link, "a link to a2 in topic00's row").toBeTruthy();
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>(".tooltip")];
+    expect(cards, "exactly one card open").toHaveLength(1);
+    const text = (cards[0]?.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("Title of a2");
+    expect(text).toContain("Author of a2 · The Example Review");
+    expect(text).toContain("The gist of a2.");
+    expect(text).toContain("Added");
+    expect(text).toContain("Last openednever");
+    expect(text).toContain("11 min · 2,400 words");
+    const topics = [...(cards[0]?.querySelectorAll(".tip-topics li") ?? [])].map((li) => li.textContent);
+    expect(topics).toEqual(["topic00", "topic01", "topic02"]);
+  });
+
+  it("leaves a link bare when the slug is on no list loaded", async () => {
+    titleOf = (slug) => (slug === "a0" ? undefined : `Title of ${slug}`);
+    await show("/?topicsView=detail");
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a0");
+    expect(link, "a link to a0 in topic00's row").toBeTruthy();
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    expect(document.querySelectorAll(".tooltip")).toHaveLength(0);
+  });
 });
 
 describe("copies of one article", () => {

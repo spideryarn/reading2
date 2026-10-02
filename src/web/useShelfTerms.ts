@@ -257,13 +257,15 @@ export function useShelfTopics({
     return new Set([...active, ...archived].map((e) => e.slug));
   }, [articles, inArchive]);
 
-  /* The card's own title: `LibraryEntry.title`, which the server has already
-     resolved through the title fallback (library.md). */
-  const titleOf = useMemo(() => {
-    const bySlug = new Map<string, string>();
-    for (const e of [...(articles ?? []), ...(archivedList ?? [])]) bySlug.set(e.slug, e.title);
+  /* The shelf entry for a slug on either list loaded — its title for the
+     chips' cards and the detail rows (`LibraryEntry.title`, which the server
+     has already resolved through the title fallback, library.md), and the
+     whole entry for the paper card on a detail row's links (PaperCard.tsx). */
+  const entryOf = useMemo(() => {
+    const bySlug = new Map<string, LibraryEntry>();
+    for (const e of [...(articles ?? []), ...(archivedList ?? [])]) bySlug.set(e.slug, e);
     return (slug: string) => bySlug.get(slug);
   }, [articles, archivedList]);
 
-  return { terms, inArchive, topics, members, inScope, titleOf };
+  return { terms, inArchive, topics, members, inScope, entryOf };
 }
