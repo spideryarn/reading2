@@ -92,9 +92,10 @@ type QuotesStatus = "loading" | "none" | "ready" | "error";
  *
  * Still not heard: a run in **another tab** while this tab's engine is idle,
  * and a CLI run with no job row — the mount `reload` and a page reload cover
- * those; focus revalidation would be the rest. With the band open, a
- * completion is refreshed twice and `useOrderedRead` makes the second a
- * trailing read: one extra GET.
+ * those; focus revalidation would be the rest. With the band open, both
+ * listeners refresh; the request cost depends on whether a read is already
+ * outstanding. useCitations.ts § An always-mounted read is not an always-fresh
+ * read names the cases.
  *
  * It is a **staleness** gap and not a disagreement — the panel and the prose
  * read the same `QuotesRead`, so they are stale together and can never show
@@ -251,8 +252,8 @@ export function useQuotesRead(slug: string): QuotesRead {
      seven other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
-  /* A run that finishes after the reader left the band still reaches the prose
-     (and the margin). useCitations.ts § An always-mounted read is not an
+  /* A run that finishes after the reader left the band still reaches the prose.
+     useCitations.ts § An always-mounted read is not an
      always-fresh read. */
   useStepFinished(slug, "quotes", refresh);
 

@@ -318,8 +318,8 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
-  /* A run that finishes after the reader left the band still reaches the prose
-     (and the margin). useCitations.ts § An always-mounted read is not an
+  /* A run that finishes after the reader left the band still reaches the prose.
+     useCitations.ts § An always-mounted read is not an
      always-fresh read. */
   useStepFinished(slug, "glossary", refresh);
 

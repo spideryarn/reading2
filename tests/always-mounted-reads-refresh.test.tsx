@@ -11,10 +11,10 @@
  * the same fix as Marginalia's (tests/marginalia-live-refresh.test.tsx, plan
  * 261002d), whose harness this is: the real `jobEngine` on a mocked network.
  *
- * The band is deliberately not mounted here. That is the case: the reader left
- * it, so nothing else is listening.
+ * The main case leaves the band unmounted. The companion cases check the
+ * duplicate-refresh cost with it open, and the read's subscription lifecycle.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "../src/types.js";
@@ -24,6 +24,7 @@ import type { Job } from "../src/types.js";
 const SLUG = "always-mounted";
 const trace: string[] = [];
 let jobs: Job[] = [];
+let holdRead: (() => Promise<Response>) | undefined;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -31,6 +32,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     const method = init?.method ?? "GET";
     trace.push(`${method} ${url}`);
     if (url === "/api/jobs" && method === "GET") return new Response(JSON.stringify({ jobs }), { status: 200 });
+    if (holdRead) return holdRead();
     /* Every artefact answers "none yet". The claim is about whether the read
        is asked again, which a body would not change. */
     return new Response(null, { status: 404 });
@@ -42,6 +44,7 @@ const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
+const { useStepJob } = await import("../src/web/useStepJob.js");
 
 const READS = [
   ["citations", useCitationsRead],
@@ -52,9 +55,19 @@ const READS = [
 let host: HTMLDivElement;
 let root: Root;
 
-function Probe({ use }: { use: (slug: string) => unknown }) {
-  use(SLUG);
+function Probe({ use, slug = SLUG }: { use: (slug: string) => unknown; slug?: string }) {
+  use(slug);
   return null;
+}
+
+function Band({ step, refresh }: { step: typeof READS[number][0]; refresh: () => Promise<void> }) {
+  useStepJob(SLUG, step, refresh, "watches-queue");
+  return null;
+}
+
+function WithBand({ step, use }: { step: typeof READS[number][0]; use: (slug: string) => { refresh(): Promise<void> } }) {
+  const read = use(SLUG);
+  return createElement(Band, { step, refresh: read.refresh });
 }
 
 function job(id: string, step: string, status: Job["status"], slug = SLUG): Job {
@@ -90,6 +103,7 @@ const artefactReads = () => trace.filter((l) => l.startsWith("GET ") && !l.inclu
 beforeEach(async () => {
   trace.length = 0;
   jobs = [];
+  holdRead = undefined;
   jobEngine.reset();
   host = document.createElement("div");
   document.body.append(host);
@@ -117,6 +131,50 @@ describe("a run that finishes after the reader left the band", () => {
 
       expect(artefactReads(), "one read after the job, not none").toEqual([url, url]);
       expect(trace.filter((l) => l === "POST /api/jobs")).toEqual([]);
+    });
+
+    it(`${step}: Strict Mode and a slug change keep completions scoped`, async () => {
+      await act(async () => root.render(createElement(StrictMode, null, createElement(Probe, { use }))));
+      await settle();
+      const url = `GET /api/${step}/${SLUG}`;
+      expect(artefactReads()).toEqual([url]);
+      await runs([job("strict", step, "running")], [job("strict", step, "done")]);
+      expect(artefactReads()).toEqual([url, url]);
+
+      await act(async () => root.render(createElement(StrictMode, null, createElement(Probe, { use, slug: "next" }))));
+      await settle();
+      const before = artefactReads().length;
+      await runs([job("old", step, "running")], [job("old", step, "done")]);
+      expect(artefactReads()).toHaveLength(before);
+      await runs([job("new", step, "running", "next")], [job("new", step, "done", "next")]);
+      expect(artefactReads().slice(-2)).toEqual([`GET /api/${step}/next`, `GET /api/${step}/next`]);
+
+      await act(async () => root.render(null));
+      const unmounted = artefactReads().length;
+      await runs([job("gone", step, "running", "next")], [job("gone", step, "done", "next")]);
+      expect(artefactReads()).toHaveLength(unmounted);
+    });
+
+    it(`${step}: an open band adds a trailing GET when no read is outstanding`, async () => {
+      await act(async () => root.render(createElement(WithBand, { step, use })));
+      await settle();
+      const before = artefactReads().length;
+      await runs([job("both", step, "running")], [job("both", step, "done")]);
+      expect(artefactReads()).toHaveLength(before + 2);
+    });
+
+    it(`${step}: both completion listeners coalesce behind an outstanding read`, async () => {
+      let release!: (response: Response) => void;
+      const pending = new Promise<Response>((resolve) => { release = resolve; });
+      holdRead = () => pending;
+      await act(async () => root.render(createElement(WithBand, { step, use })));
+      await settle();
+      await runs([job("pending", step, "running")], [job("pending", step, "done")]);
+      expect(artefactReads()).toHaveLength(1);
+      holdRead = undefined;
+      await act(async () => release(new Response(null, { status: 404 })));
+      await settle();
+      expect(artefactReads()).toHaveLength(2);
     });
   }
 

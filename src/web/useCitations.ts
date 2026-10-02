@@ -200,11 +200,15 @@ export interface UseCitations {
  * **Now the read hears its own step finish**, through `useStepFinished`
  * (useStepJob.ts) — quiet, so it buys no polling and starts nothing. All three
  * reads got the same line on the same day (plan 261002d's follow-up,
- * tests/always-mounted-reads-refresh.test.tsx). What it still cannot hear is
+ * tests/always-mounted-reads-refresh.test.tsx). Only announced completions are
+ * heard: the engine's first list is a baseline (`useStepFinished`'s docstring).
+ * What it still cannot hear is
  * a run in **another tab** while this tab's engine is idle, or a CLI run with
  * no job row; those wait for the band's mount `reload` or a page reload. With
- * the band open, a completion is refreshed twice — the band's and this — and
- * `useOrderedRead` makes the second a trailing read: one extra GET.
+ * the band open, both listeners refresh. If no read is outstanding, the first
+ * starts a GET and the second arms one trailing GET. If a read is already out,
+ * both coalesce into its one trailing read: no extra GET. A glossary lookup
+ * landing during a read can arm another repair read (`patchEntry`).
  *
  * It is a **staleness** gap and not a disagreement: the panel and the prose
  * read the same `CitationsRead`, so they are stale together and can never show

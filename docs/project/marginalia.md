@@ -22,8 +22,8 @@ The column keeps no copy of these lists: it reads them every time it opens, and 
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
 `useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations comes
-through the Reader's shared read instead, which listens the same way, so a Citations run that
-finishes after the reader has left its band reaches the margin too (as do Glossary's and Quotes'
+through the Reader's shared read instead, which listens the same way, so an announced Citations
+completion after the reader has left its band reaches the margin too (as do Glossary's and Quotes'
 reads, for the prose marks). Greg had asked for missing modes to be run when Marginalia opens, if a later
 one would otherwise be missed; it would not be, so it is not
 ([interface-vision.md § Tensions](interface-vision.md#tensions-from-the-feedback-so-far),
