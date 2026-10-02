@@ -11,6 +11,7 @@
 import { type BlockId, MAX_VISIBLE_BLOCKS } from "../types.js";
 import { firstOnScreen, type RowBox, SAFE_ID } from "./reading-time.js";
 import { dockOffset, stickyOffset } from "./scroll.js";
+import { isFolded } from "./fold.js";
 
 /** The spelling of a block's row every other reader of this table uses — Spine.tsx, keynav.ts. */
 export const ROW_SELECTOR = "tbody tr[data-block]";
@@ -56,9 +57,14 @@ export function rowsOnScreen(rows: readonly HTMLElement[], viewTop: number, view
   };
   const out: RowBox[] = [];
   for (let i = firstOnScreen(rows.length, (j) => rect(j).bottom, viewTop); i < rows.length; i++) {
+    /* Folding an outline can put hundreds of zero-height rows between the few
+       visible headings. They accrue no reading time, but measuring every one
+       would undo this sampler's logarithmic cost exactly while Fold all is in
+       use. The store already knows them without a layout read. */
+    const id = (rows[i] as HTMLElement).dataset.block;
+    if (id && isFolded(id)) continue;
     const r = rect(i);
     if (r.top >= viewBottom) break;
-    const id = (rows[i] as HTMLElement).dataset.block;
     if (id) out.push({ id, top: r.top, bottom: r.bottom });
   }
   return out;

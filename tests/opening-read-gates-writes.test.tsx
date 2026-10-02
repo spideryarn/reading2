@@ -429,7 +429,7 @@ const OLD_QUESTION = "arguments against substrate independence";
 const NEW_QUESTION = "anywhere he gives numbers";
 
 function runRow(id: string, criterion: string): SearchRun {
-  return { id, criterion, createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
+  return { id, criterion, kind: "meaning", createdAt: "2026-09-01T09:00:00.000Z", status: "done", hits: [] };
 }
 const OLD_RUN = runRow("spya-aaaab2", OLD_QUESTION);
 

@@ -57,7 +57,7 @@ import { searchRuns } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
-import type { SearchHit, SearchRun } from "../types.js";
+import { type SearchHit, type SearchKind, type SearchRun, isSearchKind } from "../types.js";
 import { MissingAttempt, type SearchStore, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -89,9 +89,16 @@ type Db = ReturnType<typeof getDb>;
 
 /** A row as the client sees it. Absent, not null — `exactOptionalPropertyTypes`. */
 function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
+  /* The column's CHECK allows exactly these two, so this cannot fire on a row
+     the database accepted — and if the CHECK were ever loosened, a third kind
+     read as `"meaning"` would be the silent version of that mistake. */
+  if (!isSearchKind(row.kind)) {
+    throw new Error(`search run ${row.id} has an unknown kind`);
+  }
   return {
     id: row.id,
     criterion: row.criterion,
+    kind: row.kind,
     createdAt: row.createdAt.toISOString(),
     status: row.status as SearchRun["status"],
     hits: row.hits as SearchHit[],
@@ -133,6 +140,7 @@ const rawPgSearchStore: SearchStore = {
   async begin(
     slug: string,
     criterion: string,
+    searchKind: SearchKind,
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
   ): Promise<{ run: SearchRun; attempt: string | undefined }> {
@@ -167,7 +175,14 @@ const rawPgSearchStore: SearchStore = {
          it. docs/plans/260904c-more-modes-on-a-shared-link.md § Still open. */
       const sourceHash = await sourceHashFor(articleId, tx);
       const existing = await runsFor(articleId, tx);
-      const { run: decided, kind } = withRun(existing, criterion, wantedId, at, sourceHash);
+      const { run: decided, kind } = withRun(
+        existing,
+        criterion,
+        searchKind,
+        wantedId,
+        at,
+        sourceHash,
+      );
 
       if (kind === "reset") {
         /* **The predicate is repeated in the UPDATE on purpose.**
@@ -202,6 +217,7 @@ const rawPgSearchStore: SearchStore = {
               eq(searchRuns.articleId, articleId),
               eq(searchRuns.id, decided.id),
               eq(searchRuns.criterion, criterion),
+              eq(searchRuns.kind, searchKind),
               eq(searchRuns.status, "error"),
             ),
           )
@@ -224,6 +240,7 @@ const rawPgSearchStore: SearchStore = {
           id: decided.id,
           ownerId: currentOwnerId(),
           criterion,
+          kind: decided.kind,
           status: "pending",
           hits: [],
           sourceHash: decided.sourceHash ?? null,
@@ -286,7 +303,7 @@ const rawPgSearchStore: SearchStore = {
       return toRun(inserted!);
     }, READ_COMMITTED);
 
-    logger.info({ slug, runId: run.id }, "search started");
+    logger.info({ slug, runId: run.id, kind: run.kind }, "search started");
     return { run, attempt };
   },
 

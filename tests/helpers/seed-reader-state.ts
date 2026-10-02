@@ -340,6 +340,11 @@ export async function seedSearchRunsFromFiles(slug: string): Promise<number> {
       id: run.id,
       ownerId,
       criterion: run.criterion,
+      /* Carried, so a quick run in a fixture stays quick. A file written
+         before 2026-10-02 has no `kind` at all (the type says required; the
+         JSON predates it), and `undefined` leaves the column to its default,
+         `'meaning'` — which is what every such run was. */
+      kind: run.kind,
       status: run.status,
       hits: run.hits,
       sourceHash: run.sourceHash ?? null,

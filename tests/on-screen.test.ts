@@ -6,13 +6,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { MAX_VISIBLE_BLOCKS } from "../src/types.js";
+import { type Block, type BlockId, MAX_VISIBLE_BLOCKS } from "../src/types.js";
+import { clearFoldArticle, setFoldArticle, toggleFold } from "../src/web/fold.js";
 import {
   blocksOnScreenNow,
   ON_SCREEN_MIN_PX,
   onScreenIds,
   onScreenLinkCss,
   rowCache,
+  rowsOnScreen,
 } from "../src/web/on-screen.js";
 
 const A = "spya-aaaaaa";
@@ -20,7 +22,39 @@ const B = "spya-bbbbbb";
 const C = "spya-cccccc";
 
 afterEach(() => {
+  clearFoldArticle();
   document.body.innerHTML = "";
+});
+
+describe("rowsOnScreen", () => {
+  it("does not measure the zero-height rows folded between visible headings", () => {
+    const block = (id: string, heading = false): Block => ({
+      id: id as BlockId,
+      tag: heading ? "h2" : "p",
+      kind: heading ? "heading" : "text",
+      ...(heading ? { level: 2 } : {}),
+      text: id,
+      words: 1,
+      html: id,
+      gistable: true,
+    });
+    const blocks = [block(A, true), block(B), block(C, true)];
+    setFoldArticle("slug", blocks);
+    toggleFold(A as BlockId);
+    const reads = [0, 0, 0];
+    const rows = blocks.map((entry, i) => {
+      const row = document.createElement("tr");
+      row.dataset.block = entry.id;
+      row.getBoundingClientRect = () => {
+        reads[i] = (reads[i] ?? 0) + 1;
+        const top = i < 2 ? 0 : 50;
+        return { top, bottom: top + (i === 1 ? 0 : 40) } as DOMRect;
+      };
+      return row;
+    });
+    expect(rowsOnScreen(rows, -1, 200).map((row) => row.id)).toEqual([A, C]);
+    expect(reads[1]).toBeLessThanOrEqual(1); // at most the binary-search probe
+  });
 });
 
 describe("rowCache", () => {

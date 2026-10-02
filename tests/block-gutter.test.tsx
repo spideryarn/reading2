@@ -246,7 +246,7 @@ describe("the permalink", () => {
 
   it("carries the full id where a reader and a screen reader can each get it", () => {
     paint();
-    expect(link().getAttribute("title")).toContain(ID);
+    expect(link().getAttribute("data-tip")).toContain(ID);
     expect(link().getAttribute("aria-label")).toContain(ID);
   });
 });
@@ -299,7 +299,7 @@ describe("the comment marker", () => {
     for (const notes of [[comment("c1", 5)], [comment("c1", 5), comment("c2", 40)]]) {
       paint(notes, 0, { chat: false, help: false, notesBy: "owner" });
       const mark = host.querySelector(".blk-cmt");
-      for (const words of [mark?.getAttribute("title"), mark?.getAttribute("aria-label")]) {
+      for (const words of [mark?.getAttribute("data-tip"), mark?.getAttribute("aria-label")]) {
         expect(words).toBeTruthy();
         expect(words).not.toMatch(/\byour\b/i);
         expect(words).toMatch(/whoever added this article/);
@@ -309,7 +309,7 @@ describe("the comment marker", () => {
 
   it("calls the owner's own notes theirs", () => {
     paint([comment("c1", 5)]);
-    expect(host.querySelector(".blk-cmt")?.getAttribute("title")).toMatch(/^Your note/);
+    expect(host.querySelector(".blk-cmt")?.getAttribute("data-tip")).toMatch(/^Your note/);
   });
 
   it("is drawn for a comment whose quote no longer resolves", () => {
@@ -345,7 +345,7 @@ describe("the chat button", () => {
        the button reporting more than it does. GPT Sol, F-05. */
     paint(undefined, 2);
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Open a conversation about this paragraph (2 total)");
+    expect(b.getAttribute("data-tip")).toBe("Open a conversation about this paragraph (2 total)");
     /* **The same sentence, and that is the fix** — unlike the permalink and the
        "?", whose two names diverge on purpose. The accessible name here used to
        be the bare singular, so the number on screen was the one thing a screen
@@ -360,7 +360,7 @@ describe("the chat button", () => {
     // count, and the press really does begin a conversation.
     paint();
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Chat about this paragraph");
+    expect(b.getAttribute("data-tip")).toBe("Chat about this paragraph");
     expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
   });
 });
@@ -425,7 +425,7 @@ describe('the "?"', () => {
        that costs money without a confirmation. */
     paint();
     const b = host.querySelector(".blk-help") as HTMLButtonElement;
-    expect(b.getAttribute("title")).toBe("Ask the AI for help with this paragraph");
+    expect(b.getAttribute("data-tip")).toBe("Ask the AI for help with this paragraph");
     /* Shorter, and divergent on purpose — the same split the permalink above
        makes. A screen reader announces this on focus with three more buttons
        queued behind it in the same gutter, so the accessible name stops at the

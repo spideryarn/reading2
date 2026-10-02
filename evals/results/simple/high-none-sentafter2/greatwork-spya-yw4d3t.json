@@ -1,0 +1,291 @@
+{
+  "arm": "high-none-sentafter2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "greatwork-spya-yw4d3t",
+  "version": "simple-prompt/4",
+  "sourceSha256": "6f6c85f0adc6d1035d31fc86abe3489ba276c113203d29d4f7004f90053fdd3b",
+  "at": "2026-10-02T15:12:28.622Z",
+  "bodyWords": 11890,
+  "bodyBlocks": 330,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "8fa539bf668201bc",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 24812,
+  "costUsd": 0.1220058,
+  "tokens": {
+    "input": 10911,
+    "output": 4229,
+    "reasoning": 1963
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 205,
+  "fullerWords": 254,
+  "briefWords": 94,
+  "paragraphs": [
+    {
+      "text": "This essay by Paul Graham asks what advice for doing great work holds true across many different fields. He wrote it as a guide for anyone, in any field, who is very ambitious. He found that the shared advice has a definite shape, and is more than just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-h7wvhs",
+        "spya-x22sb9"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham asks what advice for doing great work holds true across many different fields.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He wrote it as a guide for anyone, in any field, who is very ambitious.",
+          "id": "spya-h7wvhs"
+        },
+        {
+          "text": "He found that the shared advice has a definite shape, and is more than just \"work hard.\"",
+          "id": "spya-x22sb9"
+        }
+      ]
+    },
+    {
+      "text": "Graham argues that many more people could try to do great work than actually do. Modesty and fear hold them back, usually without their ever deciding this on purpose. He also warns that smart, ambitious people who don't achieve much tend to become bitter.",
+      "ids": [
+        "spya-m03ypv",
+        "spya-y3f850"
+      ],
+      "sentences": [
+        {
+          "text": "Graham argues that many more people could try to do great work than actually do.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "Modesty and fear hold them back, usually without their ever deciding this on purpose.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "He also warns that smart, ambitious people who don't achieve much tend to become bitter.",
+          "id": "spya-y3f850"
+        }
+      ]
+    },
+    {
+      "text": "His core recipe has four steps. First, choose work you have a natural talent for and a deep interest in. Next, learn enough to reach the frontier of knowledge, the edge of what anyone knows. Then notice the gaps at that edge, and explore the promising ones. Steady effort beats big bursts: writing a page a day adds up to a book a year.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr",
+        "spya-gvh3ek"
+      ],
+      "sentences": [
+        {
+          "text": "His core recipe has four steps.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "First, choose work you have a natural talent for and a deep interest in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Next, learn enough to reach the frontier of knowledge, the edge of what anyone knows.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Then notice the gaps at that edge, and explore the promising ones.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Steady effort beats big bursts: writing a page a day adds up to a book a year.",
+          "id": "spya-gvh3ek"
+        }
+      ]
+    },
+    {
+      "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\" Curiosity drives all four steps, from choosing a field to exploring its gaps. He is hopeful that some kind of work probably fits you closely, but you can only find out by trying.",
+      "ids": [
+        "spya-a8tsmy",
+        "spya-cfv9ys",
+        "spya-chaaks"
+      ],
+      "sentences": [
+        {
+          "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\"",
+          "id": "spya-a8tsmy"
+        },
+        {
+          "text": "Curiosity drives all four steps, from choosing a field to exploring its gaps.",
+          "id": "spya-cfv9ys"
+        },
+        {
+          "text": "He is hopeful that some kind of work probably fits you closely, but you can only find out by trying.",
+          "id": "spya-chaaks"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Paul Graham, from July 2023, about how ambitious people do great work in any field. He gathered advice on doing great work from many fields and looked for what they share. He finds the overlap has a clear shape; it is not just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-h7wvhs"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Paul Graham, from July 2023, about how ambitious people do great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He gathered advice on doing great work from many fields and looked for what they share.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He finds the overlap has a clear shape; it is not just \"work hard.\"",
+          "id": "spya-x22sb9"
+        }
+      ]
+    },
+    {
+      "text": "Graham says many more people could try to do great work than actually do. Modesty and fear hold them back, often without their noticing. Schools also assume you will somehow guess the right field as a teenager, so on choosing your work you are on your own.",
+      "ids": [
+        "spya-m03ypv",
+        "spya-nupugj"
+      ],
+      "sentences": [
+        {
+          "text": "Graham says many more people could try to do great work than actually do.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "Modesty and fear hold them back, often without their noticing.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "Schools also assume you will somehow guess the right field as a teenager, so on choosing your work you are on your own.",
+          "id": "spya-nupugj"
+        }
+      ]
+    },
+    {
+      "text": "Good work to choose fits three things: a natural talent, a deep interest, and room for great results. Then come four steps: pick a field, learn enough to reach the frontier, the edge of what is known, notice the gaps there, and explore the promising ones. Rather than planning far ahead, he suggests \"staying upwind\": doing what seems most interesting and keeps your best options open.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr",
+        "spya-zzu2w0"
+      ],
+      "sentences": [
+        {
+          "text": "Good work to choose fits three things: a natural talent, a deep interest, and room for great results.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Then come four steps: pick a field, learn enough to reach the frontier, the edge of what is known, notice the gaps there, and explore the promising ones.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Rather than planning far ahead, he suggests \"staying upwind\": doing what seems most interesting and keeps your best options open.",
+          "id": "spya-zzu2w0"
+        }
+      ]
+    },
+    {
+      "text": "Steady effort adds up more than people expect, such as a page a day becoming a book a year. New ideas often look obvious afterward, because finding them means fixing a broken picture of the world. Being earnest, meaning honest with yourself rather than trying to seem impressive, helps you see the truth more sharply.",
+      "ids": [
+        "spya-gvh3ek",
+        "spya-xmnc2p",
+        "spya-jq7znf"
+      ],
+      "sentences": [
+        {
+          "text": "Steady effort adds up more than people expect, such as a page a day becoming a book a year.",
+          "id": "spya-gvh3ek"
+        },
+        {
+          "text": "New ideas often look obvious afterward, because finding them means fixing a broken picture of the world.",
+          "id": "spya-xmnc2p"
+        },
+        {
+          "text": "Being earnest, meaning honest with yourself rather than trying to seem impressive, helps you see the truth more sharply.",
+          "id": "spya-jq7znf"
+        }
+      ]
+    },
+    {
+      "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\" Curiosity drives all four steps, and he ends by asking readers to decide consciously whether they want to do great work.",
+      "ids": [
+        "spya-a8tsmy",
+        "spya-cfv9ys"
+      ],
+      "sentences": [
+        {
+          "text": "If the secret had to be one word, Graham bets it would be \"curiosity.\"",
+          "id": "spya-a8tsmy"
+        },
+        {
+          "text": "Curiosity drives all four steps, and he ends by asking readers to decide consciously whether they want to do great work.",
+          "id": "spya-cfv9ys"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham asks which ways of doing great work are shared across many fields. He wanted a guide that anyone could use, whatever their field. First, he says, pick work you are naturally good at and deeply interested in.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-aeqwcs"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham asks which ways of doing great work are shared across many fields.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He wanted a guide that anyone could use, whatever their field.",
+          "id": "spya-x22sb9"
+        },
+        {
+          "text": "First, he says, pick work you are naturally good at and deeply interested in.",
+          "id": "spya-aeqwcs"
+        }
+      ]
+    },
+    {
+      "text": "Then come four steps: choose a field, and learn enough to reach the edge of what is known. Next, notice the gaps at that edge, and explore the promising ones. His main conclusion is that curiosity drives all four steps. If the secret were one word, he bets it would be \"curiosity.\"",
+      "ids": [
+        "spya-kr0zrr",
+        "spya-cfv9ys",
+        "spya-a8tsmy"
+      ],
+      "sentences": [
+        {
+          "text": "Then come four steps: choose a field, and learn enough to reach the edge of what is known.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Next, notice the gaps at that edge, and explore the promising ones.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "His main conclusion is that curiosity drives all four steps.",
+          "id": "spya-cfv9ys"
+        },
+        {
+          "text": "If the secret were one word, he bets it would be \"curiosity.\"",
+          "id": "spya-a8tsmy"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

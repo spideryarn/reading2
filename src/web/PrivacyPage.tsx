@@ -427,6 +427,8 @@ export function PrivacyPage() {
           articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
           one;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
+          <code>jev-1.13</code>, TypeSafe’s, through OpenRouter, for quick search, for which it is
+          shown the article’s passages and the words you searched for;{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first
           two pages of a PDF you add in a batch, for which it is shown the text of those two pages;{" "}

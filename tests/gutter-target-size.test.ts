@@ -344,17 +344,24 @@ describe("the column shows as many controls as the row has room for", () => {
        Asserted as exact strings because the failure is silent: the wrong
        threshold still renders a gutter, just one slot too many, on a device the
        author is not using. */
-    for (const [px, rem] of [
-      [48, 3],
-      [72, 4.5],
-      [96, 6],
+    /* **n slots and the n − 1 gaps between them**, since 2026-10-02: Greg
+       asked for *"slightly increase the vertical gaps"* (spya-jc0vm6), and a
+       4px gap moves every threshold by a gap per slot after the first. Both
+       halves still flip at the same 16px root — 24px = 1.5rem and 4px =
+       0.25rem there — so the `and` form is still exactly `max()`. */
+    for (const [n, px, rem] of [
+      [2, 52, 3.25],
+      [3, 80, 5],
+      [4, 108, 6.75],
     ] as const) {
       expect(css).toContain(
         "@container (min-height: " + px + "px) and (min-height: " + rem + "rem)",
       );
-      // Each pair is exactly one slot apart, which is the whole arithmetic.
-      expect(px / 24).toBe(rem / 1.5);
+      expect(px).toBe(n * 24 + (n - 1) * 4);
+      expect(rem).toBe(n * 1.5 + (n - 1) * 0.25);
     }
+    // The gap the thresholds count, with the same two halves as the slot.
+    expect(css).toContain("row-gap: max(0.25rem, 4px)");
   });
 
   it("takes the controls in one order, and it is BlockGutter's render order", () => {
@@ -374,7 +381,7 @@ describe("the column shows as many controls as the row has room for", () => {
        and the "…" share the only cell (gutter.css § One slot and a mark), and
        that is the one place a `grid-area` may appear. Everywhere else the
        source order is still the placement. */
-    const oneSlot = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
+    const oneSlot = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
     const oneSlotEnd = css.indexOf("\n}\n", oneSlot);
     for (const m of css.matchAll(/grid-area:/g)) {
       const p = m.index ?? -1;
@@ -401,7 +408,7 @@ describe("the column shows as many controls as the row has room for", () => {
        So: three controls fit in three slots and draw no dot; four do not. */
     expect(css).toContain('.blk-gutter[data-controls="3"] > .blk-more { display: none; }');
     expect(css).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }');
-    const four = css.slice(css.indexOf("@container (min-height: 96px)"));
+    const four = css.slice(css.indexOf("@container (min-height: 108px)"));
     expect(four).toContain(".blk-gutter > * { display: inline-flex; }");
     expect(four).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: none; }');
   });
@@ -457,7 +464,7 @@ describe("the column shows as many controls as the row has room for", () => {
        browser pass found the bookmark button vanish with nothing in its place.
        The mark and the "…" now share the cell; the "…" is drawn over it only
        when revealed. */
-    const at = css.indexOf("@container not ((min-height: 48px) and (min-height: 3rem))");
+    const at = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
     expect(at, "no one-slot block for a marked gutter").toBeGreaterThan(-1);
     const end = css.indexOf("\n}\n", at);
     const block = css.slice(at, end);
@@ -548,7 +555,9 @@ describe("the column shows as many controls as the row has room for", () => {
        or the button is invisible for exactly the reader who cannot find it by
        waving a mouse at the page. It was in the hover list until the query
        arrived; splitting it out is what keeps it device-independent. */
-    const focused = rulesWith(".blk-help:focus-visible");
+    /* The reveal, among the rules naming it — the shared colour rule
+       (§ every control lights) names it too since 2026-10-02. */
+    const focused = rulesWith(".blk-help:focus-visible").filter((r) => r.body.includes("opacity"));
     expect(focused.length, "nothing reveals `.blk-help` on focus").toBe(1);
     expect(focused[0]?.body).toContain("opacity: 1");
     expect(focused[0]?.body).toContain("pointer-events: auto");
@@ -578,6 +587,21 @@ describe("the column shows as many controls as the row has room for", () => {
       "a plain `tr:hover .blk-permalink` outranks `.blk-permalink:hover`",
     ).toEqual([]);
     expect(rulesWith(".blk-permalink:hover")[0]?.body).toContain("opacity: 1");
+  });
+
+  it("lights every control it is pointed at, the bookmark and the dot included", () => {
+    /* Greg, 2026-10-02 (spya-jc0vm6): *"when I hover my mouse over the
+       Bookmark icon, it doesn't glow"*. Three controls had a `:hover` colour
+       each, written separately; the bookmark and the "…", which came later,
+       had none. One rule for all five, and `.blk-permalink.failed` after it so
+       its red still wins. */
+    for (const control of [".blk-permalink", ".block-chat", ".blk-bookmark", ".blk-help", ".blk-more"]) {
+      const lit = rulesWith(`${control}:hover`);
+      expect(lit.length, `${control} has no :hover rule`).toBeGreaterThan(0);
+      expect(lit.map((r) => r.body).join(" "), `${control} does not glow`).toContain("color: var(--highlight)");
+    }
+    const shared = css.indexOf(".blk-bookmark:hover");
+    expect(css.indexOf(".blk-permalink.failed {")).toBeGreaterThan(shared);
   });
 
   it("leaves the reader's marks alone on a touch device", () => {

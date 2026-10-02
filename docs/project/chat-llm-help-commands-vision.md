@@ -124,10 +124,11 @@ What that answers, and what it does not:
 4. **The fallback is not automatically safer.** It overruled Jev's correct *"none"* for *"delete this
    article"* with Archive, and it once named a command that does not exist. Hence the dispatcher and
    the gate above: an id checked against the real list, a *none* respected, and confirmation in code.
-5. **The gateway has no route to Jev.** Every paid call goes through `src/ai-call.ts`
-   ([ai-gateway.md](ai-gateway.md)), and the decisions endpoint would be a sixth wire there. Two evals
-   reach it through declared bypasses (`shelf-topics-jev`, `command-pick-jev`). A production path
-   needs that wire built properly, and the endpoint is alpha.
+5. **The gateway reaches Jev now.** Every paid call goes through `src/ai-call.ts`
+   ([ai-gateway.md](ai-gateway.md)), and since 2026-10-02 that includes the decisions endpoint:
+   `openRouterDecisions`, built for quick search ([261002e](../plans/261002e-quick-search-v1.md), the same day). The eval reached Jev
+   through its own declared bypass (`command-pick-jev`), written before that seam landed; a
+   production interface model would call the seam. The endpoint is still alpha.
 
 **The fallback** is a capable chat model on the existing wire, through the same tier rules as
 everything else ([setup-dev.md](setup-dev.md) says which model each job uses). It is asked the same

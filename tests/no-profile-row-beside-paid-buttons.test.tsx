@@ -139,7 +139,9 @@ describe("beside the button that spends", () => {
 describe("the badge", () => {
   it("still says a list was written for the reader, and is the way into the panel", () => {
     draw(owner({ status: "ready", profiled: true }), { ideas: [] });
-    const badge = host.querySelector<HTMLButtonElement>("button.prof-badge");
-    expect(badge?.textContent).toContain("written for you");
+    /* An icon in the band's corner since 2026-10-02, as in every mode (plan
+       261002e); its name says it, and the panel it opens says it in words. */
+    const badge = host.querySelector<HTMLButtonElement>(".mode-band > button.prof-badge");
+    expect(badge?.getAttribute("aria-label")).toMatch(/^Written for your profile/);
   });
 });

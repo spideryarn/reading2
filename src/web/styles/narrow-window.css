@@ -866,6 +866,13 @@
     min-height: 2.5rem;
     justify-content: center;
   }
+
+  /* **The band's corner, for a finger: 32px, both buttons alike.** Not the
+     2.5rem floor above — that is what made the corner's badge a 40px ring
+     beside a 24px (i) (spya-hf4svm). 32px clears WCAG 2.5.8's 24, and a corner
+     has no neighbour to be hit by mistake. mode-band.css § the band's (i)
+     sizes both from this and resets the floor for the corner's badge. */
+  .mode-band.has-about { --band-corner-btn: 2rem; }
 }
 
 /* ------------------------------------------------- § a field iOS zooms into ----

@@ -275,7 +275,7 @@ export function classifyEnd(
    table is not the same as accepting that. GPT Sol asked for it twice. */
 const OPENROUTER_BASE = "https://openrouter.ai/api";
 
-/** The three paths this app posts to. A union, so a fourth cannot be invented. */
+/** The paths this app posts to. A union, so another cannot be invented. */
 export type OpenRouterPath =
   | "/v1/chat/completions"
   | "/v1/embeddings"
@@ -284,7 +284,13 @@ export type OpenRouterPath =
   | "/v1/images"
   /* Voices. `openRouterTranscription` below is the only thing that sends here,
      and `dictation` is the only job routed to it. */
-  | "/v1/audio/transcriptions";
+  | "/v1/audio/transcriptions"
+  /* Decisions — typed probabilities rather than text. `openRouterDecisions`
+     below is the only thing that sends here, and `search-quick` is the only
+     job routed to it. **Not under `/v1`**: OpenRouter serves it only as
+     `POST /api/alpha/decisions` (spike 261002o), so the base's `/api` is all
+     it shares with the others. */
+  | "/alpha/decisions";
 
 /**
  * **The jobs whose answer is a picture** — one member, and it is deliberately
@@ -309,8 +315,17 @@ export type ImageJob = "illustrate";
  */
 export type TranscriptionJob = "dictation";
 
+/**
+ * **The job whose answer is a set of probabilities** — one member, excluded
+ * from `ChatJob` for `illustrate`'s reason: the Decisions answer is
+ * `{answers: {<key>: {noul}}}` with no `choices`, so every chat parser would
+ * read it as an empty reply. `openRouterDecisions` takes this and nothing else
+ * takes it.
+ */
+export type DecisionJob = "search-quick";
+
 /** Every job with a row in `AI_JOB_ROUTE`: everything this file can send. */
-export type RoutedJob = ChatJob | ImageJob | TranscriptionJob;
+export type RoutedJob = ChatJob | ImageJob | TranscriptionJob | DecisionJob;
 
 /**
  * Where one job goes, how hard we insist on getting there, and what the ledger
@@ -696,6 +711,17 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
   dictation: {
     path: "/v1/audio/transcriptions",
     wire: "transcription",
+    provider: null,
+  },
+  /* **Quick search** (src/quick-search.ts, plan 261002e). No `provider` block,
+     for `dictation`'s reason in a stronger form: Jev has one upstream
+     (TypeSafe), nothing here is cached, and the alpha endpoint has never been
+     measured with routing keys in its body — the request the spike measured
+     5,000 times carried `model`, `state` and `questions` and nothing else.
+     An unmeasured key is the `env-proposal` lesson waiting to happen. */
+  "search-quick": {
+    path: "/alpha/decisions",
+    wire: "decisions",
     provider: null,
   },
   pdf: {
@@ -1120,6 +1146,11 @@ export type ChatJob = Exclude<
      `openRouterJson("dictation", …)` a compile error rather than a transcript
      read as an empty reply. Its entry point is `openRouterTranscription`. */
   | "dictation"
+  /* **Quick search, on the Decisions wire** — `illustrate`'s reason again: its
+     answer is `{answers}`, not `choices`, so `openRouterJson("search-quick", …)`
+     must be a compile error rather than a set of probabilities read as an
+     empty reply. Its entry point is `openRouterDecisions`. Plan 261002e. */
+  | "search-quick"
 >;
 
 /**
@@ -1158,8 +1189,15 @@ export class ProviderRefused extends Error {
    * retrying cannot help, because it is a setting rather than a queue. So it is
    * classified here, by matching a fixed string, and the string we matched
    * against never leaves this function.
+   *
+   * `"context-exceeded"` is the Decisions endpoint's 400 for a request past the
+   * model's 32k context. Its body is `{"error":{"message":"HTTP 400: …
+   * max_tokens_exceeded …"}}` — the real reason is a JSON string inside
+   * `message` (spike 261002o). Quick search halves the chunk and asks again on
+   * this, which it could not do from a bare 400: a malformed request answers
+   * 400 too, and halving that would only spend twice.
    */
-  readonly kind: "no-endpoints" | null;
+  readonly kind: "no-endpoints" | "context-exceeded" | null;
   /** `Retry-After`, parsed to milliseconds, or `null` if it was absent or nonsense. */
   readonly retryAfterMs: number | null;
   constructor(status: number, body: string, headers: Headers) {
@@ -1169,7 +1207,9 @@ export class ProviderRefused extends Error {
     this.kind =
       status === 404 && body.includes("No endpoints available")
         ? "no-endpoints"
-        : null;
+        : status === 400 && body.includes("max_tokens_exceeded")
+          ? "context-exceeded"
+          : null;
     this.retryAfterMs = headers ? retryAfterMs(headers) : null;
   }
 }
@@ -2558,6 +2598,154 @@ export async function openRouterTranscription(
         typeof usage.seconds === "number" && Number.isFinite(usage.seconds) && usage.seconds > 0
           ? usage.seconds
           : null,
+    };
+  } catch (err) {
+    if (outcome === "ok")
+      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
+    throw err;
+  } finally {
+    meter.finish(outcome);
+  }
+}
+
+/* ------------------------------------------------------------- decisions -- */
+
+/**
+ * **OpenRouter's Decisions API** — `POST /api/alpha/decisions`, where a model
+ * answers named, typed questions about a `state` with probabilities rather than
+ * text. Quick search's one call (src/quick-search.ts, plan 261002e).
+ *
+ * Modelled line for line on `openRouterTranscription`, and for the same reasons
+ * it is its own seam rather than a body handed to `openRouterJson`:
+ *
+ * 1. **The answer is `{answers: {<key>: {noul}}}`**, no `choices` anywhere, so
+ *    a chat parser would read it as an empty reply. Its own request type, its
+ *    own reader and its own `Wire`.
+ * 2. **`usage` arrives in the transcription wire's spelling** —
+ *    `{input_tokens, output_tokens, cost}` — which `Meter.saw` already reads.
+ *    Output is free on Jev, so `output_tokens` is a count with no price on it;
+ *    it is recorded anyway, because a token column nobody fills reads as zero.
+ * 3. **`usage: { include: true }` is not sent**, nor anything else the spike did
+ *    not measure. The body is `{model, state, questions}` exactly. This is an
+ *    alpha endpoint; its answer to an unmeasured key is the thing nobody knows.
+ * 4. **A refusal's reason is a JSON string inside `error.message`** —
+ *    `ProviderRefused.kind` classifies the one a caller acts on
+ *    (`"context-exceeded"`), and the body goes no further than that, for this
+ *    file's usual reason: it may echo the article back.
+ *
+ * Only `noul` (a yes/no answered as a probability) is typed here, because it
+ * is the only question the app asks. `choice` and `score` exist on the wire and
+ * were ruled out by the spike; adding one is a member of `DecisionQuestion` and
+ * a branch in `readDecisions`.
+ */
+export interface DecisionQuestion {
+  type: "noul";
+  /** The question, in words, naming the part of `state` it is about. */
+  instructions: string;
+}
+
+/** What a caller asks for. Named fields, for `ImageRequest`'s reason. */
+export interface DecisionRequest {
+  model: string;
+  /** The material every question is judged against. Billed once, not per question. */
+  state: Record<string, unknown>;
+  /** One entry per answer wanted, keyed by whatever the caller will look it up by. */
+  questions: Record<string, DecisionQuestion>;
+}
+
+/** What comes back. */
+export interface DecisionCall {
+  /**
+   * Each question's probability of *yes*, keyed as asked. **Only the answers
+   * that were a number in [0, 1]** — a question the model did not answer, or
+   * answered with something else, is absent rather than guessed at, and the
+   * caller can count the gap against what it asked.
+   */
+  noul: Record<string, number>;
+  answeredBy: string | null;
+  generationId: string | null;
+  /** The meter's own reading of `usage`, so a caller logs the figure the ledger holds. */
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
+function readDecisions(body: unknown): Record<string, number> {
+  const answers = (body as { answers?: unknown } | null)?.answers;
+  /* Its own class, for `readTranscript`'s reason: "answered nonsense" and
+     "never answered" are different failures, and a `{}` read as "nothing
+     matched" is the one a reader could never diagnose. Carries no part of the
+     body. */
+  if (!isRecord(answers))
+    throw new UnreadableAnswer("the decisions answer had no answers object");
+  const out: Record<string, number> = {};
+  for (const [key, answer] of Object.entries(answers)) {
+    const p = isRecord(answer) ? answer.noul : undefined;
+    if (typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1) out[key] = p;
+  }
+  return out;
+}
+
+export async function openRouterDecisions(
+  job: DecisionJob,
+  body: DecisionRequest,
+  options?: { signal?: AbortSignal; apiKey?: string },
+): Promise<DecisionCall> {
+  /* Before the meter — see `prepare`: no attempt, no record. */
+  const key = apiKey(options?.apiKey);
+  /* And an abort that has already happened is also "no attempt" — see the same
+     line in `openRouterTranscription`. Quick search fires its chunks in
+     parallel, and a reader who leaves while one is being halved reaches here
+     already aborted. */
+  options?.signal?.throwIfAborted();
+  const route = routeFor(job);
+  const prepared = {
+    key,
+    payload: JSON.stringify({
+      model: body.model,
+      state: body.state,
+      questions: body.questions,
+      /* `Route.provider` is `null` for the one job here; spread rather than
+         dropped, so a row that gains a policy sends it rather than having it
+         ignored in silence. */
+      ...(route.provider ? { provider: route.provider } : {}),
+    }),
+    url: `${OPENROUTER_BASE}${route.path}`,
+  };
+  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
+  let outcome: SpendRecord["outcome"] = "ok";
+  try {
+    const response = await send(prepared, options?.signal);
+    meter.generationId = generationIdOf(response);
+    /* Read once, before the status is judged — `openRouterTranscription`. */
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* Swallowed and never rethrown: V8 quotes a prefix of the input, and the
+         input here may be the article echoed back. `readDecisions` throws our
+         own sentence below. */
+    }
+    const record = json as
+      | { usage?: unknown; model?: unknown; provider?: unknown }
+      | null;
+    /* Usage before the status, for `openRouterImage`'s reason: a non-2xx that
+       carries a priced `usage` is still a call somebody billed. `unpriceZero`
+       for its own reason: Jev's input is priced, so a `cost: 0` would be a
+       row claiming to be free rather than one saying it was not told. */
+    if (record?.usage) meter.saw(unpriceZero(record.usage));
+    meter.sawModel(record?.model);
+    meter.sawUpstream(record?.provider);
+    if (!response.ok) {
+      outcome = "error";
+      throw new ProviderRefused(response.status, text, response.headers);
+    }
+    return {
+      noul: readDecisions(record),
+      answeredBy: meter.answeredBy,
+      generationId: meter.generationId,
+      inputTokens: meter.inputTokens,
+      outputTokens: meter.outputTokens,
     };
   } catch (err) {
     if (outcome === "ok")

@@ -53,7 +53,7 @@
  *
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
@@ -104,28 +104,26 @@ export function TweetsPanel({
       label="Tweets"
       mode="tweets"
       feature="gloss tweets"
-      /* **A head only when there is a thread**: *Copy the thread* and the
-         owner's profile badge, which are not the mode's name (mode.md § the
-         band's chrome). No thread, no row. The counts that were here are in
-         the (i), with who wrote it — spya-ucu35y. */
-      head={
-        ready && thread ? (
-          <ThreadHead thread={thread} article={article}>
-            {owner?.thread && (
-              <WrittenForYou
-                written={owner.thread.profileHash != null}
-                changed={owner.profileChanged}
-                slug={slug}
-                compact
-                /* The forced run replaces the thread (plan 261002b). */
-                regenerate={{
-                  run: () => void owner.regenerate(),
-                  busy: owner.job !== null || owner.starting,
-                  refresh: () => owner.refresh(),
-                }}
-              />
-            )}
-          </ThreadHead>
+      /* **A head only when there is a thread**: *Copy the thread*, which is
+         not the mode's name (mode.md § the band's chrome). No thread, no row.
+         The counts that were here are in the (i), with who wrote it —
+         spya-ucu35y — and the owner's profile badge is in the corner beside
+         it since 2026-10-02 (plan 261002e). */
+      head={ready && thread ? <ThreadHead thread={thread} article={article} /> : null}
+      profile={
+        ready && owner?.thread ? (
+          <WrittenForYou
+            written={owner.thread.profileHash != null}
+            changed={owner.profileChanged}
+            slug={slug}
+            compact
+            /* The forced run replaces the thread (plan 261002b). */
+            regenerate={{
+              run: () => void owner.regenerate(),
+              busy: owner.job !== null || owner.starting,
+              refresh: () => owner.refresh(),
+            }}
+          />
         ) : null
       }
       about={
@@ -228,22 +226,14 @@ function UnlinkedNote({ thread, slug }: { thread: PublicTweets; slug: string }) 
 }
 
 /**
- * **The head row: *Copy the thread*, and `children`**, which is where the
- * owner puts their profile badge. The thread's numbers were here until
- * 2026-10-01; they are in `TweetsAbout` now (spya-ucu35y).
+ * **The head row: *Copy the thread*.** The thread's numbers were here until
+ * 2026-10-01; they are in `TweetsAbout` now (spya-ucu35y). The owner's profile
+ * badge was here too, and is in the band's corner since 2026-10-02 (plan
+ * 261002e).
  */
-export function ThreadHead({
-  thread,
-  article,
-  children,
-}: {
-  thread: PublicTweets;
-  article: Article;
-  children?: ReactNode;
-}) {
+export function ThreadHead({ thread, article }: { thread: PublicTweets; article: Article }) {
   return (
     <div className="tw:flex tw:w-full tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1">
-      {children}
       <CopyButton
         text={() => threadMarkdown(thread, article)}
         label="Copy the thread"

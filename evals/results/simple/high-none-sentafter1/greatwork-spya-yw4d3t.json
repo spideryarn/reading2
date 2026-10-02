@@ -1,0 +1,283 @@
+{
+  "arm": "high-none-sentafter1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "greatwork-spya-yw4d3t",
+  "version": "simple-prompt/4",
+  "sourceSha256": "6f6c85f0adc6d1035d31fc86abe3489ba276c113203d29d4f7004f90053fdd3b",
+  "at": "2026-10-02T15:11:39.309Z",
+  "bodyWords": 11890,
+  "bodyBlocks": 330,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "8fa539bf668201bc",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 24502,
+  "costUsd": 0.2238962,
+  "tokens": {
+    "input": 10892,
+    "output": 3842,
+    "reasoning": 1760
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 162,
+  "fullerWords": 254,
+  "briefWords": 92,
+  "paragraphs": [
+    {
+      "text": "This is a long essay by Paul Graham on how to do great work in any field. He gathered advice from many fields and looked for what they share. He argues many more people could try for great work, but modesty and fear hold them back.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-m03ypv"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Paul Graham on how to do great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He gathered advice from many fields and looked for what they share.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He argues many more people could try for great work, but modesty and fear hold them back.",
+          "id": "spya-m03ypv"
+        }
+      ]
+    },
+    {
+      "text": "First, pick work you have a natural talent for and a deep interest in. Then learn enough to reach a frontier, the edge of what anyone knows. Up close, that edge is full of gaps, so notice them and explore the promising ones.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr",
+        "spya-uhu9ux"
+      ],
+      "sentences": [
+        {
+          "text": "First, pick work you have a natural talent for and a deep interest in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Then learn enough to reach a frontier, the edge of what anyone knows.",
+          "id": "spya-uhu9ux"
+        },
+        {
+          "text": "Up close, that edge is full of gaps, so notice them and explore the promising ones.",
+          "id": "spya-kr0zrr"
+        }
+      ]
+    },
+    {
+      "text": "Hard work matters, but steady work matters more; a page a day becomes a book a year. Great things usually start small and improve through version after version. He also urges being earnest: honest with yourself, not putting on a show of being impressive.",
+      "ids": [
+        "spya-gvh3ek",
+        "spya-ngbzxc",
+        "spya-udt302"
+      ],
+      "sentences": [
+        {
+          "text": "Hard work matters, but steady work matters more; a page a day becomes a book a year.",
+          "id": "spya-gvh3ek"
+        },
+        {
+          "text": "Great things usually start small and improve through version after version.",
+          "id": "spya-ngbzxc"
+        },
+        {
+          "text": "He also urges being earnest: honest with yourself, not putting on a show of being impressive.",
+          "id": "spya-udt302"
+        }
+      ]
+    },
+    {
+      "text": "If the secret were one word, Graham would bet on \"curiosity.\" It picks your field, gets you to the frontier, spots the gaps, and drives you to explore them.",
+      "ids": [
+        "spya-cfv9ys",
+        "spya-a8tsmy"
+      ],
+      "sentences": [
+        {
+          "text": "If the secret were one word, Graham would bet on \"curiosity.\"",
+          "id": "spya-a8tsmy"
+        },
+        {
+          "text": "It picks your field, gets you to the frontier, spots the gaps, and drives you to explore them.",
+          "id": "spya-cfv9ys"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Paul Graham, from July 2023, about how to do great work in any field. He gathered advice on doing great work from many fields and looked for what they share. He found the shared core has a definite shape, more than just \"work hard.\" It assumes you are very ambitious.",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9",
+        "spya-h7wvhs"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Paul Graham, from July 2023, about how to do great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He gathered advice on doing great work from many fields and looked for what they share.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He found the shared core has a definite shape, more than just \"work hard.\" It assumes you are very ambitious.",
+          "id": "spya-x22sb9"
+        }
+      ]
+    },
+    {
+      "text": "Graham says many more people could try to do great work than actually do. Modesty and fear hold them back, usually without their ever deciding it consciously. He also warns that smart, ambitious people who don't achieve much tend to become bitter.",
+      "ids": [
+        "spya-m03ypv",
+        "spya-y3f850"
+      ],
+      "sentences": [
+        {
+          "text": "Graham says many more people could try to do great work than actually do.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "Modesty and fear hold them back, usually without their ever deciding it consciously.",
+          "id": "spya-m03ypv"
+        },
+        {
+          "text": "He also warns that smart, ambitious people who don't achieve much tend to become bitter.",
+          "id": "spya-y3f850"
+        }
+      ]
+    },
+    {
+      "text": "First, pick work you have a natural talent for and a deep interest in. Then follow four steps: choose a field, learn enough to reach the frontier, which is the edge of what is known, notice gaps there, and explore promising ones. Steady effort matters more than big bursts: a page a day becomes a book a year.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr",
+        "spya-gvh3ek"
+      ],
+      "sentences": [
+        {
+          "text": "First, pick work you have a natural talent for and a deep interest in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Then follow four steps: choose a field, learn enough to reach the frontier, which is the edge of what is known, notice gaps there, and explore promising ones.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Steady effort matters more than big bursts: a page a day becomes a book a year.",
+          "id": "spya-gvh3ek"
+        }
+      ]
+    },
+    {
+      "text": "New ideas often look obvious afterwards, because finding them means fixing a broken model, or picture, of how the world works. That takes being stricter about the truth than others, plus a willingness to break rules. He also argues the real insight is often in the question, not the answer.",
+      "ids": [
+        "spya-xmnc2p",
+        "spya-xkh302",
+        "spya-gh64ss"
+      ],
+      "sentences": [
+        {
+          "text": "New ideas often look obvious afterwards, because finding them means fixing a broken model, or picture, of how the world works.",
+          "id": "spya-xmnc2p"
+        },
+        {
+          "text": "That takes being stricter about the truth than others, plus a willingness to break rules.",
+          "id": "spya-xkh302"
+        },
+        {
+          "text": "He also argues the real insight is often in the question, not the answer.",
+          "id": "spya-gh64ss"
+        }
+      ]
+    },
+    {
+      "text": "His main conclusion is that curiosity drives all four steps. Great work comes from ability, interest, effort and luck, so the task is finding work where your ability and interest combine. The best match for you probably exists, and the only way to find it is by trying.",
+      "ids": [
+        "spya-cfv9ys",
+        "spya-r4vhyb",
+        "spya-chaaks"
+      ],
+      "sentences": [
+        {
+          "text": "His main conclusion is that curiosity drives all four steps.",
+          "id": "spya-cfv9ys"
+        },
+        {
+          "text": "Great work comes from ability, interest, effort and luck, so the task is finding work where your ability and interest combine.",
+          "id": "spya-r4vhyb"
+        },
+        {
+          "text": "The best match for you probably exists, and the only way to find it is by trying.",
+          "id": "spya-chaaks"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an essay by Paul Graham about how to do great work in any field. He gathered advice from many different fields and looked for what they all share. He found that the shared advice has a clear shape, not just \"work hard.\"",
+      "ids": [
+        "spya-d7xxxq",
+        "spya-x22sb9"
+      ],
+      "sentences": [
+        {
+          "text": "This is an essay by Paul Graham about how to do great work in any field.",
+          "id": null
+        },
+        {
+          "text": "He gathered advice from many different fields and looked for what they all share.",
+          "id": "spya-d7xxxq"
+        },
+        {
+          "text": "He found that the shared advice has a clear shape, not just \"work hard.\"",
+          "id": "spya-x22sb9"
+        }
+      ]
+    },
+    {
+      "text": "First, pick work you are naturally good at and deeply interested in. Then learn enough to reach the frontier, the edge of what people know. Notice the gaps there, and explore the ones that look promising. His main conclusion is that curiosity drives all four of these steps.",
+      "ids": [
+        "spya-aeqwcs",
+        "spya-kr0zrr",
+        "spya-cfv9ys"
+      ],
+      "sentences": [
+        {
+          "text": "First, pick work you are naturally good at and deeply interested in.",
+          "id": "spya-aeqwcs"
+        },
+        {
+          "text": "Then learn enough to reach the frontier, the edge of what people know.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "Notice the gaps there, and explore the ones that look promising.",
+          "id": "spya-kr0zrr"
+        },
+        {
+          "text": "His main conclusion is that curiosity drives all four of these steps.",
+          "id": "spya-cfv9ys"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

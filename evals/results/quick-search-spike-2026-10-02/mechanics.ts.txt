@@ -1,0 +1,48 @@
+/* API mechanics: is state billed once or per question; is there a question cap. */
+import { writeFileSync } from "node:fs";
+import { decide, fixture, scorable } from "./qs-lib.ts";
+
+const M = "typesafe/jev-1.13";
+const blocks = scorable(fixture("constitution").blocks);
+const out: any = {};
+const q = (id: string) => ({ type: "noul", instructions: `Does passage ${id} match what the reader is looking for (query)?` });
+
+const state40 = { query: "how Claude should handle conflicts between helpfulness and safety", passages: Object.fromEntries(blocks.slice(0, 40).map((b) => [b.id, b.text])) };
+for (const n of [1, 10, 40]) {
+  const qs = Object.fromEntries(blocks.slice(0, n).map((b) => [b.id, q(b.id)]));
+  const r = await decide(M, state40, qs);
+  out[`billing_n${n}`] = { status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, error: r.error, usage: r.body?.usage };
+  console.log("billing", n, r.status, r.ms, r.inputTokens, r.cost, r.error ?? "");
+}
+
+// question-count cap with a tiny state
+const tiny = { query: "x", note: "a" };
+for (const n of [50, 150, 256, 300, 600]) {
+  const qs = Object.fromEntries(Array.from({ length: n }, (_, i) => [`q${i}`, { type: "noul", instructions: `Is ${i} even?` }]));
+  const r = await decide(M, tiny, qs);
+  const nAns = r.body?.answers ? Object.keys(r.body.answers).length : 0;
+  out[`cap_n${n}`] = { status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, answers: nAns, error: r.error };
+  console.log("cap", n, r.status, r.ms, r.inputTokens, r.cost, nAns, r.error?.slice(0, 300) ?? "");
+}
+
+// choice option cap
+for (const n of [255, 256]) {
+  const criteria = Object.fromEntries(Array.from({ length: n }, (_, i) => [`o${i}`, `option ${i}`]));
+  const r = await decide(M, tiny, { pick: { type: "choice", instructions: "Pick the option with the largest number", criteria } });
+  out[`choice_n${n}`] = { status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, error: r.error, answer: r.body?.answers?.pick?.choice };
+  console.log("choice", n, r.status, r.ms, r.inputTokens, r.error?.slice(0, 300) ?? r.body?.answers?.pick?.choice);
+}
+
+// context overflow: whole constitution (~7.5k tokens) is fine; noema doubled to provoke >32k
+const nb = scorable(fixture("noema-mythology-of-conscious-ai").blocks);
+const big = { query: "x", passages: Object.fromEntries([...nb, ...nb, ...nb].map((b, i) => [`${b.id}-${i}`, b.text])) };
+const r = await decide(M, big, { a: q("x") });
+out.overflow = { status: r.status, ms: r.ms, inputTokens: r.inputTokens, error: r.error };
+console.log("overflow", r.status, r.ms, r.inputTokens, r.error?.slice(0, 500) ?? "");
+
+// a malformed request, for the error shape
+const bad = await decide(M, tiny, { a: { type: "score", instructions: "x", criteria: ["only one"] } });
+out.bad = { status: bad.status, error: bad.error };
+console.log("bad", bad.status, bad.error?.slice(0, 500));
+
+writeFileSync(new URL("./qs-mech.json", import.meta.url), JSON.stringify(out, null, 1));

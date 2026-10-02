@@ -48,7 +48,7 @@
  * agreeing is that both call `markedQuotes` below.
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useState, type ReactElement } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
 import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
@@ -590,13 +590,12 @@ export function QuotesPanel({
      order the list is actually in. One call, one answer, passed down. */
   const rank = effectiveRank(all, chosenRank);
   /* Empty with fewer than two quotes or two ranks; then there is no rank row
-     and the head row carries the count and the badge instead. */
+     and the empty head row holds the band's corner instead. */
   const ranks = quotes && quotes.quotes.length > 1 ? rankOptions(all) : [];
   /* Provenance about the owner's own run, so a visitor sees none of it:
      `profileHash` never leaves the server (src/public-types.ts). An icon since
-     2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
-     that renders nothing, so the rank row's trailing slot is empty when there
-     is nothing to put in it.
+     2026-10-01, as Glossary's is (plan 260929a), and in the band's corner since
+     2026-10-02 (`ModeSurface`'s `profile`, plan 261002e).
 
      **No `regenerate`, on purpose.** Its panel edits the profile like every
      other, but Quotes' forced run appends to a current list — across a profile
@@ -705,25 +704,28 @@ export function QuotesPanel({
       feature="quotes"
       mode="quotes"
       about={about}
+      profile={badge}
       /* **No head row while the rank row is drawn**, since 2026-10-01 — Greg,
           on a landscape iPhone: *"all the stuff at the top of their columns
           takes up the vertical real estate, and I can't see the actual result"*
-          (`spya-gcdwps`). Its two things go to the end of the rank row: the
-          profile badge always, and the count everywhere but *prioritised*,
-          whose bar row already says "5 of 14". The move Glossary made (plan
-          260929a); plan 261001l.
+          (`spya-gcdwps`). Its profile badge is now in the band's corner and
+          its count in the (i); *prioritised* still says "5 of 14" beside its
+          own threshold, where the count describes the control. The compact
+          row began with Glossary (plan 260929a); plans 261001l, 261001m and
+          261002e finished the moves.
 
           **Otherwise a fragment, so the row is there before the quotes are.**
-          Both children are gated on `quotes`; `head={quotes && …}` would pass
-          the surface `null` while the list loads and no `.band-head` would be
-          drawn at all. With one quote, or one rank on offer, there is no rank
-          row, so the old row stays and carries both.
+          `head={quotes && <></>}` would pass the surface `null` while the list
+          loads and draw no `.band-head`, so the corner could hang into the
+          status below. With one quote, or one rank on offer, there is no rank
+          row to host the corner, so the old row stays.
 
           **The count has gone to the band's (i)** since 2026-10-01 (plan
-          261001m), so this row holds only the badge now. Still a fragment
-          rather than `null`, for the reason above: the row holds its place
-          while the list loads, and the (i) sits in it. */
-      head={ranks.length > 0 ? null : <>{badge}</>}
+          261001m), and the badge to the band's corner beside it since
+          2026-10-02 (plan 261002e), so this row holds nothing of its own.
+          Still a fragment rather than `null`, for the reason above: the row
+          holds its place while the list loads, and the corner sits in it. */
+      head={ranks.length > 0 ? null : <></>}
       /* Pinned under the list rather than at the end of it. Same guard it had
           as a trailing child of the band — and **not on a stale or an outdated
           list**, whose banner offers the one honest action there, a list of its
@@ -752,7 +754,6 @@ export function QuotesPanel({
           options={ranks}
           rank={rank}
           onRank={onRank}
-          trailing={badge}
         />
       )}
 
@@ -922,24 +923,20 @@ function rankOptions(quotes: readonly Quote[]): RankOption[] {
 }
 
 /**
- * The rank buttons, and at the right-hand end whatever the panel hands
- * `trailing`: the count and the profile badge, which came here from a head row
- * of their own on 2026-10-01, so that row could go — the move Glossary made on
- * 2026-09-29 (plan 260929a), for Greg's *"all the stuff at the top of their
- * columns takes up the vertical real estate"* (`spya-gcdwps`, plan 261001l).
- * **The trailing slot is beside the group, not in it**, for the reason
- * GlossaryPanel.tsx § SortBar gives.
+ * The rank buttons. The row took the count and the profile badge from a head
+ * row of their own on 2026-10-01, for Greg's *"all the stuff at the top of
+ * their columns takes up the vertical real estate"* (`spya-gcdwps`, plan
+ * 261001l); the count has since gone to the band's (i) (plan 261001m) and the
+ * badge to the band's corner (plan 261002e).
  */
 function RankBar({
   options,
   rank,
   onRank,
-  trailing,
 }: {
   options: readonly RankOption[];
   rank: QuoteRank;
   onRank(rank: QuoteRank): void;
-  trailing: ReactNode;
 }) {
   return (
     <div className="quotes-rank">
@@ -959,7 +956,6 @@ function RankBar({
           </button>
         ))}
       </OrderGroup>
-      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );
 }

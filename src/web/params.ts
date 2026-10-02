@@ -726,8 +726,15 @@ export const faqBarParam = createParser<number>({
  *
  * `push`, like `cols` and `text`: switching matcher changes what the article
  * looks like, and Back should undo it.
+ *
+ * **`quick` sits between them** (2026-10-02, docs/plans/261002e-quick-search-v1.md):
+ * the same saved, ticked, coloured runs as `meaning`, asked of a fast model
+ * that scores every paragraph in about a second instead of quoting and
+ * reasoning in half a minute. Wherever the panel talks about the draft or the
+ * saved list, `quick` behaves as `meaning` does — `asksTheServer` below — and
+ * it differs only in the `kind` it asks with.
  */
-export const MATCHERS = ["words", "meaning"] as const;
+export const MATCHERS = ["words", "quick", "meaning"] as const;
 export type Matcher = (typeof MATCHERS)[number];
 
 export const matchParam = createParser<Matcher>({
@@ -736,6 +743,21 @@ export const matchParam = createParser<Matcher>({
 }).withOptions({ history: "push" });
 
 const DEFAULT_MATCHER: Matcher = "meaning";
+
+/**
+ * **Does this matcher ask the server, and save what comes back?** True for
+ * `quick` and `meaning`; false for `words`, which is answered in the browser
+ * on every keystroke and saves nothing. When it is true, the matcher *is* the
+ * `kind` the run is asked and saved with.
+ *
+ * A named question rather than `matcher === "meaning"` at each call site,
+ * because that comparison was this question's spelling until a third matcher
+ * arrived, and every copy of it left behind would quietly have treated `quick`
+ * as `words` — no saved list, no draft, no find button.
+ */
+export function asksTheServer(matcher: Matcher): matcher is Exclude<Matcher, "words"> {
+  return matcher !== "words";
+}
 
 /**
  * Which matcher a URL is asking for, when it may not say.
