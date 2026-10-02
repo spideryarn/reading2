@@ -521,19 +521,26 @@ Every few hours, as a tmux loop like the feedback sweep's:
    itself"*. It commits and pushes the notes for what is about to ship
    ([changelog.md § Running it](changelog.md#running-it)), and the deploy's `changelog` gate refuses
    a commit without them.
-4. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
+4. **Then bring Help up to date.** Read the notes you just pulled for anything that changes what a
+   reader sees or can do, and check `/help` still tells the truth about it — the brief is
+   [help-page.md § Bringing it up to date](help-page.md#bringing-it-up-to-date); most releases need
+   nothing. Greg, 2026-10-01: *"add a process step when deploying (after Changelog) to make sure this
+   Help page has been updated accordingly"*. If you commit a change to Help, it is a commit the notes
+   do not cover, so run step 3 again before deploying. It is a step, not a gate: the deploy does not
+   check it.
+5. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
    for the notes; say so in the report. If it fails only because `dev` moved during the run
    (*"level with origin/dev"*, or `changelog` naming new commits), pull, re-run step 3 if `changelog`
    asked for it, and deploy once more.
-5. It is not deployed until three things agree: the exit code, the `Target:` line naming the
+6. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
    HEAD and `origin/main`. The success line alone is not evidence —
    [deployment.md](deployment.md).
-6. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
+7. **Never `vercel rollback`**: it turns off automatic promotion of later deploys. A bad deploy goes
    to Greg.
-7. **Then `npm run changelog:promote`** — seconds — to record the deploy in the changelog's
+8. **Then `npm run changelog:promote`** — seconds — to record the deploy in the changelog's
    history. Greg, 2026-09-30: *"make sure we're updating the Changelog as part of the deploy process
    going forwards"*. A skipped one costs readers nothing; the next `prepare` promotes first.
 

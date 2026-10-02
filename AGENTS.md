@@ -81,6 +81,7 @@ listed here; the names under each are files in `docs/project/`.
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·
   `website-text.md` (the landing page, the contact address) ·
+  `help-page.md` (`/help`, for readers, and the deploy step that keeps it true) ·
   `privacy.md` (what we do with a reader's data, and the page that says so)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
