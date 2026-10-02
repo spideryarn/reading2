@@ -53,3 +53,6 @@ GPT Sol's plan review ([prompt](261002j-citations-sort-by-date-plan-review-promp
 [answer](261002j-citations-sort-by-date-plan-review-sol.md)), two P3s, both taken: the year is any
 four-digit run 1000–9999 as Debate's `readPublishedYear`, not 1000–2099; and rendered tests for the
 owner's list in date order (pressed button, no threshold) and a visitor's, registry year included.
+
+GPT Sol's code review ([prompt](261002j-citations-sort-by-date-code-review-prompt.md),
+[answer](261002j-citations-sort-by-date-code-review-sol.md)): no findings, nothing changed.
