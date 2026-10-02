@@ -308,7 +308,11 @@ describe("§ a small device's query", () => {
  * that was there. What it cannot see is whether the browser applies the class;
  * that is a browser pass (docs/project/browser-testing.md).
  */
-const FULL_WIDTH_BAND = "width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));";
+/* The band reaches the window's right edge by `right` since 2026-10-02 — it was
+   `width: calc(100vw - …)`, which counts a classic scrollbar and ran the panel
+   under it (postmortem 261002a). The three lines are what is unique to this
+   rule: its twin, mode-band.css's herald slot, has the first two as well. */
+const FULL_WIDTH_BAND = "right: var(--safe-right);\n  width: auto;\n  border-right: none;";
 
 /**
  * The at-rule preludes enclosing `index`, innermost first, plus the rule's own
