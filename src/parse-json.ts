@@ -109,7 +109,7 @@
  * `objectEnd` is the newest arrival and the clearest case for the rule. It was
  * private to `parseHits` in src/search.ts, which was the only caller that dug
  * its JSON out of a longer response — and this file said so, and said the
- * others did not need to. On 2026-09-03 the hierarchy and timeline steps both
+ * others did not need to. On 2026-09-03 the structure and timeline steps both
  * died in production proving that wrong, so the scan moved here and eleven
  * stages now reach it through `parseJsonAnswer`.
  * docs/plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md.
@@ -211,7 +211,7 @@ function completeDocumentBefore(text: string, at: number): boolean {
  * § `raw_response` is gone), not in the error. So this sentence is the entire
  * evidence a future debugger gets, and it has to be worth reading.
  *
- * *"It breaks at position 5409 of 13547 characters"* is what the hierarchy step
+ * *"It breaks at position 5409 of 13547 characters"* is what the structure step
  * said on 2026-09-03, and it is indistinguishable from a syntax error part-way
  * through a document. In fact the tree was whole at 5409 and 8,138 characters of
  * something else followed it — so the sentence sent the diagnosis after a
@@ -263,7 +263,7 @@ export function parseJsonFrom<T>(text: string, source: string): T {
  * Strip a stray code fence if the model wraps its JSON despite instructions.
  *
  * Every stage that asks a model for JSON needs this. Eight of them each carried
- * a copy — arc, glossary, ideas, labels, search, summarise, hierarchy and
+ * a copy — arc, glossary, ideas, labels, search, summarise, structure and
  * tweets, in two spellings that were checked against each other on eighteen
  * awkward inputs (bare fence, `json` fence, CRLF, backticks inside a string, a
  * missing close fence, prose before, prose after, no fence at all, and ten
@@ -465,13 +465,13 @@ export function objectEnd(text: string): number {
  * A model's JSON answer, dug out of whatever the model wrapped around it.
  *
  * **This is what a stage that asks a model for JSON calls** — arc, glossary,
- * hierarchy, ideas, illustrated, labels, quiz, quotes, sketch, timeline,
+ * ideas, illustrated, labels, quiz, quotes, sketch, structure, timeline,
  * tweets. All eleven used to spell `parseJsonFrom(stripFence(raw), …)` instead,
  * which assumes the JSON *is* the whole response — and on 2026-09-03 two paid
  * steps died in production because it is not. The **timeline** step got prose
  * before the fence, so `stripFence` — which only strips a fence at the very
  * start and the very end — left the whole thing alone and the first character
- * was a letter; the **hierarchy** step got a complete tree that ended at
+ * was a letter; the **structure** step got a complete tree that ended at
  * position 5409 with another 8,138 characters after it. The two read as
  * unrelated bugs and were one.
  * docs/plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md.

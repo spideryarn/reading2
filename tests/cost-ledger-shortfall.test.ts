@@ -61,7 +61,7 @@ loadEnvLocal();
 /** A row with the five fields the arithmetic reads; the rest is irrelevant here. */
 const row = (over: Partial<AiCallRow> = {}): AiCallRow =>
   ({
-    job: "hierarchy",
+    job: "structure",
     isByok: false,
     costSource: "provider",
     creditsUsedNanos: 1_000,
@@ -126,7 +126,7 @@ describe("totalLedger", () => {
 /** A plausible finished call, so `recordSpend` has something to be handed. */
 function spend(over: Partial<SpendRecord> = {}): SpendRecord {
   return {
-    job: "hierarchy",
+    job: "structure",
     answeredBy: "anthropic/claude-sonnet-5",
     upstreamCostNanos: null,
     model: "anthropic/claude-sonnet-5",
@@ -199,9 +199,9 @@ async function oneSettledAndOneLate(jobId: string): Promise<void> {
     async () => {
       /* Settles inside the box, so `collectSpend` awaits its write before it
          returns and the row is in Postgres by the time we read. */
-      recordSpend(spend(), beginSpend("hierarchy", "m"));
+      recordSpend(spend(), beginSpend("structure", "m"));
       /* Does not. Same job, same collector, and no row anywhere. */
-      const late = beginSpend("hierarchy", "m");
+      const late = beginSpend("structure", "m");
       dangling = gate.then(() => recordSpend(spend(), late));
     },
     {
@@ -213,7 +213,7 @@ async function oneSettledAndOneLate(jobId: string): Promise<void> {
         scopeKind: "job_step",
         ownerId: currentOwnerId(),
         jobId,
-        stepName: "hierarchy",
+        stepName: "structure",
       },
     },
   );
@@ -246,7 +246,7 @@ describe("the Postgres ledger's account of what it cannot see", () => {
     /* **The settled call is here and the late one is not**, and that is the
        control as much as the claim: a read that came back empty would satisfy
        "the total is short" while proving only that nothing had been written. */
-    expect(found.rows.map((r) => r.stepName)).toEqual(["hierarchy"]);
+    expect(found.rows.map((r) => r.stepName)).toEqual(["structure"]);
     /* Nothing in a table can be unreadable — a row either parsed on the way in
        or was never written — so this is the field that CANNOT carry the fact,
        asserted so that the two stay told apart. */

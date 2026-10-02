@@ -42,10 +42,13 @@
  * ## What is not derived, and why it is safe not to be
  *
  * The rows that are not modes are fixed prose: the article's own text, its
- * pictures and its provenance on one side; the owner's comments and notes,
- * glossary lookups, reader profile, private rename, uploaded file and the cost
- * of it all on the other; and the arc and the tweet thread, which cross like an
- * artefact but have no mode to be swept. `visitorGap` has nothing to say about
+ * pictures, its provenance and the owner's comments and notes on one side
+ * (`ALWAYS_SHARED` — comments crossed over on 2026-09-04); glossary lookups,
+ * reader profile, private rename, uploaded file and the cost of it all on the
+ * other (`NEVER_SHARED`); and the arc, which crosses like an artefact but has
+ * no mode to be swept (`SHARED_ARC`). The tweet thread was a second such row
+ * until it became a mode on 2026-09-29, and the sweep lists it now.
+ * `visitorGap` has nothing to say about
  * any of them, and each is settled in a different file — the projection in
  * [../public/dto.ts](../public/dto.ts), the reader's `select` in
  * [../store/public-reader.ts](../store/public-reader.ts), `SeeTheOriginal` in

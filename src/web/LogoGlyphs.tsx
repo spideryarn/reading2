@@ -2,7 +2,7 @@
  * **The spider and the ten letters of the name, the markup every animated copy
  * of the wordmark shares.**
  *
- * styles/logo-animations.css keys all thirteen animations off `.logo-letter`
+ * styles/logo-animations.css keys every one of its animations off `.logo-letter`
  * and `.logo-image` (inside `.logo-mark`), and useLogoAnimation offers the
  * letter ones only where it finds a drawn `.logo-letter` in its host
  * (logo-animation.ts § lettersDrawn). So *which pages get the full set* is a

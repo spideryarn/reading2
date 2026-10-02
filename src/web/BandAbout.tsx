@@ -20,12 +20,45 @@ import { Info } from "lucide-react";
 import { MODE_CATALOG } from "../mode-catalog.js";
 import type { Mode } from "../modes.js";
 import { exactly, howLong, relativeAgo } from "./relative-time.js";
+import { Link } from "./Link.js";
 import { Tooltip } from "./Tooltip.js";
 
-export function BandAbout({ label, children }: { label: string; children: ReactNode }) {
+export function BandAbout({
+  label,
+  help,
+  children,
+}: {
+  label: string;
+  /**
+   * **Where Help says more** — an address from `helpHref`, never built by hand
+   * (help-anchors.ts § Typed). With one, the card ends in *More in Help →* and
+   * is `interactive`, so the pointer can cross into it and Tab can reach the
+   * link; without one, it stays the plain card the pointer cannot enter.
+   * Plan 261002e.
+   */
+  help?: string | undefined;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
+  const content = help ? (
+    <>
+      {children}
+      <p className="band-about-help">
+        <Link href={help}>More in Help →</Link>
+      </p>
+    </>
+  ) : (
+    children
+  );
   return (
-    <Tooltip content={children} placement="bottom" open={open} onOpenChange={setOpen} className="band-about-card">
+    <Tooltip
+      content={content}
+      placement="bottom"
+      open={open}
+      onOpenChange={setOpen}
+      interactive={help === undefined ? undefined : { label }}
+      className="band-about-card"
+    >
       <button
         type="button"
         className={`band-about${open ? " on" : ""}`}

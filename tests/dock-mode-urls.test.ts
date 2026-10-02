@@ -53,7 +53,7 @@ describe("withMode", () => {
   it("REMOVES a mode already in the carried string when returning to the default", () => {
     /* The half that would be a real bug rather than an untidy URL: `carriedSearch`
        hands this whatever the reader had, so leaving `?mode=chat` in place would
-       navigate to the hierarchy and land in chat. Deleting is not the same as
+       navigate to the default mode and land in chat. Deleting is not the same as
        declining to write. */
     expect(modeIn(withMode("mode=chat", DEFAULT_MODE))).toBeNull();
     expect(modeIn(withMode("at=spya-k3m9qt&mode=search", DEFAULT_MODE))).toBeNull();

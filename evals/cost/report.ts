@@ -115,9 +115,9 @@ export interface StepSpend {
    * under `aggregateByAiJob`, or `(no step)` for a call made outside a step.
    *
    * Both groupings are needed and neither substitutes for the other: **there is
-   * no `labels` step.** The nav labels fan out inside `hierarchy`
+   * no `labels` step.** The nav labels fan out inside `structure`
    * (src/pipeline.ts § STEP_ORDER), so every label call carries
-   * `stepName: "hierarchy"` and `job: "labels"` — and the baseline's
+   * `stepName: "structure"` and `job: "labels"` — and the baseline's
    * "hierarchy $0.24 + labels" split exists only in the second view.
    */
   step: string;
@@ -158,7 +158,7 @@ export function aggregateByStep(rows: readonly AiCallRow[]): StepSpend[] {
 
 /**
  * The same numbers cut by `AiJob` instead — which is the only way to see the
- * hierarchy/labels split, because labels is a fan-out inside the `hierarchy`
+ * structure/labels split, because labels is a fan-out inside the `structure`
  * step rather than a step of its own. See `StepSpend.step`.
  */
 export function aggregateByAiJob(rows: readonly AiCallRow[]): StepSpend[] {
@@ -337,12 +337,12 @@ const STOPPED = new Set(["error", "bug", "failed"]);
  * The rule is **at or before**, and the direction matters both ways. Walking the
  * steps in pipeline order, anything from the first failure onwards never
  * completed, so an absence there is explained. A failure *after* `producedBy`
- * explains nothing about it: `hierarchy` finishing and `arc` blowing up leaves a
+ * explains nothing about it: `structure` finishing and `arc` blowing up leaves a
  * missing `labels` row exactly as lost as it ever was.
  *
  * Found by evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html: draw 2's
- * `hierarchy` was billed $0.2124 and then failed its own range check, so the
- * label fan-out — which runs only after hierarchy succeeds — bought nothing, and
+ * `structure` was billed $0.2124 and then failed its own range check, so the
+ * label fan-out — which runs only after the structure step succeeds — bought nothing, and
  * the fatal `no-spend` stopped a sweep whose purpose was to count how often that
  * happens. Draws 3 and 4 never ran.
  *
@@ -372,8 +372,8 @@ export interface ColdExpectation {
    * **`AiJob`s that must have recorded non-zero spend** — a second namespace,
    * and it is not redundant.
    *
-   * There is no `labels` step: the nav labels fan out inside `hierarchy`, so
-   * every label call carries `stepName: "hierarchy"`. One priced structure row
+   * There is no `labels` step: the nav labels fan out inside `structure`, so
+   * every label call carries `stepName: "structure"`. One priced structure row
    * therefore satisfies a step-level check **even if every label call was
    * skipped or lost**, and the draw reports a plausible number for an article
    * whose labels were never bought. Only the `AiJob` cut can see it. GPT Sol,
@@ -636,7 +636,7 @@ export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): 
  * Which part of an all-modes sweep a draw is, and therefore what it means.
  *
  * - `ingest` — the fixture through the ingest queue under a fresh slug. Mints an
- *   article; hierarchy and its label fan-out are what it buys.
+ *   article; the structure step and its label fan-out are what it buys.
  * - `mode` — one on-demand mode as its own job against the **adopted** article
  *   the ingest draw made. This is the number "what does pressing Ideas cost".
  * - `batched` — several modes in one job, `--against` an article that already
@@ -675,8 +675,8 @@ export type DrawPhase = "ingest" | "mode" | "batched";
  *
  * **An ingest draw: the earliest call by `startedAt` of each step must be
  * cold.** Earliest, not any, because within-run caching here is deliberate and
- * is part of what production pays: hierarchy's label fan-out shares
- * `stepName: "hierarchy"` with the structure call and legitimately reads off it,
+ * is part of what production pays: the structure step's label fan-out shares
+ * `stepName: "structure"` with the whole-document call and legitimately reads off it,
  * and a rule of "no cache read anywhere" would fail every fan-out whose write
  * premium we choose to pay.
  *
@@ -735,7 +735,7 @@ const CACHE_CLAIM_TOLERANCE = 0.1;
  * verdict is still the right instinct; avoiding its tables for membership was
  * over-correction, and it cost this gate the group-scoping it needed.
  *
- * A step in no group — `hierarchy` and its `labels` fan-out above all — is out of
+ * A step in no group — `structure` and its `labels` fan-out above all — is out of
  * scope entirely rather than forgiven case by case. Labels writes three entries
  * in parallel and reads at most one **on purpose**, so any rule about unclaimed
  * writes is simply the wrong question to ask it.
@@ -779,7 +779,7 @@ function cacheGroupOf(step: string | null): string | null {
  * which, and that is why it survives the next mechanism.
  *
  * Deliberately loose in one direction: a write is happy with *any* later read of
- * the right size, not a matched pair. Hierarchy's label fan-out writes three
+ * the right size, not a matched pair. The structure step's label fan-out writes three
  * near-identical entries in parallel and reads one of them, and a one-to-one
  * matcher would call two of those a loss when paying for them is a documented
  * choice about latency. Money going missing is the signal; bookkeeping is not.
@@ -1026,7 +1026,7 @@ export function checkAdoption(adoption: Adoption, phase: DrawPhase): Finding[] {
  * One draw, reduced to the two facts a variation summary needs.
  *
  * **`succeeded` is the stage/job outcome, not the gateway's.** `outcome: "ok"`
- * on a ledger row only means the wire returned; a truncated hierarchy is a `bug`
+ * on a ledger row only means the wire returned; a truncated structure run is a `bug`
  * failure with a perfectly ok row beside it (src/token-budget.ts,
  * docs/postmortems/260826a-toc-max-tokens.md). Counting the gateway's word
  * would report zero failures over a run of them.
@@ -1099,7 +1099,7 @@ export function observedVariation(draws: readonly DrawOutcome[]): ObservedVariat
   };
 }
 
-/** The failure kinds as `2 truncated, 1 hierarchy error`, or "" when none failed. */
+/** The failure kinds as `2 truncated, 1 structure error`, or "" when none failed. */
 function namedFailures(v: ObservedVariation): string {
   return Object.entries(v.failureKinds)
     .map(([kind, n]) => `${n} ${kind}`)
@@ -1159,7 +1159,7 @@ export interface PaidFailure {
   label: string;
   /** Really spent. A stop is not a refund, and the money has to appear somewhere. */
   nanos: number;
-  /** What the stage said went wrong — `hierarchy bug`, `truncated`, `error`. */
+  /** What the stage said went wrong — `structure bug`, `truncated`, `error`. */
   failure: string;
 }
 

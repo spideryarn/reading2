@@ -111,6 +111,7 @@ function Harness() {
            — so this is the pair that asks nothing of the network at all. */
         canAddToShelf={false}
         showInSpideryarn={false}
+        termActions={null}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id)}
         onFollowNote={(from, m) => followed.push([from, m.note.id, m.blockId])}

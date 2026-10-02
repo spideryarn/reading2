@@ -53,7 +53,7 @@ export interface Article {
  * anybody outside, we simply cannot find the artefacts this stage is defined
  * against.
  *
- * The sentence is a diagnostic and `{ generic }` says so: "run the hierarchy
+ * The sentence is a diagnostic and `{ generic }` says so: "run the structure
  * step first" is addressed to whoever is running steps by hand, and a reader
  * gets `stepGaveUp`'s `ours` copy, which is the true thing to tell them —
  * src/job-failure.ts § `{ generic }`.
@@ -62,7 +62,7 @@ export async function readArticle(slug: string, store: ArtifactReads): Promise<A
   const article = await tryReadArticle(slug, store);
   if (!article) {
     throw stageFailure("ours", {
-      generic: `No blocks or tree for "${slug}" — run the hierarchy step first.`,
+      generic: `No blocks or tree for "${slug}" — run the structure step first.`,
     });
   }
   return article;
@@ -80,13 +80,13 @@ export async function readArticle(slug: string, store: ArtifactReads): Promise<A
  * safe way to be wrong about currency is a model call.
  *
  * **The same three coordinates for both, and that is the point of the shared
- * function** — blocks and tree from `hierarchy`, metadata from `extract`. Read them
+ * function** — blocks and tree from `structure`, metadata from `extract`. Read them
  * anywhere else and the fingerprint a stage records stops describing the bytes
  * it generated from.
  */
 export async function tryReadArticle(slug: string, store: ArtifactReads): Promise<Article | null> {
-  const file = await store.read(slug, "hierarchy", "blocks");
-  const tree = await store.read(slug, "hierarchy", "tree");
+  const file = await store.read(slug, "structure", "blocks");
+  const tree = await store.read(slug, "structure", "tree");
   if (!file?.blocks || !tree) return null;
   const meta = await store.read(slug, "extract", "meta");
   return { slug, blocks: file.blocks, tree, meta: meta ?? null };

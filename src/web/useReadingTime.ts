@@ -55,7 +55,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
-import { type ReadLevel, readLevel, shareVisible } from "./reading-time.js";
+import { expectedSeconds, type ReadLevel, readLevel, shareVisible } from "./reading-time.js";
 import { stickyOffset } from "./scroll.js";
 
 /** No input for this long and the reader is taken to have walked away. Fable, 2026-09-16. */
@@ -121,10 +121,25 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
  */
 export type ReadingTimeStatus = "off" | "loading" | "loaded" | "failed";
 
+/** What one block has had, and what it takes to read, in seconds. */
+export interface BlockReadingTime {
+  seconds: number;
+  expected: number;
+}
+
+/**
+ * **The seconds behind a block's level**, for the line's card (BlockLinkCard.tsx
+ * § `ReadingCard`). Null while not recording. Stable identity, and live: it
+ * reads the running totals each call, so a caller that asks again a second
+ * later sees the second.
+ */
+export type ReadingTimeFor = (id: BlockId) => BlockReadingTime | null;
+
 export interface ReadingTime {
   /** Blocks with a level above zero. Stable identity until one changes. */
   levels: ReadonlyMap<BlockId, ReadLevel>;
   status: ReadingTimeStatus;
+  timeFor: ReadingTimeFor;
   /** `Reader`'s gate: is the prose on screen right now. Off until it says so. */
   setCounting: (on: boolean) => void;
 }
@@ -161,10 +176,16 @@ export function useReadingTime(
   const setCounting = useCallback((on: boolean) => {
     counting.current = on;
   }, []);
+  /* Whichever run of the effect is live puts its own lookup here, and takes it
+     away on cleanup — so `timeFor` never answers from a previous article, or
+     after the switch went off, however long a card stays open. */
+  const lookup = useRef<ReadingTimeFor | null>(null);
+  const timeFor = useCallback<ReadingTimeFor>((id) => lookup.current?.(id) ?? null, []);
 
   useEffect(() => {
     setLevels(NO_LEVELS);
     setOpened({ slug, status: "loading" });
+    lookup.current = null;
     if (!enabled) return;
 
     const path = readingTimePath(slug);
@@ -174,6 +195,11 @@ export function useReadingTime(
     const local = new Map<BlockId, number>();
     let pending = new Map<BlockId, number>();
     let shown = new Map<BlockId, ReadLevel>();
+    const ownLookup: ReadingTimeFor = (id) => ({
+      seconds: (server.get(id) ?? 0) + (local.get(id) ?? 0),
+      expected: expectedSeconds(wordsRef.current.get(id) ?? 0),
+    });
+    lookup.current = ownLookup;
 
     let lastActive = Date.now();
     let lastTick = Date.now();
@@ -311,6 +337,7 @@ export function useReadingTime(
 
     return () => {
       gone = true;
+      if (lookup.current === ownLookup) lookup.current = null;
       for (const name of ACTIVITY_EVENTS) window.removeEventListener(name, active, { capture: true });
       window.removeEventListener("pageshow", active);
       window.removeEventListener("focus", active);
@@ -325,5 +352,5 @@ export function useReadingTime(
   }, [slug, enabled]);
 
   const status: ReadingTimeStatus = !enabled ? "off" : opened.slug === slug ? opened.status : "loading";
-  return { levels: enabled ? levels : NO_LEVELS, status, setCounting };
+  return { levels: enabled ? levels : NO_LEVELS, status, setCounting, timeFor };
 }

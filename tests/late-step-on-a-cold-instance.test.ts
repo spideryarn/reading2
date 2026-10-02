@@ -14,7 +14,7 @@
  * deliberately, so that a
  * failed job's half-built artefacts cannot be served as the next job's. A job
  * created as `{ slug, steps: ["tweets"] }` has exactly one step in it, so
- * `fetch`, `extract`, `blocks` and `hierarchy` never run and never write. The
+ * `fetch`, `extract`, `blocks` and `structure` never run and never write. The
  * article's blocks are in Postgres, where the ingest that made them published
  * them. The scratch directory is empty and always will be.
  *
@@ -143,7 +143,7 @@ beforeAll(async () => {
   /* **Read off the disk once, then held in memory** — the copy of `example/` is
      still what the article *is*, and `memoryArtefactsFrom` refuses an empty
      load, so a fixture that stopped being copied fails here rather than three
-     stages later saying "run the hierarchy step first". */
+     stages later saying "run the structure step first". */
   store = await memoryArtefactsFrom(published, SLUG);
 });
 
@@ -177,7 +177,7 @@ describe("a single-step job on an instance that never ingested the article", () 
   it("the store holds the blocks the step needs", async () => {
     /* If this ever fails the rest of the file proves nothing — it would be
        testing an absent article rather than an unreachable one. */
-    const file = await store.read(SLUG, "hierarchy", "blocks");
+    const file = await store.read(SLUG, "structure", "blocks");
     expect(file?.blocks.length).toBeGreaterThan(0);
   });
 
@@ -229,7 +229,7 @@ describe("a single-step job on an instance that never ingested the article", () 
        and still read plausibly. Hard-coding a count here would make this test
        fail the day the fixture's tree changed, for a reason that has nothing to
        do with what it is about. */
-    const tree = await store.read(SLUG, "hierarchy", "tree");
+    const tree = await store.read(SLUG, "structure", "tree");
     if (!tree) throw new Error("the fixture has no tree");
     const sentences = partsOf(tree).map((_, i) => `Part ${i + 1} says something.`);
     answers.push(JSON.stringify({ arc: sentences }));
@@ -250,6 +250,6 @@ describe("a single-step job on an instance that never ingested the article", () 
    */
   it("and refuses in its own words when the store has no article either", async () => {
     const empty: ArtifactReads = memoryArtefacts();
-    await expect(STEPS.arc.run(coldContext(), empty, nullCheckpointStore())).rejects.toThrow(/run the hierarchy step first/);
+    await expect(STEPS.arc.run(coldContext(), empty, nullCheckpointStore())).rejects.toThrow(/run the structure step first/);
   });
 });

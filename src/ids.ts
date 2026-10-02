@@ -84,7 +84,7 @@ export function isSpideryarnId(value: string | null | undefined): boolean {
  * where its only caller was, because src/structure-cascade.ts throws the same
  * kind of message about the same kind of value. Importing it from the stage
  * module would make a pure arithmetic file load the whole of stage 4 at
- * runtime, and would become a real `hierarchy → cascade → hierarchy` cycle the
+ * runtime, and would become a real `structure → cascade → structure` cycle the
  * moment `generateStructure` wires the cascade in. This module imports nothing
  * at all, which is what makes it the safe home. ⟨GPT Sol, 2026-09-04⟩
  */

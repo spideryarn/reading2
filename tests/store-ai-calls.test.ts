@@ -39,9 +39,9 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     ownerId: "00000000-0000-4000-8000-00000000ac01",
     articleSlug: "a-slug",
     jobId: "job-7",
-    stepName: "hierarchy",
+    stepName: "structure",
     wire: "messages",
-    job: "hierarchy",
+    job: "structure",
     requestedModel: "anthropic/claude-sonnet-5",
     answeredModel: "anthropic/claude-sonnet-5",
     upstream: "Anthropic",
@@ -527,7 +527,7 @@ describe("the Postgres ledger", () => {
     await pgCostStore.record(first);
     await pgCostStore.record(second);
     const found = await pgCostStore.forJob(JOB);
-    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "hierarchy"]);
+    expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "structure"]);
     /* **Zero, and it is not the same zero the filesystem reported.** There, a
        damaged line belonging to this job was counted so a short total could not
        look confident. A row here either parsed on the way in or was never

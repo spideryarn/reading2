@@ -120,7 +120,7 @@ describe("the round trip through the server's allowlist", () => {
       rootBlockId: ROOT_ID,
       blockIds: BLOCK_IDS,
     });
-    setFeedbackJobContext({ id: "spya-p9t4vw", step: "hierarchy", status: "running" });
+    setFeedbackJobContext({ id: "spya-p9t4vw", step: "structure", status: "running" });
 
     const collected = collectFeedbackDiagnostics();
     const parsed = parseFeedbackDiagnostics(collected);
@@ -137,7 +137,7 @@ describe("the round trip through the server's allowlist", () => {
     expect(parsed?.errors).toHaveLength(1);
     expect(parsed?.article?.revisionId).toBe(REVISION_ID);
     expect(parsed?.article?.blockIds).toEqual(BLOCK_IDS);
-    expect(parsed?.job).toEqual({ id: "spya-p9t4vw", step: "hierarchy", status: "running" });
+    expect(parsed?.job).toEqual({ id: "spya-p9t4vw", step: "structure", status: "running" });
     expect(parsed?.device?.userAgent).toContain("Safari");
     expect(parsed?.device?.colorScheme).toBe("dark");
   });

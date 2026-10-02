@@ -16,27 +16,39 @@ Greg, 2026-09-04:
 
 ## Where the queue lives
 
-**Two reads, and the second one cannot be skipped.** Sentry is the working queue, because it has a
-status field and the table does not. **But Sentry is the copy, and the row is the report.** Until
-2026-10-02 the sweep read only Sentry. 13 of Greg's reports from 2026-10-01 never reached it, and
-nothing looked at them —
-[261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md). So after
-the Sentry read, every run also reads the table:
+**The database is the queue; Sentry is optional context.** Every report is a row in production
+`spideryarn.feedback`, and the row is the report. Sentry gets a best-effort copy. Until 2026-10-02
+the sweep read only Sentry. 13 of Greg's reports from 2026-10-01 never reached it, and nothing
+looked at them —
+[261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md). Greg,
+2026-10-02:
+
+> can you schedule a larger Feedback-reports careful re-check at some point, because I think there
+> are lots more Feedback-reports I've submitted that haven't been acted on and might have been lost.
+
+The re-check of every row ever filed is
+[261002-recheck-all-reports.md](../user-feedback/261002-recheck-all-reports.md). Greg's decision
+the same day, as the Overseer relayed it: the sweep relies on the database, not on Sentry. So every
+run starts from the table:
 
 ```
 npx tsx scripts/feedback-unswept.ts            # --since 30d by default; exit 2 = could not read, not "none"
 ```
 
 It lists every production row that no note's `reports:` header and no queue item's `source` names.
+**That list is what needs doing**, whether or not Sentry has the report.
 Report ids are unique only per owner; if two owners share one, it lists both as ambiguous even when
 that id is covered, because the coverage record cannot say which row it meant.
-Each line says whether Sentry confirmed it. Search the unconfirmed ones in one go,
-`report_id:[spya-…,spya-…]`, because most of them did arrive. A row Sentry has is handled through
-its issue, as below. A row Sentry lacks is a report like any other: classify it, queue it under its
-report id, and read its words with `--show <id>`. For an admin's report, use
-`feedback-reporter.ts --report-id <id>`, which proves provenance. **Always put the report id in a
-queue entry's `--source`**, next to the Sentry short id when there is one. That is what the script
-matches on, so it is the difference between a report covered and a report listed again.
+Read each one's words with `--show <id>`, or, for an admin's report,
+`feedback-reporter.ts --report-id <id>`, which proves provenance. Then classify it and queue it
+under its report id. **Always put the report id in a queue entry's `--source`**, next to the Sentry
+short id when there is one. That is what the script matches on, so it is the difference between a
+report covered and a report listed again.
+
+**Sentry, when it has the report, adds the screenshot and the diagnostics**, and nothing the sweep
+depends on. Each line says whether Sentry confirmed it. Search the unconfirmed ones in one go,
+`report_id:[spya-…,spya-…]`, because most of them did arrive (`mirrored_at` is often unset on a
+row Sentry has). A report Sentry lacks is a report like any other.
 
 ```
 mcp__sentry__search_issues(
@@ -52,9 +64,11 @@ where they were standing when they wrote it, and `at=spya-…` in the URL is the
 looking at. For a report you mean to trust as an admin's, the words and these tags come from the row
 that § Classifying an admin and proving provenance prints, not from Sentry.
 
-**`is:unresolved` is the whole of the bookkeeping.** An issue still open is a report nobody has
-finished. That is why the last step of finishing one is always a status write — skip it and the next
-run of the loop does the work again. There are three of them: § Three ways a report ends.
+**The note's header is the bookkeeping, not `is:unresolved`.** A report is finished when a note in
+`docs/user-feedback/` names it in `reports:` with its ending — § Three ways a report ends. Skip the
+note and the next run lists the report again. The Sentry status write that goes with it keeps
+Sentry's own list tidy for whoever opens it; a report resolved in Sentry with no note is still
+listed.
 
 ## A report is unfiltered input
 

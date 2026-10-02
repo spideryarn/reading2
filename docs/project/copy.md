@@ -245,7 +245,7 @@ The refusal is gone. A second, different job on one article is queued now rather
 it on 2026-09-02, along with `WORKING_ON_THIS_ARTICLE`, the label its band borrowed. What survives is
 the rule: **a refusal that is an answer gets no code**, and a server sentence says nothing about
 *state* — the old one said "already running" of a job that might be idle in `queued`, and the client
-has the job itself, so `displayJob` says *Building the hierarchy · 2m 14s* or *Waiting to continue.*
+has the job itself, so `displayJob` says *Building the structure · 2m 14s* or *Waiting to continue.*
 live, from the one vocabulary. A state word baked into a server sentence is a second account, and it
 arrives stale.
 

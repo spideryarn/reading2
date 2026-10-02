@@ -41,7 +41,7 @@ import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
 import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
@@ -245,7 +245,48 @@ export interface GlossaryRead {
    * merged nothing while `look()` resolved as though it had worked.
    */
   patchEntry(id: string, lookup: GlossaryLookup): void;
+  /**
+   * Dig deeper into one term — see `look` in the hook below. **Here, on the
+   * read, rather than in the band's `useGlossary`**, since 2026-10-02: the hover
+   * card in the prose has a *Dig deeper* too, and the card exists in every mode
+   * while the band exists only in glossary mode. With the state down in the
+   * band, closing it disowned a running dig (the server finishes it anyway), so
+   * a card shown afterwards could not know a lookup was busy and might start a
+   * second paid one. GPT Sol's plan review of 261002c, finding 1.
+   *
+   * Resolves **`false` at once when it was not admitted** — another lookup owns
+   * the slot — and `true` once an admitted one has ended, however it ended.
+   */
+  look(id: string): Promise<boolean>;
+  /** The term a lookup is running for, or null. One at a time, on purpose. */
+  looking: string | null;
+  /** Why the last lookup failed, and which entry it belongs to. */
+  lookFailed: LookFailure | null;
+  /** The lookup as it arrives, or what arrived before it broke — `LookDraft`. */
+  lookDraft: LookDraft | null;
+  /** The last lookup this hook saw stored, even if its entry was replaced. */
+  lookKept: LookKept | null;
+  /**
+   * **Hide an entry from the owner's own view of this article, or bring it
+   * back** — `PUT`/`DELETE /api/glossary/:slug/hidden/:id`, plan 261002c § 2.
+   *
+   * **Pessimistic**: the write goes, is awaited, and then the list is read
+   * again (`refresh`), so an entry's `hidden` only ever comes from the server.
+   * An optimistic flip could be overwritten by a GET already in flight, or a
+   * quick Hide then Unhide could land in the opposite order — GPT Sol's plan
+   * review, finding 5. **Throws a sentence** on failure, for the caller to show
+   * where the press was: the band's error line, or the card's own.
+   *
+   * One write per entry at a time: a second press while one is out is ignored
+   * (`hiding` says which are out).
+   */
+  setHidden(id: string, hidden: boolean): Promise<void>;
+  /** The entries whose hide or unhide is still on its way. */
+  hiding: ReadonlySet<string>;
 }
+
+/** Nothing pending — a module constant, so an idle read hands out one identity. */
+const NOTHING_HIDING: ReadonlySet<string> = new Set();
 
 export function useGlossaryRead(slug: string): GlossaryRead {
   const [status, setStatus] = useState<GlossaryStatus>("loading");
@@ -255,6 +296,14 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The hide write may outlive the article it started on. Kept beside the
+     other per-article state so the render-time slug reset below can clear it
+     before the next article's children see a pending id from this one. */
+  const hidingLive = useRef(new Set<string>());
+  const hidingGeneration = useRef(0);
+  const currentSlug = useRef(slug);
+  currentSlug.current = slug;
+  const [hiding, setHiding] = useState<ReadonlySet<string>>(NOTHING_HIDING);
 
   /**
    * The read itself. Everything about *ordering* it — the dedupe, the trailing
@@ -318,6 +367,16 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the band still reaches the prose.
+     useCitations.ts § An always-mounted read is not an
+     always-fresh read. */
+  useStepFinished(slug, "glossary", refresh);
+  /* An old hide completion must never call the `refresh` closure it captured,
+     because that closure reads the old slug. If the reader has meanwhile gone
+     away and come back, though, the current article still needs reconciling;
+     this ref is the safe route to its current closure. */
+  const latestRefresh = useRef(refresh);
+  latestRefresh.current = refresh;
 
   /**
    * A new article clears the old one's list — **during render, not in an
@@ -343,6 +402,14 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     setProfiled(false);
     setProfileChanged(false);
     setError(null);
+    /* Entry ids are scoped to an article, and an old write's completion must
+       not call its captured `refresh()` after this reset: that closure reads
+       the previous slug and can otherwise replace this article's list. The
+       write itself is allowed to finish on its own article; only its client
+       state and follow-up read are disowned. */
+    hidingGeneration.current += 1;
+    hidingLive.current.clear();
+    setHiding(NOTHING_HIDING);
   }
 
   /* The opening read. Everything after it goes through `reload`, which does not
@@ -387,6 +454,192 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     );
   }, [armRefresh]);
 
+  /**
+   * Dig deeper into one term — the panel's *Dig deeper* button (was *Check the
+   * web*, plan 261001p), and since 2026-10-02 the hover card's too (plan
+   * 261002c § 3), which is why it lives on the read rather than in the band.
+   *
+   * **A plain request rather than a job**, unlike everything else here. Finding
+   * terms is one call over a whole article and belongs in the queue; checking a
+   * single term is a question with a reader waiting on it, which is the shape
+   * `useComments` already has. It reuses that call too — see `lookUpTerm` in
+   * src/term-lookup.ts.
+   *
+   * **One at a time**, which is a deliberate limit and not a missing feature:
+   * each of these is a model call the reader pays for, and a panel that will
+   * fire five because five rows were clicked spends money on a mis-click. The
+   * buttons are disabled while one is running.
+   *
+   * The answer is merged into the entry in place rather than refetching the
+   * list, because a refetch would rebuild every row and lose the reader's
+   * selection — and the server has just told us the one thing that changed.
+   *
+   * ## It streams, and `done` means stored
+   *
+   * Since 2026-09-10 the words arrive as they are written, into `lookDraft`,
+   * and only the `done` frame — which the server sends after the save — puts a
+   * lookup on the entry (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md).
+   * Two things differ from the box's `ask`:
+   *
+   * - **A failure reads the list again.** `error` does not prove nothing was
+   *   kept: a save can succeed and its read-back fail, or the socket die between
+   *   the save and the frame. If it was kept, the re-read puts it on the entry
+   *   and `Looked` draws the stored answer instead of the failure.
+   * - **Leaving stops the reading, not the lookup.** The server finishes and
+   *   saves either way — the panel promises that — so another article only
+   *   disowns the stream. **Closing the band no longer does**, since this moved
+   *   up from `useGlossary`: the read outlives the band, so the words keep
+   *   arriving and the card knows a dig is running.
+   */
+  const lookLive = useRef<AbortController | null>(null);
+  const [looking, setLooking] = useState<string | null>(null);
+  const [lookFailed, setLookFailed] = useState<LookFailure | null>(null);
+  const [lookDraft, setLookDraft] = useState<LookDraft | null>(null);
+  const [lookKept, setLookKept] = useState<LookKept | null>(null);
+
+  const look = useCallback(
+    async (id: string): Promise<boolean> => {
+      /* The ref is the admission record, `ask`'s rule: two presses in one tick
+         both see `looking` still null. */
+      if (lookLive.current) return false;
+      const controller = new AbortController();
+      lookLive.current = controller;
+      const mine = () => lookLive.current === controller;
+      setLooking(id);
+      setLookFailed(null);
+      setLookDraft(null);
+      setLookKept(null);
+      let opened = false;
+      try {
+        const res = await apiFetch(
+          `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
+          { method: "POST", signal: controller.signal },
+        );
+        if (!res.ok || !res.body) {
+          /* The 404 and the two 409s are decided before the stream opens, so
+             they are ordinary JSON and `readJson` throws their sentence. */
+          await readJson(res);
+          throw new Error(`The server replied ${res.status}.`);
+        }
+        opened = true;
+        const done = await readAnswerStream(res.body, {
+          delta: (text) => {
+            if (mine()) setLookDraft({ id, text });
+          },
+          /* `{ entry }`, and only its lookup is used — `patchEntry` says why the
+             rest of a snapshot taken before a model call must not be merged. */
+          done: (data) => {
+            const got = (data as { entry?: Partial<GlossaryEntry> } | null)?.entry;
+            return got?.id === id && isGlossaryLookup(got.lookup)
+              ? {
+                  lookup: got.lookup,
+                  name: typeof got.name === "string" && got.name ? got.name : null,
+                }
+              : undefined;
+          },
+        });
+        if (mine()) {
+          setLookDraft(null);
+          /* Kept independently of the list. A glossary rewrite can replace the
+             entry while the model is answering; `patchEntry` must not put that
+             stale entry back, but clearing every trace would silently hide an
+             answer the server did store. The panel uses this only when no row
+             with `id` remains. */
+          setLookKept({ id, name: done.name });
+          patchEntry(id, done.lookup);
+        }
+      } catch (err) {
+        if (controller.signal.aborted || !mine()) return true;
+        setLookFailed({
+          id,
+          message:
+            err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+        });
+        /* See the section above: the answer may be stored anyway. Only once the
+           stream had opened — a refusal before it stored nothing.
+
+           **Awaited while this request still owns `lookLive`.** Releasing
+           admission first lets a quick retry start a second paid call while
+           this read is about to discover that the first answer was stored. If
+           that stored answer then lands, `Looked` hides the retry's arriving
+           draft behind it. Reconciliation is part of this lookup's lifetime. */
+        if (opened) await refresh();
+      } finally {
+        if (lookLive.current === controller) {
+          lookLive.current = null;
+          setLooking(null);
+        }
+      }
+      return true;
+    },
+    [slug, patchEntry, refresh],
+  );
+
+  /**
+   * **Another article, or the reader leaving this one, stops reading the
+   * lookup** — not the lookup itself, which the server finishes and stores.
+   * Without this the old stream's `done` would be merged into the next
+   * article's list, whose ids are a different namespace of the same shape.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
+  useEffect(
+    () => () => {
+      lookLive.current?.abort();
+      lookLive.current = null;
+      setLooking(null);
+      setLookDraft(null);
+      setLookKept(null);
+      setLookFailed(null);
+    },
+    [slug],
+  );
+
+  /* `setHidden` — see the interface. The ref admits and the state draws: two
+     presses in one tick both see the state unchanged. */
+  const setHidden = useCallback(
+    async (id: string, hidden: boolean): Promise<void> => {
+      if (hidingLive.current.has(id)) return;
+      const mine = hidingGeneration.current;
+      const current = () => hidingGeneration.current === mine;
+      const startedSlug = slug;
+      hidingLive.current.add(id);
+      setHiding(new Set(hidingLive.current));
+      try {
+        const res = await apiFetch(
+          `/api/glossary/${encodeURIComponent(slug)}/hidden/${encodeURIComponent(id)}`,
+          { method: hidden ? "PUT" : "DELETE" },
+        );
+        /* A refusal is JSON carrying the server's sentence, which `readJson` throws. */
+        if (!res.ok) await readJson(res);
+        /* The server may have completed the write to the previous article
+           after navigation. That is fine; refreshing through this callback is
+           not — it captured that article's slug. */
+        if (!current()) {
+          /* A → B stays disowned. A → B → A needs a new read: the returning
+             GET may have beaten this write and still show the term. */
+          if (currentSlug.current === startedSlug) await latestRefresh.current();
+          return;
+        }
+        /* Inside the pending window, so the button stays disabled until the
+           list on screen says what the server now holds. */
+        await refresh();
+      } catch (err) {
+        if (!current()) return;
+        throw new Error(
+          `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${(err as Error).message}`,
+        );
+      } finally {
+        /* A request for the new article may already own the same entry id.
+           Never let the old request remove it from the new article's set. */
+        if (current()) {
+          hidingLive.current.delete(id);
+          setHiding(hidingLive.current.size > 0 ? new Set(hidingLive.current) : NOTHING_HIDING);
+        }
+      }
+    },
+    [slug, refresh],
+  );
+
   return {
     status,
     glossary,
@@ -398,6 +651,13 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     reload,
     refresh,
     patchEntry,
+    look,
+    looking,
+    lookFailed,
+    lookDraft,
+    lookKept,
+    setHidden,
+    hiding,
   };
 }
 
@@ -464,8 +724,8 @@ export interface UseGlossary {
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
   cancel(id: string): void;
-  /** Check one term on the web. Resolves when the answer is in `glossary`. */
-  look(id: string): Promise<void>;
+  /** Dig deeper into one term — `GlossaryRead.look`, passed through. Resolves `false` if not admitted. */
+  look(id: string): Promise<boolean>;
   /** The term a lookup is running for, or null. One at a time, on purpose. */
   looking: string | null;
   /** Why the last lookup failed, and which entry it belongs to. */
@@ -477,6 +737,10 @@ export interface UseGlossary {
   lookDraft: LookDraft | null;
   /** The last lookup this hook saw stored, even if its entry was replaced. */
   lookKept: LookKept | null;
+  /** Hide or unhide one entry for the owner — `GlossaryRead.setHidden`, passed through. */
+  setHidden(id: string, hidden: boolean): Promise<void>;
+  /** The entries whose hide or unhide is on its way. */
+  hiding: ReadonlySet<string>;
   /**
    * Find a term the reader typed **in the article** and explain the passage it
    * is in — the box at the top of the panel.
@@ -531,8 +795,10 @@ export interface UseGlossary {
  */
 export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
-  const [looking, setLooking] = useState<string | null>(null);
-  const [lookFailed, setLookFailed] = useState<LookFailure | null>(null);
+  /* Dig deeper's state is the read's, not the band's, since 2026-10-02 — see
+     `look` on `GlossaryRead`. Passed through unchanged, so the panel still reads
+     one object. */
+  const { look, looking, lookFailed, lookDraft, lookKept } = read;
   const [asking, setAsking] = useState(false);
   const [askDraft, setAskDraft] = useState<AskedTermDraft | null>(null);
   const [asked, setAsked] = useState<AskedTermAnswer | null>(null);
@@ -553,7 +819,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * `Reader`'s opening GET is outstanding costs nothing, and it never returns
    * `status` to `loading` — which is the whole point of the change.
    */
-  const { reload, refresh, patchEntry } = read;
+  const { reload, refresh } = read;
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -593,142 +859,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   useAutoRun(slug, "glossary", status, find, reload);
 
   /**
-   * Dig deeper into one term — the panel's *Dig deeper* button (was *Check the web*, plan 261001p).
-   *
-   * **A plain request rather than a job**, unlike everything else here. Finding
-   * terms is one call over a whole article and belongs in the queue; checking a
-   * single term is a question with a reader waiting on it, which is the shape
-   * `useComments` already has. It reuses that call too — see `lookUpTerm` in
-   * src/term-lookup.ts.
-   *
-   * **One at a time**, which is a deliberate limit and not a missing feature:
-   * each of these is a model call the reader pays for, and a panel that will
-   * fire five because five rows were clicked spends money on a mis-click. The
-   * button is disabled while one is running.
-   *
-   * The answer is merged into the entry in place rather than refetching the
-   * list, because a refetch would rebuild every row and lose the reader's
-   * selection — and the server has just told us the one thing that changed.
-   *
-   * ## It streams, and `done` means stored
-   *
-   * Since 2026-09-10 the words arrive as they are written, into `lookDraft`,
-   * and only the `done` frame — which the server sends after the save — puts a
-   * lookup on the entry (docs/plans/260910g-stream-glossary-answers-as-they-arrive.md).
-   * Two things differ from the box's `ask`:
-   *
-   * - **A failure reads the list again.** `error` does not prove nothing was
-   *   kept: a save can succeed and its read-back fail, or the socket die between
-   *   the save and the frame. If it was kept, the re-read puts it on the entry
-   *   and `Looked` draws the stored answer instead of the failure.
-   * - **Leaving stops the reading, not the lookup.** The server finishes and
-   *   saves either way — the panel promises that — so another article or the
-   *   band closing only disowns the stream.
-   */
-  const lookLive = useRef<AbortController | null>(null);
-  const [lookDraft, setLookDraft] = useState<LookDraft | null>(null);
-  const [lookKept, setLookKept] = useState<LookKept | null>(null);
-
-  const look = useCallback(
-    async (id: string) => {
-      /* The ref is the admission record, `ask`'s rule: two presses in one tick
-         both see `looking` still null. */
-      if (lookLive.current) return;
-      const controller = new AbortController();
-      lookLive.current = controller;
-      const mine = () => lookLive.current === controller;
-      setLooking(id);
-      setLookFailed(null);
-      setLookDraft(null);
-      setLookKept(null);
-      let opened = false;
-      try {
-        const res = await apiFetch(
-          `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
-          { method: "POST", signal: controller.signal },
-        );
-        if (!res.ok || !res.body) {
-          /* The 404 and the two 409s are decided before the stream opens, so
-             they are ordinary JSON and `readJson` throws their sentence. */
-          await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
-        }
-        opened = true;
-        const done = await readAnswerStream(res.body, {
-          delta: (text) => {
-            if (mine()) setLookDraft({ id, text });
-          },
-          /* `{ entry }`, and only its lookup is used — `patchEntry` says why the
-             rest of a snapshot taken before a model call must not be merged. */
-          done: (data) => {
-            const got = (data as { entry?: Partial<GlossaryEntry> } | null)?.entry;
-            return got?.id === id && isGlossaryLookup(got.lookup)
-              ? {
-                  lookup: got.lookup,
-                  name: typeof got.name === "string" && got.name ? got.name : null,
-                }
-              : undefined;
-          },
-        });
-        if (mine()) {
-          setLookDraft(null);
-          /* Kept independently of the list. A glossary rewrite can replace the
-             entry while the model is answering; `patchEntry` must not put that
-             stale entry back, but clearing every trace would silently hide an
-             answer the server did store. The panel uses this only when no row
-             with `id` remains. */
-          setLookKept({ id, name: done.name });
-          patchEntry(id, done.lookup);
-        }
-      } catch (err) {
-        if (controller.signal.aborted || !mine()) return;
-        setLookFailed({
-          id,
-          message:
-            err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
-        });
-        /* See the section above: the answer may be stored anyway. Only once the
-           stream had opened — a refusal before it stored nothing.
-
-           **Awaited while this request still owns `lookLive`.** Releasing
-           admission first lets a quick retry start a second paid call while
-           this read is about to discover that the first answer was stored. If
-           that stored answer then lands, `Looked` hides the retry's arriving
-           draft behind it. Reconciliation is part of this lookup's lifetime. */
-        if (opened) await refresh();
-      } finally {
-        if (lookLive.current === controller) {
-          lookLive.current = null;
-          setLooking(null);
-        }
-      }
-    },
-    [slug, patchEntry, refresh],
-  );
-
-  /**
-   * **Another article, or the band going, stops reading the lookup** — not the
-   * lookup itself, which the server finishes and stores. Without this the old
-   * stream's `done` would be merged into the next article's list, whose ids are
-   * a different namespace of the same shape.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
-  useEffect(
-    () => () => {
-      lookLive.current?.abort();
-      lookLive.current = null;
-      setLooking(null);
-      setLookDraft(null);
-      setLookKept(null);
-      setLookFailed(null);
-    },
-    [slug],
-  );
-
-  /**
    * The box at the top of the panel: find a term in the prose and explain it.
    *
-   * **The same shape as `look` above, minus the merge**, and the missing merge
+   * **The same shape as `look` on the read, minus the merge**, and the missing merge
    * is the deferral: `lookUpTerm` stores its answer against an entry id and this
    * has no entry to store against. So the answer lives here until the reader
    * leaves. See `ask` on `UseGlossary` for why nothing is persisted.
@@ -919,5 +1052,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     askFailed,
     askTerm,
     clearAsked,
+    setHidden: read.setHidden,
+    hiding: read.hiding,
   };
 }

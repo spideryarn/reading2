@@ -375,7 +375,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       const summaries = async (): Promise<Line[]> => {
         const { body } = splitBlocks(article.blocks);
         const { params } = wholeDocumentRequest(body);
-        const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
+        const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
         const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
         const { root } = parseWholeDocumentAnswer(raw, body); // production's own parse and starts converter
         return flatten(root, 0, []);

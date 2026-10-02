@@ -489,7 +489,7 @@ describe("the panel", () => {
       "Across all five datasets the effect held within two per cent, even after the rich-club nodes were removed and the comparison was repeated from scratch.";
     const words = (r: Element | undefined) => r?.querySelector(".skim-words")?.textContent ?? null;
     const rowsOf = () => [...host.querySelectorAll<HTMLElement>(".skim-row")];
-    const tips = () => document.querySelectorAll('[role="tooltip"]');
+    const tips = () => document.querySelectorAll('[role="tooltip"], [role="dialog"]');
     async function hover(el: Element) {
       el.dispatchEvent(new MouseEvent("mouseenter"));
       await act(async () => {
@@ -639,7 +639,7 @@ describe("the panel", () => {
   /* The (i) is the band's, in its corner, since 2026-10-01 (spya-ucu35y, plan
      261001m); it was the head's own before that. */
   it("keeps the promise in the band's info tooltip, not the foot, and says how much of the Quotes Most walks (52)", async () => {
-    const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
+    const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
     const info = () => host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
     await draw(owner(), view());
     expect(host.querySelector(".skim-foot")?.textContent ?? "").not.toContain("Quotes");
@@ -971,7 +971,7 @@ describe("the door in the prose", () => {
    the trajectory mode … especially showing the keyboard shortcuts."* The rule is
    docs/project/tooltips.md § A shortcut is named on its card. */
 describe("the step controls name their keys", () => {
-  const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
+  const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
   async function hover(el: Element) {
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
@@ -988,7 +988,7 @@ describe("the step controls name their keys", () => {
     const button = host.querySelector<HTMLButtonElement>(`.skim-head [aria-label="${label}"]`)!;
     expect(button.hasAttribute("title"), "a card, not a title").toBe(false);
     await hover(button);
-    expect(document.querySelectorAll('[role="tooltip"]'), "one card, not a stale one beside it").toHaveLength(1);
+    expect(document.querySelectorAll('[role="tooltip"], [role="dialog"]'), "one card, not a stale one beside it").toHaveLength(1);
     expect(tip()).toContain(label);
     expect(tip()).toContain(`While reading, press ${key}`);
     expect(tip()).toContain(truth);
@@ -1004,7 +1004,7 @@ describe("the step controls name their keys", () => {
     expect(tip()).toContain("Previous stop");
     await draw(owner(), view({ position: 1 }));
     expect(document.activeElement, "the step kept focus on ‹").toBe(back());
-    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[role="tooltip"], [role="dialog"]')).toHaveLength(1);
     expect(tip()).toContain("Back to stop 1");
     expect(tip()).not.toContain("Previous stop");
   });
@@ -1023,7 +1023,7 @@ describe("the step controls name their keys", () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 100));
     });
-    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[role="tooltip"], [role="dialog"]')).toHaveLength(0);
   });
 
   it("the door's Next stop names → too", async () => {
@@ -1139,6 +1139,13 @@ const GLOSSARY_READ: GlossaryRead = {
   reload: async () => {},
   refresh: async () => {},
   patchEntry: () => {},
+  look: async () => false,
+  looking: null,
+  lookFailed: null,
+  lookDraft: null,
+  lookKept: null,
+  setHidden: async () => {},
+  hiding: new Set<string>(),
 };
 let glossaryRead: GlossaryRead = GLOSSARY_READ;
 const opened: string[] = [];

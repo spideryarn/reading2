@@ -1,18 +1,19 @@
-# Hierarchy
+# Structure (the step)
 
-Pipeline stage 4 — `hierarchy`, `npm run structure -- <slug> [--force]`. Builds the nested structure that Structure,
-Marginalia, the Spine and the rest render. (The step keeps its name; the Hierarchy *mode* — gist columns
-beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
+Pipeline stage 4 — `structure`, `npm run structure -- <slug> [--force]`. Builds the nested tree that Structure,
+Marginalia, the Spine and the rest render. (The step was called `hierarchy` until 2026-10-02, and this file was
+`hierarchy.md` — [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md). The Hierarchy
+*mode* that gave it that name — gist columns beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
-**Since 2026-09-06 stage 4 is two pipeline steps, `hierarchy` and `labels`**, and only the first of
+**Since 2026-09-06 stage 4 is two pipeline steps, `structure` and `labels`**, and only the first of
 them runs when somebody pastes a URL — the label pass was 79.5–92% of the wall clock, past what the
 job lease allows. [Why they are two steps](#two-steps) is the short version;
 [260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md) is the long one. Read that
 before assuming a freshly ingested tree carries any navigation labels: it carries none.
 
-The `hierarchy` step builds the *structure* — ranges, hierarchy, titles — and the `labels` step adds
+The `structure` step builds the tree itself — ranges, hierarchy, titles — and the `labels` step adds
 the `navLabel` on every gistable block afterwards, in batched parallel calls
 ([Two passes](#two-passes)). It also writes the one-sentence
 `gist` on each internal node, which [architecture.md](architecture.md#pipeline) draws as stage 5:
@@ -424,7 +425,7 @@ own figure rather than another kind of repair, and that is arithmetic rather tha
 is a *boundary that moved* and its `size` is how many blocks changed hands, while a collapse moves
 none — it would have to enter as a repair of size 0, inflating the count while contributing nothing
 to the two numbers that say what a repair cost. All of it reaches `StructureRun`, the CLI's
-`Repaired:` line **every run including at zero**, the queue's log, and `evals/hierarchy-structure` per
+`Repaired:` line **every run including at zero**, the queue's log, and `evals/structure-whole-document` per
 result — the way `strandedSupplement` already is. A repair nobody is told about is the same shape as
 the bug it repaired ([silent-success.md](../reusable/silent-success.md)).
 
@@ -533,7 +534,7 @@ duplicated.
 
 - **Media** — figures, bare images, horizontal rules.
 - **Pull-quotes.** All 11 in the test article are word-for-word repeats of body sentences; giving
-  them rows would print the same claim in Hierarchy twice.
+  them rows would put the same claim in the tree twice.
 - **Figure captions** — `kind: "caption"`, matched on an explicit `^(Figure|Fig\.|Table|…)\s*\d*\s*[:.]`
   marker and **never on length**, because `"Given all this, what should we do?"` is seven words of
   real argument. The test article has five.
@@ -565,7 +566,7 @@ and it is deliberately noisy — skipping prose should be a decision someone mad
 Everything above is about the first kind of absence, and every consumer reads it that way. The
 second kind arrives with
 [260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md), which takes the label pass
-out of the blocking `hierarchy` step — so for a minute or two after an ingest an article has a real
+out of the blocking `structure` step — so for a minute or two after an ingest an article has a real
 tree and no labels at all, and a missing field would have meant both things at once.
 [`structure.ts`](../../src/structure.ts) had already named the problem: deferring the labels *"needs
 a state that says 'still arriving' rather than an absence that says nothing."*
@@ -582,7 +583,7 @@ says why: a column of blank cells reports our unfinished work as the article's o
 partly-drawn outline rung is worse.
 
 Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day
-and `pending` is now the ordinary state of a newly added article** — `hierarchy` writes the empty
+and `pending` is now the ordinary state of a newly added article** — `structure` writes the empty
 manifest and the labels arrive later, from a free successor job
 ([Why they are two steps](#two-steps)). So the withheld state is what a reader sees for the minutes
 between adding a piece and the labels landing, rather than a state nothing produces.
@@ -696,7 +697,7 @@ So it is two passes — and, since 2026-09-06, **two pipeline steps**:
 1. **The structure**, in one whole-document call ([`src/structure.ts`](../../src/structure.ts)) — the internal
    nodes, their titles, their gists, their ranges, `sourceHeading`. Roughly 7,000 tokens of answer on
    a 360-block article, and it grows at about one node per seven blocks rather than one per block.
-   This is the `hierarchy` step.
+   This is the `structure` step.
 2. **The nav labels**, in parallel batches ([`src/labels.ts`](../../src/labels.ts)), cut along the
    tree's own section boundaries once it exists. This is the `labels` step.
 
@@ -708,7 +709,7 @@ pass against a claimant deadline of 740 s. So it left the blocking step:
 
 What that means in practice:
 
-- **`labels` is not in `DEFAULT_INGEST_STEPS`.** Pasting a URL runs `hierarchy` and stops. The labels
+- **`labels` is not in `DEFAULT_INGEST_STEPS`.** Pasting a URL runs `structure` and stops. The labels
   are bought later, by a free successor job — so a freshly ingested article shows *"Paragraph labels
   are still arriving"* until one runs.
 - **The publication is what queues that successor**, and it does it inside its own transaction:
@@ -735,7 +736,7 @@ What that means in practice:
   settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
   ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
   lease is its *ordinary* ending rather than an exotic one.
-- **`hierarchy` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
+- **`structure` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.
 - **The tree it hands back carries no navigation labels at all.** Not "the headings but not the
@@ -754,8 +755,8 @@ What that means in practice:
   a `tree` written with no manifest beside it is **refused**. The reasoning, and the P0 it closes, is
   in the plan under [Fable's arbitration](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#fable-invalidation);
   `tests/labels-receipt-invalidation.test.ts` is the reproduction.
-- **Forcing `hierarchy` sweeps `labels` in.** It is deliberately not in `FORCE_ONLY_WHEN_NAMED`,
-  which is the opposite call from `arc`'s in the same position: re-running `hierarchy` re-cuts the
+- **Forcing `structure` sweeps `labels` in.** It is deliberately not in `FORCE_ONLY_WHEN_NAMED`,
+  which is the opposite call from `arc`'s in the same position: re-running `structure` re-cuts the
   tree, and that is exactly what makes a label wrong.
 
 The rule the split turns on:
@@ -899,7 +900,7 @@ the wiring, the last two so that a paid run can answer the questions it is being
   structure call holds the seed constant, so every repeat expands the identical tree from the
   identical frozen outline and a verdict that moves is the scoped call changing its mind rather than
   a different tree being asked a different question. So: run the article once ordinarily, then repeat
-  with the switch set — `POST /api/jobs { slug, steps: ["hierarchy"], force: ["hierarchy"] }` is the
+  with the switch set — `POST /api/jobs { slug, steps: ["structure"], force: ["structure"] }` is the
   re-run. `npm run structure` is now the same thing — stage E moved it through the queue on
   2026-09-05 ([`scripts/stage.ts`](../../scripts/stage.ts)), so it resumes like any other claim. Note
   what that means: `--force` re-runs the *step*, not the *purchase*, and replays the structure call
@@ -909,7 +910,7 @@ the wiring, the last two so that a paid run can answer the questions it is being
   input, output, cache read, cache write, every draw of a redrawn call included — are summed onto
   `DeepenStats.usage`, added into `StructureRun`'s four totals beside the structure call and the
   label batches, and written into the records file. They were metered all along (every call goes
-  through `streamMessage`, so the money is in the AI-spend ledger under task `hierarchy`), and that
+  through `streamMessage`, so the money is in the AI-spend ledger under task `structure`, `hierarchy` before 2026-10-02), and that
   is the wrong shape for the cost question, which is answered by comparing one run's artefact with
   another's. The figure is **not** conditioned on publication: a wave the deadline withheld spent the
   money and says so. A wave that *threw* is the one gap — there is no result to add up, and
@@ -969,7 +970,7 @@ is item **F** in [260830a-opening-an-article-before-the-toc.md](../investigation
 
 ### Three artefacts, and what survives a failed run
 
-The `hierarchy` step produces the tree, the blocks and the labels manifest, and **hands all three
+The `structure` step produces the tree, the blocks and the labels manifest, and **hands all three
 back in one object** rather than writing them: `generateStructure` returns `StructureArtefacts`, and
 its caller stores them together in a single write ([`src/structure.ts`](../../src/structure.ts),
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
@@ -1007,7 +1008,7 @@ publish guard compares it with the stored blocks and refuses to publish an artic
 built from something else.
 
 **The structure answer is checkpointed too, since 2026-09-04** — one row under the
-`hierarchy-structure` namespace, written only once the answer has parsed, built a tree and passed
+`structure-whole-document` namespace, written only once the answer has parsed, built a tree and passed
 `assertTreeSound`, so that a malformed-but-complete answer can never be replayed for ever. This is
 the most expensive call in the pipeline (508 seconds and about two dollars on the 142-page paper),
 and until then a run that died in the label pass bought it again from nothing. The key is a digest of
@@ -1018,7 +1019,7 @@ written to remove. `StructureRun.wholeDocumentResumed` says whether a run made t
 checkpoint that silently never hits looks exactly like one that works.
 
 While the batches are running, each one's labels are **checkpointed as it lands** — one row in the
-`checkpoints` table, under the `hierarchy-labels` namespace, keyed on the batch's fingerprint
+`checkpoints` table, under the `structure-labels` namespace, keyed on the batch's fingerprint
 ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)). That
 is working state, not an artefact, which is why it is not `labels.json`: a partial `labels.json`
 would be a finished-looking article with holes in its navigation. A later run reuses a batch only
@@ -1370,7 +1371,7 @@ equally visible.
   own.
 
 So a mixed set — a question on one part, only a gist on its neighbour — is not evidence of any one of
-these. Absence is ordinary: every article whose hierarchy predates 2026-09-05 has no question
+these. Absence is ordinary: every article whose tree predates 2026-09-05 has no question
 anywhere, and the stage is cached on a content hash of the request, so **no existing article grows a
 question on its own**. Getting them means `npm run structure -- <slug> --force`, at roughly the cost
 of a structure call per article. Unlike a missing *gist*, a missing question draws nothing on screen,

@@ -536,7 +536,7 @@ export function JobCard({
    *
    * `ctx.report` writes a step's `detail` in memory and never persists it
    * ("Persisting at this rate would be two writes a second per running job",
-   * src/jobs.ts), so a job in the middle of a six-minute `hierarchy` sends
+   * src/jobs.ts), so a job in the middle of a six-minute `structure` sends
    * back a byte-identical record on every poll — and `sameJobs` in
    * jobEngine.ts deliberately suppresses an identical snapshot. Without a tick
    * of its own the elapsed time would freeze at whatever it read when the step
@@ -787,7 +787,7 @@ function SourceLine({ job, now }: { job: Job; now: number }) {
 /**
  * One line per stage. The icon carries the status; the text never repeats it.
  *
- * The running row reads `Building the hierarchy · 2m 14s · 18k characters of
+ * The running row reads `Building the structure · 2m 14s · 18k characters of
  * tree so far` — **what**, then **how long**, then whatever the step is saying
  * about itself. That last part is the older signal and this is built beside it
  * rather than over it: a step that streams its progress was already the best

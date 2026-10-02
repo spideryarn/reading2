@@ -1,8 +1,8 @@
 # The wordmark's hover animations
 
-Point at the Spideryarn wordmark, or hold it down on a phone, and one of thirteen animations plays
-— a different one each time. This is what they are, why there are thirteen rather than one, and the
-four ways a new one can silently do nothing.
+Point at the Spideryarn wordmark, or hold it down on a phone, and one of fourteen animations plays
+— a different one each time. This is what they are, why there are fourteen rather than one, what the
+word looks like at rest, and the five ways a new one can silently do nothing.
 
 > Let's have fun with the Spideryarn logo when you hover over it. … Whenever the user hovers or
 > long-clicks the Spideryarn logo it should pick a random animation.
@@ -12,7 +12,7 @@ four ways a new one can silently do nothing.
 The code is [`src/web/logo-animation.ts`](../../src/web/logo-animation.ts) (the registry, the
 picker, the trigger) and [`src/web/styles/logo-animations.css`](../../src/web/styles/logo-animations.css)
 (every keyframe, each with its own note). The whole set is drawn at once on **`/design` § Wordmark
-animations**, which is the only way to compare a dozen effects that otherwise arrive one at a time
+animations**, which is the only way to compare fourteen effects that otherwise arrive one at a time
 at random.
 
 ## Where this came from, and what it deliberately is not
@@ -32,6 +32,9 @@ one hook, no route of its own, no per-animation component, and the entire regist
 on 2026-09-07 — and it earns them by being the thing that makes review possible at all.
 
 ## How the thirteen were chosen
+
+(A fourteenth, *Dew on the Thread*, joined on 2026-10-02 — § One look at rest says why it could not
+have existed before.)
 
 Kept in full under `docs/plans/`, because the reasoning is most of the value and the near-misses are
 the first place to look when one of these disappoints on screen.
@@ -74,10 +77,13 @@ The three axes fought, and the shortlist says where. Twice the fight was worth l
 
 The wordmark is drawn **twice**, with deliberately different inner markup:
 
-| | Where | Wrapper round the letters | Face |
-| --- | --- | --- | --- |
-| `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` | Geist Variable 600 |
-| `DockHome` | left end of the reading view's bottom bar | `.dock-btn-label` | Geist Variable |
+| | Where | Wrapper round the letters |
+| --- | --- | --- |
+| `HomeLogo` | fixed top-left, shelf-adjacent pages | `.logo-text` |
+| `DockHome` | left end of the reading view's bottom bar | `.dock-btn-label` |
+
+(The table had a Face column, which differed until 2026-09-08 and whose weights differed until
+2026-10-02. The letters carry their own look now — § One look at rest.)
 
 A third host since 2026-09-15: the top of the shelf ([`Library.tsx`](../../src/web/Library.tsx) §
 ShelfWordmark), a 28px spider beside the `text-3xl` heading. Until 2026-09-30 only the spider hosted
@@ -139,15 +145,53 @@ three things it names and silent about the fourth.
 **Settled on 2026-09-08.** It was raised to Greg as an observation rather than fixed, on the grounds
 that changing the reading view's face is a visible design change nobody asked for; his answer was to
 change the *other* one. `--font-brand` now resolves to `--font-sans`, so both copies are Geist and
-what still separates them is `.logo-text`'s weight and orange. Two things follow for this file:
+what still separated them was `.logo-text`'s weight and orange — gone too since 2026-10-02 (§ One
+look at rest). Two things follow for this file:
 
 - **The variable weight axis is now available to an animation**, which it was not while one copy was
   a two-weight face. Nothing here uses it yet, and anything that does must still be checked in both
-  places — `.dock-btn-label` does not set 600, so the two copies start from different weights even
-  in one face.
+  wrappers; since 2026-10-02 the shared `.logo-letter` rule gives both the same 600 starting weight.
 - **`font-weight: 600` is drawn rather than synthesised.** Trebuchet ships 400 and 700 and the
   browser was faux-bolding the wordmark; Geist is variable across 100–900. The corner wordmark is
   very slightly lighter and cleaner than it was, which is the visible half of this change.
+
+## One look at rest: white, on the letters
+
+> Sometimes the Spideryarn logo has white text, and sometimes it has orange text. I think probably
+> the white text is better. Investigate, take screenshots, use your judgment, standardise (perhaps
+> as a reusable flexible component), and include & build on & improve the animations.
+>
+> — Greg, 2026-10-02 (report spya-p52ccp,
+> [the plan](../plans/261002e-one-white-wordmark-everywhere-and-its-animations-made-colour-aware.md))
+
+Until that day each host set the name's look itself, and one name was drawn in two colours and four
+weights: orange in the corner and the Dock, white on the marketing bar, the footer, the shelf and the
+loader, at 400, 500, 600 and 700. **Now the look is on `.logo-letter`**
+([`styles/tokens.css`](../../styles/tokens.css) § `.logo-letter`): Geist 600, `0.02em` tracking,
+colour `--wordmark-ink`, which is white. `LogoLetters` is the only thing that emits that class, so a
+host gets the look by drawing the shared letters and cannot drift from it by forgetting a class.
+**What stays the host's** is the size and what hides the word — the two things that genuinely differ
+(§ The two mount points). "Reading", after the name on the marketing pages, stays orange and 500: it
+is not the name.
+
+**Why white**: the spider is already orange, and an orange word beside it competes with the mark
+instead of naming it; the first copy a stranger sees (the marketing bar) and the biggest (the shelf)
+were already white; and it gives the animations a colour to *arrive*. While the word rested orange
+an animation could only lighten it.
+
+That last point is also how the change found a bug. **Strain and Dawn wrote `--highlight` into
+their keyframes' rest stops**, written when the corner was the only copy, so on every white copy the
+word went orange for as long as you pointed and snapped white when you stopped. They hold
+`--wordmark-ink` now, and warm to the orange between — and
+[`tests/logo-animation.test.tsx`](../../tests/logo-animation.test.tsx) fails on any keyframe that
+writes a letter's colour at 0% or 100% other than that token. **Dew on the Thread** is the first
+animation built on the contrast: a bead of the spider's orange runs once along the white word.
+
+**Deliberately not done**: one `<Wordmark>` React component owning the host, the hook and the
+wrapper for all six copies. The hosts differ on purpose (a fixed link, a fit-laddered bar button, a
+heading, a marketing link with "Reading" after it, a scaled loader), and folding them into one
+component with a prop per difference is a layout risk that changes nothing a reader sees. Worth
+doing if a seventh copy appears.
 
 ## What a phone sees
 
@@ -158,9 +202,9 @@ goes at **rung 1** — the *first* thing the bar's fit ladder gives up, not the 
 of the two words that pay least. Both copies become the 20px spider and nothing else, and they do it
 early.
 
-That is why **six of the thirteen animate the mark alone** — a ratio, not an accident. An animation
+That is why **six of the fourteen animate the mark alone** — a ratio, not an accident. An animation
 that lives entirely in the ten letters is a hover that does nothing wherever the word is gone, and
-seven of the thirteen are in that class.
+eight of the fourteen are in that class.
 
 **And the word is gone on the reading view at ordinary desktop widths, not only on a phone.** This
 section said "phone" for a week, and that was false the day it was written: the bar's own
@@ -198,8 +242,8 @@ spend the long press's draw before the long press happened. Both enter and leave
 `pointerType === "touch"`; a finger gets the animation only from the hold, and it lingers 4.5s after
 release because a finger has no un-hover to end it with.
 
-**The picker never repeats the previous draw.** A uniform draw over thirteen repeats about one hover
-in thirteen, and a repeat does not read as chance — it reads as the feature being broken, because
+**The picker never repeats the previous draw.** A uniform draw over fourteen repeats about one hover
+in fourteen, and a repeat does not read as chance — it reads as the feature being broken, because
 the reader's model is "a new one each time". The exclusion costs nothing and removes the only
 outcome that looks like a bug. It is also why the set should not fall below about nine.
 
@@ -246,8 +290,11 @@ nothing for a large group of readers ([silent-success.md](../reusable/silent-suc
 4. **Do not change the element's box.** The dock copy is in a flex row that reflows; the corner copy
    is `position: fixed` over pages that reserved no space for it. Transforms, opacity, filters,
    masks and absolutely-positioned pseudo-elements only.
+5. **Never write the letters' resting colour as a colour.** It is `--wordmark-ink`, and a keyframe
+   either leaves its 0% and 100% out — CSS fills them from the letter's own value — or names that
+   token. Strain and Dawn said `--highlight` and snapped on every white copy (§ One look at rest).
 
-`tests/logo-animation.test.tsx` enforces 1, 2, and the registry–stylesheet agreement in both
+`tests/logo-animation.test.tsx` enforces 1, 2, 5, and the registry–stylesheet agreement in both
 directions. All four of its guards were watched go red before being trusted.
 
 **Only The Settle eases out.** Every keyframe animation here ends the frame the pointer leaves,
@@ -265,9 +312,9 @@ most likely to have failed quietly — `@property` interpolating through the Vit
 Then [Fable reviewed the build against its own spec](../plans/260907f-logo-animations-fable-review.md)
 and found two more dropped lines, six of its own numbers that were wrong once they existed rather
 than being described, and a claim in this file's stylesheet that was simply false. Its conclusion on
-the set is worth keeping: **thirteen is right, and nothing needed replacing** — the three animations
-held in reserve were each conditional on a sibling disappointing, and the two that did disappoint
-disappointed on numbers rather than on concept.
+the original set is worth keeping: **the thirteen were right, and nothing needed replacing** — the
+three animations held in reserve were each conditional on a sibling disappointing, and the two that
+did disappoint disappointed on numbers rather than on concept.
 
 **`/design` cannot show you everything**, and it could show you less before 2026-09-08 than it can
 now. Its gallery draws both wrappers, and until that date they were two different faces, so a fault
@@ -329,7 +376,7 @@ away entirely.
   `forwards` 100% frame, or a transitioned pose, depending on the animation. Most land on the base
   style; The Settle holds its lift, the seam stays parted with its thread drawn, the `i` stays a
   pixel high, and Radius Sweep sits as a two-tone spider. The stylesheet names the still each
-  animation lands on, per animation, and that is the contract a fourteenth has to meet.
+  animation lands on, per animation, and that is the contract a fifteenth has to meet.
 - **No weighting, no rarity, no context.** The wildcard list proposed animations that appear one time
   in fifty, that know the time of day, or that behave differently on a second hover. Some are good
   and they are all a second mechanism; the picker is uniform over what the host can show
@@ -339,7 +386,7 @@ away entirely.
 ## See also
 
 - [loading-spinner.md](loading-spinner.md) — the same set as the article page's loading spinner,
-  two at once; a fourteenth fails its test until it is either given a loader timing or excluded
+  two at once; a fifteenth fails its test until it is either given a loader timing or excluded
 - [design-css-overview.md](design-css-overview.md) — the parent: the stylesheets, the load order,
   which mechanism owns which rule
 - [original-version/design-system.md](original-version/design-system.md) — the previous app's

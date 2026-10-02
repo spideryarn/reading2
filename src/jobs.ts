@@ -184,14 +184,14 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * numbers, so the next person to raise one cannot forget the other.
  *
  * **Why the deadline is minutes and not seconds.** Measured per-article step
- * wall times from `data/_ai-calls.jsonl`: `hierarchy` **320.4s in a single
+ * wall times from `data/_ai-calls.jsonl`: `structure` **320.4s in a single
  * call**, which is the longest step this project has ever measured and the
  * number everything here is sized around. It exceeds the 220s deadline these
  * constants used to give, so a long step could not complete through the job path
  * **on any machine** — it only ever succeeded via the CLI, which takes no lease.
  * (This paragraph was headed *"Why 420s"* and argued for a number two revisions
  * out of date; the reasoning was still right, so what is corrected is the claim
- * it was attached to. `hierarchy` also read "324.0s over three calls", which was
+ * it was attached to. `structure` also read "324.0s over three calls", which was
  * three unrelated runs collapsed by a null slug —
  * tests/jobs-lease-budget.test.ts § the longest step.)
  *
@@ -222,7 +222,7 @@ const aborts = processSingleton<Map<string, AbortController>>(
  *
  * **So the number is now conservative rather than forced, and it is kept
  * deliberately.** What it buys is that the one step nobody can afford to repeat
- * gets a whole window: `hierarchy` at 320.4 s measured, 658–778 s on a
+ * gets a whole window: `structure` at 320.4 s measured, 658–778 s on a
  * 142-page PDF. What it costs is a claimant that is *actually* dead — killed,
  * frozen, deployed over — being unreclaimable for ~12.5 minutes rather than ~7,
  * and that cost is now bounded by the pause: a claimant that is merely slow puts
@@ -232,16 +232,16 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * The arithmetic it has to satisfy, measured rather than assumed and **for an
  * ordinary web page** — `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s
+ *     fetch ≤110s + extract ~10s + blocks ~5s + structure 320.4s + assets ≤185s = 630.4s
  *     630.4s  <  740s self-abort  <  800s platform kill
  *
  * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
- * requests.** `STEP_BUDGET_MS.hierarchy` is now 700s, so a walk that has spent
+ * requests.** `STEP_BUDGET_MS.structure` is now 700s, so a walk that has spent
  * ~125s on `fetch → extract → blocks` hands the claim back rather than starting
  * the one step it cannot restart cheaply, and the ordinary article takes two.
  * The arithmetic below still has to hold — a job that cannot fit one invocation
  * is a job nothing can recover — but "fits one claim" and "takes one request"
- * are now different claims about it. See `STEP_BUDGET_MS` § `hierarchy`.
+ * are now different claims about it. See `STEP_BUDGET_MS` § `structure`.
  *
  * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
  * and `extract ~5s`, both of which this same file falsified in the same change
@@ -254,7 +254,7 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * PDF branch of `extract` is a fan-out of model calls whose ceiling is
  * `STEP_BUDGET_MS.extract` — 700s, most of one whole window on its own. Measured
  * in a browser on 2026-09-04: a 144-page paper spent nearly all of the first
- * window in `extract` and had `hierarchy` cut off by the deadline, so it took
+ * window in `extract` and had `structure` cut off by the deadline, so it took
  * **two claims**. What makes that cheap rather than ruinous is the per-chunk
  * checkpoints and a retry that lands on the same article
  * (src/pdf-read.ts § `CHUNK_CONCURRENCY`, `slugForRetry`) — and what the sum
@@ -265,13 +265,13 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * 394s → 69s measured. The budget above is unchanged and is still a *ceiling*
  * rather than a forecast — retries stack on top of a fan-out and no number
  * bounds them — but the walk it describes now spends its first window on
- * `hierarchy`, not on transcription. **It still takes two claims**, because
- * `hierarchy` measured 658–778s and no arithmetic makes that share a window with
+ * `structure`, not on transcription. **It still takes two claims**, because
+ * `structure` measured 658–778s and no arithmetic makes that share a window with
  * anything.
  *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
- * per-step constraint in a per-claim world: `hierarchy` alone at 320.4s would have
+ * per-step constraint in a per-claim world: `structure` alone at 320.4s would have
  * eaten four fifths of it, and the ordinary article would have aborted four
  * fifths of the way through the one step nobody can afford to repeat.
  */
@@ -590,7 +590,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
      ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
 
-     **MEASURED 2026-08-30**, on ordinary articles: the worst `hierarchy` in
+     **MEASURED 2026-08-30**, on ordinary articles: the worst `structure` in
      data/_ai-calls.jsonl is **320.4 s** in a single call, so its sum and its
      wall clock agree and no grouping argument applies. That number stood here
      until 2026-09-04 and is still the one `LEASE_MS` is sized around — it is
@@ -598,11 +598,11 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      on asserting the whole HTML ingest against it.
 
      **MEASURED 2026-09-04**, on the 142-page paper this plan is about: the
-     structure call **alone** is 508 s and the whole step is **658–778 s**. The
+     whole-document call **alone** is 508 s and the whole step is **658–778 s**. The
      same two production ingests recorded `extract` at 305–347 s, so the walk
      reached this step with 393–435 s of its deadline left — comfortably over
      320.4 s, so it started a step that could not reach even its first
-     checkpoint, bought most of a ~$2 structure call, and spent one of the two
+     checkpoint, bought most of a ~$2 whole-document call, and spent one of the two
      windows `REQUEUE_BUDGET` allows. ⟨GPT Sol, reviewing the built stage 3⟩
 
      **No threshold can promise this step fits**, because 778 s is more than the
@@ -612,17 +612,17 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      the same 700 s, which is not a coincidence: both are "essentially the whole
      window, minus enough for a step to have preceded it".
 
-     What it means in practice is that `hierarchy` almost always begins a claim
+     What it means in practice is that `structure` almost always begins a claim
      rather than continuing one: the walk runs its **first** runnable step
      ungated (`advanceJobWith`'s loop, below), so a claim that opens on
-     `hierarchy` gets the entire 740 s, and a claim that reaches it after
+     `structure` gets the entire 740 s, and a claim that reaches it after
      `fetch → extract → blocks` hands back instead. Once inside, an overrun is a
      cooperative pause that keeps the draft (`pauseForDeadline`,
      src/store/jobs.ts) and the structure answer is checkpointed
      (src/structure.ts), so the next window resumes rather than re-buying it.
 
      **The cost is one extra request for an ordinary article**, which used to
-     finish all five steps in one claim and now hands back before `hierarchy`
+     finish all five steps in one claim and now hands back before `structure`
      with ~615 s left. That is the cheap direction this table's header names —
      the steps already done are skipped from the draft — and the expensive
      direction is what shipped. A size-sensitive threshold would keep the single
@@ -632,13 +632,13 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      `tests/jobs-lease-budget.test.ts` pins the relationship rather than the
      number: greater than what the worst measured PDF `extract` leaves behind,
      and less than the claimant's own deadline. */
-  hierarchy: 700_000,
+  structure: 700_000,
   /* **MEASURED** 2026-09-06, from the runs that motivated the split: the label
-     pass is 79.5–92% of what `hierarchy` used to cost, and the worst whole pass
+     pass is 79.5–92% of what `structure` used to cost, and the worst whole pass
      recorded is **682 s**, of which one call was 602 s.
      docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
 
-     **This is a ceiling, for `extract`'s and `hierarchy`'s reason**, and the
+     **This is a ceiling, for `extract`'s and `structure`'s reason**, and the
      same 700 s: as much of the window as can be reserved without the step
      becoming unstartable. The claimant's deadline is `LEASE_MS -
      DEADLINE_MARGIN_MS` = 740 s, so a budget at or over that never fits and the
@@ -650,7 +650,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      job is one step — the free successor a publication enqueues. Its first
      runnable step always starts ungated, so it always gets the whole 740 s
      whatever number is written here. What this row actually governs is the
-     other shape: a job that names `hierarchy` and `labels` together, where 700 s
+     other shape: a job that names `structure` and `labels` together, where 700 s
      is what makes the claim hand back after the tree rather than start a label
      pass on a remnant of the window. Round up anyway, for the reason this
      table's header gives. */
@@ -835,7 +835,7 @@ function markCancelled(job: Job, message?: string): void {
  * they arrived in.
  *
  * Sorting matters more than it looks. The steps are a chain — each consumes the
- * artefact the one before it wrote — so `["arc", "hierarchy"]` run as asked would
+ * artefact the one before it wrote — so `["arc", "structure"]` run as asked would
  * build the arc from the previous tree and then replace that tree. Both steps
  * would report success and the arc would describe an article nobody is reading.
  */
@@ -886,17 +886,17 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
  * **A step list that would leave the article unpublishable — refused here, where
  * it is still free.**
  *
- * `blocks` without `hierarchy` is the one such combination, and it is reachable:
+ * `blocks` without `structure` is the one such combination, and it is reachable:
  * `POST /api/jobs` takes any subset of `STEP_ORDER`, so `{ steps: ["blocks"] }`
  * is a request anybody with a session can make. It runs, it succeeds, and then
  * `reasonsNotToPublish` (src/store/pg-revisions.ts) refuses the publication,
- * because the `hierarchy` step-run's `input_hash` no longer equals `hashBlocks`
+ * because the `structure` step-run's `input_hash` no longer equals `hashBlocks`
  * of the blocks it is being published beside. The article is stuck until
  * somebody works out that the fix is to re-run a step they never named.
  * `cascadeForce` cannot rescue it: it only names steps **already in the job**.
  *
  * **Refused rather than repaired**, which was the choice. Quietly adding
- * `hierarchy` would spend a model call — the slowest one in the pipeline, 228
+ * `structure` would spend a model call — the slowest one in the pipeline, 228
  * seconds measured — on behalf of a caller who did not ask for it and is not
  * being billed for it, and it would make the job that ran different from the job
  * that was requested. A 400 naming the missing step is the whole fix.
@@ -908,8 +908,8 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
  * nothing had hit it.
  */
 export function unrunnableStepPlan(steps: readonly StepName[]): string | undefined {
-  if (steps.includes("blocks") && !steps.includes("hierarchy")) {
-    return 'A job that runs "blocks" must run "hierarchy" too, or the article cannot be published: the tree is checked against the blocks it was built from, and hierarchy has no freshness check of its own to notice.';
+  if (steps.includes("blocks") && !steps.includes("structure")) {
+    return 'A job that runs "blocks" must run "structure" too, or the article cannot be published: the tree is checked against the blocks it was built from, and the structure step has no freshness check of its own to notice.';
   }
   return undefined;
 }
@@ -956,7 +956,7 @@ function newStep(name: StepName, force: boolean, upload: boolean): JobStep {
  * **This is the one thing advance has to remember rather than derive**, and it
  * is worth naming why, because the rule everywhere else is the opposite (see
  * `advanceJob`). "Has this step's output been rebuilt since the reader asked
- * for it to be" is not a question the artefacts can answer — a forced `hierarchy`
+ * for it to be" is not a question the artefacts can answer — a forced `structure`
  * writes a `tree.json` that looks exactly like the one it replaced. The job
  * record is the only account of it there is.
  */
@@ -1302,7 +1302,7 @@ async function runStep(
      * own deadline, and until 2026-09-04 both got `STEP_STOPPED` — *"You stopped
      * this before it finished"* — because the branch asked whether the signal
      * had fired and not who fired it. The card said that about a 144-page PDF
-     * whose hierarchy step ran out of time at 742.8 s, in a browser run no test
+     * whose structure step ran out of time at 742.8 s, in a browser run no test
      * had covered. `INTERRUPTED` is what the *job* has always ended with in that
      * case (`interruptedEnding`, below), so this is the shelf card agreeing with
      * the band rather than a new sentence: *"whatever was running it did not come
@@ -1607,8 +1607,8 @@ async function lostTheClaim(
  * that being ours made it fit to show. Being ours and being fit to show a
  * reader are different things, and it was neither slug nor secret that made the
  * difference: the message reads *"the tree was built from different blocks
- * (hierarchy ran against `<hash>`, these blocks are `<hash>`) — re-run
- * hierarchy"*, which is an instruction to whoever runs this app given to
+ * (structure ran against `<hash>`, these blocks are `<hash>`) — re-run
+ * structure"*, which is an instruction to whoever runs this app given to
  * somebody who cannot run anything. It was the last raw diagnostic on a
  * reader-facing field after `runStep`'s seam closed, and GPT Sol found it in
  * the stage 2 review. The reasons now go on the log line instead.
@@ -1703,8 +1703,8 @@ async function endAsStorageFailure(args: {
      `err instanceof PublishRefused ? err.message : …` until 2026-09-03, on the
      reasoning that the refusal's message is ours and therefore fit to show. It
      is ours and it is not fit to show: `Refusing to publish "<slug>": the tree
-     was built from different blocks (hierarchy ran against <hash>, these blocks
-     are <hash>) — re-run hierarchy` is an instruction to whoever runs this app,
+     was built from different blocks (structure ran against <hash>, these blocks
+     are <hash>) — re-run structure` is an instruction to whoever runs this app,
      addressed to a reader who cannot run anything. It was the last raw
      diagnostic left on a reader-facing field after `runStep`'s seam was closed,
      found by GPT Sol reviewing stage 2. The reasons are on the log line above;
@@ -1989,7 +1989,7 @@ export interface AdvanceParts {
    * The gap it closes. `costStore.record` failures are counted in
    * `SpendReport.writeFailures` and swallowed (src/ai-spend.ts § `write`), and a
    * Postgres `forJob` read cannot report a row that was never inserted — absence
-   * is unknowable from the reading end. So a job where the structure call
+   * is unknowable from the reading end. So a job where the whole-document call
    * persisted and every label write failed reads back as a complete, plausible,
    * *smaller* bill. The only thing that can notice is a count taken on this side.
    *
@@ -2704,7 +2704,7 @@ async function walkClaim(
          * re-drives the `{done: false, busy: false}` answer immediately, with no
          * client change (src/web/jobEngine.ts). Until 2026-09-04 it ended
          * terminal `error` with a Retry button the reader had to press —
-         * measured on a 142-page PDF whose `hierarchy` step needs 658–778 s
+         * measured on a 142-page PDF whose `structure` step needs 658–778 s
          * against a 740 s deadline, so routine rather than rare.
          *
          * **Three of the four answers fall through to the endings below**, and
@@ -2839,7 +2839,7 @@ async function walkClaim(
        * be billed for them.
        *
        * The cost is that Stop is only honoured at a step boundary — a reader
-       * stopping mid-`hierarchy` waits for `hierarchy`. Said out loud in
+       * stopping mid-`structure` waits for `structure`. Said out loud in
        * docs/plans/260830d-v1-imports-on-vercel.md § Risks rather than discovered.
        */
       const noted = await note();
@@ -4414,7 +4414,7 @@ export async function retryJob(
  * through Postgres, the three steps that "finished" wrote into a **draft**, the
  * failure discarded that draft, and the retry's new draft is copied from the
  * revision the reader is still on. So the finished steps find last week's
- * artefacts current, skip, and `hierarchy` runs over the old article — a refresh
+ * artefacts current, skip, and `structure` runs over the old article — a refresh
  * silently gone, under a row of green ticks (docs/reusable/silent-success.md).
  * `tests/retry-after-a-failed-refresh.test.ts` has the sequence in full.
  *
@@ -4422,7 +4422,7 @@ export async function retryJob(
  * the failed draft so a retry can adopt its completed work — is written up in
  * that plan's § *Appendix: someday maybe*. The cost of this answer is stated
  * rather than hidden — and it is **smaller than it was**, which is the half of
- * this paragraph that had gone stale. A refresh that dies at `hierarchy` re-runs
+ * this paragraph that had gone stale. A refresh that dies at `structure` re-runs
  * `extract`, but it no longer re-buys the transcription: the per-chunk
  * checkpoints stopped being a job-scoped `/tmp` on 2026-09-01 and became rows
  * keyed on the article (landing D2, `src/store/checkpoints.ts`), and a refresh

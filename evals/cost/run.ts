@@ -6,13 +6,13 @@
  *   npm run eval:cost -- --list                               (the corpus)
  *   npm run eval:cost -- --preflight                          (the gate only; spends nothing)
  *   npm run eval:cost -- --steps fetch,extract               (free: stops before the paid step)
- *   npm run eval:cost -- --steps fetch,extract,blocks,hierarchy,arc --keep
+ *   npm run eval:cost -- --steps fetch,extract,blocks,structure,arc --keep
  *   npm run eval:cost -- --fixture short-html --all-modes     (ingest, then 8 mode jobs)
  *   npm run eval:cost -- --against <slug> --steps arc,tweets --batched-modes
  *
  * `--steps` names the steps the job runs, so a mode step has to be named after
  * the ingest steps it depends on — a fresh slug has no blocks for `arc` to read.
- * **`blocks` has to be named with `hierarchy`** (`unrunnableStepPlan`,
+ * **`blocks` has to be named with `structure`** (`unrunnableStepPlan`,
  * src/jobs.ts): a job that rebuilds the blocks and not the tree produces an
  * article that cannot be published, so `enqueue` refuses it rather than letting
  * the run get all the way to a publication failure.
@@ -82,7 +82,7 @@
  *    the negative form also swept in `cli`. Corrected 2026-09-07.⟩
  * 2. **Fixture ingress — only stage 1 is replaced**, through the existing
  *    `AdvanceParts.steps` seam. The fixture step reads the committed bytes and
- *    calls the exported `writeRaw()`; extract, blocks, hierarchy and assets are
+ *    calls the exported `writeRaw()`; extract, blocks, structure and assets are
  *    the production `STEPS` on the production session. **No SSRF guard is
  *    weakened** — a `file:`/`fixture:` scheme in `src/` was rejected for exactly
  *    that reason, and so was a local static server (the box's LAN address is
@@ -236,11 +236,11 @@ interface RunMeta {
   node: string;
   /**
    * **Effort, recorded because the baseline was nearly wrong by 2× without it.**
-   * `fb82dc8` moved hierarchy from `high` to `medium` partway through the
+   * `fb82dc8` moved the structure step from `high` to `medium` partway through the
    * ledger and no row said so, which made two halves of one table look
    * comparable when they were not.
    *
-   * `hierarchy` is read from `wholeDocumentRequest` rather than restated, because
+   * `structure` is read from `wholeDocumentRequest` rather than restated, because
    * the constant it comes from is module-private in src/structure.ts and a
    * second copy of the string here is a copy free to drift. Labels' effort is
    * private in src/labels.ts with no exported reader at all; `commit` above is
@@ -248,7 +248,7 @@ interface RunMeta {
    */
   effort: {
     pipelineEnvOverride: string | null;
-    hierarchy: string | null;
+    structure: string | null;
     labels: "module-private in src/labels.ts — pinned by commit + srcPatchSha256";
     articleStages: Record<string, string>;
   };
@@ -341,15 +341,15 @@ interface RunFile {
 const STANDING_NOTES = [
   "Stage 1 (fetch) is a fixture read, so the elapsed time excludes real-world fetch latency. " +
     "It costs no model call, so the money is unaffected.",
-  "There is no `labels` step: nav labels fan out inside `hierarchy`, so every label call " +
-    "carries stepName=hierarchy and job=labels. The hierarchy/labels split is in `byAiJob`.",
+  "There is no `labels` step: nav labels fan out inside `structure`, so every label call " +
+    "carries stepName=structure and job=labels. The structure/labels split is in `byAiJob`.",
   "Per-step wall clock is max(finishedAt) - min(startedAt). sum(durationMs) is printed beside " +
     "it and is several times larger wherever a step fanned out; it is not a wait.",
   "Unpriced rows are unknown, not zero. A total carrying them is short by an unknown amount.",
   "Pipeline cache breakpoints are conditional and off by default (`sharesArticleCache`), so an " +
     "ordinary ingest marks nothing and these are cold numbers in that sense too. Checked in the " +
     "code: `sharesArticleCache` returns false for anything that is not an ArticleStage, and " +
-    "`hierarchy` is not one — so nothing an ingest writes can be read warm by a later draw.",
+    "`structure` is not one — so nothing an ingest writes can be read warm by a later draw.",
   "`scenario` says whether the modes were measured one per job (`per-mode`) or several in one " +
     "(`batched-modes`). The two are different numbers and must never be aggregated together.",
   "A draw that was billed and did not produce its artefact is a PAID FAILURE: its money was " +
@@ -358,7 +358,7 @@ const STANDING_NOTES = [
     "money alone — a truncated generation is billed in full with an `outcome: \"ok\"` row.",
   "A missing ledger row is read against `steps`: if the step that would have bought it failed, " +
     "or never ran because something before it did, the absence is EXPLAINED (finding kind " +
-    "`explained-absence`) and the sweep carries on — a run measuring how often hierarchy fails " +
+    "`explained-absence`) and the sweep carries on — a run measuring how often the structure step fails " +
     "cannot stop the first time it does. An absence nothing explains is still fatal and still " +
     "stops the run, because that is a row that was lost rather than never bought.",
   "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its " +
@@ -701,7 +701,7 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
   draw.observedSpend = observedSpend;
   draw.findings = checkCold(ledger.rows, {
     mustPay: mustPayFor(fixture, stepNames),
-    /* The second namespace: a priced `hierarchy` step proves the structure call
+    /* The second namespace: a priced `structure` step proves the whole-document call
        ran and says nothing at all about the label fan-out, which shares its
        `stepName`. */
     mustPayJobs: requiredAiJobsFor(fixture, stepNames),
@@ -748,7 +748,7 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      risk asks for exactly this refusal.
 
      **A draw that simply failed is not one of them**, and on 2026-09-03 it was:
-     hierarchy failed its range check, its label fan-out never ran, and the
+     the structure step failed its range check, its label fan-out never ran, and the
      missing `labels` rows read as lost. The sweep stopped two draws into
      measuring how often exactly that happens. `stoppedAtOrBefore` in report.ts
      is the telling apart; `drawMustStop` is the rule that reads it. */
@@ -811,7 +811,7 @@ function printDraw(draw: Draw): void {
     console.log(formatStepTable(draw.byStep));
   }
   if (draw.byAiJob?.length) {
-    console.log("  by AI job (hierarchy vs its label fan-out)");
+    console.log("  by AI job (structure vs its label fan-out)");
     console.log(formatStepTable(draw.byAiJob));
   }
   const findings = formatFindings(draw.findings ?? []);
@@ -909,7 +909,7 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
     node: process.version,
     effort: {
       pipelineEnvOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
-      hierarchy: structureEffort,
+      structure: structureEffort,
       labels: "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
       articleStages: Object.fromEntries(
         (Object.keys(STAGE_EFFORT) as (keyof typeof STAGE_EFFORT)[]).map((s) => [s, effortFor(s)]),
@@ -919,7 +919,7 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
 }
 
 /**
- * Hierarchy's effort, read through the only exported door onto it.
+ * The structure step's effort, read through the only exported door onto it.
  *
  * An empty body is a legal argument — `budgetFor` throws only when the answer
  * cannot fit one response — and this makes no call and costs nothing. The
@@ -1134,12 +1134,12 @@ async function runDraws(
 
          **There is deliberately no "stop if the ingest failed" guard here.** A
          failed ingest can be a *paid* failure and often is — a truncated
-         hierarchy is billed in full and comes back with an `outcome: "ok"` row
+         structure run is billed in full and comes back with an `outcome: "ok"` row
          beside a failed step — so `no-spend` does not fire and this line is
          reached. That is the right behaviour rather than a hole: the failed
          ingest is recorded as a paid failure and kept out of every quoted figure
          (`headlineTotal`), and the mode draws that follow read the article's
-         blocks rather than its hierarchy, so their numbers are unaffected. What
+         blocks rather than its tree, so their numbers are unaffected. What
          a guard here would cost is the only way to drive this shape for free —
          a free step list has nothing in `mustPay`, so its ingest ends short of
          publishing and the adopted jobs still run, which is how the sweep was
@@ -1156,7 +1156,7 @@ async function runDraws(
        drift over the minutes of a run (a provider warming up, a rate limiter
        engaging) lands across every fixture's repeats rather than inside one
        fixture's. The same reason evals/structure-whole-document/run.ts interleaves.
-       This is the shape that measures hierarchy's observed variation. */
+       This is the shape that measures the structure step's observed variation. */
     for (let repeat = 1; repeat <= args.repeat; repeat++) {
       for (const fixture of chosen) {
         await draw({
@@ -1186,7 +1186,7 @@ async function main(): Promise<void> {
   console.log(`Ledger: ${costStore.describe()}`);
   console.log(`Owner:  ${meta.evalOwnerId}   (environment owner ${meta.environmentOwnerId})`);
   console.log(
-    `Effort: hierarchy=${meta.effort.hierarchy ?? "?"}  ` +
+    `Effort: structure=${meta.effort.structure ?? "?"}  ` +
       `env override=${meta.effort.pipelineEnvOverride ?? "none"}`,
   );
   console.log(
@@ -1286,7 +1286,7 @@ async function main(): Promise<void> {
 /**
  * **The stage outcome, which is a different question from `gateway ok`.**
  *
- * A truncated hierarchy comes back with a perfectly ok ledger row beside it and
+ * A truncated structure run comes back with a perfectly ok ledger row beside it and
  * a failed *step*: the model returned, and what it returned did not fit. So the
  * outcome the variation summary counts is the job's, and the reason is the
  * failing step's own error rather than anything the gateway said.

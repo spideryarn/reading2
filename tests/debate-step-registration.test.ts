@@ -322,11 +322,11 @@ describe("running the step again", () => {
        reading any more, served for ever with a green tick over it. */
     await runAndWrite();
 
-    const file = await store.read(SLUG, "hierarchy", "blocks");
+    const file = await store.read(SLUG, "structure", "blocks");
     const first = file?.blocks?.[0];
     if (!first) throw new Error("the fixture has no blocks");
     first.text = `${first.text} — and one more sentence the search never saw.`;
-    store.plant(SLUG, "hierarchy", "blocks", file);
+    store.plant(SLUG, "structure", "blocks", file);
 
     expect(await stepIsDone(STEPS.debate, ctxFor(), store)).toBe(false);
   });

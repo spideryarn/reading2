@@ -60,6 +60,7 @@ function paint(comments?: Comment[]): void {
         <BlockGutter
           id={ID}
           linkBase="/read/example"
+          notesBy="you"
           {...(comments ? { comments } : {})}
           chatCount={0}
           onOpenComment={() => {}}

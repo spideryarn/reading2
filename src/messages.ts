@@ -424,7 +424,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      reader that trying again was worth a go.
 
      `jb-publish-refused` is `bug` because the reader has no move: the remedy —
-     re-running the `hierarchy` step — belongs to whoever runs the app, and a
+     re-running the `structure` step — belongs to whoever runs the app, and a
      *retry* is not it, since a retry skips every step that finished and reads
      the same artefacts back. `jb-publish-moved` is `retry` because for that one
      the old sentence was true all along: another publication landed first, and
@@ -888,7 +888,7 @@ export const ANSWER_OVERFLOWED_FIXED_ASK: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, hierarchy, glossary, tweets, quotes — each
+ * Six pipeline stages — arc, labels, structure, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress
@@ -1054,7 +1054,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  *
  * `PublishRefused` (src/store/pg-revisions.ts) is the last gate before a draft
  * becomes the article: it refuses a draft with no blocks, no tree, a tree
- * `checkTree` rejects, a `hierarchy` run that did not finish or ran against
+ * `checkTree` rejects, a `structure` run that did not finish or ran against
  * different blocks, or a revision that is not this article's to publish. Until
  * 2026-09-07 it carried a list of free-text reasons and nothing else, so
  * `failureKindOf` (src/job-failure.ts) found nothing to read and fell through
@@ -1072,7 +1072,7 @@ export const STEP_STOPPED: ReaderFacingFailure = {
  *
  * **`bug`, not `blocked`.** `blocked` is the one non-retryable kind that admits
  * a way out, and there is none here that a reader can take: the remedy is
- * re-running the `hierarchy` step, which is an instruction for whoever runs the
+ * re-running the `structure` step, which is an instruction for whoever runs the
  * app. And note that a **retry** is not that re-run — Retry skips every step
  * that finished, so it reads the identical tree back and stops in the same
  * place (src/job-failure.ts § `stageFailure`).
@@ -3511,11 +3511,13 @@ export const SHARING_OFF = "Only you can read this.";
  * docs/plans/260904b-pricing-page-and-public-showcase.md § 1.
  *
  * **It stays one short sentence because it is three surfaces**, not one — the
- * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and half of
- * the masthead's mark (`SHARING_MARK_PUBLIC`, which appends *"Change who can
- * read it."*). So the listing is a clause inside the existing sentence and not
- * a second sentence after it: a badge tooltip and a link's description have to
- * read as one voice, and two sentences read as a correction of the first.
+ * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and the
+ * masthead's mark while the article is known to be unarchived. The masthead
+ * substitutes `SHARING_MARK_ON_ARCHIVED` or
+ * `SHARING_MARK_ON_ARCHIVE_UNKNOWN` when the listing clause cannot be made.
+ * So the listing is a clause inside the existing sentence and not a second
+ * sentence after it: a badge tooltip and a link's description have to read as
+ * one voice, and two sentences read as a correction of the first.
  */
 export const SHARING_ON = "Anyone can read this without signing in, and it's listed publicly.";
 
@@ -3578,8 +3580,25 @@ export const SHARING_COPY_TIP =
 export const SHARING_BADGE = "Shared";
 
 /**
- * **The mark at the top of the article, in two states, each of them a whole
- * sentence and a destination.**
+ * **The mark at the top of the article, in two states — and where pressing it
+ * goes, said apart from the state.**
+ *
+ * These two were the state with the destination glued on — *"Only you can read
+ * this. Share it with anyone."* — until 2026-10-02. Greg (spya-d886ah): *"One
+ * sentence is a statement of the current state. The other is a potential
+ * action. But there's no explanation of what this means or how this
+ * functionality works, or any UI differentiation between these two kinds of
+ * sentence."* So the state is `SHARING_ON`/`SHARING_OFF` alone again, in the
+ * card's `what`; what sharing means is `SHARING_MARK_HOW_*`; and these are the
+ * press, in `ControlTip`'s `press` line, styled as a different kind of sentence.
+ * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+ *
+ * **They name the Metadata page, not *Access & sharing*, because that is where
+ * the link lands** — the top of the page, where `Share…` is the first button
+ * (Metadata.tsx § `TopActions`). Landing on the section itself is deferred in
+ * the plan; when it lands, these get shorter.
+ *
+ * The history below is of the version these replaced.
  *
  * Greg, 2026-09-04:
  *
@@ -3602,10 +3621,12 @@ export const SHARING_BADGE = "Shared";
  * appears only when shared answers it by absence, which is indistinguishable
  * from a mark that has not loaded.
  */
-export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
+export const SHARING_MARK_PRESS_PUBLIC =
+  "Press to go to this article's Metadata page, where you can stop sharing it.";
 
 /** The other state of the mark above. */
-export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
+export const SHARING_MARK_PRESS_PRIVATE =
+  "Press to go to this article's Metadata page, where Share… starts it.";
 
 /**
  * **The second paragraph of the mark's card, which is the one worth hovering
@@ -3620,18 +3641,48 @@ export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
  * An owner deciding whether to press this deserves the short version here,
  * before they get to the confirmation.
  *
- * The private twin says the smaller thing, and says it because the absence of a
- * warning is not itself reassuring: an owner who has just read what publishing
- * costs should be told plainly that none of it has happened.
+ * **The private twin says what sharing would be**, since 2026-10-02. It used to
+ * say only that nothing had left the account, and Greg's report on this card
+ * (spya-d886ah) was that it offered sharing with *"no explanation of what this
+ * means or how this functionality works"*. So: what a shared article is (a page
+ * anyone can read, listed — `SHARING_ON`), what rides on it (`ALWAYS_SHARED`,
+ * and *most* of the AI's work because some modes stay behind — Chat among
+ * them; shared-inventory.ts derives the list, and the card names none so it
+ * cannot fall out of step), and that pressing Share… does not do it
+ * (`SHARING_OPEN_TIP`). Every clause is one of those three, checked against
+ * them, so this does not become a fourth near-miss of the same promise.
  */
 export const SHARING_MARK_HOW_PUBLIC =
-  "Taking it down again refuses the next request, and no more than that — whatever somebody has " +
-  "already read or copied stays with them.";
+  "Stopping sharing refuses the next request for it and takes it off the public list — whatever " +
+  "somebody has already read or copied stays with them.";
+
+/**
+ * **`SHARING_ON` for an article that is shared and archived**, where its second
+ * half is false: archiving takes a public article off the public list while its
+ * link keeps working (src/store/public-library.ts § the `archivedAt` clause).
+ * Only the masthead's mark knows both facts, so only it draws this; the sharing
+ * card and the shelf badge still say `SHARING_ON` — deferred in
+ * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+ */
+export const SHARING_MARK_ON_ARCHIVED =
+  "Anyone with the link can read this without signing in. It's archived, so it isn't listed publicly.";
+
+/**
+ * **The public state while the archive question is unknown.** Public visibility
+ * still proves that the direct link works (`publicSlug` ignores `archived_at`),
+ * but the public listing requires `archived_at is null`, so silence about the
+ * archive state cannot honestly promise the listing. `useArchive` reaches this
+ * state when the article payload cannot say, or after both a write and its
+ * verifying read fail.
+ */
+export const SHARING_MARK_ON_ARCHIVE_UNKNOWN =
+  "Anyone can read this without signing in. Whether it's listed publicly couldn't be confirmed.";
 
 /** @see SHARING_MARK_HOW_PUBLIC */
 export const SHARING_MARK_HOW_PRIVATE =
-  "Nothing has left your account: the article, your notes and your comments are yours alone until " +
-  "you say otherwise.";
+  "Sharing gives it a public page that anyone can read without signing in, listed publicly: the " +
+  "article, most of what the AI made of it, and your comments. Nothing goes until you have seen " +
+  "the full list and confirmed.";
 
 /**
  * **The mark's *name*, which is not its tooltip** — and the two have to differ.
@@ -4189,7 +4240,7 @@ export const SHARED_ARC = {
 /**
  * **What never goes out, whatever the switch says.**
  *
- * The modes among these — Chat, Search, Remember, Referee — are not listed
+ * The modes among these — Chat, Remember and Referee — are not listed
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
@@ -4658,7 +4709,7 @@ export const DEBATE_EXTRACTS_ONLY =
    mode carried a notice saying that using it would send the manuscript to a
    third-party service. That was false, and falsely reassuring: by the time
    anybody reaches Referee mode the text has *already* gone — `DEFAULT_INGEST_STEPS`
-   in src/pipeline.ts runs extraction, hierarchy and gists at ingest, and a PDF
+   in src/pipeline.ts runs extraction, structure and gists at ingest, and a PDF
    is read by a model before it is anything else. GPT Sol's review of the plan
    found it and called it the most serious thing in the draft. So the sentence
    at the *add* surface is present tense and comes first in the reader's life,

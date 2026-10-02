@@ -1,0 +1,611 @@
+diff --git a/src/web/BandAbout.tsx b/src/web/BandAbout.tsx
+index 72b4041be..72eced89d 100644
+--- a/src/web/BandAbout.tsx
++++ b/src/web/BandAbout.tsx
+@@ -20,12 +20,45 @@ import { Info } from "lucide-react";
+ import { MODE_CATALOG } from "../mode-catalog.js";
+ import type { Mode } from "../modes.js";
+ import { exactly, howLong, relativeAgo } from "./relative-time.js";
++import { Link } from "./Link.js";
+ import { Tooltip } from "./Tooltip.js";
+ 
+-export function BandAbout({ label, children }: { label: string; children: ReactNode }) {
++export function BandAbout({
++  label,
++  help,
++  children,
++}: {
++  label: string;
++  /**
++   * **Where Help says more** — an address from `helpHref`, never built by hand
++   * (help-anchors.ts § Typed). With one, the card ends in *More in Help →* and
++   * is `interactive`, so the pointer can cross into it and Tab can reach the
++   * link; without one, it stays the plain card the pointer cannot enter.
++   * Plan 261002e.
++   */
++  help?: string | undefined;
++  children: ReactNode;
++}) {
+   const [open, setOpen] = useState(false);
++  const content = help ? (
++    <>
++      {children}
++      <p className="band-about-help">
++        <Link href={help}>More in Help →</Link>
++      </p>
++    </>
++  ) : (
++    children
++  );
+   return (
+-    <Tooltip content={children} placement="bottom" open={open} onOpenChange={setOpen} className="band-about-card">
++    <Tooltip
++      content={content}
++      placement="bottom"
++      open={open}
++      onOpenChange={setOpen}
++      interactive={help === undefined ? undefined : { label }}
++      className="band-about-card"
++    >
+       <button
+         type="button"
+         className={`band-about${open ? " on" : ""}`}
+diff --git a/src/web/ModeSurface.tsx b/src/web/ModeSurface.tsx
+index 13605677f..fab6cd809 100644
+--- a/src/web/ModeSurface.tsx
++++ b/src/web/ModeSurface.tsx
+@@ -58,6 +58,7 @@
+ import type { HTMLAttributes, ReactNode, Ref } from "react";
+ import type { Mode } from "../modes.js";
+ import { AboutMode, BandAbout } from "./BandAbout.js";
++import { helpHref, modeAnchor } from "./help/help-anchors.js";
+ 
+ /**
+  * Everything an `<aside>` takes that this component does not name itself.
+@@ -220,7 +221,7 @@ export function ModeSurface({
+   return (
+     <aside {...rest} ref={ref} className={className} aria-label={label}>
+       {hasAbout && (
+-        <BandAbout label="About this mode">
++        <BandAbout label="About this mode" help={mode ? helpHref(modeAnchor(mode)) : undefined}>
+           {mode && <AboutMode mode={mode} />}
+           {extra && about}
+         </BandAbout>
+diff --git a/src/web/Tooltip.tsx b/src/web/Tooltip.tsx
+index 2db84c5d0..cf0a6bd4c 100644
+--- a/src/web/Tooltip.tsx
++++ b/src/web/Tooltip.tsx
+@@ -32,11 +32,13 @@ import { cloneElement, useEffect, useRef, useState, type ReactElement, type Reac
+ import {
+   FloatingArrow,
+   FloatingDelayGroup,
++  FloatingFocusManager,
+   FloatingPortal,
+   arrow,
+   autoUpdate,
+   flip,
+   offset,
++  safePolygon,
+   shift,
+   useDelayGroup,
+   useDismiss,
+@@ -47,6 +49,7 @@ import {
+   useMergeRefs,
+   useRole,
+   useTransitionStyles,
++  type OpenChangeReason,
+   type Placement,
+ } from "@floating-ui/react";
+ 
+@@ -107,6 +110,46 @@ interface BaseProps {
+    * current (plan 260928e). Default `true`.
+    */
+   enabled?: boolean;
++  /**
++   * **The pointer and the keyboard can get into the card**, for a card that
++   * holds something to press — a link on to Help, a button. Off by default, and
++   * the default is the point: the spine's cards must *not* take hover, or one
++   * that lands under the pointer sits on the band being pointed at and holds
++   * itself open.
++   *
++   * On, it is three things together, and none of them is useful alone:
++   *
++   *  - `.tooltip-anchor.interactive`, so the card takes pointer events at all
++   *    (tooltip.css; the prose card has used the same class since 2026-08-26).
++   *  - a `safePolygon()` corridor as `useHover`'s `handleClose`, so the pointer
++   *    can cross the gap from the trigger to the card — diagonally included —
++   *    without the card closing under it. Leaving any other way closes it as
++   *    before.
++   *  - a non-modal `FloatingFocusManager`, because the card is portalled to the
++   *    end of `<body>` and Tab from the trigger would otherwise skip it
++   *    entirely. Opening never *moves* focus — a card opened by hovering must
++   *    not take the keyboard's place — it only makes the card reachable, and
++   *    the card closes when Tab carries focus out of it.
++   *
++   * And two rules about focus that the library does not make on its own,
++   * both from GPT Sol's plan review (F1, F2) and both in `changeOpen` below:
++   * the pointer leaving does not close a card **the keyboard is inside**,
++   * and Escape from inside one puts focus back on the trigger rather than
++   * dropping it on `<body>` with the link it was on.
++   *
++   * **It is a `dialog`, not a `tooltip`, and it needs a name** — ARIA's tooltip
++   * may not hold anything focusable, and a non-modal dialog is what the W3C's
++   * own tooltip pattern points a card with a link at. So the card is no longer
++   * the trigger's `aria-describedby`; the trigger says it opens a dialog
++   * (`aria-haspopup`, `aria-controls`) and `label` is what that dialog is
++   * announced as. Hence an object rather than a boolean: an interactive card
++   * without a name does not compile.
++   *
++   * WCAG 2.1 § 1.4.13 asks for exactly this of a card with something in it.
++   * Greg chose it per use, 2026-10-02 (docs/project/tooltips.md § A card the
++   * pointer can enter).
++   */
++  interactive?: { label: string } | undefined;
+ }
+ 
+ /**
+@@ -141,6 +184,7 @@ export function Tooltip({
+   keepSide = false,
+   className,
+   enabled = true,
++  interactive,
+   open: controlledOpen,
+   onOpenChange,
+ }: Props) {
+@@ -156,9 +200,41 @@ export function Tooltip({
+   }, [disabledWhileOpen, setOpen]);
+   const arrowRef = useRef<SVGSVGElement>(null);
+ 
+-  const { refs, floatingStyles, context } = useFloating({
++  /* The two elements, for `changeOpen`, which is handed to `useFloating`
++     before `useFloating` has returned them. Written on every render below. */
++  const placed = useRef<{ reference: Element | null; floating: HTMLElement | null }>({
++    reference: null,
++    floating: null,
++  });
++  /**
++   * **What an interactive card does about focus when something asks it to
++   * close.** A no-op for every other card: `setOpen`, unchanged.
++   *
++   * - **Hover leaving does not close it while focus is inside.** `safePolygon`
++   *   guards the pointer's trip and knows nothing about the keyboard, so
++   *   without this a reader on the card's link who nudges the mouse off the
++   *   trigger loses the link under the focus, and focus falls to `<body>`.
++   * - **Escape from inside puts focus back on the trigger.** The focused link
++   *   is about to unmount; `returnFocus` is off (FocusReach says why), so
++   *   nothing else would. Only for Escape: an outside press is a click that
++   *   is about to put focus where the reader clicked, and Tab out has already
++   *   moved it on.
++   */
++  const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
++    if (interactive && !next) {
++      const { reference, floating } = placed.current;
++      const active = floating?.ownerDocument.activeElement ?? null;
++      if (floating && active && floating.contains(active)) {
++        if (reason === "hover" || reason === "safe-polygon") return;
++        if (reason === "escape-key" && reference instanceof HTMLElement) reference.focus();
++      }
++    }
++    setOpen(next);
++  };
++
++  const { refs, elements, floatingStyles, context } = useFloating({
+     open,
+-    onOpenChange: setOpen,
++    onOpenChange: changeOpen,
+     placement,
+     // Reposition on scroll and resize for as long as the tooltip is open. The
+     // spine's reference elements are inside a `position: fixed` rail, so they
+@@ -179,6 +255,8 @@ export function Tooltip({
+     ],
+   });
+ 
++  placed.current = { reference: elements.domReference, floating: elements.floating };
++
+   // Zero when there is no <TooltipGroup> above us, in which case we want our
+   // own delay. A group always supplies an object, which is truthy.
+   const { delay: groupDelay, isInstantPhase } = useDelayGroup(context);
+@@ -210,18 +288,17 @@ export function Tooltip({
+        * whatever touch behaviour it had.
+        */
+       mouseOnly: controlled,
+-      // Every card here is read, not clicked: the pointer never needs to
+-      // travel into one, and a panel that lingered while the pointer crossed
+-      // it would sit on top of the thing being pointed at. (A `safePolygon()`
+-      // corridor lived here for the context pills, whose tooltips carried
+-      // links; the pills are gone — docs/project/column-context.md.)
+-      handleClose: null,
++      // Most cards are read, not clicked: the pointer never needs to travel
++      // into one, and a panel that lingered while the pointer crossed it would
++      // sit on top of the thing being pointed at. A card with something to
++      // press asks for the corridor — `interactive` above.
++      handleClose: interactive ? safePolygon() : null,
+     }),
+     // Keyboard parity: the spine's bands are real buttons, so tabbing through
+     // them should show the same detail hovering does.
+     useFocus(context, { enabled }),
+     useDismiss(context, { enabled }),
+-    useRole(context, { role: "tooltip" }),
++    useRole(context, { role: interactive ? "dialog" : "tooltip" }),
+   ]);
+   const { getReferenceProps, getFloatingProps } = interactions;
+ 
+@@ -280,11 +357,15 @@ export function Tooltip({
+       {cloneElement(children, { ...merged, "aria-describedby": describedBy })}
+       {isMounted && (
+         <FloatingPortal>
++          <FocusReach on={interactive !== undefined} context={context}>
+           <div
+             ref={refs.setFloating}
+             style={floatingStyles}
+-            className="tooltip-anchor"
+-            {...getFloatingProps()}
++            className={interactive ? "tooltip-anchor interactive" : "tooltip-anchor"}
++            /* The name goes through `getFloatingProps` beside the role `useRole`
++               put there, so the two arrive together — and `undefined` for a
++               plain tooltip, which takes its name from nothing. */
++            {...getFloatingProps({ "aria-label": interactive?.label })}
+           >
+             <div className={`tooltip${className ? ` ${className}` : ""}`} style={styles}>
+               {content}
+@@ -308,12 +389,41 @@ export function Tooltip({
+               />
+             </div>
+           </div>
++          </FocusReach>
+         </FloatingPortal>
+       )}
+     </>
+   );
+ }
+ 
++/**
++ * **Tab reaches an interactive card's contents; nothing else changes.**
++ *
++ * `modal={false}` puts focus guards beside the trigger and the card, so Tab
++ * from the trigger lands on the card's first control and Tab past its last
++ * goes on to whatever followed the trigger. `initialFocus={-1}` and
++ * `returnFocus={false}` because the card opens on *hover* too, and a pointer
++ * resting on an (i) must not move the keyboard's place — opening or closing it
++ * leaves focus exactly where it was. `closeOnFocusOut` (the default) is what
++ * closes it once focus has left both.
++ */
++function FocusReach({
++  on,
++  context,
++  children,
++}: {
++  on: boolean;
++  context: Parameters<typeof FloatingFocusManager>[0]["context"];
++  children: ReactElement;
++}) {
++  if (!on) return children;
++  return (
++    <FloatingFocusManager context={context} modal={false} initialFocus={-1} returnFocus={false}>
++      {children}
++    </FloatingFocusManager>
++  );
++}
++
+ /**
+  * **The card a control carries**: what it is, then how it
+  * works and what it costs.
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index 6a46382b8..eceb4c89b 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -1126,3 +1126,10 @@
+ .band-about-card p + p { margin-top: 0.4rem; }
+ /* Who made it and when: last in the card, and quieter than what the mode is. */
+ .band-about-card .band-about-made { color: var(--ink-faint); font-size: 0.92em; }
++/* *More in Help →*, the card's last line and the one thing in it to press —
++   which is why this card, alone of the corner's, is `interactive` (Tooltip.tsx,
++   plan 261002e). A link's colour rather than ink, so it reads as somewhere to
++   go and not as one more sentence. */
++.band-about-card .band-about-help a { color: var(--highlight-ink); text-decoration: none; }
++.band-about-card .band-about-help a:hover,
++.band-about-card .band-about-help a:focus-visible { text-decoration: underline; }
+diff --git a/tests/band-about.test.tsx b/tests/band-about.test.tsx
+index db0e18a60..18c25ea7b 100644
+--- a/tests/band-about.test.tsx
++++ b/tests/band-about.test.tsx
+@@ -69,6 +69,30 @@ describe("ModeSurface's about", () => {
+     expect(card.indexOf(MODE_CATALOG.tweets.how)).toBeLessThan(card.indexOf("12 posts."));
+   });
+ 
++  /* Plan 261002e: the one card in the corner with something to press, and so
++     the one that lets the pointer in. */
++  it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
++    draw(
++      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
++        body
++      </ModeSurface>,
++    );
++    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
++    const card = document.querySelector(".band-about-card")!;
++    const link = card.querySelector("a")!;
++    expect(link.textContent).toBe("More in Help →");
++    expect(link.getAttribute("href")).toBe("/help#mode-tweets");
++    expect(card.textContent?.endsWith("More in Help →")).toBe(true);
++    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
++  });
++
++  it("has no link, and stays a card the pointer cannot enter, for a band with no mode", async () => {
++    draw(<ModeSurface label="Tweets" about="What this is.">body</ModeSurface>);
++    await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
++    expect(document.querySelector(".band-about-card a")).toBeNull();
++    expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(false);
++  });
++
+   it("has an (i) from the mode alone, when there is nothing to add yet", () => {
+     draw(<ModeSurface label="Tweets" mode="tweets" about={null}>body</ModeSurface>);
+     expect(host.querySelector("aside > .band-about")).not.toBeNull();
+diff --git a/tests/tooltip-interactive.test.tsx b/tests/tooltip-interactive.test.tsx
+new file mode 100644
+index 000000000..f2b1d1a54
+--- /dev/null
++++ b/tests/tooltip-interactive.test.tsx
+@@ -0,0 +1,263 @@
++// @vitest-environment jsdom
++/**
++ * **`<Tooltip interactive>`: a card the pointer and the keyboard can get into.**
++ *
++ * Every card in the app is `pointer-events: none` and closes the moment the
++ * pointer leaves its trigger — right for the spine, whose cards would otherwise
++ * sit on the band being pointed at and hold themselves open, and a failure of
++ * WCAG 2.1 § 1.4.13 for a card that holds a link. Greg chose per-use, 2026-10-02
++ * (docs/plans/261002e-interactive-tooltip-prop-and-help-link-in-band-about-cards.md).
++ *
++ * jsdom has no layout, so `safePolygon`'s triangle is not exercised here — every
++ * rectangle is zero. What it can see is the part that decides whether the card
++ * survives the trip at all: leaving the trigger and arriving in the card. The
++ * geometry is the browser pass's job (the plan's screenshots).
++ *
++ * The first test is the default, and it is the one that matters most: the
++ * spine has to keep exactly what it had.
++ */
++import { act, useState } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { Tooltip, TooltipGroup } from "../src/web/Tooltip.js";
++
++class FakeResizeObserver {
++  observe() {}
++  unobserve() {}
++  disconnect() {}
++}
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/** Past both `DELAY.open` and `DELAY.close` in Tooltip.tsx, with room to spare. */
++const PAST_THE_DELAY = 500;
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
++  vi.useFakeTimers();
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++  vi.useRealTimers();
++  vi.unstubAllGlobals();
++});
++
++function draw(interactive: boolean) {
++  act(() =>
++    root.render(
++      <>
++        <Tooltip
++          interactive={interactive ? { label: "About this mode" } : undefined}
++          placement="bottom"
++          content={
++            <>
++              What this is.{" "}
++              <a href="/help#spine" className="card-link">
++                More in Help →
++              </a>
++            </>
++          }
++        >
++          <button type="button" className="trigger">
++            i
++          </button>
++        </Tooltip>
++        <button type="button" className="elsewhere">
++          next
++        </button>
++      </>,
++    ),
++  );
++}
++
++const trigger = () => host.querySelector(".trigger") as HTMLButtonElement;
++const anchor = () => document.querySelector(".tooltip-anchor");
++const tick = () =>
++  act(async () => {
++    vi.advanceTimersByTime(PAST_THE_DELAY);
++  });
++
++async function hover() {
++  trigger().dispatchEvent(new MouseEvent("mouseenter"));
++  await tick();
++  expect(anchor()).not.toBeNull();
++}
++
++/**
++ * The pointer leaves the trigger and its next move lands inside the card.
++ *
++ * **No `mouseenter` on the card**, deliberately. `useHover` listens for one on
++ * the floating element and cancels the close when it comes, so dispatching it
++ * here would keep *every* card open, the spine's included. In a browser a
++ * `pointer-events: none` card never receives one, and jsdom loads no
++ * stylesheet, so it cannot tell — the event would be a claim about the CSS
++ * that the CSS does not make. The `mousemove` is what a browser delivers to
++ * the document either way, and what `safePolygon` reads.
++ */
++async function travelIntoTheCard() {
++  const card = document.querySelector(".tooltip") as HTMLElement;
++  /* Both leave events: React's synthetic `onMouseLeave`, which is what closes
++     a card, is synthesised from a *bubbling* `mouseout` — tooltips.md § Three
++     things about testing a card in jsdom. */
++  trigger().dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: card, clientX: 5, clientY: 5 }));
++  trigger().dispatchEvent(
++    new MouseEvent("mouseout", { bubbles: true, relatedTarget: card, clientX: 5, clientY: 5 }),
++  );
++  card.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 5, clientY: 6 }));
++  await settle();
++}
++
++/** Closing is timers in series with a render between them: one wait per step. */
++async function settle() {
++  for (const _ of [0, 1, 2]) await tick();
++}
++
++describe("a card without `interactive` (the spine's, and almost every other)", () => {
++  it("takes no pointer events and closes when the pointer goes towards it", async () => {
++    draw(false);
++    await hover();
++    expect(anchor()?.classList.contains("interactive")).toBe(false);
++    await travelIntoTheCard();
++    expect(anchor()).toBeNull();
++  });
++});
++
++describe("a card with `interactive`", () => {
++  it("takes pointer events and stays open while the pointer travels into it", async () => {
++    draw(true);
++    await hover();
++    expect(anchor()?.classList.contains("interactive")).toBe(true);
++    await travelIntoTheCard();
++    expect(anchor()).not.toBeNull();
++  });
++
++  /**
++   * **Tab, as far as jsdom can press it.** jsdom moves no focus on a Tab key,
++   * so this focuses what a browser's Tab would land on next: the focus guard
++   * Floating UI puts straight after the trigger (`data-type="outside"`), whose
++   * job is to hand focus into the portalled card; then, from the link, the
++   * guard at the card's end (`data-type="inside"`), whose job is to hand it on
++   * to whatever followed the trigger and close the card. Without
++   * `interactive` there are no guards at all, and Tab from the trigger goes
++   * straight to `.elsewhere` — the card's link is unreachable.
++   */
++  it("is reached by Tab from the trigger, and Tab past its link moves on and closes it", async () => {
++    draw(true);
++    await act(async () => trigger().focus());
++    await settle();
++    expect(anchor()).not.toBeNull();
++
++    const guardAfterTrigger = host.querySelector('.trigger ~ [data-type="outside"]') as HTMLElement;
++    expect(guardAfterTrigger.getAttribute("data-type")).toBe("outside");
++    await act(async () => guardAfterTrigger.focus());
++    await settle();
++    const link = document.querySelector(".card-link") as HTMLAnchorElement;
++    expect(document.activeElement).toBe(link);
++    expect(anchor()).not.toBeNull();
++
++    const guards = document.querySelectorAll<HTMLElement>('[data-type="inside"]');
++    const endGuard = guards[guards.length - 1] as HTMLElement;
++    await act(async () => endGuard.focus());
++    await settle();
++    expect(document.activeElement).toBe(host.querySelector(".elsewhere"));
++    expect(anchor()).toBeNull();
++  });
++
++  it("puts nothing in the tab order when it is not interactive", async () => {
++    draw(false);
++    await act(async () => trigger().focus());
++    await settle();
++    expect(anchor()).not.toBeNull();
++    expect(document.querySelector("[data-floating-ui-focus-guard]")).toBeNull();
++  });
++
++  it("does not take focus when it opens on hover", async () => {
++    draw(true);
++    const before = document.activeElement;
++    await hover();
++    expect(document.activeElement).toBe(before);
++  });
++
++  it("closes on Escape with focus on its link", async () => {
++    draw(true);
++    await act(async () => trigger().focus());
++    await settle();
++    const link = document.querySelector(".card-link") as HTMLAnchorElement;
++    await act(async () => link.focus());
++    await act(async () => {
++      link.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
++    });
++    await settle();
++    expect(anchor()).toBeNull();
++    /* Not dropped on <body>: the link it was on has gone, so it goes back to
++       the control that opened the card. GPT Sol, plan review F1. */
++    expect(document.activeElement).toBe(trigger());
++  });
++
++  /* The corridor protects the pointer's trip; it says nothing about where the
++     keyboard is. A reader who tabbed into the card and then nudged the mouse
++     off the trigger must not have the link they are on taken away. Sol F2. */
++  it("stays open when the pointer wanders off while focus is inside it", async () => {
++    draw(true);
++    await hover();
++    const link = document.querySelector(".card-link") as HTMLAnchorElement;
++    await act(async () => link.focus());
++    trigger().dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: document.body, clientX: 500, clientY: 500 }));
++    trigger().dispatchEvent(
++      new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body, clientX: 500, clientY: 500 }),
++    );
++    document.body.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 600, clientY: 600 }));
++    await settle();
++    expect(anchor()).not.toBeNull();
++    expect(document.activeElement).toBe(link);
++  });
++
++  /* A card with a link in it is a small non-modal dialog, not a tooltip: ARIA's
++     tooltip may not hold anything focusable. Named, because a dialog with no
++     name is announced as just "dialog". Sol F3. */
++  it("is a named dialog, and the trigger says it opens one", async () => {
++    draw(true);
++    await hover();
++    expect(anchor()?.getAttribute("role")).toBe("dialog");
++    expect(anchor()?.getAttribute("aria-label")).toBe("About this mode");
++    expect(trigger().getAttribute("aria-haspopup")).toBe("dialog");
++    expect(trigger().getAttribute("aria-controls")).toBe(anchor()?.id);
++  });
++});
++
++/* The spine's shape — controlled, inside a group — rather than the plain one
++   above: what has to come through untouched. Sol F6. */
++describe("a controlled, grouped card without `interactive`", () => {
++  function Band() {
++    const [open, setOpen] = useState(false);
++    return (
++      <TooltipGroup delay={{ open: 240, close: 90 }}>
++        <Tooltip content="Part one" open={open} onOpenChange={setOpen}>
++          <button type="button" className="trigger" aria-label="Part one">
++            band
++          </button>
++        </Tooltip>
++      </TooltipGroup>
++    );
++  }
++
++  it("is a tooltip describing its trigger, takes no pointer, and adds no focus guards", async () => {
++    act(() => root.render(<Band />));
++    await hover();
++    expect(anchor()?.getAttribute("role")).toBe("tooltip");
++    expect(anchor()?.classList.contains("interactive")).toBe(false);
++    expect(trigger().getAttribute("aria-describedby")).toBe(anchor()?.id);
++    expect(trigger().hasAttribute("aria-haspopup")).toBe(false);
++    expect(document.querySelector("[data-floating-ui-focus-guard]")).toBeNull();
++    await travelIntoTheCard();
++    expect(anchor()).toBeNull();
++  });
++});

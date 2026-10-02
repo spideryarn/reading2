@@ -74,6 +74,15 @@ describe("terms: the direct scan over every entry, in the rendered prose", () =>
     ).toEqual(["t-pid"]);
   });
 
+  it("leaves out a term the owner hid (plan 261002c § 2)", () => {
+    expect(
+      termsIn("<p>The win-shift task in the radial arm maze.</p>", [
+        entry("t-win", "win-shift task"),
+        entry("t-maze", "radial arm maze", [], { hidden: true }),
+      ]),
+    ).toEqual(["t-win"]);
+  });
+
   it("finds a plural", () => {
     expect(termsIn("<p>Two attention heads agree.</p>", [entry("t-head", "attention head")])).toEqual(["t-head"]);
   });

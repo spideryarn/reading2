@@ -1,5 +1,5 @@
 /**
- * **What the structure call is stamped with, how hard it thinks, and how the
+ * **What the whole-document call is stamped with, how hard it thinks, and how the
  * article is printed for it** — the three values two prompt builders share.
  *
  * A leaf: it imports one policy predicate and one type, and nothing imports it
@@ -7,8 +7,8 @@
  * and `PRODUCTION_EFFORT` lived in [`structure.ts`](structure.ts) and were read
  * from there by [`structure-expand.ts`](structure-expand.ts) **as values**, so
  * the moment `structure.ts` imported the cascade — which stage 5 does, to run a
- * deepening wave — `hierarchy → hierarchy-deepen → hierarchy-expand →
- * hierarchy` closed, and `npm run cycles` is a gate at zero. `checkpointKey` was
+ * deepening wave — `structure → structure-deepen → structure-expand →
+ * structure` closed, and `npm run cycles` is a gate at zero. `checkpointKey` was
  * hoisted into [`source-hash.ts`](source-hash.ts) the day before for the same
  * shape of reason; this is the rest of that job.
  * docs/plans/260904d-deepen-fat-sections.md § stage 5.

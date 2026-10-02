@@ -22,7 +22,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article } from "../src/types.js";
+import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../src/messages.js";
+import type { Article, Visibility } from "../src/types.js";
 
 /* The one seam that leaves the browser, mocked at the module for
    article-rename.test.tsx's reason. */
@@ -40,7 +41,7 @@ const { useArchive } = await import("../src/web/useArchive.js");
 const SLUG = "a-piece";
 const WHEN = "2026-10-01T12:00:00.000Z";
 
-function article(archivedAt: string | null | undefined): Article {
+function article(archivedAt: string | null | undefined, visibility: Visibility | undefined): Article {
   return {
     highPowerSince: null,
     meta: { slug: SLUG, title: "A piece", url: "https://example.com/the-piece" },
@@ -74,7 +75,7 @@ function article(archivedAt: string | null | undefined): Article {
         },
       },
     },
-    visibility: "private",
+    ...(visibility === undefined ? {} : { visibility }),
     /* Conditional: under `exactOptionalPropertyTypes` an absent key and an
        explicit `undefined` differ, and absent is the state case 3 is about. */
     ...(archivedAt === undefined ? {} : { archivedAt }),
@@ -116,13 +117,15 @@ async function mount(archivedAt: string | null | undefined, owner: boolean) {
 function MastheadHarness({
   archivedAt,
   owner,
+  visibility = "private",
 }: {
   archivedAt: string | null | undefined;
   owner: boolean;
+  visibility?: Visibility | "unknown";
 }) {
   const archive = useArchive(SLUG, archivedAt, archivedAt !== undefined, false);
   return createElement(Masthead, {
-    article: article(archivedAt),
+    article: article(archivedAt, visibility === "unknown" ? undefined : visibility),
     slug: SLUG,
     ...(owner ? { onRenamed: () => {}, archive } : {}),
   });
@@ -130,11 +133,27 @@ function MastheadHarness({
 
 const button = () => host.querySelector<HTMLButtonElement>('[data-testid="masthead-archive"]');
 
+async function openCard(trigger: Element): Promise<HTMLElement> {
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent("mouseenter"));
+    await new Promise((r) => setTimeout(r, 400));
+  });
+  const card = document.querySelector<HTMLElement>(".tip-soon");
+  if (!card) throw new Error("no card");
+  return card;
+}
+
+async function openSharingCard(): Promise<HTMLElement> {
+  const mark = host.querySelector<HTMLAnchorElement>(`a[href^="/read/${SLUG}/metadata"]`);
+  if (!mark) throw new Error("no sharing mark");
+  return openCard(mark);
+}
+
 function ViewSwitchHarness({ showMasthead }: { showMasthead: boolean }) {
   const archive = useArchive(SLUG, null, true, false);
   return showMasthead
     ? createElement(Masthead, {
-        article: article(null),
+        article: article(null, "private"),
         slug: SLUG,
         onRenamed: () => {},
         archive,
@@ -170,6 +189,89 @@ describe("the masthead's Archive button", () => {
     expect(JSON.parse(init.body as string)).toEqual({ archived: false });
     expect(button()?.dataset.archived).toBe("false");
   });
+
+  it("updates the sharing card from the same controller after archive and put-back presses", async () => {
+    await act(async () =>
+      root.render(
+        createElement(MastheadHarness, { archivedAt: null, owner: true, visibility: "public" }),
+      ),
+    );
+    const sharing = await openSharingCard();
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_ON);
+
+    apiFetch.mockResolvedValueOnce(patched(WHEN));
+    await act(async () => button()!.click());
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_MARK_ON_ARCHIVED);
+
+    apiFetch.mockResolvedValueOnce(patched(null));
+    await act(async () => button()!.click());
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_ON);
+  });
+
+  it.each([
+    [
+      null,
+      "private",
+      "On your shelf",
+      "Archiving takes it off your shelf, and can be undone.",
+      "Nothing else changes — you stay here and can carry on reading.",
+      "Press to archive it.",
+    ],
+    [
+      WHEN,
+      "private",
+      "Archived",
+      "Off your shelf, and still readable here.",
+      "Nothing else changes — you stay here and can carry on reading.",
+      "Press to put it back on your shelf.",
+    ],
+    [
+      null,
+      "public",
+      "On your shelf",
+      "Archiving takes it off your shelf, and can be undone.",
+      "It comes off the public list too, though its public link keeps working. You stay here and can carry on reading.",
+      "Press to archive it.",
+    ],
+    [
+      WHEN,
+      "public",
+      "Archived",
+      "Off your shelf, and still readable here.",
+      "Putting it back lists it publicly again. Its public link works either way, and you stay here.",
+      "Press to put it back on your shelf.",
+    ],
+  ] as const)(
+    "keeps the %s/%s archive card's state, consequences and press apart",
+    async (archivedAt, visibility, head, what, how, press) => {
+      await act(async () =>
+        root.render(createElement(MastheadHarness, { archivedAt, owner: true, visibility })),
+      );
+      const archive = button();
+      if (!archive) throw new Error("no archive mark");
+      const card = await openCard(archive);
+      expect(card.querySelector(".tip-soon-head")?.textContent).toBe(head);
+      expect(card.querySelector(".tip-soon-what")?.textContent).toBe(what);
+      expect(card.querySelector(".tip-soon-how")?.textContent).toBe(how);
+      expect(card.querySelector(".tip-soon-press")?.textContent).toBe(press);
+    },
+  );
+
+  it.each([null, WHEN])(
+    "does not claim archiving has no other effect when visibility is unknown (%s)",
+    async (archivedAt) => {
+      await act(async () =>
+        root.render(
+          createElement(MastheadHarness, { archivedAt, owner: true, visibility: "unknown" }),
+        ),
+      );
+      const archive = button();
+      if (!archive) throw new Error("no archive mark");
+      const card = await openCard(archive);
+      expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(/couldn't be confirmed/i);
+      expect(card.querySelector(".tip-soon-how")?.textContent).not.toContain("Nothing else changes");
+    },
+  );
 
   it("is not drawn for a visitor", async () => {
     await mount(null, false);

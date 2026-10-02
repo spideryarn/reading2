@@ -117,6 +117,7 @@ function propsFor(loaded: Loaded, over: Record<string, unknown> = {}) {
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     linkBase: "/read/x",
     ...over,

@@ -265,7 +265,7 @@ async function runWave(opts: {
     /* The fakes here answer with a string, because none of these tests is about
        what a call cost; `freeAnswer` is the adapter and every one of them
        therefore reports `NO_EXPANSION_USAGE`. The tokens have a file of their
-       own — tests/hierarchy-deepen-tokens.test.ts. */
+       own — tests/structure-deepen-tokens.test.ts. */
     execute: async (request) => freeAnswer(await opts.execute(request)),
     batches: opts.batches,
     ancestorsOf,
@@ -318,7 +318,7 @@ describe("the expansion checkpoint's key", () => {
     expect(request.thinking).toEqual({ type: "adaptive" });
     expect(request.max_tokens).toBeGreaterThan(0);
     expect(request.provider).toEqual(MESSAGES_PROVIDER);
-    expect(request.model).toBe(modelFor("hierarchy", "standard"));
+    expect(request.model).toBe(modelFor("structure", "standard"));
     /* And the four the plan's table adds, which a whole-document call gets for
        free and a scoped one does not. */
     /* `expansionBodyHash`, not `hashBlocks`: the article's own fingerprint plus
@@ -345,7 +345,7 @@ describe("the expansion checkpoint's key", () => {
       recipe: ONE_PER_CALL,
       power: "standard",
     });
-    expect(canonicalFor(first).request).toEqual(messagesWireBody("hierarchy", request.params, "standard"));
+    expect(canonicalFor(first).request).toEqual(messagesWireBody("structure", request.params, "standard"));
   });
 
   it("moves when any field of it moves — enumerated, not listed", () => {

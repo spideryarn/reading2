@@ -97,7 +97,9 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     more: async () => {},
     refresh: async () => {},
     cancel: noop,
-    look: async () => {},
+    look: async () => false,
+    setHidden: async () => {},
+    hiding: new Set<string>(),
     looking: null,
     lookFailed: null,
     lookDraft: null,
@@ -157,7 +159,7 @@ async function aboutCard(): Promise<string> {
   const button = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
   if (!button) throw new Error("the band has no (i)");
   await act(async () => button.click());
-  const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+  const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
   await act(async () => button.click());
   return text;
 }
