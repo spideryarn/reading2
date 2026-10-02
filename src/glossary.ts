@@ -60,6 +60,11 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -101,8 +106,11 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * Exported so tests can assert against the current value rather than pin a
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
+ *
+ * `glossary/7`, 2026-10-02: the request gained `GLOSSARY_OUTPUT_SCHEMA`; the
+ * prompt text is unchanged.
  */
-export const PROMPT_VERSION = "glossary/6";
+export const PROMPT_VERSION = "glossary/7";
 
 /**
  * The most entries one call may return.
@@ -1241,6 +1249,37 @@ function parseJson(raw: string): { entries?: unknown } {
   return parseJsonAnswer(raw, "the glossary response");
 }
 
+const glossaryStringSchema = { type: "string" } as const;
+const glossaryEntrySchema = {
+  type: "object",
+  properties: {
+    name: glossaryStringSchema,
+    kind: {
+      type: "string",
+      enum: ["person", "place", "organization", "event", "work", "concept", "term", "other"],
+    },
+    aliases: { type: "array", items: glossaryStringSchema },
+    senseHere: glossaryStringSchema,
+    background: glossaryStringSchema,
+    difficulty: { type: "number" },
+    centrality: { type: "number" },
+    url: glossaryStringSchema,
+  },
+  required: ["name", "kind", "aliases", "difficulty", "centrality"],
+  additionalProperties: false,
+} as const;
+
+/** The current glossary row; its three prompt-optional prose/link fields stay optional. */
+export const GLOSSARY_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: { entries: { type: "array", items: glossaryEntrySchema } },
+  required: ["entries"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(GLOSSARY_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(GLOSSARY_OUTPUT_SCHEMA, []);
+
 export interface GlossaryRun {
   glossary: Glossary;
   blocks: number;
@@ -1306,8 +1345,9 @@ export async function generateGlossary(opts: {
    * **Off by default, because a cache write costs 1.25x and a prefix nobody
    * reads never earns it back.** Each of these stages makes one call per run, so
    * none of them caches anything for itself; the entry only pays off if a stage
-   * in the same group (src/models.ts § STAGE_EFFORT) runs behind it, inside the
-   * 5-minute TTL. Ordinary ingest stops at `arc` — tweets, glossary and summary
+   * with the same renderer, effort and output schema runs behind it, inside the
+   * 5-minute TTL. No current peer has Glossary's schema (`ARTICLE_OUTPUT_FORMAT`
+   * in src/pipeline.ts). Ordinary ingest stops at `arc` — tweets, glossary and summary
    * are things a reader asks for later — so on the normal path that reader never
    * arrives, and marking unconditionally was a premium paid on every article
    * against a read that does not come. src/jobs.ts sets this from the steps the
@@ -1455,7 +1495,7 @@ export async function generateGlossary(opts: {
   try {
     const call = streamMessage(
       "glossary",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("glossary") },
@@ -1469,8 +1509,9 @@ export async function generateGlossary(opts: {
            separate run, so it reads what the previous one wrote only if it lands
            inside the 5-minute TTL — a question about when somebody clicks, not
            something the code can promise. The reliable win here is cross-stage:
-           the arc and the thread send these same bytes, and in one ingest the
-           three share an entry. docs/research/260826c-prompt-caching-callsites.md. */
+           the arc and the thread send related article bytes. Distinct effort,
+           renderer and schema values mean none of the three currently shares
+           an entry. docs/research/260826c-prompt-caching-callsites.md. */
         system: [
           {
             type: "text" as const,
@@ -1490,7 +1531,7 @@ export async function generateGlossary(opts: {
             }),
           },
         ],
-      },
+      }, GLOSSARY_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

@@ -80,11 +80,10 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
-  const { structureRequest } = await import("../../src/hierarchy.js");
+  const { parseStructureAnswer, structureRequest } = await import("../../src/hierarchy.js");
   const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/hierarchy-prompt.js");
   const { splitBlocks } = await import("../../src/supplement.js");
   const { streamMessage } = await import("../../src/messages-stream.js");
-  const { parseJsonAnswer } = await import("../../src/parse-json.js");
   const simple = await import("../../src/simple-summary.js");
   const tweets = await import("../../src/tweets.js");
   const { collectSpend } = await import("../../src/ai-spend.js");
@@ -140,7 +139,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
                    structure answers to a parse production might have mended, and
                    kept nothing to tell. So the raw answer is kept when it fails. */
                 try {
-                  const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, "paperwork structure answer");
+                  const { root } = parseStructureAnswer(raw, body);
                   return flatten(root, 0, []);
                 } catch (err) {
                   fs.writeFileSync(path.join(OUT, arm, `${slug}.structure-raw.txt`), raw);

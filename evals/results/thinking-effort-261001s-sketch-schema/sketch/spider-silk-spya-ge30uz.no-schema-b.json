@@ -1,0 +1,623 @@
+{
+  "version": "sketch/4",
+  "title": "Biology-to-technology chain",
+  "caption": "A chain down the page: spider silk's properties lead into its natural uses and glandular types, then into how spiders spin it, then into humanity's struggle to copy that spinning, ending in real-world applications — a funnel from biology to technology.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Spider Silk: Overview",
+      "height": 1150,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 260,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "Silk: a protein fibre spiders spin",
+          "size": "md",
+          "sub": "for prey, shelter, mating",
+          "block": "spya-gp4t9x"
+        },
+        {
+          "kind": "node",
+          "id": "props",
+          "shape": "hex",
+          "x": 260,
+          "y": 140,
+          "w": 240,
+          "h": 80,
+          "text": "Structure gives strength, toughness, stretch",
+          "size": "md",
+          "detail": "Crystalline beta-sheets plus amorphous stretchy regions, protective salts, adhesive discs.",
+          "block": "spya-py9zw6"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 260,
+          "w": 330,
+          "h": 210,
+          "style": "band",
+          "label": "ECOLOGICAL USES",
+          "opens": "inside-uses",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "uses",
+          "shape": "box",
+          "x": 60,
+          "y": 300,
+          "w": 270,
+          "h": 70,
+          "text": "Up to seven silk types, many uses",
+          "size": "sm",
+          "sub": "capture, wrap, nest, mate, float",
+          "tone": 1,
+          "block": "spya-rty5kb"
+        },
+        {
+          "kind": "node",
+          "id": "usecases",
+          "shape": "note",
+          "x": 60,
+          "y": 400,
+          "w": 270,
+          "h": 55,
+          "text": "Table: web, wrap, egg sac, ballooning, trails",
+          "size": "xs",
+          "tone": 1,
+          "block": "spya-jyg3uw"
+        },
+        {
+          "kind": "region",
+          "x": 410,
+          "y": 260,
+          "w": 330,
+          "h": 210,
+          "style": "band",
+          "label": "GLANDS & SILK TYPES",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "types",
+          "shape": "box",
+          "x": 440,
+          "y": 300,
+          "w": 270,
+          "h": 70,
+          "text": "Each gland makes a specialised silk",
+          "size": "sm",
+          "sub": "dragline, capture-spiral, wrap, egg",
+          "tone": 2,
+          "block": "spya-hg7j7e"
+        },
+        {
+          "kind": "node",
+          "id": "glanddetail",
+          "shape": "note",
+          "x": 440,
+          "y": 400,
+          "w": 270,
+          "h": 55,
+          "text": "Function traced to originating gland",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-bgtqr0"
+        },
+        {
+          "kind": "node",
+          "id": "spin",
+          "shape": "hex",
+          "x": 260,
+          "y": 500,
+          "w": 240,
+          "h": 80,
+          "text": "Spiders pull silk, not squeeze it",
+          "size": "md",
+          "sub": "gland: tail→ampulla→duct→spigot",
+          "block": "spya-g3h8qq"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 620,
+          "w": 700,
+          "h": 260,
+          "style": "band",
+          "label": "ARTIFICIAL SYNTHESIS",
+          "opens": "inside-synthesis",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "feedstock",
+          "shape": "box",
+          "x": 60,
+          "y": 660,
+          "w": 280,
+          "h": 70,
+          "text": "Copying the protein (feedstock)",
+          "size": "sm",
+          "sub": "E. coli, silkworms, goats",
+          "tone": 3,
+          "block": "spya-rw0wtg"
+        },
+        {
+          "kind": "node",
+          "id": "geometry",
+          "shape": "box",
+          "x": 400,
+          "y": 660,
+          "w": 280,
+          "h": 70,
+          "text": "Copying the spinning apparatus",
+          "size": "sm",
+          "sub": "syringes, microfluidics, electrospinning",
+          "tone": 3,
+          "block": "spya-x4bwhf"
+        },
+        {
+          "kind": "node",
+          "id": "synth",
+          "shape": "box",
+          "x": 230,
+          "y": 770,
+          "w": 300,
+          "h": 80,
+          "text": "Synthetic silk: weaker, thicker than natural",
+          "size": "sm",
+          "sub": "AMSilk, Bolt Threads, Spiber, Kraig",
+          "tone": 3,
+          "block": "spya-j7hems"
+        },
+        {
+          "kind": "node",
+          "id": "research",
+          "shape": "note",
+          "x": 560,
+          "y": 770,
+          "w": 170,
+          "h": 70,
+          "text": "Decades of research mapped structure",
+          "size": "xs",
+          "block": "spya-jvxbb8"
+        },
+        {
+          "kind": "node",
+          "id": "humanuses",
+          "shape": "box",
+          "x": 230,
+          "y": 920,
+          "w": 300,
+          "h": 90,
+          "text": "Applications: textiles, medicine, optics, fusion targets",
+          "size": "md",
+          "sub": "limited by production difficulty",
+          "block": "spya-chy97m"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "props",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "props",
+          "to": "uses",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "props",
+          "to": "types",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "uses",
+          "to": "usecases",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "types",
+          "to": "glanddetail",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "usecases:bottom",
+          "to": "spin:top",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "glanddetail:bottom",
+          "to": "spin:top",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spin",
+          "to": "feedstock",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "spin",
+          "to": "geometry",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "feedstock",
+          "to": "synth",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "geometry",
+          "to": "synth",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "synth",
+          "to": "research",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "synth",
+          "to": "humanuses",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "The article moves in one long chain: what silk is, what makes it work, how spiders use and produce it, how humans try to copy it, and where that copy ends up being used."
+    },
+    {
+      "id": "inside-uses",
+      "title": "Ecological Uses of Silk",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "hub",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 40,
+          "w": 200,
+          "h": 70,
+          "text": "One fibre, many jobs",
+          "size": "md",
+          "block": "spya-ybqc4f"
+        },
+        {
+          "kind": "node",
+          "id": "capture",
+          "shape": "box",
+          "x": 40,
+          "y": 180,
+          "w": 170,
+          "h": 70,
+          "text": "Prey capture: webs, bolas",
+          "size": "sm",
+          "block": "spya-jyg3uw"
+        },
+        {
+          "kind": "node",
+          "id": "immob",
+          "shape": "box",
+          "x": 40,
+          "y": 280,
+          "w": 170,
+          "h": 70,
+          "text": "Immobilising prey with wrap silk",
+          "size": "sm",
+          "block": "spya-sxy3ve"
+        },
+        {
+          "kind": "node",
+          "id": "repro",
+          "shape": "box",
+          "x": 230,
+          "y": 360,
+          "w": 170,
+          "h": 70,
+          "text": "Reproduction: sperm webs, egg sacs",
+          "size": "sm",
+          "block": "spya-ybqc4f"
+        },
+        {
+          "kind": "node",
+          "id": "disperse",
+          "shape": "box",
+          "x": 420,
+          "y": 280,
+          "w": 170,
+          "h": 70,
+          "text": "Ballooning for dispersal",
+          "size": "sm",
+          "block": "spya-jyg3uw"
+        },
+        {
+          "kind": "node",
+          "id": "food",
+          "shape": "box",
+          "x": 420,
+          "y": 180,
+          "w": 170,
+          "h": 70,
+          "text": "Eating own silk as food",
+          "size": "sm",
+          "block": "spya-k8j9fe"
+        },
+        {
+          "kind": "node",
+          "id": "nestline",
+          "shape": "box",
+          "x": 40,
+          "y": 460,
+          "w": 170,
+          "h": 70,
+          "text": "Nest lining, trapdoors, drop lines",
+          "size": "sm",
+          "block": "spya-jyg3uw"
+        },
+        {
+          "kind": "node",
+          "id": "pherom",
+          "shape": "box",
+          "x": 420,
+          "y": 460,
+          "w": 170,
+          "h": 70,
+          "text": "Pheromone trails, alarm lines",
+          "size": "sm",
+          "block": "spya-jyg3uw"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "capture",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "food",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "immob",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "repro",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "disperse",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "nestline",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub",
+          "to": "pherom",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A hub: silk's varied ecological functions all branch from the fact that spiders can tune thickness and stickiness for the job at hand."
+    },
+    {
+      "id": "inside-synthesis",
+      "title": "Artificial Synthesis",
+      "height": 680,
+      "items": [
+        {
+          "kind": "label",
+          "x": 380,
+          "y": 30,
+          "text": "TWO REQUIREMENTS",
+          "size": "sm",
+          "align": "middle"
+        },
+        {
+          "kind": "node",
+          "id": "feed1",
+          "shape": "box",
+          "x": 40,
+          "y": 80,
+          "w": 280,
+          "h": 70,
+          "text": "Protein feedstock from E. coli, silkworms, goats",
+          "size": "sm",
+          "block": "spya-rw0wtg"
+        },
+        {
+          "kind": "node",
+          "id": "feedtable",
+          "shape": "note",
+          "x": 40,
+          "y": 180,
+          "w": 280,
+          "h": 70,
+          "text": "Natural silk still tougher, stretchier",
+          "size": "xs",
+          "block": "spya-gjan3e"
+        },
+        {
+          "kind": "node",
+          "id": "geo1",
+          "shape": "box",
+          "x": 440,
+          "y": 80,
+          "w": 280,
+          "h": 70,
+          "text": "Apparatus: syringe, microfluidics, electrospinning",
+          "size": "sm",
+          "block": "spya-x4bwhf"
+        },
+        {
+          "kind": "node",
+          "id": "shapes",
+          "shape": "note",
+          "x": 440,
+          "y": 180,
+          "w": 280,
+          "h": 70,
+          "text": "Also makes sheets, nanowires, membranes",
+          "size": "xs",
+          "block": "spya-r4r9au"
+        },
+        {
+          "kind": "node",
+          "id": "combine",
+          "shape": "diamond",
+          "x": 280,
+          "y": 300,
+          "w": 220,
+          "h": 90,
+          "text": "Wet-spinning combines both",
+          "size": "md",
+          "block": "spya-jzcepa"
+        },
+        {
+          "kind": "node",
+          "id": "products",
+          "shape": "box",
+          "x": 230,
+          "y": 440,
+          "w": 300,
+          "h": 80,
+          "text": "Commercial attempts: AMSilk, Bolt Threads, Spiber, Kraig, Nexia",
+          "size": "sm",
+          "block": "spya-j7hems"
+        },
+        {
+          "kind": "node",
+          "id": "limit",
+          "shape": "note",
+          "x": 230,
+          "y": 560,
+          "w": 300,
+          "h": 70,
+          "text": "Still half the strength/flexibility of natural silk",
+          "size": "xs",
+          "block": "spya-jzcepa"
+        },
+        {
+          "kind": "edge",
+          "from": "feed1",
+          "to": "feedtable",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "geo1",
+          "to": "shapes",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "feedtable",
+          "to": "combine",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "shapes",
+          "to": "combine",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "combine",
+          "to": "products",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "products",
+          "to": "limit",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Two columns converge: copying silk needs both the right protein and the right apparatus to pull it into fibre, and both still fall short of nature."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "spider-silk-spya-ge30uz",
+  "sourceHash": "e1b739438681beb3.e79e41a4b4b6b689.5a9dbcf7548ed3c5",
+  "profileHash": null
+}

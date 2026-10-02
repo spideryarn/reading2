@@ -57,6 +57,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { isBody } from "./block-policy.js";
 import { blockIndex, sectionNodesOf, sectionPathOf } from "./section-path.js";
@@ -107,15 +112,15 @@ export type {
  * prompt can only reshuffle them between More and Most —
  * docs/plans/260929b-trajectory-stage2-deeper-passes-eval.md.
  *
- * **The value keeps the mode's old name on purpose.** The mode was called
- * Trajectory until 2026-10-01 (plan 261001r). This tag names an unchanged
- * prompt, and it is persisted twice — in the stored route's `version` and in
- * `revision_step_runs.prompt_version` — where `stampForStep` throws
- * `StampDisagrees` if the two differ. Respelling it alone would stale every
- * stored route for no change in the prompt. The next real prompt change bumps
- * it to `skim/8`.
+ * `skim/8`, 2026-10-02: the request gained `SKIM_OUTPUT_SCHEMA`; the prompt
+ * text is unchanged. This is the first new version after the mode's rename.
+ *
+ * **The old value kept the mode's old name on purpose.** The mode was called
+ * Trajectory until 2026-10-01 (plan 261001r), and respelling that unchanged
+ * tag alone would have staled every stored route. This request change is the
+ * first reason to move it, so the new tag also takes the mode's new name.
  */
-export const PROMPT_VERSION = "trajectory/7";
+export const PROMPT_VERSION = "skim/8";
 
 /**
  * **A cue is one line, not a paragraph about the passage**: an instruction or
@@ -1020,6 +1025,31 @@ function parseJson(raw: string): { stops?: unknown } {
   return parseJsonAnswer<{ stops?: unknown }>(raw, "the model's answer");
 }
 
+/** The model-answer shape `parseJson` and `buildSkim` consume. */
+export const SKIM_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["stops"],
+  properties: {
+    stops: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["quote", "depth", "cue"],
+        properties: {
+          quote: { type: "string" },
+          depth: { type: "integer", enum: [1, 2, 3] },
+          cue: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+validateAnthropicJsonSchema(SKIM_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(SKIM_OUTPUT_SCHEMA, []);
+
 export interface SkimRun {
   skim: Skim;
   offered: number;
@@ -1064,18 +1094,21 @@ export async function generateSkim(opts: {
   try {
     const call = streamMessage(
       "skim",
-      {
-        max_tokens: maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: { effort },
-        system: [{ type: "text" as const, text: SKIM_SYSTEM }],
-        messages: [
-          {
-            role: "user",
-            content: parts.prompt,
-          },
-        ],
-      },
+      withMessagesJsonSchema(
+        {
+          max_tokens: maxTokens,
+          thinking: { type: "adaptive" },
+          output_config: { effort },
+          system: [{ type: "text" as const, text: SKIM_SYSTEM }],
+          messages: [
+            {
+              role: "user",
+              content: parts.prompt,
+            },
+          ],
+        },
+        SKIM_OUTPUT_SCHEMA,
+      ),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

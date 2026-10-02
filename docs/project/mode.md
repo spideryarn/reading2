@@ -254,6 +254,18 @@ modes; each item points to the mode doc that holds its machinery.
   [`ThresholdSlider`](../../src/web/ThresholdSlider.tsx); the reasoning is
   [glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is) and
   [faq.md § A few big questions first](faq.md#a-few-big-questions-first-and-a-threshold).
+- **A mode whose items are anchored to blocks is a candidate for Marginalia**, shut by default.
+  Asked when FAQ, Citations, Debate and comments went there:
+
+  > And make a note in new-mode.md and/or docs for Annotation mode that we should keep an eye out
+  > for where new mode-items might be useful to include/display in Annotations mode.
+  >
+  > — Greg, 2026-10-01 (SPIDERYARN-READING2-82,
+  > [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md))
+
+  So when you add a mode, ask whether its items belong in the right-hand column.
+  [marginalia.md § Keep an eye out for new kinds](marginalia.md#keep-an-eye-out-for-new-kinds) says
+  what adding one takes, and which kinds are not there yet.
 
 ## The card on the button
 

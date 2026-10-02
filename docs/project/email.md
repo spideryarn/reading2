@@ -172,7 +172,14 @@ review that reshaped it):
 
 - **To the recipient**, when the voucher is made and again when an unclaimed voucher's address
   actually changes: *A gift of N free articles on Spideryarn*, HTML in the auth templates' shape plus
-  a plain-text part. **Never the note or the creator.** It is one of two letters, chosen before the
+  a plain-text part. **Never the private note or the creator.** It may carry a **note to them**
+  (`recipient_note`), labelled *A note from the person who gave you this gift:* and placed under the
+  heading, above our words, in both letters
+  ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md)). It
+  is the one value in the email we did not write, so it is untrusted on render: `noteText`
+  ([`src/email.ts`](../../src/email.ts)) makes its line breaks plain and its other control characters
+  spaces, and the HTML part escapes it. Never in the subject. Editing it re-sends nothing; an address
+  change sends the note as it then stands. It is one of two letters, chosen before the
   event's transaction by `giftAudienceFor` ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)):
   - **An existing reader** — exactly one account with that address *confirmed*, found in the same
     count-checked account list `/admin/users` reads — is told the articles they had left on Free and

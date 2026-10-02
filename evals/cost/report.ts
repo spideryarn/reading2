@@ -35,6 +35,7 @@ import type { AiCallRow, ScopeKind } from "../../src/ai-spend.js";
 import { formatNanos } from "../../src/ai-spend.js";
 import { ARTICLE_RENDERER, STAGE_EFFORT } from "../../src/models.js";
 import type { ArticleStage } from "../../src/models.js";
+import { ARTICLE_OUTPUT_FORMAT } from "../../src/pipeline.js";
 import { totalRows } from "../../src/store/ai-calls.js";
 
 /** What a set of rows cost, in the three pockets `totalRows` keeps apart. */
@@ -719,8 +720,9 @@ const CACHE_CLAIM_TOLERANCE = 0.1;
  *
  * **Using the pipeline's own tables here is a narrower thing than it looks, and
  * the distinction is the whole reason this gate is trustworthy.** The rule below
- * takes *membership* from `STAGE_EFFORT` and `ARTICLE_RENDERER` — a symmetric
- * question ("do these two stages send the same bytes at the same effort") that
+ * takes *membership* from `STAGE_EFFORT`, `ARTICLE_RENDERER`, and
+ * `ARTICLE_OUTPUT_FORMAT` — a symmetric question ("do these two stages send
+ * the same bytes with the same request settings") that
  * the pipeline has always answered correctly — and takes the *verdict* from the
  * ledger. What it never asks is `sharesArticleCache`'s question, "should this
  * step mark", which is where the direction bug lived and which a check would
@@ -742,7 +744,10 @@ function cacheGroupOf(step: string | null): string | null {
   if (step === null) return null;
   const effort = STAGE_EFFORT[step as ArticleStage] as string | undefined;
   const renderer = ARTICLE_RENDERER[step as ArticleStage] as string | undefined;
-  return effort === undefined || renderer === undefined ? null : `${effort}+${renderer}`;
+  const format = ARTICLE_OUTPUT_FORMAT[step as ArticleStage];
+  return effort === undefined || renderer === undefined || format === undefined
+    ? null
+    : `${effort}+${renderer}+${JSON.stringify(format)}`;
 }
 
 /**
@@ -779,11 +784,21 @@ function cacheGroupOf(step: string | null): string | null {
  * matcher would call two of those a loss when paying for them is a documented
  * choice about latency. Money going missing is the signal; bookkeeping is not.
  */
-export function checkBatchedDraw(rows: readonly AiCallRow[], phase: DrawPhase): Finding[] {
+export function checkBatchedDraw(
+  rows: readonly AiCallRow[],
+  phase: DrawPhase,
+  /**
+   * Which cache group a step is in — the live tables by default. A parameter
+   * because since plan 261001s no two article stages share a group (each sends
+   * its own output schema), so the tests that prove the reader/writer
+   * arithmetic have to supply a pair the live tables no longer contain.
+   */
+  groupOf: (step: string | null) => string | null = cacheGroupOf,
+): Finding[] {
   if (phase !== "batched" || rows.length === 0) return [];
   const findings: Finding[] = [];
 
-  const inGroups = rows.filter((r) => cacheGroupOf(r.stepName) !== null);
+  const inGroups = rows.filter((r) => groupOf(r.stepName) !== null);
   if (inGroups.length === 0) return [];
 
   for (const row of inGroups) {
@@ -803,7 +818,7 @@ export function checkBatchedDraw(rows: readonly AiCallRow[], phase: DrawPhase): 
   const priced = inGroups as (AiCallRow & { cacheWriteTokens: number; cacheReadTokens: number })[];
   const byGroup = new Map<string, typeof priced>();
   for (const r of priced) {
-    const key = cacheGroupOf(r.stepName) as string;
+    const key = groupOf(r.stepName) as string;
     const bucket = byGroup.get(key);
     if (bucket) bucket.push(r);
     else byGroup.set(key, [r]);

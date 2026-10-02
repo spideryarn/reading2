@@ -624,6 +624,22 @@ allowance, [below](#the-allowance-dig-deeper-has-and-look-up-does-not). The prob
 GPT Sol's two reviews are
 [261001p](../plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md).
 
+**Why Opus, measured: it stays, decided 2026-10-02.** 261001p chose Opus because Greg asked for a
+bigger model; an eval then put eleven others against it on six hard presses, with the search frozen
+and three judges from three families. Opus had the highest quality point estimate; GPT-6.1 Sol came
+close at about 58% less a press and 7 seconds sooner, but shorter and shallower, and six presses could
+not separate the two.
+"Luna writes, Opus checks" saved under 1% and added 14 seconds, so it is dropped.
+
+> Q-dig-deeper-model I was tempted to switch to Sol, but let's go with your recommendation and keep
+> Opus for now.
+>
+> — Greg, 2026-10-02
+
+The ~$7 production-shaped Opus-vs-Sol check was not run. The numbers, the models that failed, and
+what would reopen it are
+[research 261002a](../research/261002a-dig-deeper-answer-model.md).
+
 **Look up** — the typed box, [below](#looking-a-term-up) — is not Dig deeper and did not change: it is
 a first question about a phrase rather than a second look at an answer, so the model still decides
 whether to search, on the article's own model. The link hover card stays search-free on purpose

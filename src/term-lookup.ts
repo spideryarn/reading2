@@ -137,8 +137,11 @@ function quoteMatching(
  * `undefined` means the piece does not use the term anywhere. Whether that is a
  * fact about the term or about the glossary is a question this cannot answer —
  * see the caller, which reads `stale` to tell them apart.
+ *
+ * Exported for evals/dig-deeper (plan 261001s), which anchors a simulated
+ * press exactly as this file would rather than keeping a copy of the rule.
  */
-function anchorIn(
+export function anchorIn(
   entry: { name: string; aliases: string[] },
   blocks: readonly Block[],
 ): { blockId: BlockId; quote: string; matched: string } | undefined {
@@ -479,8 +482,11 @@ export function makeLookUpTerm(
  * `case` there — an unknown finish reason is the deny-list side of a bet quiz
  * spells out, and a tool request from a call that sends only the web-search
  * tool is a provider oddity over prose that is prose.
+ *
+ * Exported for evals/dig-deeper (plan 261001s), which applies the glossary's
+ * acceptance rule to every answer it scores as a glossary press.
  */
-function refuseUnfinished(ending: ExplainEnding): void {
+export function refuseUnfinished(ending: ExplainEnding): void {
   switch (ending) {
     case "finished":
     case "unknown-finish-reason":

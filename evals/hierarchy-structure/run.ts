@@ -27,7 +27,9 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { withLedger } from "../../src/cli-ledger.js";
+import { collectSpend, totalSpend } from "../../src/ai-spend.js";
+import { environmentOwnerId } from "../../src/owner.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 import { parseJsonFrom } from "../../src/parse-json.js";
@@ -106,6 +108,15 @@ export interface ArmResult {
   flat?: boolean;
   /** What the paid calls cost, one entry per call (model arms only). */
   calls?: CallStats[];
+  /** The app-wide eval ledger around this paid cell, beside the wire-specific stats above. */
+  spend?: {
+    runId: string;
+    calls: number;
+    costUsd: number | null;
+    unpriced: number;
+    pending: number;
+    writeFailures: number;
+  };
   /**
    * **What the pipeline mended in this arm's answer**, and why an `outcome` of
    * `"ok"` is no longer the whole story. Since 2026-08-30 `buildTree` snaps a
@@ -279,6 +290,7 @@ async function treeFor(
   threw?: string;
   /** The refused answer, verbatim, when there was one — see `ArmFailure.raw`. */
   failedRaw?: string;
+  spend?: ArmResult["spend"];
 }> {
   switch (arm.kind) {
     case "headings": {
@@ -297,24 +309,44 @@ async function treeFor(
          than the survivors. Anything else (a config error, a dead network)
          still crashes the run: a harness fault recorded as an arm outcome
          would blame the arm for the bench. */
-      try {
-        const run = await runModelArm(arm, article.blocks, article.slug);
-        return { tree: run.tree, calls: run.calls, built: run.built };
-      } catch (err) {
-        if (err instanceof ArmFailure) {
-          /* `built` too: an answer can mend a boundary at depth one and then
-             throw at depth three, and a row that recorded only the throw lost
-             the repair figures for exactly the answers a reader would go
-             looking at. GPT Sol, finding 5. */
-          return {
-            threw: err.message,
-            calls: err.calls,
-            ...(err.built ? { built: err.built } : {}),
-            ...(err.raw !== undefined ? { failedRaw: err.raw } : {}),
-          };
-        }
-        throw err;
-      }
+      const { result, report } = await collectSpend(
+        async () => {
+          try {
+            const run = await runModelArm(arm, article.blocks, article.slug);
+            return { tree: run.tree, calls: run.calls, built: run.built };
+          } catch (err) {
+            if (err instanceof ArmFailure) {
+              /* `built` too: an answer can mend a boundary at depth one and then
+                 throw at depth three, and a row that recorded only the throw lost
+                 the repair figures for exactly the answers a reader would go
+                 looking at. GPT Sol, finding 5. */
+              return {
+                threw: err.message,
+                calls: err.calls,
+                ...(err.built ? { built: err.built } : {}),
+                ...(err.raw !== undefined ? { failedRaw: err.raw } : {}),
+              };
+            }
+            throw err;
+          }
+        },
+        {
+          attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
+          sink: (spend) => costStore.record(spend),
+        },
+      );
+      const total = totalSpend(report.calls);
+      return {
+        ...result,
+        spend: {
+          runId: report.runId,
+          calls: report.calls.length,
+          costUsd: total.unpriced === 0 ? total.nanos / 1e9 : null,
+          unpriced: total.unpriced,
+          pending: report.pending.length,
+          writeFailures: report.writeFailures,
+        },
+      };
     }
   }
 }
@@ -618,6 +650,7 @@ async function main(): Promise<void> {
           ...(chose.sectionLevel !== undefined ? { sectionLevel: chose.sectionLevel } : {}),
           ...(chose.flat !== undefined ? { flat: chose.flat } : {}),
           ...(chose.calls ? { calls: chose.calls } : {}),
+          ...(chose.spend ? { spend: chose.spend } : {}),
           ...(chose.built
             ? {
                 repaired: {
@@ -728,5 +761,5 @@ if (isMain(import.meta.url)) {
      run — withDeclaredExternalCall refuses to spend without one open, so a
      model arm run outside this entrypoint fails closed rather than unmetered. */
   loadEnvLocal();
-  await withLedger("eval", main);
+  await main();
 }

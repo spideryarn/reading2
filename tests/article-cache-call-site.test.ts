@@ -11,9 +11,12 @@
  *
  * So this file asks the only question that would have gone red on `24335207`:
  * **run a two-mode job through the real walk, and see what `StepContext.cacheArticle`
- * each step is actually handed.** Both must be `true`. `tweets` and `ideas` share
- * an effort and a renderer, so the entry one writes is the entry the other reads.
- * (The pair was `arc` and `tweets` until `tweets/5` moved tweets to `ids`.)
+ * each step is actually handed.** When this test was written both had to be
+ * `true`: `tweets` and `faq` then shared an effort, renderer, and absence of an
+ * output schema, so the entry one wrote was the entry the other read. They now
+ * send different schemas, and the replacement tripwire below proves no distinct
+ * article stages currently share all three cache dimensions.
+ * (The original pair was `arc` and `tweets` until `tweets/5` moved tweets to `ids`.)
  *
  * docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md
  *
@@ -85,7 +88,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STEPS, type PipelineStep, type StepContext } from "../src/pipeline.js";
+import { STEPS, sharesArticleCache, type PipelineStep, type StepContext } from "../src/pipeline.js";
+import { STAGE_EFFORT } from "../src/models.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
@@ -239,44 +243,52 @@ describe("the cacheArticle flag, as the job walk actually sets it", () => {
     await closeDb();
   }, 60_000);
 
-  it("marks BOTH steps of a same-group pair — the reader as well as the writer", async () => {
-    /* `tweets` and `ideas` since `tweets/5` moved tweets to the `ids` renderer;
-       the pair was `arc` and `tweets` when the bug below was found, and those two
-       no longer share. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-    await walk(["tweets", "ideas"]);
+  /* **There is no same-group pair today, so the "marks BOTH" walk has nothing to
+     walk.** Since plan 261001s every article stage sends its own output schema,
+     and the schema is part of the cache key, so no two stages share a cached
+     article. Production had shown 0 cross-stage cache reads in the 14 days
+     before (only Simple reads, from its own three levels). The walk that proved
+     the reader as well as the writer gets a breakpoint (`24335207`'s bug, found
+     2026-09-03 as `[true, false]`) is kept as a tripwire rather than deleted:
+     the first test below fails the day a pair forms again, and that is the day
+     to point the second one back at it. */
+  it("no two article stages share a cached article today (tripwire)", () => {
+    const stages = Object.keys(STAGE_EFFORT) as StepName[];
+    const pairs = stages.flatMap((a) =>
+      stages.filter((b) => b !== a && sharesArticleCache(a, [b])).map((b) => `${a}+${b}`),
+    );
+    /* If this fails: a pair exists again. Walk it in the test below, with
+       `[true, true]` as the expectation, and delete this test. */
+    expect(pairs).toEqual([]);
+  });
+
+  it("marks neither of two former group-mates now that their schemas differ", async () => {
+    /* `tweets` and `faq` were the same-group pair until 261001s gave each its
+       own schema. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+    await walk(["tweets", "faq"]);
 
     /* First that both steps ran at all. Every way this file can go wrong
        silently — a step skipped on freshness, a walk that stopped after one, a
        registry key that did not take — produces a SHORT list, and a short list
        satisfies every `every()` ever written. docs/reusable/silent-success.md. */
-    expect(seen.map((s) => s.step)).toEqual(["tweets", "ideas"]);
-
-    /* And then the thing itself. Before 2026-09-03 this was `[true, false]`:
-       the writer paid the 1.25x write premium and the reader, last in its
-       group, sent no breakpoint and read nothing. */
-    expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);
+    expect(seen.map((s) => s.step)).toEqual(["tweets", "faq"]);
+    expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
   }, 30_000);
 
   it("marks neither step when the two are in different cache groups", async () => {
     /* `glossary` runs at `medium` where `arc` runs at `high`, and effort is part
        of the cache key — so these two send different prefixes and a marker on
        either would pay for a read that cannot happen. The mistake
-       `sharesArticleCache` reads two tables to avoid, asked at the call site. */
+       `sharesArticleCache` reads all cache dimensions to avoid, asked at the call site. */
     await walk(["arc", "glossary"]);
     expect(seen.map((s) => s.step)).toEqual(["arc", "glossary"]);
     expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
   }, 30_000);
 
-  it("marks both of glossary and quotes, and a lone glossary not at all", async () => {
-    /* **The pair evals/prompt-caching.ts runs on the Messages wire**, with
-       `cacheArticle: true` forced. That eval proves the wire and the two
-       stages' byte layout, and says in its header that it does not prove the
-       job sets the flag. This is that half for the same two stages and for the
-       combined-job shape. The import tick box queues separate jobs, so it does
-       not take this path. docs/plans/261001l-prompt-caching-across-every-call.md § 2b. */
+  it("marks neither Glossary nor Quotes now that their schemas differ", async () => {
     await walk(["glossary", "quotes"]);
     expect(seen.map((s) => s.step)).toEqual(["glossary", "quotes"]);
-    expect(seen.map((s) => s.cacheArticle)).toEqual([true, true]);
+    expect(seen.map((s) => s.cacheArticle)).toEqual([false, false]);
 
     await walk(["glossary"]);
     expect(seen.map((s) => s.step)).toEqual(["glossary"]);

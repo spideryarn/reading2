@@ -158,6 +158,12 @@ describe("the privacy page", () => {
     );
   });
 
+  it("says a gift email may carry a note from whoever gave it", () => {
+    /* Plan 261002b: the note to the recipient goes through Resend too. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("with a short note from whoever gave it, if they wrote one");
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

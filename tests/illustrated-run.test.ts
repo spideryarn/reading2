@@ -22,9 +22,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const finalMessage = vi.fn();
-let lastBriefRequest: { system?: readonly { text: string }[] } | undefined;
+let lastBriefRequest: {
+  system?: readonly { text: string }[];
+  output_config?: { effort?: string; format?: unknown };
+} | undefined;
 const streamMessage = vi.fn(
-  (_task: string, request: { system?: readonly { text: string }[] }) => {
+  (_task: string, request: NonNullable<typeof lastBriefRequest>) => {
     lastBriefRequest = request;
     return {
       onText: (_: (delta: string) => void) => {},
@@ -39,7 +42,7 @@ vi.mock("../src/messages-stream.js", () => ({
   wasRefused: () => false,
 }));
 
-const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST } =
+const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST, ILLUSTRATED_BRIEF_OUTPUT_SCHEMA } =
   await import("../src/illustrated.js");
 const { MAX_PLATES } = await import("../src/illustrated-plate.js");
 
@@ -188,18 +191,26 @@ describe("generateIllustrated", () => {
     expect(system).toMatch(/The ids are for these instructions, not\s+for the reader/);
   });
 
-  /* The effort eval's override (plan 261001p) must leave today's request
-     alone: no `output_config` unless one is asked for, so production keeps the
-     API's implicit default and the eval's base arm is production's bytes. */
+  /* The effort eval's override (plan 261001p) must leave today's effort alone:
+     production keeps the API's implicit default while both arms carry the
+     brief schema. */
   it("sends no effort by default, and only the eval's option adds one", async () => {
     const { draw } = drawer();
     await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw });
     expect(streamMessage.mock.calls[0]?.[1]).toMatchObject({ thinking: { type: "adaptive" } });
-    expect(streamMessage.mock.calls[0]?.[1]).not.toHaveProperty("output_config");
+    expect(lastBriefRequest?.output_config?.effort).toBeUndefined();
+    expect(lastBriefRequest?.output_config?.format).toEqual({
+      type: "json_schema",
+      schema: ILLUSTRATED_BRIEF_OUTPUT_SCHEMA,
+    });
 
     streamMessage.mockClear();
     await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw, effort: "low" });
-    expect(streamMessage.mock.calls[0]?.[1]).toMatchObject({ output_config: { effort: "low" } });
+    expect(lastBriefRequest?.output_config?.effort).toBe("low");
+    expect(lastBriefRequest?.output_config?.format).toEqual({
+      type: "json_schema",
+      schema: ILLUSTRATED_BRIEF_OUTPUT_SCHEMA,
+    });
   });
 
   it("draws a plate per scene, the overview first", async () => {

@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2889.45" width="760" height="2889.45">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2889.45" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Chain to a Wave Theory</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A chain: the article builds, step by step, from a flaw in the old wiring-diagram model of the brain through</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">oscillation-based mechanisms to a wave theory of cognition, then uses that theory to explain analog computation</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">and finally consciousness itself — each stage resting on the one above it.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">From fixed wiring to wave-based mind</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Down the page is the article's own order: a problem with the classical model leads to oscillations and ephaptic</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">coupling, which feed a wave-based control theory, which explains moving brain states and analog computing, which</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">together are used to explain consciousness and unconsciousness.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 80.85)"><rect x="40" y="410" width="680" height="220" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="40" y="660" width="680" height="230" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<path d="M390 110 L390 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,150 386.5,140 393.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 230 L190 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,280 198.85255031382616,274.179144999128 200.55029968908048,280.9701425001453" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 230 L570 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,280 559.4280673804492,280.6958740458439 561.3015744269519,273.95124867843424" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 360 L390 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,450 379.4445085775982,449.08807849482486 382.31706131889973,442.70462795859913" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 360 L390 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,450 397.3790243257493,442.3973688765007 400.509519494249,448.6583592135001" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 530 L390 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,560 386.5,550 393.5,550" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 615 L230 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="230,700 237.18911390370798,692.2175427222816 240.47320048544023,698.3993527584834" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 615 L550 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="550,700 539.5267995145598,698.3993527584834 542.810886096292,692.2175427222816" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M230 780 L390 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,810 379.52626825798114,811.5971673037683 380.81628800333243,804.7170619952279" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M550 780 L390 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,810 399.18371199666757,804.7170619952279 400.47373174201886,811.5971673037683" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 865 L390 930" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,930 386.5,920 393.5,920" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 1005 L390 1030" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,1030 386.5,1020 393.5,1020" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M520 1065 L560 1065" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="560,1065 550,1068.5 550,1061.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Fixed-wiring model can't explain it — a third of neurons fire on any task — Classic feedforward, specialist-neuron models cannot explain why so many prefrontal neurons respond to almost every task. — → spya-k046f6</title>
+<rect x="260" y="30" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="58.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Fixed-wiring model can't</text>
+<text x="390" y="76.84" font-size="15" text-anchor="middle" fill="#f7f7f7">explain it</text>
+<text x="390" y="97.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">a third of neurons fire on any task</text>
+</g>
+<g>
+<title>Neurons multitask (mixed selectivity) — same neuron, different meaning by context — Many cortical neurons blend sensory, motor and context signals, so a fixed synaptic map can't be the whole story. — → spya-v0gbwq</title>
+<rect x="260" y="150" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="178.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Neurons multitask (mixed</text>
+<text x="390" y="196.84" font-size="15" text-anchor="middle" fill="#f7f7f7">selectivity)</text>
+<text x="390" y="217.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">same neuron, different meaning by context</text>
+</g>
+<g>
+<title>Brain waves organize and route spikes — Oscillations segregate and time spiking, and gate which regions can talk to which. — → spya-jnp59d</title>
+<rect x="80" y="280" width="220" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Brain waves organize and route</text>
+<text x="190" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">spikes</text>
+</g>
+<g>
+<title>Waves push spikes directly (ephaptic coupling) — Electric fields alter nearby neurons' voltage without using a synapse, fast and over a wide area. — → spya-mapqhv</title>
+<rect x="460" y="280" width="220" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="570" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Waves push spikes directly</text>
+<text x="570" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">(ephaptic coupling)</text>
+</g>
+<g>
+<title>Alpha/beta waves as inhibitory 'stencils' — Spatial patterns of alpha/beta suppress gamma-driven spiking in some places, letting it through elsewhere. — → spya-qck2sw</title>
+<polygon points="300,450 480,450 520,490 480,530 300,530 260,490" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="390" y="485.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Alpha/beta waves as</text>
+<text x="390" y="504.25" font-size="15" text-anchor="middle" fill="#f7f7f7">inhibitory 'stencils'</text>
+</g>
+<g>
+<title>Explains mixed selectivity and subspace coding — → spya-zmknun</title>
+<rect x="260" y="560" width="260" height="55" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="390" y="583.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Explains mixed selectivity and subspace</text>
+<text x="390" y="598.9" font-size="12" text-anchor="middle" fill="#f7f7f7">coding</text>
+</g>
+<g>
+<title>Moving waves shift neural coding states — Traveling alpha/beta waves accompany the brain switching from one activity pattern to another. — → spya-y09vju</title>
+<polygon points="140,700 320,700 360,740 320,780 140,780 100,740" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="230" y="735.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Moving waves shift neural</text>
+<text x="230" y="754.25" font-size="15" text-anchor="middle" fill="#f7f7f7">coding states</text>
+</g>
+<g>
+<title>Wave interference = analog computation — Overlapping waves add, cancel and combine, doing math in parallel without digital steps. — → spya-h5qjz4</title>
+<polygon points="460,700 640,700 680,740 640,780 460,780 420,740" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="550" y="735.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Wave interference = analog</text>
+<text x="550" y="754.25" font-size="15" text-anchor="middle" fill="#f7f7f7">computation</text>
+</g>
+<g>
+<title>Far more energy-efficient than digital — → spya-szhg6f</title>
+<rect x="260" y="810" width="260" height="55" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="390" y="841.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Far more energy-efficient than digital</text>
+</g>
+<g>
+<title>Anesthesia disrupts wave organization, not specific cells — Very different drugs all converge on the same slow, desynchronized cortical waves when consciousness is lost. — → spya-uvev07</title>
+<rect x="260" y="930" width="260" height="75" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="963.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Anesthesia disrupts wave organization,</text>
+<text x="390" y="978.9" font-size="12" text-anchor="middle" fill="#f7f7f7">not specific cells</text>
+</g>
+<g>
+<title>Synapses store, waves decide what's active now — → spya-dnv2tp</title>
+<rect x="260" y="1030" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="1060.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Synapses store, waves decide</text>
+<text x="390" y="1079.25" font-size="15" text-anchor="middle" fill="#f7f7f7">what's active now</text>
+</g>
+<g>
+<title>Vs. Global Workspace, IIT, Higher-Order theories — → spya-xn7mdj</title>
+<rect x="560" y="1030" width="160" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="640" y="1062" font-size="10" text-anchor="middle" fill="#f7f7f7">Vs. Global Workspace, IIT,</text>
+<text x="640" y="1074.5" font-size="10" text-anchor="middle" fill="#f7f7f7">Higher-Order theories</text>
+</g></g>
+</g>
+<g transform="translate(0 1401.6499999999999)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: Spatial Computing Theory</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A hub: the central idea (alpha/beta waves as stencils that suppress or permit gamma spiking) has three things it is</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">used to explain, shown as satellites rather than a strict sequence.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-SPATIAL</text>
+<g transform="translate(0 65.9)"><path d="M390 140 C390 180.5 160 189.5 160 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="160,230 156.5,220 163.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 140 C390 203 390 217 390 280" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,280 386.5,270 393.5,270" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 140 C390 180.5 620 189.5 620 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="620,230 616.5,220 623.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Alpha/beta as inhibitory stencils — push-pull with gamma spiking — Spatially patterned alpha/beta rhythms suppress gamma-driven spiking in some cortical locations while sparing others, routing information without the brain needing to track specific synapses. — → spya-qck2sw</title>
+<ellipse cx="390" cy="95" rx="110" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="79.12" font-size="20" text-anchor="middle" fill="#f7f7f7">Alpha/beta as</text>
+<text x="390" y="104.12" font-size="20" text-anchor="middle" fill="#f7f7f7">inhibitory…</text>
+<text x="390" y="131.4" font-size="15.2" text-anchor="middle" fill="#8f8f8f">push-pull with gamma…</text>
+</g>
+<g>
+<title>Alpha/beta's millimeter scale fits top-down control — confirmed in primate PFC — Gamma is too fine-grained, theta/delta too broad; alpha/beta sits at the right spatial scale, and in primates it does encode context and predicts errors. — → spya-azz3c8</title>
+<rect x="60" y="230" width="200" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="160" y="265.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Alpha/beta's millimeter scale</text>
+<text x="160" y="280.472" font-size="12" text-anchor="middle" fill="#f7f7f7">fits top-down control</text>
+<text x="160" y="296.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">confirmed in primate PFC</text>
+</g>
+<g>
+<title>Produces mixed selectivity — no dedicated 'context neurons' needed — A neuron inside the stencil in one context but outside it in another looks like it has switched its tuning, without any fixed context-detecting cells. — → spya-zmknun</title>
+<rect x="290" y="280" width="200" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="322.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Produces mixed selectivity</text>
+<text x="390" y="339.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no dedicated 'context neurons' needed</text>
+</g>
+<g>
+<title>Produces orthogonal subspace coding — reconciles noisy cells, tidy populations — The stencils split spiking into separate, structured subsets of active neurons, which is what low-dimensional 'subspace' coding looks like. — → spya-m63zb9</title>
+<rect x="520" y="230" width="200" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="265.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Produces orthogonal subspace</text>
+<text x="620" y="280.472" font-size="12" text-anchor="middle" fill="#f7f7f7">coding</text>
+<text x="620" y="296.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">reconciles noisy cells, tidy…</text>
+</g></g>
+</g>
+<g transform="translate(0 2115.5499999999997)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: Traveling Waves and Analog Computation</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain: moving waves are shown to drive state changes, which is then reframed as a form of computation, which is</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">argued to be efficient and used for combining task contexts.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-WAVES</text>
+<g transform="translate(0 65.9)"><path d="M390 115 L390 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,150 386.5,140 393.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 230 L390 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,270 386.5,260 393.5,260" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 350 L390 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,380 386.5,370 393.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 460 L390 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,500 386.5,490 393.5,490" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Beta waves travel across motor cortex before/after movement — Beta rhythms, which brake movement, rise and fall as a moving wave timed to movement onset and offset. — → spya-qr9ra4</title>
+<rect x="260" y="40" width="260" height="75" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="73.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Beta waves travel across motor cortex</text>
+<text x="390" y="88.9" font-size="12" text-anchor="middle" fill="#f7f7f7">before/after movement</text>
+</g>
+<g>
+<title>Traveling waves may drive switches between coding states — Moving patterns of inhibition/excitation could transition population activity from one orthogonal subspace to another. — → spya-mrsvfu</title>
+<rect x="260" y="150" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Traveling waves may drive switches</text>
+<text x="390" y="201.4" font-size="12" text-anchor="middle" fill="#f7f7f7">between coding states</text>
+</g>
+<g>
+<title>Analog computing: continuous physical quantities do the math — Instead of binary signals, waves directly add, cancel and combine — the physics itself performs the calculation. — → spya-vp5h33</title>
+<rect x="260" y="270" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="306.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Analog computing: continuous physical</text>
+<text x="390" y="321.4" font-size="12" text-anchor="middle" fill="#f7f7f7">quantities do the math</text>
+</g>
+<g>
+<title>Whole pattern settles at once, all in parallel — far cheaper than step-by-step digital logic — Because the medium evolves everywhere simultaneously, analog wave computation is inherently parallel and energy-efficient. — → spya-mgnqxk</title>
+<rect x="260" y="380" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="410.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Whole pattern settles at once, all in</text>
+<text x="390" y="425.472" font-size="12" text-anchor="middle" fill="#f7f7f7">parallel</text>
+<text x="390" y="441.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">far cheaper than step-by-step digital logic</text>
+</g>
+<g>
+<title>Example: summing two context-waves gives a unique pattern per combination — Two task-context signals, each a wave pattern, sum to produce a distinct neural pattern for every combination of contexts — an 'intersection of constraints.' — → spya-prykb8</title>
+<rect x="260" y="500" width="260" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="541.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Example: summing two context-waves</text>
+<text x="390" y="556.4" font-size="12" text-anchor="middle" fill="#f7f7f7">gives a unique pattern per combination</text>
+</g></g>
+</g>
+</svg>

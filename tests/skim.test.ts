@@ -30,6 +30,7 @@ import {
   MAX_CUE_CHARS,
   MAX_IDEA_PROMPT_CHARS,
   PROMPT_VERSION,
+  SKIM_OUTPUT_SCHEMA,
   SKIM_SYSTEM,
   buildSkim,
   collapseQuotes,
@@ -486,7 +487,7 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("trajectory/7");
+    expect(PROMPT_VERSION).toBe("skim/8");
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
     expect(SKIM_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
@@ -815,6 +816,19 @@ describe("the step", () => {
     expect(body).toContain(JSON.stringify(PROFILE_RULES).slice(1, 60));
     /* Block 11's prose is not a quote's text, so it must not be in the request. */
     expect(body).not.toContain("something distinct number 11");
+  });
+
+  it("sends its strict schema without losing the low effort", async () => {
+    const store = storeWith(quotesOf(10));
+    answer = JSON.stringify({ stops: goodRoute });
+    await STEPS.skim.run(ctx(), store, nullCheckpointStore());
+    const body = sent[0]!.body as {
+      output_config?: { effort?: unknown; format?: unknown };
+    };
+    expect(body.output_config).toEqual({
+      effort: "low",
+      format: { type: "json_schema", schema: SKIM_OUTPUT_SCHEMA },
+    });
   });
 });
 

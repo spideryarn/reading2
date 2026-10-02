@@ -11,7 +11,8 @@
  * This is a conversion seam, not an id trust seam. Every proposed start is still
  * resolved against the body. An invented id refuses with `buildTree`'s existing
  * message, while a wrong-but-real id remains possible exactly as it is for the
- * ranged answer. The live `toc/10` path does not call this module in stage 1.
+ * ranged answer. The live `toc/11` path calls this module at its parse boundary;
+ * the frozen `toc/10` eval arm deliberately keeps the old ranged parser.
  */
 import { nameValue } from "./ids.js";
 import type { BuildReport, ModelNode } from "./hierarchy.js";

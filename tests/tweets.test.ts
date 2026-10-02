@@ -25,6 +25,7 @@ import {
   overLimit,
   suggestedLength,
   TARGET,
+  TWEETS_OUTPUT_SCHEMA,
   TWEETS_SYSTEM,
 } from "../src/tweets.js";
 import { articleFingerprint } from "../src/source-hash.js";
@@ -188,6 +189,26 @@ describe("buildThread", () => {
 });
 
 /**
+ * **No mutation involving the store: this block has no store in it.** It pins
+ * the JSON schema a new Tweets answer is decoded against (plan 261001s): every
+ * post carries its source blocks, while the parser above stays tolerant of the
+ * legacy string rows already stored.
+ */
+describe("the live answer contract", () => {
+  it("requires every generated post to carry its source blocks", () => {
+    expect(TWEETS_OUTPUT_SCHEMA.properties.tweets.items).toEqual({
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        blocks: { type: "array", items: { type: "string" } },
+      },
+      required: ["text", "blocks"],
+      additionalProperties: false,
+    });
+  });
+});
+
+/**
  * **No mutation involving the store: this block has no store in it.** It hashes
  * arrays of blocks handed to it directly, which is the pure half of the
  * freshness question — the half that consults a store is the last block.
@@ -331,12 +352,12 @@ describe("hashBlocks and isStale", () => {
 
 /**
  * **No mutation involving the store: no store reaches this block.** It pins the
- * `tweets/6` wording (plan 261001p) beside the stamp that names it, so the text
+ * `tweets/6` wording (plan 261001p) beside the later request-schema stamp, so the text
  * cannot change without the stamp being looked at.
  */
-describe("the tweets/6 prompt", () => {
+describe("the tweets prompt", () => {
   it("pins the paperwork and safe-takeaway rules behind the new stamp", () => {
-    expect(PROMPT_VERSION).toBe("tweets/6");
+    expect(PROMPT_VERSION).toBe("tweets/7");
     expect(TWEETS_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
     expect(TWEETS_SYSTEM).toContain("any implication it states\nitself");
     expect(TWEETS_SYSTEM).toContain("If it deliberately reaches no conclusion");

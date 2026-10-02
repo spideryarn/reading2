@@ -551,6 +551,10 @@ Two more choices worth knowing:
 - **An account with no calls draws an em dash, not `$0.0000`.** A zero with a currency sign reads as
   a measurement, and "we recorded nothing for this person" is the one thing it is not. The sort still
   treats it as zero, because for ranking who is expensive it genuinely is one.
+- **Whole dollars on the cell, the exact figure on hover**, since 2026-10-02 — Greg: *"round to
+  integer dollars (with exact figure as tooltip)"*. A real cost under fifty cents is `<$1`, never
+  `$0`, for the em dash's reason (`formatWholeDollars` in [`src/admin.ts`](../../src/admin.ts);
+  [261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md)).
 
 The wider version of the same numbers — by category, with a median/p95/max spread across every
 account — is `npm run cost -- --owners`:
@@ -767,9 +771,9 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
 | `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
-| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, email, revoked }`; the address only while unclaimed (409 after) |
+| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, email, revoked }`; the address only while unclaimed (409 after) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
 
 Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
@@ -781,7 +785,10 @@ restores it.
 **The page** is [`AdminVouchersPage.tsx`](../../src/web/AdminVouchersPage.tsx) over
 [`useAdminVouchers.ts`](../../src/web/useAdminVouchers.ts), lazy-loaded like the others and linked
 from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a page without a
-loader is a compile error). A create form — address, articles (20 by default), private note — over
+loader is a compile error). A create form — address, articles (20 by default), private note, and a
+note to them that goes in their email, with a sketch of that email beside it showing where the note
+lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
+the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body) — over
 a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.

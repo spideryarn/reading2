@@ -1,0 +1,3616 @@
+{
+  "version": "toc/11",
+  "generator": "claude-sonnet-5",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0015",
+        "n0052",
+        "n0080",
+        "n0096",
+        "n0134",
+        "n0188",
+        "n0201",
+        "n0215",
+        "n0251",
+        "n0268",
+        "n0289"
+      ],
+      "range": [
+        "spya-xed5su",
+        "spya-m2c4yc"
+      ],
+      "title": "Towards a Theory of Bugs",
+      "gist": "Bugs are inevitable because even simple programs can be computationally irreducible, beyond full proof or testing.",
+      "question": "Bugs — why can't any program be guaranteed free of them? (a theory built from ruliology)"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007"
+      ],
+      "range": [
+        "spya-xed5su",
+        "spya-gj554s"
+      ],
+      "title": "My Program Did the Wrong Thing!",
+      "gist": "Bugs are unexpected outcomes relative to a simple mental model of a program, and they become unavoidable once a program's actual computation is irreducibly complex.",
+      "question": "Bugs — why do they occur even when a program seems well understood? (a framing via computational irreducibility)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-xed5su",
+        "spya-z8e57b"
+      ],
+      "title": "Title and read time",
+      "gist": "Title, read-time estimate, and a blank block."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-xed5su",
+        "spya-xed5su"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-wtw9br",
+        "spya-wtw9br"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-z8e57b",
+        "spya-z8e57b"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-d46wsq",
+        "spya-gj554s"
+      ],
+      "title": "My Program Did the Wrong Thing!",
+      "gist": "Bugs are framed as cases where simple programs act in computationally irreducible ways that escape our in-mind predictions, making a general theory of bugs possible through ruliology."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-d46wsq",
+        "spya-d46wsq"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-qyg5re",
+        "spya-qyg5re"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-nzn95h",
+        "spya-nzn95h"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-sx0zyh",
+        "spya-sx0zyh"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-dh7pah",
+        "spya-dh7pah"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-b9z7g9",
+        "spya-b9z7g9"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-gj554s",
+        "spya-gj554s"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0016",
+        "n0025",
+        "n0030",
+        "n0040"
+      ],
+      "range": [
+        "spya-s7uc4u",
+        "spya-u3d2ws"
+      ],
+      "title": "Bugs in Turing Machines",
+      "gist": "Even tiny Turing machines meant to compute simple functions like n+1 eventually produce wrong outputs, with the first bug sometimes delayed until surprisingly large inputs.",
+      "question": "Simple Turing machines — how soon, and how severely, do bugs appear in machines meant to do trivial arithmetic? (worked examples)",
+      "sourceHeading": "Bugs in Turing Machines"
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0015",
+      "children": [
+        "n0017",
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021",
+        "n0022",
+        "n0023",
+        "n0024"
+      ],
+      "range": [
+        "spya-s7uc4u",
+        "spya-h3jx6h"
+      ],
+      "title": "A minimal n+1 machine fails",
+      "gist": "A minimal Turing machine built to compute n+1 appears correct for small inputs, but testing reveals a bug at input 7, where it outputs 9 instead of 8."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-s7uc4u",
+        "spya-s7uc4u"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-kk6a0n",
+        "spya-kk6a0n"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-m9y7wv",
+        "spya-m9y7wv"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-sbt4tk",
+        "spya-sbt4tk"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-kfgajm",
+        "spya-kfgajm"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-scjxv8",
+        "spya-scjxv8"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-ys9cxg",
+        "spya-ys9cxg"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-h3jx6h",
+        "spya-h3jx6h"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0015",
+      "children": [
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029"
+      ],
+      "range": [
+        "spya-hhrzxe",
+        "spya-k8xn3h"
+      ],
+      "title": "The shape of the glitches",
+      "gist": "Plotting the machine's outputs shows a repeating pattern of glitches, occurring whenever an input's binary digits end in three 1s, following a precise mathematical size pattern."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-hhrzxe",
+        "spya-hhrzxe"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-ctcdmk",
+        "spya-ctcdmk"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-z99x4e",
+        "spya-z99x4e"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-k8xn3h",
+        "spya-k8xn3h"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 2,
+      "parent": "n0015",
+      "children": [
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039"
+      ],
+      "range": [
+        "spya-rhc6t0",
+        "spya-pt0hmz"
+      ],
+      "title": "Surveying correct machines",
+      "gist": "Among thousands of small Turing machines that correctly compute n+1, behavior ranges from simple to deceptively complex, and the earliest bugs in the riskiest machines first appear at input 15."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-rhc6t0",
+        "spya-rhc6t0"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-sgvss4",
+        "spya-sgvss4"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-aabpey",
+        "spya-aabpey"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-z4k6q6",
+        "spya-z4k6q6"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-qdvs0y",
+        "spya-qdvs0y"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-y7nwnj",
+        "spya-y7nwnj"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-ak7n5c",
+        "spya-ak7n5c"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-h58prg",
+        "spya-h58prg"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-pt0hmz",
+        "spya-pt0hmz"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 2,
+      "parent": "n0015",
+      "children": [
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-y6ug27",
+        "spya-u3d2ws"
+      ],
+      "title": "Larger machines, later bugs",
+      "gist": "Larger Turing machines can behave correctly for dozens of inputs before suddenly failing, with the riskiest inputs being those whose binary form is all 1s, like 2^i minus 1."
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-y6ug27",
+        "spya-y6ug27"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-tt4xb5",
+        "spya-tt4xb5"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-ktwj9x",
+        "spya-ktwj9x"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-k8dhyb",
+        "spya-k8dhyb"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-hqukdz",
+        "spya-hqukdz"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-h06thy",
+        "spya-h06thy"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-n58qub",
+        "spya-n58qub"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-g2jw29",
+        "spya-g2jw29"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-eyckyr",
+        "spya-eyckyr"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-k6y5k9",
+        "spya-k6y5k9"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-u3d2ws",
+        "spya-u3d2ws"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0053",
+        "n0063",
+        "n0074"
+      ],
+      "range": [
+        "spya-gjut02",
+        "spya-uj4rfn"
+      ],
+      "title": "What Counts as a Bug?",
+      "gist": "Whether something counts as a bug depends on the specification chosen, and for nearly any kind of specification—positive or negative—some machines eventually violate it unexpectedly.",
+      "question": "Specifications — what kinds of rules can define a bug, and can any of them reliably rule bugs out? (several specification types examined)",
+      "sourceHeading": "What Counts as a Bug?"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062"
+      ],
+      "range": [
+        "spya-gjut02",
+        "spya-tkdq33"
+      ],
+      "title": "Specifications as restatement",
+      "gist": "A bug can only be judged against some specification of intended behavior, and even specifications that just restate a program differently can reveal unexpected divergences, as shown by two Turing machines agreeing until input 27."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-gjut02",
+        "spya-gjut02"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-mhwnwh",
+        "spya-mhwnwh"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-tzs7f4",
+        "spya-tzs7f4"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-ssqhfr",
+        "spya-ssqhfr"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-edcy7p",
+        "spya-edcy7p"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-txuteu",
+        "spya-txuteu"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-kzhg6p",
+        "spya-kzhg6p"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-e8xjfs",
+        "spya-e8xjfs"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-tkdq33",
+        "spya-tkdq33"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073"
+      ],
+      "range": [
+        "spya-rt2gb2",
+        "spya-c0gskm"
+      ],
+      "title": "Specifying what not to do",
+      "gist": "Specifications can instead forbid certain behavior, such as unbounded memory use or infinite loops, but even machines that look well behaved can suddenly violate such constraints at a particular input."
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-rt2gb2",
+        "spya-rt2gb2"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-suj0e3",
+        "spya-suj0e3"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-wtm5p7",
+        "spya-wtm5p7"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-q5x4kn",
+        "spya-q5x4kn"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-gp6xya",
+        "spya-gp6xya"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-n9gk5v",
+        "spya-n9gk5v"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-r6gw6a",
+        "spya-r6gw6a"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-a4jvxk",
+        "spya-a4jvxk"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-fmdw58",
+        "spya-fmdw58"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0063",
+      "children": [],
+      "range": [
+        "spya-c0gskm",
+        "spya-c0gskm"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079"
+      ],
+      "range": [
+        "spya-jdmx0m",
+        "spya-uj4rfn"
+      ],
+      "title": "An even-output specification",
+      "gist": "A specification requiring only even outputs is satisfied until, at input 32, a machine unexpectedly outputs 9, suggesting that whatever constraint is chosen some machines will eventually escape it."
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-jdmx0m",
+        "spya-jdmx0m"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-p2d6ms",
+        "spya-p2d6ms"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-hz8ymk",
+        "spya-hz8ymk"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-q5tb0r",
+        "spya-q5tb0r"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-uj4rfn",
+        "spya-uj4rfn"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0081",
+        "n0089"
+      ],
+      "range": [
+        "spya-cy4dgs",
+        "spya-ntjurq"
+      ],
+      "title": "A Cellular Automaton Example",
+      "gist": "Cellular automata designed to double an input size often work correctly for many cases but can suddenly fail at specific, sometimes large, input values.",
+      "question": "Doubling cellular automata — how do bugs show up when generalizing beyond Turing machines? (two worked examples)",
+      "sourceHeading": "A Cellular Automaton Example"
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088"
+      ],
+      "range": [
+        "spya-cy4dgs",
+        "spya-htqcgc"
+      ],
+      "title": "Doubling rules and a first failure",
+      "gist": "Cellular automata can be designed to double the size of an input pattern, and while many rules succeed, some that look promising fail suddenly, as one rule breaks at input 14."
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-cy4dgs",
+        "spya-cy4dgs"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-dvfn87",
+        "spya-dvfn87"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-kudah3",
+        "spya-kudah3"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-h8dhq3",
+        "spya-h8dhq3"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-kzy46q",
+        "spya-kzy46q"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-b6uxy4",
+        "spya-b6uxy4"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0081",
+      "children": [],
+      "range": [
+        "spya-htqcgc",
+        "spya-htqcgc"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 2,
+      "parent": "n0080",
+      "children": [
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-pqwf4x",
+        "spya-ntjurq"
+      ],
+      "title": "Later bugs in other rules",
+      "gist": "Other doubling cellular automata appear correct for a longer stretch of inputs before failing, with observed first bugs occurring at inputs 24 and 32 in different rules."
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-pqwf4x",
+        "spya-pqwf4x"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-jt3kst",
+        "spya-jt3kst"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-sk8qh9",
+        "spya-sk8qh9"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-kagygs",
+        "spya-kagygs"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-rmjff3",
+        "spya-rmjff3"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0089",
+      "children": [],
+      "range": [
+        "spya-ntjurq",
+        "spya-ntjurq"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0097",
+        "n0110",
+        "n0118",
+        "n0131"
+      ],
+      "range": [
+        "spya-gt6430",
+        "spya-fg7dg2"
+      ],
+      "title": "Can One Tell If There's Going to Be a Bug?",
+      "gist": "Visual simplicity of a pattern can guarantee no bugs exist, but some cellular automata look complex yet can still be proven, through analysis of their structure, to always work correctly.",
+      "question": "Correctness — can one tell in advance whether a system will ever have a bug? (a structural proof for one case)",
+      "sourceHeading": "Can One Tell If There's Going to Be a Bug?"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107",
+        "n0108",
+        "n0109"
+      ],
+      "range": [
+        "spya-gt6430",
+        "spya-f89kx4"
+      ],
+      "title": "Visually clear versus ambiguous cases",
+      "gist": "Some cellular automata are visually simple enough, or clearly bounded, to guarantee correct doubling, but a less obvious case tested up to 100,000 inputs with no failure shows stabilization time growing roughly linearly yet with unexplained random fluctuations."
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-gt6430",
+        "spya-gt6430"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-qm284b",
+        "spya-qm284b"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-rhda0x",
+        "spya-rhda0x"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-yfhq8f",
+        "spya-yfhq8f"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-prbnnj",
+        "spya-prbnnj"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-zqt0ya",
+        "spya-zqt0ya"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-npht8w",
+        "spya-npht8w"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-asw9eq",
+        "spya-asw9eq"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-kz8n8e",
+        "spya-kz8n8e"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-a8865j",
+        "spya-a8865j"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-mj9p5j",
+        "spya-mj9p5j"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0097",
+      "children": [],
+      "range": [
+        "spya-f89kx4",
+        "spya-f89kx4"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117"
+      ],
+      "range": [
+        "spya-ks47a8",
+        "spya-vffsp4"
+      ],
+      "title": "A second ambiguous case",
+      "gist": "A second ambiguous cellular automaton also shows roughly linear stabilization time with random-looking fluctuations, leaving open whether the pattern could ever 'leak' and produce a bug."
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-ks47a8",
+        "spya-ks47a8"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-t4rf49",
+        "spya-t4rf49"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-vu73gx",
+        "spya-vu73gx"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-waqwas",
+        "spya-waqwas"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-mtpngt",
+        "spya-mtpngt"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-kpmpzf",
+        "spya-kpmpzf"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0110",
+      "children": [],
+      "range": [
+        "spya-vffsp4",
+        "spya-vffsp4"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0119",
+        "n0120",
+        "n0121",
+        "n0122",
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130"
+      ],
+      "range": [
+        "spya-hcdcqp",
+        "spya-br8vww"
+      ],
+      "title": "Proving correctness from structure",
+      "gist": "Analyzing the full computation rather than just summary statistics reveals that a boundary 'rind' can only move left or stay still, and the pattern inside reduces to the well-understood rule 122, which can never die out."
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-hcdcqp",
+        "spya-hcdcqp"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-r7ty6m",
+        "spya-r7ty6m"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-s96yjg",
+        "spya-s96yjg"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-erqjtv",
+        "spya-erqjtv"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-n4zdkn",
+        "spya-n4zdkn"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-xmsny5",
+        "spya-xmsny5"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-s34883",
+        "spya-s34883"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-gagsuk",
+        "spya-gagsuk"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-szaqw2",
+        "spya-szaqw2"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-th0b9w",
+        "spya-th0b9w"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-ybxykf",
+        "spya-ybxykf"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0118",
+      "children": [],
+      "range": [
+        "spya-br8vww",
+        "spya-br8vww"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 2,
+      "parent": "n0096",
+      "children": [
+        "n0132",
+        "n0133"
+      ],
+      "range": [
+        "spya-n5acnw",
+        "spya-fg7dg2"
+      ],
+      "title": "No bugs after all",
+      "gist": "This structural argument proves the cellular automaton always eventually stabilizes and correctly doubles its input, showing that even visually complex behavior can sometimes be proven free of bugs."
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-n5acnw",
+        "spya-n5acnw"
+      ],
+      "title": ""
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-fg7dg2",
+        "spya-fg7dg2"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0135",
+        "n0142",
+        "n0161",
+        "n0168",
+        "n0173",
+        "n0185"
+      ],
+      "range": [
+        "spya-qr6x2h",
+        "spya-hdwdeu"
+      ],
+      "title": "But What about Formal Proofs?",
+      "gist": "Formal symbolic proofs can show some Turing machines always compute correctly, but when a machine is actually buggy, no such proof exists and testing works just as well.",
+      "question": "Formal proof — can a proof guarantee a program has no bugs, and what happens when the program is actually buggy? (worked proof examples)",
+      "sourceHeading": "But What about Formal Proofs?"
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0136",
+        "n0137",
+        "n0138",
+        "n0139",
+        "n0140",
+        "n0141"
+      ],
+      "range": [
+        "spya-qr6x2h",
+        "spya-ycgxn9"
+      ],
+      "title": "Can correctness be proven?",
+      "gist": "Returning to a Turing machine that appears, across many tested inputs, to always compute n+1 correctly, the question becomes whether this can be formally proven rather than just observed."
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-qr6x2h",
+        "spya-qr6x2h"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-ywjeje",
+        "spya-ywjeje"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-vd6f3a",
+        "spya-vd6f3a"
+      ],
+      "title": ""
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-c4b5bn",
+        "spya-c4b5bn"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-hmqqaz",
+        "spya-hmqqaz"
+      ],
+      "title": ""
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-ycgxn9",
+        "spya-ycgxn9"
+      ],
+      "title": ""
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0143",
+        "n0144",
+        "n0145",
+        "n0146",
+        "n0147",
+        "n0148",
+        "n0149",
+        "n0150",
+        "n0151",
+        "n0152",
+        "n0153",
+        "n0154",
+        "n0155",
+        "n0156",
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160"
+      ],
+      "range": [
+        "spya-jqmftv",
+        "spya-p72kr7"
+      ],
+      "title": "A symbolic notation for tapes",
+      "gist": "Proving correctness requires a symbolic notation representing the tape as a linked list with run-length encoding and head position, from which algebraic-style axioms for the machine's operation and halting can be written down."
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-jqmftv",
+        "spya-jqmftv"
+      ],
+      "title": ""
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-y7k7cf",
+        "spya-y7k7cf"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-qxgvkf",
+        "spya-qxgvkf"
+      ],
+      "title": ""
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-q44v59",
+        "spya-q44v59"
+      ],
+      "title": ""
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-zv2a7w",
+        "spya-zv2a7w"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-yz4tsm",
+        "spya-yz4tsm"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-rca3yf",
+        "spya-rca3yf"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-dduhac",
+        "spya-dduhac"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-kpbek2",
+        "spya-kpbek2"
+      ],
+      "title": ""
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-z3jzbv",
+        "spya-z3jzbv"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-eu0my2",
+        "spya-eu0my2"
+      ],
+      "title": ""
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-jgk2vk",
+        "spya-jgk2vk"
+      ],
+      "title": ""
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-zapw7r",
+        "spya-zapw7r"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-ymen9s",
+        "spya-ymen9s"
+      ],
+      "title": ""
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-san2q8",
+        "spya-san2q8"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-zqphy3",
+        "spya-zqphy3"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-chx3ce",
+        "spya-chx3ce"
+      ],
+      "title": ""
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0142",
+      "children": [],
+      "range": [
+        "spya-p72kr7",
+        "spya-p72kr7"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0162",
+        "n0163",
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167"
+      ],
+      "range": [
+        "spya-k9eddy",
+        "spya-muu0c5"
+      ],
+      "title": "Deriving the correctness theorem",
+      "gist": "The statement to prove reduces to one formula, which can be derived from the axioms by substitution and mathematical induction, yielding a finite symbolic proof that the machine computes n+1 for every input, with no bugs."
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-k9eddy",
+        "spya-k9eddy"
+      ],
+      "title": ""
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-q8fg9q",
+        "spya-q8fg9q"
+      ],
+      "title": ""
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-z8v9v0",
+        "spya-z8v9v0"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-pm96mu",
+        "spya-pm96mu"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-hu7rag",
+        "spya-hu7rag"
+      ],
+      "title": ""
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 3,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-muu0c5",
+        "spya-muu0c5"
+      ],
+      "title": ""
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0169",
+        "n0170",
+        "n0171",
+        "n0172"
+      ],
+      "range": [
+        "spya-wevzjq",
+        "spya-nrywpa"
+      ],
+      "title": "Generalizing to other machines",
+      "gist": "The same method generates proofs for all other small Turing machines that correctly compute n+1, though the proofs grow longer and harder as machines get more complex, and the proofs found are not unique."
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 3,
+      "parent": "n0168",
+      "children": [],
+      "range": [
+        "spya-wevzjq",
+        "spya-wevzjq"
+      ],
+      "title": ""
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 3,
+      "parent": "n0168",
+      "children": [],
+      "range": [
+        "spya-tdp0xj",
+        "spya-tdp0xj"
+      ],
+      "title": ""
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 3,
+      "parent": "n0168",
+      "children": [],
+      "range": [
+        "spya-ktzwer",
+        "spya-ktzwer"
+      ],
+      "title": ""
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 3,
+      "parent": "n0168",
+      "children": [],
+      "range": [
+        "spya-nrywpa",
+        "spya-nrywpa"
+      ],
+      "title": ""
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0174",
+        "n0175",
+        "n0176",
+        "n0177",
+        "n0178",
+        "n0179",
+        "n0180",
+        "n0181",
+        "n0182",
+        "n0183",
+        "n0184"
+      ],
+      "range": [
+        "spya-bn24t3",
+        "spya-ymdpn2"
+      ],
+      "title": "Searching for proofs that don't exist",
+      "gist": "Proofs are found by searching a 'multiway graph' of theorems reachable from the axioms; for a buggy machine no proof is ever found, because the claim is false, revealing that proving and testing cost comparable computational effort."
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-bn24t3",
+        "spya-bn24t3"
+      ],
+      "title": ""
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-c8zns4",
+        "spya-c8zns4"
+      ],
+      "title": ""
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-a84apm",
+        "spya-a84apm"
+      ],
+      "title": ""
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-bufrj8",
+        "spya-bufrj8"
+      ],
+      "title": ""
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-fe0twt",
+        "spya-fe0twt"
+      ],
+      "title": ""
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-kdmeat",
+        "spya-kdmeat"
+      ],
+      "title": ""
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-f9cwzm",
+        "spya-f9cwzm"
+      ],
+      "title": ""
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-zkkrs3",
+        "spya-zkkrs3"
+      ],
+      "title": ""
+    },
+    "n0182": {
+      "id": "n0182",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-ypka68",
+        "spya-ypka68"
+      ],
+      "title": ""
+    },
+    "n0183": {
+      "id": "n0183",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-vs44ga",
+        "spya-vs44ga"
+      ],
+      "title": ""
+    },
+    "n0184": {
+      "id": "n0184",
+      "depth": 3,
+      "parent": "n0173",
+      "children": [],
+      "range": [
+        "spya-ymdpn2",
+        "spya-ymdpn2"
+      ],
+      "title": ""
+    },
+    "n0185": {
+      "id": "n0185",
+      "depth": 2,
+      "parent": "n0134",
+      "children": [
+        "n0186",
+        "n0187"
+      ],
+      "range": [
+        "spya-gtygcn",
+        "spya-hdwdeu"
+      ],
+      "title": "A type-theoretic alternative",
+      "gist": "An alternative, type-theoretic approach using proof assistants and an LLM can also generate a less illuminating but valid proof of correctness for one of the simple machines."
+    },
+    "n0186": {
+      "id": "n0186",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-gtygcn",
+        "spya-gtygcn"
+      ],
+      "title": ""
+    },
+    "n0187": {
+      "id": "n0187",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-hdwdeu",
+        "spya-hdwdeu"
+      ],
+      "title": ""
+    },
+    "n0188": {
+      "id": "n0188",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0189",
+        "n0196"
+      ],
+      "range": [
+        "spya-wcnws7",
+        "spya-ucy0sf"
+      ],
+      "title": "Computational Irreducibility and Bugs",
+      "gist": "Computational irreducibility—needing to run a system to know what it does—is common, and it guarantees bugs are always possible, though some narrow guarantees can survive within predictable pockets.",
+      "question": "Irreducibility — why can't a bounded amount of reasoning ever guarantee a program is bug-free? (two linked concepts examined)",
+      "sourceHeading": "Computational Irreducibility and Bugs"
+    },
+    "n0189": {
+      "id": "n0189",
+      "depth": 2,
+      "parent": "n0188",
+      "children": [
+        "n0190",
+        "n0191",
+        "n0192",
+        "n0193",
+        "n0194",
+        "n0195"
+      ],
+      "range": [
+        "spya-wcnws7",
+        "spya-nd4kn9"
+      ],
+      "title": "Irreducibility as the source of bugs",
+      "gist": "The ultimate source of bugs is computational irreducibility, the fact that a system's outcome can require running it step by step, which is common and means bounded reasoning can never rule out surprises, even though a fully foreseeable program would be pointless to run."
+    },
+    "n0190": {
+      "id": "n0190",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-wcnws7",
+        "spya-wcnws7"
+      ],
+      "title": ""
+    },
+    "n0191": {
+      "id": "n0191",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-wyr446",
+        "spya-wyr446"
+      ],
+      "title": ""
+    },
+    "n0192": {
+      "id": "n0192",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-z3ryqd",
+        "spya-z3ryqd"
+      ],
+      "title": ""
+    },
+    "n0193": {
+      "id": "n0193",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-s247px",
+        "spya-s247px"
+      ],
+      "title": ""
+    },
+    "n0194": {
+      "id": "n0194",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-x3w25j",
+        "spya-x3w25j"
+      ],
+      "title": ""
+    },
+    "n0195": {
+      "id": "n0195",
+      "depth": 3,
+      "parent": "n0189",
+      "children": [],
+      "range": [
+        "spya-nd4kn9",
+        "spya-nd4kn9"
+      ],
+      "title": ""
+    },
+    "n0196": {
+      "id": "n0196",
+      "depth": 2,
+      "parent": "n0188",
+      "children": [
+        "n0197",
+        "n0198",
+        "n0199",
+        "n0200"
+      ],
+      "range": [
+        "spya-uj0h88",
+        "spya-ucy0sf"
+      ],
+      "title": "Pockets of reducibility",
+      "gist": "Whenever irreducibility is present there must also be some 'pockets' of predictable structure, which can sometimes guarantee a desired property, but establishing enough facts to guarantee freedom from all bugs would require infinitely many of them."
+    },
+    "n0197": {
+      "id": "n0197",
+      "depth": 3,
+      "parent": "n0196",
+      "children": [],
+      "range": [
+        "spya-uj0h88",
+        "spya-uj0h88"
+      ],
+      "title": ""
+    },
+    "n0198": {
+      "id": "n0198",
+      "depth": 3,
+      "parent": "n0196",
+      "children": [],
+      "range": [
+        "spya-y9hee0",
+        "spya-y9hee0"
+      ],
+      "title": ""
+    },
+    "n0199": {
+      "id": "n0199",
+      "depth": 3,
+      "parent": "n0196",
+      "children": [],
+      "range": [
+        "spya-zz4up4",
+        "spya-zz4up4"
+      ],
+      "title": ""
+    },
+    "n0200": {
+      "id": "n0200",
+      "depth": 3,
+      "parent": "n0196",
+      "children": [],
+      "range": [
+        "spya-ucy0sf",
+        "spya-ucy0sf"
+      ],
+      "title": ""
+    },
+    "n0201": {
+      "id": "n0201",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0202",
+        "n0208"
+      ],
+      "range": [
+        "spya-yc9e2z",
+        "spya-xrvkvy"
+      ],
+      "title": "Did I Test Enough Cases? The Failure of Ruliological Induction",
+      "gist": "Generalizing from many observed cases, as science normally does, can fail for computational systems, because rare bugs may hide until sampling is extensive or exhaustive enough to find them.",
+      "question": "Testing — when does observing a pattern in many cases justify expecting it to always hold? (no settled answer)",
+      "sourceHeading": "Did I Test Enough Cases? The Failure of Ruliological Induction"
+    },
+    "n0202": {
+      "id": "n0202",
+      "depth": 2,
+      "parent": "n0201",
+      "children": [
+        "n0203",
+        "n0204",
+        "n0205",
+        "n0206",
+        "n0207"
+      ],
+      "range": [
+        "spya-yc9e2z",
+        "spya-a6ybxq"
+      ],
+      "title": "Why induction fails here",
+      "gist": "Scientific induction, inferring a lasting rule from repeated observation, is undermined in computational systems by irreducibility, and even in science itself it succeeds mainly where, as in physics more than biology, reducible regularities happen to dominate."
+    },
+    "n0203": {
+      "id": "n0203",
+      "depth": 3,
+      "parent": "n0202",
+      "children": [],
+      "range": [
+        "spya-yc9e2z",
+        "spya-yc9e2z"
+      ],
+      "title": ""
+    },
+    "n0204": {
+      "id": "n0204",
+      "depth": 3,
+      "parent": "n0202",
+      "children": [],
+      "range": [
+        "spya-ue5uq4",
+        "spya-ue5uq4"
+      ],
+      "title": ""
+    },
+    "n0205": {
+      "id": "n0205",
+      "depth": 3,
+      "parent": "n0202",
+      "children": [],
+      "range": [
+        "spya-ym6u26",
+        "spya-ym6u26"
+      ],
+      "title": ""
+    },
+    "n0206": {
+      "id": "n0206",
+      "depth": 3,
+      "parent": "n0202",
+      "children": [],
+      "range": [
+        "spya-ajc2n8",
+        "spya-ajc2n8"
+      ],
+      "title": ""
+    },
+    "n0207": {
+      "id": "n0207",
+      "depth": 3,
+      "parent": "n0202",
+      "children": [],
+      "range": [
+        "spya-a6ybxq",
+        "spya-a6ybxq"
+      ],
+      "title": ""
+    },
+    "n0208": {
+      "id": "n0208",
+      "depth": 2,
+      "parent": "n0201",
+      "children": [
+        "n0209",
+        "n0210",
+        "n0211",
+        "n0212",
+        "n0213",
+        "n0214"
+      ],
+      "range": [
+        "spya-vy3nfe",
+        "spya-xrvkvy"
+      ],
+      "title": "Sampling, density, and rare bugs",
+      "gist": "Testing a program by sampling inputs only reveals bugs if the sampling is strong and plentiful enough to escape rare 'special corners', and experience shows that rare bugs routinely surface once enough cases are checked."
+    },
+    "n0209": {
+      "id": "n0209",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-vy3nfe",
+        "spya-vy3nfe"
+      ],
+      "title": ""
+    },
+    "n0210": {
+      "id": "n0210",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-ehtbrx",
+        "spya-ehtbrx"
+      ],
+      "title": ""
+    },
+    "n0211": {
+      "id": "n0211",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-utamf4",
+        "spya-utamf4"
+      ],
+      "title": ""
+    },
+    "n0212": {
+      "id": "n0212",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-f7mn34",
+        "spya-f7mn34"
+      ],
+      "title": ""
+    },
+    "n0213": {
+      "id": "n0213",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-wem6ht",
+        "spya-wem6ht"
+      ],
+      "title": ""
+    },
+    "n0214": {
+      "id": "n0214",
+      "depth": 3,
+      "parent": "n0208",
+      "children": [],
+      "range": [
+        "spya-xrvkvy",
+        "spya-xrvkvy"
+      ],
+      "title": ""
+    },
+    "n0215": {
+      "id": "n0215",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0216",
+        "n0223",
+        "n0232",
+        "n0239"
+      ],
+      "range": [
+        "spya-kjsjh5",
+        "spya-q7khj8"
+      ],
+      "title": "Some Typical Ruliological Surprises",
+      "gist": "Across nearly half a century of exploring simple programs, unexpected behavior in cellular automata, Turing machines, combinators, and multiway graphs turns out to be the rule rather than the exception.",
+      "question": "Surprises — how common are ruliological bugs in practice, across many kinds of systems? (several worked examples)",
+      "sourceHeading": "Some Typical Ruliological Surprises"
+    },
+    "n0216": {
+      "id": "n0216",
+      "depth": 2,
+      "parent": "n0215",
+      "children": [
+        "n0217",
+        "n0218",
+        "n0219",
+        "n0220",
+        "n0221",
+        "n0222"
+      ],
+      "range": [
+        "spya-kjsjh5",
+        "spya-v3haun"
+      ],
+      "title": "Rule 30 and a surprising Turing machine",
+      "gist": "Decades of exploring simple rule systems have repeatedly produced surprises, from the unexpectedly complex rule 30 cellular automaton to a Turing machine, found only after searching further, that behaves in a similarly intricate way."
+    },
+    "n0217": {
+      "id": "n0217",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-kjsjh5",
+        "spya-kjsjh5"
+      ],
+      "title": ""
+    },
+    "n0218": {
+      "id": "n0218",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-wwgwe5",
+        "spya-wwgwe5"
+      ],
+      "title": ""
+    },
+    "n0219": {
+      "id": "n0219",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-zbsh70",
+        "spya-zbsh70"
+      ],
+      "title": ""
+    },
+    "n0220": {
+      "id": "n0220",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-k2336r",
+        "spya-k2336r"
+      ],
+      "title": ""
+    },
+    "n0221": {
+      "id": "n0221",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-tgkahp",
+        "spya-tgkahp"
+      ],
+      "title": ""
+    },
+    "n0222": {
+      "id": "n0222",
+      "depth": 3,
+      "parent": "n0216",
+      "children": [],
+      "range": [
+        "spya-v3haun",
+        "spya-v3haun"
+      ],
+      "title": ""
+    },
+    "n0223": {
+      "id": "n0223",
+      "depth": 2,
+      "parent": "n0215",
+      "children": [
+        "n0224",
+        "n0225",
+        "n0226",
+        "n0227",
+        "n0228",
+        "n0229",
+        "n0230",
+        "n0231"
+      ],
+      "range": [
+        "spya-n7j593",
+        "spya-fxbcy3"
+      ],
+      "title": "Surprises from changing inputs",
+      "gist": "A single cellular automaton rule can behave simply across a wide range of starting inputs, yet produce qualitatively new and unexpected patterns at particular inputs like 916 and 97,439."
+    },
+    "n0224": {
+      "id": "n0224",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-n7j593",
+        "spya-n7j593"
+      ],
+      "title": ""
+    },
+    "n0225": {
+      "id": "n0225",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-s2qqv0",
+        "spya-s2qqv0"
+      ],
+      "title": ""
+    },
+    "n0226": {
+      "id": "n0226",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-xukm2x",
+        "spya-xukm2x"
+      ],
+      "title": ""
+    },
+    "n0227": {
+      "id": "n0227",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-hwqtfu",
+        "spya-hwqtfu"
+      ],
+      "title": ""
+    },
+    "n0228": {
+      "id": "n0228",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-k3uz6v",
+        "spya-k3uz6v"
+      ],
+      "title": ""
+    },
+    "n0229": {
+      "id": "n0229",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-vdbehz",
+        "spya-vdbehz"
+      ],
+      "title": ""
+    },
+    "n0230": {
+      "id": "n0230",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-vdjy3v",
+        "spya-vdjy3v"
+      ],
+      "title": ""
+    },
+    "n0231": {
+      "id": "n0231",
+      "depth": 3,
+      "parent": "n0223",
+      "children": [],
+      "range": [
+        "spya-fxbcy3",
+        "spya-fxbcy3"
+      ],
+      "title": ""
+    },
+    "n0232": {
+      "id": "n0232",
+      "depth": 2,
+      "parent": "n0215",
+      "children": [
+        "n0233",
+        "n0234",
+        "n0235",
+        "n0236",
+        "n0237",
+        "n0238"
+      ],
+      "range": [
+        "spya-msgzxc",
+        "spya-xu3yg0"
+      ],
+      "title": "How long until it halts",
+      "gist": "Whether a computation will ever halt can be extremely hard to predict in practice, as shown by a combinator expression that keeps growing for over 137 million steps before finally stopping."
+    },
+    "n0233": {
+      "id": "n0233",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-msgzxc",
+        "spya-msgzxc"
+      ],
+      "title": ""
+    },
+    "n0234": {
+      "id": "n0234",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-fvwunp",
+        "spya-fvwunp"
+      ],
+      "title": ""
+    },
+    "n0235": {
+      "id": "n0235",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-h2j87f",
+        "spya-h2j87f"
+      ],
+      "title": ""
+    },
+    "n0236": {
+      "id": "n0236",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-fres2j",
+        "spya-fres2j"
+      ],
+      "title": ""
+    },
+    "n0237": {
+      "id": "n0237",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-keh5tw",
+        "spya-keh5tw"
+      ],
+      "title": ""
+    },
+    "n0238": {
+      "id": "n0238",
+      "depth": 3,
+      "parent": "n0232",
+      "children": [],
+      "range": [
+        "spya-xu3yg0",
+        "spya-xu3yg0"
+      ],
+      "title": ""
+    },
+    "n0239": {
+      "id": "n0239",
+      "depth": 2,
+      "parent": "n0215",
+      "children": [
+        "n0240",
+        "n0241",
+        "n0242",
+        "n0243",
+        "n0244",
+        "n0245",
+        "n0246",
+        "n0247",
+        "n0248",
+        "n0249",
+        "n0250"
+      ],
+      "range": [
+        "spya-p3ume6",
+        "spya-q7khj8"
+      ],
+      "title": "Circles that sprout beaks",
+      "gist": "Further surprises include a 2D cellular automaton whose circular growth suddenly sprouts an asymmetric 'beak', and a multiway graph of possible growth histories that unexpectedly reaches a dead end, showing that in ruliology such surprises are the norm."
+    },
+    "n0240": {
+      "id": "n0240",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-p3ume6",
+        "spya-p3ume6"
+      ],
+      "title": ""
+    },
+    "n0241": {
+      "id": "n0241",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-eptnfn",
+        "spya-eptnfn"
+      ],
+      "title": ""
+    },
+    "n0242": {
+      "id": "n0242",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-h2nbsx",
+        "spya-h2nbsx"
+      ],
+      "title": ""
+    },
+    "n0243": {
+      "id": "n0243",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-px2rjn",
+        "spya-px2rjn"
+      ],
+      "title": ""
+    },
+    "n0244": {
+      "id": "n0244",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-ey7bx7",
+        "spya-ey7bx7"
+      ],
+      "title": ""
+    },
+    "n0245": {
+      "id": "n0245",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-dam90t",
+        "spya-dam90t"
+      ],
+      "title": ""
+    },
+    "n0246": {
+      "id": "n0246",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-aa23jc",
+        "spya-aa23jc"
+      ],
+      "title": ""
+    },
+    "n0247": {
+      "id": "n0247",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-f6dd7s",
+        "spya-f6dd7s"
+      ],
+      "title": ""
+    },
+    "n0248": {
+      "id": "n0248",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-xqfqnq",
+        "spya-xqfqnq"
+      ],
+      "title": ""
+    },
+    "n0249": {
+      "id": "n0249",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-xs3727",
+        "spya-xs3727"
+      ],
+      "title": ""
+    },
+    "n0250": {
+      "id": "n0250",
+      "depth": 3,
+      "parent": "n0239",
+      "children": [],
+      "range": [
+        "spya-q7khj8",
+        "spya-q7khj8"
+      ],
+      "title": ""
+    },
+    "n0251": {
+      "id": "n0251",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0252",
+        "n0263"
+      ],
+      "range": [
+        "spya-bhwh4d",
+        "spya-ppan8f"
+      ],
+      "title": "Mathematical \"Bugs\"",
+      "gist": "Mathematics occasionally produces counterexamples to patterns that held for enormous numbers of cases, but mainstream pure mathematics mostly avoids such bugs by focusing on humanly understandable, computationally reducible questions.",
+      "question": "Mathematics — why doesn't pure mathematics suffer from ruliology-style bugs as often as computation does? (counterexamples plus an explanation)",
+      "sourceHeading": "Mathematical \"Bugs\""
+    },
+    "n0252": {
+      "id": "n0252",
+      "depth": 2,
+      "parent": "n0251",
+      "children": [
+        "n0253",
+        "n0254",
+        "n0255",
+        "n0256",
+        "n0257",
+        "n0258",
+        "n0259",
+        "n0260",
+        "n0261",
+        "n0262"
+      ],
+      "range": [
+        "spya-bhwh4d",
+        "spya-bg32gr"
+      ],
+      "title": "Counterexamples after many cases",
+      "gist": "Mathematical patterns can also hold for enormous numbers of tested cases before failing, as with polynomial factor coefficients that stay plus-or-minus one until x to the 105 minus 1, or a prime-counting difference that stays positive until an astronomically large prime."
+    },
+    "n0253": {
+      "id": "n0253",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-bhwh4d",
+        "spya-bhwh4d"
+      ],
+      "title": ""
+    },
+    "n0254": {
+      "id": "n0254",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-yyq9nq",
+        "spya-yyq9nq"
+      ],
+      "title": ""
+    },
+    "n0255": {
+      "id": "n0255",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-ca4f5c",
+        "spya-ca4f5c"
+      ],
+      "title": ""
+    },
+    "n0256": {
+      "id": "n0256",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-mvkvgq",
+        "spya-mvkvgq"
+      ],
+      "title": ""
+    },
+    "n0257": {
+      "id": "n0257",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-y7q6q3",
+        "spya-y7q6q3"
+      ],
+      "title": ""
+    },
+    "n0258": {
+      "id": "n0258",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-x9m8me",
+        "spya-x9m8me"
+      ],
+      "title": ""
+    },
+    "n0259": {
+      "id": "n0259",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-cc855a",
+        "spya-cc855a"
+      ],
+      "title": ""
+    },
+    "n0260": {
+      "id": "n0260",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-b7f8a3",
+        "spya-b7f8a3"
+      ],
+      "title": ""
+    },
+    "n0261": {
+      "id": "n0261",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-tjybft",
+        "spya-tjybft"
+      ],
+      "title": ""
+    },
+    "n0262": {
+      "id": "n0262",
+      "depth": 3,
+      "parent": "n0252",
+      "children": [],
+      "range": [
+        "spya-bg32gr",
+        "spya-bg32gr"
+      ],
+      "title": ""
+    },
+    "n0263": {
+      "id": "n0263",
+      "depth": 2,
+      "parent": "n0251",
+      "children": [
+        "n0264",
+        "n0265",
+        "n0266",
+        "n0267"
+      ],
+      "range": [
+        "spya-zcpn8u",
+        "spya-ppan8f"
+      ],
+      "title": "Why pure math mostly escapes this",
+      "gist": "Mainstream pure mathematics mostly avoids such bugs because it concentrates on human-scale questions sitting in predictable pockets, even though Gödel's theorem shows arithmetic can in principle hide the same irreducibility that experimental mathematics directly confronts."
+    },
+    "n0264": {
+      "id": "n0264",
+      "depth": 3,
+      "parent": "n0263",
+      "children": [],
+      "range": [
+        "spya-zcpn8u",
+        "spya-zcpn8u"
+      ],
+      "title": ""
+    },
+    "n0265": {
+      "id": "n0265",
+      "depth": 3,
+      "parent": "n0263",
+      "children": [],
+      "range": [
+        "spya-whd6dc",
+        "spya-whd6dc"
+      ],
+      "title": ""
+    },
+    "n0266": {
+      "id": "n0266",
+      "depth": 3,
+      "parent": "n0263",
+      "children": [],
+      "range": [
+        "spya-t3vxyk",
+        "spya-t3vxyk"
+      ],
+      "title": ""
+    },
+    "n0267": {
+      "id": "n0267",
+      "depth": 3,
+      "parent": "n0263",
+      "children": [],
+      "range": [
+        "spya-ppan8f",
+        "spya-ppan8f"
+      ],
+      "title": ""
+    },
+    "n0268": {
+      "id": "n0268",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0269",
+        "n0276",
+        "n0283"
+      ],
+      "range": [
+        "spya-kdks69",
+        "spya-j4tprn"
+      ],
+      "title": "Bugs in Practice",
+      "gist": "Avoiding bugs in practice depends on good language design and on finding ways to visually or symbolically 'see inside' a computation, but any program doing real computational work retains some risk of behaving unexpectedly.",
+      "question": "Practice — what can programmers actually do to limit, though never eliminate, bugs? (language design and visualization)",
+      "sourceHeading": "Bugs in Practice"
+    },
+    "n0269": {
+      "id": "n0269",
+      "depth": 2,
+      "parent": "n0268",
+      "children": [
+        "n0270",
+        "n0271",
+        "n0272",
+        "n0273",
+        "n0274",
+        "n0275"
+      ],
+      "range": [
+        "spya-kdks69",
+        "spya-x8ag2t"
+      ],
+      "title": "Language design as a strategy",
+      "gist": "Guaranteeing a program free of bugs would require fully understanding it, which would make running it pointless, so the best practical strategy is designing languages whose primitives already match what humans actually want to compute, as with short, bug-resistant Wolfram Language programs."
+    },
+    "n0270": {
+      "id": "n0270",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-kdks69",
+        "spya-kdks69"
+      ],
+      "title": ""
+    },
+    "n0271": {
+      "id": "n0271",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-uqhm5n",
+        "spya-uqhm5n"
+      ],
+      "title": ""
+    },
+    "n0272": {
+      "id": "n0272",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-p2f2cx",
+        "spya-p2f2cx"
+      ],
+      "title": ""
+    },
+    "n0273": {
+      "id": "n0273",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-wx09gt",
+        "spya-wx09gt"
+      ],
+      "title": ""
+    },
+    "n0274": {
+      "id": "n0274",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-jdrtne",
+        "spya-jdrtne"
+      ],
+      "title": ""
+    },
+    "n0275": {
+      "id": "n0275",
+      "depth": 3,
+      "parent": "n0269",
+      "children": [],
+      "range": [
+        "spya-x8ag2t",
+        "spya-x8ag2t"
+      ],
+      "title": ""
+    },
+    "n0276": {
+      "id": "n0276",
+      "depth": 2,
+      "parent": "n0268",
+      "children": [
+        "n0277",
+        "n0278",
+        "n0279",
+        "n0280",
+        "n0281",
+        "n0282"
+      ],
+      "range": [
+        "spya-s0e3qm",
+        "spya-j4rcwn"
+      ],
+      "title": "Seeing inside a computation",
+      "gist": "Catching bugs in practice depends on being able to 'see inside' a computation, which visual or symbolic representations make easier for cellular automata and Turing machines than for traditional software with shared mutable state, though many bugs are still ordinary human mistakes."
+    },
+    "n0277": {
+      "id": "n0277",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-s0e3qm",
+        "spya-s0e3qm"
+      ],
+      "title": ""
+    },
+    "n0278": {
+      "id": "n0278",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-wvj8uq",
+        "spya-wvj8uq"
+      ],
+      "title": ""
+    },
+    "n0279": {
+      "id": "n0279",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-qexzj4",
+        "spya-qexzj4"
+      ],
+      "title": ""
+    },
+    "n0280": {
+      "id": "n0280",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-sr946a",
+        "spya-sr946a"
+      ],
+      "title": ""
+    },
+    "n0281": {
+      "id": "n0281",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-r32r9j",
+        "spya-r32r9j"
+      ],
+      "title": ""
+    },
+    "n0282": {
+      "id": "n0282",
+      "depth": 3,
+      "parent": "n0276",
+      "children": [],
+      "range": [
+        "spya-j4rcwn",
+        "spya-j4rcwn"
+      ],
+      "title": ""
+    },
+    "n0283": {
+      "id": "n0283",
+      "depth": 2,
+      "parent": "n0268",
+      "children": [
+        "n0284",
+        "n0285",
+        "n0286",
+        "n0287",
+        "n0288"
+      ],
+      "range": [
+        "spya-sggbeh",
+        "spya-j4tprn"
+      ],
+      "title": "Deep bugs in AI and raw computation",
+      "gist": "Deeper bugs arise from computation's own nature rather than human error, affecting even programs built by exhaustive search or machine learning where nothing is fully understood, and such unexpected behavior can equally be read as a scientific discovery rather than a failure."
+    },
+    "n0284": {
+      "id": "n0284",
+      "depth": 3,
+      "parent": "n0283",
+      "children": [],
+      "range": [
+        "spya-sggbeh",
+        "spya-sggbeh"
+      ],
+      "title": ""
+    },
+    "n0285": {
+      "id": "n0285",
+      "depth": 3,
+      "parent": "n0283",
+      "children": [],
+      "range": [
+        "spya-qbh6a3",
+        "spya-qbh6a3"
+      ],
+      "title": ""
+    },
+    "n0286": {
+      "id": "n0286",
+      "depth": 3,
+      "parent": "n0283",
+      "children": [],
+      "range": [
+        "spya-ms0ens",
+        "spya-ms0ens"
+      ],
+      "title": ""
+    },
+    "n0287": {
+      "id": "n0287",
+      "depth": 3,
+      "parent": "n0283",
+      "children": [],
+      "range": [
+        "spya-xdwm97",
+        "spya-xdwm97"
+      ],
+      "title": ""
+    },
+    "n0288": {
+      "id": "n0288",
+      "depth": 3,
+      "parent": "n0283",
+      "children": [],
+      "range": [
+        "spya-j4tprn",
+        "spya-j4tprn"
+      ],
+      "title": ""
+    },
+    "n0289": {
+      "id": "n0289",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0290",
+        "n0291"
+      ],
+      "range": [
+        "spya-y2vpe2",
+        "spya-m2c4yc"
+      ],
+      "title": "Thanks",
+      "gist": "Acknowledgements to Wolfram Institute colleagues and the Wolfram Software Quality Assurance team.",
+      "sourceHeading": "Thanks"
+    },
+    "n0290": {
+      "id": "n0290",
+      "depth": 2,
+      "parent": "n0289",
+      "children": [],
+      "range": [
+        "spya-y2vpe2",
+        "spya-y2vpe2"
+      ],
+      "title": ""
+    },
+    "n0291": {
+      "id": "n0291",
+      "depth": 2,
+      "parent": "n0289",
+      "children": [],
+      "range": [
+        "spya-m2c4yc",
+        "spya-m2c4yc"
+      ],
+      "title": ""
+    }
+  }
+}

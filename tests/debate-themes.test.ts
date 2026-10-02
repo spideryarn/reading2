@@ -17,13 +17,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let answer: () => Promise<unknown> = () => Promise.reject(new Error("no answer set"));
 let callCount = 0;
+const requests: unknown[] = [];
 
 vi.mock("../src/ai-call.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/ai-call.js")>();
   return {
     ...real,
-    openRouterJson: () => {
+    openRouterJson: (_job: unknown, body: unknown) => {
       callCount += 1;
+      requests.push(body);
       return answer().then((json) => ({ json, answeredBy: null, generationId: null }));
     },
   };
@@ -69,6 +71,7 @@ const mint = () => MINTED[n++] ?? "spya-thzzzz";
 beforeEach(() => {
   n = 0;
   callCount = 0;
+  requests.length = 0;
 });
 
 function made(result: ReturnType<typeof readSynthesisAnswer>) {
@@ -164,6 +167,8 @@ describe("the synthesis prompt", () => {
     expect(prompt).toContain(`[source ${rows[0]!.id}]`);
     expect(prompt).toContain(rows[0]!.sourceQuote);
     expect(prompt).toContain("Pick at most 1 key source.");
+    expect(THEMES_SYSTEM).toContain("JSON object, and nothing else");
+    expect(THEMES_SYSTEM).not.toContain("fenced block");
   });
 });
 
@@ -357,7 +362,6 @@ describe("readStoredSynthesis", () => {
 
 describe("synthesiseDebate", () => {
   const stop = (content: unknown) => ({ choices: [{ finish_reason: "stop", message: { content } }] });
-  const fenced = (body: unknown) => stop(`\`\`\`debate\n${JSON.stringify(body)}\n\`\`\``);
 
   it("asks nothing below the minimum, and says so", async () => {
     const few = rows.slice(0, SYNTHESIS_MIN_ROWS - 1);
@@ -368,16 +372,30 @@ describe("synthesiseDebate", () => {
   it("reads a clean answer", async () => {
     answer = () =>
       Promise.resolve(
-        fenced({
+        stop(JSON.stringify({
           themes: [{ label: "L", gist: "G", sources: ["spya-r00001", "spya-r00002"] }],
           key: [{ source: "spya-r00001", role: "dissents", why: "W" }],
-        }),
+        })),
       );
     const got = await synthesiseDebate({ rows, model: "m" });
     expect(got.kind).toBe("made");
     if (got.kind !== "made") return;
     expect(got.themes.map((t) => t.rowIds)).toEqual([["spya-r00001", "spya-r00002"]]);
     expect(got.key).toEqual([{ rowId: "spya-r00001", role: "dissents", why: "W" }]);
+    expect(requests[0]).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "debate_synthesis",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["themes", "key"],
+          },
+        },
+      },
+    });
   });
 
   it("stores failed — not an empty made — for every unusable answer", async () => {
@@ -385,7 +403,7 @@ describe("synthesiseDebate", () => {
       { choices: [{ finish_reason: "length", message: { content: "```debate\n{" } }] },
       { choices: [] },
       null,
-      stop("no fence at all"),
+      stop("not json at all"),
       stop("```debate\nnot json\n```"),
       stop("```debate\n[]\n```"),
       stop(["not", "a", "string"]),

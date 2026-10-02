@@ -124,8 +124,8 @@ const MAX_QUERY_CHARS = 200;
  * $0.047 for a press that reads it. The cold press scales with the article, so
  * a 100k-token paper is about $0.60. The fuse is 100 of those, about $60 a day
  * at the very worst, and $5–25 for presses that are mostly warm. Investigate's
- * fuse is $20 a day; this one is looser because one button here replaces two
- * that had no limit at all, and the ceiling is Greg's to move.
+ * fuse is $50 a day (since 2026-10-02); this one is looser because one button
+ * here replaces two that had no limit at all, and the ceiling is Greg's to move.
  *
  * Two at once rather than Investigate's one, because a reader may reasonably
  * dig into a term and a comment side by side, and each button already allows

@@ -45,6 +45,11 @@ import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Tree, TreeNode } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 /* Moved to a pure leaf on 2026-10-01 (plan 261001b); re-exported so every stage
@@ -61,8 +66,11 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
  * which is the reason `tweets` and `glossary` export theirs as well.
  *
  * `arc/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `arc/5`, 2026-10-02: the request gained `ARC_OUTPUT_SCHEMA`; the prompt text
+ * is unchanged.
  */
-export const PROMPT_VERSION = "arc/4";
+export const PROMPT_VERSION = "arc/5";
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
 article. The reader sees, side by side: your column, then a one-sentence gist
@@ -267,6 +275,17 @@ function parseJson(raw: string): { arc: string[] } {
   return parseJsonAnswer(raw, "the arc response");
 }
 
+/** The one closed array shape the prompt asks for and `buildArc` consumes. */
+export const ARC_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: { arc: { type: "array", items: { type: "string" } } },
+  required: ["arc"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(ARC_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(ARC_OUTPUT_SCHEMA, []);
+
 export interface ArcRun {
   arc: Arc;
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what an arc cost. */
@@ -312,8 +331,9 @@ export async function generateArc(opts: {
    * **Off by default, because a cache write costs 1.25x and a prefix nobody
    * reads never earns it back.** Each of these stages makes one call per run, so
    * none of them caches anything for itself; the entry only pays off if a stage
-   * in the same group (src/models.ts § STAGE_EFFORT) runs behind it, inside the
-   * 5-minute TTL. Ordinary ingest stops at `arc` — tweets, glossary and summary
+   * with the same renderer, effort and output schema runs behind it, inside the
+   * 5-minute TTL. No current peer has Arc's schema (`ARTICLE_OUTPUT_FORMAT` in
+   * src/pipeline.ts). Ordinary ingest stops at `arc` — tweets, glossary and summary
    * are things a reader asks for later — so on the normal path that reader never
    * arrives, and marking unconditionally was a premium paid on every article
    * against a read that does not come. src/jobs.ts sets this from the steps the
@@ -365,7 +385,7 @@ export async function generateArc(opts: {
      `anthropicCallFailed` never sees them. See docs/project/logging.md. */
   let message: Anthropic.Message;
   try {
-    const call = streamMessage("arc", {
+    const call = streamMessage("arc", withMessagesJsonSchema({
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: effortFor("arc") },
@@ -381,7 +401,7 @@ export async function generateArc(opts: {
         { type: "text" as const, text: SYSTEM },
       ],
       messages: [{ role: "user", content: renderPrompt(tree) }],
-    }, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
+    }, ARC_OUTPUT_SCHEMA), { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
       const report = opts.onProgress;

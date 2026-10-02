@@ -1,5 +1,7 @@
 # Trajectory: each pass walks only its new stops
 
+Research write-up: [docs/research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
+
 From an admin report of Greg's, SPIDERYARN-READING2-4P (overseer queue `qi-amm7ytak`), made on
 `arxiv-2212-spya-u5293w` at depth 2 (More):
 

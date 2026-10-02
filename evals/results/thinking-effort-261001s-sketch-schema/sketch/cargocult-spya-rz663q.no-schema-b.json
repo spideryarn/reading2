@@ -1,0 +1,692 @@
+{
+  "version": "sketch/4",
+  "title": "Funnel into hub, then chain",
+  "caption": "A funnel of failed pseudoscience examples narrows into Feynman's central diagnosis—missing scientific integrity—which then fans out into principles and is tested against a chain of real-world case studies.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Cargo Cult Science — overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "intro",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 200,
+          "h": 60,
+          "text": "Why people still believe nonsense",
+          "size": "md",
+          "detail": "Science arose by testing and discarding failed ideas, yet mysticism and pseudoscience persist.",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "region",
+          "x": 24,
+          "y": 120,
+          "w": 320,
+          "h": 260,
+          "style": "band",
+          "label": "FAILED INVESTIGATIONS",
+          "opens": "inside-investigations",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "esp",
+          "shape": "box",
+          "x": 50,
+          "y": 160,
+          "w": 260,
+          "h": 60,
+          "text": "Mysticism, ESP, Uri Geller — nothing worked",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "edu",
+          "shape": "box",
+          "x": 50,
+          "y": 240,
+          "w": 260,
+          "h": 60,
+          "text": "Reading methods, crime policy claim science, show no progress",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "cocktail",
+          "shape": "box",
+          "x": 50,
+          "y": 320,
+          "w": 260,
+          "h": 50,
+          "text": "The \"cocktail party test\" for empty fields",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "cult",
+          "shape": "hex",
+          "x": 280,
+          "y": 420,
+          "w": 220,
+          "h": 90,
+          "text": "\"Cargo Cult Science\": the form of research without real results",
+          "size": "md",
+          "detail": "Islanders mimic airstrips and control towers, but no planes land — the missing ingredient is scientific integrity.",
+          "tone": 2,
+          "block": "spya-fd2muf"
+        },
+        {
+          "kind": "region",
+          "x": 400,
+          "y": 540,
+          "w": 340,
+          "h": 260,
+          "style": "band",
+          "label": "WHAT INTEGRITY REQUIRES",
+          "opens": "inside-integrity",
+          "tone": 3
+        },
+        {
+          "kind": "node",
+          "id": "report-against",
+          "shape": "box",
+          "x": 420,
+          "y": 580,
+          "w": 300,
+          "h": 60,
+          "text": "Report everything that could make your result wrong",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-afgs74"
+        },
+        {
+          "kind": "node",
+          "id": "advert",
+          "shape": "box",
+          "x": 420,
+          "y": 660,
+          "w": 300,
+          "h": 55,
+          "text": "Unlike advertising, don't just avoid lying — disclose full implications",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-bpyx8n"
+        },
+        {
+          "kind": "node",
+          "id": "truthout",
+          "shape": "box",
+          "x": 420,
+          "y": 735,
+          "w": 300,
+          "h": 50,
+          "text": "Sloppy work gets exposed eventually",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-az6z7k"
+        },
+        {
+          "kind": "node",
+          "id": "millikan",
+          "shape": "box",
+          "x": 230,
+          "y": 830,
+          "w": 300,
+          "h": 65,
+          "text": "Millikan's electron charge: later scientists fooled themselves toward his wrong number",
+          "size": "sm",
+          "block": "spya-s9msxy"
+        },
+        {
+          "kind": "node",
+          "id": "layman",
+          "shape": "box",
+          "x": 230,
+          "y": 915,
+          "w": 300,
+          "h": 55,
+          "text": "Same honesty owed to the public and to policymakers",
+          "size": "sm",
+          "block": "spya-c46yyu"
+        },
+        {
+          "kind": "region",
+          "x": 30,
+          "y": 990,
+          "w": 700,
+          "h": 150,
+          "style": "band",
+          "label": "CASE STUDIES PUT TO THE TEST",
+          "tone": 4
+        },
+        {
+          "kind": "node",
+          "id": "young",
+          "shape": "box",
+          "x": 60,
+          "y": 1030,
+          "w": 200,
+          "h": 60,
+          "text": "Young's rat maze: careful, then ignored",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-fvenms"
+        },
+        {
+          "kind": "node",
+          "id": "rhine",
+          "shape": "box",
+          "x": 290,
+          "y": 1030,
+          "w": 200,
+          "h": 60,
+          "text": "Rhine's ESP: effects shrink to nothing",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-rbpppq"
+        },
+        {
+          "kind": "node",
+          "id": "wish",
+          "shape": "ellipse",
+          "x": 520,
+          "y": 1030,
+          "w": 180,
+          "h": 60,
+          "text": "Closing wish: keep your integrity",
+          "size": "sm",
+          "tone": 4,
+          "block": "spya-ndyj3t"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "esp",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "edu",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "intro",
+          "to": "cocktail",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "esp",
+          "to": "cult",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "edu",
+          "to": "cult",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cocktail",
+          "to": "cult",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "cult",
+          "to": "report-against",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "report-against",
+          "to": "advert",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "advert",
+          "to": "truthout",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "truthout",
+          "to": "millikan",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "millikan",
+          "to": "layman",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "layman",
+          "to": "young",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "layman",
+          "to": "rhine",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rhine",
+          "to": "wish",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "The talk funnels several failed investigations into one diagnosis (missing integrity), spells out that integrity as satellite principles, then walks through case studies that test it before closing."
+    },
+    {
+      "id": "inside-investigations",
+      "title": "Failed investigations",
+      "height": 640,
+      "items": [
+        {
+          "kind": "node",
+          "id": "witch",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 40,
+          "w": 220,
+          "h": 60,
+          "text": "Medieval witch doctors: nothing worked",
+          "size": "md",
+          "block": "spya-ddrr9m"
+        },
+        {
+          "kind": "node",
+          "id": "tanks",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 260,
+          "h": 55,
+          "text": "Isolation tanks, Esalen hallucinations",
+          "size": "sm",
+          "block": "spya-q4502k"
+        },
+        {
+          "kind": "node",
+          "id": "reflex",
+          "shape": "box",
+          "x": 60,
+          "y": 235,
+          "w": 260,
+          "h": 55,
+          "text": "Reflexology massage, no pituitary found",
+          "size": "sm",
+          "block": "spya-xm9a87"
+        },
+        {
+          "kind": "node",
+          "id": "geller",
+          "shape": "box",
+          "x": 60,
+          "y": 310,
+          "w": 260,
+          "h": 55,
+          "text": "Uri Geller's key-bending fails under test",
+          "size": "sm",
+          "block": "spya-mmhbvn"
+        },
+        {
+          "kind": "node",
+          "id": "reading",
+          "shape": "box",
+          "x": 440,
+          "y": 160,
+          "w": 260,
+          "h": 55,
+          "text": "Reading scores don't improve despite theory",
+          "size": "sm",
+          "block": "spya-aww976"
+        },
+        {
+          "kind": "node",
+          "id": "crime",
+          "shape": "box",
+          "x": 440,
+          "y": 235,
+          "w": 260,
+          "h": 55,
+          "text": "Crime treatment: lots of theory, no progress",
+          "size": "sm",
+          "block": "spya-re4634"
+        },
+        {
+          "kind": "node",
+          "id": "intimidate",
+          "shape": "box",
+          "x": 440,
+          "y": 310,
+          "w": 260,
+          "h": 55,
+          "text": "Pseudoscience intimidates good common sense",
+          "size": "sm",
+          "block": "spya-re4634"
+        },
+        {
+          "kind": "node",
+          "id": "test",
+          "shape": "box",
+          "x": 250,
+          "y": 410,
+          "w": 260,
+          "h": 60,
+          "text": "Cocktail party test finds empty topics (even psychotherapy)",
+          "size": "sm",
+          "block": "spya-wc4h5s"
+        },
+        {
+          "kind": "node",
+          "id": "diagnosis",
+          "shape": "hex",
+          "x": 280,
+          "y": 520,
+          "w": 220,
+          "h": 80,
+          "text": "All share one missing thing: integrity",
+          "size": "md",
+          "tone": 2,
+          "block": "spya-g2cwvy"
+        },
+        {
+          "kind": "edge",
+          "from": "witch",
+          "to": "tanks",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "witch",
+          "to": "reading",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "tanks",
+          "to": "reflex",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "reflex",
+          "to": "geller",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "reading",
+          "to": "crime",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "crime",
+          "to": "intimidate",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "geller",
+          "to": "test",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "intimidate",
+          "to": "test",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "test",
+          "to": "diagnosis",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A funnel: several independent failed searches for substance, all leading nowhere, set up the need for a diagnosis."
+    },
+    {
+      "id": "inside-integrity",
+      "title": "What scientific integrity requires",
+      "height": 640,
+      "items": [
+        {
+          "kind": "node",
+          "id": "hub2",
+          "shape": "ellipse",
+          "x": 280,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "Scientific integrity: lean over backwards",
+          "size": "md",
+          "tone": 2,
+          "block": "spya-afgs74"
+        },
+        {
+          "kind": "node",
+          "id": "disclose",
+          "shape": "box",
+          "x": 40,
+          "y": 160,
+          "w": 220,
+          "h": 65,
+          "text": "Disclose doubts and disagreeing facts, not just supporting ones",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-rxj5wa"
+        },
+        {
+          "kind": "node",
+          "id": "advert2",
+          "shape": "box",
+          "x": 290,
+          "y": 160,
+          "w": 220,
+          "h": 65,
+          "text": "Go beyond true-but-misleading advertising claims",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-bpyx8n"
+        },
+        {
+          "kind": "node",
+          "id": "truth2",
+          "shape": "box",
+          "x": 540,
+          "y": 160,
+          "w": 180,
+          "h": 65,
+          "text": "Truth will eventually out anyway",
+          "size": "sm",
+          "tone": 3,
+          "block": "spya-az6z7k"
+        },
+        {
+          "kind": "node",
+          "id": "millikan2",
+          "shape": "box",
+          "x": 260,
+          "y": 290,
+          "w": 280,
+          "h": 70,
+          "text": "Millikan's oil-drop charge: later values crept slowly toward correct answer",
+          "size": "sm",
+          "block": "spya-s9msxy"
+        },
+        {
+          "kind": "node",
+          "id": "bias",
+          "shape": "box",
+          "x": 260,
+          "y": 385,
+          "w": 280,
+          "h": 65,
+          "text": "Results near Millikan's accepted; outliers over-scrutinized",
+          "size": "sm",
+          "block": "spya-uj9v2h"
+        },
+        {
+          "kind": "node",
+          "id": "selffool",
+          "shape": "box",
+          "x": 260,
+          "y": 475,
+          "w": 280,
+          "h": 55,
+          "text": "First principle: you are easiest to fool yourself",
+          "size": "sm",
+          "block": "spya-ed9mzv"
+        },
+        {
+          "kind": "node",
+          "id": "publish",
+          "shape": "box",
+          "x": 260,
+          "y": 555,
+          "w": 280,
+          "h": 65,
+          "text": "Publish every result, not just favorable ones (science and policy alike)",
+          "size": "sm",
+          "block": "spya-jk7mj4"
+        },
+        {
+          "kind": "edge",
+          "from": "hub2",
+          "to": "disclose",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub2",
+          "to": "advert2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "hub2",
+          "to": "truth2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "disclose",
+          "to": "millikan2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "advert2",
+          "to": "millikan2",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "millikan2",
+          "to": "bias",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bias",
+          "to": "selffool",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "selffool",
+          "to": "publish",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A hub: the cargo cult diagnosis opens into several concrete demands integrity places on scientists, tested against the Millikan story."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null
+}

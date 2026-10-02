@@ -138,7 +138,7 @@ describe("the path is the model's order", () => {
   });
 
   it("stamps the new prompt version", () => {
-    expect(PROMPT_VERSION).toBe("quiz/5");
+    expect(PROMPT_VERSION).toBe("quiz/6");
   });
 });
 

@@ -153,6 +153,8 @@ const PAID_PLAN = {
   atLimit: false,
   periodEnd: "2026-10-03T11:37:00.000Z",
   endsAt: null,
+  periodAllowance: null,
+  trial: false,
 } satisfies BillingSummary["plan"];
 
 const PAID: BillingSummary = {

@@ -1,0 +1,366 @@
+{
+  "mode": "ideas",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 5, "c3": 2, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Power cap, base rate, incentives, flexibility, posterior and triangulation all turn the argument; the 'science can be studied scientifically' assumed idea is near-trivia.",
+            "c2": "Every item is a portable claim (e.g. 'a population of rational scientists can still produce a literature dominated by unreliable findings').",
+            "c3": "The only assumed idea (metascience is coherent) is stated outright in the metascience passages and is generic, not a local inferential move.",
+            "c4": "Anchors fit (x7d5t5, dzsa7e, huxt52, ftd2ng); the triangulation idea quotes the same block twice and heterogeneity rests on qn347b alone.",
+            "c5": "Includes incentives and the base-rate argument; publication bias is folded into effect inflation rather than standing alone, and there is nothing on 'failures are science working' or on soft-science NHST."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Power, winner's curse, publication bias, forking paths, heterogeneity, Bayesian prior and triangulation are all load-bearing.",
+            "c2": "All propositions, e.g. 'replication rate is bounded by the power'.",
+            "c3": "The assumed 'one fixed true effect' idea names what heterogeneity undercuts (cxbx9m, c08svn, x02d6v); the 'citations track merit' idea names exactly why m3et6t reads as troubling.",
+            "c4": "Anchors fit well: k59a2x's 85% shrinkage, q6s08t's fail-safe number for the file drawer, and h7qg2e for persistent low power.",
+            "c5": "No incentives / publish-or-perish idea (huxt52, ftd2ng), and no soft-science NHST critique."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Most items are central, and 'a rejected null doesn't single out one alternative' is a good pick; the frequentist long-run assumed idea is pedantic rather than something the argument turns on.",
+            "c2": "All stated as claims.",
+            "c3": "The assumed frequentist reading is argued (definitions vs the later Bayesian correction) but loosely tied to m4dued, bnzb3f and sg0nmn as definitions.",
+            "c4": "Effect-size inflation rests on hw9d4p alone; the other anchors (j0ubfk, ddw4ya, x02d6v) fit.",
+            "c5": "No incentives idea, and the base rate is only implicit in the publication-bias anchor."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "'Non-replication is science working' (cxcn8h) is a strong pick; the 'trust comes from convergence' assumed idea is near-universal background.",
+            "c2": "All propositions.",
+            "c3": "The citation assumption is precise (m3et6t, x6vcuf); the 'convergence across studies' assumption is generic and its g7w0hc reasoning ('scale presented as a strength') is a stretch.",
+            "c4": "Triangulation is also anchored to dtq8wq (multi-lab uniform protocols), which is the opposite of method triangulation; the rest fit.",
+            "c5": "No incentives idea and no base-rate idea; heterogeneity, power, publication bias and flexibility are covered."
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Synergy, the lattice, redundancy underdetermination, rich clubs, motifs, the intermediate peak and the task shift are all central.",
+            "c2": "All claims, e.g. 'synergy peaks at intermediate, not maximal, input similarity'.",
+            "c3": "The MI-vs-TE 'assumed' idea is stated outright in f6sbgx and p4pyuy; the 'firing as a decision' framing is argued but h5dz45 itself states it.",
+            "c4": "The redundancy-underdetermined claim (three equations, four unknowns) is anchored only to rc76qn, not bgsd4n, which actually says it.",
+            "c5": "No limitations idea (Dedekind explosion, statistical-not-mechanistic caveat); the behaving-primate task shift is included."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "The core PID chain plus the empirical findings.",
+            "c2": "All propositions.",
+            "c3": "'Statistics treated as computation' is precise (spdx0y read as a late corrective), but 'whole is not the sum of its parts' is stated explicitly in h5dz45, so it is introduced, not assumed.",
+            "c4": "Synergy rests on e94ury alone; s0db2g supports non-additivity only loosely.",
+            "c5": "No task-dependent redundancy idea (the primates appear only as an anchor), and no Dedekind or estimation limits."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All load-bearing, including the Dedekind explosion.",
+            "c2": "All propositions.",
+            "c3": "'Triad synergy is additive network-wide' names exactly the move in fud8q3's 88% claim; 'inferred edges are real circuit relations' uses j4cy9j's caveat as evidence the assumption was in force.",
+            "c4": "The q9gytb anchor for additivity is loose ('only reasonable if generalize'); the rest fit.",
+            "c5": "The behaving-primate result (task-dependent redundancy) is missing; rich club and recurrence are merged into one item."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Every item turns the review.",
+            "c2": "All propositions.",
+            "c3": "'Effective network treated as real wiring' is precise (sw5ukx, xs5660, j4cy9j); 'redundancy as robustness' is in fact stated by the authors in t8fayf, and the b32ecw reasoning is loose.",
+            "c4": "b32ecw is a weak anchor for the redundancy-as-robustness idea; the others fit (bgsd4n for underdetermination).",
+            "c5": "Covers MI/TE, the decomposition, the lattice, the redundancy choice, the empirical findings, task dependence and the Dedekind limit."
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Intelligence/consciousness, the biases, computational functionalism, inseparability, life, simulation and seeming-vs-being are the essay's spine.",
+            "c2": "All propositions.",
+            "c3": "'Not checkable from outside' and 'precaution under moral uncertainty' are both argued against specific passages (kqs33c, yverz7); using gwz5eu for precaution is weaker, since it is conditional on actual consciousness.",
+            "c4": "Mostly exact (zw2m7u, p4vmm0, un9fjn, npjt4j); gwz5eu does not presuppose precaution.",
+            "c5": "No 'other games in town' / non-Turing dynamics argument (gw0hsq, n393ru), which is one of the four arguments."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "'Experience is a fact over behaviour' is a precise local move (kqs33c, p8ky7g); 'moral status tracks consciousness' is asserted in e68t9h and ryg483 rather than presupposed, but is fairly flagged as unargued.",
+            "c4": "Anchors well chosen: xdy4fe for the hidden premise in Bostrom, ahtr6e for neural replacement, xk9gne for persistent illusion.",
+            "c5": "No non-algorithmic dynamics / 'other games' argument."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 5, "c5": 3 },
+          "evidence": {
+            "c1": "Mostly core; the exponential-curve illusion is a side bias, given a slot that the three main biases do not get.",
+            "c2": "All propositions.",
+            "c3": "One assumed idea (moral status) is argued against e68t9h and ryg483, but those passages state it rather than presuppose it.",
+            "c4": "Anchors fit (cke6sj, jnwfxp, pbcr03, xk9gne).",
+            "c5": "The three biases (h4mwb2, her4zk, nxxnrj), a major section, are absent, as is the non-Turing dynamics argument."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Every item is load-bearing.",
+            "c2": "All propositions.",
+            "c3": "The precaution assumption names the exact gap from 'I might be wrong' (qu7j89) to 'nobody should' (yverz7), and extends it via vs0vpj.",
+            "c4": "Anchors fit throughout (f87ghx, her4zk, gw0hsq, t54yqa, dgf4em, jvrmrh).",
+            "c5": "Has all four arguments including non-algorithmic dynamics, plus the biases, moral status and seeming-vs-being."
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Irreducibility, PCE, pockets, spec-relativity, proof = testing, worth-running, induction and language design are all central.",
+            "c2": "All propositions.",
+            "c3": "'Toy models generalize' is stated by the author in sx0zyh; the 'visual simplicity as proof' assumption is argued but overstates it, since qexzj4 does justify visual inspection.",
+            "c4": "q7khj8 and r32r9j are loose anchors for the toy-model assumption; the introduced anchors fit.",
+            "c5": "No idea on unbounded bug rarity (wem6ht) and none on mathematics staying in reducible pockets (whd6dc)."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "All load-bearing.",
+            "c2": "All propositions.",
+            "c3": "The only assumed idea ('full predictability makes running pointless') is stated explicitly in nd4kn9 and uqhm5n, so it is not a hidden premise.",
+            "c4": "Rarity is anchored to f7mn34 only, missing wem6ht where the busy-beaver claim is made; the rest fit (hcdcqp, zkkrs3, ktzwer).",
+            "c5": "Broadest set: adds visual inspection, rarity and mathematics on top of the core."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 5, "c3": 2, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Mostly core; the 'randomness vs program' contest is a minor sub-point.",
+            "c2": "All propositions.",
+            "c3": "Both 'assumed' ideas are stated in the text (b9z7g9, wem6ht), and the candidate's own reasoning concedes 'This is actually stated'.",
+            "c4": "kk6a0n ('Consider the (3-state, 2-color) Turing machine') and aabpey do not presuppose PCE.",
+            "c5": "No mathematics idea and no worth-running paradox."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All load-bearing; the rind / local-invariant proof is a good catch.",
+            "c2": "All propositions.",
+            "c3": "No assumed ideas are offered, so nothing is laundered but nothing is argued either.",
+            "c4": "Good anchors (zbsh70, tgkahp, r7ty6m, vy3nfe); rarity rests on f7mn34 without wem6ht.",
+            "c5": "Only one kind of idea, and nothing on mathematics or visual inspection."
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Loop, mixed selectivity, ephaptic coupling, stencils, traveling waves, analog computation and anesthesia are the paper's argument.",
+            "c2": "All propositions.",
+            "c3": "The state-space assumption is tied to xphb7u, ah94dx, ns23sq and qsz9ur as unexplained geometry, which is specific, though it is closer to background vocabulary than to an inferential move.",
+            "c4": "Anchors fit (amx5qf, bzqaf5, gkfdys, k02vdw).",
+            "c5": "Nothing on the binding/unified-consciousness claim (tdqde5, m9exy5), and no energy-efficiency argument."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All central; the control-layer idea states the thesis.",
+            "c2": "All propositions.",
+            "c3": "'Function over substrate' names exactly the inference from wnqgmn to k02vdw; the state-space assumption rests on one anchor.",
+            "c4": "Thin: the control layer, stencils and state space each rest on a single anchor (z9g2s3, gxyg0d, ns23sq).",
+            "c5": "No consciousness/binding idea; anesthesia appears only as the assumed idea's anchors."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All load-bearing.",
+            "c2": "All propositions.",
+            "c3": "'Population geometry is functionally real' is argued against xphb7u, ns23sq and ah94dx, though the article partly argues it itself ('thought to organize').",
+            "c4": "Ephaptic coupling is anchored partly on the section heading mapqhv; the rest fit.",
+            "c5": "No binding/consciousness idea and no explanation of mixed selectivity via stencils."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "'Consciousness requires unity' precisely targets tdqde5 and m9exy5; the population-code reasoning on x5m34h ('would look like noise') is looser.",
+            "c4": "Strong anchors: ectcj5 ties stencils to mixed selectivity, and qr9ra4 to the timing of traveling waves.",
+            "c5": "The anesthesia convergence evidence (wnqgmn, k02vdw), the main support for the consciousness claim, is missing."
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Positional status, impersonal respect and Smith's friendship argument are central; the 'innate primate trait' item overstates a point Elias qualifies in k26ath.",
+            "c2": "All propositions.",
+            "c3": "The positional-status assumption is argued across a94czy, f6f8d4, tyj2mt and de69sf; the ritual-performance assumption rests on one quote that states rather than presupposes.",
+            "c4": "j3vvp7 is a stretch for 'innate primate' behaviour; hdbtc0 is a loose fit for impersonal respect.",
+            "c5": "No idea for the central forecast (k44gdt, zy53n3: relationships are what's left) and none for 'material conditions change what we want' (t4xpae)."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Forecast, clannishness, material conditions, impersonal respect and commerce freeing friendship are all core.",
+            "c2": "All propositions.",
+            "c3": "The case-study assumption is stated explicitly in xcg5en (yet anchored only on c4s3en); the 'stable status needs' assumption leans on cz0cgg, which k26ath qualifies.",
+            "c4": "j337dx is a setup sentence rather than a statement of clannishness; the others fit.",
+            "c5": "Covers the forecast, method, mechanism, the material-conditions point, respect and friendship."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All load-bearing; 'removing work removes a dignity system, not the need' captures the thesis.",
+            "c2": "All propositions.",
+            "c3": "The zero-sum status assumption names the unargued step in hdbtc0 and ties it to j3vvp7, tyj2mt and xnesxg.",
+            "c4": "The primate item cites k26ath and openly notes the qualification, but still asserts the trait as introduced.",
+            "c5": "No 'material conditions change what we want' idea (t4xpae, b3pf45)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "The positional-status assumption is argued well via Saint-Simon's precedence rage (x4w0zk); the Junior League anchor (xn6rzj) is looser.",
+            "c4": "hb8vvc is a weak anchor for 'material conditions change wants'; the rest fit.",
+            "c5": "The case-study method (xcg5en) is absent; the rest is covered, with some overlap between the positional and clannish items."
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Structure-to-property, strength/toughness/stiffness, the phase change, feedstock+process and form-follows-function are what the article turns on.",
+            "c2": "All propositions.",
+            "c3": "Form-follows-function names why the gland/use catalogue (m3rk4n, xytxuw) reads as explanation; specific strength names why hng89u's 'five times' is an advantage.",
+            "c4": "jzcepa attributes the shortfall to simpler proteins (feedstock), not to process, so it is a stretch for the two-part idea.",
+            "c5": "Complete at the right grain for an encyclopedia article, with both kinds of idea."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 5, "c3": 2, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Core is covered, but spinning is split into two thin overlapping items (liquid crystal, pulled).",
+            "c2": "All propositions.",
+            "c3": "Both 'assumed' ideas are stated outright (dadew4 'are related', and wgee6t's two tasks), and the whyYouNeedIt is generic ('unconnected chemistry trivia').",
+            "c4": "The pultrusion idea is anchored on ba6knb rather than g2gw42, which actually says it; n5mzfc is only a caption.",
+            "c5": "No specific-strength idea."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 5, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Mostly core; 'a gene moved makes the protein' is basic background rather than something this argument turns on.",
+            "c2": "All propositions.",
+            "c3": "The specific-strength assumption is precise (hng89u); the gene-transfer assumption is argued but generic.",
+            "c4": "The jzcepa reasoning ('implying spinning is the unsolved half') goes beyond what the passage says.",
+            "c5": "All major sections are covered, with both kinds of idea."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "Specific strength is precise; the 'transplanted gene carries the material' assumption is argued, but the article itself shows it fails (brz8bx, jzcepa).",
+            "c4": "Anchors fit well (b7usb3 for the capture spiral, n7yuqt's RIKEN artificial gland for the process half).",
+            "c5": "No idea on silk types and glands matched to uses (bgtqr0, nprqdc)."
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Cargo cult form, leaning over backwards, don't fool yourself, the Young controls and the ESP shrinkage are the talk's core.",
+            "c2": "All propositions.",
+            "c3": "'Shrinking effect under tighter controls signals artifact' names the exact move in rbpppq; the g203mu reasoning (selection explains PSI results) is looser.",
+            "c4": "s9msxy's viscosity sentence is an honest error, not self-deception; the other anchors fit.",
+            "c5": "Nothing on replicating before varying (the tf8rj2 rat student, the m95kqm accelerator), and nothing on institutional pressure."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "'Working is the only test' is argued against ddrr9m and aww976, and specific to the witch-doctor-to-education move.",
+            "c4": "The replication idea cites yzzxkw (Young's controls), which is not about replication, and misses tf8rj2.",
+            "c5": "Nothing on Young's controls or the ignored literature, on publishing both kinds of result, or on institutional pressure."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 5, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "All load-bearing.",
+            "c2": "All propositions.",
+            "c3": "The 'stagnant outcomes prove invalid methods' assumption is argued as the leap from con men to disciplines (aww976, re4634), with a bounded reading.",
+            "c4": "'Publish regardless of outcome' is anchored only on m95kqm (control-experiment time at the accelerator), not jk7mj4 or s05sub; c46yyu is about laymen, not self-deception.",
+            "c5": "Nothing on Young's controls, replication or ESP."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "All central.",
+            "c2": "All propositions.",
+            "c3": "The institutional-pressure assumption is close to stated (Feynman calls it dishonest in mjty2q, and ndyj3t names the pressure explicitly), so the 'only lists instances' argument is loose.",
+            "c4": "Anchors mostly fit (rndcqw, npdc6n, uj9v2h).",
+            "c5": "Nothing on publishing both kinds of result, replication or ESP shrinkage."
+          }
+        }
+      }
+    }
+  ]
+}

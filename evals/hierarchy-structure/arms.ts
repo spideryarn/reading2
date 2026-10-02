@@ -134,7 +134,14 @@ export type ArmSpec =
   /** Free: score the tree already on disk in the article's directory. */
   | { name: string; kind: "disk"; comparison: "baseline" }
   /** One structure call, the shape the pipeline ships today. */
-  | { name: string; kind: "one-call"; comparison: Comparison; call: CallSpec; seed: Seed }
+  | {
+      name: string;
+      kind: "one-call";
+      comparison: Comparison;
+      call: CallSpec;
+      seed: Seed;
+      prompt?: "toc10-frozen" | "toc11-think-first";
+    }
   /**
    * L1 in one call, then one call per part for the next level, recursively to
    * `levels`. Three, not two: the book-length motivation for waves is depth
@@ -290,6 +297,22 @@ export const ARMS: readonly ArmSpec[] = [
     comparison: "baseline",
     call: INCUMBENT,
     seed: "none",
+  },
+  {
+    name: "toc10-frozen",
+    kind: "one-call",
+    comparison: "baseline",
+    call: INCUMBENT,
+    seed: "none",
+    prompt: "toc10-frozen",
+  },
+  {
+    name: "toc11-think-first",
+    kind: "one-call",
+    comparison: "isolated",
+    call: INCUMBENT,
+    seed: "none",
+    prompt: "toc11-think-first",
   },
   /* Identical to `incumbent` on purpose: repeats of it are the noise floor —
      the run-to-run disagreement of the shipping recipe, which is the

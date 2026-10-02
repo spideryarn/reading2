@@ -1,0 +1,124 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-jrh6vt",
+      "name": "Institutional incentives reward the appearance of results over truth",
+      "provenance": "assumed",
+      "statement": "Organizations and funding structures create pressure to produce usable, favorable, or novel-seeming findings, which pushes researchers toward selectively reporting or skipping rigor even without conscious dishonesty.",
+      "whyYouNeedIt": "Without this assumption, the examples of suppressed null results, skipped control experiments, and reluctance to publish unfavorable findings would just be isolated lapses rather than a systemic pattern the talk is warning against.",
+      "occurrences": [
+        {
+          "blockId": "spya-s05sub",
+          "quote": "If your answer happens to come out in the direction the government or the politicians like, they can use it as an argument in their favor; if it comes out the other way, they don’t publish it at all.",
+          "reasoning": "Only makes sense as a general pattern if institutional pressure, not individual malice, is assumed to drive selective publication.",
+          "start": 336
+        },
+        {
+          "blockId": "spya-mjty2q",
+          "quote": "Yes, but then we won’t get support for more research of this kind.",
+          "reasoning": "The friend's worry only makes sense if funding depends on perceived usefulness, an unstated institutional incentive.",
+          "start": 268
+        }
+      ]
+    },
+    {
+      "id": "spya-aqy58t",
+      "name": "Form without function is detectable failure",
+      "provenance": "introduced",
+      "statement": "Following the outward procedures of science—experiments, publications, institutions—does not guarantee real results; the test is whether the thing actually works, not whether it looks like science.",
+      "whyYouNeedIt": "This is the core diagnostic the whole talk uses to classify fields as pseudoscience even when they resemble science procedurally.",
+      "analogy": "A cargo cult builds a replica airstrip and control tower, perfect in every visible detail, but no planes ever land because the invisible infrastructure that actually brings planes is missing.",
+      "occurrences": [
+        {
+          "blockId": "spya-fd2muf",
+          "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.",
+          "reasoning": "States directly that correct form does not produce results.",
+          "start": 581
+        },
+        {
+          "blockId": "spya-re4634",
+          "quote": "Yet these things are said to be scientific. We study them.",
+          "reasoning": "Applies the form-vs-function test to education and criminology.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-pgzvza",
+      "name": "Report what disconfirms you, not just what confirms you",
+      "provenance": "introduced",
+      "statement": "Genuine scientific honesty requires disclosing every fact, alternative explanation, and detail that could undermine your own conclusion, not only the evidence that supports it.",
+      "whyYouNeedIt": "This is the concrete practice Feynman offers as what 'leaning over backwards' actually consists of, distinguishing it from ordinary non-lying.",
+      "occurrences": [
+        {
+          "blockId": "spya-rxj5wa",
+          "quote": "Details that could throw doubt on your interpretation must be given, if you know them.",
+          "reasoning": "States the duty to disclose disconfirming details directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-bpyx8n",
+          "quote": "So it’s the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with.",
+          "reasoning": "Distinguishes mere truthfulness from the fuller integrity of not misleading by omission.",
+          "start": 533
+        },
+        {
+          "blockId": "spya-jk7mj4",
+          "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.",
+          "reasoning": "Applies the principle to publication practice regardless of outcome.",
+          "start": 185
+        }
+      ]
+    },
+    {
+      "id": "spya-rh4f9u",
+      "name": "You are your own easiest mark",
+      "provenance": "introduced",
+      "statement": "The greatest risk of error in investigation is not deception by others but self-deception; a scientist's main discipline is catching their own biases before anyone else's.",
+      "whyYouNeedIt": "This underlies why integrity is framed as an internal practice of leaning over backwards rather than merely avoiding lies to others.",
+      "analogy": "Like a judge who cannot trust their own gut verdict and must build in procedures to check their own bias, not just watch for outside tampering.",
+      "occurrences": [
+        {
+          "blockId": "spya-ed9mzv",
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.",
+          "reasoning": "States the principle explicitly as foundational.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-s9msxy",
+          "quote": "It’s a little bit off, because he had the incorrect value for the viscosity of air.",
+          "reasoning": "Illustrates an error that persisted through unconscious self-deception rather than deliberate fraud.",
+          "start": 250
+        },
+        {
+          "blockId": "spya-uj9v2h",
+          "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.",
+          "reasoning": "Shows researchers unconsciously biasing their own judgment toward an expected answer.",
+          "start": 181
+        }
+      ]
+    },
+    {
+      "id": "spya-mq6cps",
+      "name": "A result must survive attempts to eliminate confounds before it counts",
+      "provenance": "introduced",
+      "statement": "A finding is not established merely by observing an effect; it must be tested against every plausible alternative explanation (controls) until only the real cause remains, as in systematically eliminating a rat's sensory cues.",
+      "whyYouNeedIt": "This explains why the Young rat experiment is held up as exemplary and why the failure to replicate or control is treated as the defining flaw of bad science elsewhere in the talk.",
+      "occurrences": [
+        {
+          "blockId": "spya-npdc6n",
+          "quote": "So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door.",
+          "reasoning": "Shows the method of sequentially eliminating confounds to isolate true cause.",
+          "start": 150
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:30:49.285Z",
+  "elapsedMs": 22097
+}

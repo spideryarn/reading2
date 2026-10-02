@@ -457,6 +457,17 @@ them twice, in opposite directions:
   half of what the buffer is for. Held at both ends, so neither trusts the other.
 - **Never the `console`.** Greg's request said "contents of web browser errors/logs/console", and
   taken literally that is a leak — see below.
+- **A failed import's *Report this* pre-fills ids and times, and never the address, the file name
+  or the error.** The words are `importProblemReport` in
+  [`src/web/import-report.ts`](../../src/web/import-report.ts): the job id, the slug, the status,
+  the failed step's name, the failure kind and the timestamps. A pasted URL can carry an access
+  token, a file name is the reader's own words, and an error sentence is open-ended, so none of them
+  fits a clause above just because it sits in the box. Greg kept it that way on 2026-10-02
+  (Q-import-report-details, *"yes"*), with the job id as the way back: **Dismiss no longer deletes
+  the job record** — it stamps `jobs.dismissed_at` and the reader stops seeing it
+  ([ingest-queue.md § The routes](ingest-queue.md#the-routes)) — so the id in a report still names a
+  row we can read in the database, until the usual fifty-finished-jobs trim retires it. Nothing
+  serves the uploaded file back by that id.
 
 ## The tick-box, and what is behind it
 
@@ -564,10 +575,10 @@ administrators' own, by `src/admin.ts`'s list, on the server (`?from=readers`). 
 **The page exists because Sentry was the only reader, and Sentry is the *second* destination.**
 Greg filed a report on production on 2026-09-02 and asked where it had gone; it was answered out
 of Sentry, because no agent holds a production `DATABASE_URL` and Vercel's runtime logs never
-return in time. That works only for reports Sentry received — which is exactly the set that
-`mirror_attempted_at is not null and mirrored_at is null` excludes, and that query is advertised
-two paragraphs down as the way to find a stranded report. A mirror being the only way to read the
-original is backwards. [260902l-admin-feedback-page.md](../plans/260902l-admin-feedback-page.md).
+return in time. That works only for reports Sentry received. An unconfirmed row may or may not be
+among them: `mirror_attempted_at is not null and mirrored_at is null` cannot tell which. A mirror
+being the only way to read the original is backwards.
+[260902l-admin-feedback-page.md](../plans/260902l-admin-feedback-page.md).
 
 Two columns worth knowing when you do:
 
@@ -575,6 +586,15 @@ Two columns worth knowing when you do:
   the report to the SDK; the second only when a transport acknowledgement comes back. They were one
   column until GPT Sol pointed out that the SDK sends asynchronously and swallows transport
   failures, so the single column said "delivered" about reports that never arrived. A row with an
-  attempt and no delivery is the interesting one.
+  attempt and no confirmed delivery is the interesting one; it does not prove Sentry lacks the
+  report.
+  **Before the 2026-10-02 fix it was most rows, and it meant little.** Vercel froze the instance
+  once the response had gone, and the mirror runs after it. So 86% of rows never recorded an
+  acknowledgement, including many Sentry had received, and some were never sent at all.
+  `handler` now registers its work with the platform's `waitUntil` (src/wait-until.ts). The rows
+  from before that are left as they are, and they under-report delivery —
+  [261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md).
+  **Anything that must not miss a report reads this table, not Sentry:**
+  `scripts/feedback-unswept.ts`, [feedback-reports.md § Where the queue lives](feedback-reports.md).
 - **`request_vercel_id`** is the feedback POST's own id, read from the request headers on the
   server — the browser cannot put its own response header into its own request.
