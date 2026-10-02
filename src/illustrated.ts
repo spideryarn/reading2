@@ -156,7 +156,7 @@ export const PROMPT_VERSION = ILLUSTRATED_VERSION;
  * 111 supplied strings the Gemini model got **not one character wrong**, where
  * the OpenAI model produced "SΩUL MACHINE" on the first heading it was asked
  * for — which is the failure the whole text ban was written around.
- * docs/research/260904a-nano-banana-text-in-generated-images.md.
+ * docs/investigations/260904a-nano-banana-text-in-generated-images.md.
  *
  * **`2:3` portrait, because up is the top of the article and down is the
  * bottom** — a portrait plate says that before a single element is read.
@@ -816,7 +816,7 @@ export function plateLettering(plate: {
  *
  * Three things in the caption block are load-bearing, and the 2026-09-04 spike
  * is where each number comes from
- * (docs/research/260904a-nano-banana-text-in-generated-images.md § The prompt
+ * (docs/investigations/260904a-nano-banana-text-in-generated-images.md § The prompt
  * wording that worked):
  *
  *  - **Each title is bound to the scene it goes under** rather than left to

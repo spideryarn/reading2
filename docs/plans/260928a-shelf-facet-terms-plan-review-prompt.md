@@ -5,7 +5,7 @@ You are reviewing a PLAN, read-only. Do not change any file.
 **Candidate (live, pre-commit)**: worktree at base commit c2bb3c05, untracked files:
 - docs/plans/260928a-shelf-facet-terms.md — THE PLAN (start here)
 - docs/research/260928a-shelf-facet-terms-algorithms-and-ui.md — the research behind it
-- docs/research/260928b-academic-bulk-import-without-llm-processing.md — the deferred idea (skim)
+- docs/investigations/260928b-academic-bulk-import-without-llm-processing.md — the deferred idea (skim)
 - spike/facets/extract.ts, spike/facets/choose.ts, spike/facets/run.ts, spike/facets/out3.txt — the throwaway spike whose numbers the plan quotes (not to be shipped as-is)
 
 Context to read as needed: CLAUDE.md, docs/project/library.md (§ Shelf state, § Finding an article, § Sorting the shelf), src/web/Library.tsx (the `rows` memo; `ArchivedShelf` near the end), src/routes.ts (GET /api/library around line 7020), src/store/pg.ts (`listArticlesQuery`, `onTheShelf`), src/store/pg-shelf.ts, src/db/schema.ts (`articles`, `articleRevisions` incl. REVISION_CARRY_POLICY, `revisionBlocks`), src/store/pg-revisions.ts (publish/draft), docs/project/sql.md, docs/project/security-map.md, docs/project/tooltips.md, docs/project/url-state.md.

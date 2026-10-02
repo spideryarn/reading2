@@ -1,6 +1,6 @@
 # One Simple press, one article cache: Fuller first, the other two once it has begun
 
-Research write-up: [docs/research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md](../research/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md).
+Investigation write-up: [docs/investigations/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md](../investigations/261002b-how-simple-is-written-effort-levels-one-call-or-three-and-opus.md).
 
 **Status as of 2026-10-01:** spiked and measured; built (the stagger and `MeteredCall.onStart`).
 Streaming to the reader is not built; it is a decision for Greg, with numbers, in § Streaming.

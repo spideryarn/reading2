@@ -335,7 +335,7 @@ the step can finish with some still hot-linked, so *"closing this cannot be some
 ask for"* is only partly true on heavy articles. That is a new limitation their plan predates, and it
 is noted in their doc rather than left implicit here.
 
-**Deferring the ToC** ([260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md))
+**Deferring the ToC** ([260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md))
 is research with nothing built, so there is no code to collide with. The conflict is a roadmap one
 and worth writing down before either side builds: **this plan publishes once the whole job has run;
 that research's entire premise is publishing something readable before it has, and upgrading in

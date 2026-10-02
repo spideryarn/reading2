@@ -613,7 +613,7 @@ Six further things the plan did not settle, decided here:
 - **The answer is a fenced JSON block, not `response_format: {type: "json_schema"}`.**
   `AI_JOB_ROUTE.debate` sends `require_parameters: true`, which turns a parameter an upstream does
   not support from a silent no-op into a **404 with no endpoints left** — what a `temperature: 0` did
-  to `env-proposal` ([research](../research/260902b-env-key-proposal-spike.md)). Neither Stage 0 nor
+  to `env-proposal` ([research](../investigations/260902b-env-key-proposal-spike.md)). Neither Stage 0 nor
   0b sent a schema alongside `openrouter:web_search`, so one here would be an unmeasured field in a
   body whose failure mode the feature reports as *"the search did not run"*. `referee-candidates` is
   the one existing caller that does web search *and* structured output, and it uses a fence.

@@ -253,7 +253,7 @@ export const MAX_NODE_CHARS = 80;
  * it replaced was for: the 2026-09-04 spike put 111 supplied strings through
  * `google/gemini-3.1-flash-image` and got every character back correct, full
  * sentences included, so no cap here is load-bearing for spelling
- * (docs/research/260904a-nano-banana-text-in-generated-images.md § The verdict).
+ * (docs/investigations/260904a-nano-banana-text-in-generated-images.md § The verdict).
  * It exists because a short title reads under a small vignette at 288 px and a
  * long one does not.
  *

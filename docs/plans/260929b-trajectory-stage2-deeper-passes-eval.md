@@ -1,6 +1,6 @@
 # Trajectory stage 2: do the deeper passes add detail? (measured, not kept)
 
-Research write-up: [docs/research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
+Investigation write-up: [docs/investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
 
 Stage 2 of [260929b](260929b-trajectory-deeper-passes-one-door-promise-in-a-tooltip-list-follows-the-stop.md).
 Greg, SPIDERYARN-READING2-51:

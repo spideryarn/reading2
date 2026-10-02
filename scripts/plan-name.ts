@@ -105,6 +105,7 @@ export function nextPlanFilename(
 export const DIRS: Record<string, { dir: string; ext: string }> = {
   plans: { dir: "docs/plans", ext: ".md" },
   research: { dir: "docs/research", ext: ".md" },
+  investigations: { dir: "docs/investigations", ext: ".md" },
   postmortems: { dir: "docs/postmortems", ext: ".md" },
   tutorials: { dir: "docs/tutorials", ext: ".html" },
 };

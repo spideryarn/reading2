@@ -107,7 +107,7 @@ draws per arm, two blind judges (GPT Sol ranking, Opus scoring): no visible loss
 to $0.100 and from 176 s to 42 s on average. Validity was 1 malformed draw in 16
 at both levels. It also took the Sketch out of the `ids` cache group — see
 [prompt-caching.md](prompt-caching.md).
-[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
+[261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
 has the lineups and what the judges said.
 
 **One model call, 30–101 seconds, about $0.10** — measured over sixteen draws of

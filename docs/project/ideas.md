@@ -504,4 +504,4 @@ on the re-run — which is the right answer.
 - [url-state.md](url-state.md) — `?mode=ideas`, `?idea=`
 - [architecture.md](architecture.md#pipeline) — where stage 5f sits
 - [260826ac-ideas-mode.md](../plans/260826ac-ideas-mode.md) — the plan, the alternatives, and the review
-- [261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — why the effort stays `high`: below it, 10 of 16 answers were malformed JSON
+- [261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — why the effort stays `high`: below it, 10 of 16 answers were malformed JSON

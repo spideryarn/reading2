@@ -4,6 +4,12 @@
 ends. A plan says what we're doing; a research doc says what else we could have done and why not, so
 that reopening the question later costs an hour rather than a week.
 
+It is for **external** work: web or literature deep dives, library or vendor selection,
+best-practice surveys. Internal work — evals, model comparisons, spikes against our own code or data
+— goes in `docs/investigations/` ([investigations.md](investigations.md)).
+
+For mixed work, use the folder that holds most of its substance.
+
 **How to write one is [write-deep-dive-as-doc.md](../reusable/write-deep-dive-as-doc.md)**, and
 [third-party-library-selection.md](../reusable/third-party-library-selection.md) when the question is
 which dependency to take.
@@ -18,7 +24,7 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 - **Every fact carries its source and its date.** A research doc ages faster than anything else here,
   and the reader six weeks later needs to know whether to believe it. Record the URL, when you
-  fetched it, and how confident you were — [why](../research/260903b-facts-that-were-wrong.md).
+  fetched it, and how confident you were — [why](../investigations/260903b-facts-that-were-wrong.md).
 - **A number is a dated example, not a fact.** Record the command and the scope that produced it, so
   the next reader can re-run it instead of trusting it.
 - **Write down the dead ends.** The option you rejected in ten minutes is the one somebody will
@@ -31,7 +37,7 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 - [plans.md](plans.md) · [postmortems.md](postmortems.md) · [tutorials.md](tutorials.md)
 - [open-questions.md](open-questions.md) — the calls nobody has made yet. A research doc is often
   what turns one of those into an answer.
-- [260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
+- [260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../investigations/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
   — the reader study Greg can run to answer [Q6](open-questions.md#q6), *how do we know it's
   working?* Written 2026-09-10, not yet run.
 

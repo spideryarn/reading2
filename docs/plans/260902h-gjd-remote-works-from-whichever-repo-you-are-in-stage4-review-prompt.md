@@ -12,7 +12,7 @@ exactly stops it.
    found-checkout gate still warns for never-run/failed/config-changed), the Stage 3 and 4 sections,
    the guard table, and the Log (every live result is there). Your Stage 3 review:
    `…-stage3-review-sol.md`. The spike that changed the model choice:
-   `docs/research/260902b-env-key-proposal-spike.md`.
+   `docs/investigations/260902b-env-key-proposal-spike.md`.
 2. The scoped diff since your Stage 3 review:
    `/private/tmp/claude-501/-Users-greg-dev-spideryarn-reading2/eaf11bc0-8303-409a-abea-7789226536e6/scratchpad/stage4.diff`.
 3. In `scripts/gjd-remote.ts`: `sayFoundSetupStatus`, `startUnderAdmission`, `setUpTheClone`,

@@ -23,7 +23,7 @@ The standing rule was that an image model cannot be trusted with words — the e
 render `SΩUL MACHINE`, and a plan had generalised that into a law. Greg asked for it to be retested
 with Nano Banana. It was, and **the law was wrong**: across 15 plates and 111 supplied strings, 105
 short labels and 6 full sentences, not one character came back wrong.
-[The research doc](../research/260904a-nano-banana-text-in-generated-images.md) has the numbers.
+[The research doc](../investigations/260904a-nano-banana-text-in-generated-images.md) has the numbers.
 
 It also came back on **OpenRouter's own `/v1/images`**, on the existing key with a settled
 `usage.cost` — so no direct-Google seam, no new provider account, and the privacy page stays true.

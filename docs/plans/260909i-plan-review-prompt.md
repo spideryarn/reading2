@@ -12,7 +12,7 @@ dashboard and `gjd-remote` into their own repo) landing first. So review the *de
 Context to read first:
 
 - The research it came from, with GPT 6 Astra's review folded in:
-  `docs/research/260909b-a-shared-team-box-with-one-overseer-several-people-and-several-claude-accounts.md`
+  `docs/investigations/260909b-a-shared-team-box-with-one-overseer-several-people-and-several-claude-accounts.md`
   and `docs/plans/260909b-team-box-review-astra.md`.
 - `docs/project/overseer.md` — the runbook and its four gates, which the plan extends to several
   people.

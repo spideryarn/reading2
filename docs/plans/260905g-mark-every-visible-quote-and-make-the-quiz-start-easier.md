@@ -1,6 +1,6 @@
 # Mark every visible quote, and make the quiz start easier
 
-Research write-up: [docs/research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
+Investigation write-up: [docs/investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
 
 Two feedback reports from Greg, built together because both turned out to be **small remainders of
 things that already exist**. The headline finding, and the first thing to say back to him:

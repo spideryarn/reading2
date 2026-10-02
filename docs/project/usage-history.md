@@ -11,7 +11,7 @@ and "Can we call an API instead?". Read that first; nothing here makes sense wit
 
 The work is [260909b](../plans/260909b-usage-limits-tab-fleet-dashboard-24h-history.md), and the four
 designs abandoned on the way are in
-[260909a](../research/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md).
+[260909a](../investigations/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md).
 
 ## Why there is a store at all
 

@@ -3,7 +3,7 @@
 **Status:** proposed, 2026-09-09. **Not to be built until the Overseer dispatches it** — Greg:
 *"Don't implement - wait for instructions from the Overseer."* The research behind it, with GPT 6
 Astra's review, is
-[260909b](../research/260909b-a-shared-team-box-with-one-overseer-several-people-and-several-claude-accounts.md);
+[260909b](../investigations/260909b-a-shared-team-box-with-one-overseer-several-people-and-several-claude-accounts.md);
 this plan is what changed once Greg answered its questions, and what we would build. **GPT Sol
 reviewed it the same night** ([260909i-plan-review-sol.md](260909i-plan-review-sol.md)): no P0,
 five P1s, all accepted — § Round 1 review says what each changed.

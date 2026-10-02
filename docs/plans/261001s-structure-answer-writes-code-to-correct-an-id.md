@@ -35,7 +35,7 @@ string:
 
 `parseJsonAnswer` rejects it, so the stage fails. The reader gets a Retry button, and the call has
 still been billed. Ideas and Sketch break their JSON in other ways
-([research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md):
+([research 261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md):
 1 in 16 each at today's effort, and Ideas 10 in 16 below `high`).
 
 ## The evidence

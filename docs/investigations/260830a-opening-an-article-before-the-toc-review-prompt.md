@@ -5,7 +5,7 @@ AI-assisted reading app). You have read-only access to the working tree — **pl
 rather than trusting my summaries of them.** Where I quote a docstring, check I have not quoted it
 selectively, and where I cite a line number, check it says what I claim.
 
-**The doc is `docs/research/260830a-opening-an-article-before-the-toc.md`.** Read it in full first.
+**The doc is `docs/investigations/260830a-opening-an-article-before-the-toc.md`.** Read it in full first.
 
 ## Background
 

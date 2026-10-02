@@ -1,6 +1,6 @@
 # Simple on Opus, with and without the fidelity guard
 
-Research write-up: [docs/research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
+Investigation write-up: [docs/investigations/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../investigations/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
 
 **Status, 2026-10-01:** measured; decided **(b) Opus with the checker kept**; built and on `dev` in
 ef04cfd5 (merged as 2a573770), see § What ships. Not deployed: the Overseer deploys.
