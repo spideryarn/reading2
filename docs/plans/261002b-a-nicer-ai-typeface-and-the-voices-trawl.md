@@ -33,7 +33,7 @@ session with no worktree and no commits; the Overseer relayed 8G to this session
 
 ## 1. The face: IBM Plex Mono replaces Courier Prime
 
-Research: [261002b-ai-typeface-research.md](261002b-ai-typeface-research.md) (seven candidates,
+Research: [261002a-a-nicer-typeface-for-ai-written-text.md](../research/261002a-a-nicer-typeface-for-ai-written-text.md) (seven candidates,
 metrics measured from the woff2 files, sources). Specimens, the same three voices with each
 candidate, dark, light and phone:
 
@@ -154,3 +154,31 @@ The one-time trawl rots the moment a new mode arrives. Two things:
   imported; the rule distinguishes generated from copied/transcribed text, and `.ref-scan-text` stays
   UI; promotion described as its own audit. Sol confirmed the trawl's spot-checks, the 450→400
   matching, and that `Record<Mode,…>` reds under `npm run typecheck`.
+- 2026-10-02 — **built** (Opus subagent): the trawl's additions and fixes, `VOICES_BY_MODE`, and
+  `startsAtHeading` on the tree, so a heading leaf's label is the author's. Red-first: removing
+  `tweets` from the record is a TS2741 at typecheck; removing `.tweets-text` from `voices.css` reds the
+  test; forcing `navLabelVoice` to `"ai"` reds all four nav-label tests. Docs:
+  [fonts.md](../project/fonts.md), and the research moved to
+  [docs/research](../research/261002a-a-nicer-typeface-for-ai-written-text.md).
+- 2026-10-02 — **GPT Sol, code review/fix** ([answer](261002b-sol-code-review.md)): four fixed.
+  Candidates' hedge had inherited the AI face through `.cnd-name`; the stance-tag and "Whole
+  paragraph" UI rules had escaped the switch's guard; the nav-label test now exercises Spine's own
+  `childLabel`; two over-claims in the docs. Nothing wider was left for me.
+- 2026-10-02 — **browser pass** (Sonnet, Playwright, at `0d35f120d`, `fowler-phrenology`, laptop and
+  390px): Plex Mono 400/700 loaded and computed on Summary, the masthead gist, chat replies, Tweets'
+  posts, glossary entries and names, Structure gists, Marginalia and Skim. Source Serif on the prose
+  and its headings, Arial on the reader's message and the chat input, Geist on the chrome and Tweets'
+  counter (Geist Mono). No horizontal overflow at either width. With the switch off, five modes went
+  back to Geist. The check was inconclusive for Tweets, Marginalia and Skim, because a peer flipped
+  the shared dev account's switch back on mid-run. The hook is unchanged by this work, and its tests
+  pass.
+
+## Screenshots (switch on)
+
+![Tweets, laptop](261002b-shot-tweets-laptop-on.png)
+![Summary, laptop](261002b-shot-summary-laptop-on.png)
+![Chat, laptop](261002b-shot-chat-laptop-on.png)
+![Tweets, phone](261002b-shot-tweets-phone-on.png)
+![Summary, phone](261002b-shot-summary-phone-on.png)
+![Chat, phone](261002b-shot-chat-phone-on.png)
+

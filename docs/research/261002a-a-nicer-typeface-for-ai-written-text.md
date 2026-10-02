@@ -1,6 +1,35 @@
-# A nicer face for the AI's voice than Courier Prime
+# A nicer typeface for AI-written text than Courier
 
-Research for Greg's 2026-10-02 request (quoted in the brief). Date: 2026-10-02.
+**Question** (Greg, 2026-10-01, SPIDERYARN-READING2-7N):
+
+> But Courier is really ugly. Do some web research on a more attractive font that would still
+> indicate that it's somehow machine/AI-generated - Courier is good in that respect because it looks
+> typewriter-y, but it's just a bit too unattractive.
+
+**Decision: IBM Plex Mono**, taken in
+[261002b](../plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md) and recorded in
+[fonts.md](../project/fonts.md). It is still a true monospace, so it still reads as machine-made,
+with a real x-height and stroke where Courier has hairlines. **Runner-up: iA Writer Quattro.** It
+reads best as paragraphs, but it barely looks monospaced, which is the signal Greg liked.
+
+**The evidence that decided it** was the specimens rather than the metrics below. Each specimen sets
+the same author paragraph, AI summary, reader question and AI reply in every candidate, in dark,
+light and phone widths:
+[dark](../plans/261002b-specimen-dark.png), [dark 2](../plans/261002b-specimen-dark-2.png),
+[light](../plans/261002b-specimen-light.png), [light 2](../plans/261002b-specimen-light-2.png),
+[phone](../plans/261002b-specimen-phone.png). Shot 2026-10-02 with Playwright from the Fontsource
+woff2 files; every face was confirmed `loaded` in `document.fonts`.
+
+**Dead ends:**
+- **Recursive.** Fontsource's default import is the proportional sans. To be monospaced it needs
+  `mono.css` (73 KB) and `font-variation-settings: "MONO" 1`, and the specimen without that setting
+  rendered proportional.
+- **Spline Sans Mono** reads as a code listing.
+- **Red Hat Mono** is faint on a dark ground.
+- **Xanh Mono** has no bold, and as a serif it blurs into the author's face.
+- **Geist Mono** would blur "the app" and "the AI", since the chrome is Geist.
+
+What follows is the research as the subagent wrote it, on 2026-10-02.
 
 ## How this was checked
 
