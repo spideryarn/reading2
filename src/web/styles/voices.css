@@ -11,8 +11,9 @@
    FOR EVERY READER, ON EVERY PAGE, since 2026-10-02. Greg: "Yes they should
    now be used throughout and always going forwards." Until then every rule
    was gated by an attribute on `<html>`, set only while the Experimental switch was
-   on; the switch path is gone (docs/plans/261002f-the-three-faces-for-everyone-
-   and-every-surface-voiced.md). Every rule still starts `:root ` because that
+   on; the switch path is gone
+   (docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
+   Every rule still starts `:root ` because that
    prefix is part of its specificity: without it several rules would only tie
    with the ones they override, and the import order would be what decides.
 
