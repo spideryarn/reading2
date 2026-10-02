@@ -51,7 +51,7 @@ Verbatim, 2026-09-03:
 Checked against the tree at `4b0163c9` and the corpus in `data/`, 2026-09-03.
 
 - **The tree is fixed at three levels, and it is the prompt that fixes it.**
-  [`src/hierarchy.ts`](../../src/hierarchy.ts) § `SYSTEM` says *"Go 3 levels deep: root (depth 0),
+  [`src/hierarchy.ts`](../../src/structure.ts) § `SYSTEM` says *"Go 3 levels deep: root (depth 0),
   chapters (depth 1), sections (depth 2)"*, and leaves are added mechanically one per block. All
   thirteen trees in `data/` are `maxDepth 3`. The branching-factor rule in the same prompt (5–9
   children) is blown wherever a fourth level would have been the answer: `constitution` has a part
@@ -69,7 +69,7 @@ Checked against the tree at `4b0163c9` and the corpus in `data/`, 2026-09-03.
   "Sections", the leaf is "Para"), [`Spine.tsx`](../../src/web/Spine.tsx) (depth 1 as bands, depth 2
   as ticks — reasonable at any depth, but it is a choice), and
   [`diagram.ts`](../../src/web/diagram.ts) § `MAX_DRAWN_DEPTH`. Stage 4's structure call cannot be
-  split past ~1,976 blocks ([hierarchy.md § Longer pieces](../project/hierarchy.md#long-articles)),
+  split past ~1,976 blocks ([hierarchy.md § Longer pieces](../project/structure-step.md#long-articles)),
   so a *book* is gated on that regardless of depth.
 - **Hierarchy mode** is the `<table>` of [granularity-zoom.md](../project/granularity-zoom.md), with
   each gist column covered in reading mode by a fixed fisheye panel listing **the whole level**
@@ -313,10 +313,10 @@ left as it was proposed so the reasoning survives.
   draws today, and why the fisheye there is size rather than length.
 - [260828aw-outline-mode.md](260828aw-outline-mode.md) — Outline: the rung ladder, the churn
   measurement, the corpus table, the name collision.
-- [hierarchy.md](../project/hierarchy.md) — stage 4, the prompt, and why long pieces do not fit.
+- [hierarchy.md](../project/structure-step.md) — stage 4, the prompt, and why long pieces do not fit.
 - [260902o-adding-a-mode](260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md)
   — what a mode costs and the registry that was refused.
 - [`src/web/outline.ts`](../../src/web/outline.ts), [`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx),
   [`context.ts`](../../src/web/context.ts), [`layout.ts`](../../src/web/layout.ts),
-  [`tree.ts`](../../src/web/tree.ts), [`src/hierarchy.ts`](../../src/hierarchy.ts),
+  [`tree.ts`](../../src/web/tree.ts), [`src/hierarchy.ts`](../../src/structure.ts),
   [`src/arc.ts`](../../src/arc.ts).

@@ -431,6 +431,11 @@ gitignored; `prepare` gives each run its own directory there.
    step 4 and `write`'s checks in step 6. If `dev` gained a commit a reader could see while the model
    stages ran, `prepare` plans again rather than ship notes that stop short (up to three rounds).
 
+**Help reads the notes next.** Straight after `prepare`, the Overseer reads the pending release for
+anything that makes `/help` untrue or incomplete, and updates it —
+[overseer.md § Deploying](overseer.md#deploying), step 4, and
+[help-page.md § Bringing it up to date](help-page.md#bringing-it-up-to-date).
+
 **Write the notes even when nobody is about to deploy them.** Greg, 2026-09-10: *"it should write the
 changelog docs, even if you can't actually deploy them."* Still true: `prepare` needs no deploy
 credential and no Vercel access, and a pending release committed to `dev` ships whenever the next

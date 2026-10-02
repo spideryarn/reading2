@@ -4,23 +4,23 @@ Implemented Stage 2: production Structure is now `toc/11`, starts-only, schema-c
 
 Production:
 
-- [src/hierarchy.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/hierarchy.ts) — exact `toc/10` prompt retained; `toc/11` wording and three-level schema; request attachment; starts-only parsing/conversion; checkpoint validation.
-- [src/hierarchy-prompt.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/hierarchy-prompt.ts) — `PROMPT_VERSION = "toc/11"` and history.
-- [src/hierarchy-starts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/hierarchy-starts.ts) — updated converter ownership comment.
+- [src/hierarchy.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/structure.ts) — exact `toc/10` prompt retained; `toc/11` wording and three-level schema; request attachment; starts-only parsing/conversion; checkpoint validation.
+- [src/hierarchy-prompt.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/structure-prompt.ts) — `PROMPT_VERSION = "toc/11"` and history.
+- [src/hierarchy-starts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/structure-starts.ts) — updated converter ownership comment.
 
 Eval plumbing:
 
-- [toc10-frozen.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/hierarchy-structure/toc10-frozen.ts) — byte-pinned ranged `toc/10` request/parser.
-- [arms.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/hierarchy-structure/arms.ts) — `toc10-frozen` and `toc11-think-first`.
-- [model-arms.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/hierarchy-structure/model-arms.ts) — schema forwarding and production parse/converter use.
-- [run.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/hierarchy-structure/run.ts) — per-cell `collectSpend`.
+- [toc10-frozen.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/structure-whole-document/toc10-frozen.ts) — byte-pinned ranged `toc/10` request/parser.
+- [arms.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/structure-whole-document/arms.ts) — `toc10-frozen` and `toc11-think-first`.
+- [model-arms.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/structure-whole-document/model-arms.ts) — schema forwarding and production parse/converter use.
+- [run.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/structure-whole-document/run.ts) — per-cell `collectSpend`.
 - [structure-parse.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/paperwork/structure-parse.ts) — per-draw spend, build/drop/depth/refusal fields, every raw answer retained, per-article tally.
 - [run.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/paperwork/run.ts), [plain-words/run.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/plain-words/run.ts), [structure-starts-replay.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/paperwork/structure-starts-replay.ts), and [spike-book-structure.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/scripts/spike-book-structure.ts) — production parser/converter or explicit frozen parser.
-- [hierarchy-panel.sh](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/hierarchy-panel.sh), [lineup.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/lineup.ts), [make-judge-prompts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/make-judge-prompts.ts), [judge-rank.md](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/judge-rank.md), and [tally.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/tally.ts) — one complete quality run, four blind aliases, both judges, same-effort tally semantics.
+- [hierarchy-panel.sh](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/structure-panel.sh), [lineup.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/lineup.ts), [make-judge-prompts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/make-judge-prompts.ts), [judge-rank.md](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/judge-rank.md), and [tally.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/tally.ts) — one complete quality run, four blind aliases, both judges, same-effort tally semantics.
 
 Tests:
 
-- Added [hierarchy-structure-toc11.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/tests/hierarchy-structure-toc11.test.ts) and [paperwork-structure-parse.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/tests/paperwork-structure-parse.test.ts).
+- Added [hierarchy-structure-toc11.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/tests/structure-whole-document-toc11.test.ts) and [paperwork-structure-parse.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/tests/paperwork-structure-parse.test.ts).
 - Updated parity, checkpoint, prompt/digest, expansion stamp, eval, deepening, write-guard, and thinking-effort tests.
 
 The think-first arm uses the allowed fallback wording, `"Think the problem through before you answer."`, because network access was unavailable.

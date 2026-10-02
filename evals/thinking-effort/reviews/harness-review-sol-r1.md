@@ -20,11 +20,11 @@ The committed candidate was not safe to run unchanged. I fixed the stage-local p
 
 - **H8 — P1 — Fixed: lineup sanitising was shallow and Hierarchy sampling was unseeded.** Provenance, model, usage, timing, cost, hashes, timestamps, and version fields are now removed recursively. Image names are neutral, keys remain separate, candidate ordering is per-article seeded, and deep-gist sampling uses that seed. Visible answer length remains exposed because it is legitimate candidate content. [lineup.ts:57](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/lineup.ts:57), [lineup.ts:162](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/lineup.ts:162), [lineup.ts:215](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/lineup.ts:215)
 
-- **H9 — P1 — Fixed: Hierarchy “off” treated a missing thinking count as zero.** It now requires an explicit zero, no thinking blocks, and `end_turn`. [model-arms.ts:346](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/hierarchy-structure/model-arms.ts:346)
+- **H9 — P1 — Fixed: Hierarchy “off” treated a missing thinking count as zero.** It now requires an explicit zero, no thinking blocks, and `end_turn`. [model-arms.ts:346](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/structure-whole-document/model-arms.ts:346)
 
 - **H10 — P2 — Fixed: subset/resume runs changed recorded order slots.** Slots now come from the complete seeded arm order and remain stable when only unfinished arms are selected. The old smoke artifact remains historical and is labelled accordingly. [run.ts:120](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/thinking-effort/run.ts:120), [smoke README:3](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/results/thinking-effort-smoke/README.md:3)
 
-- **W1 — P3 — Reported, not fixed:** the old standalone Hierarchy `blind.ts` CLI still shuffles whole candidates with `Math.random()`. It is not used by this eval’s lineup builder, and the full Hierarchy run is cancelled. [blind.ts:171](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/hierarchy-structure/blind.ts:171)
+- **W1 — P3 — Reported, not fixed:** the old standalone Hierarchy `blind.ts` CLI still shuffles whole candidates with `Math.random()`. It is not used by this eval’s lineup builder, and the full Hierarchy run is cancelled. [blind.ts:171](/home/greg/code/spideryarn2/.claude/worktrees/thinking-effort-eval/evals/structure-whole-document/blind.ts:171)
 
 ## Plan round 2
 

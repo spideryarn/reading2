@@ -834,7 +834,7 @@ same machinery given a different sub-list, and none of them needed a special cas
 - **Add** — every step in `DEFAULT_INGEST_STEPS`, which is `fetch`, `extract`, `blocks`,
   `hierarchy`, `assets`. **Not a prefix of `STEP_ORDER` since 2026-09-06**: `labels` sits between
   `hierarchy` and `assets` in the order and is deliberately skipped here, so pasting a URL does not
-  wait on it ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
+  wait on it ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
 - **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the Tweets mode's band (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)); `useTweets.ts` sends it.
@@ -1522,7 +1522,7 @@ running out inside slug allocation, which is a fault rather than a queue state.
 
 Since 2026-09-07 a **publication can queue a job**. When a revision reaches the shelf saying
 `nav_label_status = 'pending'` — a freshly ingested article, whose paragraph labels are no longer
-part of `hierarchy` ([hierarchy.md](hierarchy.md#two-passes)) — `publishRevisionIn`
+part of `hierarchy` ([structure-step.md](structure-step.md#two-passes)) — `publishRevisionIn`
 ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) queues a `{ steps: ["labels"] }` job
 for the article's owner **on the publication's own transaction**, through `enqueueSuccessorIn`
 ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)).
@@ -1871,7 +1871,7 @@ than a shared path — see [block-ids.md § The freshness guard](block-ids.md#th
    one, and since 2026-09-06 something **does** compare it: the `labels` step declares a `stamp()` of
    the blocks hash, its prompt version and its model, and `stepIsDone` checks it. What keeps that
    step honest across a *re-cut tree* is not the stamp but the receipt deletion in `writeArtefacts`
-   ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
+   ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
 2. **Atomic artefact writes across a step's whole set.** `hierarchy` and `labels` write temp-then-rename,
    and the store's `write` does too; the other stages still write in place, and none of it makes the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
@@ -2324,7 +2324,7 @@ The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`,
 
 ## The CLI *is* this queue <a id="they-are-the-same-functions-the-cli-runs"></a>
 
-`npm run extract`, `npm run blocks` and `npm run hierarchy` still work, and `npm run fetch` is
+`npm run extract`, `npm run blocks` and `npm run structure` still work, and `npm run fetch` is
 `npm run ingest`. **Since 2026-09-05 they are this queue rather than a second caller of the same
 functions**: [`scripts/stage.ts`](../../scripts/stage.ts) enqueues a job and runs `advanceJob` in a
 loop, which is what a browser tab does. So "one code path per stage, and no way for the two to

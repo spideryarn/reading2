@@ -363,6 +363,9 @@ const PLAIN_ROUTES = [
   "/add/https://example.com/a",
   "/privacy",
   "/contact",
+  /* The corner logo is App's (App.tsx § help), drawn around the lazily
+     loaded page — plan 261002b. */
+  "/help",
   "/profile",
   "/an-address-nobody-minted",
 ];

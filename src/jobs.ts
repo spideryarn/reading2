@@ -422,7 +422,7 @@ export const REQUEUE_BUDGET = 2;
    holding the two together. A misspelling of either copy leaves
    `jobConcurrency()` quietly on its default. One spelling, in the read, is
    fewer parts and cannot disagree with itself. `REASK_ENV` and
-   `DEEPEN_RECORDS_ENV` in src/hierarchy-deepen.ts kept their constants for the
+   `DEEPEN_RECORDS_ENV` in src/structure-deepen.ts kept their constants for the
    opposite reason — evals and tests import those to *set* the variable, and
    tests/env-reads-are-literal.test.ts holds each against its read. */
 
@@ -619,7 +619,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      `fetch → extract → blocks` hands back instead. Once inside, an overrun is a
      cooperative pause that keeps the draft (`pauseForDeadline`,
      src/store/jobs.ts) and the structure answer is checkpointed
-     (src/hierarchy.ts), so the next window resumes rather than re-buying it.
+     (src/structure.ts), so the next window resumes rather than re-buying it.
 
      **The cost is one extra request for an ordinary article**, which used to
      finish all five steps in one claim and now hands back before `hierarchy`

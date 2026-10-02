@@ -48,7 +48,7 @@ import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
  * block and the `<ul>` around it is not. Containers become nodes in the tree
  * instead, which is what lets the ToC choose its own granularity: one row for a
  * list of terse bullets, one row per item for a list of real arguments.
- * See docs/project/hierarchy.md#granularity.
+ * See docs/project/structure-step.md#granularity.
  */
 const LEAF_BLOCKS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
@@ -1606,7 +1606,7 @@ export interface BlocksRun extends SplitResult {
 /**
  * The contents of a `blocks.json`, cleaned and then stamped. **Every writer of
  * that file must go through this**, and there are three of them: stage 3 here,
- * stage 4 in src/hierarchy.ts, and the Postgres export in src/store/export.ts.
+ * stage 4 in src/structure.ts, and the Postgres export in src/store/export.ts.
  *
  * The stamp is what lets the read seam tell an artefact cleaned by the current
  * policy from one cleaned by nothing (`sanitizeStoredBlocks` in

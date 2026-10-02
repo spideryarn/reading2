@@ -12,7 +12,7 @@ No P0 findings. Five findings:
   The claim that expansions only create depth ≥2 nodes is false. A flat stage-4 tree can put the root itself on the frontier; expanding it creates depth-1 children. The scoped protocol at [src/hierarchy-expand.ts:245](/home/greg/code/spideryarn2/.claude/worktrees/feedback-diagram-text-and-socratic/src/hierarchy-expand.ts:245) cannot request or return questions. Reproduced with a ten-block, 2,500-word flat root. This currently affects only the opt-in deepening path.  
   **Smallest fix:** when the expansion target is the root, request, validate, and carry questions on its children; add a flat-root deepening test.
 
-- **F4 — P2 — [evals/hierarchy-structure/run.ts:600](/home/greg/code/spideryarn2/.claude/worktrees/feedback-diagram-text-and-socratic/evals/hierarchy-structure/run.ts:600)**  
+- **F4 — P2 — [evals/hierarchy-structure/run.ts:600](/home/greg/code/spideryarn2/.claude/worktrees/feedback-diagram-text-and-socratic/evals/structure-whole-document/run.ts:600)**  
   `droppedQuestions` was added to the eval’s `BuildReport` construction sites but is discarded from the saved result, printer, and floor calculations. Thus the evaluation intended to detect prompt drift cannot report this new failure mode. Production merge sites themselves are complete.  
   **Smallest fix:** add an optional `droppedQuestions` field to the historical result shape and thread it through serialization and reporting.
 

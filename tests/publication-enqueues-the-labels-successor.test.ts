@@ -283,7 +283,7 @@ function block(id: string, text: string): Block {
  *
  * **No `navLabel` on the leaves**, which is what a stage-2a `hierarchy` produces:
  * `buildTree` sets the field from the map it is handed and from nothing else, so
- * a structure-only tree carries none (tests/hierarchy-leaves-the-labels.test.ts).
+ * a structure-only tree carries none (tests/structure-step-leaves-the-labels.test.ts).
  * `checkTree`'s complaints about labels are editorial and never refuse.
  */
 function treeFor(slug: string, blocks: Block[]): Tree {

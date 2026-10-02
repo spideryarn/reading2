@@ -468,7 +468,7 @@ either would be the restatement failure [above](#controltip-which-is-what-most-o
 *a hover that costs a reader a second to discover they knew it already is worse than no card* —
 arriving not through careless copy but through a card and a panel drawing the same fact.
 
-So the card is **defined as the difference**: `structure.ts` § `attachCards` builds it after both
+So the card is **defined as the difference**: `src/web/structure.ts` § `attachCards` builds it after both
 columns are settled, and
 
 - the **gist** is carried only where the row is not printing one;

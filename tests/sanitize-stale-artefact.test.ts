@@ -198,7 +198,7 @@ describe("every writer of a blocks.json stamps it", () => {
      * `blocksArtefact(...)` and a literal `sanitizer:` are the two ways to
      * build the payload at the write itself. `parts.blocks` is the third, and
      * it arrived when stage 4 stopped writing its own files (2026-08-31): the
-     * stage returns `HierarchyArtefacts`, whose `blocks` field is typed
+     * stage returns `StructureArtefacts`, whose `blocks` field is typed
      * `ReturnType<typeof blocksArtefact>`, and `main()` writes that field out.
      * The value provably went through `blocksArtefact` — one function away, in
      * the same file — and a line-by-line reading of the source cannot see it.
@@ -207,7 +207,7 @@ describe("every writer of a blocks.json stamps it", () => {
      * will not assign to that field, and the only other way to satisfy it is an
      * object literal carrying `sanitizer`, which this expression already
      * catches wherever it is written. What would be a hole is a field named
-     * `parts.blocks` on something that is not `HierarchyArtefacts` — so if a second
+     * `parts.blocks` on something that is not `StructureArtefacts` — so if a second
      * one is ever introduced, narrow this.
      */
     const stamped = /blocksArtefact|sanitizer|parts\.blocks/;
@@ -256,7 +256,7 @@ describe("every writer of a blocks.json stamps it", () => {
   it("finds the writers at all", async () => {
     /* The control. The assertion above passes trivially against a regex that
        matches nothing, which is precisely how it would come to be believed.
-       It watched `src/hierarchy.ts` until 2026-09-05, when stage 4's command
+       It watched `src/structure.ts` until 2026-09-05, when stage 4's command
        line went and took the last `writeAtomic(path.join(outDir,
        "blocks.json"), …)` with it — the control went red, correctly, and
        naming the writer that is actually left is the repair. If this ever goes

@@ -20,7 +20,7 @@ only question that matters.
 **Why it was run.** Hierarchy structure is 14% of a long article's ingest, the one paid step every
 article pays, and ~80% of its output tokens are reasoning. Both Fable and GPT Sol independently
 ranked "is `medium` earning its keep" as the largest unmeasured lever in the pipeline. The `EFFORT`
-comment in [`src/hierarchy.ts`](../../src/hierarchy.ts) says the setting "has now been wrong in both
+comment in [`src/hierarchy.ts`](../../src/structure.ts) says the setting "has now been wrong in both
 directions twice" and was chosen by a truncation postmortem, never by a quality comparison.
 
 **This run could not have been done before it.** The harness's `incumbent` arm declared
@@ -133,7 +133,7 @@ supported one: **`low` follows more of the author's own top-level divisions and 
 for them.** The refutation was sitting in this run's own sweep, filed under noise.
 
 **Several directions are judgments, not quality orderings.** More parts is not worse. Lower
-`balanceCv` is not better — [`score.ts`](../../evals/hierarchy-structure/score.ts) says so itself:
+`balanceCv` is not better — [`score.ts`](../../evals/structure-whole-document/score.ts) says so itself:
 "Lower is *usually* better, but a preface genuinely shorter than the chapters is not a fault —
 compare arms on it, don't gate on it." Gist retention's same-recipe gap of 0.009 sits against
 per-draw values spanning 0.48–0.62, so it is an unstable denominator, and the 2.4-point arm gap is
@@ -141,7 +141,7 @@ about 1.6 standard errors — a weak directional observation, nothing more.
 
 ## The blind judging, which reversed the verdict
 
-[`blind.ts`](../../evals/hierarchy-structure/blind.ts) shuffles the trees per document, hides the
+[`blind.ts`](../../evals/structure-whole-document/blind.ts) shuffles the trees per document, hides the
 mapping in a key file the judge never sees, and always adds the free heading tree to the lineup as a
 non-model anchor. Two draw sets were judged, each by two models from **different families** — GPT
 Sol and Claude Fable — asked one question: *reading this article for the first time with the tree as
@@ -181,7 +181,7 @@ the product.
 The finding is narrower and more useful than "the free tree wins": **the author's own headings carve
 this article better than the paid call does, and what the paid call is actually buying is titles and
 gists.** Which points straight at an experiment nobody has run — `headings-seeded` and
-`headings-listed` already exist as arms in [`arms.ts`](../../evals/hierarchy-structure/arms.ts):
+`headings-listed` already exist as arms in [`arms.ts`](../../evals/structure-whole-document/arms.ts):
 give the model the boundaries and let it write the prose.
 
 ### What this still does not settle

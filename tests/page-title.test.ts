@@ -203,6 +203,7 @@ describe("every title, whatever the page", () => {
     { kind: "features" },
     { kind: "pricing" },
     { kind: "contact" },
+    { kind: "help" },
     { kind: "landing" },
     { kind: "not-found" },
     { kind: "login" },

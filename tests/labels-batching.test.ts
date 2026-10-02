@@ -345,7 +345,7 @@ describe("planBatches", () => {
     // tree.json off disk, and `walk` recurses straight past a mixed node's leaf
     // children without noticing.
     //
-    // On the generateHierarchy path checkCoverage would catch the result. On
+    // On the generateStructure path checkCoverage would catch the result. On
     // the second path — `npm run labels -- <dir>`, retired 2026-09-05 — nothing
     // would: the merged tree reached disk with paragraphs that have no sidebar
     // row and nothing saying why. So the check lives where every caller passes
@@ -708,7 +708,7 @@ describe("mergeLabels", () => {
 
   it("never labels an internal node", () => {
     // A gist and a navLabel are different lengths for different columns
-    // (docs/project/hierarchy.md). Crossing them would render one in
+    // (docs/project/structure-step.md). Crossing them would render one in
     // the other's place with nothing to see.
     const labels = Object.fromEntries(blocks.map((b) => [b.id, "A label of about the right length"]));
     const merged = mergeLabels(tree, labels);
@@ -973,7 +973,7 @@ describe("assertEveryBlockLabelled", () => {
   });
 
   it("refuses a gap, and names where it is", () => {
-    // `npm run labels -- <dir>` did not go through generateHierarchy, so this
+    // `npm run labels -- <dir>` did not go through generateStructure, so this
     // was the only thing between a short answer and a rewritten tree.json on
     // that path. The command went on 2026-09-05 and the check stays: it is
     // stated on `mergeLabels`'s own input, so it covers whatever calls it next.

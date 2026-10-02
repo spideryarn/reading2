@@ -13,7 +13,7 @@
  * kept children is not an expansion and is refused too.
  */
 import { snapStartsToHeadings } from "./heading-snap.js";
-import type { PartitionRepair } from "./hierarchy.js";
+import type { PartitionRepair } from "./structure.js";
 import type { Block } from "./types.js";
 
 export interface StartProposal {

@@ -298,7 +298,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     evidence: "static-only",
     reason:
       "Pure-function tests of `buildTree` and `checkTree`: a model proposal in, a tree out, with " +
-      "block fixtures written in the file. It imports src/hierarchy.js, which is how the import " +
+      "block fixtures written in the file. It imports src/structure.js, which is how the import " +
       "graph reaches a condemned module — that file also holds stage 4's CLI and its checkpoint " +
       "plumbing — but nothing here selects a store, reads a path or writes a byte, and the " +
       "instrumented run confirms it executes no condemned function.",
@@ -839,7 +839,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "array and the serialised request body. It imports src/converse.js, which is how the graph " +
       "reaches a condemned module; nothing here selects a store, reads a path or writes a byte.",
   },
-  "tests/hierarchy-cascade.test.ts": {
+  "tests/structure-step-cascade.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
@@ -847,7 +847,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "The pure arithmetic of the hierarchy cascade — the stopping rule, the batch packing and " +
       "the starts-only range derivation. Every function under test is a function of an article " +
       "and a recipe, with no model, no network and no store; it reaches a condemned module only " +
-      "because `src/hierarchy.ts` imports the app to reach `generateHierarchy`. Nothing here " +
+      "because `src/structure.ts` imports the app to reach `generateStructure`. Nothing here " +
       "changes when the filesystem store goes.",
   },
   /**
@@ -857,7 +857,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * `static-only` is the state of the evidence rather than a preference —
    * re-running witness 2 is what upgrades it.
    */
-  "tests/hierarchy-expand.test.ts": {
+  "tests/structure-step-expand.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
@@ -866,8 +866,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "cache order, the strict reading of an answer, and the record of what was decided about " +
       "each candidate. It makes no model call and constructs no store; its only file read is " +
       "three committed JSON fixtures under `evals/results/`, by an absolute path off " +
-      "`import.meta.url`. It reaches a condemned module only because `src/hierarchy.ts` imports " +
-      "the app to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+      "`import.meta.url`. It reaches a condemned module only because `src/structure.ts` imports " +
+      "the app to reach `generateStructure`. Nothing here changes when the filesystem store goes.",
   },
   /**
    * **The third of the cascade's files, and the first that touches a store at
@@ -876,7 +876,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * docs/plans/260904d-deepen-fat-sections.md, after the witness ran, so
    * `static-only` is the state of the evidence rather than a preference.
    */
-  "tests/hierarchy-deepen.test.ts": {
+  "tests/structure-step-deepen.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
@@ -885,27 +885,27 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "a stored answer has to pass, and a whole wave run against a fake executor. It does use a " +
       "checkpoint store — `memoryCheckpoints`, the in-memory fake — and never a real one, so " +
       "there is no database, no blobs and no filesystem here; `SPIDERYARN_STORE` changes nothing " +
-      "about it. It reaches a condemned module only because `src/hierarchy.ts` imports the app " +
-      "to reach `generateHierarchy`. Nothing here changes when the filesystem store goes.",
+      "about it. It reaches a condemned module only because `src/structure.ts` imports the app " +
+      "to reach `generateStructure`. Nothing here changes when the filesystem store goes.",
   },
   /**
    * **Stage 5's two files, landed 2026-09-05**, and the same verdict as the
    * three above for the same reason — they reach a condemned module only through
-   * `src/hierarchy.ts`, which imports the app to reach `generateHierarchy`.
+   * `src/structure.ts`, which imports the app to reach `generateStructure`.
    * `static-only` is the state of the evidence rather than a preference: both
    * arrived long after witness 2 ran, and re-running it is what upgrades them.
    */
-  "tests/hierarchy-prompt-hoist.test.ts": {
+  "tests/structure-step-prompt-hoist.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
     reason:
       "Three constants and a renderer, pinned where they landed after being hoisted out of " +
-      "`src/hierarchy.ts` into a leaf so that the deepening wave could be imported without " +
+      "`src/structure.ts` into a leaf so that the deepening wave could be imported without " +
       "closing a cycle. It builds one request in memory and hashes it; there is no store, no " +
       "network and no filesystem. Nothing here changes when the filesystem store goes.",
   },
-  "tests/hierarchy-deepen-wave.test.ts": {
+  "tests/structure-step-deepen-wave.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
@@ -913,7 +913,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "The deepening wave end to end against a fake executor: which sections a mechanical bound " +
       "selects, that the result does not depend on the order the calls come back in, that a wave " +
       "declines to start a call it cannot finish, and that the whole thing is off by default. The " +
-      "two model calls `generateHierarchy` would make are mocked at the module boundary and the " +
+      "two model calls `generateStructure` would make are mocked at the module boundary and the " +
       "only stores it constructs are `nullCheckpointStore` and `memoryCheckpoints`, so there is " +
       "no database, no blobs and no filesystem. Nothing here changes when the filesystem store " +
       "goes.",
@@ -938,7 +938,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * the witness ran, so `static-only` is not a preference — the dynamic evidence
    * does not exist for it yet and re-running witness 2 is what upgrades it.
    */
-  "tests/hierarchy-structure-checkpoint.test.ts": {
+  "tests/structure-whole-document-checkpoint.test.ts": {
     category: "store-agnostic-fake",
     evidence: "static-only",
     reason:
@@ -946,10 +946,10 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "really makes, and that only an answer which parsed and built is stored. Its checkpoint " +
       "store is a `Map` written in the file and its model call is mocked, so it constructs no " +
       "store of any kind and reads no path; it reaches a condemned module only because " +
-      "`src/hierarchy.ts` imports `nullCheckpointStore`. Nothing here changes when the filesystem " +
+      "`src/structure.ts` imports `nullCheckpointStore`. Nothing here changes when the filesystem " +
       "store goes.",
   },
-  "tests/hierarchy-eval-incumbent-parity.test.ts": {
+  "tests/structure-step-eval-incumbent-parity.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",

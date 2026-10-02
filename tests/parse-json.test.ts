@@ -211,7 +211,7 @@ beforeAll(async () => {
     /* A stage reading a *model's* answer — the same leak from the other side.
        Called through \`stripFence\` then \`parseJsonFrom\`, which is exactly what
        every stage's own private \`parseJson\` does (src/glossary.ts, src/arc.ts,
-       src/hierarchy.ts, src/tweets.ts, src/quotes.ts — none of them exports it). It
+       src/structure.ts, src/tweets.ts, src/quotes.ts — none of them exports it). It
        used to go through src/summarise.ts, the one that did; that module is
        gone (docs/plans/260831s-gist-only-summaries.md) and this is the same two calls
        without the wrapper. */
@@ -524,7 +524,7 @@ describe("parseJsonAnswer", () => {
   /* ------------------------------------------------ the trailing comma -- */
 
   /**
-   * **The model's habit, not a slip.** `src/hierarchy.ts` asks for `question`
+   * **The model's habit, not a slip.** `src/structure.ts` asks for `question`
    * on the root and depth-1 nodes and for it to be OMITTED deeper — so on a
    * deep node the model writes the comma that would have preceded the field and
    * then obeys the instruction, leaving `{"gist":"…",}`.
@@ -775,13 +775,13 @@ describe("parseJsonAnswer", () => {
 const STAGES = [
   "arc",
   "glossary",
-  "hierarchy",
   "ideas",
   "illustrated",
   "labels",
   "quiz",
   "quotes",
   "sketch",
+  "structure",
   "timeline",
   "tweets",
 ] as const;
