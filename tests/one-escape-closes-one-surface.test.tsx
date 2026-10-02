@@ -616,6 +616,7 @@ describe("pair 6 — the gutter disclosure in front of each of the three dialogs
               },
             ]}
             chatCount={0}
+            notesBy="you"
             onOpenComment={() => {}}
             onChatAbout={() => {}}
             onHelp={() => {}}
@@ -936,6 +937,7 @@ describe("pair 17 — a native <dialog> in front of the two document-tier surfac
             },
           ]}
           chatCount={0}
+          notesBy="you"
           onOpenComment={() => {}}
           onChatAbout={() => {}}
           onHelp={() => {}}

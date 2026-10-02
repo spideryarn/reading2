@@ -184,6 +184,7 @@ function Page({ xrefs, extras }: { xrefs: readonly Crossref[] | null; extras: Ex
         openComment={null}
         chats={[]}
         chatCounts={new Map()}
+        notesBy="you"
         openChat={null}
         onOpenChat={() => {}}
         onSelect={() => {}}

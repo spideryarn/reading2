@@ -236,6 +236,29 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
+### The `press` line: what pressing does, set apart
+
+`ControlTip` has an optional fourth line, `press`, since 2026-10-02: **what pressing the control does,
+or where it goes**, drawn last with a rule above it, full ink, medium weight and an arrow before it.
+It came from Greg's report on the sharing mark's card, which read *"Only you can read this. Share it
+with anyone."*:
+
+> One sentence is a statement of the current state. The other is a potential action. But there's no
+> explanation of what this means or how this functionality works, or any UI differentiation between
+> these two kinds of sentence.
+>
+> — Greg, 2026-10-02 (`spya-d886ah`)
+
+So the masthead's two marks (sharing and archive) now keep the state in `what`, the explanation in
+`how`, and the press in `press`. It sits outside the two paragraphs above, which keep their rule;
+it is a different kind of sentence, not a third paragraph. The line is still text, not a button — the card cannot be entered by
+the pointer ([§ The pointer cannot enter a card](#the-pointer-cannot-enter-a-card-and-that-used-to-be-exempt)),
+so the action is the control the card sits on, and `press` says what it does. The outside evidence for
+the split is
+[261002b-tooltip-text-state-versus-action.md](../research/261002b-tooltip-text-state-versus-action.md);
+the plan is
+[261002e](../plans/261002e-sharing-mark-tooltip-separates-state-from-action.md).
+
 ### A shortcut is named on its card
 
 **Any control that has a keyboard shortcut says so in its tooltip.** This file is the single home of

@@ -391,6 +391,7 @@ export function ControlTip({
   what,
   drawn,
   how,
+  press,
   tap,
 }: {
   head: string;
@@ -406,6 +407,22 @@ export function ControlTip({
    */
   drawn?: string | undefined;
   how: string;
+  /**
+   * **What pressing this control does, or where it goes** — the one line in the
+   * card that is an action rather than a statement, so it is set apart: last
+   * before `tap`, a rule above it, an arrow before it.
+   *
+   * Greg, 2026-10-02 (spya-d886ah), about the sharing mark's *"Only you can read
+   * this. Share it with anyone."*: *"One sentence is a statement of the current
+   * state. The other is a potential action … [and there's no] UI
+   * differentiation between these two kinds of sentence."* So `head`, `what`
+   * and `how` stay statements, and an action that is worth saying goes here.
+   *
+   * Only where pressing does something a reader would not assume from the
+   * glyph — a link that leaves the page, a button whose press is the change.
+   * docs/research/261002b-tooltip-text-state-versus-action.md.
+   */
+  press?: string | undefined;
   /**
    * **"Tap again to do it"**, and only ever that shape.
    *
@@ -431,7 +448,8 @@ export function ControlTip({
       <p className="tip-soon-what">{what}</p>
       {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
-      {tap && <p className="tip-soon-tap">{tap}</p>}
+      {press && <p className="tip-soon-press">{press}</p>}
+      {tap &&<p className="tip-soon-tap">{tap}</p>}
     </>
   );
 }

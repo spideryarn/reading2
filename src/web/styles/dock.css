@@ -949,3 +949,18 @@
   border-top: 1px solid var(--rule);
   color: var(--ink);
 }
+/* What pressing the control does — the one line in a card that is an action
+   rather than a statement, so it must not read as a third sentence of the same
+   paragraph. A rule above, full ink, medium weight, and an arrow before it; not
+   italic, which is the gesture hint's (`.tip-soon-tap`) and would make the two
+   look like one kind of line. `ControlTip` § `press`, and spya-d886ah for why.
+   Specificity ladder as `.tip-soon-learned` above. */
+.tip-soon p.tip-soon-press {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+  font-weight: 500;
+}
+.tip-soon p.tip-soon-press::before {
+  content: "→\00a0";
+}

@@ -3578,8 +3578,25 @@ export const SHARING_COPY_TIP =
 export const SHARING_BADGE = "Shared";
 
 /**
- * **The mark at the top of the article, in two states, each of them a whole
- * sentence and a destination.**
+ * **The mark at the top of the article, in two states — and where pressing it
+ * goes, said apart from the state.**
+ *
+ * These two were the state with the destination glued on — *"Only you can read
+ * this. Share it with anyone."* — until 2026-10-02. Greg (spya-d886ah): *"One
+ * sentence is a statement of the current state. The other is a potential
+ * action. But there's no explanation of what this means or how this
+ * functionality works, or any UI differentiation between these two kinds of
+ * sentence."* So the state is `SHARING_ON`/`SHARING_OFF` alone again, in the
+ * card's `what`; what sharing means is `SHARING_MARK_HOW_*`; and these are the
+ * press, in `ControlTip`'s `go` line, styled as a different kind of sentence.
+ * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+ *
+ * **They name the Metadata page, not *Access & sharing*, because that is where
+ * the link lands** — the top of the page, where `Share…` is the first button
+ * (Metadata.tsx § `TopActions`). Landing on the section itself is deferred in
+ * the plan; when it lands, these get shorter.
+ *
+ * The history below is of the version these replaced.
  *
  * Greg, 2026-09-04:
  *
@@ -3602,10 +3619,12 @@ export const SHARING_BADGE = "Shared";
  * appears only when shared answers it by absence, which is indistinguishable
  * from a mark that has not loaded.
  */
-export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
+export const SHARING_MARK_PRESS_PUBLIC =
+  "Press to go to this article's Metadata page, where you can stop sharing it.";
 
 /** The other state of the mark above. */
-export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
+export const SHARING_MARK_PRESS_PRIVATE =
+  "Press to go to this article's Metadata page, where Share… starts it.";
 
 /**
  * **The second paragraph of the mark's card, which is the one worth hovering
@@ -3620,18 +3639,37 @@ export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
  * An owner deciding whether to press this deserves the short version here,
  * before they get to the confirmation.
  *
- * The private twin says the smaller thing, and says it because the absence of a
- * warning is not itself reassuring: an owner who has just read what publishing
- * costs should be told plainly that none of it has happened.
+ * **The private twin says what sharing would be**, since 2026-10-02. It used to
+ * say only that nothing had left the account, and Greg's report on this card
+ * (spya-d886ah) was that it offered sharing with *"no explanation of what this
+ * means or how this functionality works"*. So: what a shared article is (a page
+ * anyone can read, listed — `SHARING_ON`), what rides on it (`ALWAYS_SHARED`,
+ * and *most* of the AI's work because some modes stay behind — Chat among
+ * them; shared-inventory.ts derives the list, and the card names none so it
+ * cannot fall out of step), and that pressing Share… does not do it
+ * (`SHARING_OPEN_TIP`). Every clause is one of those three, checked against
+ * them, so this does not become a fourth near-miss of the same promise.
  */
 export const SHARING_MARK_HOW_PUBLIC =
-  "Taking it down again refuses the next request, and no more than that — whatever somebody has " +
-  "already read or copied stays with them.";
+  "Stopping sharing refuses the next request for it and takes it off the public list — whatever " +
+  "somebody has already read or copied stays with them.";
+
+/**
+ * **`SHARING_ON` for an article that is shared and archived**, where its second
+ * half is false: archiving takes a public article off the public list while its
+ * link keeps working (src/store/public-library.ts § the `archivedAt` clause).
+ * Only the masthead's mark knows both facts, so only it draws this; the sharing
+ * card and the shelf badge still say `SHARING_ON` — deferred in
+ * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+ */
+export const SHARING_MARK_ON_ARCHIVED =
+  "Anyone with the link can read this without signing in. It's archived, so it isn't listed publicly.";
 
 /** @see SHARING_MARK_HOW_PUBLIC */
 export const SHARING_MARK_HOW_PRIVATE =
-  "Nothing has left your account: the article, your notes and your comments are yours alone until " +
-  "you say otherwise.";
+  "Sharing gives it a public page that anyone can read without signing in, listed publicly: the " +
+  "article, most of what the AI made of it, and your comments. Nothing goes until you have seen " +
+  "the full list and confirmed.";
 
 /**
  * **The mark's *name*, which is not its tooltip** — and the two have to differ.
