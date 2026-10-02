@@ -1,0 +1,272 @@
+{
+ "What can journals do to fix this?": {
+  "ms": 14580,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 62387,
+   "completionTokens": 1464,
+   "cacheReadTokens": 0,
+   "cacheWriteTokens": 62336
+  },
+  "hits": [
+   {
+    "blockId": "spya-pqp4ce",
+    "confidence": 93,
+    "quote": "more than 140 psychology journals have adopted result-blind peer review. In this approach, studies are accepted not on the basis of their findings and after the studies are completed, but before they are conducted and on the basis of the methodological rigor of their experimental designs",
+    "reasoning": "Describes a concrete journal policy (result-blind review) adopted to fix replication problems."
+   },
+   {
+    "blockId": "spya-neds6m",
+    "confidence": 92,
+    "quote": "Scientific publishing has begun using pre-registration reports to address the replication crisis.",
+    "reasoning": "Describes pre-registration as a journal-level fix for the crisis."
+   },
+   {
+    "blockId": "spya-d97yu8",
+    "confidence": 88,
+    "quote": "The journal Psychological Science has encouraged the preregistration of studies and the reporting of effect sizes and confidence intervals.",
+    "reasoning": "Gives a specific example of a journal changing policy to improve reproducibility."
+   },
+   {
+    "blockId": "spya-epfeeh",
+    "confidence": 85,
+    "quote": "Business and management journals that have introduced editorial policies on data accessibility, replication, and transparency include the Strategic Management Journal, the Journal of International Business Studies, and the Management and Organization Review.",
+    "reasoning": "Lists journals' editorial policy changes aimed at fixing reproducibility issues."
+   },
+   {
+    "blockId": "spya-cstzz5",
+    "confidence": 80,
+    "quote": "These authors tend to plead for both a broad cultural change in the scientific community of how statistics are considered and a more coercive push from scientific journals and funding bodies.",
+    "reasoning": "Discusses what journals and funders should do about poor methodology reporting."
+   },
+   {
+    "blockId": "spya-q8mbr9",
+    "confidence": 85,
+    "quote": "Methods of addressing the crisis include pre-registration of scientific studies and clinical trials as well as the founding of organizations such as CONSORT and the EQUATOR Network that issue guidelines for methodology and reporting.",
+    "reasoning": "Lists institutional/publishing reforms meant to fix the replication crisis."
+   },
+   {
+    "blockId": "spya-c9bf7m",
+    "confidence": 75,
+    "quote": "The paper \"Redefine statistical significance\",[226] signed by a large number of scientists and mathematicians, proposes that in \"fields where the threshold for defining statistical significance for new discoveries is p < 0.05, we propose a change to p < 0.005. This simple step would immediately improve the reproducibility of scientific research in many fields.\"",
+    "reasoning": "Proposes a journal-adoptable standard (stricter significance threshold) to fix reproducibility."
+   },
+   {
+    "blockId": "spya-uq4qqe",
+    "confidence": 70,
+    "quote": "It has been suggested that \"a simple way to check how often studies have been repeated, and whether or not the original findings are confirmed\" is needed.",
+    "reasoning": "Suggests journal/peer-review tools for tracking replication status, a fix proposal."
+   }
+  ]
+ },
+ "fishing for significant results": {
+  "ms": 14432,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 62384,
+   "completionTokens": 1436,
+   "cacheReadTokens": 62336,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-zjcy3c",
+    "confidence": 95,
+    "quote": "if one collects some data, applies several different significance tests to it, and publishes only the one that happens to have a p-value less than 0.05, then the total p-value for \"at least one significance test reaches p < 0.05\" can be much larger than 0.05",
+    "reasoning": "Directly describes fishing for a significant result among multiple tests."
+   },
+   {
+    "blockId": "spya-jp3k7e",
+    "confidence": 88,
+    "quote": "Suppose the null hypothesis is true, and we have 20 possible significance tests to apply to the dataset.",
+    "reasoning": "Illustrates the math of fishing through many tests to find significance."
+   },
+   {
+    "blockId": "spya-umu7gf",
+    "confidence": 85,
+    "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\".",
+    "reasoning": "Describes the many analytic paths researchers can try until finding significance."
+   },
+   {
+    "blockId": "spya-gnxfb0",
+    "confidence": 80,
+    "quote": "It pointed out that over half of the studies would test for correlation between a phenomenon and individual fMRI voxels, and only report on voxels exceeding chosen thresholds.",
+    "reasoning": "An example of fishing for significant results among many voxel-level tests."
+   },
+   {
+    "blockId": "spya-qsad7n",
+    "confidence": 75,
+    "quote": "Various statistical methods can be applied to make the p-value appear smaller than it really is.",
+    "reasoning": "Describes manipulating analysis to find significance, a form of fishing."
+   },
+   {
+    "blockId": "spya-kqvxfb",
+    "confidence": 78,
+    "quote": "Examples of questionable research practices include data dredging,[139][140][39][c] selective reporting of only statistically significant findings",
+    "reasoning": "Names data dredging and selective reporting, the core of fishing for significant results."
+   },
+   {
+    "blockId": "spya-m748h2",
+    "confidence": 82,
+    "quote": "The inappropriate practice of searching through large files of information to try to confirm a preconceived hypothesis or belief without an adequate design that controls for possible confounds or alternate hypotheses.",
+    "reasoning": "This is the definition of data dredging/p-hacking, i.e. fishing for significant results."
+   },
+   {
+    "blockId": "spya-t3us9w",
+    "confidence": 70,
+    "quote": "exploiting the flexibility of the process of data collection and reporting, could greatly increase the probability of false positive results",
+    "reasoning": "Describes how flexible analysis choices (fishing) increase false positives."
+   },
+   {
+    "blockId": "spya-nwgxra",
+    "confidence": 65,
+    "quote": "In a 2012 survey, 56% of psychologists admitted to early stopping, 46% to only reporting analyses that \"worked\", and 38% to post hoc exclusion",
+    "reasoning": "Describes practices of trying multiple approaches until significance is found."
+   }
+  ]
+ },
+ "examples from fields outside psychology": {
+  "ms": 12693,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 62387,
+   "completionTokens": 1326,
+   "cacheReadTokens": 62336,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-acfh3t",
+    "confidence": 80,
+    "quote": "In other disciplines",
+    "reasoning": "Section heading introducing examples from fields beyond psychology."
+   },
+   {
+    "blockId": "spya-d977mu",
+    "confidence": 90,
+    "quote": "In nutrition science, for most food ingredients, there were studies that found that the ingredient has an effect on cancer risk.",
+    "reasoning": "Example of replication problems in nutrition science."
+   },
+   {
+    "blockId": "spya-s2xfzn",
+    "confidence": 92,
+    "quote": "A 2016 study in the journal Science replicated 18 experimental studies published in two leading economics journals, The American Economic Review and the Quarterly Journal of Economics, between 2011 and 2014.",
+    "reasoning": "Example of replication crisis data in economics."
+   },
+   {
+    "blockId": "spya-gvvmwj",
+    "confidence": 92,
+    "quote": "A 2019 study in Scientific Data estimated with 95% confidence that of 1,989 articles on water resources and management published in 2017, study results might be reproduced for only 0.6% to 6.8%",
+    "reasoning": "Example from water resource management field."
+   },
+   {
+    "blockId": "spya-ch4h0b",
+    "confidence": 85,
+    "quote": "The rapid adoption of large language models (LLMs) after 2022 introduced a distinct set of reproducibility concerns, affecting both research on LLMs and research that uses them as tools.",
+    "reasoning": "Example of replication issues in LLM research, a non-psychology field."
+   },
+   {
+    "blockId": "spya-k47jy2",
+    "confidence": 70,
+    "quote": "A 2025 review of 640 papers that applied LLMs to software engineering tasks found persistent gaps in the availability of artefacts, the specification of computing environments, and documentation, and called the situation a reproducibility crisis within that subfield.",
+    "reasoning": "Another non-psychology field example (software engineering/ML)."
+   },
+   {
+    "blockId": "spya-d8g53k",
+    "confidence": 85,
+    "quote": "Results from The Reproducibility Project: Cancer Biology suggest most studies of the cancer research sector may not be replicable.",
+    "reasoning": "Example from cancer biology research."
+   },
+   {
+    "blockId": "spya-esjmns",
+    "confidence": 85,
+    "quote": "Of 49 medical studies from 1990 to 2003 with more than 1000 citations, 92% found that the studied therapies were effective.",
+    "reasoning": "Example of replication issues in medical research."
+   },
+   {
+    "blockId": "spya-k59a2x",
+    "confidence": 85,
+    "quote": "In a 2012 paper, C. Glenn Begley, a biotech consultant working at Amgen, and Lee Ellis, a medical researcher at the University of Texas, found that only 11% of 53 pre-clinical cancer studies had replications that could confirm conclusions from the original studies.",
+    "reasoning": "Example from pre-clinical cancer research."
+   },
+   {
+    "blockId": "spya-yj72uc",
+    "confidence": 75,
+    "quote": "Scientists from biotech companies Amgen and Bayer Healthcare reported alarmingly low replication rates (11–20%) of landmark findings in preclinical oncological research.",
+    "reasoning": "Example of replication failures in biomedical/oncological research."
+   }
+  ]
+ },
+ "Why do so many studies fail to replicate?": {
+  "ms": 12775,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 62391,
+   "completionTokens": 1383,
+   "cacheReadTokens": 62336,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-sy87zk",
+    "confidence": 80,
+    "quote": "There are many proposed causes for the replication crisis.",
+    "reasoning": "Directly introduces the section explaining why studies fail to replicate."
+   },
+   {
+    "blockId": "spya-y782zn",
+    "confidence": 85,
+    "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\", where negative results remain unpublished.",
+    "reasoning": "Explains publication bias as a major cause of non-replication."
+   },
+   {
+    "blockId": "spya-f76az5",
+    "confidence": 75,
+    "quote": "it is plausible that a considerable proportion of research findings might be false positives",
+    "reasoning": "Links publication bias and false-priori hypotheses to nonreproducible findings."
+   },
+   {
+    "blockId": "spya-hdubm3",
+    "confidence": 90,
+    "quote": "Low statistical power hinders replication for three reasons: (1) low-power replications have reduced ability to detect true effects, (2) low-power original studies produce biased effect size estimates leading to undersized replications, and (3) low-power original studies yield results unlikely to reflect true effects.",
+    "reasoning": "Directly explains why low power causes replication failures."
+   },
+   {
+    "blockId": "spya-kqvxfb",
+    "confidence": 90,
+    "quote": "Questionable research practices are behaviors that exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates and undermine reproducibility.",
+    "reasoning": "Describes questionable research practices as a cause of non-replication."
+   },
+   {
+    "blockId": "spya-ddw4ya",
+    "confidence": 88,
+    "quote": "a further reason studies might fail to replicate is high heterogeneity of the to-be-replicated effects.",
+    "reasoning": "Explicitly states a cause of replication failure."
+   },
+   {
+    "blockId": "spya-qn347b",
+    "confidence": 88,
+    "quote": "a further reason findings are difficult to replicate is the sensitivity to context of certain psychological effects.",
+    "reasoning": "Gives context sensitivity as an explanation for failed replications."
+   },
+   {
+    "blockId": "spya-cxcn8h",
+    "confidence": 60,
+    "quote": "Replication failures do not indicate that affected fields lack scientific rigor.",
+    "reasoning": "Frames replication failures as a normal, explainable part of science."
+   },
+   {
+    "blockId": "spya-v697nj",
+    "confidence": 70,
+    "quote": "The replication crisis may be triggered by the \"generation of new data and scientific publications at an unprecedented rate\" that leads to \"desperation to publish or perish\" and failure to adhere to good scientific practice.",
+    "reasoning": "Gives a historical/sociological cause for the crisis."
+   },
+   {
+    "blockId": "spya-rzjbzy",
+    "confidence": 65,
+    "quote": "in complex systems, such as social psychology, \"the null hypothesis is always false\", or \"everything is correlated\".",
+    "reasoning": "Explains a statistical reason why many results fail to replicate."
+   }
+  ]
+ }
+}

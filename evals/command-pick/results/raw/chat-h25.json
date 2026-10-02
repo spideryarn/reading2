@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944990-mTyBAnpQzt0WpCBIaxbY",
+ "object": "chat.completion",
+ "created": 1790944990,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"mode:chat\", \"argument\": null, \"confidence\": 0.55}",
+    "refusal": null,
+    "reasoning": "Summarizing a specific section isn't something the summary mode handles, since that's built for whole-article summaries at different lengths. This seems like it might fall under \"none,\" though chat mode could potentially address it as a question about the article instead.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "Summarizing a specific section isn't something the summary mode handles, since that's built for whole-article summaries at different lengths. This seems like it might fall under \"none,\" though chat mode could potentially address it as a question about the article instead.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "ErQICsQBCBIYAipAKYEJZdM19VZ805vo6inL39B/HxntF7+icEDxKiu8m0xD2PlfENeEYpdINOOKH3HM7YzVPPxoqq9wPpUNBNxkpDIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAHkzf7VBhIMq37a0iS7yoZtDToLGgxmQhK6jRJSowE+VkoiMPaFnFyVIyxqACgnDNSGk7XD3IOLOaTVNo6SkGo7yOw1YW92CQ9PmkzTKjSMYI+RgSqcBuBewt6/aWUWD3p3HclVzlIwYFBTpmnkaR1c1E0gkLbiO42np/gqLn0OwOpl7qYmQqxJgzNpoGXIo1tTSBNLAYEsvBb3+KWP56acJ+F5Q4Ziwao60lIFpdXpZpapixg44EwppR/kDJAslNAlBfkBSL6w/2tNQTlC0WHS4M9ZlMw7R6EVmmD3n7hvCjlDzgyQg7IYKip5RwZlUb34WxZVs/u0+1+8EE8nzyve4Hlj+XxMlz1UBDPE1EEi+MuKh4DgL6obx0ryJeL1ky11yWcaAaDyBzJls4hn4mzP+oAvrkUwGy6llrAMWvxsYjj/BCvoS37kOQPuyAcNDn1zf6MRSNulREG48FWsVHCya50kdydO0MFBKlOQvoZcOMQptnI0EKvxVHW1YCV3fGY9EzFcfLwoB+sVphhlVTAbQYez8atPQNxZ7iOuAlPJ7E4M+8FtXzWpzT2G0pAVdzISEFONlAt2O55sy5KG4boDTIqpJiVBT4SgDB+w8105IV3Yn47hUqz37+ggr4kUY6mVwNGoYRGJEtQkvm+SzApVxsr3sajNcWdAtwkRhYpU9oohceO6JFvG0CTHM1yVbwxfeB1pw51/Yv8DyciJXpb+tF7DJm5wFhkOjOC6j/7xVKPgOhZKL4TKeX6q9uZsjeHdGBSVORjqer0WDS3Fg3oTeEd7IKizjzJke1PjyXyR5StLzBOGSDH1xl7LWHGHxPcJoXhpI9CIcBa67oiNmm6+AWODJpcN4A8REAMDBZByYdl+Q5/zsG4nA7CEcg5I6EkGBk34y7GJzk9V+QSZo5qKvMHwnN91JrfeITJwvcWV+mxxsA9ovSK1UmU6lN6VFM7cqraawWHpMItgdXKm15/wPlGwzO3Hyk0AdqeoUUAb7zeAbvYIn8BbxOxsf++HuSM+b9GPUswJ7sJIuNBGXxViQ2oobozMtdUi5nZEKs46Z+ETH42iQZdXpz4x3yzXeVScR9bONL1Gadj8zOVjm2ogHRCwmuammVLtV/E/W8KBicFo1Uf2Bt3aVVu9zoCGDQd43aPoXs01JvCXqHLwvEmCiyQYAQ==.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2815,
+  "completion_tokens": 264,
+  "total_tokens": 3079,
+  "cost": 0.00827,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.00827,
+   "upstream_inference_prompt_cost": 0.00563,
+   "upstream_inference_completions_cost": 0.00264
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 234,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 6313
+ }
+}

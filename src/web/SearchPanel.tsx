@@ -97,9 +97,10 @@ import {
   Sparkles,
   Trash2,
   Type,
+  Zap,
 } from "lucide-react";
 import { worthRetrying } from "../messages.js";
-import type { BlockId, SearchRun } from "../types.js";
+import type { BlockId, SearchKind, SearchRun } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
 import type { Found } from "./search-hits.js";
 import {
@@ -109,7 +110,7 @@ import {
   PRIORITY_CONF,
 } from "./search-hits.js";
 import { hiddenNote } from "./threshold.js";
-import type { HitOrder, Matcher } from "./params.js";
+import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -153,7 +154,8 @@ export type SearchAccess =
       error: string | null;
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
-      onAsk(criterion: string): void;
+      /** Ask a new question, as a quick search or a meaning one. */
+      onAsk(criterion: string, kind: SearchKind): void;
       onRetry(id: string): void;
       /**
        * Pin one saved search to a palette slot — `null` hands it back to the hash.
@@ -291,7 +293,7 @@ export function SearchPanel({
   const running = new Set(
     runs
       .filter((r) => r.status === "pending" && own?.running.has(r.id))
-      .map((r) => r.criterion.trim()),
+      .map((r) => runningKey(r.criterion, r.kind)),
   );
 
   return (
@@ -318,7 +320,7 @@ export function SearchPanel({
           onFind={onFind}
           draft={draft}
           onDraft={setDraft}
-          busy={matcher === "meaning" && searching}
+          busy={asksTheServer(matcher) && searching}
           running={running}
           loaded={loaded}
           onAsk={own.onAsk}
@@ -335,8 +337,8 @@ export function SearchPanel({
           seen from here: the ticks are the control and the list below is what
           they add up to, so a reader can watch one appear as they tick it.
           Words mode has no saved searches to tick, so it gets the results
-          alone. */}
-      {matcher === "meaning" && (
+          alone. Quick and meaning share the one list. */}
+      {asksTheServer(matcher) && (
         <Saved
           access={access}
           runs={runs}
@@ -357,7 +359,7 @@ export function SearchPanel({
           moved they land on the wrong ones or on nothing at all. Only for
           searches that are actually switched on — a warning about a run whose
           box is unticked is a warning about nothing on screen. */}
-      <StaleNote runs={matcher === "meaning" ? runs : []} active={active} own={own !== null} />
+      <StaleNote runs={asksTheServer(matcher) ? runs : []} active={active} own={own !== null} />
 
       <Results
         found={found}
@@ -381,7 +383,18 @@ export function SearchPanel({
 }
 
 /**
- * The box, the two-way toggle, and the one submit.
+ * How a question still out from this tab is told apart from another: its
+ * trimmed words **and its kind**. A quick search and a meaning search for the
+ * same words are two questions, so the box can ask meaning while quick is
+ * still running. *Flesh out* appears on a finished quick row (plan 261002e,
+ * review F5). `useSearch.isRunning` keys its ref the same way.
+ */
+function runningKey(criterion: string, kind: SearchKind): string {
+  return `${kind}\u0000${criterion.trim()}`;
+}
+
+/**
+ * The box, the three-way toggle, and the one submit.
  *
  * One `<input>` over **two sources of truth**. In words mode the text *is*
  * `?find=`, because a literal search changes what the article looks like and
@@ -447,14 +460,17 @@ const Box = forwardRef<
     onDraft(next: string): void;
     /** The spinner: a ticked search is still out. It no longer holds Find. */
     busy: boolean;
-    /** Criteria still being searched for, trimmed — the one question Find refuses to ask again. */
+    /**
+     * Questions still being searched for, as `runningKey`s — the one question
+     * Find refuses to ask again is the same words *as the same kind*.
+     */
     running: ReadonlySet<string>;
     /**
      * **Has the saved list come back — answered, failed or given up on?** Find
      * waits for it: `SearchApi.loaded` says why. Typing does not.
      */
     loaded: boolean;
-    onAsk(criterion: string): void;
+    onAsk(criterion: string, kind: SearchKind): void;
   }
 >(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk }, ref) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
@@ -478,9 +494,14 @@ const Box = forwardRef<
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
   /* Not `!busy` any more: several searches may run at once, and only an exact
-     repeat of one still running is refused — see `running` in SearchPanel. */
-  const repeat = running.has(draft.trim());
-  const ready = matcher === "meaning" && loaded && draft.trim().length > 0 && !repeat;
+     repeat of one still running — same words, same kind — is refused. See
+     `running` in SearchPanel. */
+  const asking = asksTheServer(matcher) ? matcher : null;
+  const repeat = asking !== null && running.has(runningKey(draft, asking));
+  const ready = asking !== null && loaded && draft.trim().length > 0 && !repeat;
+  const ask = () => {
+    if (ready && asking !== null) onAsk(draft, asking);
+  };
 
   /**
    * Change matcher, taking whatever is in the box along with it.
@@ -491,10 +512,12 @@ const Box = forwardRef<
    */
   function switchTo(next: Matcher, toBox: boolean) {
     if (next !== matcher) {
-      if (next === "meaning") {
+      /* Only a crossing between words and the other two moves the text. Quick
+         and meaning both read the draft, so between them it simply stays. */
+      if (matcher === "words") {
         setDraft(value);
         onFind(null);
-      } else {
+      } else if (next === "words") {
         onFind(draft.trim() === "" ? null : draft);
       }
       onMatcher(next);
@@ -517,8 +540,20 @@ const Box = forwardRef<
              docs/project/touch.md § What the Enter key promises. */
           enterKeyHint="search"
           value={value}
-          placeholder={matcher === "words" ? "find these words…" : "describe what to look for…"}
-          aria-label={matcher === "words" ? "Find these words" : "Describe what to look for"}
+          placeholder={
+            matcher === "words"
+              ? "find these words…"
+              : matcher === "quick"
+                ? "describe it — a fast first pass…"
+                : "describe what to look for…"
+          }
+          aria-label={
+            matcher === "words"
+              ? "Find these words"
+              : matcher === "quick"
+                ? "Describe what to look for, for a quick search"
+                : "Describe what to look for"
+          }
           onChange={(e) => {
             if (matcher === "words") onFind(e.target.value || null);
             else setDraft(e.target.value);
@@ -526,7 +561,7 @@ const Box = forwardRef<
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              if (ready) onAsk(draft);
+              if (ready) ask();
               /* Words mode has nothing to ask — the hits arrived as the reader
                  typed — so Enter dismisses the keyboard instead. On a phone that
                  is the whole point of the press; on a desktop it hands the arrow
@@ -591,7 +626,19 @@ const Box = forwardRef<
           >
             <Type size={12} /> words
           </button>
-          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of two, in one group, with one label */}
+          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={matcher === "quick"}
+            tabIndex={0}
+            className={`srch-mode${matcher === "quick" ? " on" : ""}`}
+            onClick={(e) => switchTo("quick", e.detail > 0)}
+            title="A fast first pass: scores every paragraph in about a second. Whole paragraphs, no reasons."
+          >
+            <Zap size={12} /> quick
+          </button>
+          {/* biome-ignore lint/a11y/useSemanticElements: as above — one of three, in one group, with one label */}
           <button
             type="button"
             role="radio"
@@ -604,12 +651,12 @@ const Box = forwardRef<
             <Sparkles size={12} /> meaning
           </button>
         </div>
-        {/* Only in meaning mode, because only meaning mode has a moment of
+        {/* Only in quick and meaning, because only they have a moment of
             submission. In words mode there is nothing to press: the results are
             already there. Saying so with the absence of a button is clearer
             than a disabled one, which invites a reader to wonder what they did
             wrong. */}
-        {matcher === "meaning" && (
+        {asking !== null && (
           <button
             type="button"
             className="srch-go"
@@ -617,15 +664,15 @@ const Box = forwardRef<
             /* Checked again here, not only through `disabled`: `disabled`
                lands on the next render, and the handler is what a press
                actually reaches. The Enter key above asks the same `ready`. */
-            onClick={() => {
-              if (ready) onAsk(draft);
-            }}
+            onClick={ask}
             title={
               !loaded
                 ? "Waiting for your saved searches to load"
                 : repeat
                   ? "Already searching for this — change the words to ask something else"
-                  : "Find the passages that match — one model call"
+                  : asking === "quick"
+                    ? "Score every paragraph against this — about a second"
+                    : "Find the passages that match — one model call"
             }
           >
             find
@@ -736,7 +783,7 @@ function Saved({
   loaded: boolean;
   loadFailed: boolean;
   active: string[];
-  /** Criteria this tab is already searching for, trimmed. */
+  /** Questions this tab is already searching for, as `runningKey`s. */
   running: ReadonlySet<string>;
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
@@ -820,7 +867,11 @@ function Saved({
         {sorted.map((run) => {
           const checked = active.includes(run.id);
           const slot = slots.get(run.id);
-          const retryAlreadyRunning = running.has(run.criterion.trim());
+          const retryAlreadyRunning = running.has(runningKey(run.criterion, run.kind));
+          /* *Flesh out*: the same words as a full meaning search, on a quick
+             row that has finished. Refused while that meaning search is
+             already out from this tab, the same rule as Find. */
+          const fleshing = running.has(runningKey(run.criterion, "meaning"));
           return (
             <li
               key={run.id}
@@ -868,6 +919,18 @@ function Saved({
               >
                 <span className="srch-saved-criterion">{run.criterion}</span>
                 <span className="srch-saved-meta">
+                  {/* Which matcher answered it, for a visitor as much as for
+                      the owner: a quick row's passages are whole paragraphs
+                      with a score and no reasons, and a reader comparing it with
+                      a meaning row needs to know why they look different. */}
+                  {run.kind === "quick" && (
+                    <span
+                      className="srch-saved-kind"
+                      title="A quick search: every paragraph scored by a fast model. Whole paragraphs, no reasons."
+                    >
+                      <Zap size={10} aria-hidden /> quick
+                    </span>
+                  )}
                   {run.status === "pending" ? (
                     <>
                       <LoaderCircle size={11} className="srch-spin" /> searching…
@@ -956,6 +1019,31 @@ function Saved({
                   somebody else's row. What is left is the tick and the row
                   itself, which is exactly *see the ones they have already
                   created*. */}
+              {/* **Flesh out** — the owner's, on a finished quick row only. It
+                  asks the same words as a meaning search, a new row with quotes
+                  and reasons, and unticks this one so the two do not paint
+                  over each other; this row stays for comparison until it is
+                  deleted. A visitor has no way to ask anything, so no button
+                  (plan 261002e, review F6). */}
+              {own && run.kind === "quick" && run.status === "done" && (
+                <button
+                  type="button"
+                  className="srch-flesh"
+                  disabled={fleshing}
+                  title={
+                    fleshing
+                      ? "Already running the full search for this"
+                      : "Run the full meaning search for these words — exact quotes and reasons, about half a minute"
+                  }
+                  onClick={() => {
+                    if (fleshing) return;
+                    own.onAsk(run.criterion, "meaning");
+                    onToggle(run.id, false);
+                  }}
+                >
+                  flesh out
+                </button>
+              )}
               {own && (
                 <>
                   <ColourPicker
@@ -1198,7 +1286,7 @@ function SortBar({
           result has the same (absent) confidence, so a confidence sort would be
           a control that visibly does nothing — the honest version of which is
           not to draw it. */}
-      {matcher === "meaning" && (
+      {asksTheServer(matcher) && (
         <>
           <button
             type="button"
@@ -1390,7 +1478,7 @@ function Results({
      to the matcher that has them. Without this, typing two letters into the
      words box while a meaning search happened to be running showed "Reading the
      article for you…" over a literal search that had already finished. */
-  const switchedOn = matcher === "meaning" ? runs.filter((r) => active.includes(r.id)) : [];
+  const switchedOn = asksTheServer(matcher) ? runs.filter((r) => active.includes(r.id)) : [];
   const waiting = switchedOn.filter((r) => r.status === "pending");
 
   /* Sixth state, and it is new with the ticks: searches exist, none is on. The
@@ -1402,7 +1490,7 @@ function Results({
   /* Nothing to say about saved searches until we know whether there are any.
      `Saved` above is already showing a spinner; two of them stacked is noise,
      and "Nothing matched" underneath it would be a second wrong answer. */
-  if (matcher === "meaning" && !loaded) return null;
+  if (asksTheServer(matcher) && !loaded) return null;
 
   /* **And nothing to say when there are none**, which the paragraph above this
      block has claimed since it was written — *"with no saved searches at all,
@@ -1421,9 +1509,9 @@ function Results({
      where somebody finally looked. An intention written in a comment and left
      unimplemented is the exact shape docs/reusable/silent-success.md is about,
      with the comment standing in for the check. */
-  if (matcher === "meaning" && runs.length === 0) return null;
+  if (asksTheServer(matcher) && runs.length === 0) return null;
 
-  if (matcher === "meaning" && runs.length > 0 && switchedOn.length === 0) {
+  if (asksTheServer(matcher) && runs.length > 0 && switchedOn.length === 0) {
     return (
       <div className="srch-empty">
         <p className="srch-empty-hint">
@@ -1545,7 +1633,7 @@ function Results({
       {/* Only in the order it belongs to, the same call GlossaryPanel.tsx makes
           about its own gate: a number that means nothing in the other two
           orders would be furniture. */}
-      {matcher === "meaning" && order === "prioritised" && (
+      {asksTheServer(matcher) && order === "prioritised" && (
         <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
       )}
       <Legend matcher={matcher} coloured={switchedOn.length > 1} />
@@ -1565,6 +1653,11 @@ function Results({
                   ? (runs.find((r) => r.id === f.runId)?.criterion ?? null)
                   : null
               }
+              /* Which matcher scored it — looked up on its run, because the
+                 list merges runs of both kinds and a quick score is a
+                 different number from a meaning one (plan 261002e, F9).
+                 `null` for a literal match, which has no run. */
+              kind={f.runId === null ? null : (runs.find((r) => r.id === f.runId)?.kind ?? null)}
               open={f.key === openKey}
               onOpen={onOpen}
             />
@@ -1636,7 +1729,7 @@ function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) 
           which search found it
         </span>
       )}
-      {matcher === "meaning" && (
+      {asksTheServer(matcher) && (
         <span className="srch-legend-item">
           <span className="srch-conf" aria-hidden>
             62
@@ -1674,7 +1767,15 @@ function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) 
  * model's difficulty scores — offer them, label them, never present them as
  * fact.
  */
-function HitCard({ found, criterion }: { found: Found; criterion: string | null }) {
+function HitCard({
+  found,
+  criterion,
+  kind,
+}: {
+  found: Found;
+  criterion: string | null;
+  kind: SearchKind | null;
+}) {
   const pct = Math.round(Math.min(1, Math.max(0, found.at)) * 100);
   return (
     <>
@@ -1689,7 +1790,19 @@ function HitCard({ found, criterion }: { found: Found; criterion: string | null 
             <br />
           </>
         )}
-        {found.confidence !== null && (
+        {/* A quick score is a different number, so it gets its own sentence
+            (plan 261002e, F9): a fast model's yes-score for the whole
+            paragraph, times a hundred. Still not a measured accuracy. */}
+        {found.confidence !== null && kind === "quick" && (
+          <>
+            <b>Quick score {found.confidence} out of 100</b> — how sure the fast model is that this
+            whole paragraph matches what you asked for. It is a fast first pass with no reasons
+            behind it, not a measurement of anything: read it as <em>worth a look</em>, not as a
+            probability.
+            <br />
+          </>
+        )}
+        {found.confidence !== null && kind !== "quick" && (
           <>
             <b>{found.confidence} out of 100</b> — how strongly the model thinks this passage
             matches what you asked for. It is the model's own judgement about its own answer, not a
@@ -1747,6 +1860,7 @@ function Hit({
   found,
   slot,
   criterion,
+  kind,
   open,
   onOpen,
 }: {
@@ -1755,6 +1869,8 @@ function Hit({
   slot: number | undefined;
   /** The question that found it, when there is more than one to tell apart. */
   criterion: string | null;
+  /** Which matcher scored it — `null` for a literal match. See `HitCard`. */
+  kind: SearchKind | null;
   open: boolean;
   onOpen(key: string, blockId: BlockId): void;
 }) {
@@ -1779,7 +1895,11 @@ function Hit({
      trying to remember. */
   const about = [
     criterion !== null ? `found by ${criterion}` : null,
-    found.confidence !== null ? `the model's confidence ${found.confidence} out of 100` : null,
+    found.confidence === null
+      ? null
+      : kind === "quick"
+        ? `quick score ${found.confidence} out of 100, how sure the fast model is that this paragraph matches`
+        : `the model's confidence ${found.confidence} out of 100`,
     `${pct}% of the way through the article`,
   ]
     .filter(Boolean)
@@ -1812,7 +1932,7 @@ function Hit({
         className="tip-hit"
         open={card}
         onOpenChange={setCard}
-        content={<HitCard found={found} criterion={criterion} />}
+        content={<HitCard found={found} criterion={criterion} kind={kind} />}
       >
         <button
           type="button"

@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944835-gJTBzasbOcv2w8OJb5HM",
+ "object": "chat.completion",
+ "created": 1790944835,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"mode:chat\", \"argument\": null, \"confidence\": 0.7}",
+    "refusal": null,
+    "reasoning": "The user is asking about section three of the article, so this is just a chat-mode question about the content rather than a request to edit anything.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "The user is asking about section three of the article, so this is just a chat-mode question about the content rather than a request to edit anything.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "Eq4DCsQBCBIYAipArEBK/fyGM/BYTCkXOJG9q/meDa57qoYziJ2NqH2V0z9NrVMxrUbwRaxdA1QPPwXKq/ALPWWE06sz2ZALOFk4hjIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAHHzP7VBhIMvDkCbCMiU3+oBn3UGgy+TgiryGJxYg8LyWEiMIyvHd7lvWKuqp0iFzmklBpqXMuYECwrY7BOxJfC0sUbI34mGlgKturO8j0LOP1mESqWAUIzXVNj4ltws+i0EVYh5fRwKXreravFTRsIEFc8g0/nZTiYwjcnkDHwJUI5iDj3XizwPo907WuqWXAAB7MVi2gd96LQKCSR7AFFuw1LBBXc1o6z9kanePxDwN0qKvOdPrPpkZNlstg4OxpJBIbS/N4hdLZyr6u0JOEKgd8JsdysHon1IeFQn08hMGzaCWS3WxOjvUn79xgB.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2819,
+  "completion_tokens": 64,
+  "total_tokens": 2883,
+  "cost": 0.006278,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.006278,
+   "upstream_inference_prompt_cost": 0.005638,
+   "upstream_inference_completions_cost": 0.00064
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 34,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 3430
+ }
+}

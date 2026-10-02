@@ -1,0 +1,5 @@
+Verdict: **PASS — no F21 findings (P0–P3).**
+
+- Both reading and Metadata mounts pass the same article rows before app pages; equal label-prefix matches retain list order ([Dock.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb8d-commands-and-interface-llm/src/web/Dock.tsx:2003), [CommandBar.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb8d-commands-and-interface-llm/src/web/CommandBar.tsx:295), [command-match.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb8d-commands-and-interface-llm/src/web/command-match.ts:430)). Thus `share` ranks *Share this article* first on both pages.
+- Query audit: `access`, `publish`, `private`, `sharing`, and `share this` lead to *Share this article*; `public` and `shared` still lead to *Shared articles*. No worse first-row regression found.
+- Focused tests passed: **3 files, 92 tests**.

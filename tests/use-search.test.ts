@@ -143,7 +143,7 @@ describe("hits stream in, and done is authoritative", () => {
         ]),
       } as unknown as Response);
 
-    const id = latest?.ask("arguments against dualism");
+    const id = latest?.ask("arguments against dualism", "meaning");
     expect(id).toBeTruthy();
     const runId = id as string;
 
@@ -195,7 +195,7 @@ describe("the reader's colour choice beats a frame that predates it", () => {
         }),
       } as unknown as Response);
 
-    const runId = latest?.ask("arguments against dualism") as string;
+    const runId = latest?.ask("arguments against dualism", "meaning") as string;
     await flush();
     expect(latest?.runs.find((r) => r.id === runId)?.colour).toBe(1);
 
@@ -240,7 +240,7 @@ describe("the reader's colour choice beats a frame that predates it", () => {
         }),
       } as unknown as Response);
 
-    const runId = latest?.ask("arguments against dualism") as string;
+    const runId = latest?.ask("arguments against dualism", "meaning") as string;
     await flush();
 
     await act(async () => {
@@ -431,7 +431,7 @@ describe("a run deleted while the model is thinking wins", () => {
         }),
       } as unknown as Response);
 
-    const id = latest?.ask("a criterion") as string;
+    const id = latest?.ask("a criterion", "meaning") as string;
 
     await flush();
 
@@ -492,7 +492,7 @@ describe("a stream that stops without ending", () => {
         }),
       } as unknown as Response);
 
-    const id = latest?.ask("a criterion") as string;
+    const id = latest?.ask("a criterion", "meaning") as string;
     await settle();
     expect(latest?.runs.find((r) => r.id === id)?.status).toBe("pending");
 
@@ -554,21 +554,21 @@ describe("a run that begin answers under a new id", () => {
     const post = heldPost();
     let sent = "";
     act(() => {
-      sent = latest?.ask(Q) ?? "";
+      sent = latest?.ask(Q, "meaning") ?? "";
     });
     expect(latest?.running.has(sent)).toBe(true);
-    expect(latest?.isRunning(` ${Q} `)).toBe(true);
+    expect(latest?.isRunning(` ${Q} `, "meaning")).toBe(true);
 
     post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
     await flush();
     expect([...(latest?.running ?? [])]).toEqual([NEW]);
-    expect(latest?.isRunning(Q)).toBe(true);
+    expect(latest?.isRunning(Q, "meaning")).toBe(true);
 
     post.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
     post.end();
     await flush();
     expect(latest?.running.size).toBe(0);
-    expect(latest?.isRunning(Q)).toBe(false);
+    expect(latest?.isRunning(Q, "meaning")).toBe(false);
   });
 
   it("drops the previous article's in-flight snapshot when the slug changes", async () => {
@@ -576,15 +576,15 @@ describe("a run that begin answers under a new id", () => {
     await flush();
     const oldPost = heldPost();
     act(() => {
-      latest?.ask(Q);
+      latest?.ask(Q, "meaning");
     });
     expect(latest?.running.size).toBe(1);
-    expect(latest?.isRunning(Q)).toBe(true);
+    expect(latest?.isRunning(Q, "meaning")).toBe(true);
 
     await show("another-slug");
     await flush();
     expect(latest?.running.size).toBe(0);
-    expect(latest?.isRunning(Q)).toBe(false);
+    expect(latest?.isRunning(Q, "meaning")).toBe(false);
 
     oldPost.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
     oldPost.frame("done", { id: NEW, criterion: Q, createdAt, status: "done", hits: [] });
@@ -599,10 +599,10 @@ describe("a run that begin answers under a new id", () => {
     const post = heldPost();
     let sent = "";
     act(() => {
-      sent = latest?.ask(Q) ?? "";
+      sent = latest?.ask(Q, "meaning") ?? "";
     });
     act(() => latest?.remove(sent));
-    expect(latest?.isRunning(Q), "a deleted question is free to ask again").toBe(false);
+    expect(latest?.isRunning(Q, "meaning"), "a deleted question is free to ask again").toBe(false);
 
     post.frame("begin", { id: NEW, criterion: Q, createdAt, status: "pending", hits: [] });
     await flush();
@@ -622,7 +622,7 @@ describe("a run that begin answers under a new id", () => {
     const post = heldPost();
     let sent = "";
     act(() => {
-      sent = latest?.ask(Q) ?? "";
+      sent = latest?.ask(Q, "meaning") ?? "";
     });
     act(() => latest?.remove(sent));
 
@@ -631,7 +631,7 @@ describe("a run that begin answers under a new id", () => {
     await flush();
     expect(latest?.runs).toEqual([]);
     expect(latest?.running.size).toBe(0);
-    expect(latest?.isRunning(Q)).toBe(false);
+    expect(latest?.isRunning(Q, "meaning")).toBe(false);
     expect(latest?.error).toBeNull();
   });
 
@@ -641,7 +641,7 @@ describe("a run that begin answers under a new id", () => {
     const post = heldPost();
     let sent = "";
     act(() => {
-      sent = latest?.ask(Q) ?? "";
+      sent = latest?.ask(Q, "meaning") ?? "";
     });
     act(() => latest?.recolour(sent, 3));
 
@@ -651,5 +651,93 @@ describe("a run that begin answers under a new id", () => {
     await flush();
     expect(latest?.runs.find((r) => r.id === NEW)?.colour, "the colour was lost on screen").toBe(3);
     expect(calls("PATCH").some((u) => u.endsWith(`/${NEW}`)), "the colour was never stored").toBe(true);
+  });
+});
+
+/**
+ * **A run's kind travels with it** — quick search, plan 261002e. The box asks
+ * with the matcher's kind; a retry asks with the run's own, whatever the box
+ * is on now; and "already running" is the same words *as the same kind*, so
+ * *flesh out* can ask the meaning search while the quick one is still out
+ * (GPT Sol's plan review, F5).
+ */
+describe("a search's kind", () => {
+  const Q = "statistical evidence";
+  const createdAt = "2026-10-02T00:00:00.000Z";
+
+  /** Every POST body the hook sent, in order. */
+  const posted = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([, init]) => init?.method === "POST")
+      .map(
+        ([, init]) =>
+          JSON.parse(init?.body as string) as { id: string; criterion: string; kind?: string },
+      );
+
+  /** A POST whose stream never says anything, so the question stays in flight. */
+  function silentPost(): void {
+    postImpl = () =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({ start() {} }),
+      } as unknown as Response);
+  }
+
+  it("is sent in the POST body, and is on the pending row before the server answers", async () => {
+    await mount("a-slug");
+    await flush();
+    silentPost();
+    let id = "";
+    act(() => {
+      id = latest?.ask(Q, "quick") ?? "";
+    });
+    expect(latest?.runs.find((r) => r.id === id)?.kind, "on the optimistic row").toBe("quick");
+    await flush();
+    expect(posted()).toEqual([{ id, criterion: Q, kind: "quick" }]);
+    expect(latest?.runs.find((r) => r.id === id)?.kind).toBe("quick");
+  });
+
+  it("keys the in-flight guard on kind as well as words", async () => {
+    await mount("a-slug");
+    await flush();
+    silentPost();
+    act(() => {
+      latest?.ask(Q, "quick");
+    });
+    expect(latest?.isRunning(Q, "quick")).toBe(true);
+    expect(
+      latest?.isRunning(Q, "meaning"),
+      "a meaning search for the same words is a different question",
+    ).toBe(false);
+  });
+
+  it("is kept on the error row a dropped stream leaves, and retry resends it", async () => {
+    await mount("a-slug");
+    await flush();
+    // Ends without `done`: the hook's "stopped arriving" failure.
+    postImpl = ({ id, criterion }) =>
+      Promise.resolve({
+        ok: true,
+        body: oneShotStream([
+          {
+            event: "begin",
+            data: { id, criterion, kind: "quick", createdAt, status: "pending", hits: [] },
+          },
+        ]),
+      } as unknown as Response);
+    const id = latest?.ask(Q, "quick") as string;
+    await flush();
+    const failed = latest?.runs.find((r) => r.id === id);
+    expect(failed?.status).toBe("error");
+    expect(failed?.kind).toBe("quick");
+
+    silentPost();
+    act(() => latest?.retry(id));
+    await flush();
+    // Two POSTs, so the last one really is the retry and not the first ask.
+    expect(posted()).toHaveLength(2);
+    expect(posted().at(-1)).toEqual({ id, criterion: Q, kind: "quick" });
+    expect(latest?.runs.find((r) => r.id === id)?.kind).toBe("quick");
   });
 });

@@ -1080,33 +1080,37 @@ describe("the rows that are not modes", () => {
   it("answers the words for re-running and the page's other controls with Metadata", () => {
     readingSignedIn();
     openBar();
-    for (const query of [
-      "regenerate",
-      "rerun",
-      "reprocess",
-      "ai processing",
-      "cost",
-      "export",
-      "archive",
-      "delete",
-    ]) {
+    /* `export` and `archive` here because this Dock is handed no shelf row, so
+       the bar's own Export and Archive rows are withheld (stage B of plan
+       261002c) and the page is the way there. */
+    for (const query of ["regenerate", "rerun", "reprocess", "cost", "export", "archive", "delete"]) {
       type(query);
       expect(listed()[0], `typing ${JSON.stringify(query)} did not rank Metadata first`).toBe("Metadata");
     }
+    /* Since stage B, the section has a row of its own, and its name is that
+       row's label; the page is still offered under it. */
+    type("ai processing");
+    expect(listed()[0]).toBe("AI processing");
+    expect(listed()).toContain("Metadata");
   });
 
-  it("keeps the existing shared-articles destination first for `share` and `public`", () => {
+  it("keeps the shared-articles destination first for `public`, and gives `share` to this article", () => {
     readingSignedIn();
     openBar();
-    for (const query of ["share", "public"]) {
-      type(query);
-      expect(listed()[0], query).toBe(PUBLIC_SHELF_LABEL);
-    }
-    /* `share` still offers the current article's controls underneath the
-       page whose own name starts with the query. `public` does not borrow that
-       alias: it already names this app-wide destination. */
+    /* `public` names this app-wide destination and nothing about the article
+       borrows it (plan 261002c-metadata-search-aliases, Sol's P2). */
+    type("public");
+    expect(listed()[0]).toBe(PUBLIC_SHELF_LABEL);
+    /* `share` did too until the browser check of plan
+       261002c-commands-do-more (2026-10-02): the article's row was then
+       *Access & sharing*, reachable by alias only, so the shelf's label prefix
+       took the Enter on an article page where `share` means this article. The
+       row is now *Share this article* — `share` in its own name, as the shelf
+       has it in its — and on that tie the article's rows come first. The shelf
+       is still listed. */
     type("share");
-    expect(listed()).toContain("Metadata");
+    expect(listed()[0]).toBe("Share this article");
+    expect(listed()).toContain(PUBLIC_SHELF_LABEL);
   });
 
   it("navigates to this article's metadata page, carrying the reader's place", () => {
@@ -1137,7 +1141,10 @@ describe("the rows that are not modes", () => {
     readingSignedIn({ onMode, experimental: EXPERIMENTAL_ON });
     openBar();
     type("tweets");
-    expect(listed()).toEqual(["Tweets"]);
+    /* The mode first, and the thread's *Run again* row after it since
+       2026-10-02 — `tweets again` is one of its words (rerun-commands.ts), and
+       a row that ties the mode loses on order (plan 261002c). */
+    expect(listed()).toEqual(["Tweets", "Thread › Run again"]);
     expect(rows()[0]?.dataset.kind).toBe("mode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");

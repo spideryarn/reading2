@@ -1575,6 +1575,9 @@ describe("the artefacts a shared link carries", () => {
         {
           id: "spya-run23z",
           criterion: "anywhere the argument turns on a number",
+          /* A quick run, so the one field that says what the numbers mean is
+             seen crossing with a value its default would not give it. */
+          kind: "quick",
           createdAt: "2026-09-02T09:00:00.000Z",
           stale: false,
           colour: 3,
@@ -1608,9 +1611,12 @@ describe("the artefacts a shared link carries", () => {
         "[].hits[].reasoning",
         "[].hits[].start",
         "[].id",
+        "[].kind",
         "[].stale",
       ].sort(),
     );
+    /* Plan 261002e, F6: a quick run reaches a visitor labelled quick. */
+    expect(built.searches[0]?.kind).toBe("quick");
     /* And not vacuously: the reader's own words really are there, and so is the
        passage they found. */
     expect(built.searches[0]?.criterion).toContain("turns on a number");
@@ -1636,9 +1642,9 @@ describe("the artefacts a shared link carries", () => {
       ...ARTICLE_BASE,
       ...NO_ARTEFACTS,
       searches: [
-        { id: "spya-run22z", criterion: "fresh", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run22z", criterion: "fresh", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: false },
-        { id: "spya-run33z", criterion: "old", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run33z", criterion: "old", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: true },
       ],
     });
@@ -1659,7 +1665,7 @@ describe("the artefacts a shared link carries", () => {
       ...ARTICLE_BASE,
       ...NO_ARTEFACTS,
       searches: [
-        { id: "spya-run44z", criterion: "unpinned", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run44z", criterion: "unpinned", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: false },
       ],
     });

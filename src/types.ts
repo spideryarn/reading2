@@ -3660,10 +3660,33 @@ export interface SearchHit {
  * to disk *before* the model is called, so a crash mid-search leaves a visible
  * unfinished run rather than a criterion that silently evaporated.
  */
+/**
+ * **Which matcher answered a saved search** — `"meaning"` (the model reads the
+ * article and quotes what matches, src/search.ts) or `"quick"` (Jev scores every
+ * block, src/quick-search.ts). Plan 261002e.
+ */
+export type SearchKind = "quick" | "meaning";
+
+/** The two, as a value, for a route to narrow a request body against. */
+export const SEARCH_KINDS = ["quick", "meaning"] as const satisfies readonly SearchKind[];
+
+export function isSearchKind(x: unknown): x is SearchKind {
+  return (SEARCH_KINDS as readonly unknown[]).includes(x);
+}
+
 export interface SearchRun {
   id: string;
   /** What the reader typed, in their own words. Never logged — it is prose. */
   criterion: string;
+  /**
+   * **Which matcher this run is** — stated on the row, never inferred from
+   * `model`, because a pending or failed run has no model yet and the panel
+   * still has to label it. Part of a run's identity: a retry keeps it, and a
+   * retry that names the other kind is a new run (`withRun`, src/searches.ts).
+   * Every row written before 2026-10-02 is `"meaning"`, which is what the
+   * column's default says.
+   */
+  kind: SearchKind;
   createdAt: string;
   status: "pending" | "done" | "error";
   hits: SearchHit[];
@@ -4566,14 +4589,22 @@ export interface Quiz {
   dropped: QuizDropped;
   generatedAt: string;
   elapsedMs: number;
+  /**
+   * `hashProfile` of the rendered profile these were written for, `null` for
+   * none, and **absent on a quiz written before 2026-10-02**, which therefore
+   * shows no badge. Recorded for the owner's *written for your profile* badge
+   * and its Regenerate; **not in the freshness stamp**, so a changed profile
+   * never makes a quiz stale on its own. Not in the *make public* dialog either:
+   * a shared link carries no quiz (`NeverShared`, src/store/pg.ts). Plan 261002f.
+   */
+  profileHash?: string | null;
 }
 
 /**
- * `GET /api/quiz/:slug`. Two staleness facts and no third, exactly as
- * `TimelineResponse` above: the reader profile is **not** in this stage's
- * stamp, so there is no `profileChanged` to report and the route sends no
- * `withProfileChanged`.
- * docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+ * `GET /api/quiz/:slug`. Two staleness facts and, since 2026-10-02, the
+ * reader's: `profileChanged` comes from `withProfileChanged` like Ideas' and
+ * Simple's, and is a label's fact rather than staleness — nothing re-runs on
+ * it. docs/plans/261002f-quiz-regenerate-for-my-profile.md.
  */
 export interface QuizResponse {
   quiz: Quiz;
@@ -4581,14 +4612,12 @@ export interface QuizResponse {
   stale: boolean;
   /** The article is the same and we would write the questions differently now. */
   outdated: boolean;
+  /** Written for a profile the reader has since changed. `ThreadResponse`. */
+  profileChanged: boolean;
 }
 
-/**
- * As `TimelineFound`, and here too it is the *same* type, for the same reason:
- * there is no `profileChanged` for a store adapter to leave out. Named rather
- * than skipped so both adapters agree with their neighbours by shape.
- */
-export type QuizFound = QuizResponse;
+/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
+export type QuizFound = Omit<QuizResponse, "profileChanged">;
 
 /**
  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.

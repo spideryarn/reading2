@@ -137,7 +137,7 @@ function server(
 }
 
 function run(id: string, criterion: string, status: SearchRun["status"]): SearchRun {
-  return { id, criterion, createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
+  return { id, criterion, kind: "meaning", createdAt: "2026-09-30T09:00:00.000Z", status, hits: [], sourceHash: "h" };
 }
 
 /** Each search finds its own words, so a row can be traced to the search that found it. */

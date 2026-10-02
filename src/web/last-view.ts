@@ -136,6 +136,14 @@ export const NEVER_REMEMBERED = [
      would then overwrite it with the remembered view, taking the probe off the
      URL that had just switched it on. */
   "probe",
+  /* **Which Metadata section to open and flash on arrival** — `?section=`,
+     params.ts § `sectionParam`, written by the command bar's *Run again* rows
+     (plan 261002c). An instruction carried out once and then taken off the
+     address, so never a place to put back. Listed for `probe`'s reason: left
+     out, `/read/x/metadata?section=ai-processing` reads as a bare address and
+     the remembered view is appended over the link that had just named the
+     section. GPT Sol's F5 on that plan. */
+  "section",
   /* **A retired key, kept so an old link still wins.** `?deep=` chose Parts or
      Sections in Summary's outline until the outline went on 2026-10-01
      (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md).

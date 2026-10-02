@@ -136,7 +136,7 @@ async function mount(
     lost: false,
     busy: false,
     error: null,
-    set: async () => {},
+    set: async () => ({ kind: "done" }),
   };
   await act(async () => {
     root.render(

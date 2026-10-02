@@ -412,7 +412,8 @@ export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
  * Chosen by measurement, 2026-09-29: nine shelves, four arms, three runs each,
  * blind Opus judges. Luna's scores beat the program-only list 9–0 in both
  * rounds and were level with or ahead of Jev, a cheaper decisions model on an
- * alpha endpoint the gateway does not speak. About $0.001 and 6–20 s a call.
+ * alpha endpoint the gateway did not then speak (it has since 2026-10-02, for
+ * quick search). About $0.001 and 6–20 s a call.
  * docs/plans/260929c-shelf-topics-chosen-by-a-model.md § Stage 1.
  *
  * The undated id, like every other Luna constant in this file. OpenRouter's
@@ -442,6 +443,28 @@ export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
  * do not serve would only be refused by the route.
  */
 export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
+ * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
+ * model that answers typed questions with probabilities rather than writing
+ * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
+ * question per block, all in one request; about 0.4 s and $0.0004 a search on
+ * a typical article, against 5–16 s for the meaning search.
+ *
+ * **Requests the versioned id, not `-latest`**, because the floor the hits are cut
+ * at (`QUICK_FLOOR`, 0.7) was measured on this model and means nothing on the
+ * next one. The provider may return a dated id, which is stored as the model
+ * that answered; the request itself names `typesafe/jev-1.13`.
+ * docs/investigations/261002o-quick-search-spike.md.
+ *
+ * Served only on OpenRouter's alpha Decisions endpoint, so it has its own
+ * gateway seam (`openRouterDecisions`, src/ai-call.ts) and its own wire. No
+ * `SPIDERYARN_*_MODEL` override, like every other model on no tier: another
+ * decisions model would need its own floor and, measured, bills the state per
+ * question (`liquid/d1`, `upstage/solar-decide`), which the one-request shape
+ * cannot afford.
+ */
+export const QUICK_SEARCH_MODEL = "typesafe/jev-1.13";
 
 /**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
@@ -828,7 +851,13 @@ export type NonTaskAiJob =
      `MODEL_ENV_VAR` row that could quietly put it back on Sonnet — Sol's F2
      on the plan. Its own job, apart from `explain`, so the ledger can say
      what a dug answer costs; its search step is the `dig-deeper-search` task. */
-  | "dig-deeper";
+  | "dig-deeper"
+  /* **A quick search** — every block of the article scored by Jev for how well
+     it matches what the reader typed (src/quick-search.ts, plan 261002e). Not
+     a `Task`: its model was chosen by a spike, not a tier, and it speaks the
+     Decisions wire, where a tier's reasoning effort means nothing. Its own job
+     rather than `search`, so the ledger can say what the quick half costs. */
+  | "search-quick";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -1220,9 +1249,11 @@ export type Wire =
   | "transcription"
   /**
    * OpenRouter's Decisions API. It returns named typed answers rather than a
-   * chat completion. The product gateway does not speak it; the shelf-topics
-   * eval's declared Jev bypass does, and its ledger row must name the protocol
-   * it actually used rather than calling those tokens chat tokens.
+   * chat completion. The product gateway speaks it since 2026-10-02, for
+   * quick search (`search-quick`, `openRouterDecisions` in src/ai-call.ts);
+   * the shelf-topics eval's declared Jev bypass speaks it too. Either way the
+   * ledger row must name the protocol it actually used rather than calling
+   * those tokens chat tokens.
    */
   | "decisions";
 
@@ -1321,6 +1352,9 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
+  /* OpenRouter's Decisions API — typed probabilities, not a chat completion.
+     src/quick-search.ts through `openRouterDecisions`. */
+  "search-quick": "decisions",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1548,6 +1582,8 @@ export const DISPLAY_NAME: Record<string, string> = {
   "openai/gpt-6-luna": "gpt-6-luna",
   /* The batch import's metadata reader, `PAPER_METADATA_MODEL`. */
   "deepseek/deepseek-v4.1-flash": "deepseek-v4.1-flash",
+  /* Quick search's scorer, `QUICK_SEARCH_MODEL`. */
+  "typesafe/jev-1.13": "jev-1.13",
 };
 
 /**
@@ -1581,6 +1617,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
+  { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
      by its source because that file imports this one. */
   { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },

@@ -115,9 +115,9 @@ export function SearchBand({
         loaded,
         loadError,
         error,
-        onAsk: (criterion) => {
+        onAsk: (criterion, kind) => {
           const question = criterion.trim();
-          if (isRunning(question)) return;
+          if (isRunning(question, kind)) return;
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
              use.
@@ -125,14 +125,14 @@ export function SearchBand({
              And it switches itself on, which is the one exception to
              default-false: a search the reader just paid for and cannot see is
              not a result. */
-          const id = ask(question);
+          const id = ask(question, kind);
           setActive((ids) => [...ids, id]);
           onOpenHit(null);
         },
         running,
         onRetry: (id) => {
           const run = runs.find((candidate) => candidate.id === id);
-          if (!run || isRunning(run.criterion)) return;
+          if (!run || isRunning(run.criterion, run.kind)) return;
           retry(id);
         },
         /* Straight through. Unlike every other write on this panel it does not
@@ -306,7 +306,7 @@ function useSearchMode({
     () =>
       runs
         .filter((r) => active.includes(r.id) && r.status !== "error")
-        .map((r) => ({ id: r.id, slot: slots.get(r.id) ?? 0, hits: r.hits })),
+        .map((r) => ({ id: r.id, kind: r.kind, slot: slots.get(r.id) ?? 0, hits: r.hits })),
     [runs, active, slots],
   );
 

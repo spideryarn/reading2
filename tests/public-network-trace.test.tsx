@@ -281,6 +281,7 @@ const ARTICLE: PublicArticle = {
     {
       id: "spya-run23z",
       criterion: PUBLIC_CRITERION,
+      kind: "meaning",
       createdAt: "2026-09-02T09:00:00.000Z",
       stale: false,
       hits: [

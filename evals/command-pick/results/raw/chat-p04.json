@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944875-eUnrF6HZ4yOiOS80nxZH",
+ "object": "chat.completion",
+ "created": 1790944875,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"section:high-powered-ai\", \"argument\": null, \"confidence\": 0.55}",
+    "refusal": null,
+    "reasoning": "This request to reprocess the glossary with more powerful AI really implies two steps, but since only one command can be chosen, I'm leaning toward rerun:glossary as the main action since it specifically targets regenerating the glossary, with the high-powered AI aspect being a prerequisite rather than the primary command.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "This request to reprocess the glossary with more powerful AI really implies two steps, but since only one command can be chosen, I'm leaning toward rerun:glossary as the main action since it specifically targets regenerating the glossary, with the high-powered AI aspect being a prerequisite rather than the primary command.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "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.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2823,
+  "completion_tokens": 540,
+  "total_tokens": 3363,
+  "cost": 0.011046,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.011046,
+   "upstream_inference_prompt_cost": 0.005646,
+   "upstream_inference_completions_cost": 0.0054
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 506,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 6905
+ }
+}
