@@ -66,6 +66,12 @@
  * from the article, with the card sitting on top of the white; Greg named that
  * one himself. See docs/project/marketing-pages.md § One shot, one idea.
  *
+ * **And again on 2026-10-02: it is Structure now.** Outline stopped being a
+ * mode on 2026-09-10, when Structure took it over, and the old picture's bar
+ * still offered Hierarchy and Outline. Structure is that same fisheye
+ * (its default face), so the reason for leading with it is unchanged.
+ * docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md.
+ *
  * Styled with the `site-*` classes at the foot of styles.css and `tw:` utilities
  * for nudges — SiteBits.tsx's header says which does what.
  */
@@ -139,7 +145,7 @@ export function LandingPage() {
               an angle is arguing against itself (styles.css § the tilt). */}
           <div className="site-tilt-stage tw:mt-14 tw:sm:mt-16">
             <div className="site-tilt">
-              <Frame shot={SHOTS.outline} hero />
+              <Frame shot={SHOTS.structure} hero />
             </div>
           </div>
         </div>
@@ -163,7 +169,13 @@ export function LandingPage() {
             Greg, 2026-09-03, follow-up to answer 4: "notes in the margin that
             explain & remind you about anything you might find tricky". The rest
             is docs/project/vision.md's line on the glossary. */}
-        <Showcase shot={SHOTS.glossary} eyebrow="Glossary" title="Notes in the margin." offset>
+        <Showcase
+          shot={SHOTS.glossary}
+          eyebrow="Glossary"
+          title="Notes in the margin."
+          mode="glossary"
+          offset
+        >
           They explain and remind you about anything you might find tricky: the terms this piece
           uses in a non-obvious way, defined from the piece itself, underlined where they stand. The
           card comes to you.
@@ -175,6 +187,7 @@ export function LandingPage() {
           shot={SHOTS.meaning}
           eyebrow="Search by meaning"
           title="Find by concepts and meaning, rather than exact match"
+          mode="search"
         >
           Type in basically anything — a word, a phrase, a description — and it highlights the areas
           of the text that are relevant. It leaves you as the arbiter of whether something is worth
@@ -197,13 +210,18 @@ export function LandingPage() {
         </section>
 
         {/* ------------------------------------------------ and the rest of it -- */}
-        {/* [tissue] The count is a product fact: nine <Tile>s follow. If you
-            add or remove one, change the number — this page has shipped a wrong
-            count before. */}
-        <H2 eyebrow="And the rest of it">Nine more ways in.</H2>
+        {/* [tissue] The count is a product fact: ten <Tile>s follow, and
+            tests/landing-page-tiles.test.tsx counts them against this word.
+            Each mode's tile carries its `mode`, so SiteBits.tsx tags the
+            experimental ones from MODE_CATALOG. */}
+        <H2 eyebrow="And the rest of it">Ten more ways in.</H2>
         <div className="site-bento site-reveal">
           {/* Greg, 2026-08-26 (ideas) and 2026-08-31 (quotes). */}
-          <Tile name="The ideas it introduces, and the ones it needs you to hold." span="wide">
+          <Tile
+            name="The ideas it introduces, and the ones it needs you to hold."
+            span="wide"
+            mode="ideas"
+          >
             And the most central, helpful, interesting quotes — in order, or by importance, or by
             how memorable they are.
           </Tile>
@@ -213,46 +231,64 @@ export function LandingPage() {
             surrounding argument and from the web when it needs to. The article never leaves the
             screen.
           </Tile>
-          {/* Greg, 2026-08-27 (remember) and 2026-08-31 (quiz). */}
-          <Tile name="Find out what you kept.">
+          {/* Took the Diagrams tile's place on 2026-10-02: Structure is the
+              mode out from behind the switch, Diagram is now behind it, and
+              /features keeps the five diagrams. Greg, 2026-09-08 and
+              2026-10-01, docs/project/structure.md; the same words as the
+              Structure showcase on /features, shortened. */}
+          <Tile name="Structure." span="wide" mode="structure">
+            The article’s parts, and the sections of the one you are reading, beside the text.
+            Fisheye opens up around where you are; Expanded shows everything.
+          </Tile>
+          {/* Greg, 2026-09-29: "I'm increasingly thinking of the trajectory
+              mode as one of the main modes" (docs/project/skim.md), which is
+              why it is here. The words are the /features tile's — Greg,
+              2026-09-28, "skim through the paper … in increasing depth", "a
+              trajectory through quotes"; the three passes are src/skim.ts. */}
+          <Tile name="Skim." span="wide" mode="skim">
+            Skim the paper in increasing depth: a route through its quotes, walked three times — the
+            gist, then more, then most.
+          </Tile>
+          {/* Greg, 2026-08-27 (remember) and 2026-08-31 (quiz). The second
+              sentence was false from 2026-09-30, when the quiz became a path
+              of up to MAX_QUESTIONS = 20 that build on one another (src/quiz.ts,
+              Greg 2026-09-29) rather than a dozen sorted easy-first,
+              central-first; only that sentence changed. */}
+          <Tile name="Find out what you kept." mode="remember">
             Say what you took from the piece and hear, plainly and concisely, where it diverges from
-            the text. Or take a dozen short questions, easy first, central first.
+            the text. Or take up to twenty short questions, each building on the one before.
           </Tile>
           {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
               levels; 2026-10-01, the outline removed (plan 261001p). */}
-          <Tile name="Summary.">
+          <Tile name="Summary." mode="summary">
             The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Greg, 2026-08-31, the timeline request; docs/project/timeline.md. */}
-          <Tile name="Timeline.">
+          <Tile name="Timeline." mode="timeline">
             When the piece says things happened — falling back to order where the dates are
             ambiguous, and showing the uncertainty rather than hiding it.
           </Tile>
-          {/* Greg, 2026-08-26, the diagram request, and 2026-09-03 for the
-              fifth. The five names are DIAGRAMS in src/web/diagram.ts — checked
-              there, not in a doc about it: this page said "six diagrams" for a
-              day when there were four, and said "four" for an afternoon when
-              Illustrated had made it five. */}
-          <Tile name="Diagrams.">
-            Five maps of the structure of the piece — force, drift, trail, sketch and illustrated —
-            with where you are marked on each.
-          </Tile>
           {/* docs/project/referee-mode.md, its title. */}
-          <Tile name="For peer reviewers.">
+          <Tile name="For peer reviewers." span="wide" mode="referee">
             A mode that helps a referee read a paper without reading it for them.
           </Tile>
           {/* Greg, 2026-08-27, the links request. */}
-          <Tile name="Links.">
+          <Tile name="Links." span="wide">
             Hover the author’s own hyperlinks and see something about the destination before you
             leave.
           </Tile>
-          {/* Greg, 2026-09-03, answer 2's postscript. What is shared is the
-              generated work — outline, gists, glossary, ideas, quotes — and not
-              the owner's comments, chats or searches (PrivacyPage.tsx). */}
+          {/* Greg, 2026-09-03, answer 2's postscript. **Corrected 2026-10-02,
+              because it was false**: it ended "Your own notes stay yours",
+              while src/public/dto.ts (`publicComments`; `searches` in
+              src/public-types.ts) gives a public article's visitors the
+              owner's comments and searches, as PrivacyPage.tsx says. Only the
+              chats and the profile stay behind. The list follows PrivacyPage's
+              names. tests/marketing-public-sharing.test.tsx asks. */}
           <Tile name="Public articles share their AI annotations." span="featured">
-            The expensive generated work on a public-readable article — its outline, glossary, ideas
-            and quotes — is there for everyone who opens it. Your own notes stay yours.
+            The expensive generated work on a public-readable article — its outline, summaries,
+            glossary, ideas, quotes and the rest — is there for everyone who opens it. Your comments
+            and searches go with it; your chats and your profile do not.
           </Tile>
         </div>
         <p className="tw:mt-6 tw:text-sm">

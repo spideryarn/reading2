@@ -27,20 +27,39 @@
  * Every new run now uses the profile, and Find more continues a list in the
  * setting it was written with (useGlossary.ts § `more`). The label's half of
  * the split still stands: **`<WrittenForYou>`** states a fact about the text on
- * screen — this was written for you, or for a profile you have since changed —
- * and never offers to change that text. The profile itself is edited on
- * /profile and the metadata page, and the Command bar's Profile row reaches
- * the first. docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
+ * screen — this was written for you, or for a profile you have since changed.
+ * docs/plans/260913a-drop-the-use-your-profile-checkbox.md.
  *
- * ## It opens the profile panel, and it is still not a control
+ * ## It opens the profile panel — and since 2026-10-02 the panel has controls
  *
- * The badge is a trigger for `<ProfilePanel>` — what your profile currently
- * says, and a working link to each of the two places that edit it
- * (docs/plans/260830c-profile-panel.md). That does not break the rule above: a
- * *label* must not offer to regenerate the text it describes, and opening an
- * explanation is not that. It is the question the badge was always being
- * pointed at, and until 2026-08-30 it answered it with a link nobody could
- * click — see ProfilePanel.tsx for the measurement.
+ * The badge is a trigger for `<ProfilePanel>` (docs/plans/260830c-profile-panel.md).
+ * Until 2026-10-02 that panel only showed the two boxes, with a link to each
+ * page that edits them, and this docstring said the badge "never offers to
+ * change that text": *a label must not offer to regenerate the text it
+ * describes*. **Greg has asked for exactly that, so it is now a recorded
+ * exception, not a rule broken by accident:**
+ *
+ * > Make that a reusable component that shows up in any modes where the output
+ * > is personalised. And if possible, allow them to edit the text inline …
+ * > I suppose if they do edit or if the profile has changed since the mode
+ * > generated, then it should show a handy "Regenerate" button in that mode's
+ * > "This was written for your profile" panel.
+ * >
+ * > — Greg, 2026-10-01, `[SPIDERYARN-READING2-7S]`
+ *
+ * What survives of Fable's objection is where the spend sits. The *badge* is
+ * still a label — pressing it opens a panel and spends nothing — and the paid
+ * call is a button inside, named for what it does, offered only when the server
+ * says the profile changed, and never pressed for the reader. Both boxes are
+ * edited in the panel itself; ProfilePanel.tsx says how it keeps the words safe
+ * and when Regenerate shows.
+ *
+ * **`regenerate` is the mode's own forced run**, passed only by a mode whose
+ * forced run *replaces* (Summary, Ideas, Tweets, Sketch) or, for the Glossary,
+ * rewrites because the profile no longer matches. Quotes passes none: its
+ * forced run appends to a current list and keeps the first pass's stamp, so it
+ * would lengthen the list and leave the badge saying *changed*. Plan 261002b
+ * § Deferred.
  *
  * ## `compact`: an icon without words, in Glossary and Summary (2026-09-29)
  *
@@ -70,7 +89,7 @@
  * docs/project/reader-profile.md.
  */
 import { UserRound, UserRoundPen } from "lucide-react";
-import { ProfilePanel } from "./ProfilePanel.js";
+import { ProfilePanel, type Regenerate } from "./ProfilePanel.js";
 
 /**
  * The two provenance facts the badge needs before rendering anything.
@@ -99,12 +118,20 @@ export function WrittenForYou({
   changed,
   slug,
   compact = false,
-}: ProfileState & { slug: string; compact?: boolean }) {
+  regenerate,
+}: ProfileState & {
+  slug: string;
+  compact?: boolean;
+  /** The mode's forced run, for the panel's Regenerate. See the header for who passes one. */
+  regenerate?: Regenerate | undefined;
+}) {
   if (!written) return null;
   const Icon = compact && changed ? UserRoundPen : UserRound;
   return (
     <ProfilePanel
       slug={slug}
+      changed={changed}
+      regenerate={regenerate}
       className={`prof-badge${changed ? " changed" : ""}${compact ? " icon-only" : ""}`}
       label={
         changed

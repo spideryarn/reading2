@@ -20,6 +20,7 @@ import {
   resolveMark,
   termMarks,
   type Mark,
+  type MarkKind,
 } from "../src/web/annotate.js";
 import { CATEGORICAL_SLOTS, PALETTE_SLOTS } from "../src/web/hit-colours.js";
 
@@ -871,6 +872,25 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
         SPECIMEN_OUT[i],
       );
     });
+  });
+
+  it("draws every MarkKind at least once on /design", () => {
+    /* /design's "Marks in the prose" promises every mark the reader can meet,
+       and lost three of them (cmt, chat, xref) without anybody noticing until
+       2026-10-02. `Record<MarkKind, true>` makes a seventh kind a type error
+       here until somebody decides whether /design draws it. A mark with no
+       `kind` is a comment — `annotateHtml` reads it as `cmt`. */
+    const every = {
+      cmt: true,
+      chat: true,
+      term: true,
+      hit: true,
+      cite: true,
+      xref: true,
+    } satisfies Record<MarkKind, true>;
+    const drawn = new Set(SPECIMEN_MARKS.flatMap((s) => s.marks.map((m) => m.kind ?? "cmt")));
+    expect([...drawn].sort()).toEqual(Object.keys(every).sort());
+    expect(SPECIMEN_OUT).toHaveLength(SPECIMEN_MARKS.length);
   });
 
   it("draws the heavier of two quotes over one run, which the artefact prevents", () => {

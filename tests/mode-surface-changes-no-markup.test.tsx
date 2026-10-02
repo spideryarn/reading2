@@ -1288,6 +1288,7 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     starting: false,
     find: async () => {},
     more: async () => {},
+    refresh: async () => {},
     cancel: () => {},
     look: async () => {},
     looking: null,
@@ -1320,6 +1321,7 @@ function ideasOwner(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): IdeasO
     starting: false,
     ensure: async () => {},
     regenerate: async () => {},
+    refresh: async () => {},
     cancel: () => {},
     ...over,
   };
@@ -1548,6 +1550,7 @@ function tweetsOwner(thread: TweetThread | null, over: Partial<UseTweets> = {}):
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
+    refresh: async () => {},
     cancel: () => {},
     ...over,
   };

@@ -1579,7 +1579,7 @@ describe("a claim under Postgres", () => {
     let blockRuns = 0;
     let minted: Block[] = [];
     /** How many times `hierarchy` failed to find its answer and had to buy one. */
-    let structureCalls = 0;
+    let wholeDocumentCalls = 0;
 
     const extractHtml = "<html><body><p>the article, as fetched</p></body></html>";
     const extract = returningStep("extract", {
@@ -1618,7 +1618,7 @@ describe("a claim under Postgres", () => {
      * that is the whole shape of the real step: the expensive answer lands, and
      * then the wall clock runs out before the step can finish.
      */
-    const hierarchyStep = (hang: boolean) =>
+    const structureStep = (hang: boolean) =>
       ({
         name: "hierarchy",
         label: STEPS.hierarchy.label,
@@ -1636,7 +1636,7 @@ describe("a claim under Postgres", () => {
           const key = read.map((b) => b.id).join("-");
           const found = await checkpoints.read<{ tree: string }>(slug, "hierarchy-structure", [key]);
           if (!found.has(key)) {
-            structureCalls += 1;
+            wholeDocumentCalls += 1;
             await checkpoints.write(slug, "hierarchy-structure", key, {
               tree: "as the model gave it",
             });
@@ -1670,7 +1670,7 @@ describe("a claim under Postgres", () => {
     const first = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: structureStep(false) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 30_000,
     });
     expect(first?.done, "window one ended the job").toBe(false);
@@ -1684,11 +1684,11 @@ describe("a claim under Postgres", () => {
     const paused = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(true) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: structureStep(true) } as never,
       leaseMs: DEADLINE_MARGIN_MS + 6_000,
     });
     expect(paused?.done, "the overrun ended the job instead of putting it down").toBe(false);
-    expect(structureCalls, "the structure answer was not bought in window two").toBe(1);
+    expect(wholeDocumentCalls, "the structure answer was not bought in window two").toBe(1);
     expect((await jobRow(job.id))?.requeues).toBe(1);
     expect((await jobRow(job.id))?.draftRevisionId, "the pause dropped the draft").toBe(draft);
 
@@ -1724,7 +1724,7 @@ describe("a claim under Postgres", () => {
     const finished = await advanceUntilItRuns(job.id, {
       power: async () => "standard",
       session: claimSession,
-      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: hierarchyStep(false) } as never,
+      steps: { ...STEPS, extract, blocks: blocksStep, hierarchy: structureStep(false) } as never,
     });
     expect(finished?.job.error).toBeUndefined();
     expect(finished?.done).toBe(true);
@@ -1732,7 +1732,7 @@ describe("a claim under Postgres", () => {
 
     expect(blockRuns, "the resumed claim re-minted the article's ids").toBe(1);
     expect(
-      structureCalls,
+      wholeDocumentCalls,
       "the checkpoint written in window two was not found in window four — the identity it " +
         "is keyed on moved",
     ).toBe(1);

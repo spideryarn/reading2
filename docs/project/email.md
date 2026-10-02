@@ -173,8 +173,9 @@ review that reshaped it):
 - **To the recipient**, when the voucher is made and again when an unclaimed voucher's address
   actually changes: *A gift of N free articles on Spideryarn*, HTML in the auth templates' shape plus
   a plain-text part. **Never the private note or the creator.** It may carry a **note to them**
-  (`recipient_note`), labelled *A note from the person who gave you this gift:* and placed under the
-  heading, above our words, in both letters
+  (`recipient_note`), unlabelled and in italics (the text part sets it on its own lines), placed under
+  the heading, above our words, in both letters; Greg signs it himself, and `/admin/vouchers` reminds
+  him to
   ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md)). It
   is the one value in the email we did not write, so it is untrusted on render: `noteText`
   ([`src/email.ts`](../../src/email.ts)) makes its line breaks plain and its other control characters

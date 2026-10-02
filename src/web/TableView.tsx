@@ -1214,7 +1214,7 @@ function TableViewInner({
         <tr>
           {/* The prose column is the finest granularity there is, so ↑ / ↓
               over it step one paragraph at a time. Leaves are 1:1 with blocks
-              (src/hierarchy.ts). */}
+              (src/structure.ts). */}
           <th scope="col" data-nav-depth={geometry.leafDepth} className="text pin-right">
             <span className="sr-only">Text verbatim</span>
           </th>

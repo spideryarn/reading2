@@ -226,6 +226,22 @@ been getting wrong, is [marketing-pages.md](marketing-pages.md).
 Regrouped the same day: it was fourteen full-width screenshots stacked vertically, and each group
 now leads with one or two landscape shots and follows with three portraits across or plain tiles.
 
+**Brought up to date on 2026-10-02**, at Greg's asking (*"Update the non-logged-in homepage and
+Features pages"*, SPIDERYARN-READING2-86). Three things in it will outlast the content:
+
+- **The page names every mode, and a test says so.** `tests/features-page-modes.test.tsx` fails when
+  a mode in `src/modes.ts` has no tile, which is how Structure, Skim, Tweets and four others went
+  missing for a month without anyone noticing.
+- **"Experimental" is drawn from the code, not typed.** `Tile`, `Portrait` and `Showcase` take a
+  `mode`, and the tag appears exactly when `MODE_CATALOG` says the mode is behind the switch. A mode
+  that comes out from behind it loses the tag without anybody editing a caption.
+- **Both pages had promised that a public article's comments and searches "stay yours".** That was
+  false: the privacy policy and `src/public/dto.ts` both say they go with it, and only chats and the
+  profile stay private. `tests/marketing-public-sharing.test.tsx` now holds both pages to the policy.
+
+The plan, with what was deferred, is
+[261002b](../plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md).
+
 The plan for both pages, with the simpler options passed over, is
 [260902k-website-copy-homepage-and-features.md](../plans/260902k-website-copy-homepage-and-features.md).
 

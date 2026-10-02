@@ -37,7 +37,7 @@ then where the data lives.
 - **[content-extraction.md](content-extraction.md)** — stage 2 for a web page: Readability dropped
   or kept the wrong part of an article. (A PDF is the other extractor, in
   [260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).)
-- **[hierarchy.md](hierarchy.md)** — stage 4: the tree, its gists and the paragraph labels, and why
+- **[structure-step.md](structure-step.md)** — stage 4: the tree, its gists and the paragraph labels, and why
   labels are a separate step that a plain add does not run.
 - **[article-images.md](article-images.md)** — stage 4.5: an article's figures are missing, broken
   or still hotlinked, or you are changing how we fetch and host them.
@@ -184,8 +184,8 @@ than the ones below are in `src/step-order.ts` § `STEP_ORDER`.
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
-| 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure), `labels.json` (**empty** — see 4b) |
-| 4b | **labels** — the `navLabel` on every paragraph ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). Split out of stage 4 on 2026-09-06 because it was 79.5–92% of its wall clock, past what the job lease allows. **Not run by a plain add**: `hierarchy` writes an empty manifest and the reader sees *"Paragraph labels are still arriving"* until a free successor job runs. Forcing `hierarchy` sweeps it in, because re-cutting the tree is what makes a label wrong | **blocks + hierarchy agent** ([`src/labels.ts`](../../src/labels.ts)) | `labels.json`, `tree.json` (labels merged in) |
+| 4 | hierarchy — the deeply-nested table of contents, see [structure-step.md](structure-step.md) | **blocks + hierarchy agent** | `tree.json` (structure), `labels.json` (**empty** — see 4b) |
+| 4b | **labels** — the `navLabel` on every paragraph ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Split out of stage 4 on 2026-09-06 because it was 79.5–92% of its wall clock, past what the job lease allows. **Not run by a plain add**: `hierarchy` writes an empty manifest and the reader sees *"Paragraph labels are still arriving"* until a free successor job runs. Forcing `hierarchy` sweeps it in, because re-cutting the tree is what makes a label wrong | **blocks + hierarchy agent** ([`src/labels.ts`](../../src/labels.ts)) | `labels.json`, `tree.json` (labels merged in) |
 | 4.5 | **assets** — fetch the article's own images and host them, so a hotlink cannot rot and no reader announces themselves to the publisher's CDN ([article-images.md](article-images.md)). The one stage that calls no model | **fetch agent** ([`src/collect-assets.ts`](../../src/collect-assets.ts)) | `assets.json`, plus objects in Storage |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
@@ -445,7 +445,7 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   [database.md](database.md#the-filesystem-era-files-under-dataslug).
 - **The other five decide freshness some other way, and none of them is a content hash.** Four are
   the front of the pipeline, which is what `npm run ingest`, `npm run extract`, `npm run blocks` and
-  `npm run hierarchy` re-run, so this is the paragraph to read before trusting a skip:
+  `npm run structure` re-run, so this is the paragraph to read before trusting a skip:
   - `fetch` and `extract` — **existence**. The step's `produces` are in the store, so it is done.
     So is `metadata`, the fifth: it runs once, in the job that made the minimal paper, and nothing
     re-runs it.
@@ -457,7 +457,7 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
     `labels` is not in this group — it has a `stamp()`, over the blocks, its prompt version and its
     model — but the thing that keeps *it* honest across a re-cut tree is not that stamp: it is
     `writeArtefacts` deleting the step's receipt whenever a pending manifest is written
-    ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
+    ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
   And a fifth thing that looks like it belongs on that list and does not: **`pdf` is not a step.**
   It is one branch of `extract`, and its per-chunk cache is not step freshness at all — since
   2026-09-01 it is `checkpoints` rows keyed on an `articles` row
@@ -468,7 +468,7 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   paid for its chunks and batches again. Going through the queue gives every run the article's own
   checkpoints. But `force` is a flag on the *step*, not on the purchase — so a forced re-run finds
   its structure and label batches already checkpointed and replays them. Measured: two consecutive
-  `npm run hierarchy -- <slug> --force` on an unchanged article bought two model calls and then
+  `npm run structure -- <slug> --force` on an unchanged article bought two model calls and then
   **none**. **Re-labelling after a prompt change is therefore not `--force`**, whatever route you
   come by; a reader's Refresh in the browser behaves the same, because this is the queue's rule
   rather than the command's.
@@ -489,7 +489,7 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   [260828e-pdf-chunk-cache-corrupt-entry.md](../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md).
 
   **There is no `writeAtomic` left to point at, and the rule stands anyway.** The two copies — in
-  `src/hierarchy.ts` and `src/labels.ts`, deliberately duplicated — belonged to command lines writing
+  `src/structure.ts` and `src/labels.ts`, deliberately duplicated — belonged to command lines writing
   artefacts into a directory, and both went with those commands on 2026-09-05. Postgres removes the
   window rather than guarding it: stage 4's three artefacts are one write inside one transaction, and
   a half-written set is not a state that exists. Keep the rule for the next thing that caches into a

@@ -20,7 +20,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RefreshCw } from "lucide-react";
 
-import { GIFT_NOTE_LABEL, type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../admin-vouchers.js";
+import { type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -158,16 +158,26 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
         </button>
       </div>
       <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-start tw:gap-3">
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          Note to them (optional — it goes in their email, above our words)
-          <textarea
-            id="voucher-new-recipient-note"
-            rows={3}
-            value={recipientNote}
-            onChange={(e) => setRecipientNote(e.target.value)}
-            className={`${TEXTAREA} tw:w-full`}
-          />
-        </label>
+        <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          <label className="tw:flex tw:flex-col tw:gap-1">
+            Note to them (optional — it goes in their email, above our words)
+            <textarea
+              id="voucher-new-recipient-note"
+              rows={3}
+              value={recipientNote}
+              onChange={(e) => setRecipientNote(e.target.value)}
+              aria-describedby="voucher-new-recipient-note-hint"
+              className={`${TEXTAREA} tw:w-full`}
+            />
+          </label>
+          {/* Greg, 2026-10-02: the note is unlabelled in the email, so
+              "add a tooltip or something in the interface to remind me to
+              sign my name". */}
+          <p id="voucher-new-recipient-note-hint" className="tw:m-0 tw:text-ink-faint">
+            Sign it yourself, e.g. “— Greg”. The email comes from Spideryarn, so the note isn’t signed
+            otherwise.
+          </p>
+        </div>
         <EmailSketch articles={wholeNumber(articles)} note={recipientNote} />
       </div>
     </form>
@@ -180,12 +190,13 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
  * gets sent will look like and where my note for them would go"*. Plan
  * 261002b.
  *
- * The subject, heading and label are the email's own words, from
+ * The subject and heading are the email's own words, from
  * src/admin-vouchers.ts, which the renderer calls too. **The body is described
  * rather than quoted**: it depends on who they are (a stranger is invited, a
  * reader is told their numbers), which only the server can look up, and the
  * renderer is not browser code. The note is drawn as typed; the server makes
- * its line breaks plain and escapes it when it builds the email.
+ * its line breaks plain and escapes it when it builds the email. It is in
+ * italics and unlabelled, as in the email.
  */
 function EmailSketch({ articles, note }: { articles: number | null; note: string }) {
   const n = articles !== null && articles >= 1 ? articles : 1;
@@ -204,12 +215,9 @@ function EmailSketch({ articles, note }: { articles: number | null; note: string
           Your note to them goes here, if you write one.
         </p>
       ) : (
-        <>
-          <p className="tw:m-0 tw:mb-1">{GIFT_NOTE_LABEL}</p>
-          <p className="tw:m-0 tw:mb-2 tw:whitespace-pre-wrap tw:break-words tw:border-l-2 tw:border-highlight tw:pl-2 tw:text-foreground">
-            {trimmed}
-          </p>
-        </>
+        <p className="tw:m-0 tw:mb-2 tw:whitespace-pre-wrap tw:break-words tw:border-l-2 tw:border-highlight tw:pl-2 tw:text-foreground">
+          <em>{trimmed}</em>
+        </p>
       )}
       <p className="tw:m-0">
         …then a short paragraph from us: what Spideryarn is and how to collect the articles (or, if

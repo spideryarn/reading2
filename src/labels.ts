@@ -26,15 +26,15 @@
  * `checkpoints` rows and replays both — measured 2026-09-05, two consecutive
  * forced runs on an unchanged article bought two model calls and then none. So
  * changing the label prompt and buying a genuinely fresh answer is not a thing
- * any command does today: the eval (`npm run eval:hierarchy`) is how a prompt
+ * any command does today: the eval (`npm run eval:structure-labels`) is how a prompt
  * change is judged, and making `force` mean something to a checkpoint is a
  * queue-wide decision and Greg's. GPT Sol found it in review; the measurement is
  * in docs/project/setup-dev.md.
  *
- * `generateLabels` stays exported for `evals/`, for src/hierarchy.ts and for the
+ * `generateLabels` stays exported for `evals/`, for src/structure.ts and for the
  * step.
  *
- * **Why this is not part of src/hierarchy.ts's model call.** A nav label is written
+ * **Why this is not part of src/structure.ts's model call.** A nav label is written
  * for every gistable block, so this is the one output in the whole pipeline that
  * grows with the article without a bound — measured at 73% of stage 4's answer
  * on a 360-block article, against 27% for the entire tree. One model response
@@ -52,7 +52,7 @@
  * > Generate siblings together; generate disjoint sibling groups in parallel.
  *
  * A label's documented job is to tell its paragraph apart from its neighbours
- * (docs/project/hierarchy.md), so every pair a reader compares must have
+ * (docs/project/structure-step.md), so every pair a reader compares must have
  * been written in the same call. `planBatches` therefore packs whole sibling
  * sets and never splits one. Batching on a token window instead would break
  * exactly that and nothing else, which is why it would be hard to notice.
@@ -552,14 +552,14 @@ interface LabelsManifest {
    * Absent and empty mean different things and both are fine here: absent is a
    * file written before there was such a thing as a dropped label, empty is a
    * run that dropped none. Nothing branches on the difference; what reads it is
-   * evals/hierarchy-labels.ts, which without this field can only see coverage below 1
+   * evals/structure-labels.ts, which without this field can only see coverage below 1
    * and call it INCOMPLETE — a repair inside the code under measurement
    * silently redefining the measurement, which is the mistake the R2/R3 build
    * made and wrote down. See `LabelRun.dropped`.
    *
    * **On the shared base rather than on `CompletedLabelsFile` alone**, so that
    * `labelsFile?.dropped` goes on compiling for a reader holding either shape
-   * (evals/hierarchy-labels.ts does exactly that). A pending manifest never
+   * (evals/structure-labels.ts does exactly that). A pending manifest never
    * carries one, and absence there means what it has always meant.
    */
   dropped?: string[];
@@ -816,8 +816,8 @@ export function oversizedSets(batches: Batch[], max = MAX_BATCH): SiblingSet[] {
  * an older version of this pipeline or edited by hand, and a mixed node would
  * make `walk` recurse straight past its leaf children without complaining.
  *
- * `checkCoverage` in src/hierarchy.ts would catch the result — but only on the
- * path that goes through `generateHierarchy`. There was a second path,
+ * `checkCoverage` in src/structure.ts would catch the result — but only on the
+ * path that goes through `generateStructure`. There was a second path,
  * `npm run labels -- <dir>`, which merged and wrote `tree.json` without it, so a
  * lost block reached disk as a paragraph with no sidebar row and nothing
  * anywhere saying why. That is docs/reusable/silent-success.md, and the fix was
@@ -1198,7 +1198,7 @@ function describeShape(value: unknown): string {
  *
  * Ordinals are safe to interpolate. They are integers this file generated from
  * the batch's own length, never a value read out of the model's response as
- * text — see `nameValue` in src/hierarchy.ts for the rule and why it matters here.
+ * text — see `nameValue` in src/structure.ts for the rule and why it matters here.
  */
 function paragraphList(ns: number[]): string {
   const shown = ns.slice(0, 5).join(", ");
@@ -1370,7 +1370,7 @@ function readPairs(raw: string): {
 } {
   /* `parseJsonAnswer`, never bare `JSON.parse`. The reasoning that used to sit
      here — including that `redact` is path-based and so reaches neither the
-     message nor the stack, and that src/hierarchy.ts learned this before this
+     message nor the stack, and that src/structure.ts learned this before this
      file was written without it — is now in src/parse-json.ts, next to the code
      it is about. Its message is a diagnosis of the shape and is safe to carry;
      that is what `MalformedJson` promises. */
@@ -1491,7 +1491,7 @@ export function isHeading(block: Block): boolean {
 
 /* Small on purpose. A long stopword list would start deleting the author's own
    vocabulary, which is the thing these words are used to detect. Exported so
-   evals/hierarchy-labels.ts measures with exactly the same rule the gate below uses —
+   evals/structure-labels.ts measures with exactly the same rule the gate below uses —
    a measure that disagreed with its gate would be worse than no measure. */
 const STOPWORDS = new Set(
   ("the a an and or but of to in on at by for with from as is are was were be been being that this " +
@@ -1672,8 +1672,8 @@ export function mergeLabels(tree: Tree, labels: Record<string, string>): Tree {
  * Every gistable block came back with a label — checked before anything is
  * written, on **both** paths into this stage.
  *
- * `generateHierarchy` has `checkCoverage` after its merge, but `npm run labels
- * -- <dir>` did not go through `generateHierarchy`: it merged and rewrote
+ * `generateStructure` has `checkCoverage` after its merge, but `npm run labels
+ * -- <dir>` did not go through `generateStructure`: it merged and rewrote
  * `tree.json` on its own. Leaving the only gate in the caller meant the
  * advertised standalone command was the one path with nothing between a short
  * answer and the disk. So the check lives here, at the end of the stage, where
@@ -1726,12 +1726,12 @@ export function assertEveryBlockLabelled(
  * backstop for exactly that.
  *
  * **Here rather than in the caller, because there are two callers.**
- * `generateHierarchy` applied the floor after its merge and `npm run labels -- <dir>`
+ * `generateStructure` applied the floor after its merge and `npm run labels -- <dir>`
  * did not — it merged and rewrote `tree.json` with nothing between a
  * heavily-dropped run and the disk. So the advertised backstop depended on which
  * supported command you typed, which is the same fault `assertCoversEveryBlock`
  * and `assertEveryBlockLabelled` were both moved in here to fix. `checkCoverage`
- * in src/hierarchy.ts still runs on the pipeline path and is not redundant with this:
+ * in src/structure.ts still runs on the pipeline path and is not redundant with this:
  * it counts labelled *leaves of the tree*, so it is the one that would notice a
  * merge losing labels this function never hears about. GPT Sol, finding 4.
  *
@@ -2124,7 +2124,7 @@ async function repairShortfall(
  * It was **0.95** when one model call wrote the whole tree, because the model
  * was allowed to skip a trivial transition sentence — an unlabelled gistable
  * leaf is still only a *warning* in [validate-tree.ts](./validate-tree.ts) for
- * that reason (docs/project/hierarchy.md). The floor told a used escape
+ * that reason (docs/project/structure-step.md). The floor told a used escape
  * hatch apart from an answer that had quietly stopped early.
  *
  * It was tightened to **1** when the label pass split out, on the argument that
@@ -2154,8 +2154,8 @@ async function repairShortfall(
  * `LabelRun.dropped` — printed by the CLI, logged by the step, recorded in
  * `labels.json` — is how anybody finds out it has stopped being.
  *
- * **Moved here from src/hierarchy.ts on 2026-08-31, and it is applied here now too.**
- * `generateHierarchy` checked it after its merge and `npm run labels -- <dir>` did
+ * **Moved here from src/structure.ts on 2026-08-31, and it is applied here now too.**
+ * `generateStructure` checked it after its merge and `npm run labels -- <dir>` did
  * not, so the advertised backstop depended on which supported entry point ran:
  * twenty small batches each spending their floor could publish a tree missing a
  * fifth of its rows through the standalone command and be refused through the
@@ -2810,7 +2810,7 @@ export async function allOrStop<T>(work: Promise<T>[], stop: () => void): Promis
  * of an article somebody might be reading, which made it the worse of the two
  * places to get that wrong. Under Postgres stage 4's three artefacts are one
  * write inside one transaction and a half-written set is not a state that
- * exists. src/hierarchy.ts had the deliberately-duplicated twin and lost it the
+ * exists. src/structure.ts had the deliberately-duplicated twin and lost it the
  * same day.
  *
  * `stageCli(import.meta.url, main)` went too. The job runner opens a `job_step`

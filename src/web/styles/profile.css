@@ -491,10 +491,10 @@
    docs/plans/260913a-drop-the-use-your-profile-checkbox.md. */
 
 /* ------------------------------------------------- profile: the panel --
-   What your profile currently says, and a working link to each of the two
-   places that edit it. src/web/ProfilePanel.tsx.
+   What your profile currently says, editable in place since 2026-10-02, and a
+   Regenerate when the profile has changed. src/web/ProfilePanel.tsx.
 
-   **Not a `.tooltip`.** It is a click-popover with links in it, so it must take
+   **Not a `.tooltip`.** It is a click-popover with controls in it, so it must take
    pointer events — the whole reason it is not a tooltip is that
    `.tooltip-anchor` is `pointer-events: none` and the link that used to live in
    one has never been clickable. It borrows the tooltip's *surface* (the same
@@ -512,8 +512,9 @@
   max-width: calc(100vw - 1.75rem);
   /* And never taller than the window: a 1,500-character profile is a lot of
      prose, and it scrolls inside the panel rather than growing off the top of
-     the screen where the close is. */
-  max-height: min(24rem, calc(100vh - 3rem));
+     the screen where the close is. 30rem since the two boxes became editable,
+     which is both of them and Done without a scroll at their default rows. */
+  max-height: min(30rem, calc(100vh - 3rem));
   overflow-y: auto;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--rule-strong);
@@ -524,6 +525,9 @@
     0 8px 24px -6px rgb(0 0 0 / 0.65);
   font-family: var(--font-ui);
 }
+/* Focus lands on the panel itself when it opens (ProfilePanel.tsx says why);
+   the ring belongs on the controls inside, not round the whole card. */
+.prof-panel:focus { outline: none; }
 .prof-panel-lede {
   margin: 0 0 0.5rem;
   color: var(--ink-faint);
@@ -535,23 +539,55 @@
   padding-top: 0.4rem;
   margin-top: 0.4rem;
 }
-.prof-panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
 .prof-panel-label {
   color: var(--ink-faint);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.prof-panel-edit {
-  color: var(--highlight);
-  font-size: 0.77rem;
-  white-space: nowrap;
+/* `.prof-panel-head` and `.prof-panel-edit` lived here until 2026-10-02: the
+   label row and its `Edit →` link. The boxes are edited in the panel now, and
+   the links — each a way out that skipped the save — went. Plan 261002b. */
+
+/* **The two `ProfileBox`es, made to fit a popover** (since 2026-10-02). The
+   page versions are sized for a column of their own; here the panel is 320px
+   at most and may be 390px-wide-phone minus its gutters, so everything is a
+   step smaller and the gaps are halved. The same rules otherwise — a box that
+   looked different here would look like a different mechanism. */
+.prof-panel .prof-box {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
 }
+.prof-panel .prof-box-head { margin-bottom: 0.2rem; }
+.prof-panel .prof-box-label { font-size: 0.72rem; letter-spacing: 0.04em; }
+.prof-panel .prof-box-input {
+  padding: 0.35rem 0.45rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.prof-panel .prof-box-foot { margin-top: 0.2rem; gap: 0.5rem; }
+.prof-panel .prof-box-hint,
+.prof-panel .prof-count,
+.prof-panel .prof-save { font-size: 0.74rem; }
+.prof-panel .prof-save { margin-top: 0.15rem; min-height: 1.05rem; }
+/* Offline: what follows is a copy, shown and not offered for editing. */
+.prof-panel-offline {
+  margin: 0 0 0.3rem;
+  color: var(--highlight-ink);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+/* Regenerate (only when the profile changed) on the left, Done on the right.
+   `wrap` for the narrowest band, where the two may not share a line. */
+.prof-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.prof-panel-done { margin-left: auto; }
 .prof-panel-text {
   margin: 0.2rem 0 0;
   /* The reader's own prose, in the reading face — it is a paragraph they wrote,

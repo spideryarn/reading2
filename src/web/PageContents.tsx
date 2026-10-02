@@ -45,16 +45,15 @@
  *
  * Both go through one verb, `reveal`: tell the section to open
  * (`SECTION_REVEAL`, which Metadata.tsx § Section listens for), scroll to it,
- * and flash it once the scroll has stopped (flash.ts § flashElement, the
+ * and flash it once the scroll has stopped (flash.ts § scrollToAndFlash, the
  * reading view's flash). The search itself is page-search.ts, which reads the
  * same `[data-section]` elements this list does, plus their `data-keywords`.
  * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { flashElement } from "./flash.js";
+import { scrollToAndFlash } from "./flash.js";
 import { searchSections, type SearchableSection } from "./page-search.js";
-import { reducedMotion } from "./scroll.js";
 
 /**
  * The event a section listens for to open itself — sent to the `[data-section]`
@@ -62,19 +61,6 @@ import { reducedMotion } from "./scroll.js";
  * would need the list of sections this component reads off the page instead.
  */
 export const SECTION_REVEAL = "section-reveal";
-
-/**
- * **Flash when the scroll has stopped, not when it starts.** The wash holds for
- * about a third of `FLASH_MS` and then fades; fired at the click, a smooth
- * scroll across a long page would spend the hold travelling and land on the
- * fade. There is no settle callback for `scrollIntoView`, and `scrollend` is
- * not everywhere yet, so: wait until no scroll event has arrived for
- * `SCROLL_IDLE_MS`. A section already in place never scrolls, and flashes after
- * that one short wait. `SCROLL_MAX_MS` is the ceiling, for a scroll that keeps
- * being nudged (an image loading above it, say).
- */
-const SCROLL_IDLE_MS = 120;
-const SCROLL_MAX_MS = 1500;
 
 /**
  * **The section with this id, inside `root` and nowhere else.** Two of these
@@ -105,32 +91,11 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
      scroll is asked for — near the foot of the page a shut section may not
      leave the scroll range to bring its heading up. Sol, plan review. */
   el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
-  let finished = false;
-  let idle = setTimeout(done, SCROLL_IDLE_MS);
-  const cap = setTimeout(done, SCROLL_MAX_MS);
-  window.addEventListener("scroll", onScroll, { passive: true });
-  /* Optional-called: jsdom has none. */
-  el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  const cancel = scrollToAndFlash(el);
   /* **Focus follows the eye**: the heading, which every section makes
      focusable from a script, without a second scroll. Otherwise a keyboard or
      screen-reader user is left in the margin while the page has moved. */
   el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
-  function onScroll(): void {
-    clearTimeout(idle);
-    idle = setTimeout(done, SCROLL_IDLE_MS);
-  }
-  function cancel(): void {
-    if (finished) return;
-    finished = true;
-    clearTimeout(idle);
-    clearTimeout(cap);
-    window.removeEventListener("scroll", onScroll);
-  }
-  function done(): void {
-    if (finished) return;
-    cancel();
-    if (el?.isConnected) flashElement(el);
-  }
   return cancel;
 }
 

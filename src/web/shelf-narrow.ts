@@ -34,9 +34,16 @@ export type ShelfTerm = LibraryTermsResponse["terms"][number];
  * matching something invisible would look like a bug from the outside.
  *
  * Lived in Library.tsx until 2026-09-28; moved here so the archived list is
- * searched by the same rule rather than a copy of it.
+ * searched by the same rule rather than a copy of it — and generic since
+ * 2026-10-02, so the public articles under Include public are too (plan 261002b).
  */
-export function filterEntries(articles: readonly LibraryEntry[], query: string): LibraryEntry[] {
+export function filterEntries<
+  T extends Pick<LibraryEntry, "title"> & {
+    byline?: string | null;
+    siteName?: string | null;
+    gist?: string | null;
+  },
+>(articles: readonly T[], query: string): T[] {
   const terms = queryTerms(query);
   if (terms.length === 0) return [...articles];
   return articles.filter((a) => {

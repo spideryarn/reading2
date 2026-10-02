@@ -315,7 +315,7 @@ interface RunFile {
 const CLAIM_LIMITS = [
   "Every arm is a `bakeoff`, the control included: production asks for structure, titles, gists and questions in ONE long-context response, and this asks only for wording over a fixed tree.",
   "Nothing here sees an interaction between the new wording and the structure the model proposes in the same breath — that is what the cheap design buys its cheapness with.",
-  "Nothing here touches `EXPAND_SYSTEM` (src/hierarchy-expand.ts), so no result covers the deepening cascade. That prompt gained its own QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — but nothing in this harness measures it.",
+  "Nothing here touches `EXPAND_SYSTEM` (src/structure-expand.ts), so no result covers the deepening cascade. That prompt gained its own QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — but nothing in this harness measures it.",
   "A win is a reason to put a variant in front of Greg RENDERED (the plan's stage 2), never a reason to ship it.",
   "Depth-2 gists at two sentences are deferred, not measured: they raise TOKENS_PER_NODE and break evals/hierarchy-structure's baseline.",
 ];

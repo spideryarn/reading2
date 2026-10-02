@@ -1,6 +1,6 @@
 /**
  * **The deterministic half of the Socratic-summaries eval** — the split
- * `evals/extraction/` and `evals/hierarchy-structure/` already make: what is
+ * `evals/extraction/` and `evals/structure-whole-document/` already make: what is
  * cheap and repeatable is pinned as a test, what spends money is not one.
  *
  * Four of these blocks are guarding something specific rather than exercising
@@ -32,7 +32,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { questionFor } from "../src/hierarchy.js";
+import { questionFor } from "../src/structure.js";
 import {
   ANCHOR_SITE,
   anchors,
@@ -57,7 +57,7 @@ import {
 } from "../evals/summaries/judge.js";
 import { stubJudge } from "../evals/summaries/run.js";
 import { productionGists, productionQuestions, productionSystem, sectionOf, THE_DIAGNOSED_SENTENCE } from "../evals/summaries/production-prompt.js";
-import { structureRequest } from "../src/hierarchy.js";
+import { wholeDocumentRequest } from "../src/structure.js";
 import {
   type ArmPlan,
   coverageFor,
@@ -318,7 +318,7 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
        `productionGists()` with itself is true of every implementation and was
        the tautology GPT Sol found here. */
     const one = productionSystem();
-    const many = structureRequest(
+    const many = wholeDocumentRequest(
       Array.from({ length: 40 }, (_, i) => ({
         id: `spya-${String(i).padStart(6, "0")}`,
         tag: "p",
@@ -327,7 +327,7 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
         words: 14,
         gistable: true,
         html: `<p>Block ${i}</p>`,
-      })) as unknown as Parameters<typeof structureRequest>[0],
+      })) as unknown as Parameters<typeof wholeDocumentRequest>[0],
     ).system;
     expect(many).toBe(one);
     expect(productionGists(many)).toBe(productionGists(one));
@@ -555,7 +555,7 @@ describe("the arms", () => {
     /* **The "after" half is PINNED to V4, and production has since moved one
        bullet past it.** Both halves, and the difference between them is F13:
        for a day `gists-toc6` resolved its questions through
-       `productionQuestions()`, so one word changed in `src/hierarchy.ts` would
+       `productionQuestions()`, so one word changed in `src/structure.ts` would
        have silently changed what this comparison was *of*, while the arm's own
        note claimed both halves stay put. Pinning makes the claim true — and
        `toc/8` (plan 260926a) is the day it earned its keep: production replaced

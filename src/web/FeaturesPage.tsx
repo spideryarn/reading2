@@ -27,11 +27,23 @@
  * stacked vertically, 11,042px of it**, which is impressive to no one. Now each
  * group leads with one or two landscape `Showcase` shots, and the group's other
  * modes follow as either three portraits across (`Gallery`) or plain `Tile`s.
- * Same thirteen pictures; the six tall band shots, which were the worst of the
- * height, now take one screen between them instead of six.
+ * The six tall band shots, which were the worst of the height, take one screen
+ * between them instead of six.
  *
- * Styled with the `site-*` classes at the foot of styles.css — SiteBits.tsx's
- * header says which mechanism owns what.
+ * ## Every mode, and the tag — 2026-10-02
+ *
+ * By October the page described Outline, which was gone, and none of the seven
+ * modes that had arrived since. Every mode in `MODES` now has a tile, a portrait
+ * or a showcase carrying its `mode`, and tests/features-page-modes.test.tsx goes
+ * red when the next one does not. Which ones are behind the experimental switch
+ * is not written into any caption: SiteBits.tsx § `ExperimentalTag` reads it
+ * from MODE_CATALOG, and one `[tissue]` line under the lede says what the tag
+ * means. Cross-references and maths are not modes and carry no `mode`; reading
+ * time is left off, being neither a mode nor for everyone.
+ * docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md.
+ *
+ * Styled with the `site-*` classes in styles/site.css — SiteBits.tsx's header
+ * says which mechanism owns what.
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -74,6 +86,14 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <p className="site-lede tw:mt-6">
             It highlights, annotates, orients and explains, but keeps you in the text itself.
           </p>
+          {/* [tissue] What the tag on some modes below means. The second half
+              was the Diagram caption's last sentence until 2026-10-02, moved up
+              here when SiteBits.tsx began drawing the tag from MODE_CATALOG, so
+              it is said once for every experimental mode. */}
+          <p className="tw:mt-4 tw:max-w-[62ch] tw:text-sm tw:text-ink-faint">
+            A mode tagged Experimental is one of the Experimental Features; signed-in readers turn
+            these on from the bar or their profile.
+          </p>
         </div>
       </header>
 
@@ -97,10 +117,29 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         {/* --------------------------------------- the landscape, and where you are --
             Greg, 2026-09-03, answer 4. */}
         <H2 eyebrow="Orient">The landscape, and where you are in it.</H2>
-        <Showcase shot={SHOTS.outline} title="Outline." eager under>
-          A constantly evolving table of contents that gives you a sense of the overall landscape
-          and where you are in the grand scheme of things, with more detail for the current and
-          nearby sections — a semantic fisheye lens.
+        {/* Structure took Outline's place on 2026-09-10 and this showcase on
+            2026-10-02. Greg, 2026-09-08 (the two columns where the window is
+            wide, the nested list where it is narrower) and 2026-10-01 (Fisheye
+            the default, Expanded showing everything), both in
+            docs/project/structure.md; the faces and the chips' words checked in
+            src/web/modes/structure/StructureMode.tsx and STRUCTURE_SUB_MODES in
+            src/web/sub-modes.ts. */}
+        <Showcase shot={SHOTS.structure} title="Structure." mode="structure" eager under>
+          The article’s parts, and the sections of the one you are reading, in two columns beside
+          the text — or, where the window is narrower, one nested list. Fisheye, the default, opens
+          up around where you are; Expanded shows everything, every summary visible.
+        </Showcase>
+        {/* Greg, 2026-09-28, docs/project/skim.md: "help the user to skim
+            through the paper as effectively as possible in increasing depth",
+            and "a trajectory through quotes". The three passes, the quotes as
+            stops and the one-line cue are src/skim.ts (DEPTH_CAPS, the GIST /
+            MORE / MOST depths, `cue`: "what to look for in that passage"). A
+            picture rather than a tile since the 2026-10-02 retake: Greg,
+            2026-09-29, "I'm increasingly thinking of the trajectory mode as one
+            of the main modes". */}
+        <Showcase shot={SHOTS.skim} title="Skim." mode="skim" offset under>
+          Skim the paper in increasing depth: a route through its quotes, walked three times — the
+          gist, then more, then most — each stop with a line on what to look for.
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as
@@ -111,28 +150,29 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               for Illustrated. The five names are DIAGRAMS in src/web/diagram.ts
               and the picture is the first of them. Counted in the code: this
               said "the other three" on the afternoon there were four. The
-              last sentence since 2026-09-29, when the whole mode went behind
-              the switch: without it this caption sends a new reader looking
-              for a button their bar does not draw. */}
-          <Portrait shot={SHOTS.diagram} title="Diagram.">
+              mode went behind the switch on 2026-09-29; since 2026-10-02 the
+              tag says so, and the sentence that did is under the lede. */}
+          {/* Pictured is `sketch` since the 2026-10-02 retake — the one kind an
+              ordinary reader's band offers (src/web/sub-modes.ts); it was
+              `force`. The sentences were reordered to match, not rewritten. */}
+          <Portrait shot={SHOTS.sketch} title="Diagram." mode="diagram">
             Maps of the structure of the piece, with where you are marked on each. Pictured:{" "}
-            <strong className="tw:text-foreground">force</strong>, the sections as dots, joined
-            where they share distinctive words. The other four: <em>drift</em> and <em>trail</em>,
-            one dot per paragraph placed by what it is about; <em>sketch</em>, drawn by the model;
-            and <em>illustrated</em>, that same scene painted. This is one of the Experimental
-            Features; signed-in readers can turn those on from the bar or their profile.
+            <strong className="tw:text-foreground">sketch</strong>, drawn by the model. The other
+            four: <em>force</em>, the sections as dots, joined where they share distinctive words;{" "}
+            <em>drift</em> and <em>trail</em>, one dot per paragraph placed by what it is about; and{" "}
+            <em>illustrated</em>, that same scene painted.
           </Portrait>
         </div>
         <div className="site-bento site-reveal tw:mt-4">
           {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
               levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
               Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
-          <Tile name="Summary." span="wide">
+          <Tile name="Summary." mode="summary" span="wide">
             The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Plain mode: the article alone, with the band closed. */}
-          <Tile name="Or just the article." span="wide">
+          <Tile name="Or just the article." mode="plain" span="wide">
             Plain mode is the prose and nothing else. Every other mode is a step away from it and a
             step back.
           </Tile>
@@ -141,13 +181,13 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         {/* ------------------------------------ the text, with a friend's notes in it -- */}
         <H2 eyebrow="Annotate">The text, with a clever friend’s notes in it.</H2>
         {/* Greg, 2026-09-03, follow-up to answer 4; docs/project/vision.md. */}
-        <Showcase shot={SHOTS.glossary} title="Glossary." under>
+        <Showcase shot={SHOTS.glossary} title="Glossary." mode="glossary" under>
           Notes in the margin that explain and remind you about anything you might find tricky: the
           terms this piece uses in a non-obvious way, defined from the piece itself, underlined
           wherever they occur. Point at one and the card comes to you.
         </Showcase>
         {/* Greg, 2025-07-14, and docs/project/search.md. */}
-        <Showcase shot={SHOTS.meaning} title="Search by meaning." offset under>
+        <Showcase shot={SHOTS.meaning} title="Search by meaning." mode="search" offset under>
           Type in basically anything — a word, a phrase, a description of what you are looking for —
           and it highlights the areas of the text that are relevant. Every hit is marked in the
           prose and painted as a lane in the strip beside it, so you can see where in the piece a
@@ -159,24 +199,24 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               this ("a term is a word you look up; an idea is a claim you hold",
               from vision.md, an agent's) is out until he says it or something
               like it. */}
-          <Portrait shot={SHOTS.ideas} title="Ideas.">
+          <Portrait shot={SHOTS.ideas} title="Ideas." mode="ideas">
             The new ideas the text introduces, and the key ideas it requires you to understand —
             split into what you need to bring and what this piece adds.
           </Portrait>
           {/* Greg, 2026-08-31, the quotes request. */}
-          <Portrait shot={SHOTS.quotes} title="Quotes.">
+          <Portrait shot={SHOTS.quotes} title="Quotes." mode="quotes">
             The most central, helpful, interesting quotes, in the author’s own words. In order by
             default, or by importance, or by how memorable, striking or lyrical they are.
           </Portrait>
           {/* docs/project/search.md, the confidence rule. */}
-          <Portrait shot={SHOTS.meaningPanel} title="Every hit says how sure.">
+          <Portrait shot={SHOTS.meaningPanel} title="Every hit says how sure." mode="search">
             The number is the model’s own guess rather than a measurement, so the panel says so and
             gives you the slider. Run several searches at once, each in its own colour.
           </Portrait>
         </Gallery>
         <div className="site-bento site-reveal">
           {/* Greg, 2026-08-31, the timeline request; product fact from timeline.md. */}
-          <Tile name="Timeline." span="wide">
+          <Tile name="Timeline." span="wide" mode="timeline">
             When the piece says things happened — dealing with ambiguity about dates by falling back
             to order, and showing the uncertainty rather than hiding it.
           </Tile>
@@ -184,6 +224,32 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <Tile name="Links." span="wide">
             Hover the author’s own hyperlinks and see something about the destination before you
             leave.
+          </Tile>
+          {/* Greg (the admin who filed it), 2026-09-11, SPIDERYARN-READING2-2Y,
+              the citations request in docs/project/citations.md, rephrased to
+              the reader. "Where there is one", because not every work gets an
+              address (src/public/dto.ts § `publicCitationUrl`, and the
+              80-work cap in docs/project/citations.md). The orders are
+              `orderOptions` in src/web/CitationsPanel.tsx: prioritised, first
+              cited, relevance, influence. */}
+          <Tile name="Citations." span="wide" mode="citations">
+            The works the piece cites — in its bibliography, its footnotes or the text itself — with a
+            link out where there is one, in the order it first cites them, by how relevant or
+            influential each is, or prioritised.
+          </Tile>
+          {/* Greg, 2026-09-30 (SPIDERYARN-READING2-7E): "marginalia-snippets
+              that scrolls with the text, i.e. anchored to the blocks visible on
+              screen", with "socratic-questions for what each section is
+              answering"; and 2026-10-01 (7K), the right-hand column "for
+              annotations anchored to the blocks". Both in
+              docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md.
+              What it draws is src/web/marginalia/notes.ts: one question per
+              part, and a stamp where an idea occurs — only once the article's
+              Ideas exist, because Marginalia never starts that job. */}
+          <Tile name="Marginalia." span="wide" mode="marginalia">
+            Notes in a column to the right of the text, anchored to the paragraphs they sit beside and
+            scrolling with them: the question each part is answering and, once its Ideas have been
+            made, where each idea first appears.
           </Tile>
         </div>
 
@@ -200,15 +266,36 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           {/* docs/project/chat-tools.md, and the two rules in src/converse.ts: a
               statement about the article cites its block; no summarising unless
               the reader asks. */}
-          <Tile name="A chat that cites." span="wide">
+          <Tile name="A chat that cites." span="wide" mode="chat">
             Ask a longer question, and whenever the answer says what the article says, it links to
             the passage. It can search the piece, your library or the web — and it does not
             summarise the article unless you ask it to. You are reading it.
           </Tile>
           {/* Greg, 2026-08-31, the live-conversation request. */}
-          <Tile name="Or say it out loud." span="wide">
+          <Tile name="Or say it out loud." span="wide" mode="chat">
             Switch into a live conversation for a bit, then type or dictate for a while, then talk
             again. The audio goes straight to the voice provider and never touches our server.
+          </Tile>
+          {/* Greg, 2026-09-29 (SPIDERYARN-READING2-5D), in docs/project/faq.md:
+              each question rated "for something like how difficult and how
+              central", "a prioritized ordering by default with a threshold".
+              That every answer is the piece's own passages is src/faq.ts and
+              src/web/FaqPanel.tsx; the order is `centrality × (1 − difficulty)`
+              there. Not MODE_CATALOG's description, which an agent wrote (Sol
+              plan review #5). */}
+          <Tile name="FAQ." span="wide" mode="faq">
+            Questions about the piece, each answered with the piece’s own passages — rated for how
+            difficult and how central, and shown in a prioritised order with a threshold.
+          </Tile>
+          {/* Greg, 2026-09-05, the debate request: "gathers from the wider web
+              about the article, e.g. reviews, critiques, etc (ideally from
+              authoritative sources)", with "citation/linking"; and 2026-09-30
+              (SPIDERYARN-READING2-6M), "key themes" and "key nodes". Both in
+              docs/project/debate.md; the themes and key sources are
+              src/debate-themes.ts. */}
+          <Tile name="Debate." span="wide" mode="debate">
+            What the wider web says about the piece — reviews and critiques, ideally from
+            authoritative sources, each linked — with the key themes and the key sources drawn out.
           </Tile>
         </div>
 
@@ -216,17 +303,25 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <H2 eyebrow="Internalise">Find out what you kept.</H2>
         <Gallery>
           {/* Greg, 2026-08-27, the review-mode request, rephrased to the reader. */}
-          <Portrait shot={SHOTS.remember} title="Remember.">
+          <Portrait shot={SHOTS.remember} title="Remember." mode="remember">
             Type or talk about what you have taken from the piece, and get a plain, concise
             response: corrections, misunderstandings, refinements, gaps. Written not to be annoying,
             patronising or superior — you are earnestly looking to deepen your understanding, and it
             treats you so.
           </Portrait>
-          {/* Greg, 2026-08-31, the quiz request. */}
-          <Portrait shot={SHOTS.quiz} title="Quiz.">
-            Questions that need a couple of sentences each, a dozen at a time, ordered by a
-            combination of ease and value: easy first then harder, central first. Marked against the
-            article, not an answer key.
+          {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
+              (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which
+              replaced its order: questions where "only a sentence or two is
+              needed", that "build on one another gradually" towards "the key
+              takeaways". The first sentence was false since 2026-09-30 — "a
+              dozen at a time" and "ordered by a combination of ease and value"
+              were the retired batch of twelve sorted by band and value; it is
+              now a path of up to MAX_QUESTIONS = 20 that nothing re-sorts.
+              Only that sentence changed. A Remember sub-mode, so `remember`. */}
+          <Portrait shot={SHOTS.quiz} title="Quiz." mode="remember">
+            Questions that need a sentence or two each, up to twenty at a time, each building on the
+            one before towards the piece’s key takeaways. Marked against the article, not an answer
+            key.
           </Portrait>
         </Gallery>
 
@@ -234,7 +329,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <H2 eyebrow="A mode for one job">For peer reviewers.</H2>
         {/* docs/project/referee-mode.md, its title and its four sub-modes; the
             confidentiality sentence is the one the mode itself shows. */}
-        <Showcase shot={SHOTS.referee} title="Referee mode." offset under>
+        <Showcase shot={SHOTS.referee} title="Referee mode." mode="referee" offset under>
           Helps a referee read a paper without reading it for them. Your own criteria, streamed
           against the paper with every matching passage marked; the paper’s claims pulled out with
           where each is taken up; and a mirror that rereads your own draft comments. Nothing here
@@ -245,14 +340,20 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         {/* -------------------------------------------- your shelf, and everyone's -- */}
         <H2 eyebrow="Your library">Your shelf, and everyone’s.</H2>
         {/* Greg, 2026-08-25 (library) and 2026-09-03, answer 2's postscript.
-            What a public visitor gets is the generated work, not the owner's
-            comments, chats or searches — PrivacyPage.tsx says so, and this must
-            agree with it. */}
+            **Corrected 2026-10-02, because it was false**: the last sentence
+            said "your own comments, chats and searches stay yours", while
+            src/public/dto.ts (`publicComments`; `searches` in
+            src/public-types.ts) gives a
+            public article's visitors the owner's comments and searches, and
+            PrivacyPage.tsx said so. Only the chats and the profile stay
+            behind. The list of what is shared lost "gists", and follows
+            PrivacyPage's names. This must keep agreeing with PrivacyPage.tsx;
+            tests/marketing-public-sharing.test.tsx asks. */}
         <Showcase shot={SHOTS.library} title="The library." under>
           Every article you have added, one click from where you left off. Make one public-readable
-          and it shares its expensive AI annotations — the outline, gists, glossary, ideas and
-          quotes — so that everyone who opens it can benefit from them. Your own comments, chats and
-          searches stay yours.
+          and it shares its expensive AI annotations — the outline, summaries, glossary, ideas,
+          quotes and the rest — so that everyone who opens it can benefit from them. Your comments
+          and searches go with it; your chats and your profile are not shared.
         </Showcase>
         {/* **The claim above, with the evidence under it.** The paragraph in
             that showcase is the strongest thing this page says about public
@@ -272,6 +373,48 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <Tile name="It’s the reader’s data." span="wide">
             One button exports everything Spideryarn holds about an article — the text, the ids, and
             every note and summary — as plain files.
+          </Tile>
+        </div>
+
+        {/* -------------------------------------------------------- elsewhere --
+            [tissue] heading. Tweets is a mode and out from behind the switch;
+            cross-references and maths are not modes and are drawn for every
+            reader in every mode (src/web/useCrossrefs.ts from
+            src/web/article/ArticlePage.tsx unconditionally;
+            `renderArticleMaths` in src/web/article/access.ts). */}
+        <H2 eyebrow="Elsewhere">And a few more.</H2>
+        <div className="site-bento site-reveal">
+          {/* Greg, 2026-08-25, "the Tweet Thread view"; 2026-09-12, that it
+              starts writing when opened; 2026-09-29, a column alongside the
+              text with block links back to relevant passages. The two limits
+              are product facts from src/web/useTweets.ts (only an owner's
+              absent thread auto-runs) and src/tweets.ts § `checkBlocks` plus
+              src/web/Tweets.tsx § `UnlinkedNote` (a post can have no surviving
+              passage id, and threads from before tweets/5 have none). GPT Sol's
+              code review caught the first draft promising both without the
+              limits; "the passages they came from" is unqualified because a
+              post with no surviving id says so in place (`UnlinkedNote`). */}
+          <Tile name="Tweets." mode="tweets">
+            The piece as a thread, in a column beside the text, written the first time you open it
+            on an article of your own. Posts link back to the passages they came from.
+          </Tile>
+          {/* Greg, 2026-09-30, docs/project/cross-references.md, rephrased to
+              the reader: "if it describes a result, then it would create an
+              anchor link to the block that actually [has] the results in
+              detail … So you can always jump around the paper to get to the
+              thing being described", with "a rich tooltip … that would preview
+              that linked-to block". */}
+          <Tile name="Cross-references.">
+            Where the piece describes a result it reports in detail elsewhere, the phrase links to
+            that passage, with a preview when you point at it. So you can always jump around the
+            paper to get to the thing being described.
+          </Tile>
+          {/* Greg, 2026-09-12 (SPIDERYARN-READING2-30), docs/project/maths.md:
+              equations and formulae shown as raw LaTeX — "Can we somehow render
+              them … to display them nicely within the text?" Drawn as MathML,
+              src/web/maths.ts. */}
+          <Tile name="Maths.">
+            Equations and formulae written in LaTeX are displayed as maths, nicely, within the text.
           </Tile>
         </div>
 

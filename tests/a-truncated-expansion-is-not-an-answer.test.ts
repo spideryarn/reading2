@@ -21,9 +21,9 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { ExpansionRefused } from "../src/hierarchy-cascade.js";
-import type { ExpansionRequest } from "../src/hierarchy-expand.js";
-import { ExpansionTruncated, liveExpansionExecutor } from "../src/hierarchy-deepen.js";
+import { ExpansionRefused } from "../src/structure-cascade.js";
+import type { ExpansionRequest } from "../src/structure-expand.js";
+import { ExpansionTruncated, liveExpansionExecutor } from "../src/structure-deepen.js";
 
 /** What the mocked `finalMessage` will answer with, set per test. */
 const answer: { stopReason: string; text: string } = {
@@ -81,10 +81,10 @@ describe("an expansion the model ran out of room for", () => {
     answer.text = HALF;
     /* **And what it cost, beside the body.** The executor is the only place a
        scoped call's tokens exist — the seam handed back a bare string until
-       2026-09-05 and the wave's whole bill reached nothing on `HierarchyRun`.
+       2026-09-05 and the wave's whole bill reached nothing on `StructureRun`.
        All four, because the two cache figures are the ones a shared prefix
        moves and the ones an optional field would have quietly left at zero.
-       src/hierarchy-deepen.ts § `ExpansionAnswer`. */
+       src/structure-deepen.ts § `ExpansionAnswer`. */
     await expect(liveExpansionExecutor("standard")(REQUEST)).resolves.toEqual({
       text: HALF,
       usage: {

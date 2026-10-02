@@ -2,13 +2,13 @@
  * **Why you're reading this one** — the per-article half of the reader profile,
  * as the client reads and writes it (docs/project/reader-profile.md).
  *
- * One module because there are now three places that touch it — the Metadata
- * page's box, the add page's box, and Skim's line — and two copies of a
+ * One module because there are now four places that touch it — the Metadata
+ * page's box, the add page's box, Skim's line and the profile panel — and two copies of a
  * `PATCH` are two places to forget `forgetSummaries`.
  * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md.
  */
 import { useEffect, useRef, useState } from "react";
-import { apiFetch, readJson } from "./lib/api.js";
+import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
 import { forgetSummaries } from "./link-facts.js";
 
 /**
@@ -38,6 +38,23 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
      answer written for the sentence they just replaced. */
   forgetSummaries();
   return body.purpose ?? null;
+}
+
+/**
+ * The same write as the page goes away, or the box with it — a `keepalive`
+ * request started at once, with nothing awaited first (`leavingFetch`, and
+ * useProfile.ts § `leaveProfile` for why not `apiFetch`). An empty box clears,
+ * as every caller's `savePurpose` does. For `useAutosavedText`'s `leave`.
+ *
+ * One copy, for the box on Metadata, the first-open prompt and the profile
+ * panel, which until 2026-10-02 each wrote this request out for themselves.
+ */
+export function leavePurpose(slug: string, text: string): void {
+  leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ purpose: text === "" ? null : text }),
+  });
 }
 
 /**

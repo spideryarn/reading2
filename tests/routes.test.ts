@@ -562,6 +562,11 @@ describe("the shelf routes", () => {
     const on = await call("GET", "/api/library/search?q=the&archived=1");
     expect(on.status).toBe(200);
     expect((on.body as unknown as { archived: boolean }).archived).toBe(true);
+    // And with the archive left out, how many archived articles it would have
+    // added — a number, counted; absent when they are already in the hits
+    // (plan 261002b § Part D).
+    expect(typeof (off.body as unknown as { archivedArticles?: number }).archivedArticles).toBe("number");
+    expect((on.body as unknown as { archivedArticles?: number }).archivedArticles).toBeUndefined();
   });
 
   it("answers an empty search with an empty list, not an error", async () => {

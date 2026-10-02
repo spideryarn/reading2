@@ -713,7 +713,7 @@ export const NO_INPUT_HASH = "unstamped";
  * is. Ordered: a run that has not finished well has a hash that means nothing,
  * so the status arms come before the hash one.
  */
-export type HierarchyCurrency =
+export type StructureCurrency =
   | { current: true }
   | { current: false; why: "no-run" | "unfinished" | "errored" }
   /* Carries the hash rather than sending the caller back to the row for it: the
@@ -758,10 +758,10 @@ export type HierarchyCurrency =
  *   Threading that case through here would put a third question in a function
  *   named for one. GPT Sol, 2026-09-07.
  */
-export function hierarchyCurrency(
+export function structureCurrency(
   run: { status: string; inputHash: string } | undefined,
   blocksHash: string,
-): HierarchyCurrency {
+): StructureCurrency {
   if (!run) return { current: false, why: "no-run" };
   /* Anything that is not `done` is not to be trusted, rather than everything
      that is `running` or `error` — the column is constrained to those three

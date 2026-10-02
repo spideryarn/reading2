@@ -2,7 +2,7 @@
 
 Written by Fable on 2026-09-05 for the eval in this directory, against the brief and the constraints
 in [`docs/plans/260905f-…`](../../docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md).
-Each block is a **drop-in replacement for the QUESTIONS block** of `SYSTEM` in `src/hierarchy.ts`
+Each block is a **drop-in replacement for the QUESTIONS block** of `SYSTEM` in `src/structure.ts`
 (lines 127-140 as of `95e43cd7`).
 
 **The axes are the point.** Four variants that differed only in wording would tell us nothing; these
@@ -194,7 +194,7 @@ Worked: `Computational functionalism — why isn't computation sufficient for co
 
 ### The code change V4 needs, and only V4 — **landed 2026-09-07**
 
-**V4 won and shipped as `toc/7`, and this patch is in `src/hierarchy.ts` now**, so what follows is
+**V4 won and shipped as `toc/7`, and this patch is in `src/structure.ts` now**, so what follows is
 the record of what was changed rather than a proposal. `arms.ts` § `v4` no longer declares a
 `questionRule` of its own, `armsNeedingCodeChange()` returns nothing, and the harness's
 reimplementation of the rule below was deleted the same day — a copy is worth keeping only while
@@ -202,7 +202,7 @@ there is something for it to differ from.
 [260907d](../../docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md).
 
 Without it the stored value is `…consciousness? (4 arguments)?` — GPT Sol's P1-4, verified.
-In `questionFor` (`src/hierarchy.ts`), replace `if (q.endsWith("?")) return q;` with:
+In `questionFor` (`src/structure.ts`), replace `if (q.endsWith("?")) return q;` with:
 
 ```ts
   /* A `?` followed by nothing but one short bracketed hint is a finished line:
@@ -225,7 +225,7 @@ policy.
 
 ## The GISTS block
 
-Replacement for `src/hierarchy.ts:118-125`. **Two changes only.** Depth-2 is deliberately untouched —
+Replacement for `src/structure.ts:118-125`. **Two changes only.** Depth-2 is deliberately untouched —
 longer section gists are deferred for the token-budget reasons in the plan.
 
 ```
@@ -326,7 +326,7 @@ still invert, that is a result about the judge and not a reason to edit an ancho
 
 ## One thing left for whoever ships the winner — **done, 2026-09-07**
 
-Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which had **no question field at
+Nothing here touches `EXPAND_SYSTEM` in `src/structure-expand.ts`, which had **no question field at
 all** (plan § P1-5). Whichever variant won needed the same block there, or the deepening cascade
 would produce depth-1 rows with no question — invisible while the question was a faint second line,
 and obvious the moment it became the only one.
@@ -343,11 +343,11 @@ cascade. That sentence is unchanged and is the reason this section stays rather 
 
 ## The shipped GISTS block, toc/6
 
-**Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
+**Copied out of `src/structure.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
 rule, plus the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
-`src/hierarchy.ts` moves on. `tests/summaries-eval.test.ts` asserted the copy was
+`src/structure.ts` moves on. `tests/summaries-eval.test.ts` asserted the copy was
 character-for-character what production sent, until `toc/8` (2026-09-26) moved the live block on
 with the plain-words rule; it now asserts that they differ by that rule, so the copy is history.
 
@@ -434,7 +434,7 @@ GISTS (internal nodes)
 ## The shipped GISTS block, toc/5
 
 **The same block as it stood before the `toc/6` bump** — the *before* half of the length
-measurement, recovered from `git show <the toc/5 commit>:src/hierarchy.ts`. It is the prompt that
+measurement, recovered from `git show <the toc/5 commit>:src/structure.ts`. It is the prompt that
 produced the 1,239 stored gists whose mean ran 28.8 words at the root and 14.9 at depth 3: one
 instruction (*"Exactly ONE sentence"*) at every depth, and no ceiling anywhere.
 
@@ -453,7 +453,7 @@ GISTS (internal nodes)
 
 ## The shipped QUESTIONS block, toc/6
 
-**Copied out of `src/hierarchy.ts` § SYSTEM on 2026-09-07, verbatim, immediately before V4 replaced
+**Copied out of `src/structure.ts` § SYSTEM on 2026-09-07, verbatim, immediately before V4 replaced
 it.** This is the wording every arm in the 2026-09-05 run was measured against, and it is the one
 the plan calls *the diagnosed failure*: `antikythera` carries ten of its questions in the wild and
 they are lookups, yes/no questions and the gist re-asked.

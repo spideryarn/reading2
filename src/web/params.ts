@@ -1650,6 +1650,13 @@ export const libraryTopicsParam = createParser<string[]>({
 export const libraryArchivedParam = parseAsBit.withDefault(false).withOptions({ history: "push" });
 
 /**
+ * `?public=1`: the **Include public** chip — what other readers have shared,
+ * in its own section under the shelf and narrowed by the same search box.
+ * `push` for the archive's reason. Greg, spya-yy5x66; plan 261002b § Part A.
+ */
+export const libraryPublicParam = parseAsBit.withDefault(false).withOptions({ history: "push" });
+
+/**
  * How the Topics row is drawn — pills on one line (absent), or one row per
  * topic with its colour, a count bar and its top articles: `topicsView=detail`.
  *

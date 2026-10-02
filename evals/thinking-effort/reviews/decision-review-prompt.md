@@ -19,7 +19,7 @@ reviewed the plan twice and the harness once (`evals/thinking-effort/reviews/`).
   - `judging/illustrated-low/` (the base-vs-low round).
   - `judging/illustrated/` (the base-vs-medium round).
   - Ideas was not judged; the validity gate decided it.
-- Hierarchy's smoke: `evals/results/hierarchy-structure/2026-10-01-17-*`.
+- Hierarchy's smoke: `evals/results/structure-whole-document/2026-10-01-17-*`.
 
 **The decision:**
 - Sketch `high` → `low`.

@@ -35,7 +35,7 @@ const DEBOUNCE_MS = 250;
  * src/library-search.ts) — so the request would reliably cost a walk over every
  * paragraph to return nothing.
  */
-const MIN_QUERY = 3;
+export const MIN_QUERY = 3;
 
 export interface LibrarySearchState {
   hits: LibraryHit[];
@@ -51,9 +51,13 @@ export interface LibrarySearchState {
   resultsQuery: string;
   /** Whether `hits` included the archive — the other half of the question, checked the same way. */
   resultsArchived: boolean;
+  /** The shelf snapshot searched; mutations can change the answer at the same query. */
+  resultsShelfKey: string;
   /** How many articles those hits are spread across. */
   articles: number;
   capped: boolean;
+  /** `LibrarySearchResponse.archivedArticles`: set only on an answer asked without the archive. */
+  archivedArticles?: number;
   /** True while a request for the current query is in flight. */
   searching: boolean;
   error: string | null;
@@ -65,6 +69,7 @@ const IDLE: LibrarySearchState = {
   hits: [],
   resultsQuery: "",
   resultsArchived: false,
+  resultsShelfKey: "",
   articles: 0,
   capped: false,
   searching: false,
@@ -78,22 +83,22 @@ const IDLE: LibrarySearchState = {
  *   chip asks again, and a response for the other chip state is dropped like a
  *   response for other words.
  */
-export function useLibrarySearch(query: string, includeArchived: boolean): LibrarySearchState {
+export function useLibrarySearch(query: string, includeArchived: boolean, shelfKey = ""): LibrarySearchState {
   const [state, setState] = useState<LibrarySearchState>(IDLE);
-  const current = useRef({ query, includeArchived });
-  current.current = { query, includeArchived };
+  const current = useRef({ query, includeArchived, shelfKey });
+  current.current = { query, includeArchived, shelfKey };
 
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < MIN_QUERY) {
-      setState(IDLE);
+      setState({ ...IDLE, resultsShelfKey: shelfKey });
       return;
     }
 
     /* The previous query's hits are dropped the moment the query changes, not
        when the next response lands. Keeping them would be smoother and would be
        a lie for as long as the request takes. */
-    setState({ ...IDLE, searching: true, asked: false });
+    setState({ ...IDLE, resultsShelfKey: shelfKey, searching: true, asked: false });
 
     /* Declared before the timer that uses it. It only ever *ran* after this
        line, so the old order worked — but a `const` referenced above its own
@@ -113,12 +118,19 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
           // The answer to a question nobody is asking any more.
           if (body.query !== current.current.query.trim()) return;
           if (body.archived !== current.current.includeArchived) return;
+          if (shelfKey !== current.current.shelfKey) return;
+          /* Aborted, and so superseded — even if the words and the chip are
+             back where they were (A → B → A), this is the old A's answer.
+             GPT Sol, plan 261002b § Part D review. */
+          if (controller.signal.aborted) return;
           setState({
             hits: body.hits,
             resultsQuery: body.query,
             resultsArchived: body.archived,
+            resultsShelfKey: shelfKey,
             articles: body.articles,
             capped: body.capped,
+            ...(body.archivedArticles === undefined ? {} : { archivedArticles: body.archivedArticles }),
             searching: false,
             error: null,
             asked: true,
@@ -132,7 +144,9 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
           // failure replace newer results (plan 260930d code review).
           if (current.current.query.trim() !== trimmed) return;
           if (current.current.includeArchived !== includeArchived) return;
-          setState({ ...IDLE, error: e.message, asked: true });
+          if (current.current.shelfKey !== shelfKey) return;
+          if (controller.signal.aborted) return;
+          setState({ ...IDLE, resultsShelfKey: shelfKey, error: e.message, asked: true });
         });
     }, DEBOUNCE_MS);
 
@@ -140,7 +154,10 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, includeArchived]);
+  }, [query, includeArchived, shelfKey]);
 
-  return state;
+  // Hide the old snapshot synchronously, before the effect starts the next read.
+  return state.resultsShelfKey === shelfKey
+    ? state
+    : { ...IDLE, resultsShelfKey: shelfKey, searching: query.trim().length >= MIN_QUERY };
 }

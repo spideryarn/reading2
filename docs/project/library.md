@@ -351,6 +351,51 @@ article on their own shelf while strangers go on finding it, and since the paylo
 `archived_at` at all, nothing on either end would ever show that it had. Listing is the half
 archiving owns; the link is the half sharing owns, and `publicSlug` is deliberately left alone.
 
+### Include public, and an empty shelf that says where to go
+
+> Perhaps let's also have a button for include public. And if the user has no articles in their
+> shelf, … a link that points them to the top. … be able to include public for everybody they want,
+> including in searching, etc.
+>
+> — Greg, 2026-10-01 (spya-yy5x66)
+
+An **Include public** chip sits beside Include archived (`?public=1`, off by default, nothing fetched
+until it is on). On, what other readers have shared is drawn **in a section of its own under the
+list** — [`ShelfPublicSection.tsx`](../../src/web/ShelfPublicSection.tsx) — and not in the one list
+the archive joined. That is the difference that matters: an archived article is still yours, with
+opens and a rename and Put back; a public one has none of those, so a row for it would be a
+`ShelfCard` with every owner verb switched off, the design [public-shelf.md](public-shelf.md)
+§ The parts rejected. It draws the public page's own `PublicCard` off the same anonymous read
+`/read/public` makes, so it adds nothing to the public import graph. Your own shared articles are
+left out of it, being already above.
+
+**The search box narrows it, by the cards' words only.** The same `filterEntries` rule as the shelf
+(title, byline, site, gist), in the browser. The *text* of public articles is not searched — the
+section says so whenever a query is typed — because that would be a new listing-shaped read in the
+unauthenticated namespace, and the listing is capped, so the section says too that only the most
+recently shared are shown and searched when it is. Unread and Topics do not apply to it (both are
+about your reading), and it says that when either is on.
+
+**An empty shelf now links to the add box** — the link puts the cursor in it — and offers to turn
+Include public on. Plan
+[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md).
+
+**Under the search's answer, the two chips again, with how much each would add** — since
+2026-10-02. Greg, spya-s9fhmw: *"add an extra button right there next to that empty-results-message
+for including archived (and another one for including public) … include a sense of how many
+archived and public results would have matched"*. Whenever a query is typed and either chip is off,
+one line ([`ShelfSearchAlso.tsx`](../../src/web/ShelfSearchAlso.tsx)) carries a button for each one
+that is off — always, whatever the count — and a number where an honest one exists. The archived
+number is the server's: `/api/library/search` with the archive left out also returns
+`archivedArticles`, a count of archived articles with a matching passage (`countArchivedMatches` in
+[`pg-shelf.ts`](../../src/store/pg-shelf.ts), the same predicates as the passages, uncapped). So it is
+about the text, and says "mention". The public number is the cards that match by the card rule, off
+the one public read `Library` shares with the Include public section. It replaced the sentence
+*"Archived articles aren't searched — turn on Include archived"*. Plan 261002b § Part D.
+
+**On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
+dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
+
 #### This section was called "Delete means archive", and that was the bug
 
 Greg's choice above was made on 2026-08-26 and built the same day. **Every control that carried it
