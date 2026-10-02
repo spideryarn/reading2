@@ -46,6 +46,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
+  `marginalia.md` (the notes right of the prose, and what other modes' items belong there) ·
   `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
   `column-context.md` (history: the gist columns' fisheye) ·

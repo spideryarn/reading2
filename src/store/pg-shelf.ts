@@ -208,9 +208,10 @@ function importRunning(): Error {
  * computed from — is untouched by this delete in either case. `jobs.ingest_event_id`
  * is `NO ACTION` in both directions.
  *
- * `pgJobStore.forget` and `trimFinished` have deleted terminal rows on exactly
- * this reasoning since before any of it was written down; this is the same
- * operation, chosen by article rather than by hand.
+ * `trimFinished` has deleted terminal rows on exactly this reasoning since
+ * before any of it was written down; `pgJobStore.forget` did too until Dismiss
+ * became a soft delete on 2026-10-02. This is the same deletion, chosen by
+ * article rather than by retention.
  *
  * **And the argument above is checked rather than trusted**, by
  * `strandedReservationsQuery` below. It is an argument about the *application*,
@@ -271,9 +272,9 @@ function deleteTerminalJobs(
  * the reason above.
  *
  * **Pre-existing rather than introduced**, and worth saying so: `trimFinished`
- * and `forget` have deleted terminal rows on the same assumption since long
- * before this feature, and still do. This is one delete path made stricter than
- * the status quo, not a hole this one opened.
+ * and permanent article deletion remove terminal rows on the same assumption;
+ * `forget` did as well until Dismiss became a soft delete. This is one delete
+ * path made stricter than the status quo, not a hole this one opened.
  */
 function strandedReservationsQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,

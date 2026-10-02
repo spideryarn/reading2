@@ -94,7 +94,9 @@ the paragraphs.
   [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
   with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
-  main modes* box includes Summary for the same reason. A visitor on a public article gets the
+  main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
+  Q-summary-on-add), and it writes what the press writes: all three plain-words levels — Brief,
+  Simple and Fuller, all or none — through the `simple` step. A visitor on a public article gets the
   stored paragraphs off the payload, or a line saying none has been made.
 - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in

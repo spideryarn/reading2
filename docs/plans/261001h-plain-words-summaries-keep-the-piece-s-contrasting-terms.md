@@ -1,5 +1,7 @@
 # Simple's "feedback loops" terminology collision: a prompt rule tried, not shipped, and the guard proposed
 
+Research write-up: [docs/research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
+
 **Status as of 2026-10-01:** the two prompt wordings were measured and backed out; the screen and
 probe provenance are built; the guard is a proposal, not built. It was measured the same day
 (§ Measuring the guard): Luna catches 24 of the 30 known faults for about $0.0027 per complete

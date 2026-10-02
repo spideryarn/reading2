@@ -1,26 +1,48 @@
-1. **P1 — Billing copy made false promises about trials and delayed cancellation.**  
-   Evidence: [src/billing-plan.ts:729](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/billing-plan.ts:729), [src/billing-plan.ts:834](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/billing-plan.ts:834), [src/billing-plan.ts:929](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/billing-plan.ts:929). Trial copy claimed the allowance would restart and referred to “what you have paid for”; cancellation copy claimed the current allowance lasted until `endsAt`, even when another billing period begins first. I changed the copy to distinguish trial conversion, renewal, and ending, and added regressions for earlier/later scheduled endings.
+Fixed the in-scope issues. The main defect was that soft-dismiss was not applied consistently to every job lookup.
 
-2. **P1 — The recipient-note limit disagreed with Postgres and could be bypassed by cleaning.**  
-   Evidence: [src/store/pg-vouchers.ts:584](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/store/pg-vouchers.ts:584), [src/web/AdminVouchersPage.tsx:87](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/web/AdminVouchersPage.tsx:87). The server previously checked only the cleaned note; the browser’s `maxLength` counted UTF-16 units, while Postgres `char_length` counts Unicode code points. I now check both raw and cleaned input in code points, pass raw input to the server, and removed the incompatible browser limit. Tests cover 500/501 emoji and over-limit input shortened by cleaning.
+### Reader audit
 
-3. **P1 — The existing paid-plan route test would fail on the new wire shape.**  
-   Evidence: [tests/billing-usage-route.test.ts:338](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/tests/billing-usage-route.test.ts:338). Its exact equality omitted `periodAllowance` and `trial`. I updated it and added assertions for trial state. I also added a paid-reader voucher integration test proving gifts remain visible while not changing the paid allowance at [tests/billing-vouchers.test.ts:504](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/tests/billing-vouchers.test.ts:504).
+Three reads materially changed behavior and are now fixed:
 
-4. **P2 — The tooltip link had an excessively long accessible name and a small touch target.**  
-   Evidence: [src/web/PlanHelp.tsx:56](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/src/web/PlanHelp.tsx:56). I gave it a concise action-oriented label, retained the full explanation as its accessible tooltip description, and increased the coarse-pointer target to 40px. Keyboard focus and touch sizing are now tested.
+- [`ingestProvenanceOf`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/src/store/pg-jobs.ts:248) could let Retry reserve quota for a dismissed job before returning 404.
+- [`lockRetriedAttempt`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/src/store/pg-jobs.ts:341) could enqueue a retry if Dismiss raced with Retry. The previous hard delete prevented this.
+- [`getIn`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/src/store/pg-jobs.ts:943), used by Claim/Advance, could expose a dismissed terminal job as `finished` rather than absent.
 
-5. **P2 — Important normalization and outbox behavior lacked effective regressions.**  
-   Evidence: [tests/billing-voucher-emails.test.ts:1016](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/tests/billing-voucher-emails.test.ts:1016), [tests/billing-voucher-emails.test.ts:1125](/home/greg/code/spideryarn2/.claude/worktrees/fb-voucher-note-and-profile/tests/billing-voucher-emails.test.ts:1125). I expanded coverage to CRLF, lone CR, U+2028/U+2029, DEL and C1 controls, and added a failed-send/edit/retry test proving the outbox retries its frozen original body.
+All now require `dismissed_at IS NULL`.
 
-The HTML path is safe: recipient text is cleaned, escaped at the HTML boundary, and never interpolated into the subject, header, or authored link. Create replay, re-addressing, and note-only edits have the intended semantics. The prorated sentence is supported by the quota-adjustment implementation: a current-period mismatch comes from a same-subscription, same-period price change. Spend formatting and `.gifts` consumers showed no further defects.
+The remaining readers are correct without another filter:
 
-Verification:
+- Enqueue arbitration, cancellation, pause, expiry settlement and publishing reads only consider active/queued/running attempts.
+- Revision and glossary writes are protected by `liveAttempt`.
+- [`jobForUpload`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/src/routes.ts:5870) uses the already-filtered job list, so upload recovery behaves as it did after deletion.
+- Permanent article deletion, reservation diagnostics and billing settlement intentionally inspect or remove underlying terminal rows.
 
-- Requested unit tests: **124/124 passed**.
-- All four underlying TypeScript compiler invocations passed.
+### Retention and citations
+
+[`trimFinished`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/src/store/pg-jobs.ts:2140) remains correct. Dismissed rows consume one of the 50 history slots and are eventually deleted according to their original finish time. That can leave fewer than 50 visible jobs, but 50 is a storage bound rather than a visible-history promise. It also provides the intended temporary diagnostic window. A separate longer-lived support archive would be a wider product decision.
+
+The citation fuse is consistently $50/62. No current code, UI copy, test or project documentation still depends on $20/25; remaining occurrences in historical plans describe the old limit. The test checks both the exact value and the $49.20–$50.00 boundary, so reverting to 25 fails meaningfully.
+
+The four requested docs are accurate after tightening the Dismiss wording:
+
+- [`feedback.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/feedback.md:460)
+- [`ingest-queue.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/ingest-queue.md:2060)
+- [`summaries.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/summaries.md:88)
+- [`citations.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/citations.md:467)
+
+### Findings
+
+- **P0:** None.
+- **P1:** None.
+- **P2:** Soft-dismiss was incomplete across Claim/Advance, Retry arbitration and billing provenance. Added dismissal filters and regression coverage in [`store-jobs-parity.test.ts`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/tests/store-jobs-parity.test.ts:2062).
+- **P3:** The billing-settlement test still treated `forget` as physical deletion, so it no longer exercised the stranded-reservation hazard. It now dismisses and then trims the row in [`billing-settlement.test.ts`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/tests/billing-settlement.test.ts:1032). Stale comments and documentation describing Dismiss as deletion were also corrected.
+
+Checks:
+
+- 108 non-database tests passed across citation investigation, import reporting and auto modes.
+- The requested combined Vitest command could not collect tests because the sandbox cannot reach the private Docker/Postgres test database (`EPERM 127.0.0.1:54362`).
+- The normal `npm run typecheck` wrapper was blocked by sandboxed `tsx` IPC; the same typecheck script run through the socket-free Node loader passed all 2,647 covered source files.
 - `git diff --check` passed.
-- Exact `npm run typecheck` could not start because the sandbox denied `tsx`’s local IPC socket.
-- The voucher email, voucher, and additional billing usage database tests could not initialize because the sandbox denied access to local Postgres/Docker.
+- No database command was run, and nothing was committed.
 
-**Overall:** no unresolved code findings, but I would not call it ready to land until the three database-backed tests pass in an environment that can reach local Postgres. I made no commit and left unrelated feedback/generated-file changes untouched.
+**Verdict: APPROVE after the fixes above; no unresolved wider findings.**

@@ -63,7 +63,7 @@ always the simpler-first version, not the end state.
 
 ## Where each mode's content would live
 
-Read from the mode docs and the code, 2026-10-01. "Exists" means the data is already stored and
+Read from the mode docs and the code, 2026-10-02. "Exists" means the data is already stored and
 anchored, so placing it costs layout, not a model call.
 
 | Content | Anchored to | Where it would live | Exists today? |
@@ -75,8 +75,8 @@ anchored, so placing it costs layout, not a model call.
 | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
 | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |
 | Ideas (assumes / introduces) | block ids | right: a stamp at first occurrence | **in the margin**, once Ideas has run; marked in the prose only while Ideas' band is open (`selectPassages`, `src/web/reader/passages.ts`) |
-| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: only the `disputes` rows (the filter is a decision), collapsed, opening the replies | data yes, placement no |
-| FAQ answers | the passages that answer | right, or a mark | data yes; marked nowhere, not even in its own band (open report 82) |
+| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first (narrowing to `disputes` is open question 2) |
+| FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
 | Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **no** — a new model pass (the relation words in [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) stage 2) |
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
@@ -85,7 +85,8 @@ anchored, so placing it costs layout, not a model call.
 | Tweets | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
-| Search, Chat, Remember / Quiz, Referee, Comments | the reader's own actions | tools, not columns | — |
+| Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
+| Search, Chat, Remember / Quiz, Referee | the reader's own actions | tools, not columns | — |
 
 The finding that matters: **most of the right-hand column's content is already made and already
 anchored.** The expensive items — rebuttals, conclusions, explanations — are the two that need a new
@@ -94,8 +95,9 @@ model pass, and they can come last.
 ## What is already true
 
 - **The right column exists.** Marginalia's notes sit level with their blocks, push each other down
-  when they collide, generate nothing, show visitors the same thing, and are faint, small and
-  hueless so they read as the machine's voice
+  when they collide, and generate nothing. Visitors see the public Ideas, FAQ and Debate artefacts
+  plus the owner's published comments, but never the owner's Citations. The notes are faint, small
+  and hueless
   ([261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md)).
 - **Left and right already coexist.** Since 261001i the margin is a switch of its own, `?margin=1`,
   beside whichever band is open. From 900px both are drawn; from 612px to 899px whichever was
@@ -139,8 +141,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
   heavily decorated middle pulls the other way, so the decorations have to be quiet by default
   (progressive disclosure is the whole point) and few at a time.
 - **Who owns the right margin.** The decorated research gave the right margin to *the reader* (their
-  comments and bookmarks, the only hue on the page); Marginalia gave it to *the machine*, kept faint
-  so the reader's notes could join later. If both live there, they need different voices — the
+  comments and bookmarks, the only hue on the page); Marginalia began with *the machine*, kept faint.
+  Both now live there, and still need different voices — the
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
 - **Cost and consent.** Marginalia generates nothing and shows only what other modes have already
   made. A margin that is useful on first open would have to run those modes, which spends money on
@@ -158,14 +160,16 @@ Each step is useful on its own, and none commits us to the next.
 
 1. **Rename Annotations to Marginalia** — done, 2026-10-01
    ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md)).
-2. **One small trial of a note from data already stored** — Debate's `disputes` rows, or FAQ's
-   answers — collapsed by default, one line each, opening to the stored content. No model call.
-   (Report 82 asks for this.)
+2. **Notes from data already stored** — done, 2026-10-02, wider than the trial this step proposed:
+   report 82 asked for FAQ, Citations, Debate and comments, shut by default, and that is what
+   [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md)
+   built: one line per kind per block, opening to the stored content, no model call.
+   [marginalia.md](marginalia.md).
 3. **Every mark explains itself on hover and on tap** — the app-side version of the playground's
    check, before adding marks.
 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
-   one only once its content reaches the reader through the middle or the right, which for Ideas,
-   Timeline and FAQ it does not yet.
+   one only once its content reaches the reader through the middle or the right; Timeline does not
+   reach either yet.
 5. **New model passes for the margin** — relation words, rebuttals, conclusions — measured on the
    eval corpus before shipping, as any new prompt is ([prompting-guide.md](prompting-guide.md)).
 6. **The left as a column of its own**, if the band turns out not to be enough.
@@ -181,9 +185,12 @@ question comes off this list.
 1. **For now, is the left still today's band?** (A) yes — one mode at a time, chosen as now, and the
    structural change waits until the right and middle have moved; (B) no — design a left column that
    holds several unanchored things at once, stacked or tabbed, now. *Recommended: A.*
-2. **Which stored content goes into the margin first, as one small trial?** (A) Debate's rows that
-   *dispute* a claim (not those that qualify, extend or corroborate it); (B) FAQ's answers, beside
-   the passages that answer them; (C) both at once. *Recommended: A, then B.*
+2. **Debate in the margin: every relation, or only disputes?** Report 82 answered the first half of
+   this question (which stored content goes in: FAQ, Citations, Debate and comments, all shut).
+   What is left is the filter: (A) every claim row, with its relation word first — "disputes",
+   "qualifies", "extends", "agrees" — as built in 261002b; (B) only the rows that *dispute* a
+   claim, so the margin flags disagreement and nothing else. Changing to B is one line in
+   `src/web/marginalia/notes.ts`. *Recommended: A until a real article shows it is too busy.*
 3. **May opening Marginalia ever spend money to make what it is missing?** (A) no — it shows only
    what is already stored, as now; (B) yes, for some modes, under a policy Greg sets.
    *Recommended: A until Greg sets that policy.*
@@ -193,8 +200,7 @@ question comes off this list.
 - How the single-purpose modes recede (an overflow and the command bar, or removal as Hierarchy
   was) — not askable until each one's content reaches the reader another way.
 - What a phone reader gets: the text and marks only, with each column a sheet opened on demand?
-- Whether the reader's comments and bookmarks share the right margin with the machine's notes, and
-  how the two voices differ.
+- How the reader's comments and bookmarks differ in voice from the machine's notes in the margin.
 - Whether the decorated text stays a playground or becomes the default middle, and if so whether it
   is a density dial (bare → loud, the designer's idea in [260828c](../research/260828c-decorated-mode-ideas.md))
   or a set of toggles.

@@ -32,7 +32,7 @@
  *
  * docs/plans/260908e-gutter-icons-on-touch-only-when-a-block-is-selected.md.
  */
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -50,6 +50,8 @@ vi.mock("../src/web/Tooltip.js", () => ({
 
 import type { Mark } from "../src/web/annotate.js";
 import { fitView } from "../src/web/layout.js";
+import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
+import type { MarginClaim } from "../src/web/marginalia/notes.js";
 import { TableView } from "../src/web/TableView.js";
 import { buildGeometry } from "../src/web/tree.js";
 import type { Article, BlockId } from "../src/types.js";
@@ -130,7 +132,11 @@ function articleFrom(loaded: Loaded): Article {
  * only for a reader who has them, and the gutter case below wants a control
  * inside it to click.
  */
-function propsFor(article: Article, hitMarks?: ReadonlyMap<BlockId, readonly Mark[]>) {
+function propsFor(
+  article: Article,
+  hitMarks?: ReadonlyMap<BlockId, readonly Mark[]>,
+  margin?: ReadonlyMap<BlockId, ReactElement>,
+) {
   const geometry = buildGeometry(article.tree, article.blocks);
   const fit = fitView({ windowWidth: 1400 });
   return {
@@ -149,6 +155,7 @@ function propsFor(article: Article, hitMarks?: ReadonlyMap<BlockId, readonly Mar
     onChatAbout: vi.fn(),
     onHelp: vi.fn(),
     hitMarks,
+    margin,
     linkBase: "",
     slug: "noema-mythology-of-conscious-ai",
   };
@@ -257,6 +264,39 @@ describe("tapping a paragraph selects the block", () => {
 });
 
 describe("a tap that already means something else does not select the block", () => {
+  it("leaves the selection and article position alone for a Marginalia disclosure and its link", async () => {
+    const loaded = await readArticleFromDir(DIR);
+    const block = plainBlocks(loaded)[0];
+    if (!block) throw new Error("the fixture has no plain-prose block");
+    const claim = {
+      id: "debate-1",
+      url: "https://elsewhere.example/reply",
+      title: "A reply",
+      blockId: block.id,
+      claimQuote: block.text.slice(0, 20),
+      relation: "disputes",
+      sourceQuote: "The outside page's evidence.",
+      applies: "It bears on this claim.",
+    } as unknown as MarginClaim;
+    const margin = new Map<BlockId, ReactElement>([
+      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }] })],
+    ]);
+    const props = propsFor(articleFrom(loaded), undefined, margin);
+    await draw(props);
+
+    const button = rowOf(block.id).querySelector(".marg-shut-button");
+    if (!button) throw new Error("the margin drew no disclosure button");
+    await tap(button);
+    expect(selectedRows(), "the disclosure selected its row").toEqual([]);
+    expect(props.onJump, "the disclosure moved ?at=").not.toHaveBeenCalled();
+
+    const link = rowOf(block.id).querySelector(".marg-open a[href]");
+    if (!link) throw new Error("the open Debate note drew no source link");
+    await tap(link);
+    expect(selectedRows(), "the source link selected its row").toEqual([]);
+    expect(props.onJump, "the source link moved ?at=").not.toHaveBeenCalled();
+  });
+
   it("leaves the selection alone when the tap follows a link", async () => {
     /* Following it is the point of tapping it. Selecting on the way out would
        paint the wash and shift `activeChain` onto the paragraph the reader is

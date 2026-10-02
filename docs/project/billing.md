@@ -1035,8 +1035,9 @@ and pressing **Stop** costs a slot for ever.
 
 **The last two have no caller in `src/`** and were missing until GPT Sol counted the paths
 (2026-09-03). That made them a trap rather than a leak — but they are the advertised `JobStore` API,
-and `forget`/`trimFinished` delete terminal jobs, so a job ended through either of them and then
-forgotten leaves a reservation `in_flight` for ever with nothing left to say what it was spent on.
+and `trimFinished` deletes terminal jobs (`forget` did too before 2026-10-02), so a job ended through
+either of them and then retired leaves a reservation `in_flight` for ever with nothing left to say
+what it was spent on.
 They **release even for a `done`**, because that path moves the job row and publishes nothing: the
 only transition entitled to charge is the one that publishes in the same transaction.
 

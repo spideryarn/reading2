@@ -139,8 +139,8 @@ Then a browser check (Sonnet subagent) of `/admin/vouchers`, `/profile` and the 
 
 ## Plan review (GPT Sol, 2026-10-02)
 
-Prompt: [261002b-plan-review-prompt.md](261002b-plan-review-prompt.md); answer:
-[261002b-plan-review-sol.md](261002b-plan-review-sol.md). *"The three-stage approach holds … It
+Prompt: [261002b-voucher-plan-review-prompt.md](261002b-voucher-plan-review-prompt.md); answer:
+[261002b-voucher-plan-review-sol.md](261002b-voucher-plan-review-sol.md). *"The three-stage approach holds … It
 should not be built unchanged."* Every finding taken:
 
 1. **P1 — an ending plan must not suggest a fresh free allowance.** Articles added while subscribed
@@ -159,3 +159,37 @@ should not be built unchanged."* Every finding taken:
 6. **P3 — the gifted example's headline number**: the tooltip says 23, made of 3 + 20.
 
 Also adopted: the $0.499999999 / $0.50 boundary is pinned in the spend test.
+
+## Code review (GPT Sol, 2026-10-02)
+
+Prompt: [261002b-voucher-code-review-prompt.md](261002b-voucher-code-review-prompt.md); answer:
+[261002b-voucher-code-review-sol.md](261002b-voucher-code-review-sol.md). (The review files carry a
+`voucher` prefix because three other pieces of work were also named 261002b that day.) Sol fixed
+five findings in place:
+
+- trial and scheduled-ending copy that over-promised;
+- the recipient-note limit checked on both the raw and the cleaned text, in code points;
+- the paid wire shape in `billing-usage-route`;
+- a short accessible name and a 40px touch target on the (i);
+- more regressions for control characters and for the frozen outbox.
+
+Its sandbox could not reach Postgres, so the three database-backed files were run afterwards
+outside it: all green.
+
+## Verification
+
+- **Touched suites:** 283/283 pass.
+- **Full suite:** 16 reds in 9 files, sorted one by one:
+  - two guards that wanted a line for the new code: the two note textareas are `newline` boxes,
+    and `<$1` is an admin-only figure. Both were added.
+  - five files that need a build to inspect, green after `npm run build` and `npm run build:fleet`;
+  - two contention flakes, green when run alone.
+- **Browser** (Sonnet subagent, Playwright): `/admin/vouchers` (note, sketch, edit, 390px), and a
+  claimed gift on `/profile` and the shelf (tooltip on hover and focus) are checked. On
+  `/admin/users`, `<$1` and the em dash are checked. `$N` was not checked, because no local account
+  spends a dollar; the unit tests cover it.
+- **Merging dev** collided with `20261002100053_job_dismissed_at` at journal index 115. Neither
+  migration is in production, and only this one was applied to the shared local database. They
+  touch disjoint tables, so they were merged per database.md § Repairing a fork: both kept, in
+  `when` order (this one 115, `job_dismissed_at` 116), with that migration's snapshot rebuilt onto
+  this one's. `db:chain` is clean, and `db:generate` finds no schema changes.

@@ -57,7 +57,7 @@ const seededSlugs: string[] = [];
 afterEach(async () => {
   /* **Jobs first, and by SQL rather than through `forgetJob`.**
      `jobs.upload_id` is a foreign key into `uploads`, so an upload cannot go
-     while a job names it — and `pgJobStore.forget` only deletes a **terminal**
+     while a job names it — and `pgJobStore.forget` only hides a **terminal**
      job. Every job here is left `queued`, on purpose: `VERCEL=1` stops the pump
      so that the second request in each case is not racing an ingest. So the
      polite route cannot clean up after these and a direct delete has to.

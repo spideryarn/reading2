@@ -15,8 +15,8 @@
  *      retries, because `useJobs` has already announced the job.
  *
  * It began as a two-case spike: `useIdeas` red, `useGlossary` green, because
- * only the glossary ordered its reads. All eight now share that ordering
- * (src/web/useOrderedRead.ts), so all eight are driven here, through the same
+ * only the glossary ordered its reads. All ten now share that ordering
+ * (src/web/useOrderedRead.ts), so all ten are driven here, through the same
  * body — which is the point of the extraction rather than a convenience.
  *
  * **The assertion names the stale value.** A request count would go green on
@@ -39,6 +39,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Arc,
   BlockId,
+  Debate,
+  Faq,
   Glossary,
   Ideas,
   Quiz,
@@ -135,6 +137,28 @@ function threadArtefact(): TweetThread {
   } as unknown as TweetThread;
 }
 
+function faqArtefact(): Faq {
+  return {
+    ...STAMP,
+    version: "faq/4",
+    questions: [{ id: "spya-faq0", question: value, passages: [] }],
+    dropped: {},
+    generatedAt: "2026-10-02T00:00:00.000Z",
+    elapsedMs: 1,
+  } as unknown as Faq;
+}
+
+function debateArtefact(): Debate {
+  return {
+    ...STAMP,
+    version: "debate/5",
+    searchedAt: "2026-10-02T00:00:00.000Z",
+    direct: { rows: [] },
+    claims: { rows: [{ id: "debate-1", applies: value }] },
+    elapsedMs: 1,
+  } as unknown as Debate;
+}
+
 /** A scene `readSketch` will keep whole — one node, whose label is the value. */
 function sketchArtefact(): unknown {
   return {
@@ -174,6 +198,10 @@ function bodyFor(url: string): string {
   if (url.startsWith("/api/sketch/")) return JSON.stringify({ sketch: sketchArtefact(), ...dated });
   if (url.startsWith("/api/tweets/")) {
     return JSON.stringify({ thread: threadArtefact(), ...dated });
+  }
+  if (url.startsWith("/api/faq/")) return JSON.stringify({ faq: faqArtefact(), ...dated });
+  if (url.startsWith("/api/debate/")) {
+    return JSON.stringify({ debate: debateArtefact(), ...dated });
   }
   throw new Error(`the test made an unexpected request: ${url}`);
 }
@@ -222,6 +250,8 @@ const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useTweets } = await import("../src/web/useTweets.js");
+const { useFaq } = await import("../src/web/useFaq.js");
+const { useDebate } = await import("../src/web/useDebate.js");
 
 /** A job for this article, arriving in the poll as finished. */
 function finishJob(step: string): void {
@@ -306,6 +336,16 @@ function TweetsHarness({ slug }: { slug: string }): ReactElement {
   return createElement("aside", null, all.thread?.tweets.map((t) => t.text).join(",") ?? all.status);
 }
 
+function FaqHarness({ slug }: { slug: string }): ReactElement {
+  const all = useFaq(slug);
+  return createElement("aside", null, all.faq?.questions.map((q) => q.question).join(",") ?? all.status);
+}
+
+function DebateHarness({ slug }: { slug: string }): ReactElement {
+  const all = useDebate(slug);
+  return createElement("aside", null, all.debate?.claims.rows.map((row) => row.applies).join(",") ?? all.status);
+}
+
 interface Reader {
   /** The hook or component, as its file names it. */
   name: string;
@@ -325,6 +365,8 @@ const READERS: Reader[] = [
   { name: "useArc", step: "arc", url: `/api/arc/${SLUG}`, Harness: ArcHarness },
   { name: "useSketch", step: "sketch", url: `/api/sketch/${SLUG}`, Harness: SketchHarness },
   { name: "useTweets", step: "tweets", url: `/api/tweets/${SLUG}`, Harness: TweetsHarness },
+  { name: "useFaq", step: "faq", url: `/api/faq/${SLUG}`, Harness: FaqHarness },
+  { name: "useDebate", step: "debate", url: `/api/debate/${SLUG}`, Harness: DebateHarness },
 ];
 
 let host: HTMLDivElement;

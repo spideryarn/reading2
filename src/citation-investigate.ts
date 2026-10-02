@@ -224,12 +224,14 @@ export const INVESTIGATE_PRESS_BUDGET_USD = 0.8;
 
 /**
  * **The allowance.** A reader gets 20 a day, 8 an hour, one at a time. The
- * global fuse keeps every reader together at $20 a day: 25 ×
- * `INVESTIGATE_PRESS_BUDGET_USD` is 25 × $0.80 = $20. It was 50 × $0.395 ≈
- * $19.75 on Sonnet, and 55 × $0.345 before the paper was read. So since Dig
- * deeper a reader's own 20 a day against a fuse of 25 a day means two busy
- * readers can use the day up for everyone. That is the $20 ceiling doing its
- * job, and the ceiling is Greg's to move. The lease is every deadline in a
+ * global fuse keeps every reader together at $50 a day: 62 ×
+ * `INVESTIGATE_PRESS_BUDGET_USD` is 62 × $0.80 = $49.60. Greg raised the
+ * ceiling from $20 on 2026-10-02 (Q-citations-daily-cap, "yes"): at $20 the
+ * fuse was 25, which on Opus with the forced search bought only about 25
+ * presses for everyone. Before that it was 50 × $0.395 ≈ $19.75 on Sonnet,
+ * and 55 × $0.345 before the paper was read. A reader's own 20 a day against
+ * a fuse of 62 means about three busy readers can use the day up for
+ * everyone; the ceiling is Greg's to move. The lease is every deadline in a
  * press plus a margin, so a process that dies mid-press frees its slot soon
  * after.
  */
@@ -250,8 +252,8 @@ export const INVESTIGATE_RATE_POLICY: RatePolicy = {
     PASSAGES_TIMEOUT_MS +
     INVESTIGATE_TIMEOUT_MS +
     30_000,
-  /* 25 × $0.80, twice the one measured cold press on a long article, is $20. */
-  daily: { fills: 20, globalFills: 25, windowMs: 24 * 60 * 60 * 1000 },
+  /* 62 × $0.80, twice the one measured cold press on a long article, is $49.60. */
+  daily: { fills: 20, globalFills: 62, windowMs: 24 * 60 * 60 * 1000 },
 };
 
 function httpError(status: number, message: string): Error {
