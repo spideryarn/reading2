@@ -157,6 +157,9 @@ browser's find, because keyboard.md's rule is that we do not take the browser's 
 
 ## Phone and iPad
 
+*Superseded by the review below and § Rung 4 — touch screens always get the ⚡, and a fifth rung
+keeps the box at laptop widths. Kept as the plan was written.*
+
 The bar is a scrolling row with a fit ladder (`src/web/dock-fit.ts`, three rungs that drop labels).
 The box gets a rung of its own: a full box (≈14rem) on the widest rung, a narrower one (≈9rem) on
 rungs 1–2, and the ⚡ button on rung 3 and under `max-width: 731px`. An iPad in landscape keeps the
@@ -370,3 +373,17 @@ search *bar*. `dock-fit-4` went in at the bottom of `DOCK_FIT_CLASSES` (no renum
 
 At 1440, rung 2 (mode labels shown) is 89px short; at 1024, rung 3 (the box) is 133px short. The
 two narrow rows overflow by the ladder's design (the scroll floor), as they did before.
+
+## Landed (2026-10-02)
+
+Reviews: GPT Sol on the plan, then three code rounds — stages 1–2 (C1–C7, all fixed), stage 3
+(D1–D9, all fixed), and a narrow round on rung 4, D9 and the docs (E1–E2, doc wording). Two
+postmortems: `261002g-transport-completion-is-not-server-acknowledgement.md` and
+`261002h-search-handoffs-are-actions-not-draft-state.md`. Browser check (Playwright, owner, real
+Jev calls) at 1800, 1440, 1024, 768, 390 and touch at 1024: every scenario passed except the box at
+1440, which rung 4 fixed and a second measurement confirmed. Search *opening* scrolls the window
+(1800 → 855 in the check) — but the plain Search button does exactly the same, so it is existing
+behaviour, not this job's; noted, not fixed.
+
+Not built, and offered to Greg rather than decided: making *quick* the default matcher (Opus's
+suggestion; one line in `src/web/params.ts`).

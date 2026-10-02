@@ -600,8 +600,9 @@ key, and there is no way to switch it off or remap it.
 ## Quick search: the slash key
 
 **`/` jumps to quick search** — it focuses the quick-search box in the bottom bar, or, where the
-bar shows the ⚡ instead (a touch screen, a narrow window, or Search mode already open), opens
-Search mode on *quick* with the panel's box focused. Built 2026-10-02 with the box itself
+bar shows the ⚡ instead (a coarse pointer, fit rung 4, a window under 732px, or Search mode open
+with the bar box unfocused), opens Search mode on *quick* with the panel's box focused.
+Built 2026-10-02 with the box itself
 ([search.md § Search as you type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar),
 [261002h](../plans/261002h-quick-search-bar-in-the-dock.md)); the code is `isQuickSearchKey` in
 [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx).
@@ -614,7 +615,7 @@ feature every reader already relies on.
 is a second way into what ⌘F/Ctrl-F already does, and GitHub makes the same trade. Raised by GPT Sol
 in the plan review.
 
-The guards are G's (below), less one: no auto-repeat, no IME composition, not while typing, nothing
+The guards are G's (above), less one: no auto-repeat, no IME composition, not while typing, nothing
 over an open `<dialog>`, nothing once another handler has `preventDefault`ed, no Ctrl, ⌘ or Alt —
 but **Shift is allowed**, because some keyboard layouts need it to type `/` at all. It
 `preventDefault`s, so the `/` is not typed into the box it focuses. It exists only on an owner's

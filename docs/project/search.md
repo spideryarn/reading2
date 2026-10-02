@@ -236,9 +236,12 @@ The plan, its two reviews and the alternatives passed over are
 
 **One typing session keeps one saved row.** That is the answer to Greg's question: nothing obsolete
 is deleted, because nothing obsolete is made. The first pause (600 ms, at least three characters)
-asks a quick search; every later pause in the same session **revises that row** — the same id, so
-the same colour and the same place in the list — and when you stop, it stays with the words you
-ended on. The previous answer's marks stay on screen until the revision's arrive. The rules are a
+asks a quick search; later pauses with changed words of at least three characters **revise that
+row** — the same id, so the same colour and the same place in the list. The saved row keeps the
+last words submitted, which can differ from the draft if you shorten it below three characters or
+leave Search before its pause. Enter or *find* submits changed words without waiting for the pause,
+including shorter words, and ends the session; explicit submissions wait for the saved list to load with their
+words sealed. The previous answer's marks stay on screen until the revision's arrive. The rules are a
 pure reducer, [`src/web/quick-session.ts`](../../src/web/quick-session.ts), and its header is the
 list; in short, a session **ends** on Enter or *find*, the box emptied, a matcher switch, ↺, ✕ or
 *flesh out* on its row, leaving the mode or the article, and the box blurred for longer than a
@@ -271,13 +274,15 @@ Every one is metered as `search-quick` in `ai_calls`.
 second view of the same draft ([`search-draft.ts`](../../src/web/search-draft.ts)), not a second
 search: the asking is the band's typing session either way. Type into it with Search mode closed and
 the first qualifying pause opens Search mode on `?match=quick` (switching from another matcher if
-needed); focus stays in the bar, the panel's box does not take it, and the article does not move.
-While Search mode is open and the bar box is not focused it shows as a ⚡ button, so there is only
-ever one box to type in.
+needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
+pointer setting hides the focused bar box, focus transfers to the panel with scrolling prevented.
+While Search mode is open and the bar box is not focused it shows as a ⚡ button. Both boxes can
+be visible while the bar box has focus; they share the same words and typing session.
 
-- **Touch screens get the ⚡ at every width**, and so do a mouse at the bar's narrowest fit rung
-  and a window under 732px. The ⚡ opens Search mode on quick with the panel's box focused. A text
-  box in a fixed bar at the foot of an iPad is where the on-screen keyboard misbehaves. When the
+- **A coarse pointer gets the ⚡ at every width**, and so do a mouse at fit rung 4
+  and a window under 732px. Rung 3 keeps a compact 7rem input after the button labels disappear.
+  The ⚡ opens Search mode on quick with the panel's box focused. A text box in a fixed bar at the
+  foot of an iPad is where the on-screen keyboard misbehaves. When the
   panel is not yet mounted it focuses a render after the tap, so **iOS may need a second tap to
   raise the keyboard** — the accepted cost, not something the Playwright check can show.
 - **Only on an owner's reading view**, where the band that can ask (`SearchBand`) would mount; a
