@@ -26,6 +26,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
+import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
 import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
@@ -1079,10 +1080,33 @@ describe("the rows that are not modes", () => {
   it("answers the words for re-running and the page's other controls with Metadata", () => {
     readingSignedIn();
     openBar();
-    for (const query of ["regenerate", "rerun", "reprocess", "ai processing", "cost", "export", "delete"]) {
+    for (const query of [
+      "regenerate",
+      "rerun",
+      "reprocess",
+      "ai processing",
+      "cost",
+      "export",
+      "archive",
+      "delete",
+    ]) {
       type(query);
-      expect(listed(), `typing ${JSON.stringify(query)} did not offer Metadata`).toContain("Metadata");
+      expect(listed()[0], `typing ${JSON.stringify(query)} did not rank Metadata first`).toBe("Metadata");
     }
+  });
+
+  it("keeps the existing shared-articles destination first for `share` and `public`", () => {
+    readingSignedIn();
+    openBar();
+    for (const query of ["share", "public"]) {
+      type(query);
+      expect(listed()[0], query).toBe(PUBLIC_SHELF_LABEL);
+    }
+    /* `share` still offers the current article's controls underneath the
+       page whose own name starts with the query. `public` does not borrow that
+       alias: it already names this app-wide destination. */
+    type("share");
+    expect(listed()).toContain("Metadata");
   });
 
   it("navigates to this article's metadata page, carrying the reader's place", () => {

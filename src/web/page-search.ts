@@ -133,11 +133,11 @@ function groupsOf(table: SynonymTable): GroupIndex {
  */
 const STOPWORDS = new Set(
   [
-    "a", "an", "the", "of", "to", "in", "on", "for", "from", "and", "or", "is", "are", "was",
+    "a", "an", "the", "of", "to", "in", "on", "for", "from", "with", "and", "or", "is", "are", "was",
     "were", "be", "been", "it", "its", "this", "that", "my", "me", "i", "you", "your", "we", "our",
     "how", "much", "many", "what", "which", "where", "when", "why", "do", "does", "did", "can",
     "show", "see", "find", "about", "make", "change", "used", "want", "need", "like", "article", "page",
-    "get", "please",
+    "please",
     /* Fragments produced when punctuation splits ordinary contractions:
        "what's", "you're", "I've", "I'll", "I'd", "can't". */
     "s", "re", "ve", "ll", "d", "m", "t",
@@ -182,13 +182,21 @@ function hit(term: string, synonyms: Set<string>, have: readonly string[]): numb
  * the page's own table; omitted, it is Metadata's.
  *
  * **Every word must hit somewhere — among the words that mean anything here.**
- * When no section answers every word, a word that no section answers at all
- * (*please*, *zebra*) is dropped and the rest are tried again, so *regenerate
- * my glossary please* finds AI processing. Words that each mean something on
- * the page still have to agree: *delete cost* finds nothing rather than both,
- * so a second word only ever narrows. Not "rank by how many words hit", which
- * would make it widen. Greg, `spya-nkjpte` ("more flexible/forgiving"); GPT
- * Sol, plan review of 261002c, P1.
+ * Question furniture (*my*, *with*, *please*, and *get* only in *get rid*) is
+ * removed above. Then, when no section answers every word, a word that no
+ * section answers at all (*zebra*) is set aside and the rest tried again, so
+ * one unexpected word does not empty the list. Words that each mean something
+ * on the page must still agree: *delete cost* finds nothing rather than both,
+ * so a word the page knows only ever narrows. Not "rank by how many words
+ * hit", which would widen. Greg, `spya-nkjpte` ("more flexible/forgiving");
+ * GPT Sol, plan review of 261002c, P1.
+ *
+ * **The trade, taken on purpose.** The set-aside word may have been a
+ * qualifier: with the experimental *Whole article* row hidden, *redo the
+ * whole article* answers as *redo* — AI processing, where every other redo
+ * lives. The code review preferred strict AND here; "nothing matched" is the
+ * exact complaint this answers, so a near answer wins. Plan 261002c § After
+ * GPT Sol's code review.
  */
 export function searchSections(
   query: string,
@@ -197,7 +205,9 @@ export function searchSections(
 ): string[] {
   const all = words(query);
   if (all.length === 0) return [];
-  const content = all.filter((t) => !STOPWORDS.has(t));
+  const content = all.filter(
+    (t, i) => !STOPWORDS.has(t) && !(t === "get" && all[i + 1] === "rid"),
+  );
   const terms = content.length > 0 ? content : all;
   const groups = groupsOf(synonyms);
   const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t, groups) }));

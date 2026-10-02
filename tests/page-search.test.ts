@@ -214,12 +214,13 @@ describe("searchSections with a synonym table of its own", () => {
 
 /* **Forgiving about a word nothing on the page has** — Greg, `spya-nkjpte`,
    2026-10-02 ("more flexible/forgiving"). After an AND miss, a query word that
-   matches no section at all is dropped and AND is tried again; two words that
-   each mean something still narrow, so *delete cost* finds nothing. GPT Sol,
-   plan review of 261002c, P1. */
-describe("searchSections drops a word that matches nothing anywhere", () => {
+   matches no section at all is set aside and AND is tried again; two words
+   that each mean something still narrow, so *delete cost* finds nothing. The
+   code review argued for strict AND; the trade is in page-search.ts §
+   searchSections and plan 261002c. */
+describe("searchSections sets aside a word that matches nothing anywhere", () => {
   it("finds the section the other words agree on", () => {
-    expect(find("regenerate my glossary please")[0]).toBe("AI processing");
+    expect(find("regenerate my glossary zebra")[0]).toBe("AI processing");
     expect(find("delete zebra")).toEqual(find("delete"));
   });
 
@@ -229,6 +230,23 @@ describe("searchSections drops a word that matches nothing anywhere", () => {
 
   it("still finds nothing when no word means anything", () => {
     expect(find("zebra giraffe")).toEqual([]);
+  });
+});
+
+describe("searchSections's question furniture", () => {
+
+  it("keeps `get` meaningful except in the phrase `get rid`", () => {
+    expect(
+      searchSections(
+        "get it back",
+        [
+          section("Jumping around, and getting back"),
+          section("How do I get it back?"),
+        ],
+        [],
+      ),
+    ).toEqual(["How do I get it back?", "Jumping around, and getting back"]);
+    expect(find("get rid of it forever")[0]).toBe("Delete this article");
   });
 });
 

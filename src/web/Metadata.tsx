@@ -1419,7 +1419,7 @@ function RerunSection({
        a failed metadata request draws the section open, with the error first. */
     <Section
       label="AI processing"
-      keywords={AI_PROCESSING_KEYWORDS}
+      keywords={`${AI_PROCESSING_KEYWORDS}${reset ? ` ${WHOLE_ARTICLE_KEYWORDS}` : ""}`}
       collapsible={!error}
       keepMounted
       aside={error ? null : aside}
@@ -1598,16 +1598,21 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * broader ones are here, on this section alone: a synonym applies to every
  * section, so *update* or *over* in that group would rank this above *At a
  * glance* for *over time* (GPT Sol, plan review of 261002c, P2). Then the
- * High-powered AI switch and the *Whole article* row, which `RERUN_LABEL` does
- * not name, and every row it does — built from it, so a new row is findable
- * the day it is added.
+ * High-powered AI switch and every row `RERUN_LABEL` names — built from it, so
+ * a new row is findable the day it is added.
+ *
+ * The whole-article reset's words are separate because that row is behind the
+ * experimental switch. Advertising *reset* while the switch is off would land
+ * the reader in a section that has no such control. Code review of 261002c.
  */
 const AI_PROCESSING_KEYWORDS = [
   "steps stages pipeline models summaries glossary structure hierarchy",
-  "start over again reset whole update fix generate",
+  "start again update fix generate",
   "high powered power opus sonnet model better smarter stronger capable",
   ...Object.values(RERUN_LABEL),
 ].join(" ");
+
+const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
 
 /**
  * **The four rows for which "another model call" is not the whole story**,

@@ -141,3 +141,21 @@ Metadata page. Making the command bar reveal a section is a second search over t
 with a different matcher (command-match.ts), and the box is drawn at every width from 1024px. Named
 in § Deferred, and in the feedback note as the question to ask Greg: if it was ⌘K he used, that is
 the next piece. "All three get wider" is corrected to "two of the three".
+
+## After GPT Sol's code review — what changed
+
+1. **Sol removed the retry after an AND miss; it was put back** (the one finding not taken). Its
+   case: with the experimental switch off, *redo whole article* sets aside *whole* and answers
+   *redo* — AI processing, which then has no *Whole article* row. True, but AI processing is where
+   every other redo is, so the answer is near rather than wrong; and strict AND turns any stray
+   word into "nothing matched", which is the complaint this report is about. What *was* taken from
+   that finding: *get* is question furniture only in *get rid* (it means something in Help's *get
+   it back*), *with* joined the stopwords, and the reset's own words follow its switch (2). The
+   tests pin both sides: *delete cost* still finds nothing; *regenerate my glossary zebra* finds AI
+   processing.
+2. **Whole-article words follow the whole-article control.** *Reset*, *whole* and *over* are indexed
+   only while the experimental switch exposes that row. The rendered test checks both switch
+   positions.
+3. **The command bar does not borrow `public`.** That word already names *Shared articles*, and the
+   new Metadata alias won their tie only because the article row comes first. *Share* still offers
+   Metadata below *Shared articles*; the tests now assert the first result for both cases.

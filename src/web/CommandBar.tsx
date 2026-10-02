@@ -302,7 +302,7 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       aliases: [
         "about", "details", "source", "reading time", "stats",
         "regenerate", "rerun", "re-run", "redo", "reprocess", "ai processing", "high-powered",
-        "cost", "price", "export", "download", "share", "public", "archive", "delete",
+        "cost", "price", "export", "download", "share", "archive", "delete",
       ],
       /* The metadata page shows what the pipeline already wrote; opening it
          runs nothing. */
