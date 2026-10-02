@@ -102,8 +102,17 @@ Then the residue, which is why this page exists:
 - **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
   [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
-- **Opening it for the first time starts it.** A mode the reader opens with nothing in it generates
-  it, rather than offering a button and waiting — so a new artefact-backed mode wants a name in
+- **Opening it for the first time starts it — always.** A mode the reader opens with nothing in it
+  generates it, rather than offering a button and waiting, and so does each of its sub-modes:
+
+  > opening a mode should always trigger generation if it hasn't happened already.
+  >
+  > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
+  > [261002a](../plans/261002a-summary-generates-on-open.md))
+
+  The only modes that open without generating are the ones with nothing to fill until the reader
+  has typed or written something (Search, Chat, Referee's Criteria, Remember's Recall). So a new
+  artefact-backed mode wants a name in
   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
   with the **unforced** verb. The traps, and the one mode deliberately left out, are
   [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
@@ -255,7 +264,7 @@ So `description` is the mode in one fragment — it is also what the command bar
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 the current modes that is almost always one of three things: **it reads something already built**
 (Structure), **its content is a model pass over the article, written once and
-stored** (Summary's plain-words levels, which a press on the bar does not yet start, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
+stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining

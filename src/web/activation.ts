@@ -238,6 +238,18 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      first (`precededBy`, src/web/useSkim.ts): the press is for this
      mode's artefact, and the token is keyed on it. */
   skim: { kind: "fixed", target: "skim" },
+  /* **One job writes all three plain-words levels**, so whichever level the
+     band opens on, the press arms `simple` — as the band's own slider and the
+     command bar's three rows do one level down (SummaryMode.tsx §
+     `SummaryControls`). Until 2026-10-01 Summary opened on the tree's gists,
+     which were free; that outline went
+     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
+     until 2026-10-02 the press then armed nothing and the band waited on its
+     "Write it". Greg: *"When I open any of the Summary submodes, if they
+     haven't already been generated, automatically kick off the generation."*
+     (7T, docs/plans/261002a-summary-generates-on-open.md). "Write it" stays,
+     for an arrival, which arms nothing here as for every mode. */
+  summary: { kind: "fixed", target: "simple" },
   tweets: {
     kind: "arrival",
     target: "tweets",
@@ -262,20 +274,6 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
     kind: "none",
     reason: "reads the tree, the arc and any ideas already made; it never starts a job",
   },
-  /* **Opens on a plain-words level and spends nothing.** Until 2026-10-01 it
-     opened on the tree's gists, which were free; that outline went
-     (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
-     what is left is an artefact. The press still arms nothing: an article with
-     no plain-words version shows the empty state's "Write it", and the band's
-     plain-words controls and the command bar's three rows arm `simple` for
-     themselves one level down, as Remember's Quiz chip does. Whether opening
-     Summary should start the run is a product question still open (Overseer
-     queue fb7t-7v). */
-  summary: {
-    kind: "none",
-    reason: "opens on a plain-words level and shows \"Write it\" if there is none; its controls and the command bar's rows arm themselves",
-  },
-
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
   chat: { kind: "none", reason: "stores nothing until the reader asks something" },
@@ -663,11 +661,6 @@ export function bandTarget(
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
-  /* The literal every plain-words stop arms (SummaryMode.tsx § `SummaryControls`):
-     one job writes all levels, so Fuller arms `simple` too. Sol's plan review
-     of 261001b, P1-3. Every Summary band is a plain-words level since the
-     outline went on 2026-10-01, so it does not depend on `?summary=`. */
-  if (mode === "summary") return "simple";
   const decision = MODE_TARGET[mode];
   switch (decision.kind) {
     case "fixed":

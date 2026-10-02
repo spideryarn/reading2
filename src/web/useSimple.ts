@@ -123,7 +123,8 @@ export function useSimple(slug: string): UseSimple {
     await queue.start({ force: true });
   }, [queue]);
 
-  /* A press on the Summary slider or either end button, never arrival, spends. */
+  /* A press — Summary on the bar, its command-bar rows, the slider or either
+     end button — spends; arrival never does. */
   useAutoRun(slug, "simple", status, ensure, reload);
 
   return {

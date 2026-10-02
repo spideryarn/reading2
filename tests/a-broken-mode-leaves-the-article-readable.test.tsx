@@ -1639,10 +1639,12 @@ describe("a throw inside any band leaves the article", () => {
   });
 
   /**
-   * **Each mode gets a boundary of its own.** Summary arms nothing, so a press
-   * on it cannot reset a broken boundary the way a fresh token does — only
-   * `key={mode}` at the call site stands between a broken Quotes and a Summary
-   * band that says "Summary is not working" when nothing in Summary threw.
+   * **Each mode gets a boundary of its own.** Structure arms nothing, so a
+   * press on it cannot reset a broken boundary the way a fresh token does —
+   * only `key={mode}` at the call site stands between a broken Quotes and a
+   * Structure band that says "Structure is not working" when nothing in it
+   * threw. (It was Summary until 2026-10-02, when Summary's press began arming
+   * its run — docs/plans/261002a-summary-generates-on-open.md.)
    */
   it("does not follow the reader into another mode", async () => {
     who.set(OWNER_A);
@@ -1650,10 +1652,10 @@ describe("a throw inside any band leaves the article", () => {
     await open("?mode=quotes");
     containedInside("quotes");
 
-    await press(MODE_LABEL.summary);
-    expect(modeInUrl()).toBe("summary");
+    await press(MODE_LABEL.structure);
+    expect(modeInUrl()).toBe("structure");
     expect(text(), "the broken band followed the reader").not.toContain("[mode-render]");
-    expect(host.querySelector('.mode-band[aria-label="Summary"]'), "no Summary band").not.toBeNull();
+    expect(host.querySelector('.mode-band[aria-label="Structure"]'), "no Structure band").not.toBeNull();
   });
 
   it("does not reset a visitor's broken Sketch for a diagram parameter it ignores", async () => {

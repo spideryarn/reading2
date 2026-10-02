@@ -575,7 +575,9 @@ const GENERATES: Record<Mode, boolean> = {
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */
   structure: false,
-  summary: false,
+  /* Since 2026-10-02 the press writes the plain-words levels when there are
+     none (Greg, 7T; docs/plans/261002a-summary-generates-on-open.md). */
+  summary: true,
   search: false,
   chat: false,
   referee: false,
@@ -1245,6 +1247,25 @@ describe("off the reading view", () => {
     type("glossary");
     press("Enter");
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
+  });
+
+  it("arms nothing when a visitor presses a mode on the bar", () => {
+    /* A visitor's band mounts no `useAutoRun` to claim the token, so it would
+       wait, and a reader seen as a visitor for a moment (a private read that
+       returned 401) could later claim it as the owner and spend on arrival.
+       GPT Sol's plan review of 261002a, P1. */
+    const onMode = vi.fn();
+    reading({ visitor: true, onMode });
+    for (const mode of ["glossary", "summary"] as const) {
+      const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
+        (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],
+      );
+      expect(button, `${mode}: a bar button`).toBeDefined();
+      act(() => button?.click());
+      expect(onMode).toHaveBeenCalledWith(mode);
+    }
+    expect(pendingActivation("a-piece", "glossary")).toBeNull();
+    expect(pendingActivation("a-piece", "simple")).toBeNull();
   });
 
   it("still navigates a page row", () => {
