@@ -4,7 +4,9 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 **Built 2026-08-26.** One box in the mode band, three ways of matching behind it (two until
 2026-10-02, when *quick* arrived — [§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
-and the passages that match get marked in the article beside it. Greg's ask:
+and the passages that match get marked in the article beside it. Quick search can also be started
+from a box in the bottom bar, from anywhere in the article, and searches as you type —
+[§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Greg's ask:
 
 > Add functionality for Semantic Search/Highlights.
 >
@@ -119,9 +121,9 @@ letters or the meaning, until 2026-10-02; *quick* sits between them:
 | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
 | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
 | what it costs | nothing | about $0.0004, and about a second | a few cents, and 15–40 seconds |
-| when it runs | every keystroke | when you press **find** | when you press **find** |
+| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find** |
 | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
-| is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* | yes, beside the article |
+| is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
 
 Greg chose words and meaning both over meaning-only. It is also what the previous version converged on, and its own
 note is the argument:
@@ -146,8 +148,10 @@ of that file instead: it returns the same `SearchHit`s as meaning, so it is a se
 the same route and the same saved list.
 
 The practical difference the panel is at pains to make obvious is *what pressing a key does*. In
-words mode the results are already there as you type. In quick and meaning mode nothing happens until
-you submit, because submitting spends money. A box that quietly billed you per keystroke would be the
+words mode the results are already there as you type. In meaning mode nothing happens until you
+submit, because submitting spends money. Quick sits between them since 2026-10-02: it asks when you
+pause, because a pause costs about $0.0004 and one typing session keeps one saved row —
+[§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). A box that quietly billed you per keystroke would be the
 worst possible version of this feature — so there is a **find** button in one mode and deliberately
 none in the other, rather than a disabled one that invites you to wonder what you did wrong.
 
@@ -215,6 +219,77 @@ endpoint answers in one body, so all the hits arrive together, under one deadlin
 Why a third arm of the toggle rather than a new mode or a separate quick-search bar, and why it is
 saved rather than thrown away: the plan's § The decision.
 
+## Search as you type, and the box in the bottom bar
+
+**Built 2026-10-02**, the same evening, from two asks of Greg's:
+
+> I'm excited about the quick search. Can we add a searchbar somehow in the bottom bar that makes it
+> easy to trigger a quick search from anywhere?
+>
+> Q-quick-ui let's try the search-as-you-type, just for fun. Will it automatically delete the
+> obsolete versions as I keep typing?
+>
+> — Greg, 2026-10-02
+
+The plan, its two reviews and the alternatives passed over are
+[261002h-quick-search-bar-in-the-dock.md](../plans/261002h-quick-search-bar-in-the-dock.md).
+
+**One typing session keeps one saved row.** That is the answer to Greg's question: nothing obsolete
+is deleted, because nothing obsolete is made. The first pause (600 ms, at least three characters)
+asks a quick search; later pauses with changed words of at least three characters **revise that
+row** — the same id, so the same colour and the same place in the list. The saved row keeps the
+last words submitted, which can differ from the draft if you shorten it below three characters or
+leave Search before its pause. Enter or *find* submits changed words without waiting for the pause,
+including shorter words, and ends the session; explicit submissions wait for the saved list to load with their
+words sealed. The previous answer's marks stay on screen until the revision's arrive. The rules are a
+pure reducer, [`src/web/quick-session.ts`](../../src/web/quick-session.ts), and its header is the
+list; in short, a session **ends** on Enter or *find*, the box emptied, a matcher switch, ↺, ✕ or
+*flesh out* on its row, leaving the mode or the article, and the box blurred for longer than a
+pause — so a reader who searches, reads for five minutes and types again starts a new row rather
+than overwriting one they may want. Words left in a box are inert: remounting never asks.
+
+Chosen over **saving nothing until Enter**, which would have needed a second, unsaved kind of
+result — the second search path this design refuses — and over **a new row each pause with the last
+one deleted**, which repaints every mark each pause, because a row's colour is hashed from its id
+(`assignSlots` in [`hit-colours.ts`](../../src/web/hit-colours.ts)).
+
+**On the server** a revision is `revises: true` on the same `POST /api/search/<slug>`: `withRun`
+([`src/searches.ts`](../../src/searches.ts)) resets an existing *quick* row in place with the new
+words, a new attempt token, and its `createdAt` and colour kept. A revision naming a row that is
+not there — another tab deleted it — gets a fresh id, never the old one back. The attempt fence
+orders *finishes*, not *begins*, so the client sends **one request per session at a time**: a
+revision waits for the previous request's `begin`, edits meanwhile coalesce to the latest words,
+and only then is the old fetch aborted; each send has a generation, and a superseded one's frames
+never touch the row (the race is
+[261002g-transport-completion-is-not-server-acknowledgement.md](../postmortems/261002g-transport-completion-is-not-server-acknowledgement.md)).
+A quick request whose reader has gone is cancelled through `sse(res).gone` and finishes as an error
+through the fence. **A meaning search still runs to the end when the tab closes**, as before.
+
+**What it costs**: about $0.0004 a pause on a typical article ($0.003 on a 540-paragraph one), so a
+typed question of four or five words — three to six asks, some cancelled mid-flight but possibly
+still billed — is roughly **$0.001–0.003 a session, and up to about $0.02 on a very long article**.
+Every one is metered as `search-quick` in `ai_calls`.
+
+**The box in the bottom bar** ([`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx)) is a
+second view of the same draft ([`search-draft.ts`](../../src/web/search-draft.ts)), not a second
+search: the asking is the band's typing session either way. Type into it with Search mode closed and
+the first qualifying pause opens Search mode on `?match=quick` (switching from another matcher if
+needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
+pointer setting hides the focused bar box, focus transfers to the panel with scrolling prevented.
+While Search mode is open and the bar box is not focused it shows as a ⚡ button. Both boxes can
+be visible while the bar box has focus; they share the same words and typing session.
+
+- **A coarse pointer gets the ⚡ at every width**, and so do a mouse at fit rung 4
+  and a window under 732px. Rung 3 keeps a compact 7rem input after the button labels disappear.
+  The ⚡ opens Search mode on quick with the panel's box focused. A text box in a fixed bar at the
+  foot of an iPad is where the on-screen keyboard misbehaves. When the
+  panel is not yet mounted it focuses a render after the tap, so **iOS may need a second tap to
+  raise the keyboard** — the accepted cost, not something the Playwright check can show.
+- **Only on an owner's reading view**, where the band that can ask (`SearchBand`) would mount; a
+  visitor's view has no control and no `/` (`hasQuickSearch` in
+  [`Dock.tsx`](../../src/web/Dock.tsx)).
+- **`/` focuses it** — [keyboard.md § Quick search: the slash key](keyboard.md#quick-search-the-slash-key).
+
 ## Why this is on the augment side of the line
 
 [vision.md](vision.md) exists to refuse tools that read the article *instead of* you. A results list
@@ -275,6 +350,11 @@ of the five it once carried, four became buttons and the last one (`Reading time
 answered by the metadata page already. The convention survives on that page for its own unbuilt
 rows; the bar is all live controls now. See
 [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md#the-dimmed-placeholders-are-gone).
+
+Since 2026-10-02 the bar also carries **a quick-search box** (a ⚡ on touch screens and narrow
+windows), beside the Search button rather than instead of it: the button opens the mode as it always
+has, the box always searches *quick*. It is the one text box in the bar —
+[§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar).
 
 ## Drawing the marks, and the wall that wasn't there
 

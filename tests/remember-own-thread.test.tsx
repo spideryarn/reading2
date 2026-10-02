@@ -100,7 +100,7 @@ const { ConversationBand } = await import("../src/web/modes/conversation/Convers
 const SLUG = "a-piece";
 const AT = "2026-09-20T10:00:00.000Z";
 
-function thread(id: string, kind: "chat" | "remember", over: Partial<ChatThread> = {}): ChatThread {
+function thread(id: string, kind: "chat" | "remember" | "tutorial", over: Partial<ChatThread> = {}): ChatThread {
   return {
     id,
     kind,
@@ -117,6 +117,7 @@ function thread(id: string, kind: "chat" | "remember", over: Partial<ChatThread>
 
 const CHAT = thread("spya-chat01", "chat");
 const REMEMBER = thread("spya-rem001", "remember");
+const TUTORIAL = thread("spya-tut002", "tutorial");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -160,7 +161,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(kind: "chat" | "remember", search: string): Promise<void> {
+async function mount(kind: "chat" | "remember" | "tutorial", search: string): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () =>
     root.render(
@@ -433,5 +434,57 @@ describe("Start over waits for the server", () => {
     expect(last()?.threadId).toBe(REMEMBER.id);
     expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
     expect(last()?.error).toMatch(/Couldn't delete/);
+  });
+});
+
+/* Tutorial, Remember's third sub-mode (plan 261002i): its own single thread,
+   with Recall's lifecycle and none of Live. */
+describe("Tutorial opens its own one conversation", () => {
+  it("opens the stored Tutorial thread, never Recall's or a list", async () => {
+    stored = [CHAT, REMEMBER, TUTORIAL];
+    await mount("tutorial", "?mode=remember&remember=tutorial");
+    expect(last()?.threadId).toBe(TUTORIAL.id);
+    expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
+    for (const props of renders) expect(drawsList(props)).toBe(false);
+  });
+
+  it("is not listed in Recall", async () => {
+    stored = [REMEMBER, TUTORIAL];
+    await mount("remember", "?mode=remember");
+    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
+  });
+
+  it("begins its own conversation when there is none, of its own kind", async () => {
+    stored = [REMEMBER];
+    await mount("tutorial", "?mode=remember&remember=tutorial");
+    const opened = shown();
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.kind).toBe("tutorial");
+    expect(opened[0]?.id).not.toBe(REMEMBER.id);
+  });
+
+  it("offers no Live conversation", async () => {
+    stored = [TUTORIAL];
+    await mount("tutorial", "?mode=remember&remember=tutorial");
+    expect(last()?.live).toBeUndefined();
+    expect(last()?.onStartLive).toBeUndefined();
+  });
+
+  it("starts Tutorial over only after the stored thread has been deleted", async () => {
+    stored = [TUTORIAL];
+    await mount("tutorial", "?mode=remember&remember=tutorial");
+    await act(async () => prop<(id: string) => void>("onDelete")(TUTORIAL.id));
+    await settle();
+    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
+    expect(last()?.threadId ?? null).toBeNull();
+    expect(shown()).toHaveLength(0);
+
+    await act(async () => releaseDelete?.(200));
+    await settle();
+    const fresh = shown()[0];
+    expect(fresh?.kind).toBe("tutorial");
+    expect(fresh?.id).not.toBe(TUTORIAL.id);
+    expect(fresh?.messages).toHaveLength(0);
+    expect(last()?.threadId).toBe(fresh?.id);
   });
 });

@@ -577,18 +577,20 @@ describe("the bundle is the faithful projection", () => {
 
   /* ------------------------------------------------- the three known losses -- */
 
-  it("keeps a Candidates thread's kind, where the rollback flattens it to chat", async () => {
+  it("keeps a Candidates thread's kind, and so does the rollback now", async () => {
     const threads = parsed("augmentations/chat.json").threads as { kind: string }[];
     expect(threads[0]?.kind).toBe("candidates");
 
-    /* The contrast. `export.ts` maps anything that is not `remember` to `chat`,
-       because store-roundtrip compares its bytes against a file the filesystem
-       store wrote — so a reader's Candidates thread comes back as an ordinary
-       chat, silently. */
+    /* Until 2026-10-02 `export.ts` mapped anything that was not `remember` to
+       `chat`, so a reader's Candidates thread came back as an ordinary chat,
+       silently, and this test pinned that contrast. Adding Tutorial as a fourth
+       kind made it a loss of the same shape, so the rollback now writes every
+       known kind as itself — tests/store-export-thread-kind.test.ts, plan
+       261002i. */
     const rollback = JSON.parse(await readFile(path.join(out, SLUG, "chat.json"), "utf8")) as {
       threads: { kind: string }[];
     };
-    expect(rollback.threads[0]?.kind).toBe("chat");
+    expect(rollback.threads[0]?.kind).toBe("candidates");
   });
 
   it("keeps passages and interrupted on a message, which the rollback drops", async () => {

@@ -70,6 +70,7 @@ export { ArticleNotFound };
 import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
+import { isThreadKind } from "../types.js";
 
 const logger = log("store");
 
@@ -617,7 +618,10 @@ export async function exportArticle(
            written since is the one case where the two differ, and it converges
            the moment anything touches it — the same transitional state `tools`
            passed through. */
-        kind: thread.kind === "remember" ? ("remember" as const) : ("chat" as const),
+        /* The stored kind whenever it is one we know — Candidates and Tutorial
+           were exported as chats until 2026-10-02, because this was a
+           Remember-or-chat ternary. GPT Sol's plan review of 261002i. */
+        kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,

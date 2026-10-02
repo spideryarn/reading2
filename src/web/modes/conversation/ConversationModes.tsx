@@ -22,7 +22,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { BlockId, ChatThread, ThreadKind } from "../../../types.js";
+import type { BlockId, ChatThread, SingleThreadKind, ThreadKind } from "../../../types.js";
+import { isSingleThreadKind } from "../../../types.js";
 import { currentAt, rememberParam, threadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
@@ -33,11 +34,12 @@ import { useLiveConversation } from "../../live/useLiveConversation.js";
 import { ChatPanel } from "../../ChatPanel.js";
 
 /**
- * **Remember's two sub-modes, and the one place their URL rules live.**
+ * **Remember's three sub-modes, and the one place their URL rules live.**
  *
  * Remember is `recall` — the reader says what they took from the article and the
- * model shows them where that comes apart — or `quiz`, where the questions come
- * from the article instead. One mode, two bands, and `?remember=` says which.
+ * model shows them where that comes apart — `tutorial`, where model and reader
+ * take short teaching turns, or `quiz`, where the questions come from the article
+ * instead. One mode, three views, and `?remember=` says which.
  * docs/plans/260831al-review-quiz-sub-mode.md.
  *
  * ## Why this is a component rather than two conditions up in `Reader`
@@ -152,6 +154,20 @@ export function RememberBand({
         sections={sections}
         onJump={onJump}
         onArrowKeys={onQuizKeys}
+      />
+    );
+  if (remember === "tutorial")
+    return (
+      <ConversationBand
+        /* Its own key, so Recall and Tutorial never share a mounted band — a
+           focus nonce, a latch or a draft carried across would belong to the
+           other conversation. */
+        key="remember-tutorial"
+        slug={slug}
+        blocks={blocks}
+        onJump={onJump}
+        kind="tutorial"
+        subMode={toggle}
       />
     );
   return (
@@ -282,10 +298,13 @@ export interface ChatHandoff {
  * the earliest, then the id — a total order, so every render picks the same.
  * Pure and exported for that reason.
  */
-export function oneRemember(threads: readonly ChatThread[]): ChatThread | null {
+export function oneRemember(
+  threads: readonly ChatThread[],
+  kind: SingleThreadKind = "remember",
+): ChatThread | null {
   let best: ChatThread | null = null;
   for (const t of threads) {
-    if (t.kind !== "remember") continue;
+    if (t.kind !== kind) continue;
     if (!best || before(t, best)) best = t;
   }
   return best;
@@ -333,6 +352,11 @@ type ConversationVisibilityByKind = {
     kind: "remember";
     onScreen?: never;
   };
+  /** Remember's Tutorial: the same rule as Recall's. */
+  tutorial: {
+    kind: "tutorial";
+    onScreen?: never;
+  };
 };
 
 type ConversationBandProps = {
@@ -347,8 +371,8 @@ type ConversationBandProps = {
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
   onHandoffTaken?: (() => void) | undefined;
   /**
-   * **The Recall | Quiz control**, when this band is the Recall half of
-   * Remember. Absent in chat mode. Built by `RememberBand` above and passed straight
+   * **The Recall | Tutorial | Quiz control**, when this band is one of Remember's
+   * conversation views. Absent in chat mode. Built by `RememberBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
    */
   subMode?: React.ReactNode;
@@ -395,7 +419,10 @@ export function ConversationBand({
    */
   const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
   const [thread, setThread] = useQueryState("thread", threadParam);
-  const remembering = kind === "remember";
+  /* Recall and Tutorial: each one conversation per article, no list. Named
+     for Remember because that is where both live. */
+  const single = isSingleThreadKind(kind) ? kind : null;
+  const remembering = single !== null;
   /**
    * Start over has two ordered waits: Live must finish writing its last spoken
    * exchange, then the DELETE must finish. While either is true Remember has no
@@ -410,7 +437,7 @@ export function ConversationBand({
    * rather than leading it: a chat's id or a stale one in Remember's URL is
    * simply overruled. GPT Sol's plan review, F6.
    */
-  const remembered = useMemo(() => (remembering ? oneRemember(threads) : null), [remembering, threads]);
+  const remembered = useMemo(() => (single ? oneRemember(threads, single) : null), [single, threads]);
   const theRemember = resetting === "idle" ? remembered : null;
   /** The open conversation's id: Remember's one, or what `?thread=` says in chat. */
   const current = remembering ? (theRemember?.id ?? null) : thread;
@@ -699,8 +726,13 @@ export function ConversationBand({
       onNew={startNew}
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
-      live={live}
-      onStartLive={(id) => {
+      /* **No Live in Tutorial, yet.** Short alternating turns are ideal spoken,
+         and Greg said so, but also that Live "doesn't work very well at the
+         moment" — so Tutorial is typed or dictated first, and a spoken turn
+         cannot create one (`SpokenKind` in src/chat.ts stays chat | remember).
+         Omitted here rather than refused by the server, so there is no button. */
+      live={kind === "tutorial" ? undefined : live}
+      onStartLive={kind === "tutorial" ? undefined : (id) => {
         if (resettingNow.current) return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");

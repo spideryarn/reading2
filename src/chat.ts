@@ -35,7 +35,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isThreadKind } from "./types.js";
+import { isSingleThreadKind, isThreadKind } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -155,8 +155,10 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  if (named || kind !== "remember") return named;
-  return threads.find((t) => t.kind === "remember");
+  /* Every single-thread kind, not only Remember: Tutorial is one per article
+     too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  if (named || !isSingleThreadKind(kind)) return named;
+  return threads.find((t) => t.kind === kind);
 }
 
 /* There is deliberately no `createThread` here.

@@ -1,5 +1,5 @@
 /* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
-   Recall | Quiz switch that sits in the band's head beside the title.
+   Recall | Tutorial | Quiz switch that sits in the band's head beside the title.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
@@ -17,7 +17,7 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Quiz, in the band's head beside the title. Two toggle buttons, and
+/* Recall | Tutorial | Quiz, in the band's head beside the title. Two toggle buttons, and
    the pressed one is filled — a pair where one is always on, so an outline-only
    treatment would leave a reader guessing which half they are looking at. */
 .remember-submode {

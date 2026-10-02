@@ -1132,6 +1132,13 @@ export interface SearchStore {
    * status is the one this codebase carries a postmortem for. `kind` is
    * required rather than defaulted: a caller that forgot it would otherwise
    * store a quick search as a meaning one, and nothing would say so.
+   *
+   * **`revises`** (plan 261002h, search-as-you-type): a `wantedId` naming an
+   * existing **quick** row, asked as quick, is re-asked in place with the new
+   * criterion whatever its status — same id, `createdAt` and colour, a new
+   * attempt. Anything else mints, always under a **new** id — an absent id
+   * is a row deleted elsewhere, and must not be recreated. `withRun` in
+   * src/searches.ts decides.
    */
   begin(
     slug: string,
@@ -1139,6 +1146,7 @@ export interface SearchStore {
     kind: SearchKind,
     wantedId?: string,
     now?: () => string,
+    options?: { revises?: boolean },
   ): Promise<{ run: SearchRun; attempt: string | undefined }>;
 
   /**

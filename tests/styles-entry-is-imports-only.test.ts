@@ -149,6 +149,7 @@ const MANIFEST = [
   "prose-hover-card.css",
   "footnotes.css",
   "dock-fit.css",
+  "dock-quick-search.css",
   "search.css",
   "referee.css",
   "summary.css",
