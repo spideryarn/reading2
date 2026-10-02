@@ -66,6 +66,12 @@
  * from the article, with the card sitting on top of the white; Greg named that
  * one himself. See docs/project/marketing-pages.md § One shot, one idea.
  *
+ * **And again on 2026-10-02: it is Structure now.** Outline stopped being a
+ * mode on 2026-09-10, when Structure took it over, and the old picture's bar
+ * still offered Hierarchy and Outline. Structure is that same fisheye
+ * (its default face), so the reason for leading with it is unchanged.
+ * docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md.
+ *
  * Styled with the `site-*` classes at the foot of styles.css and `tw:` utilities
  * for nudges — SiteBits.tsx's header says which does what.
  */
@@ -139,7 +145,7 @@ export function LandingPage() {
               an angle is arguing against itself (styles.css § the tilt). */}
           <div className="site-tilt-stage tw:mt-14 tw:sm:mt-16">
             <div className="site-tilt">
-              <Frame shot={SHOTS.outline} hero />
+              <Frame shot={SHOTS.structure} hero />
             </div>
           </div>
         </div>

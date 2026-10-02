@@ -124,11 +124,22 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             docs/project/structure.md; the faces and the chips' words checked in
             src/web/modes/structure/StructureMode.tsx and STRUCTURE_SUB_MODES in
             src/web/sub-modes.ts. */}
-        {/* Stage 2 retakes this as Structure — the picture is still Outline's. */}
-        <Showcase shot={SHOTS.outline} title="Structure." mode="structure" eager under>
+        <Showcase shot={SHOTS.structure} title="Structure." mode="structure" eager under>
           The article’s parts, and the sections of the one you are reading, in two columns beside
           the text — or, where the window is narrower, one nested list. Fisheye, the default, opens
           up around where you are; Expanded shows everything, every summary visible.
+        </Showcase>
+        {/* Greg, 2026-09-28, docs/project/skim.md: "help the user to skim
+            through the paper as effectively as possible in increasing depth",
+            and "a trajectory through quotes". The three passes, the quotes as
+            stops and the one-line cue are src/skim.ts (DEPTH_CAPS, the GIST /
+            MORE / MOST depths, `cue`: "what to look for in that passage"). A
+            picture rather than a tile since the 2026-10-02 retake: Greg,
+            2026-09-29, "I'm increasingly thinking of the trajectory mode as one
+            of the main modes". */}
+        <Showcase shot={SHOTS.skim} title="Skim." mode="skim" offset under>
+          Skim the paper in increasing depth: a route through its quotes, walked three times — the
+          gist, then more, then most — each stop with a line on what to look for.
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as
@@ -141,34 +152,27 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               said "the other three" on the afternoon there were four. The
               mode went behind the switch on 2026-09-29; since 2026-10-02 the
               tag says so, and the sentence that did is under the lede. */}
-          <Portrait shot={SHOTS.diagram} title="Diagram." mode="diagram">
+          {/* Pictured is `sketch` since the 2026-10-02 retake — the one kind an
+              ordinary reader's band offers (src/web/sub-modes.ts); it was
+              `force`. The sentences were reordered to match, not rewritten. */}
+          <Portrait shot={SHOTS.sketch} title="Diagram." mode="diagram">
             Maps of the structure of the piece, with where you are marked on each. Pictured:{" "}
-            <strong className="tw:text-foreground">force</strong>, the sections as dots, joined
-            where they share distinctive words. The other four: <em>drift</em> and <em>trail</em>,
-            one dot per paragraph placed by what it is about; <em>sketch</em>, drawn by the model;
-            and <em>illustrated</em>, that same scene painted.
+            <strong className="tw:text-foreground">sketch</strong>, drawn by the model. The other
+            four: <em>force</em>, the sections as dots, joined where they share distinctive words;{" "}
+            <em>drift</em> and <em>trail</em>, one dot per paragraph placed by what it is about; and{" "}
+            <em>illustrated</em>, that same scene painted.
           </Portrait>
         </div>
         <div className="site-bento site-reveal tw:mt-4">
-          {/* Greg, 2026-09-28, docs/project/skim.md: "help the user to skim
-              through the paper as effectively as possible in increasing depth",
-              and "a trajectory through quotes". The three passes, the quotes
-              as stops and the one-line cue are src/skim.ts (DEPTH_CAPS, the
-              GIST / MORE / MOST depths, `cue`: "what to look for in that
-              passage"). */}
-          <Tile name="Skim." mode="skim">
-            Skim the paper in increasing depth: a route through its quotes, walked three times — the
-            gist, then more, then most — each stop with a line on what to look for.
-          </Tile>
           {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
               levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
               Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
-          <Tile name="Summary." mode="summary">
+          <Tile name="Summary." mode="summary" span="wide">
             The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Plain mode: the article alone, with the band closed. */}
-          <Tile name="Or just the article." mode="plain">
+          <Tile name="Or just the article." mode="plain" span="wide">
             Plain mode is the prose and nothing else. Every other mode is a step away from it and a
             step back.
           </Tile>
