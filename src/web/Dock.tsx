@@ -1501,12 +1501,19 @@ function useMetadataChord(enabled: boolean, href: string): void {
  * press). Arming first would make the bar a cheaper door than the link beside
  * it, under a Commands card that says it opens a mode *exactly as pressing
  * that button here does*. docs/plans/260930a-….
+ *
+ * **A visitor's press arms nothing either** (`arms` false). Their band mounts
+ * no `useAutoRun` to claim a token, so it would wait — and a reader drawn as a
+ * visitor for a moment (a private read that came back 401) could claim it later
+ * as the owner and spend on what was only an arrival. GPT Sol's plan review of
+ * docs/plans/261002a-summary-generates-on-open.md, P1.
  */
 function useActivateMode(
   slug: string,
   search: string,
   diagram: DiagramKind,
   onMode: Props["onMode"],
+  arms: boolean,
 ): (next: Mode) => void {
   return useCallback(
     (next: Mode) => {
@@ -1514,10 +1521,10 @@ function useActivateMode(
         navigate(modeLinkHref(slug, search, next));
         return;
       }
-      armActivationForMode(slug, next, { diagram });
+      if (arms) armActivationForMode(slug, next, { diagram });
       onMode(next);
     },
-    [slug, search, diagram, onMode],
+    [slug, search, diagram, onMode, arms],
   );
 }
 
@@ -1540,6 +1547,7 @@ function useActivateSubMode(
   slug: string,
   search: string,
   onMode: Props["onMode"],
+  arms: boolean,
 ): (sub: SubMode) => void {
   return useCallback(
     (sub: SubMode) => {
@@ -1547,10 +1555,10 @@ function useActivateSubMode(
         navigate(readHref(slug, withSubMode(search, sub), "article"));
         return;
       }
-      armActivationForSubMode(slug, sub);
+      if (arms) armActivationForSubMode(slug, sub);
       onMode(sub.mode, sub);
     },
-    [slug, search, onMode],
+    [slug, search, onMode, arms],
   );
 }
 
@@ -1695,8 +1703,8 @@ export function Dock({
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, onMode);
-  const activateSubMode = useActivateSubMode(slug, search, onMode);
+  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor);
+  const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It

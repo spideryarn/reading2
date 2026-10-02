@@ -26,8 +26,8 @@
  *
  * A **Retry** (the admin's button) may reserve a `queued`, `failed` or
  * `skipped` row, or a `sending` one whose lease is more than ten minutes old —
- * never a `sent` one — and, for a gift, only while its voucher is unclaimed,
- * unrevoked and still at that address. That is `RETRYABLE`, one SQL fragment,
+ * never a `sent` one — and, for a gift, only while its voucher is unrevoked
+ * and still at that address (claimed or not: see `RETRYABLE`). That is `RETRYABLE`, one SQL fragment,
  * and the list's `retryable` flag is the same fragment, so the page and the
  * route cannot disagree.
  *
@@ -51,6 +51,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { VoucherEmailState, VoucherEmailStatus, VoucherEmails } from "../admin-vouchers.js";
+import { type Articles, type Points, articles as toArticles, budgetFor, ingestHeadroom } from "../billing/points.js";
 import { FREE_LIFETIME_INGESTS } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingVoucherEmails, billingVouchers } from "../db/schema.js";
@@ -79,6 +80,7 @@ function errorName(err: unknown): string {
 /* ------------------------------------------------------------ messages -- */
 
 const LOGIN_URL = `${PUBLIC_ORIGIN}/login`;
+const HOME_URL = `${PUBLIC_ORIGIN}/`;
 const SMALL_NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 
 /** `20 free articles`, `1 free article` — digits even for one, as the wording says. */
@@ -100,22 +102,106 @@ export interface RenderedEmail {
 }
 
 /**
- * **The recipient's email.** The only value in it is `articles`, an integer the
- * route validated, so there is nothing to escape. **Never the note, the creator
- * or the voucher id** — tests/billing-voucher-emails.test.ts pins that. HTML in
- * the shape of supabase/templates/confirmation.html.
+ * **Who the recipient's email is written for**, decided before the event's
+ * transaction (`giftAudienceFor` in src/store/pg-vouchers.ts) and frozen with
+ * the rest of the email. docs/plans/261002a-fb99-voucher-email-for-existing-user.md.
+ *
+ * `invite` is anyone we cannot name as one existing reader — no account, an
+ * unconfirmed one, two of them, or a lookup that failed — and its wording
+ * (*sign in, or create an account*) is true for a reader too, which is why it is
+ * the answer to any doubt. `reader` is exactly one account whose confirmed
+ * address is the voucher's, with its plan as of now.
  */
-export function giftMessage(articles: number): RenderedEmail {
+export type GiftAudience =
+  | { readonly kind: "invite" }
+  | { readonly kind: "reader"; readonly plan: ReaderStanding };
+
+/**
+ * A reader's plan, as the existing-reader email needs it. `free` carries the
+ * raw inputs to the wall's own arithmetic, not a count, so the email's *before*
+ * and *after* are `ingestHeadroom` over the same `wallUsed` against the budget
+ * without and with the gift — what the wall will actually admit. `waiting` is
+ * the other gifts at this address not yet claimed, which the next visit claims
+ * together with this one, so *after* includes them.
+ */
+export type ReaderStanding =
+  | { readonly kind: "free"; readonly limit: Articles; readonly wallUsed: Points; readonly waiting: Articles }
+  | { readonly kind: "paid" }
+  | { readonly kind: "unknown" };
+
+const INVITE: GiftAudience = { kind: "invite" };
+
+/** `3 articles`, `1 article`. */
+function articlesCount(n: number): string {
+  return `${n} article${n === 1 ? "" : "s"}`;
+}
+
+/** One email in the shape of supabase/templates/confirmation.html. Every value interpolated is ours. */
+function giftHtml(parts: {
+  readonly subject: string;
+  readonly heading: string;
+  readonly paragraphs: readonly string[];
+  readonly button: { readonly label: string; readonly url: string };
+  readonly after: string;
+}): string {
+  const paragraphs = parts.paragraphs.map(
+    (p, i) =>
+      `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 ${i === parts.paragraphs.length - 1 ? 28 : 16}px 0;">${p}</td></tr>`,
+  );
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>${parts.subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+<tr><td style="padding:0 0 32px 0;">
+<img src="${PUBLIC_ORIGIN}/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+</td></tr>
+<tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
+${paragraphs.join("\n")}
+<tr><td style="padding:0 0 28px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${parts.button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${parts.button.label}</a></td></tr></table>
+</td></tr>
+<tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${parts.after}</td></tr>
+<tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+`;
+}
+
+const FOOTER_TEXT =
+  "Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com.";
+
+/**
+ * **The recipient's email.** The values in it are `articles`, an integer the
+ * route validated, and for an existing reader two counts we computed, so there
+ * is nothing to escape. **Never the note, the creator or the voucher id** —
+ * tests/billing-voucher-emails.test.ts pins that, for both audiences.
+ */
+export function giftMessage(articles: number, audience: GiftAudience = INVITE): RenderedEmail {
   if (!Number.isInteger(articles) || articles < 1) throw new Error("a gift message needs a whole number of articles");
+  return audience.kind === "reader" ? readerGiftMessage(articles, audience.plan) : inviteGiftMessage(articles);
+}
+
+/** To somebody who may not know Spideryarn: what it is, and how to collect. */
+function inviteGiftMessage(articles: number): RenderedEmail {
   const gift = freeArticles(articles);
   const subject = `A gift of ${gift} on Spideryarn`;
   const intro = `You have been given ${gift} on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.`;
   const how =
     "Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.";
   const after = `They come on top of ${freeAllowanceClause()}. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.`;
-  const footer =
-    "Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com.";
-
   const text = [
     `A gift of ${gift}`,
     "",
@@ -128,40 +214,69 @@ export function giftMessage(articles: number): RenderedEmail {
     after,
     "",
     "--",
-    footer,
+    FOOTER_TEXT,
   ].join("\n");
+  const html = giftHtml({
+    subject,
+    heading: `A gift of ${gift}`,
+    paragraphs: [intro, how],
+    button: { label: "Sign in or create an account", url: LOGIN_URL },
+    after,
+  });
+  return { subject, text, html };
+}
 
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
-<title>${subject}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#0a0a0a;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
-<tr><td align="center" style="padding:40px 16px;">
-<table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
-<tr><td style="padding:0 0 32px 0;">
-<img src="${PUBLIC_ORIGIN}/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
-<span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
-</td></tr>
-<tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of ${gift}</td></tr>
-<tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">${intro}</td></tr>
-<tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">${how}</td></tr>
-<tr><td style="padding:0 0 28px 0;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${LOGIN_URL}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Sign in or create an account</a></td></tr></table>
-</td></tr>
-<tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${after}</td></tr>
-<tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>
-`;
+/**
+ * To somebody who already reads here: how many articles they had left, and how
+ * many they have with the gift — or, on a paid plan, that it waits for Free
+ * (billing.md: a gift counts on Free only).
+ */
+function readerGiftMessage(articles: number, plan: ReaderStanding): RenderedEmail {
+  const gift = freeArticles(articles);
+  const subject = `A gift of ${gift} on Spideryarn`;
+  const intro = `You have been given ${gift} on Spideryarn, for your account with this address.`;
+  let standing: string | null;
+  switch (plan.kind) {
+    case "free": {
+      const before = ingestHeadroom(plan.wallUsed, budgetFor(plan.limit));
+      const after = ingestHeadroom(plan.wallUsed, budgetFor(toArticles(plan.limit + plan.waiting + articles)));
+      const also = plan.waiting > 0 ? `, and ${articlesCount(plan.waiting)} given to you earlier and still waiting` : "";
+      standing = `Before this gift you had ${articlesCount(before)} left on your free allowance. With it${also}, you have ${articlesCount(after)}.`;
+      break;
+    }
+    case "paid":
+      standing =
+        "You are on a paid plan, so you do not need them today. They stay on your account, and count whenever you are on the Free plan.";
+      break;
+    case "unknown":
+      standing = null;
+      break;
+    default: {
+      const never: never = plan;
+      throw new Error(`unknown reader standing ${String(never)}`);
+    }
+  }
+  const how = "They are added the next time you open Spideryarn while signed in, with nothing to type in.";
+  const after = "If you were not expecting this, you can ignore this email.";
+  const paragraphs = standing === null ? [intro, how] : [intro, standing, how];
+  const text = [
+    `A gift of ${gift}`,
+    "",
+    ...paragraphs.flatMap((p) => [p, ""]),
+    `Open Spideryarn: ${HOME_URL}`,
+    "",
+    after,
+    "",
+    "--",
+    FOOTER_TEXT,
+  ].join("\n");
+  const html = giftHtml({
+    subject,
+    heading: `A gift of ${gift}`,
+    paragraphs,
+    button: { label: "Open Spideryarn", url: HOME_URL },
+    after,
+  });
   return { subject, text, html };
 }
 
@@ -221,8 +336,9 @@ export async function queueGiftEmail(
   voucherId: string,
   recipient: string,
   articles: number,
+  audience: GiftAudience,
 ): Promise<string> {
-  const message = giftMessage(articles);
+  const message = giftMessage(articles, audience);
   const [row] = await tx
     .insert(billingVoucherEmails)
     .values({
@@ -284,14 +400,22 @@ export async function skipQueuedGifts(tx: Tx, voucherId: string, detail: "vouche
  * the list's `retryable` flag alike.
  *
  * Never `sent`. A `sending` row only once its lease is ten minutes old. A gift
- * only while its voucher is unclaimed, unrevoked and still at the address this
- * delivery was frozen with — a readdressed voucher has a newer delivery for that.
+ * only while its voucher is unrevoked and still at the address this delivery
+ * was frozen with — a readdressed voucher has a newer delivery for that.
+ *
+ * **Claimed does not stop a gift's Retry** (261002a, Sol F1). An existing
+ * reader claims within moments of opening Spideryarn, often before anybody has
+ * seen a failed send; refusing then would make every failure for a reader
+ * permanent. The claim moves the voucher to an account with that same confirmed
+ * address, so none of the voucher transitions can redirect this email. As for
+ * every frozen recipient, a later change in inbox ownership is outside this
+ * predicate (docs/project/email.md § Gift voucher emails).
  */
 const RETRYABLE = sql`(
   (e.status in ('queued', 'failed', 'skipped')
     or (e.status = 'sending' and e.attempt_started_at < now() - interval '10 minutes'))
   and (e.kind <> 'gift'
-    or (v.claimed_by is null and v.revoked_at is null and v.email = e.recipient))
+    or (v.revoked_at is null and v.email = e.recipient))
 )`;
 
 /** What a reservation hands the send: the attempt it now owns. `null` when it lost. */
@@ -313,7 +437,7 @@ const reserve: Reserve = async (deliveryId, mode) => {
 export type RetryReservation =
   | { readonly kind: "reserved"; readonly attempts: number }
   | { readonly kind: "not-found" }
-  /** Sent, being sent, or a gift whose voucher was since claimed, revoked or readdressed. */
+  /** Sent, being sent, or a gift whose voucher was since revoked or readdressed. */
   | { readonly kind: "refused" };
 
 /**

@@ -89,12 +89,12 @@ const postingOrder = (): StepName[][] => {
 const { AddPage } = await import("../src/web/AddPage.js");
 
 describe("which steps the box queues", () => {
-  it("is the five main modes that make something, and the cross-references, in STEP_ORDER", () => {
+  it("is the six main modes that make something, and the cross-references, in STEP_ORDER", () => {
     /* If this changes, a mode moved in or out of the experimental switch, or
        started or stopped making something. That may be right — then change
        this line, and the price in the plan. `crossrefs` is no mode: it is
        added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3. */
-    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "skim", "crossrefs"]);
+    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
   });
 
   it("puts Skim after Quotes and Ideas, which it reads", () => {
@@ -111,7 +111,7 @@ describe("which steps the box queues", () => {
   });
 
   it("names them to the reader", () => {
-    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas and Skim");
+    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas, Summary and Skim");
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
@@ -133,6 +133,7 @@ describe("queueAutoModes", () => {
       ["glossary"],
       ["quotes"],
       ["ideas"],
+      ["simple"],
       ["quotes", "ideas", "skim"],
       ["crossrefs"],
     ]);
@@ -156,9 +157,9 @@ describe("queueAutoModes", () => {
       return null;
     };
     await queueAutoModes(run, "an-article");
-    expect(answered).toHaveLength(6);
-    /* The four modes that read nothing, and `crossrefs`, which reads nothing either. */
-    expect(skimPostedAfter, "Skim was posted before the other five had answered").toBe(5);
+    expect(answered).toHaveLength(7);
+    /* The five modes that read nothing, and `crossrefs`, which reads nothing either. */
+    expect(skimPostedAfter, "Skim was posted before the other six had answered").toBe(6);
   });
 
   it("carries on past one that throws", async () => {
@@ -168,7 +169,7 @@ describe("queueAutoModes", () => {
       if (request.steps[0] === "glossary") throw new Error("network");
       return null;
     }, "an-article");
-    expect(started).toHaveLength(6);
+    expect(started).toHaveLength(7);
   });
 });
 
