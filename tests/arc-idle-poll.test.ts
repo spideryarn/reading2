@@ -82,6 +82,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 const { useArc } = await import("../src/web/useArc.js");
 const { useJobs } = await import("../src/web/useJobs.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
+const { ARC_PROMPT_VERSION, isArcOutdated } = await import("../src/arc-version.js");
 
 const SLUG = "an-arc-at-rest";
 
@@ -283,5 +284,99 @@ describe("the arc's job subscription", () => {
     expect(statusPolls().length).toBeGreaterThan(20);
     expect(requests.some((u) => u.includes("/advance")), "and it is still driven").toBe(true);
     expect(lastWorking, "and the arc knows its job is running").toBe(true);
+  });
+});
+
+/**
+ * **An arc an older prompt wrote is rewritten when its owner opens it, and
+ * stays on screen meanwhile.** The payload carries no staleness, so before
+ * 261002g a prompt change never reached an article that already had an arc —
+ * Greg's two were on arc/2 and arc/3 when he asked for a plainer one
+ * (spya-g4yrew). Strictly older only: a rolled-back build must not rewrite a
+ * newer arc, and a version nobody can read is not evidence (GPT Sol, plan
+ * review). docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+ */
+describe("an arc from another prompt version, in the payload", () => {
+
+  function probeFor(version: string) {
+    const arc: Arc = { ...ARC, version };
+    return () => {
+      const got = useArc(SLUG, arc);
+      lastArc = got.arc;
+      if (got.working) everWorking = true;
+      return null;
+    };
+  }
+
+  beforeEach(() => {
+    override = (url, method) => {
+      if (method === "POST" && url === "/api/jobs") {
+        queue = [arcJob("queued")];
+        return json(arcJob("queued"));
+      }
+      return null;
+    };
+  });
+
+  it("older: asks for one new arc, and keeps drawing the old one meanwhile", async () => {
+    await mount(probeFor("arc/1"));
+    await advance(2_000);
+    expect(calls.filter((c) => c === "POST /api/jobs"), "one job asked for").toHaveLength(1);
+    expect(lastArc?.version, "the old arc is still drawn").toBe("arc/1");
+    expect(calls.some((c) => c.startsWith("GET /api/arc/")), "no read: the payload is drawn").toBe(false);
+  });
+
+  it("replaces the old payload arc with the current, freshly fingerprinted arc when the job finishes", async () => {
+    const fresh: Arc = {
+      ...ARC,
+      version: ARC_PROMPT_VERSION,
+      sourceHash: "the-current-article-fingerprint",
+      entries: [{ ...ARC.entries[0]!, text: "The new sentence." }],
+    };
+    let written = false;
+    override = (url, method) => {
+      if (url === `/api/arc/${SLUG}`) {
+        return written
+          ? json({ arc: fresh, stale: false, outdated: false })
+          : new Response(null, { status: 404 });
+      }
+      if (method === "POST" && url === "/api/jobs") {
+        queue = [arcJob("queued")];
+        return json(arcJob("queued"));
+      }
+      if (url === `/api/jobs/${jobId}/advance`) {
+        written = true;
+        queue = [arcJob("done")];
+        return json({ job: arcJob("done"), ran: "arc", busy: false, done: true });
+      }
+      return null;
+    };
+
+    await mount(probeFor("arc/1"));
+    await advance(30_000);
+
+    expect(calls.filter((c) => c === "POST /api/jobs"), "one job asked for").toHaveLength(1);
+    expect(calls.some((c) => c === `GET /api/arc/${SLUG}`), "the completion refresh read the arc").toBe(true);
+    expect(lastArc, "the refreshed arc reached the screen").toEqual(fresh);
+    expect(lastArc?.version).toBe(ARC_PROMPT_VERSION);
+    expect(lastArc?.sourceHash).toBe("the-current-article-fingerprint");
+  });
+
+  it.each([
+    ["current", ARC_PROMPT_VERSION],
+    ["newer (a rolled-back build)", "arc/999"],
+    ["unparseable", "test"],
+  ])("%s: asks for nothing", async (_label, version) => {
+    await mount(probeFor(version));
+    await advance(2_000);
+    expect(calls.filter((c) => c.startsWith("POST")), "no job").toEqual([]);
+    expect(lastArc?.version).toBe(version);
+  });
+
+  it("orders numeric versions rather than comparing arc/10 and arc/9 as strings", () => {
+    expect(isArcOutdated("arc/9", "arc/10")).toBe(true);
+    expect(isArcOutdated("arc/10", "arc/9")).toBe(false);
+    expect(isArcOutdated("arc/10", "arc/10")).toBe(false);
+    expect(isArcOutdated("arc/9-extra", "arc/10")).toBe(false);
   });
 });

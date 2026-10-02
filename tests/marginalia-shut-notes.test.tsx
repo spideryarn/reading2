@@ -31,7 +31,7 @@ function draw(notes: MarginaliaNote[]): HTMLDivElement {
   document.body.append(el);
   const nextRoot = createRoot(el);
   root = nextRoot;
-  act(() => nextRoot.render(<MarginNotesSlot notes={notes} />));
+  act(() => nextRoot.render(<MarginNotesSlot notes={notes} viewer="owner" />));
   return el;
 }
 
@@ -73,9 +73,9 @@ describe("a shut line", () => {
     expect(el.textContent).toContain("+2 more passages");
   });
 
-  it("explains itself on hover", () => {
+  it("explains itself on hover, through the house card (marginalia-note-cards.test.tsx)", () => {
     const el = draw([{ kind: "debate", items: [row] }]);
-    expect(el.querySelector(".marg-shut-button")?.getAttribute("title")).toMatch(/From Debate mode/);
+    expect(el.querySelector(".marg-shut-button")?.getAttribute("data-marg-tip")).toBe("debate");
   });
 
   it("puts a Debate row's link beside the button, never inside it", () => {
@@ -161,8 +161,8 @@ function LayoutHarness() {
   return (
     <table className="zoom">
       <tbody>
-        <tr><td><MarginNotesSlot notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
-        <tr><td><MarginNotesSlot notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
+        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
+        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
       </tbody>
     </table>
   );

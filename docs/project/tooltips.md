@@ -193,6 +193,13 @@ it; a finger does not, because a tap presses the control. It adds no `aria-descr
 sentence is the control's own name, near enough, and would be read twice
 ([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
+**And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
+and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
+made it and who wrote it. It keeps `aria-describedby`, because the card says what the line's own
+words do not. A note with nothing to press — a part's question — is not on this branch: the
+delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of its
+own ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
+
 ## `ControlTip`, which is what most of them are now
 
 The spine's card is a *place* described. The other shape — and by count the commoner one — is a

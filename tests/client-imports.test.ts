@@ -128,6 +128,10 @@ const SHARED = new Set([
   // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so
   // only the *comparison* is shared. Three lines and no imports but types.
   "search-stale.js",
+  // The arc prompt's version and whether a stored arc is older: useArc keeps
+  // an older arc drawn while the owner's open rewrites it. No imports; arc.ts
+  // re-exports the constant. Plan 261002g § 2.
+  "arc-version.js",
   "sanitize-policy.js", // the DOMPurify config, shared so both passes agree
   /* The address a reader writes to us at. On the list because it imports
      nothing at all, and here rather than typed into the page because it is the

@@ -1,0 +1,68 @@
+{
+  "arm": "after",
+  "promptVersion": "arc/6",
+  "arcSha": "b09201176bf9",
+  "at": "2026-10-02T17:41:51.788Z",
+  "articles": [
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "sentences": [
+        "Bigger brains might hold more concepts as pockets of reducibility, but how much more remains genuinely unclear.",
+        "That capacity for concepts rests on mundane shared mechanics: sensory input compressed through layers into one decision stream.",
+        "Language's discreteness and single-threaded grammar emerge from this mechanics, and bigger brains would shift that balance, not escape it.",
+        "The same balance holds beyond language: sensing and acting gain more features with scale, still bounded by irreducibility.",
+        "Tracing concepts through perception and language, abstraction appears as a historical tower of such pockets, reaching toward the ruliad's limit.",
+        "Computational language stress-tests that tower, showing how far brains can routinize abstraction before hitting pure irreducibility.",
+        "Since one brain sustains only a single thread of thought, scaling beyond it means coordinating many threads through society instead.",
+        "These threads converge: a bigger mind is simply a larger region of the ruliad, mind-like only while bounded and single-threaded."
+      ]
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "sentences": [
+        "Machine consciousness is still unsettled, yet it already bears on rights, ethics, and how we see ourselves.",
+        "Before any evidence is weighed, built-in biases already tilt us toward seeing minds in machines.",
+        "Stripped of bias, the real question becomes whether computation itself can ever be enough for experience.",
+        "Computation alone looks insufficient, so action must proceed under genuine uncertainty about what's inside any machine.",
+        "Unable to resolve the question outright, the stakes return to what kind of beings we choose to remain."
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "sentences": [
+        "GPT-3's scale-up succeeds where architecture tweaks alone would not, reviving a long-dismissed idea about intelligence.",
+        "Beyond GPT-3, scale's benefits recur everywhere, but why size itself breeds intelligence remains unexplained.",
+        "Scale's general power now gets a concrete mechanism: predicting text may force models toward real understanding.",
+        "Why scale works is argued; whether anyone will wager enough compute on it is another matter.",
+        "That lone bet now looks vindicated by hindsight, yet most experts still haven't revised their skepticism.",
+        "Vindicated or not, scale carries a side effect: models trained on human data start acting like agents.",
+        "Even stripped of human data, agency may still emerge from any system complex enough to require inferring rules.",
+        "The case for scale-born intelligence and agency rests here, unresolved beyond pointers to further reading."
+      ]
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "sentences": [
+        "A single corroded find raises a core claim still unsettled: who built this first known computer, and when.",
+        "Before any mechanism can be explained, its scattered physical remains must first be sorted and identified.",
+        "With the gears catalogued, attention turns to what the front face actually displayed and how reliably.",
+        "Granted a calendar and sun-moon pointers, the question becomes what else those dials could track.",
+        "The front having handled sun and moon, the back dials extend reach to decades-long eclipse and calendar cycles.",
+        "All five back dials now accounted for, one stray gear reopens the question of undiscovered planetary works.",
+        "Unable to settle planets from evidence alone, rival teams built competing gear schemes to test the idea.",
+        "Granting the device was imprecise and likely not unique, its lineage is sought in later geared instruments abroad.",
+        "Debate over its original design settled or not, the mechanism's afterlife continues in museums and popular culture."
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "sentences": [
+        "A scientist opens by promising to explain how to avoid fooling ourselves, without yet saying how.",
+        "Popular beliefs keep failing simple tests, setting up the need for a name for this failure.",
+        "That failure gets a name, Cargo Cult Science, and its missing ingredient: strict honesty with oneself.",
+        "That honesty now extends outward, from guarding against self-deception to leveling with the public and policymakers.",
+        "Concrete cases show integrity routinely abandoned under pressure, closing with a wish rather than a fix."
+      ]
+    }
+  ]
+}

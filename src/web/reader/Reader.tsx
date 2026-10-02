@@ -130,6 +130,7 @@ import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
+import { modePress } from "./mode-press.js";
 import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -1478,7 +1479,8 @@ export function Reader({
       comments,
     });
     const out = new Map<BlockId, ReactElement>();
-    for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
+    for (const [blockId, notes] of byBlock)
+      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
     return out;
   }, [
     marginRoom,
@@ -3133,7 +3135,7 @@ export function Reader({
         experimental={experimental}
         mode={mode}
         margin={marginOpen}
-        onMode={(next, sub) => {
+        onMode={(next, sub, toggle = false) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old
              entry for ~50ms, so inferring intent from the address races. Back
@@ -3150,6 +3152,15 @@ export function Reader({
               bothFit: wouldFit.both,
               aloneFit: wouldFit.alone,
             });
+            /* The bar's own Marginalia button is a toggle; the command bar
+               names a destination, as it does for every band. If the notes
+               are already on and there is no useful swap to make, choosing
+               them there is therefore idempotent. Keep the narrow-window
+               swap, though: `closeBand` means `?margin=1` is on but hidden
+               behind the band, and naming Marginalia should bring that
+               destination on screen.
+               docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+            if (!toggle && marginOpen && !press.closeBand) return;
             if (press.closeBand) {
               void setModeAndMargin({ mode: null, margin: true }, { history: "push" });
               setBandAway(false);
@@ -3158,16 +3169,44 @@ export function Reader({
             }
             return;
           }
+          /* **Plain closes both columns, and a second press closes the band**
+             (`modePress`, Greg's 96). Both are one push, so one Back puts it
+             all back; neither is a press on a band, so neither names one in
+             the herald. A sub-mode row always moves to its sub-mode. */
+          if (sub === undefined) {
+            const press = modePress({ next, current: mode, bandBack, toggle });
+            if (press === "plain") {
+              /* Already at the destination, with nothing left for Plain to
+                 close. `nuqs` does not elide a same-value push, so calling the
+                 setter here would add an invisible history entry and make the
+                 reader press Back twice to leave the article. */
+              if (mode === "plain" && !marginOpen) return;
+              void setModeAndMargin({ mode: "plain", margin: null }, { history: "push" });
+              setBandAway(false);
+              return;
+            }
+            if (press === "close") {
+              void setMode("plain");
+              return;
+            }
+          }
           armSkimOpening(skimArrival.current, mode, next);
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */
-          if (sub === undefined) void setMode(next);
-          else void setSubNav(subModeParams(sub), { history: "push" });
+          /* A command naming the mode already open, or the bar bringing a
+             stepped-aside band back, changes no URL state. Avoid a same-value
+             `nuqs` write: it still pushes a history entry even though the
+             address and the rendered mode do not move. The activation and
+             recovery paths do not depend on that write — the token minted in
+             Dock is their signal. */
+          if (sub === undefined) {
+            if (next !== mode) void setMode(next);
+          } else void setSubNav(subModeParams(sub), { history: "push" });
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */
           setBandAway(false);
-          /* A new nonce every press, so pressing the mode you are in shows it
-             again and a second press restarts the three seconds. */
+          /* A new nonce every press, so pressing the mode you are in while it
+             has stepped aside names it again as it comes back. */
           setHerald((prev) => ({ mode: next, nonce: (prev?.nonce ?? 0) + 1 }));
           /* Search draws its results down the rail, so entering search mode
              brings the rail back if the reader had put it away — Greg,

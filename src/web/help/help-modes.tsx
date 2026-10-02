@@ -96,8 +96,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     whenToUse: (
       <p>
         For reading straight through. Open a mode when you hit something you want help with, then
-        press <strong>Plain</strong> to come back. It is the first mode button in the bottom bar,
-        and on a phone the only one that keeps its name, so you can always find your way out.
+        press <strong>Plain</strong> to come back; it closes the Marginalia column too. Pressing the
+        mode you are in a second time also closes it. Plain is the first button in the bottom bar,
+        in a box of its own, and on a phone the only one that keeps its name, so you can always find
+        your way out.
       </p>
     ),
     reading: (
