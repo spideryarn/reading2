@@ -32,7 +32,6 @@ import type {
   ChatAnchor,
   ChatMessage,
   ChatThread,
-  RememberStance,
   ThreadKind,
   ToolRun,
 } from "./types.js";
@@ -206,14 +205,6 @@ export interface Turn {
    */
   kind?: ThreadKind;
   /**
-   * How much the answer should say, for a Remember turn.
-   *
-   * Written onto the **pending** reply, not onto the finished one — see
-   * `ChatMessage.stance`. An answer that never finished still has to say which
-   * instruction produced it.
-   */
-  stance?: RememberStance;
-  /**
    * The reader pressed the "?" beside a paragraph rather than typing this
    * question — **only meaningful when this turn creates the thread**, in the
    * sense that the "?" only ever sends a first question. But unlike `anchor` and
@@ -264,7 +255,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, kind, stance, help }: Turn,
+  { threadId, question, anchor, kind, help }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -290,9 +281,8 @@ export function withTurn(
     text: question,
     createdAt: at,
     status: "done",
-    /* **On the reader's row, and only ever here.** The mirror of `stance` on the
-       reply below: one says how the answer was asked for, the other how it was
-       written. Conditional spread rather than `help: help`, because
+    /* **On the reader's row, and only ever here**, so a retry or an edit of
+       the question inherits it. Conditional spread rather than `help: help`, because
        `exactOptionalPropertyTypes` is on and the two stores are compared field
        for field — an explicit `undefined` and an absent key are not the same
        thing. See `Turn.help`. */
@@ -304,11 +294,9 @@ export function withTurn(
     text: "",
     createdAt: at,
     status: "pending",
-    /* On the pending row, before a word of the answer exists. `ChatMessage.stance`
-       says why: an answer that crashed, errored, was stopped or was swept still
-       has to say which instruction produced the words that did arrive, and a
-       retry of it has to have something to inherit. */
-    ...(stance ? { stance } : {}),
+    /* No stance. Remember's four stances became one voice on 2026-10-02, so
+       nothing new writes `ChatMessage.stance`; older rows keep theirs.
+       docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
   };
   const base: ChatThread = existing ?? {
     /* The client mints the thread id so `?thread=` can be in the URL before
@@ -373,7 +361,7 @@ export function withTurn(
  * One spoken exchange, both halves known, ready to append.
  *
  * Deliberately not a `Turn`: that type describes a question **about to be
- * answered**, and half its fields (`stance`, and the pending row `beginTurn`
+ * answered**, and some of its fields (the pending row `beginTurn`
  * writes) only make sense while an answer is still coming.
  */
 export interface SpokenTurn {
@@ -658,17 +646,9 @@ export function withRetry(
     text: "",
     createdAt: at,
     status: "pending",
-    /* **Carried over by name, and it is the one field that is.**
-       Everything else the old attempt had is deliberately dropped — that is what
-       the note above is about. The stance is different in kind: it is not a
-       result of the answer, it is the INSTRUCTION that produced it, and "have
-       another go at that" has to mean another go at the same question asked the
-       same way.
-       If it took the reader's current picker instead, moving the picker and
-       then pressing retry would silently rewrite the instruction attached to a
-       stored turn — a button that says "have another go" changing what was
-       asked. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 4. */
-    ...(last.stance ? { stance: last.stance } : {}),
+    /* Nothing carried over: everything the old attempt had is deliberately
+       dropped, as the note above says. The stance was the one exception until
+       Remember's four stances became one voice on 2026-10-02. */
   };
   const thread: ChatThread = {
     ...existing,
@@ -710,17 +690,6 @@ export function withRetry(
  * which is what stops a reader reading an answer that no longer matches the
  * question above it and thinking the model wandered.
  */
-/**
- * The stance on an assistant row, if it has one.
- *
- * A named function rather than `m?.stance` at the call site because the call
- * site is already a conditional spread and the interesting part — *which* row —
- * would be lost inside it.
- */
-function stanceOf(message: ChatMessage | undefined): RememberStance | undefined {
-  return message?.role === "assistant" ? message.stance : undefined;
-}
-
 export function withEdit(
   threads: ChatThread[],
   threadId: string,
@@ -773,17 +742,6 @@ export function withEdit(
     text: "",
     createdAt: at,
     status: "pending",
-    /* **From the answer being REPLACED, not from the tail of the thread.**
-       An edit to question 2 discards turns 3, 4 and 5, which may have had three
-       different stances between them; the reader's picker at that moment is
-       seeded from turn 5's. Inheriting that would answer a rewritten early
-       question in the voice of a later turn that no longer exists.
-       `index + 1` is the answer that sat under the question being rewritten. It
-       may not exist — a question whose answer was never stored — in which case
-       there is nothing to inherit and `balanced` applies downstream. */
-    ...(stanceOf(existing.messages[index + 1])
-      ? { stance: stanceOf(existing.messages[index + 1]) as RememberStance }
-      : {}),
   };
   const thread: ChatThread = {
     ...existing,

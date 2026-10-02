@@ -51,7 +51,7 @@ import { describe, expect, it } from "vitest";
 
 import { chromePath } from "../scripts/browser-sign-in.js";
 import type { LibraryEntry } from "../src/types.js";
-import { ShelfCard, type Shelf } from "../src/web/ShelfEntry.js";
+import { Actions, ShelfCard, type Shelf } from "../src/web/ShelfEntry.js";
 import { EditableTitle, type ArticleRename } from "../src/web/TitleEditor.js";
 
 const chrome = (() => {
@@ -81,10 +81,22 @@ const ENTRY: LibraryEntry = {
 const SHELF = { renaming: null } as unknown as Shelf;
 const RENAME = { editing: false, overridden: false } as unknown as ArticleRename;
 
+/*
+ * **Three places the five are drawn, since 2026-10-02** (plan 261002i): a card
+ * as wide as an iPad's shelf, a card as narrow as a phone's, and the table's
+ * row, which is `Actions` without `fingerRow`. The widths are the card's own,
+ * because the switch is a container query on the card.
+ */
 const MARKUP = renderToStaticMarkup(
   <div>
-    <div id="card">
+    <div id="card" style={{ width: "760px" }}>
       <ShelfCard entry={ENTRY} shelf={SHELF} note="" />
+    </div>
+    <div id="narrow" style={{ width: "340px" }}>
+      <ShelfCard entry={ENTRY} shelf={SHELF} note="" />
+    </div>
+    <div id="table">
+      <Actions entry={ENTRY} shelf={SHELF} onEdit={() => {}} inTooltipGroup />
     </div>
     <div id="heading">
       <EditableTitle rename={RENAME} title="A piece">
@@ -110,7 +122,9 @@ async function stylesheet(): Promise<string> {
   const entry = resolve("src/web/tailwind.css");
   const compiler = await compile(readFileSync(entry, "utf8"), loader(dirname(entry)));
   const classes = [...MARKUP.matchAll(/class="([^"]*)"/g)].flatMap((m) =>
-    (m[1] ?? "").replace(/&#x27;/g, "'").split(/\s+/),
+    /* `&amp;` last, so an escaped `&#x27;` is not unescaped twice. The row's
+       `[&_svg]` classes are the first here with an `&` in them. */
+    (m[1] ?? "").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").split(/\s+/),
   );
   return compiler.build([...new Set(classes)].filter(Boolean));
 }
@@ -123,9 +137,19 @@ const DEVICES = {
     "primaryPointerType=4,availablePointerTypes=6,primaryHoverType=2,availableHoverTypes=3",
 } as const;
 
+interface Place {
+  rowShown: boolean;
+  menuShown: boolean;
+  /** The rendered width of the row's first button, in CSS px — 0 when not drawn. */
+  button: number;
+}
+
 interface Seen {
   /** The effective opacity of the row of five — every ancestor's multiplied in. */
   row: number;
+  /** The phone-width card and the table's row, asked the same three questions. */
+  narrow: Place;
+  table: Place;
   /**
    * Whether the row of five is laid out at all. `display: none`, on itself or
    * any ancestor, leaves an element with no client rects — which is the one
@@ -136,6 +160,8 @@ interface Seen {
   menuShown: boolean;
   /** The same, of the pencil beside an article page's heading. */
   pencil: number;
+  /** The wide card's first button's width. */
+  button: number;
   /** The row again, with the (fake, mouse) pointer resting on the card. */
   rowHovered: number;
 }
@@ -160,13 +186,28 @@ async function look(device: keyof typeof DEVICES): Promise<Seen> {
           return o;
         };
         const shown = (el: Element | null): boolean => (el?.getClientRects().length ?? 0) > 0;
-        const first = document.querySelector("#card [data-action]");
-        let row = first?.parentElement ?? null;
-        while (row && row.querySelectorAll("[data-action]").length < 5) row = row.parentElement;
+        const rowIn = (id: string) => {
+          let row = document.querySelector(`#${id} [data-action]`)?.parentElement ?? null;
+          while (row && row.querySelectorAll("[data-action]").length < 5) row = row.parentElement;
+          return row;
+        };
+        const place = (id: string) => {
+          const row = rowIn(id);
+          const button = row?.querySelector("button, a");
+          return {
+            rowShown: shown(row),
+            menuShown: shown(document.querySelector(`#${id} button[aria-label^="Actions for"]`)),
+            button: shown(row) ? (button?.getBoundingClientRect().width ?? 0) : 0,
+          };
+        };
+        const card = place("card");
         return {
-          row: visible(row),
-          rowShown: shown(row),
-          menuShown: shown(document.querySelector('#card button[aria-label^="Actions for"]')),
+          row: visible(rowIn("card")),
+          rowShown: card.rowShown,
+          menuShown: card.menuShown,
+          button: card.button,
+          narrow: place("narrow"),
+          table: place("table"),
           pencil: visible(document.querySelector('#heading button[aria-label="Edit title"]')),
         };
       });
@@ -200,22 +241,44 @@ describe.skipIf(chrome === null)("the shelf's actions, in a browser that evaluat
     expect(seen.row, "the row showed at rest on a desktop").toBe(0);
     expect(seen.pencil, "the pencil showed at rest on a desktop").toBe(0);
     expect(seen.rowHovered, "pointing at the card did not reveal the row").toBe(1);
+    expect(seen.button, "a mouse's row is not the 28px row").toBe(28);
+    expect(seen.narrow.menuShown, "a desktop's narrow card drew the ⋯").toBe(false);
+    expect(seen.table.menuShown, "a desktop's table drew the ⋯").toBe(false);
   });
 
-  it("are a ⋯ menu, there at rest, for a finger on a tablet", { timeout: 60_000 }, async () => {
+  /*
+   * **Since 2026-10-02 a wide card gives a finger the row** — at rest, opaque,
+   * 40px a button — and keeps the "⋯" for a phone-width card and for the
+   * table. Greg, on an iPad: *"save me a click. And we could keep the three
+   * dots menu just in case things are really, really narrow."* Plan 261002i.
+   */
+  it("are the row of five, finger-sized, for a finger on a wide card", { timeout: 60_000 }, async () => {
     const seen = await look("finger");
-    expect(seen.menuShown, "a tablet showed no ⋯").toBe(true);
-    expect(seen.rowShown, "a tablet was still drawn the unlabelled row").toBe(false);
+    expect(seen.rowShown, "a tablet-width card hid the row from a finger").toBe(true);
+    expect(seen.menuShown, "a tablet-width card drew the ⋯ as well as the row").toBe(false);
+    expect(seen.row, "the row was not opaque at rest for a finger").toBe(1);
+    expect(seen.button, "the row's buttons are not finger-sized").toBe(40);
     expect(seen.pencil).toBe(1);
   });
 
+  it("are a ⋯ menu for a finger on a phone-width card, and in the table", { timeout: 60_000 }, async () => {
+    const seen = await look("finger");
+    expect(seen.narrow.menuShown, "a phone-width card showed no ⋯").toBe(true);
+    expect(seen.narrow.rowShown, "a phone-width card was drawn the row").toBe(false);
+    expect(seen.table.menuShown, "the table showed no ⋯ to a finger").toBe(true);
+    expect(seen.table.rowShown, "the table was drawn the row for a finger").toBe(false);
+  });
+
   it(
-    "are a ⋯ menu for a finger on a machine whose primary pointer is a mouse",
+    "follow the same switch for a finger on a machine whose primary pointer is a mouse",
     { timeout: 60_000 },
     async () => {
       const seen = await look("finger and mouse");
-      expect(seen.menuShown, "a touchscreen laptop showed no ⋯ to its finger").toBe(true);
-      expect(seen.rowShown, "a touchscreen laptop was still drawn the unlabelled row").toBe(false);
+      expect(seen.rowShown, "a touchscreen laptop's wide card hid the row").toBe(true);
+      expect(seen.menuShown, "a touchscreen laptop's wide card drew the ⋯ too").toBe(false);
+      expect(seen.narrow.menuShown, "a touchscreen laptop's narrow card showed no ⋯").toBe(true);
+      expect(seen.table.menuShown, "a touchscreen laptop's table showed no ⋯").toBe(true);
+      expect(seen.table.rowShown, "a touchscreen laptop's table drew the row").toBe(false);
       expect(seen.pencil, "a touchscreen laptop showed no pencil beside the title").toBe(1);
     },
   );

@@ -26,6 +26,16 @@
    here. Each panel keeps a class of its own — `chat`, `gloss` — for whatever
    only it needs. */
 .mode-band {
+  /* **A scrollbar you can see on an iPad.** Greg, 2026-10-02, in Summary:
+     *"there IS a scroll bar in summary mode on my iPad. It's just very hard to
+     see."* iOS draws its own thin overlay indicator, and on `--panel` it was
+     close to invisible. Since Safari 26.2 (iPadOS 26.2) WebKit paints that
+     indicator in `scrollbar-color`'s thumb (WebKit bug 258461); earlier
+     versions ignore this line. **Inherited**, so every scroller in every band gets it from
+     here. Only the colour: `scrollbar-width` is untouched, so no scrollbar
+     takes or gives back any width (narrow-windows.md). On a desktop with
+     classic scrollbars the band's bar takes the same grey. Plan 261002i. */
+  scrollbar-color: var(--ink-faint) transparent;
   position: fixed;
   /* Left of the spine's right edge, right of nothing — the band starts exactly
      where the spine ends, so the two read as one rail of chrome. */
@@ -293,7 +303,7 @@
   color: var(--ink-faint);
   cursor: pointer;
 }
-.chat-icon:not(:disabled):hover { background: var(--surface-raised); color: var(--ink); }
+.chat-icon:not(:disabled):not([aria-disabled="true"]):hover { background: var(--surface-raised); color: var(--ink); }
 .chat-icon.danger:not(:disabled):hover { color: var(--destructive, oklch(0.65 0.2 25)); }
 /* Armed: one press has already happened and the next one deletes. Coloured
    rather than merely hovered, because the whole point is that it looks
@@ -310,7 +320,10 @@
    a browser pass reported it could not visually confirm the disabled state,
    which was the right observation and the wrong conclusion — there was nothing
    to see. 2026-08-26. */
-.chat-icon:disabled { opacity: 0.4; cursor: default; }
+/* `aria-disabled` too: Ask again uses it rather than `disabled`, so a refused
+   press can still say why (EditQuestion in ChatPanel.tsx). */
+.chat-icon:disabled,
+.chat-icon[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 
 .chat-error {
   margin: 0;
@@ -747,7 +760,7 @@
 }
 .chat-sources ul { margin: 0; padding: 0; list-style: none; }
 /* Says the list is the web half of the answer (report 3D). As quiet as the
-   list it heads — the same small-caps note `.chat-stance-tag` is. */
+   list it heads. */
 .chat-sources-label {
   margin: 0 0 0.15rem;
   font-variant: small-caps;
@@ -890,25 +903,11 @@
 /* The whole control row drops below the box rather than sitting beside it: at
    six rows tall, buttons aligned to `flex-end` beside the textarea sit level
    with its last line and read as belonging to nothing. */
-/* The tightest row in the app: talk, live + its device picker, the stance
-   picker, and send, all on one line under a full-width box. It fitted with 4px
-   to spare before the 2026-09-03 lift and wrapped after it, stranding send
-   alone at the left of a second line. A narrower gap here rather than smaller
-   text — the row is short of a few pixels, not of room to read. */
+/* Talk, Live + its device picker, and Send share the line below the full-width
+   box. A narrow gap keeps that row together on small screens without shrinking
+   the labels. */
 .remember .chat-composer { flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .remember .chat-input { flex-basis: 100%; }
-
-/* The bottom row reads left to right in the order the reader does things:
-   talk, choose how the reply comes back, send. The DOM order cannot say that —
-   the send button has to stay next to the textarea for the keyboard, and the
-   dictation button is rendered after it — so the three are ordered here.
-   Without this the box wraps to `send · talk · stance`, which strands send at
-   the far left of a full-width row with the stance at the far right. */
-.remember .chat-talk { order: 1; }
-.remember .chat-live { order: 2; }
-.remember .chat-stance { order: 3; }
-.remember .chat-send { order: 4; }
-.remember .prof-listening { order: 6; }
 
 .chat-talk {
   display: inline-flex;
@@ -1040,43 +1039,6 @@
 }
 .chat-pointed-why { color: var(--ink-faint); }
 
-.chat-stance {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-left: auto;
-  font-size: 0.88rem;
-  color: var(--ink-faint);
-}
-.chat-stance-label { white-space: nowrap; }
-.chat-stance select {
-  padding: 0.15rem 0.25rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  /* Matches `.chat-live-mic select`, its neighbour in the same row. The two
-     were 0.88 and 0.83 for no reason anyone chose, and a select is as wide as
-     its longest option ("Signposts") whether you can spare the width or not. */
-  font-size: 0.83rem;
-}
-.chat-stance select:disabled { opacity: 0.45; cursor: default; }
-
-/* Which stance an answer was asked for, in its action row. Quiet, lower-case
-   and un-boxed: it is a note about how the reply was requested, not a label on
-   its quality. Only ever present on a non-default stance. */
-.chat-stance-tag {
-  margin-right: auto;
-  font-size: 0.83rem;
-  font-variant: small-caps;
-  letter-spacing: 0.03em;
-  color: var(--ink-faint);
-}
-/* Our label for how the reply was asked for, not the model's words: with the
-   per-voice faces it would otherwise inherit the AI face from
-   `.chat-turn.model` (docs/project/fonts.md). */
-:root .chat-stance-tag { font-family: var(--font-ui); }
 
 /* **A band's (i)** (`BandAbout.tsx`), in the band's top-right corner, put
    there by `ModeSurface`'s `about` for every mode alike — what the mode is,
@@ -1183,3 +1145,17 @@
 .band-about-card .band-about-help a { color: var(--highlight-ink); text-decoration: none; }
 .band-about-card .band-about-help a:hover,
 .band-about-card .band-about-help a:focus-visible { text-decoration: underline; }
+
+/* The Remember composer is the one deliberate reordering of the shared chat
+   controls. Keep it after their base rules: besides making the cascade read in
+   the order it applies, that keeps the stylesheet's specificity ordering
+   check honest. The bottom row reads left to right in the order the reader
+   does things: talk, then send at the far right. The DOM order cannot say that
+   — the send button has to stay next to the textarea for the keyboard, and the
+   dictation button is rendered after it — so they are ordered here. Send takes
+   the `margin-left: auto` the stance picker had until 2026-10-02, when Recall
+   became one voice and the picker went. */
+.remember .chat-talk { order: 1; }
+.remember .chat-live { order: 2; }
+.remember .chat-send { order: 4; margin-left: auto; }
+.remember .prof-listening { order: 6; }

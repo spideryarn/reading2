@@ -188,12 +188,15 @@ right instead, beside a band or without one.
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
   [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
 - **[remember-mode.md](remember-mode.md)** — the other direction: the reader says what they took from
-  the piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
-  cross-family review said not to ship the first one, and the one mode that cannot be used to avoid
-  reading.
+  the piece and the model shows them where it comes apart, then nudges them to remember more. One
+  adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
+  not to ship the first one, and the one mode that cannot be used to avoid reading.
 - **[quiz.md](quiz.md)** — the other half of Remember, where the questions come the other way: a
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
+- **[remembering-vision.md](remembering-vision.md)** — where Remember is going: Recall, Tutorial and
+  Quiz as three directions of one exchange, what all three share (brief, block links, hints that make
+  success likely), and the ideas not built yet. Read it before adding a fourth.
 
 ### Hovering and moving around
 

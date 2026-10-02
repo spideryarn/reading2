@@ -707,45 +707,44 @@ describe("the Postgres chat store", () => {
     expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("chat");
   });
 
-  it("stores the stance on the pending answer, before a word of it exists", async () => {
-    const { reply } = await pgChatStore.begin(SLUG, {
+  /* No stance is written since Recall became one voice on 2026-10-02. The
+     column stays, for the rows that already have one. */
+  it("writes no stance on a Remember turn, and clears a legacy one on retry", async () => {
+    const { reply, attempt } = await pgChatStore.begin(SLUG, {
       threadId: THREAD,
       question: "what I took",
       kind: "remember",
-      stance: "socratic",
     });
     expect(reply.status).toBe("pending");
-    const stored = (await pgChatStore.load(SLUG))[0]?.messages.at(-1);
-    expect(stored?.stance).toBe("socratic");
-    // and never on the reader's own row — the check constraint agrees
-    expect((await pgChatStore.load(SLUG))[0]?.messages[0]).not.toHaveProperty("stance");
-  });
-
-  it("keeps the stance through a failed answer, which is when it matters most", async () => {
-    /* An answer that errored still has to say which instruction produced it,
-       because the retry of that row inherits from it. Writing the stance in
-       `finish` rather than on the pending row would lose exactly this case. */
-    const { reply, attempt } = await pgChatStore.begin(SLUG, {
-      threadId: THREAD,
-      question: "what I took",
-      kind: "remember",
-      stance: "respond",
-    });
-    await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "error", error: "nope" }, { attempt });
-    expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.stance).toBe("respond");
-  });
-
-  it("carries the stance across a retry rather than dropping it", async () => {
-    const { reply, attempt } = await pgChatStore.begin(SLUG, {
-      threadId: THREAD,
-      question: "what I took",
-      kind: "remember",
-      stance: "signposts",
-    });
     await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "done", text: "a" }, { attempt });
+    /* Make this a real pre-one-voice row. Starting and retrying only a new null
+       row lets a missing `stance: null` in pgChatStore.retry pass silently. */
+    await getDb()
+      .update(chatMessages)
+      .set({ stance: "socratic" })
+      .where(
+        and(
+          eq(chatMessages.articleId, ARTICLE_ID),
+          eq(chatMessages.threadId, THREAD),
+          eq(chatMessages.id, reply.id),
+        ),
+      );
     const again = await pgChatStore.retry(SLUG, THREAD, reply.id);
-    expect(again.reply.stance).toBe("signposts");
-    expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.stance).toBe("signposts");
+    expect(again.reply).not.toHaveProperty("stance");
+    for (const m of (await pgChatStore.load(SLUG))[0]?.messages ?? []) {
+      expect(m).not.toHaveProperty("stance");
+    }
+    const rows = await getDb()
+      .select({ stance: chatMessages.stance })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.articleId, ARTICLE_ID),
+          eq(chatMessages.threadId, THREAD),
+          eq(chatMessages.id, reply.id),
+        ),
+      );
+    expect(rows[0]?.stance).toBeNull();
   });
 
   /**

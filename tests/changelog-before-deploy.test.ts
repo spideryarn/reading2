@@ -10,14 +10,16 @@
  *  - `plan --upcoming` — one version, no deployment id, or nothing at all.
  *  - `installPending` — the pending file replaced whole, or not at all.
  *  - `planPromotion` — one history line per production deploy, with the serving
- *    build's own id and time, and nothing a forced deploy shipped left
- *    behind the watermark undescribed.
- *  - `changelogGap` / `notesAt` — the deploy gate, strict: nothing a reader
- *    would see may ship after the notes stop.
+ *    build's own id and time, and nothing shipped after the notes left behind
+ *    the watermark undescribed.
+ *  - `changelogGap` / `notesAt` — the deploy gate: notes were written for this
+ *    deploy, and anything after them rolls to the next release (261002h).
  *
- * Real commits from this repo's history, because the ancestry questions are
- * asked of git and a fixture repo would be testing a different history shape.
+ * Mostly real commits from this repo's history, because the ancestry questions
+ * are asked of git and a fixture repo would be testing a different history
+ * shape; `repoWithALateCommit` builds the one shape the history lacks.
  */
+import * as childProcess from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,8 +37,12 @@ import {
   Refused,
   servingFrom,
 } from "../scripts/changelog/changelog.js";
+import * as changelogModule from "../scripts/changelog/changelog.js";
+import { main as releaseNotes, fastForwardTo, Stop } from "../scripts/changelog/release-notes.js";
 import { isReleasePath, notesAt, releaseCommits } from "../scripts/changelog/release-paths.js";
 import { changelogGap, servingUnrecorded } from "../scripts/deploy-checks.js";
+
+vi.mock("node:child_process", { spy: true });
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -59,6 +65,9 @@ function scratch(): string {
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   vi.restoreAllMocks();
+  /* Module spies keep their mock implementations after restoreAllMocks. */
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function line(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -111,6 +120,39 @@ function history(...lines: Record<string, unknown>[]): ChangelogVersion[] {
 
 const SERVING = { commit: CODE, deploymentId: "dpl_one", builtAt: "2026-10-01T01:20:30.456Z" };
 
+/**
+ * A real repo: one recorded deploy (`first`), notes describing a later commit
+ * (`noted`, committed in `notesCommit`), and a commit a reader can see that
+ * landed after `prepare` planned (`late`) — 261002h's case.
+ */
+function repoWithALateCommit(): { repo: string; first: string; noted: string; notesCommit: string; late: string } {
+  const repo = scratch();
+  const run = (...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], {
+      cwd: repo,
+      encoding: "utf8",
+    }).trim();
+  const commit = (file: string, text: string, msg: string): string => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), text);
+    run("add", file);
+    run("commit", "--quiet", "-m", msg);
+    return run("rev-parse", "HEAD");
+  };
+  run("init", "--quiet");
+  const first = commit("src/a.ts", "a\n", "the first deploy");
+  commit("src/web/changelog-pending.json", "null\n", "nothing pending");
+  commit("src/web/changelog-versions.ndjson", `${JSON.stringify(line({ sha: first }))}\n`, "its line");
+  const noted = commit("src/b.ts", "b\n", "a change the notes describe");
+  const notesCommit = commit(
+    "src/web/changelog-pending.json",
+    `${JSON.stringify(pending({ sha: noted, previous_sha: first }))}\n`,
+    "the notes",
+  );
+  const late = commit("src/c.ts", "c\n", "a change that landed after prepare planned");
+  return { repo, first, noted, notesCommit, late };
+}
+
 describe("release paths", () => {
   it("does not count the changelog's own files as a change", () => {
     expect(isReleasePath("src/web/changelog-versions.ndjson")).toBe(false);
@@ -143,6 +185,20 @@ describe("parsePending", () => {
   it("refuses one that claims a deployment it cannot have had", () => {
     expect(parsePending(JSON.stringify(pending({ deployment_id: "dpl_x" })), h()).problems.join()).toMatch(
       /must be null/,
+    );
+  });
+
+  it("refuses one that names a deployed commit it cannot have had", () => {
+    expect(parsePending(JSON.stringify(pending({ deployed_sha: CODE })), h()).problems.join()).toMatch(
+      /deployed_sha must be absent/,
+    );
+  });
+
+  it("reads a history line's deployed commit, and refuses one that is not a sha", () => {
+    expect(history(line({ deployed_sha: CODE }))[0]?.deployed_sha).toBe(CODE);
+    expect(history(line())[0]?.deployed_sha).toBeNull();
+    expect(parseChangelog(JSON.stringify(line({ deployed_sha: "nope" }))).problems.join()).toMatch(
+      /deployed_sha is neither absent nor a sha/,
     );
   });
 
@@ -251,6 +307,7 @@ describe("promote", () => {
       version: "2026-10-01T01:20:30Z",
       deployment_id: "dpl_one",
       sha: CODE,
+      deployed_sha: CODE,
       previous_sha: CODE_PARENT,
       commit_count: 1,
     });
@@ -289,8 +346,113 @@ describe("promote", () => {
     if (p.kind !== "append") return;
     expect(p.line.sha).toBe(CODE_PARENT);
     expect(p.line.commit_count).toBe(0);
-    expect(p.notes.join()).toMatch(/without notes/);
+    expect(p.notes.join()).toMatch(/after the notes/);
     expect(parseChangelog([line(), p.line].map((l) => JSON.stringify(l)).join("\n")).problems).toEqual([]);
+  });
+
+  /**
+   * The claim 261002h rests on: a commit the deploy gate let through after the
+   * notes is not lost behind the watermark — the line stops at the notes, so
+   * the next `prepare`'s range (from the last line's `sha`) contains it.
+   */
+  it("leaves a commit that landed after the notes in the next release's range", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const p = promote({
+      root: repo,
+      history: history(line({ sha: first })),
+      serving: { ...SERVING, commit: late },
+      servingPendingText: notesText,
+      localPendingText: notesText,
+    });
+    expect(p.kind).toBe("append");
+    if (p.kind !== "append") return;
+    expect(p.line.sha).toBe(noted);
+    /* And what was built, for the fleet dashboard's distance. */
+    expect(p.line.deployed_sha).toBe(late);
+    expect(p.line.entries).toEqual([entry()]);
+    expect(releaseCommits(`${String(p.line.sha)}..${late}`, repo)).toEqual([late]);
+  });
+
+  it("records repeated redeploys of a rolled release without advancing its coverage", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = [line({ sha: first })];
+    for (let i = 1; i <= 3; i++) {
+      const p = promote({
+        root: repo, history: history(...rows),
+        serving: { commit: late, deploymentId: `dpl_${i}`, builtAt: `2026-10-01T0${i + 1}:00:00Z` },
+        servingPendingText: notesText, localPendingText: "null\n",
+      });
+      expect(p.kind).toBe("append");
+      if (p.kind !== "append") throw new Error("unreachable");
+      expect(p.line).toMatchObject({ sha: noted, deployed_sha: late });
+      if (i > 1) expect(p.line).toMatchObject({ commit_count: 0, entries: [] });
+      rows.push(p.line);
+    }
+    expect(releaseCommits(`${noted}..${late}`, repo)).toEqual([late]);
+  });
+
+  it("still records a redeploy of a legacy rolled line with no deployed_sha", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", version: "2026-10-01T02:00:00Z",
+    }));
+    const p = promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: late, deploymentId: "dpl_two", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: notesText,
+    });
+    expect(p.kind === "append" && p.line).toMatchObject({
+      sha: noted, deployed_sha: late, commit_count: 0, entries: [],
+    });
+  });
+
+  it("does not call a rollback to the notes commit a redeploy of a rolled build", () => {
+    const { repo, first, noted, notesCommit, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: `${SERVING.builtAt.slice(0, 19)}Z`,
+    }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: notesCommit, deploymentId: "dpl_rollback", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: notesText,
+    })).toThrow(/rollback/);
+  });
+
+  it("refuses a rollback with null notes even when it is ahead of the coverage watermark", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: "2026-10-01T02:00:00Z",
+    }));
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: noted, deploymentId: "dpl_rollback", builtAt: "2026-10-01T03:00:00Z" },
+      servingPendingText: "null\n",
+    })).toThrow(/rollback/);
+  });
+
+  it("does not match quiet coverage rows from a different build as repeated redeploys", () => {
+    const { repo, first, noted, notesCommit, late } = repoWithALateCommit();
+    const rows = history(line({ sha: first }), line({
+      ...pending({ sha: noted, previous_sha: first }),
+      deployment_id: "dpl_one", deployed_sha: late, version: "2026-10-01T02:00:00Z",
+    }), line({
+      sha: noted, previous_sha: noted, deployed_sha: notesCommit,
+      deployment_id: "dpl_wrong", commit_count: 0, version: "2026-10-01T03:00:00Z",
+    }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => promote({
+      root: repo, history: rows,
+      serving: { ...SERVING, commit: late, deploymentId: "dpl_two", builtAt: "2026-10-01T04:00:00Z" },
+      servingPendingText: JSON.stringify(pending({ sha: noted, previous_sha: first })),
+    })).toThrow(/does not chain/);
   });
 
   it("records a redeploy of a release already promoted as a line with nothing in it", () => {
@@ -373,15 +535,26 @@ describe("promote", () => {
 });
 
 describe("changelogGap — the deploy gate", () => {
-  const base = { problems: [], described: CODE, describedInCandidate: true, uncovered: [] };
+  const base = { problems: [], described: CODE, describedInCandidate: true, pendingPresent: true, uncovered: [] };
 
   it("passes notes that cover everything the candidate ships", () => {
     expect(changelogGap(base)).toBeNull();
   });
 
-  /** The revert that lands after the notes: the reason the rule is strict (261001q § The deploy gate). */
-  it("refuses a release commit after the notes, however fresh they are", () => {
-    expect(changelogGap({ ...base, uncovered: [DOCS] })).toMatch(/no release notes describe them/);
+  /**
+   * A commit that landed after `prepare` planned rolls to the next release's
+   * notes rather than sending `prepare` round again — 261002h. Strict until
+   * then (261001q § The deploy gate).
+   */
+  it("passes a release commit after the notes, which the next release describes", () => {
+    expect(changelogGap({ ...base, uncovered: [DOCS] })).toBeNull();
+  });
+
+  /** No notes at all since the last promote means prepare did not run for this deploy. */
+  it("refuses a release commit when nothing is pending", () => {
+    expect(changelogGap({ ...base, pendingPresent: false, uncovered: [DOCS] })).toMatch(
+      /no release notes describe them/,
+    );
   });
 
   it("refuses notes about some other history", () => {
@@ -410,6 +583,28 @@ describe("changelogGap — the deploy gate", () => {
 
     expect(notesAt(sha, repo).gap).toMatch(/history has no releases/);
   });
+
+  describe("notesAt, against a real history", () => {
+    const build = repoWithALateCommit;
+
+    it("passes a late commit after the notes, and names it as the next release's", () => {
+      const { repo, noted, late } = build();
+      const notes = notesAt(late, repo);
+      expect(notes.gap).toBeNull();
+      expect(notes.described).toBe(noted);
+      expect(notes.late).toEqual([late]);
+    });
+
+    it("names nothing late when the notes cover the candidate", () => {
+      const { repo, notesCommit } = build();
+      expect(notesAt(notesCommit, repo)).toMatchObject({ gap: null, late: [] });
+    });
+
+    it("still refuses a release commit when no notes are pending", () => {
+      const { repo, noted } = build();
+      expect(notesAt(noted, repo).gap).toMatch(/no release notes describe them/);
+    });
+  });
 });
 
 /**
@@ -434,5 +629,199 @@ describe("servingUnrecorded — the deploy gate's second question", () => {
     expect(servingUnrecorded({ servingDeploymentId: null, recordedDeploymentIds: ["dpl_one"] })).toMatch(
       /could not read/,
     );
+  });
+});
+
+/**
+ * `prepare` brings the primary to `origin/dev` by fast-forward only, in a tree
+ * that holds other agents' uncommitted edits. `merge --ff-only` on its own says
+ * "Already up to date" from a HEAD that is AHEAD and leaves it there — GPT Sol
+ * on 261002h — so `fastForwardTo` asks ancestry first and checks after.
+ */
+describe("fastForwardTo — prepare's only way of moving HEAD", () => {
+  function inRepo(dir: string) {
+    const run = (...args: string[]) =>
+      execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], {
+        cwd: dir, encoding: "utf8",
+      }).trim();
+    const commit = (file: string, msg: string): string => {
+      writeFileSync(path.join(dir, file), `${msg}\n`);
+      run("add", file);
+      run("commit", "--quiet", "-m", msg);
+      return run("rev-parse", "HEAD");
+    };
+    const at = (sha: string) => {
+      const tree = path.join(scratch(), "tree");
+      run("worktree", "add", "--quiet", "--detach", tree, sha);
+      return inRepo(tree);
+    };
+    return { dir, run, commit, at };
+  }
+  function repo() {
+    const result = inRepo(scratch());
+    result.run("init", "--quiet");
+    return result;
+  }
+
+  it("moves a HEAD that is behind to exactly the target, keeping an unrelated edit", () => {
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("b.txt", "b");
+    const { dir, run } = source.at(a);
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+
+    fastForwardTo(b, dir);
+    expect(run("rev-parse", "HEAD")).toBe(b);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+  });
+
+  it("stops on a HEAD that is AHEAD, rather than calling it up to date", () => {
+    const { dir, run, commit } = repo();
+    const a = commit("a.txt", "a");
+    const b = commit("b.txt", "b");
+    expect(() => fastForwardTo(a, dir)).toThrow(Stop);
+    expect(() => fastForwardTo(a, dir)).toThrow(/ahead or has diverged/);
+    expect(run("rev-parse", "HEAD")).toBe(b);
+  });
+
+  it("stops on a HEAD that has diverged", () => {
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("b.txt", "b");
+    const { dir, run, commit } = source.at(a);
+    const c = commit("c.txt", "c");
+    expect(() => fastForwardTo(b, dir)).toThrow(/ahead or has diverged/);
+    expect(run("rev-parse", "HEAD")).toBe(c);
+  });
+
+  it("detects a concurrent HEAD move during the fast-forward", () => {
+    const heads = [CODE_PARENT, DOCS];
+    vi.spyOn(childProcess, "execFileSync").mockImplementation(() => heads.shift() ?? DOCS);
+    vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      pid: 1, output: [], signal: null, status: 0, stdout: "", stderr: "",
+    });
+    expect(() => fastForwardTo(CODE, scratch())).toThrow(/fast-forwarded, but HEAD is/);
+  });
+
+  it("keeps an ignored local file when the target starts tracking that path", () => {
+    const source = repo();
+    const a = source.commit(".gitignore", "local.txt");
+    writeFileSync(path.join(source.dir, "local.txt"), "the deployed version\n");
+    source.run("add", "--force", "local.txt");
+    source.run("commit", "--quiet", "-m", "start tracking local.txt");
+    const b = source.run("rev-parse", "HEAD");
+    const { dir, run } = source.at(a);
+    writeFileSync(path.join(dir, "local.txt"), "somebody's ignored work\n");
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "local.txt"), "utf8")).toBe("somebody's ignored work\n");
+  });
+
+  it("refuses an overlapping edit even when merge.autoStash is enabled", () => {
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("a.txt", "a again");
+    const { dir, run } = source.at(a);
+    run("config", "merge.autoStash", "true");
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+    expect(run("for-each-ref", "refs/stash")).toBe("");
+  });
+
+  it("stops, and keeps the edit, when the target would change a file somebody is editing", () => {
+    const source = repo();
+    const a = source.commit("a.txt", "a");
+    const b = source.commit("a.txt", "a again");
+    const { dir, run } = source.at(a);
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+  });
+});
+
+describe("prepare after the model stages (external commands stubbed)", () => {
+  function setup({ fetchFails = false, headMoved = false, remoteMoved = false } = {}) {
+    const cwd = scratch();
+    mkdirSync(path.join(cwd, ".git"));
+    mkdirSync(path.join(cwd, "src/web"), { recursive: true });
+    mkdirSync(path.join(cwd, "scripts/changelog"), { recursive: true });
+    writeFileSync(path.join(cwd, "src/web/changelog-versions.ndjson"), JSON.stringify(line()));
+    writeFileSync(path.join(cwd, "src/web/changelog-pending.json"), "null\n");
+    writeFileSync(path.join(cwd, "scripts/changelog/prepare-prompt.md"), "{{SHA}} {{WORK}}");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(SERVING))));
+    let modeled = false;
+    let currentHead = CODE;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(changelogModule, "main").mockImplementation((args) => {
+      if (args[0] === "plan") {
+        const work = args[args.indexOf("--work") + 1] as string;
+        mkdirSync(work, { recursive: true });
+        writeFileSync(path.join(work, "upcoming.json"), '{"release_commits":1}');
+      }
+    });
+    vi.spyOn(childProcess, "execFileSync").mockImplementation(((_cmd: string, args: string[]) => {
+      if (args[0] === "branch") return "dev";
+      if (args[0] === "log") return modeled && remoteMoved ? `\0${DOCS}\nsrc/late.ts\n` : "";
+      const refs: Record<string, string> = {
+        "--show-toplevel": cwd,
+        "--git-common-dir": ".git",
+        "origin/dev": modeled && remoteMoved ? DOCS : CODE,
+        HEAD: modeled && headMoved ? DOCS : currentHead,
+      };
+      return refs[args[1] ?? ""] ?? currentHead;
+    }) as typeof execFileSync);
+    const commands: string[][] = [];
+    vi.spyOn(childProcess, "spawnSync").mockImplementation(((_cmd: string, args: string[]) => {
+      commands.push(args);
+      if (args.includes("scripts/run-claude.ts")) {
+        writeFileSync(path.join(cwd, "src/web/changelog-pending.json"), JSON.stringify(pending()));
+        modeled = true;
+      }
+      if (args[0] === "merge" && remoteMoved) currentHead = DOCS;
+      if (args[0] === "show") {
+        return { status: 0, stdout: args[1]?.endsWith(".ndjson") ? JSON.stringify(line()) : JSON.stringify(pending()), stderr: "" };
+      }
+      const refused = (modeled && fetchFails && args[0] === "fetch") ||
+        (modeled && headMoved && args[0] === "merge-base" && args[2] === DOCS);
+      return { status: refused || (modeled && args[0] === "diff") ? 1 : 0, stdout: "", stderr: refused ? "simulated refusal" : "" };
+    }) as typeof childProcess.spawnSync);
+    return { cwd, commands };
+  }
+
+  it("finishes one model round when the checkout stays level with dev", async () => {
+    const { commands } = setup();
+    expect(await releaseNotes(["prepare"])).toBe(0);
+    expect(commands.filter(args => args.includes("scripts/run-claude.ts"))).toHaveLength(1);
+    expect(commands.filter(args => args[0] === "fetch")).toHaveLength(3);
+    expect(commands.some(args => args[0] === "commit")).toBe(true);
+    expect(commands.some(args => args[0] === "push")).toBe(true);
+  });
+
+  it("does one model round and fast-forwards over late release work", async () => {
+    const { commands } = setup({ remoteMoved: true });
+    expect(await releaseNotes(["prepare"])).toBe(0);
+    expect(commands.filter(args => args.includes("scripts/run-claude.ts"))).toHaveLength(1);
+    expect(commands.some(args => args[0] === "merge" && args.at(-1) === DOCS)).toBe(true);
+    expect(commands.some(args => args[0] === "push")).toBe(true);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("1 later release commit(s) roll"));
+  });
+
+  it("stops before committing when the post-model fetch fails, keeping the generated notes", async () => {
+    const { cwd, commands } = setup({ fetchFails: true });
+    expect(await releaseNotes(["prepare"])).toBe(1);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("could not fetch origin"));
+    expect(commands.some((args) => args[0] === "commit" || args[0] === "push")).toBe(false);
+    expect(JSON.parse(readFileSync(path.join(cwd, "src/web/changelog-pending.json"), "utf8")).sha).toBe(CODE);
+  });
+
+  it("rechecks a locally moved HEAD even when origin/dev stayed at the planned tip", async () => {
+    const { commands } = setup({ headMoved: true });
+    expect(await releaseNotes(["prepare"])).toBe(1);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("ahead or has diverged"));
+    expect(commands.some((args) => args[0] === "commit" || args[0] === "push")).toBe(false);
   });
 });

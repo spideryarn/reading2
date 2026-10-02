@@ -129,8 +129,23 @@ export interface ChangelogVersion {
    */
   release: number;
   deployment_id: string;
+  /**
+   * **The last commit this release's notes describe** — the watermark the next
+   * release's range starts from, and what `previous_sha` chains. Usually the
+   * deployed commit too, but not when commits landed after the notes and rolled
+   * to the next release's (docs/plans/261002h); then it stops short of it.
+   */
   sha: string;
+  /**
+   * **The commit production was built from**, written by `promote` since
+   * 2026-10-02. Null on older lines, where `sha` is the deployed commit unless a
+   * forced deploy stopped it short, and on a pending release, which has not been
+   * deployed. Read it as `deployed_sha ?? sha`: what the fleet dashboard measures
+   * "commits since the newest deploy" from.
+   */
+  deployed_sha: string | null;
   previous_sha: string | null;
+  /** Non-merge commits in `previous_sha..sha` — the range the notes describe. */
   commit_count: number;
   invisible: boolean;
   generated_at: string;
@@ -369,6 +384,11 @@ function readVersion(
     problems.push(`${where}: previous_sha is neither null nor a sha`);
     return null;
   }
+  const deployed_sha = raw.deployed_sha ?? null;
+  if (deployed_sha !== null && (typeof deployed_sha !== "string" || !SHA.test(deployed_sha))) {
+    problems.push(`${where}: deployed_sha is neither absent nor a sha`);
+    return null;
+  }
 
   const entries: ChangelogEntry[] = [];
   if (!Array.isArray(raw.entries)) {
@@ -429,6 +449,7 @@ function readVersion(
     version,
     deployment_id,
     sha,
+    deployed_sha: deployed_sha as string | null,
     previous_sha: previous_sha as string | null,
     commit_count: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : 0,
     invisible: entries.length === 0,
@@ -496,6 +517,9 @@ export function parsePending(text: string, history: ChangelogVersion[]): Pending
   if (!isRecord(raw)) return { pending: null, problems: ["pending: neither null nor an object"] };
   if (raw.deployment_id !== null) {
     return { pending: null, problems: ["pending: deployment_id must be null — it has not been deployed"] };
+  }
+  if ((raw.deployed_sha ?? null) !== null) {
+    return { pending: null, problems: ["pending: deployed_sha must be absent — it has not been deployed"] };
   }
   /* `readVersion` insists on an id, which is right for every line of the
      history; lend it a placeholder rather than loosen it for all of them. */

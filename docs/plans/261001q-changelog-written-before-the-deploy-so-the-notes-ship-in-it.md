@@ -2,6 +2,10 @@
 
 Up: [changelog.md](../project/changelog.md) · [overseer.md § Deploying](../project/overseer.md#deploying)
 
+> **Loosened on 2026-10-02 by [261002h](261002h-late-commits-roll-to-the-next-release-notes.md):**
+> the deploy gate is no longer strict, and `prepare` no longer plans again. Commits after the notes
+> roll to the next release's. Everything else here stands.
+
 ## Why
 
 Greg, 2026-10-01 ~19:50, to the Overseer:

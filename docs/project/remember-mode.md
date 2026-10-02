@@ -4,9 +4,11 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 
 **Built 2026-08-27, and named *Remember* since 2026-09-01** — the rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
-types — about what they got from the article, and the model helps them find where their account and
-the piece come apart. Four **stances** control how much it says: Balanced, Respond, Socratic,
-Signposts.
+types — about what they remember of the article, and the model corrects briefly where their account
+and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
+the gap when they are stuck. One voice since 2026-10-02; until then four **stances** (Balanced,
+Respond, Socratic, Signposts) were picked per turn. Where the three sub-modes are going:
+[remembering-vision.md](remembering-vision.md).
 
 Greg, 2026-08-27, when it was still called Review:
 
@@ -16,9 +18,9 @@ Greg, 2026-08-27, when it was still called Review:
 > annoying/patronising/superior, but at the same time the user is earnestly looking to deepen/correct
 > their understanding.
 
-Code: [`src/converse.ts`](../../src/converse.ts) § `REMEMBER_SYSTEM`, `systemFor`, `stanceLine` (the
-prompt and where each piece of it lands), [`src/chat.ts`](../../src/chat.ts) (`withTurn`,
-`withRetry`, `withEdit` — who owns a stance), [`src/routes.ts`](../../src/routes.ts) § `streamChat`
+Code: [`src/converse.ts`](../../src/converse.ts) § `REMEMBER_SYSTEM`, `systemFor` (the prompt and
+where each piece of it lands), [`src/chat.ts`](../../src/chat.ts) (`withTurn`, `withRetry`,
+`withEdit`), [`src/routes.ts`](../../src/routes.ts) § `streamChat`
 (validation, the 409, `MAX_REMEMBER_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
 (one panel, parameterised by kind),
 [`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
@@ -27,7 +29,7 @@ Tests: [`remember-prompt.test.ts`](../../tests/remember-prompt.test.ts),
 [`remember-store.test.ts`](../../tests/remember-store.test.ts),
 [`remember-route.test.ts`](../../tests/remember-route.test.ts),
 [`remember-panel.test.tsx`](../../tests/remember-panel.test.tsx).
-Eval: [`evals/remember-stances.ts`](../../evals/remember-stances.ts) — **read this before editing
+Eval: [`evals/remember-recall.ts`](../../evals/remember-recall.ts) — **read this before editing
 the prompt.**
 The plan, the reasoning and the cross-family review:
 [260827ah-review-mode.md](../plans/260827ah-review-mode.md).
@@ -58,47 +60,54 @@ have read the piece before they can use it at all.** There is nothing to say oth
 output is a set of paragraphs to go back to. vision.md's *recall* entry is the nearest thing already
 written down; this is that idea with the direction reversed, the reader supplying the answer first.
 
-## The four stances
+## One adaptive voice
 
-The reader picks one per turn, from a `<select>` under the box. Its card lists the four in a line
-each, from the reader's side, and the one rule nothing else on screen says — a direct question or
-*"just tell me"* gets a plain answer whatever is picked (`StanceTip` in
-[`ChatPanel.tsx`](../../src/web/ChatPanel.tsx); Greg, `spya-xunuum`, 2026-09-29).
+Greg, 2026-10-01, three reports in one sitting (`spya-cjquu6`, `spya-kqynj5`, `spya-c8x66d`):
 
-| Stance | What the reply is |
-|---|---|
-| **Balanced** (default) | The model decides, per point, whether to tell or to ask. Always gives the ids |
-| **Respond** | Direct: what comes apart, what the article says instead, quoted and cited |
-| **Socratic** | A question with a hint and somewhere to look — unless they ask to be told |
-| **Signposts** | Three or four passages worth re-reading, ids and a few words each. Nothing else |
+> I think basically I want to get to the point where actually there's really only one recall mode,
+> which is fairly brief, simple language makes use of block links and tries to keep nudging me with
+> hints and questions so that I'm constantly remembering a bit more and a bit more because the act of
+> recollection is what helps learning. … And you know what, if it's clear that they are struggling,
+> then don't make them suffer or feel bad or fail. In that case, maybe you do just provide more. So I
+> guess you're being a bit adaptive. And that's why we only need one mode.
 
-Greg on Balanced, when offered four definitions and declining all of them:
+So the four stances went, and the per-point triage Balanced did became the whole prompt. Each reply:
 
-> I don't know. Maybe it should leave it up to the LLM. If the reader is genuinely confused or stuck,
-> it should help more. If the confusion is more minor/subtle/manageable, lean more towards Socratic.
-> And also include links too as an option if the user prefers those.
+1. **At most one correction**, only where *what you are entitled to say* (below) allows it, quoted
+   and cited. Often none, and that is normal.
+2. **Then a nudge**: a cue that names *where* in the piece and *what it was about*, never what it
+   said — often offering **two directions**, so a reader with nothing on one has the other (Greg:
+   *"so that I've got a choice"*).
+3. **Adaptive on evidence**: "I don't remember", "I'm lost", or a nudge that got nothing → the gap
+   is **filled**, plainly and cited, and nobody is asked the same thing twice. A direct question or
+   "just tell me" is answered first.
+4. **Every substantive reply links a passage** (`spya-kqynj5`); a pure clarification may not need
+   one, and an id attaches only to what the article says.
+5. **Brief** — usually under 120 words, one nudge at the end. A long explanation becomes a pointer to
+   the passage and a suggestion that Chat is the place to talk it through. (Greg also asked for a
+   tool that starts that chat itself; there is none yet — [remembering-vision.md](remembering-vision.md).)
 
-So Balanced is **not a blend**; it is per-point triage on his rule — *stuck → tell; nearly there →
-ask* — with the block ids given either way. What the cross-family review changed is where the model
-is allowed to get "stuck" from: not from reading the reader's mind, but from stated evidence (they
-say so, they contradict themselves, they cannot get from one of their own steps to the next). And
-when it cannot tell, it **tells**, because a plain answer to somebody who was nearly there costs a
-few seconds and a riddle at somebody lost costs the session.
+The ranking that governed the stances survives, with the nudge in their place: **the entitlement
+rules, then the reader's own words, then the nudge.** The research behind the nudges and the hint
+ladder is [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md).
 
-**The reader's own words beat the stance.** Say "just tell me" into a Socratic conversation and you
-are told. That is a prompt rule, and it exists because Socratic's escape hatch was otherwise a
-promise the code broke — the picker was still on Socratic, so the next turn was another question.
+**What the stances left behind.** Old rows keep their stored `stance` (the column and its CHECK
+stay; dropping them is destructive and buys nothing); nothing writes or shows one. The route still
+accepts a `stance` on an ordinary Remember send, validated against the old four and then dropped, so
+a tab open across the deploy does not 400 — kept indefinitely, because a tab can stay open for weeks.
+[261002i](../plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
 
 ## The prompt is the feature
 
 Everything else here is plumbing around a page of instructions about tone, so
-[`evals/remember-stances.ts`](../../evals/remember-stances.ts) came **first** and runs again after every
-prompt change: eight readers × four stances against a real article, read by a person. Each of the
-eight is a way the prompt has misbehaved rather than a spread of inputs — a reader who is right, one
-whose reading the piece genuinely permits, one who understood it and disagrees, one whose dictation
-mangled a term, one who says they are lost, one who left half the article out, one asking about
-something the piece genuinely leaves open, and one who says only *"just tell me"* into a Socratic
-conversation.
+[`evals/remember-recall.ts`](../../evals/remember-recall.ts) came **first** and runs again after every
+prompt change: thirteen readers against a real article, read by a person (eight readers × four
+stances until 2026-10-02, when it was `remember-stances.ts`). Each is a way the prompt has
+misbehaved rather than a spread of inputs. The original eight cover a reader who is right, one whose
+reading the piece genuinely permits, one who understood it and disagrees, mangled dictation, being
+lost, an incomplete account, a genuinely open question and *"just tell me"* after a nudge. The five
+added for one voice cover a weak account, remembering almost nothing, a failed nudge, unclear
+references and an expert account that needs a harder cue rather than praise.
 
 The three faults that draft had are worth knowing before editing the prompt, because all three are
 the obvious thing to write. They are recorded in full on `REMEMBER_SYSTEM` in
@@ -121,11 +130,35 @@ the prompt *said* correctly and the model did not do:
    or not at all.
 5. **"Their words beat the stance" was contradicted** by Socratic's *"ask, do not tell"* and
    Signposts' *"and nothing else"*, both of which read as absolutes — and the model was visibly
-   half-obeying both. There is now an explicit ranking, stated once: **the entitlement rules, then
-   the reader's own words, then the stance.**
+   half-obeying both. The ranking survives in the one voice: **the entitlement rules, then the
+   reader's own words, then the nudge.**
 6. **Confirming and grading were not distinguished.** "Yes, that's his move" points at a claim;
    "that reading holds up well" is a verdict on the reader wearing a friendly face. The first is
    wanted, the second is the sentence to delete.
+
+### What the one-voice runs showed (2026-10-02)
+
+Three runs, Sonnet 5, 13 replies each: `evals/results/remember-recall.261002i-run-1.md`,
+`…-run-2.md`, and `remember-recall.md`. The first draft pasted article sentences into its own prose unmarked and uncited (two replies
+with no id at all), opened with verdicts ("that tracks", "exactly right") and twice asked two
+questions in one reply. The second draft — quotation marks with the id straight after, those openers
+banned, one nudge at the end, a word target — cited in every reply and kept all thirteen under 160
+words; `lost`, `dontRemember` and `nudgeFailed` were told before anything was asked. It was not yet
+the requested voice: six replies ran past the 120-word target, `correct` and `defensible` still opened
+with verdicts on the reader, `unclear` was corrected after the model guessed what two vague phrases
+referred to, `disagreement` asked two separate questions, and `nudgeFailed` asked for the implication
+of the answer it had just supplied. The prompt now names vague references as clarification cases,
+forbids a verdict as the opener, tells a failed nudge to move elsewhere, sets 120 as a ceiling and
+permits exactly one interrogative sentence.
+
+The third run, after those: every reply cited, ten of thirteen under 120 words (`lost` ran to 173,
+explaining the section it had been lost in, which is what it should do), and the stuck readers told
+before anything was asked. "That tracks" survived its ban as an opener in two replies, and `unclear`
+was still corrected from the quoted sentence rather than asked — both mild. One real fault: `expert`
+told the reader the free energy principle "doesn't actually appear anywhere in the piece", when it is
+in a footnote the model is not shown. So the entitlement rules now forbid telling a reader the
+article does not mention something. (Most of the eval's "actually" hits are inside quotations of the
+article, and are not the model's.)
 
 ### What the first run showed
 
@@ -153,8 +186,8 @@ model never wrote; that is now surfaced loudly. And the `ambiguous` case was not
 article settles it in the word "necessary" — so it tested the wrong thing and has been replaced.
 
 The banned-phrase counter in the eval is deliberately over-broad and is **a prompt to look, not a
-verdict**: both remaining hits are the phrase applied to a claim rather than to the reader, which is
-fine. A green count with a patronising answer under it is the failure
+verdict**: the latest run's six hits are all the word *actually* in a quotation or a claim about the
+article rather than a verdict on the reader. A green count with a patronising answer under it is the failure
 [silent-success.md](../reusable/silent-success.md) is about, so the report prints every answer in
 full and the pass condition is a person reading them.
 
@@ -220,31 +253,13 @@ question of discipline into four compiler errors.
   sends no kind, so every edit was measured against chat's 4,000 and a 4,001-character Remember
   message could be created and then never rewritten.
 
-### The stance belongs to the turn
+### The stance belonged to the turn, and is legacy now
 
-`ChatMessage.stance` is written when the **pending** assistant row is created, never on finish.
-Otherwise every answer that crashed, errored, was stopped or was swept would have no stance — and a
-retry of one would have nothing to inherit.
-
-| Turn | Stance used |
-|---|---|
-| New question | The reader's picker |
-| **Retry** | **The stance stored on the answer being replaced** |
-| **Edit** | **The stance stored on the answer being replaced** |
-
-Retry is the one worth stating out loud. "Have another go at that" has to mean another go at the same
-question asked the same way; taking the picker's current value instead would silently rewrite the
-instruction attached to a stored turn. `withRetry` rebuilds its reply field by field precisely so
-that nothing stale leaks through, so the stance is carried across **by name** — the one field that
-must cross that line. Edit is sharper still: editing an early question discards later turns whose
-stances differed, and the picker at that moment is seeded from the last of them.
-
-**And the client's optimistic rows carry it too**, which the first version did not. Getting the
-server right is not enough: the optimistic reply is what the reader looks at while the answer
-arrives, and a row that lost its stance there seeded the picker with `balanced` on the next load and
-made the *following* turn change voice with nothing on screen saying why. Each answer shows its
-stance as a small tag — except `balanced`, which most answers are, because a tag on nearly every row
-distinguishes nothing.
+Until 2026-10-02 `ChatMessage.stance` was written on the **pending** assistant row and carried by
+name across a retry and an edit (from the answer being replaced). Nothing writes it now and nothing
+carries it; a retry or an edit of an old answer is answered in the one voice. The help flag, which
+lives on the **question** row, is a different rule and still crosses both
+(`tests/remember-store.test.ts`).
 
 ## Where each piece lands in the prompt, and why it costs what it does
 
@@ -258,7 +273,6 @@ distinguishes nothing.
    │  assistant: "I've read it. Tell me what you took…"     │
    │  … the last 20 turns …                                 │
    │  user:    position · profile · anchor                  │
-   │           Stance for this turn: SOCRATIC.              │  ← the STANCE
    │           what the reader said                         │
    └────────────────────────────────────────────────────────┘
 ```
@@ -267,9 +281,9 @@ Everything above the breakpoint must stay byte-identical for the life of a conve
 article is written to the cache again every turn — the bug in
 [260826h-chat-cache-automatic-breakpoint.md](../postmortems/260826h-chat-cache-automatic-breakpoint.md). So:
 
-- the **stance** goes below it. Switching stance mid-conversation is the *expected* use — ask
-  Socratically, get stuck, press Respond — and in the system prompt that gesture would cost a cold
-  write of the article every time.
+- **anything per-turn** goes below it. The stance did, until it went: switching it mid-conversation
+  was the expected use, and in the system prompt that gesture would have cost a cold write of the
+  article every time.
 - the **kind** goes above it, because one prompt carrying both sets of rules would ask the model to
   hold two contradictory sets of instructions about tone. One more prompt is one more prefix, paid
   on entering the mode rather than per turn.
@@ -315,7 +329,7 @@ on every load and a missing thread sat on "Starting…" forever.
 
 **One panel, parameterised by kind, not two panels.** The transcript, the scroll-follow, the citation
 chips, the tool strip, the retry, the editor and the stream recovery are identical in both; what
-differs is an empty state, a box six rows tall instead of one, and one `<select>`. Likewise one
+differs is an empty state and a box six rows tall instead of one. Likewise one
 `ConversationBand` in `modes/conversation/ConversationModes.tsx` with one `useChat`, rather than a
 second chat state machine.
 
@@ -336,21 +350,13 @@ typed question and an accident applied to a spoken paragraph, and a reader who t
 minutes would have hit it after paying for the transcription. Same mistake `MAX_QUOTE_CHARS` had to
 be rescued from.
 
-The stance picker is a native `<select>`. The dock already owns a roving-tabindex radiogroup, and a
-second one inside a composer — where arrow keys are already the caret's, and the article's ↑/↓ is a
-third claimant — is a keyboard problem nobody needs.
 
 ## What is deliberately not here
 
-- **No `?stance=`.** It changes nothing on screen, which is the rule [url-state.md](url-state.md)
-  keeps. The picker is seeded from the last answer's stance so the choice survives a return to the
-  conversation.
 - **No no-spoilers rule keyed on `?at=`.** That parameter is where the reader is *now*, not how far
   they have read, and the likeliest reader here has finished the piece and scrolled back to the
   paragraph they want to talk about. Using it as a progress marker would suppress exactly the
   corrections the mode exists for. The prompt honours an *explicit* request instead.
-- **No "retry as a different stance".** Retry preserves the stored stance, which is the right
-  default; an explicit control can arrive later.
 - **No model-written title.** A thread is named from the reader's first 60 characters, which for
   speech will regularly be *"Um, so I suppose what I took from this was…"*. Since 2026-10-01 that
   title is shown nowhere — Remember's header just says *Remember* — so there is nothing to rename.

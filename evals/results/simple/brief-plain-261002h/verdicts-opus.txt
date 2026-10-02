@@ -1,0 +1,30 @@
+1: Q1=Y; Q2=X (conclusion drops the hedge: "is important" where the passage says "can be important"); Q3=SAME
+2: Q1=Y; Q2=BOTH (X: "synergy is common" is not in the cited passages; Y: "mouse brain tissue grown in a dish" is not in the cited passages); Q3=SAME
+3: Q1=SAME; Q2=NONE; Q3=SAME
+4: Q1=X; Q2=BOTH (both add "thunderstorms", which no cited passage says; X also presents the several-types idea as the data's suggestion, where the passage says some researchers assume it); Q3=Y
+5: Q1=Y; Q2=X (pins "too slow and clumsy" on the electric pulses, where the passage says synaptic changes are too cumbersome; the energy explanation is stretched from a passage about neuromorphic hardware); Q3=Y
+6: Q1=X; Q2=Y (conclusion drops the hedge: "is important" where the passage says "can be important"); Q3=SAME
+7: Q1=X; Q2=BOTH (Y: "intelligence is just simple neural units and learning rules" is not in the cited passages; X: drops the "once we find a scalable architecture" condition from the hypothesis); Q3=SAME
+8: Q1=SAME; Q2=BOTH (both add "thunderstorms"; X also adds "weather watchers" and turns "seems promising" into "among the best evidence available"); Q3=SAME
+9: Q1=X; Q2=NONE; Q3=SAME
+10: Q1=SAME; Q2=BOTH (both add "thunderstorms", which no cited passage says); Q3=SAME
+11: Q1=Y; Q2=NONE; Q3=SAME
+12: Q1=Y; Q2=NONE; Q3=SAME
+13: Q1=X; Q2=X (frames the open question as whether standing up "helps memory", rather than whether hippocampal activity during rearing matters); Q3=SAME
+14: Q1=Y; Q2=BOTH (X: "intelligence is just simple neural units and learning rules" is unsupported; Y: "human-like intelligence" and "most experts have been wrong" are not in the cited passages); Q3=SAME
+15: Q1=Y; Q2=BOTH (X: "synergy is common" is unsupported; Y: "recordings from mouse brain tissue" and "synergy was common" are not in the cited passages); Q3=Y
+16: Q1=SAME; Q2=X (adds "may be the path to human-level AI"; turns Google Brain and DeepMind's doubts into "most AI experts doubt"; and gives as the conclusion only "bigger models are possible"); Q3=Y
+17: Q1=Y; Q2=X ("cultured mouse cortex" and "in monkeys" are not in the cited passages); Q3=SAME
+18: Q1=Y; Q2=NONE; Q3=SAME
+19: Q1=SAME; Q2=NONE; Q3=SAME
+20: Q1=SAME; Q2=Y (turns "eminent, respectable, serious people" into "most experts predicted this would fail"); Q3=X
+21: Q1=SAME; Q2=BOTH (X: "mouse brain tissue grown in a dish" is unsupported; Y: "studies of mouse and monkey brain cells" and "synergy was common" are not in the cited passages); Q3=SAME
+22: Q1=X; Q2=BOTH (X: "path to human-level AI" and "experts are not ready" are not in the cited passages; Y: drops the scalable-architecture condition); Q3=SAME
+23: Q1=SAME; Q2=BOTH (X: "cultured mouse cortex" and "monkeys" are unsupported; Y: "mouse cortex cultures" is unsupported, it bends the 7%-of-mutual-information peak into "two inputs moderately similar", and "shaped by behavior" is not in the cited passages); Q3=X
+24: Q1=SAME; Q2=NONE; Q3=SAME
+25: Q1=SAME; Q2=BOTH (X: turns "seems promising" into "some of the best evidence there is"; Y: "seen during thunderstorms" is not in its passages, and the article's own figures say 17% had no storm connection); Q3=SAME
+26: Q1=X; Q2=NONE; Q3=SAME
+27: Q1=SAME; Q2=BOTH (X: adds "weather watchers", "often seen in thunderstorms", and "among the best evidence available" for "seems promising"; Y: "thunderstorms" is not in the cited passages); Q3=SAME
+28: Q1=Y; Q2=BOTH (X: "mouse cortex cultures" is unsupported, it bends the mutual-information peak into "inputs moderately similar", and adds "behavior"; Y: "mouse brain tissue and monkeys" and "synergy is common" are not in the cited passages); Q3=Y
+29: Q1=SAME; Q2=Y (turns "eminent, respectable, serious people" into "most experts predicted this would fail"); Q3=X
+30: Q1=SAME; Q2=BOTH (X: "thunderstorms" is unsupported, and "seems promising" becomes "the best evidence available"; Y: "seen mostly in thunderstorms" is unsupported); Q3=SAME

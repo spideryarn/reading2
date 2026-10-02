@@ -3430,16 +3430,13 @@ export interface ChatMessage {
    */
   editedAt?: string;
   /**
-   * Which stance produced this answer. **Assistant turns only, Remember threads
-   * only** — absent on every chat answer and on every user message.
-   *
-   * Written when the *pending* row is created, never when it finishes, and that
-   * is the whole rule. An answer that crashed, errored, was stopped, or was
-   * buried by the sweep still has to say which instruction produced the words
-   * that did arrive — and a retry of that row has to have something to inherit.
-   * Writing it in `finishTurn` would leave every one of those rows blank.
-   *
-   * See docs/plans/260827ah-review-mode.md § Where the stance picker's value lives.
+   * Which stance produced this answer — **legacy, read-only**. Assistant turns
+   * of Remember threads written before 2026-10-02 carry one; nothing writes it
+   * since Recall became one voice, and nothing on screen shows it. It is kept
+   * because the stored rows have values (the column and its CHECK stay, and an
+   * export carries them) — dropping it would be destructive and buy nothing.
+   * docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md;
+   * the original rule is docs/plans/260827ah-review-mode.md.
    */
   stance?: RememberStance;
   /**
@@ -3463,30 +3460,23 @@ export interface ChatMessage {
    * `withEdit` spreads it, so all three paths agree without anyone arranging it.
    *
    * `true` or absent, never `false` — the same rule `stopped` and `interrupted`
-   * follow above, and what tests/store-roundtrip.test.ts compares. It is the
-   * mirror of `stance`, which lives on the assistant row: one says how the
-   * answer was asked for, the other how it was written.
+   * follow above, and what tests/store-roundtrip.test.ts compares.
    */
   help?: true;
 }
 
 /**
  * How much the model should say in a Remember answer — the reader's choice, per
- * turn.
- *
- * Greg named all four, 2026-08-27. `balanced` is the default and is not an
- * average of the other three: it decides per point, on evidence, and defaults
- * to telling when it cannot tell. docs/plans/260827ah-review-mode.md § The stance.
+ * turn, **until 2026-10-02**. Greg named all four on 2026-08-27
+ * (docs/plans/260827ah-review-mode.md § The stance) and asked for one adaptive
+ * voice instead on 2026-10-01 (`spya-c8x66d`). Legacy now: the type of stored
+ * rows, and of the one request field the route still validates and drops.
  */
 export type RememberStance = "balanced" | "respond" | "socratic" | "signposts";
 
 /**
- * The four, as a value.
- *
- * **One list, used by the route's validation and by the client's picker**, so a
- * fifth stance cannot be accepted by the server and missing from the menu, or
- * offered in the menu and rejected by the server. The same trick `MODES` plays
- * in src/web/params.ts.
+ * The four, as a value — what the route accepts (and drops) from a tab still
+ * running a client from before the picker went. `streamChat` in src/routes.ts.
  */
 export const REMEMBER_STANCES: readonly RememberStance[] = [
   "balanced",

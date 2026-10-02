@@ -1,8 +1,8 @@
 /**
  * **Remember mode's prompt, and the one property that costs money if it breaks.**
  *
- * Remember adds a second system prompt and a per-turn stance. Where each of those
- * lands in the message array is not a style question: everything above the
+ * Remember adds a second system prompt. Where it lands in the message array is
+ * not a style question: everything above the
  * `cache_control` breakpoint has to stay byte-identical for the life of a
  * conversation, or the whole article is written to the cache again on every
  * turn. That is the bug in docs/postmortems/260826h-chat-cache-automatic-breakpoint.md,
@@ -13,21 +13,18 @@
  *   - the **kind** chooses the system prompt, which is ABOVE the breakpoint —
  *     two kinds means two cached prefixes per article, paid on entering the
  *     mode rather than per turn;
- *   - the **stance** rides in the final user message, BELOW it, because
- *     switching stance mid-conversation is the expected use of the feature and
- *     must cost nothing.
+ *   - and nothing per-turn goes above it. Until 2026-10-02 a per-turn
+ *     **stance** rode in the final user message for exactly that reason; there
+ *     is one voice now (docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
+ *     and a test below checks no stance line survives anywhere.
  *
  * Every test here is pure — no network, no model. As tests/article-prompt.test.ts
  * says at length: this can prove the bytes are the same and cannot prove the
  * provider cached them. `evals/prompt-caching.ts` is the half that costs money.
- *
- * The tests that matter most are the two that go red if somebody moves the
- * stance into the system prompt, which is the obvious thing to do and is the
- * expensive mistake.
  */
 import { describe, expect, it } from "vitest";
 import { buildConverseMessages } from "../src/converse.js";
-import type { Block, ChatMessage, Meta, RememberStance } from "../src/types.js";
+import type { Block, ChatMessage, Meta } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -63,12 +60,20 @@ describe("the article message is the same bytes whatever the mode", () => {
     expect(articleMessage(remember)).toEqual(articleMessage(chat));
   });
 
-  it("every stance sends an identical article block", () => {
-    const stances: RememberStance[] = ["balanced", "respond", "socratic", "signposts"];
-    const first = articleMessage(buildConverseMessages({ ...base, kind: "remember", stance: "balanced" }));
-    for (const stance of stances) {
-      expect(articleMessage(buildConverseMessages({ ...base, kind: "remember", stance }))).toEqual(first);
-    }
+  it("a different history, profile and question leave the Remember article block unchanged", () => {
+    const first = articleMessage(buildConverseMessages({ ...base, kind: "remember" }));
+    const later = articleMessage(
+      buildConverseMessages({
+        ...base,
+        kind: "remember",
+        profile: "A neuroscientist",
+        question: "something else entirely",
+        history: [
+          { id: "spya-usr001", role: "user", text: "hi", createdAt: "2026-10-02T00:00:00.000Z", status: "done" },
+        ],
+      }),
+    );
+    expect(later).toEqual(first);
   });
 
   it("keeps its cache_control marker in Remember mode", () => {
@@ -104,48 +109,17 @@ describe("the kind chooses the system prompt", () => {
   });
 });
 
-describe("the stance lands below the breakpoint and nowhere else", () => {
-  /* THE test of this file. If the stance ever migrates into the system prompt,
-     this goes red — and without it, that migration is invisible until the
-     OpenRouter bill arrives. */
-  it("is not in the system prompt", () => {
-    for (const stance of ["respond", "socratic", "signposts"] as RememberStance[]) {
-      const messages = buildConverseMessages({ ...base, kind: "remember", stance });
-      expect(String(messages[0]?.content).toUpperCase()).not.toContain(
-        `STANCE FOR THIS TURN: ${stance.toUpperCase()}`,
-      );
-    }
-  });
-
-  it("is in the final user message", () => {
-    const messages = buildConverseMessages({ ...base, kind: "remember", stance: "socratic" });
-    expect(String(messages.at(-1)?.content)).toContain("Stance for this turn: SOCRATIC.");
-  });
-
-  it("changes nothing above the final message", () => {
-    const a = buildConverseMessages({ ...base, kind: "remember", stance: "respond" });
-    const b = buildConverseMessages({ ...base, kind: "remember", stance: "signposts" });
-    expect(a.slice(0, -1)).toEqual(b.slice(0, -1));
-    expect(a.at(-1)).not.toEqual(b.at(-1));
-  });
-
-  it("says balanced when no stance was chosen", () => {
+describe("there is one Recall voice, and no stance", () => {
+  /* The four stances went on 2026-10-02. A stance line left in the final
+     message would be an instruction naming a section the prompt no longer has. */
+  it("sends no stance line, in the system prompt or the final message", () => {
     const messages = buildConverseMessages({ ...base, kind: "remember" });
-    expect(String(messages.at(-1)?.content)).toContain("Stance for this turn: BALANCED.");
+    for (const m of messages) expect(JSON.stringify(m.content)).not.toMatch(/stance for this turn/i);
   });
 
-  /* A stance is meaningless in a chat, and a chat turn must not carry one even
-     if a caller passes it — otherwise a stray field in a request body would
-     change what a chat answer is asked for, with nothing on screen saying so. */
-  it("never appears in a chat turn, even if one is passed", () => {
-    const messages = buildConverseMessages({ ...base, kind: "chat", stance: "socratic" });
-    expect(String(messages.at(-1)?.content)).not.toContain("Stance for this turn");
-  });
-
-  it("keeps the reader's own words last, after the stance", () => {
-    const messages = buildConverseMessages({ ...base, kind: "remember", stance: "respond" });
-    const content = String(messages.at(-1)?.content);
-    expect(content.indexOf("Stance for this turn")).toBeLessThan(content.indexOf(base.question));
+  it("names none of the old four in the prompt", () => {
+    const system = String(buildConverseMessages({ ...base, kind: "remember" })[0]?.content);
+    for (const old of ["SIGNPOSTS", "SOCRATIC —", "RESPOND —", "BALANCED —"]) expect(system).not.toContain(old);
   });
 });
 
@@ -168,26 +142,51 @@ describe("the Remember prompt itself", () => {
     expect(system).toContain("NO PRAISE");
   });
 
-  it("stops a Socratic question smuggling in a claim", () => {
+  it("stops a nudge smuggling in a claim", () => {
     expect(system).toContain("ASK ONLY WHERE YOU COULD HAVE TOLD");
     expect(system).toContain("NEVER PUT A DISPUTED CONCLUSION INSIDE A QUESTION");
   });
 
-  it("makes Balanced run on evidence rather than on mind-reading", () => {
+  it("adapts on evidence rather than on mind-reading, and tells when unsure", () => {
     expect(system).toContain("Fluency is not evidence");
-    expect(system).toContain("WHEN YOU CANNOT TELL WHICH, TELL THEM");
+    expect(system).toMatch(/When you cannot tell whether to\s+hint or to tell, TELL/);
   });
 
-  it("ranks the reader's own words above the stance, and the rules above both", () => {
+  /* Greg's three asks for Recall, 2026-10-01 (spya-cjquu6, spya-kqynj5,
+     spya-c8x66d): brief, block links always, and nudges that fill the gap
+     when the reader is struggling rather than making them fail. */
+  it("asks for a nudge, a gap filled when they are stuck, block ids and brevity", () => {
+    expect(system).toContain("THEN A NUDGE");
+    expect(system).toContain("TWO DIRECTIONS");
+    expect(system).toContain("NEVER MAKE THEM FAIL TWICE");
+    expect(system).toContain("FILL THE GAP");
+    expect(system).toContain("EVERY REPLY POINTS INTO THE ARTICLE");
+    expect(system).toContain("120 is a ceiling");
+    expect(system).toContain("exactly one interrogative sentence and one");
+    expect(system).toContain('directions joined by "or"');
+  });
+
+  it("makes the clarification exception explicit before and inside the detailed rules", () => {
+    expect(system).toContain("A pure clarification is the exception");
+    expect(system).toContain('such as "the brain stuff", "the other thing" or "that bit"');
+    expect(system).toContain("make that question the whole reply");
+  });
+
+  it("does not turn a filled gap straight back into the same test", () => {
+    expect(system).toContain("Do not immediately ask them to recall");
+    expect(system).toContain("the answer you just supplied");
+  });
+
+  it("ranks the reader's own words above the nudge, and the rules above both", () => {
     /* An ordered list rather than one sentence, because the first version said
-       only "their words beat the stance" and left SOCRATIC's "ask, do not tell"
-       and SIGNPOSTS' "and nothing else" reading as absolutes that contradicted
-       it — which is what the model then did, half-obeying both. GPT Sol's
-       review of the built code, finding 1. */
+       only "their words beat the stance" and left Socratic's "ask, do not tell"
+       reading as an absolute that contradicted it — which is what the model
+       then did, half-obeying both. GPT Sol's review of the built code, finding 1.
+       The stances are gone; the ranking stays, with the nudge in their place. */
     expect(system).toContain("THREE THINGS GOVERN A REPLY");
     expect(system).toContain("WHAT YOU ARE ENTITLED TO SAY, above. Nothing overrides it");
     expect(system).toContain("THE READER'S OWN WORDS");
-    expect(system).toMatch(/AND IF THEY HAVE ALREADY SAID THEY ARE LOST, do not ask/);
+    expect(system).toMatch(/IF THEY SAY THEY DON'T REMEMBER, are stuck or lost/);
   });
 
   it("forbids a correction built out of the model's own inference", () => {

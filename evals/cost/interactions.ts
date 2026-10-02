@@ -121,7 +121,6 @@ import type {
   Glossary,
   GlossaryEntry,
   GlossaryLookup,
-  RememberStance,
   ThreadKind,
 } from "../../src/types.js";
 import { transcribe } from "../../src/transcribe.js";
@@ -257,7 +256,6 @@ async function oneTurn(opts: {
   ctx: TaskContext;
   question: string;
   kind: ThreadKind;
-  stance?: RememberStance;
 }): Promise<string> {
   const { task, ctx, question, kind } = opts;
   let text = "";
@@ -269,7 +267,6 @@ async function oneTurn(opts: {
     question,
     slug: ctx.slug,
     kind,
-    ...(opts.stance ? { stance: opts.stance } : {}),
     /* `null` rather than the reader's real profile: the profile lands in the
        final user message, after the breakpoint, so it changes the answer and
        not the cache — and a run whose numbers depend on whose profile was in
@@ -305,9 +302,8 @@ const TASKS: readonly InteractionTask[] = [
     note:
       "One Remember turn — the reader says what they took from the piece and finds out. It is " +
       "`converse` with `kind: \"remember\"`, which is the whole difference: a different system " +
-      "prompt, and the stance appended to the FINAL user message (src/converse.ts § " +
-      "`stanceLine`), below the breakpoint, so the stance costs nothing in cache terms. " +
-      "`balanced` is the stance the picker starts on. It bills under the `chat` AI job, so " +
+      "prompt (one adaptive voice since 2026-10-02; until then a per-turn stance rode in the " +
+      "final user message). It bills under the `chat` AI job, so " +
       "read its number beside chat's rather than as a new line in the model table. The wire " +
       "validation in `streamChat` (thread kind, MAX_REMEMBER_CHARS) is not an input to the " +
       "model call, so no thread is needed.",
@@ -318,7 +314,6 @@ const TASKS: readonly InteractionTask[] = [
         ctx,
         question: RECOLLECTIONS[ctx.round - 1] ?? RECOLLECTIONS[0],
         kind: "remember",
-        stance: "balanced",
       }),
   },
   {

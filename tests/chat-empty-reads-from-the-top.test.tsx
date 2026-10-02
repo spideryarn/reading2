@@ -126,8 +126,6 @@ function paint(t: ChatThread): void {
       createElement(ChatPanel, {
         slug: "a-piece",
         kind: t.kind === "remember" ? "remember" as const : "chat" as const,
-        stance: "balanced" as const,
-        onStance: () => {},
         loaded: true,
         loadFailed: false,
         threads: [t],

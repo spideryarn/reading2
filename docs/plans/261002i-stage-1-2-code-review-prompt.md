@@ -1,0 +1,16 @@
+You are reviewing code before it lands, in the repo at the current directory (Spideryarn). Stages 1 and 2 of docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. The plan, your own earlier plan review (docs/plans/261002i-plan-review-sol.md) and the scoped diff (docs/plans/261002i-stage-1-2-code-review.diff, against merge-base 3e3278f64) are the evidence; stage 1 is committed (9edc2b934), stage 2 is in the working tree.
+
+Stage 1: Greg's report that editing an earlier Recall message didn't trigger a reply. It did not reproduce; the candidate cause (Enter / the tick in EditQuestion doing nothing silently while an answer is pending) is fixed in src/web/ChatPanel.tsx EditQuestion and src/web/styles/mode-band.css, with tests/remember-edit-asks-again.test.tsx and docs/postmortems/261002g-a-refusal-with-no-voice.md.
+
+Stage 2: Recall's four stances replaced by one adaptive voice: REMEMBER_SYSTEM rewritten (src/converse.ts), stance removed from the write path (src/chat.ts, src/store/contracts.ts, src/routes.ts streamChat, src/web/useChat.ts, src/web/modes/conversation/ConversationModes.tsx, src/web/ChatPanel.tsx), the route accepting-validating-dropping a legacy stance on a Remember send only, Help/Features copy, CSS, tests, the eval renamed to evals/remember-recall.ts with new cases. The eval's latest output is evals/results/remember-recall.md (and the earlier run evals/results/remember-recall.261002i-run-1.md) — read them: does the prompt do what Greg asked (his words are quoted in the plan and in docs/project/remember-mode.md § One adaptive voice)?
+
+You may fix what you find, inside these stages' files (sandbox is workspace-write). Do not commit, do not run git commands that discard work (no checkout/restore/reset/stash/clean). Run `npm run typecheck` and the specific vitest files you touch (`npx vitest run <files>`); do NOT run the full `npm test` (another run is in progress on this box). Report anything wider than these stages for me to decide.
+
+Look especially for:
+1. Correctness of the legacy stance handling in streamChat: exactly which requests accept a stance, and that nothing new stores one (pg-chat begin/retry/edit paths). Any test that still asserts old behaviour, or any remaining reader of `stance` that implies behaviour.
+2. The EditQuestion change: aria-disabled vs disabled semantics, keyboard, the message clearing, any regression for chat (it's shared).
+3. The prompt: contradictions between sections (e.g. "every reply points into the article" vs "a pure clarification needs none"; TONE's "NO OVERALL ASSESSMENT ... If there is nothing worth raising" now that every reply nudges; "WHAT IS WORTH RAISING" vs "At most ONE correction"), anything that will make replies long, anything that loses a rule the old prompt had for a reason (see the header comment and remember-mode.md's six faults). Quote lines.
+4. Client: anything still reading message.stance for display, the composer row layout without the select (send pushed right with margin-left:auto), the Recall CSS order rules.
+5. Docs accuracy: remember-mode.md, help-modes.tsx, FeaturesPage.tsx vs what the code now does.
+
+Write findings ranked P0/P1/P2 with file:line, say which you fixed (and how) and which you left for me, and end with a verdict.

@@ -37,7 +37,7 @@
  * ## Why this is not `ChatPanel`
  *
  * `ChatPanel` is the reader's own conversation surface: a thread list, a live
- * voice session, a stance picker, dictation, per-turn profile. None of that
+ * voice session, dictation, per-turn profile. None of that
  * belongs to an editor working through names, and the two features that would
  * actively mislead here are the thread list (there is one Candidates thread per
  * paper and the reader never chooses it) and the live session (this
