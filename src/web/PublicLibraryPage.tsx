@@ -397,7 +397,15 @@ export type ShelfState =
  * a reader something false about the world with complete confidence, which is
  * worse than admitting we could not read it. src/web/public-api.ts.
  */
-export function usePublicShelf(): { state: ShelfState; again: () => void } {
+export function usePublicShelf(
+  /**
+   * Whether to read at all. The page always does; the owner's shelf only once
+   * Include public is on or a search wants the count, and its live shelf has
+   * answered (Library.tsx; plan 261002b § Part D). It reads once, the first
+   * time this is true, and keeps the answer if it goes false again.
+   */
+  enabled = true,
+): { state: ShelfState; again: () => void } {
   const [state, setState] = useState<ShelfState>({ kind: "loading" });
   /**
    * **Which read is allowed to answer**, and it is a ref rather than state
@@ -444,9 +452,12 @@ export function usePublicShelf(): { state: ShelfState; again: () => void } {
       });
   }, []);
 
+  const started = useRef(false);
   useEffect(() => {
+    if (!enabled || started.current) return;
+    started.current = true;
     again();
-  }, [again]);
+  }, [again, enabled]);
 
   return { state, again };
 }

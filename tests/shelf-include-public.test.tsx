@@ -262,7 +262,10 @@ describe("the Include public chip", () => {
     await traverse(() => history.forward());
     expect(publicChip()?.getAttribute("aria-pressed")).toBe("true");
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
-    expect(publicReads).toBe(2);
+    /* One read: the listing is `Library`'s since Part D, shared by the section
+       and the search's count, so turning the chip off and on again does not
+       ask again. */
+    expect(publicReads).toBe(1);
   });
 
   it("says when a search leaves none, and says the cap", async () => {
@@ -298,6 +301,43 @@ describe("the Include public chip", () => {
     await settle();
     expect(publicReads).toBe(2);
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+  });
+});
+
+describe("beside the search's answer (spya-s9fhmw)", () => {
+  const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+  const buttons = () => [...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+
+  it("counts the public cards that match, offers Include public, and pressing it shows them", async () => {
+    await show("/?q=ann");
+    expect(line()?.textContent).toContain("1 public article matches by title, author, site or description.");
+    expect(buttons()).toEqual(["Include archived", "Include public"]);
+    const press = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include public");
+    act(() => press?.click());
+    await settle();
+    expect(new URLSearchParams(location.search).get("public")).toBe("1");
+    expect(publicTitles()).toEqual(["Zebra crossings"]);
+    // One read for the count and the section both.
+    expect(publicReads).toBe(1);
+    expect(buttons()).toEqual(["Include archived"]);
+  });
+
+  it("does not count your own shared article as public, and says 'at least' when the listing is capped", async () => {
+    truncated = true;
+    await show("/?q=mine");
+    expect(line()?.textContent).toContain("None of the most recently shared public articles matches");
+    expect(buttons()).toContain("Include public");
+  });
+
+  it("does not count a query the card rule keeps no word of, but still offers the buttons", async () => {
+    await show("/?q=a");
+    expect(line()?.textContent).not.toContain("public article");
+    expect(buttons()).toEqual(["Include archived", "Include public"]);
+  });
+
+  it("says the counts come before Unread and topics when either is on", async () => {
+    await show("/?q=ann&show=unread");
+    expect(line()?.textContent).toContain("Counted before Unread and topics.");
   });
 });
 

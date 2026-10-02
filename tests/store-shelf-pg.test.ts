@@ -607,6 +607,20 @@ describe("the Postgres shelf and library search", () => {
       }
     });
 
+    it("counts the archived articles a search would have added, and only those", async () => {
+      /* What the shelf says beside Include archived under a search's answer —
+         Greg, spya-s9fhmw; plan 261002b § Part D. Active, it is not counted:
+         it is already in the hits. Archived, it is. */
+      expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(0);
+      await pgShelfStore.patch(SLUG, { archived: true });
+      try {
+        expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(1);
+        expect(await pgLibrarySearch.countArchivedMatches("")).toBe(0);
+      } finally {
+        await pgShelfStore.patch(SLUG, { archived: false });
+      }
+    });
+
     /* ---- ported from tests/shelf.test.ts, 2026-09-05 ----------------------
        `patchShelf` on the filesystem side held the title cap, the three
        blank-clears-it rules and every claim about `purpose`, and every one of

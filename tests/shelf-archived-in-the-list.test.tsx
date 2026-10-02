@@ -119,7 +119,10 @@ vi.mock("../src/web/lib/api.js", () => ({
         withArchive && query === "zibble"
           ? [{ slug: "delta", title: "Delta", blockId: "spya-k3m9qt", text: "a zibble in Delta", rank: 1, archived: true }]
           : [];
-      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false });
+      /* With the archive left out, the server also counts the archived
+         articles that would have matched (plan 261002b § Part D). */
+      const count = withArchive ? {} : { archivedArticles: query === "zibble" ? 1 : 0 };
+      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false, ...count });
     }
     return json({ error: "unmocked" }, 404);
   },
@@ -525,12 +528,28 @@ describe("the Archived chip", () => {
     expect(passage()?.querySelector("[data-archived-mark]"), "marked Archived").toBeTruthy();
   });
 
-  it("says the archive was not searched when off and nothing matched", async () => {
+  it("says, beside the empty answer, how many archived articles mention it, with a button that includes them", async () => {
+    /* Greg, spya-s9fhmw: *"add an extra button right there next to that
+       empty-results-message for including archived … include a sense of how
+       many archived … results would have matched"*. Plan 261002b § Part D. */
     await show("/?q=zibble");
-    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.includes("Archived articles aren't searched"));
-    await waitFor(() => !!line(), "the nothing-found line");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("1 archived article mentions it"), "the count");
     expect(asked).toContain("GET /api/library/search?q=zibble");
-    expect(line()?.textContent).toContain("turn on Include archived");
+    const button = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include archived");
+    expect(button, "the button beside it").toBeTruthy();
+    if (!button) return;
+    click(button);
+    await waitFor(() => params().get("archived") === "1", "the chip on, in the URL");
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => !!passage(), "the archived passage after pressing it");
+  });
+
+  it("keeps the button at zero, and says zero", async () => {
+    await show("/?q=nothing");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("No archived article mentions it"), "the zero");
+    expect([...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toContain("Include archived");
   });
 
   it("asks again when the chip is pressed with the words unchanged", async () => {

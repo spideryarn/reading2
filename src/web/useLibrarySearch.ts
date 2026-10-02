@@ -35,7 +35,7 @@ const DEBOUNCE_MS = 250;
  * src/library-search.ts) — so the request would reliably cost a walk over every
  * paragraph to return nothing.
  */
-const MIN_QUERY = 3;
+export const MIN_QUERY = 3;
 
 export interface LibrarySearchState {
   hits: LibraryHit[];
@@ -54,6 +54,8 @@ export interface LibrarySearchState {
   /** How many articles those hits are spread across. */
   articles: number;
   capped: boolean;
+  /** `LibrarySearchResponse.archivedArticles`: set only on an answer asked without the archive. */
+  archivedArticles?: number;
   /** True while a request for the current query is in flight. */
   searching: boolean;
   error: string | null;
@@ -113,12 +115,17 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
           // The answer to a question nobody is asking any more.
           if (body.query !== current.current.query.trim()) return;
           if (body.archived !== current.current.includeArchived) return;
+          /* Aborted, and so superseded — even if the words and the chip are
+             back where they were (A → B → A), this is the old A's answer.
+             GPT Sol, plan 261002b § Part D review. */
+          if (controller.signal.aborted) return;
           setState({
             hits: body.hits,
             resultsQuery: body.query,
             resultsArchived: body.archived,
             articles: body.articles,
             capped: body.capped,
+            ...(body.archivedArticles === undefined ? {} : { archivedArticles: body.archivedArticles }),
             searching: false,
             error: null,
             asked: true,
@@ -132,6 +139,7 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
           // failure replace newer results (plan 260930d code review).
           if (current.current.query.trim() !== trimmed) return;
           if (current.current.includeArchived !== includeArchived) return;
+          if (controller.signal.aborted) return;
           setState({ ...IDLE, error: e.message, asked: true });
         });
     }, DEBOUNCE_MS);
