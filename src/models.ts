@@ -412,7 +412,8 @@ export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
  * Chosen by measurement, 2026-09-29: nine shelves, four arms, three runs each,
  * blind Opus judges. Luna's scores beat the program-only list 9–0 in both
  * rounds and were level with or ahead of Jev, a cheaper decisions model on an
- * alpha endpoint the gateway does not speak. About $0.001 and 6–20 s a call.
+ * alpha endpoint the gateway did not then speak (it has since 2026-10-02, for
+ * quick search). About $0.001 and 6–20 s a call.
  * docs/plans/260929c-shelf-topics-chosen-by-a-model.md § Stage 1.
  *
  * The undated id, like every other Luna constant in this file. OpenRouter's
@@ -451,7 +452,7 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
  * a typical article, against 5–16 s for the meaning search.
  *
  * **Pinned to the dated id, not `-latest`**, because the floor the hits are cut
- * at (`QUICK_FLOOR`, 0.8) was measured on this model and means nothing on the
+ * at (`QUICK_FLOOR`, 0.7) was measured on this model and means nothing on the
  * next one: a quietly-upgraded alias would move every quick search's hit count
  * with nothing to say why. docs/investigations/261002o-quick-search-spike.md.
  *
@@ -1247,9 +1248,11 @@ export type Wire =
   | "transcription"
   /**
    * OpenRouter's Decisions API. It returns named typed answers rather than a
-   * chat completion. The product gateway does not speak it; the shelf-topics
-   * eval's declared Jev bypass does, and its ledger row must name the protocol
-   * it actually used rather than calling those tokens chat tokens.
+   * chat completion. The product gateway speaks it since 2026-10-02, for
+   * quick search (`search-quick`, `openRouterDecisions` in src/ai-call.ts);
+   * the shelf-topics eval's declared Jev bypass speaks it too. Either way the
+   * ledger row must name the protocol it actually used rather than calling
+   * those tokens chat tokens.
    */
   | "decisions";
 

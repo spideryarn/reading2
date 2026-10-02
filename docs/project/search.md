@@ -2,8 +2,9 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-26.** One box in the mode band, two ways of matching behind it, and the passages
-that match get marked in the article beside it. Greg's ask:
+**Built 2026-08-26.** One box in the mode band, three ways of matching behind it (two until
+2026-10-02, when *quick* arrived — [§ Quick search](#quick-search-a-meaning-search-in-about-a-second)),
+and the passages that match get marked in the article beside it. Greg's ask:
 
 > Add functionality for Semantic Search/Highlights.
 >
@@ -17,6 +18,7 @@ that match get marked in the article beside it. Greg's ask:
 > — Greg, 2026-08-26
 
 Code: [`src/search.ts`](../../src/search.ts) (the model call),
+[`src/quick-search.ts`](../../src/quick-search.ts) (quick search's call to Jev),
 [`src/searches.ts`](../../src/searches.ts) (the rules — the cap, the palette, mint-or-retry) and
 [`src/store/pg-searches.ts`](../../src/store/pg-searches.ts) (storage),
 [`src/quote-match.ts`](../../src/quote-match.ts) (finding a quote in a block — the shared rule),
@@ -29,8 +31,8 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
 **When a search returns nothing, or less than it should**, these are the sections that say what can
 empty one:
 
-- **Which search it was.** There are three — the words box and the meaning search in an article,
-  and the shelf's box over every article — and they match differently:
+- **Which search it was.** There are four — the words box, the quick search and the meaning search
+  in an article, and the shelf's box over every article — and they match differently:
   [§ The third search](#the-third-search-the-whole-library-at-once), and the table under the
   diagram below. A link may set `?match=` either way:
   [§ `match` defaults to `meaning`](#match-defaults-to-meaning-and-used-to-default-to-words).
@@ -43,6 +45,8 @@ empty one:
   [§ The counts in the log line](#the-counts-in-the-log-line).
 - **The text in the box was replaced** by a saved run's criterion arriving late:
   [§ And the fetch](#and-the-fetch-which-can-still-take-the-text-away).
+- **A quick search** shows only paragraphs Jev scored at 0.7 or more, never a heading, and at
+  most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
 - **On the shelf**, only gistable blocks are indexed for passages (`searchLibrary` in
   [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts)), so a heading or a figure is never a hit;
   [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one).
@@ -107,19 +111,19 @@ function doing the same job.
 
 ## The one decision everything else follows from
 
-**Two matchers, one box, one results list.** The reader types, and a toggle says whether we match
-the letters or the meaning:
+**One box, one results list, and a toggle that says how to match.** It was two matchers, the
+letters or the meaning, until 2026-10-02; *quick* sits between them:
 
-| | **words** | **meaning** |
-|---|---|---|
-| what it matches | the characters you typed | passages that mean what you described |
-| where it runs | in the browser | a model call over the whole article |
-| what it costs | nothing | a few cents, and 15–40 seconds |
-| when it runs | every keystroke | when you press **find** |
-| what a result carries | a snippet, and where in the piece it falls | the same, plus a confidence and one line of reasoning |
-| is it saved | no — it is `?find=` in the URL | yes, beside the article |
+| | **words** | **quick** | **meaning** |
+|---|---|---|---|
+| what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
+| where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
+| what it costs | nothing | about $0.0004, and about a second | a few cents, and 15–40 seconds |
+| when it runs | every keystroke | when you press **find** | when you press **find** |
+| what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
+| is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* | yes, beside the article |
 
-Greg chose both over meaning-only. It is also what the previous version converged on, and its own
+Greg chose words and meaning both over meaning-only. It is also what the previous version converged on, and its own
 note is the argument:
 
 > Text search and meaning-based search answer different questions and their version ran both, side
@@ -137,13 +141,79 @@ and, on the relationship between them:
 
 The two meet in [`search-hits.ts`](../../src/web/search-hits.ts) and **nothing downstream of that
 file knows which one ran**. One `Found[]`, one list, one kind of mark, one sort control. A third way
-of matching would be a third arm of one ternary.
+of matching would be a third arm of one ternary — and when one came, quick search, it went upstream
+of that file instead: it returns the same `SearchHit`s as meaning, so it is a second generator behind
+the same route and the same saved list.
 
 The practical difference the panel is at pains to make obvious is *what pressing a key does*. In
-words mode the results are already there as you type. In meaning mode nothing happens until you
-submit, because submitting spends money. A box that quietly billed you per keystroke would be the
+words mode the results are already there as you type. In quick and meaning mode nothing happens until
+you submit, because submitting spends money. A box that quietly billed you per keystroke would be the
 worst possible version of this feature — so there is a **find** button in one mode and deliberately
 none in the other, rather than a disabled one that invites you to wonder what you did wrong.
+
+## Quick search: a meaning search in about a second
+
+**Built 2026-10-02**, from feedback report `spya-c77zuq`. The plan is
+[261002e-quick-search-v1.md](../plans/261002e-quick-search-v1.md) and every number below was
+measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-search-spike.md).
+
+> I really love the idea of our kind of search that can search by concepts or ideas or questions,
+> but it's quite slow. And so I was wondering about using TypeSafe.ai's Jev model through OpenRouter
+> to at least provide a quick version of it, even if it's not as powerful.
+>
+> […]
+>
+> So try and get a V1 working that's fun to play with without too much complexity, assuming that
+> we'll evolve the UI from there.
+>
+> — Greg, 2026-10-01 (dictated; the whole request is quoted in the plan)
+
+Jev (`typesafe/jev-1.13`, `QUICK_SEARCH_MODEL` in [`src/models.ts`](../../src/models.ts)) is a
+*decision* model: it answers typed questions with probabilities rather than writing text. Quick
+search asks it one yes/no question per block — *does this passage match what the reader is looking
+for?* — all in one request, and keeps the blocks it says yes to. What follows from that shape:
+
+- **A hit is a whole paragraph.** Jev scores blocks, so there is no sentence inside one to quote;
+  the wash covers the paragraph, and the row and hover show a bounded preview of it rather than all
+  of it (the snippet caps above still hold).
+- **No reasoning line**, and that is what *flesh out* is for (below).
+- **The confidence is Jev's p(yes) × 100**, so a quick 88 and a meaning 88 are different numbers.
+  It is still printed, because [§ The confidence](#the-confidence-and-the-unit-that-changed-silently)
+  is about not hiding uncertainty; the row's *quick* tag, and each result's score explanation, say
+  which number it is.
+- **Floor 0.7, cap 20, best first** (`QUICK_FLOOR` in
+  [`src/quick-search.ts`](../../src/quick-search.ts), `MAX_HITS` shared with meaning). There is no
+  natural break in Jev's scores, so the floor is a measurement, not a gap: the plan said 0.8, and
+  re-measured on the wording actually sent, 0.8 kept about half the meaning search's hits and 0.7
+  about three-quarters, with what lay between nearly all genuine. The cap does real work on queries
+  about the whole piece, where 34–59 blocks clear 0.7.
+- **Headings are never asked about.** Jev rates the title highly against any query about the
+  article. They are dropped in `quickBlocks`, not in the shared `isSearchable`, because they are
+  searchable — a meaning search may land on one. Notes and references stay in, as they do for
+  meaning.
+- **A long article is chunked** under Jev's 32k-token context and the chunks run in parallel; a
+  chunk the provider refuses as too long is halved and retried, a few levels deep. Every question
+  must come back answered or the run fails — never a quietly short result.
+- **It is saved like a meaning search**, into the same list with the same colours, ticks, rail lane
+  and *Prioritised* bar, and `search_runs.kind` says `'quick'` (meaning rows are `'meaning'`). The
+  kind is stated on the row rather than inferred from the model, because a pending row has no model
+  yet. It travels through export and the public reader, so a visitor sees the tag and the hits, and
+  never *flesh out*.
+- **Flesh out**, on a finished quick row, runs the full meaning search on the same words as a new
+  row and unticks the quick one so the two do not paint over each other. Kind is part of a run's
+  identity — retry resends with its own kind, and the guard against a duplicate in-flight search
+  is per kind and criterion — which is what lets the meaning search start while a quick one with
+  the same words is still on screen.
+
+**On the wire** it is the product's one call on OpenRouter's Decisions API, through its own gateway
+seam, `openRouterDecisions` in [`src/ai-call.ts`](../../src/ai-call.ts), as the job `search-quick` —
+so it is metered and attributed to the article like every other call
+([ai-gateway.md](ai-gateway.md), [cost-tracking.md](cost-tracking.md)). It is not streamed: the
+endpoint answers in one body, so all the hits arrive together, under one deadline
+(`QUICK_TIMEOUT_MS`) over every chunk and retry.
+
+Why a third arm of the toggle rather than a new mode or a separate quick-search bar, and why it is
+saved rather than thrown away: the plan's § The decision.
 
 ## Why this is on the augment side of the line
 
@@ -942,14 +1012,14 @@ reader pressed**. Every part of that is silent. The key is now `runId:blockId:n`
 
 ## The URL
 
-Six parameters, which is more than any other mode wants, because search mode has two matchers in it
+Six parameters, which is more than any other mode wants, because search mode has three matchers in it
 rather than one feature. The division: `match` says which matcher, and then exactly one of `find` and
 `runs` is the thing being matched. (`run` is the sixth and is legacy — read on load, never written.)
 
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode` | `search` | push | A mode is where you are, not a glance |
-| `match` | `words`, `meaning` (default) | **push** | It changes what the article looks like, like a column toggle. Back should undo it |
+| `match` | `words`, `quick` (since 2026-10-02), `meaning` (default) | **push** | It changes what the article looks like, like a column toggle. Back should undo it. `quick` behaves as `meaning` does for `runs` and the draft — `asksTheServer` in [`params.ts`](../../src/web/params.ts) — and differs only in the `kind` it asks with |
 | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
 | `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
 | `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
@@ -1087,11 +1157,11 @@ list, an unknown `order` is document order. Same rule as everything else in
    toggle, the list      and the ONE place       one POST one answer                   ▼
         │                the two matchers                                        routes.ts § search
         │                    meet                                                      │
-        │                       │                                             ┌────────┴────────┐
-        │                       ▼                                             ▼                 ▼
-        │              search-hits.ts                                   searches.ts        search.ts
-        │            findLiteral / resolveHits                      pg-searches.ts        OpenRouter,
-        │            → Found[] → hitMarks()                          search_runs        no web search
+        │                       │                                             ┌────────┴────────┬──────────────────┐
+        │                       ▼                                             ▼                 ▼                  ▼
+        │              search-hits.ts                                   searches.ts        search.ts        quick-search.ts
+        │            findLiteral / resolveHits                      pg-searches.ts        OpenRouter,      Jev, on the
+        │            → Found[] → hitMarks()                     search_runs (+ kind)    no web search    Decisions wire
         ▼                       │                                                              │
   the results list              ▼                                                        validateHits()
                         App holds Found[] ──► TableView ──► annotateHtml ──► mark.hit     ▲
@@ -1099,6 +1169,10 @@ list, an unknown `order` is document order. Same rule as everything else in
                                                      src/quote-match.ts ──────────────────┘
                                                      the same findQuote() both ends use
 ```
+
+`routes.ts` § search picks the generator by the request's `kind`: `findPassagesStream` for meaning,
+`quickPassagesStream` for quick. Both yield the same events and are stored the same way, so
+everything to the left of that fork is shared.
 
 The one seam worth knowing: **`SearchBand` computes the results and pushes them up to `Reader`,
 which owns the prose.** Not because that is elegant — it is the awkward half of a hook that must
@@ -1277,6 +1351,15 @@ a hope.
 - **Words mode has no whole-word or case-sensitive option.** Deliberately: find-on-page has a
   meaning readers already hold, and the reader who wants cleverness has the other toggle. But it is
   the first thing somebody will ask for.
+- **Quick search does not run as you type**, though a second is fast enough to tempt: every pause
+  would be a saved row and a call. A natural v2, and the reason it has a *find* button too.
+- **A quick hit cannot point inside its paragraph.** Jev scores blocks, so the wash covers the whole
+  paragraph; the quote is what *flesh out* buys.
+- **Quick scores wobble from run to run** — up to 0.17 between identical requests in the spike — so
+  the order of close hits, and whether a block near 0.7 makes it in, is not stable. Another reason
+  the row says *quick*. Its known failure is *about* versus *against*: "things Claude should never
+  do" scored a passage on being over-cautious nearly as high as the hard limits
+  ([261002o](../investigations/261002o-quick-search-spike.md)).
 - **No evidence it helps.** Which is the criticism the previous version earned for its chat, and
   repeating their mistake would mean never asking.
   [Q6](open-questions.md#q6) is where "how would we know we are failing at this" lives.
@@ -1301,6 +1384,9 @@ a hope.
   when the article may acquire marks
 - [comments.md](comments.md) — the older marks-on-prose feature, and where `resolveMark` came from
 - [260826a-chat-mode.md](../plans/260826a-chat-mode.md) — the mode band this is the fourth tenant of
+- [261002e-quick-search-v1.md](../plans/261002e-quick-search-v1.md) and
+  [261002o-quick-search-spike.md](../investigations/261002o-quick-search-spike.md) — quick search's
+  plan and the measurements behind its numbers
 - [url-state.md](url-state.md) — `?match=`, `?find=`, `?run=` and `?order=` among the rest
 - [design-css-overview.md](design-css-overview.md) — the tokens, and `--hit-rgb` among them
 - [logging.md](logging.md) — what a model call may and may not write down

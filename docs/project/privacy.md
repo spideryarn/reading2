@@ -438,6 +438,17 @@ and `LAST_UPDATED` moved. The scores it returns are stored against the reader
 (`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
 profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
 
+## Quick search
+
+**Added 2026-10-02**, with [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second):
+a quick search sends the article's passages and the words the reader searched for to TypeSafe's
+`jev-1.13`, through OpenRouter. That is what the meaning search already sends to a model, so it is a
+new model rather than a new kind of data — and not a new subprocessor in our contract, since the
+call is OpenRouter's like the rest — but the page names it and what it is shown, in the models
+paragraph. The search and its hits are stored like a meaning search (`search_runs`, with `kind =
+'quick'`), and [`src/quick-search.ts`](../../src/quick-search.ts) logs counts only, never the
+criterion or a passage.
+
 ## The admin's sign-up and upgrade notices carry the address
 
 **Added 2026-10-01**, at Greg's request

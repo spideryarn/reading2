@@ -20,7 +20,8 @@ three rules**, and each rule has something that enforces it:
 
 1. **Call a model through the gateway**, never with your own client or `fetch`: `streamMessage`
    ([`src/messages-stream.ts`](../../src/messages-stream.ts)) for the pipeline stages,
-   `openRouterStream` / `openRouterJson` / the embeddings, images and transcription seams in
+   `openRouterStream` / `openRouterJson` / the embeddings, images, transcription and decisions
+   (`openRouterDecisions`, quick search's) seams in
    [`src/ai-call.ts`](../../src/ai-call.ts) for everything else. The gateway is what writes the row;
    `tests/no-undeclared-spend.test.ts` fails on any other way to reach a provider.
 2. **Make the call inside a scope.** A pipeline step runs inside `runStep`
@@ -174,4 +175,5 @@ they appear. Run it after a change to the gateway, the ledger or the attribution
 the article attribution removed (exit 1).
 
 Not covered yet: the transcription and images wires, which need an audio file and cost more per
-call.
+call, and the decisions wire (quick search, since 2026-10-02), which this check does not call yet —
+its ledger row is pinned in `tests/ai-call.test.ts` against a stubbed provider, not against a real bill.
