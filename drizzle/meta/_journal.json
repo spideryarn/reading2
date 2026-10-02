@@ -841,6 +841,13 @@
       "when": 1790955356334,
       "tag": "20261002153556_search_runs_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1790960562607,
+      "tag": "20261002170242_glossary_lookups_added_name",
+      "breakpoints": true
     }
   ]
 }

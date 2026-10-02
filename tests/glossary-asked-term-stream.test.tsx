@@ -36,6 +36,7 @@ const FOUND = { term: "attention head", blockId: "spya-bbbbbb", quote: "Attentio
 const ANSWER: AskedTermAnswer = {
   ...FOUND,
   blockId: FOUND.blockId as AskedTermAnswer["blockId"],
+  added: { kind: "no-glossary" },
   lookup: {
     answer: "An answer about attention heads.",
     citations: [],

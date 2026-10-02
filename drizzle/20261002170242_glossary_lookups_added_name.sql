@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."glossary_lookups" ADD COLUMN "added_name" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."glossary_lookups" ADD CONSTRAINT "glossary_lookups_added_name_length" CHECK ("spideryarn"."glossary_lookups"."added_name" is null or char_length("spideryarn"."glossary_lookups"."added_name") between 1 and 80);

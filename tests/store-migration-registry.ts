@@ -1943,6 +1943,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/glossary-added-term.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with adding a looked-up term to the glossary (plan 261002f, " +
+      "2026-10-02). It seeds three articles with `scratchArticleInPg`, writes a known glossary onto " +
+      "each, and drives `addTerm`, hide, the owner's `loadGlossary` and the public read directly — " +
+      "entirely Postgres. Its reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/reset-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2762,6 +2773,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
   "tests/glossary-hidden-route.test.ts": "private-postgres",
+  /* Seeds three articles, writes a glossary on each, and drives adding a
+     looked-up term, hiding it, the owner's read and the public read, reading
+     rows back out of `glossary_lookups`. No model is called. */
+  "tests/glossary-added-term.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",

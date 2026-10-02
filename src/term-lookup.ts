@@ -52,6 +52,7 @@ import {
 import type {
   Article,
   AskedTermAnswer,
+  AskedTermFound,
   Block,
   BlockId,
   GlossaryEntry,
@@ -172,7 +173,7 @@ export interface LookUpTermDeps {
   };
 
   /** Where the answer goes. One row (or one key) per term. */
-  readonly lookups: GlossaryLookupStore;
+  readonly lookups: Pick<GlossaryLookupStore, "load" | "save">;
 
   /**
    * ***Dig deeper*'s allowance** — required, with no default, because every
@@ -508,16 +509,23 @@ export function refuseUnfinished(ending: ExplainEnding): void {
 /* ------------------------------------------ a term the reader typed in a box -- */
 
 /**
- * Everything the *Look up a term* box needs — **which is strictly less than a
- * lookup needs**, and the subtraction is the feature.
+ * Everything the *Look up a term* box needs.
  *
- * No `lookups` store, because nothing is saved. No `loadGlossary`, because the
- * question is about the article and not about the list: a term the glossary has
- * never heard of is exactly the case this box exists for.
+ * No `loadGlossary`, because the question is about the article and not about
+ * the list: a term the glossary has never heard of is exactly the case this
+ * box exists for. The list is consulted only once the answer has finished,
+ * inside `lookups.addTerm`, to decide whether the term is already in it.
  */
 export interface AskAboutTermDeps {
   /** Where the article's blocks and meta come from. Owner-filtered — see below. */
   readonly reader: { loadArticle(slug: string): Promise<Article> };
+
+  /**
+   * Where a finished answer adds the term to the owner's glossary —
+   * `GlossaryLookupStore.addTerm`, plan 261002f. Required, not defaulted: a
+   * box that quietly stopped adding would look exactly like one that works.
+   */
+  readonly lookups: Pick<GlossaryLookupStore, "addTerm">;
 
   /**
    * Overridable so a test can drive the successful path without a model.
@@ -537,9 +545,10 @@ export interface AskAboutTermDeps {
  * `quote` is the run of characters the matcher found in `blockId`, never what
  * the reader typed; `term` is what they typed, normalised, and is only ever
  * shown as their own question. The route sends this before the first word of
- * the answer, so the panel can say where it is looking while it waits.
+ * the answer, so the panel can say where it is looking while it waits. The
+ * type lives in src/types.ts beside `AskedTermAnswer`, which extends it.
  */
-export type AskedTermFound = Omit<AskedTermAnswer, "lookup">;
+export type { AskedTermFound } from "./types.js";
 
 /**
  * What an asked term's answer emits: any number of `delta`, then exactly one
@@ -591,9 +600,9 @@ function appearsInsideAWord(term: string, blocks: readonly Block[]): boolean {
 
 /**
  * Find a term the reader typed in the article, and explain the passage it is
- * in. **Nothing is stored.**
+ * in; once the answer has finished, add the term to the owner's own glossary.
  *
- * A reader asked for this, and asked for a little more than it does:
+ * A reader asked for this:
  *
  * > I would like to be able to type into a search box in the glossary for a
  * > particular term and for it to look for that term and add it to the
@@ -608,9 +617,10 @@ function appearsInsideAWord(term: string, blocks: readonly Block[]): boolean {
  * guess — see `ASKED_TERM_ABSENT` in src/messages.ts for why there is no
  * *"did you mean…"* here.
  *
- * **"Add it to the glossary" is deliberately not built.** {@link AskedTermAnswer}
- * has the three reasons, one of which is that a reader-added entry would be
- * published with an already-shared article.
+ * **"Add it to the glossary" arrived on 2026-10-02**, a month after the rest,
+ * once there was somewhere to put it that *Find more* cannot merge away and a
+ * shared link does not publish: a `glossary_lookups` row with `added_name` set,
+ * the owner's alone. {@link AskedTermAnswer} and src/glossary-added.ts.
  *
  * ## What it will not take from the client
  *
@@ -752,6 +762,17 @@ export function makeAskAboutTerm(
            private question in a way a stored glossary entry is not. `chars` is
            what makes the eighty-character bound observable without carrying the
            string. docs/project/logging.md. */
+        /* **Then add the term**, now that there is a finished answer to be
+           its explanation — never before, so an abandoned or cut-off stream
+           adds nothing (`refuseUnfinished` above has already thrown for
+           those). A write that throws throws the stream: no `done` says
+           "added" over a row that is not there. Plan 261002f. */
+        const added = await deps.lookups.addTerm(slug, {
+          name: found.term,
+          quote: found.quote,
+          lookup,
+        });
+
         log("store").info(
           {
             slug,
@@ -759,11 +780,12 @@ export function makeAskAboutTerm(
             searches: lookup.searches,
             citations: lookup.citations.length,
             model: lookup.model,
+            added: added.kind,
           },
           "explained a term a reader asked about",
         );
 
-        yield { type: "done", answer: { ...found, lookup } };
+        yield { type: "done", answer: { ...found, lookup, added } };
         return;
       }
       /* Unreachable by `explainStream`'s own contract — it yields `done` or

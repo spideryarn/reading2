@@ -32,6 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
+import { withAddedEntries } from "../glossary-added.js";
 import { relocateEntries } from "../glossary-occurrences.js";
 import { decodeAuthors } from "../authors.js";
 import { NOT_READ_YET } from "../messages.js";
@@ -3489,8 +3490,20 @@ const rawPgArticleReader: ArticleReader = {
        `blocks` already says nothing (`occurrencesFitTheArticle`), and a
        current one is what the underlines need. src/glossary-occurrences.ts,
        plan 261002c. */
-    const entries = relocateEntries(glossary.entries, blocks).map((entry) => {
-      const lookup = byEntry.get(entry.id);
+    /* **And the terms the reader added**, which are lookup rows with a name
+       rather than entries in the document — src/glossary-added.ts, plan
+       261002f. Added here, before the relocate, so they get their blocks and
+       their place in document order by the same rule as the rest. One a later
+       *Find more* now names is not drawn; if the model's entry has no
+       explanation of its own, the reader's follows it there (`absorbed`).
+       **A hide does not follow**: the model's entry is a new entry, and
+       carrying a hide across would leave *Unhide* on it clearing the wrong
+       row. Plan 261002f § Revised, item 5. */
+    const { entries: owners, absorbed } = withAddedEntries(glossary.entries, stored);
+    const entries = relocateEntries(owners, blocks).map((entry) => {
+      const lookup =
+        byEntry.get(entry.id) ??
+        (absorbed.get(entry.id) ?? []).map((id) => byEntry.get(id)).find((l) => l !== undefined);
       const withLookup = lookup ? { ...entry, lookup } : entry;
       return hidden.has(entry.id) ? { ...withLookup, hidden: true as const } : withLookup;
     });

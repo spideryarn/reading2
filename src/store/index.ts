@@ -346,17 +346,17 @@ export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden
 /**
  * Explaining a term the reader typed into the glossary's box.
  *
- * **The same parts as `lookUpTerm` below, minus the store**, because nothing is
- * saved — src/types.ts § `AskedTermAnswer` has the three reasons, the sharpest
- * being that the glossary blob is published with a shared article. So there is
- * no `lookups` seam here and no second copy of the anchor rule: both verbs are
- * built from `anchorIn` in src/term-lookup.ts, which is the whole argument for
- * that file existing.
+ * **The same parts as `lookUpTerm` below**, and since plan 261002f the same
+ * store: a finished answer adds the term to the owner's glossary as a lookup
+ * row with a name (`addTerm`). No second copy of the anchor rule: both verbs
+ * are built from `anchorIn` in src/term-lookup.ts, which is the whole argument
+ * for that file existing.
  *
  * No `assertWritable`, for the same reason as `lookUpTerm` below.
  */
 export const askAboutTerm = makeAskAboutTerm({
   reader,
+  lookups: glossaryLookupStore,
 });
 
 /**

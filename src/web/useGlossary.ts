@@ -28,8 +28,11 @@
  * See docs/project/glossary.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isSpideryarnId } from "../ids.js";
 import type {
+  AddedTerm,
   AskedTermAnswer,
+  AskedTermFound,
   Citation,
   Glossary,
   GlossaryEntry,
@@ -59,7 +62,7 @@ type GlossaryStatus = "loading" | "none" | "ready" | "error";
  * sentence — the reader has read it, and the server's sentences for a broken
  * stream say *what arrived is real*. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
-export interface AskedTermDraft extends Omit<AskedTermAnswer, "lookup"> {
+export interface AskedTermDraft extends AskedTermFound {
   text: string;
 }
 
@@ -87,13 +90,34 @@ export interface LookKept {
 }
 
 /** The box's `begin` frame, if it is one: where the server found the term. */
-function asFound(data: unknown): Omit<AskedTermAnswer, "lookup"> | undefined {
-  const found = data as Partial<AskedTermAnswer> | null;
+function asFound(data: unknown): AskedTermFound | undefined {
+  const found = data as Partial<AskedTermFound> | null;
   return typeof found?.term === "string" &&
     typeof found.blockId === "string" &&
     typeof found.quote === "string"
     ? { term: found.term, blockId: found.blockId, quote: found.quote }
     : undefined;
+}
+
+/**
+ * **What became of the term, checked arm by arm** — plan 261002f. An id goes
+ * into `?term=` and into a hide request, so a malformed one is refused here
+ * rather than trusted because the frame came from our own server.
+ */
+export function isAddedTerm(data: unknown): data is AddedTerm {
+  const a = data as Partial<Record<string, unknown>> | null | undefined;
+  switch (a?.kind) {
+    case "added":
+      return typeof a.entryId === "string" && isSpideryarnId(a.entryId);
+    case "existing":
+      return (
+        typeof a.entryId === "string" && isSpideryarnId(a.entryId) && typeof a.hidden === "boolean"
+      );
+    case "no-glossary":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
@@ -102,7 +126,8 @@ function isAskedTermAnswer(data: unknown): data is AskedTermAnswer {
     typeof a?.term === "string" &&
     typeof a.blockId === "string" &&
     typeof a.quote === "string" &&
-    isGlossaryLookup(a.lookup)
+    isGlossaryLookup(a.lookup) &&
+    isAddedTerm(a.added)
   );
 }
 
@@ -965,6 +990,11 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
           setAskDraft(null);
           setAsked(answer);
         }
+        /* **The term is in the list now, so read the list again** — the box
+           selects the new row once it is there (`AskATerm`). Whether or not
+           this request is still the box's: the row was written either way.
+           Plan 261002f. */
+        if (answer.added.kind === "added") await refresh();
       } catch (err) {
         /* Stopped on purpose — a keystroke, another article, the band closing.
            Not a failure, and nothing to put on a screen that has moved on. */
@@ -988,7 +1018,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
         }
       }
     },
-    [slug],
+    [slug, refresh],
   );
 
   /**

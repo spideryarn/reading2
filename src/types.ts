@@ -586,6 +586,15 @@ export interface GlossaryEntry {
    * `shownEntries` in src/web/glossary-shown.ts.
    */
   hidden?: true;
+  /**
+   * **The reader added this term**, from the *Look up a term* box —
+   * docs/plans/261002f-glossary-add-a-looked-up-term.md. Such an entry is not in
+   * the glossary document at all: it is built at the owner's read seam
+   * (`loadGlossary`) from a `glossary_lookups` row with `added_name` set, so it
+   * has a `lookup` and no `senseHere`, `background` or scores. Like `hidden`,
+   * never stored on the document and never on the public projection.
+   */
+  added?: true;
   /** Every block that uses this term, in document order. Found by us. Empty is meaningful. */
   blocks: BlockId[];
 }
@@ -618,28 +627,12 @@ export interface GlossaryLookup {
 }
 
 /**
- * **What the glossary's *Look up a term* box hands back** — one answer about
- * one passage, and nothing that outlives the request.
- *
- * A reader asked for a box that would "look for that term and add it to the
- * glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). This is the first half of
- * that and deliberately not the second: **nothing here is stored**, and no
- * `GlossaryEntry` is minted. The glossary is a wholesale JSON document
- * (src/db/schema.ts § `glossary`) which a *"find more terms"* run recomputes,
- * and which src/store/public-reader.ts publishes to everyone a shared article
- * is shared with — so an entry a reader added would be merged away by the first
- * and **published by the second**. Persistence needs its own owner-scoped table
- * and its own decision about the public projection; until then this answers the
- * question and keeps the reader's words to itself.
- * docs/project/glossary.md § Looking a term up.
- *
- * `lookup` is a {@link GlossaryLookup} so the panel draws this with the same
- * component it draws a checked entry with — same call, same shape, one piece of
- * rendering. It is **not** written to `glossary_lookups`: that table is keyed by
- * entry id and there is no entry.
+ * **Where the *Look up a term* box found the term** — every word of it the
+ * server's, sent before the first word of the answer so the panel can say where
+ * it is looking while it waits.
  */
-export interface AskedTermAnswer {
-  /** What the reader typed, normalised — never their raw string, and never stored. */
+export interface AskedTermFound {
+  /** What the reader typed, normalised — never their raw string. */
   term: string;
   /** The block the question was anchored to, so the panel can offer a jump. */
   blockId: BlockId;
@@ -649,7 +642,45 @@ export interface AskedTermAnswer {
    * model was told the reader had selected and it is the text that is there.
    */
   quote: string;
+}
+
+/**
+ * **What happened to the term once its answer finished** —
+ * docs/plans/261002f-glossary-add-a-looked-up-term.md.
+ *
+ * - `added`: it is in the owner's glossary now, as `entryId`, with this answer
+ *   as its explanation. Only the owner sees it.
+ * - `existing`: an entry already names these words (the model's, or one the
+ *   reader added before), so nothing was written. `hidden` when the reader has
+ *   hidden that entry, so the panel can offer *Unhide* rather than a jump to a
+ *   row that is not drawn.
+ * - `no-glossary`: the article has no glossary yet, so there is no list to add
+ *   to and nothing was written.
+ */
+export type AddedTerm =
+  | { kind: "added"; entryId: string }
+  | { kind: "existing"; entryId: string; hidden: boolean }
+  | { kind: "no-glossary" };
+
+/**
+ * **What the glossary's *Look up a term* box hands back** — one answer about
+ * one passage, and what became of the term.
+ *
+ * A reader asked for a box that would "look for that term and add it to the
+ * glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). The first half shipped
+ * that day and stored nothing; since 2026-10-02 a finished answer also adds the
+ * term to the owner's own glossary (`added`). It is stored as a
+ * `glossary_lookups` row with `added_name` set, outside the glossary document,
+ * so *Find more* cannot merge it away and a shared link does not publish it —
+ * the two reasons the first half stopped short. src/glossary-added.ts.
+ *
+ * `lookup` is a {@link GlossaryLookup} so the panel draws this with the same
+ * component it draws a checked entry with — same call, same shape, one piece of
+ * rendering.
+ */
+export interface AskedTermAnswer extends AskedTermFound {
   lookup: GlossaryLookup;
+  added: AddedTerm;
 }
 
 /**
