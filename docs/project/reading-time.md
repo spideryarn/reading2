@@ -28,6 +28,17 @@ and the drawing.
 - **Thickness is per block and absolute**: four steps of the time spent over the time the block takes
   to read at 230 words a minute, never under a second. Not relative to the most-read block, which
   would make everything else look unread. `readLevel`.
+- **Each step costs twice the time of the one before**, since 2026-10-02: 0.35, 0.7, 1.4 and 2.8 of
+  the reading time (it was 0.1, 0.35, 0.7, 1). A glance draws nothing, one brisk read is faint, full
+  strength is a slow read or nearly three. 0.7 stays a boundary because it is the quiz's "read".
+
+  > It seems to get brighter too fast. There's lots of blocks that have lines next to them that I
+  > think I haven't spent that much time on. So maybe increase the threshold or basically slow down
+  > the rate at which it gets brighter.
+  >
+  > — Greg, 2026-10-01 (spya-d940uu)
+
+  [261002e](../plans/261002e-reading-time-line-brightens-more-slowly-and-its-card-says-the-time.md).
 - **Sent after the opening read, then once a minute, on hide and on `pagehide`, and never twice.**
   A new opening read also waits for the preceding mount's cleanup write. Those two orderings stop an
   opening snapshot from counting the same local batch twice or overtaking it. A real teardown sends
@@ -41,8 +52,8 @@ and the drawing.
   re-render every row whenever one block crossed a step. `gutterCss`,
   [`ReadingTimeStyle.tsx`](../../src/web/ReadingTimeStyle.tsx), gutter.css § reading time.
 - **The hairline gets lighter, not darker.** It is `--ink` — near-white on the dark page — at an
-  opacity of `level × (level + 1) × 0.025`: nothing unread, 0.05 for a glance, 0.50 once read
-  through. Zero at level 0 is required, not tidy: the 2px line is not clipped by its zero-wide strip.
+  opacity of `level × (level + 1) × 0.025`: nothing unread or glanced at, 0.05 at level 1, 0.50 at the
+  top. Zero at level 0 is required, not tidy: the 2px line is not clipped by its zero-wide strip.
   Greg, 2026-10-01, when the `title` said "darker" and he saw it brighten:
 
   > there's no visible line at first, and then for stuff I've been reading a lot, there is a visible
@@ -55,7 +66,9 @@ and the drawing.
   tell what it meant (SPIDERYARN-READING2-4S). It is a `span.blk-read`, last in the gutter, and its
   hover strip is zero wide on a row with no reading time. **A rich card since 2026-10-01**, not a
   `title`: the reading view's one delegated card (`BlockLinkCard.tsx` § `ReadingCard`), placed at the
-  pointer's height rather than the paragraph's top
+  pointer's height rather than the paragraph's top. **It says the time** since 2026-10-02 — "You have
+  spent 1 min 20 s here. It takes about 26 s to read." — live while open, from `useReadingTime`'s
+  `timeFor`, which only the owner's Reader hands the card
   ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
   Nothing yet on touch.
   **The line is drawn inside its own strip** since 2026-10-01: it used to sit 2px outside it, so
@@ -69,8 +82,8 @@ and the drawing.
 
 ## Who else reads it
 
-- **The quiz**, since 2026-09-30: *Only what I've read* narrows it to questions whose passages are at
-  level 3 or more, and says what share of the body's words is. The hook's `status` exists for it —
+- **The quiz**, since 2026-09-30: *Only what I've read* narrows it to questions whose passages have
+  been on screen for 70% of their reading time (level 2 or more since 2026-10-02), and says what share of the body's words is. The hook's `status` exists for it —
   `off`, `loading`, `loaded`, `failed` — because an empty level map means "read nothing" only once
   the opening read has answered. [quiz.md § Only what you have read](quiz.md#only-what-you-have-read).
 

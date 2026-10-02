@@ -10,6 +10,7 @@ import {
   type ReadLevel,
   readLevel,
   shareVisible,
+  spentWords,
 } from "../src/web/reading-time.js";
 
 describe("expectedSeconds", () => {
@@ -28,23 +29,50 @@ describe("expectedSeconds", () => {
 });
 
 describe("readLevel", () => {
+  /* Each level needs twice the time of the one before — diminishing returns of
+     brightness (Greg, 2026-10-01, spya-d940uu). 300 words take 78.26 s. */
   const cases: [number, number, ReadLevel][] = [
     [0, 300, 0],
     [-1, 300, 0],
     [Number.NaN, 300, 0],
-    [7, 300, 0], // 7 / 78.26 = 0.09
-    [8, 300, 1], // 0.10
-    [27, 300, 1], // 0.345
-    [28, 300, 2], // 0.358
-    [55, 300, 3], // 0.703
-    [78, 300, 3], // 0.997
-    [79, 300, 4],
+    [8, 300, 0], // 0.10 — a glance draws nothing
+    [27, 300, 0], // 0.345
+    [28, 300, 1], // 0.358
+    [54, 300, 1], // 0.690
+    [55, 300, 2], // 0.703 — the quiz's "read", where it always was
+    [109, 300, 2], // 1.393
+    [110, 300, 3], // 1.406
+    [219, 300, 3], // 2.798
+    [220, 300, 4], // 2.811
     [10_000, 300, 4],
-    [0.5, 0, 2], // a figure: half a second of its one
-    [1, 0, 4],
+    [0.5, 0, 1], // a figure: half a second of its one
+    [1, 0, 2],
+    [3, 0, 4],
   ];
   it.each(cases)("%s seconds on %s words is level %s", (seconds, words, level) => {
     expect(readLevel(seconds, words)).toBe(level);
+  });
+});
+
+describe("spentWords", () => {
+  const cases: [number, string][] = [
+    [0, "under a second"],
+    [0.4, "under a second"],
+    [Number.NaN, "under a second"],
+    [0.5, "under a second"],
+    [0.99, "under a second"],
+    [1, "1 s"],
+    [45.2, "45 s"],
+    [59.6, "1 min"],
+    [80, "1 min 20 s"],
+    [599, "9 min 59 s"],
+    [600, "10 min"],
+    [869, "14 min"],
+    [3599, "1 h"],
+    [3900, "1 h 5 min"],
+  ];
+  it.each(cases)("%s seconds reads %s", (seconds, words) => {
+    expect(spentWords(seconds)).toBe(words);
   });
 });
 

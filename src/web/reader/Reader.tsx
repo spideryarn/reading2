@@ -2466,7 +2466,7 @@ export function Reader({
     /* Every block link inside — panels, chips, the chat dialog through its
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
-    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref}>
+    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
     <div
       /* `text-alone` says the article is the only thing on the page, so the
          stylesheet can centre the reading column and put the masthead over it
