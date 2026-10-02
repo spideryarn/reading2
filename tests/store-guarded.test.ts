@@ -160,6 +160,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-cited-in-spideryarn.js", "pgCitedInSpideryarnStore", "cited-in-spideryarn"],
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
+    ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
     ["../src/store/pg-high-power.js", "pgHighPowerStore", "high-power"],
@@ -362,6 +363,8 @@ describe("no Postgres store is selected without a guard", () => {
          `pgLinkPreviewStore` is a URL somebody hovered — which
          docs/project/logging.md keeps out of a *log*, let alone a 500. */
       "pgFetchAllowanceStore",
+      /* Hiding a glossary entry, 2026-10-02 (plan 261002c): its parameters are a slug and an entry id. */
+      "pgGlossaryHiddenStore",
       "pgGlossaryLookupStore",
       "pgGlossaryStore",
       /* High-powered AI's switch, 2026-09-30: its parameter is an article's slug. */

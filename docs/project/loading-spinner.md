@@ -44,11 +44,12 @@ durations and delays live in the stylesheet, so
 [`tests/logo-loader.test.tsx`](../../tests/logo-loader.test.tsx) reads them from there — including
 computed staggers, pseudo-elements and conditional rules — and fails if a hold stops agreeing.
 
-**Four of the thirteen are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
+**Four of the fourteen are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
 and `spya-dawn` reach both halves (the first holds the letters while the spider hauls; the second
 masks the whole host) and would override the other track; `spya-seam` and `spya-i` hold a pose
-whose transition is scoped to their class, so leaving them snaps. **A fourteenth hover animation
-fails the test until it is put in one list or the other**, and the same test reads the
+whose transition is scoped to their class, so leaving them snaps. The fourteenth, *Dew on the
+Thread* (2026-10-02), joined the letters track: a bead of orange along a white word is texture by
+nature. **A fifteenth hover animation fails the test until it is put in one list or the other**, and the same test reads the
 stylesheet's selectors and fails if anything in a track touches the other half.
 
 **It is the corner's wordmark, scaled up, not a big one.** The spider's moves are fixed pixels

@@ -276,6 +276,7 @@ const HOMES: Record<string, string> = {
   "citation-finds.json": "citation_finds",
   "citation-investigations.json": "citation_investigations",
   "reading-time.json": "reading_time",
+  "glossary-hidden.json": "glossary_hidden_entries",
   /* Reader state, and the one exception to "never on a revision" being stated
      as a positive: these four ARE on `articles` rather than on a table of their
      own. There is exactly one row per article and it is per-owner state on a
@@ -531,6 +532,14 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "reading_time",
+    },
+  },
+  /* And again: a sentinel `glossary_hidden_entries` row (plan 261002c § 2). */
+  "glossary-hidden.json": {
+    why: "no committed article carries a hidden glossary entry; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "glossary_hidden_entries",
     },
   },
 };

@@ -10,7 +10,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
 import { useQueryState } from "nuqs";
 import type { BlockId, GlossaryEntry } from "../../../types.js";
 import type { PublicGlossary } from "../../../public-types.js";
@@ -20,6 +20,7 @@ import { gateParam, sortParam, termParam, type TermSort } from "../../params.js"
 import { useRenderCount } from "../../perf.js";
 import { NO_TERMS } from "../../reader-capability.js";
 import { useGlossary, type GlossaryRead } from "../../useGlossary.js";
+import { hiddenEntries, shownEntries } from "../../glossary-shown.js";
 import {
   effectiveSort,
   GlossaryPanel,
@@ -89,11 +90,23 @@ export function GlossaryBand({
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
-  const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
+  const all = glossary.glossary?.entries ?? NO_TERMS;
+  /* **The one visible list** (src/web/glossary-shown.ts): the band's rows,
+     counts, sorts and threshold are all drawn from what the owner has not
+     hidden, and the raw list goes to the panel only as `hidden`, for the
+     *Hidden (n)* section. */
+  const shown = useMemo(() => shownEntries(all), [all]);
+  const hidden = useMemo(() => hiddenEntries(all), [all]);
+  const band = useGlossaryMode(shown, onSelected, hidden);
 
   return (
     <GlossaryPanel
-      access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
+      access={{
+        kind: "owner",
+        owner: glossary,
+        glossary: glossary.glossary ? { entries: shown } : null,
+        hidden,
+      }}
       {...band}
       onJump={onJump}
       onAskChat={onAskChat}
@@ -144,6 +157,8 @@ export function VisitorGlossaryBand({
 function useGlossaryMode(
   entries: readonly GlossaryEntry[],
   onSelected: (selection: TermSelection | null) => void,
+  /** The owner's hidden entries — `entries` above is already without them. Empty for a visitor. */
+  hidden: readonly GlossaryEntry[] = NO_TERMS,
 ) {
   const [termId, setTermId] = useQueryState("term", termParam);
   const [sort, setSort] = useQueryState("sort", sortParam);
@@ -172,10 +187,16 @@ function useGlossaryMode(
    * looking at a threshold for.
    */
   const order = effectiveSort(entries, sort);
+  /* **And a term the owner has hidden cannot either, in any order** — a
+     different rule from the bar's, so its own clause rather than a case of
+     the prioritised one: the reader asked for this term to be gone, and an
+     old `?term=` in a URL must not open it. Plan 261002c § 2, GPT Sol's plan
+     review finding 2. */
   const hiddenSelection =
     termId !== null &&
-    order === "prioritised" &&
-    !visibleEntries(entries, gate ?? PRIORITY_GATE).visible.some((e) => e.id === termId);
+    (hidden.some((e) => e.id === termId) ||
+      (order === "prioritised" &&
+        !visibleEntries(entries, gate ?? PRIORITY_GATE).visible.some((e) => e.id === termId)));
   useEffect(() => {
     if (hiddenSelection) void setTermId(null);
   }, [hiddenSelection, setTermId]);

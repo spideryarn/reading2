@@ -204,6 +204,7 @@ function Page({ xrefs, extras }: { xrefs: readonly Crossref[] | null; extras: Ex
         lookUpLinks={false}
         canAddToShelf={false}
         showInSpideryarn={false}
+        termActions={null}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id as BlockId)}
         onFollowNote={() => {}}

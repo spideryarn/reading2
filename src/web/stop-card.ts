@@ -38,6 +38,7 @@ import type {
 } from "../types.js";
 import { formsOf, termAppears, termPattern, termSpans } from "../term-match.js";
 import { renderedText } from "./annotate.js";
+import { shownEntries } from "./glossary-shown.js";
 
 /** An artefact as the card needs it: the value if there is one, and whether it is stale. */
 export interface Fresh<T> {
@@ -164,7 +165,9 @@ function termsAt(
   const earlier = at > 0 ? route.slice(0, at) : [];
 
   const found: { term: CardTerm; first: number }[] = [];
-  for (const entry of glossary.entries) {
+  /* Not the ones the owner hid: the one visible list, src/web/glossary-shown.ts
+     (plan 261002c § 2). A visitor's list never carries `hidden`. */
+  for (const entry of shownEntries(glossary.entries)) {
     const pattern = termPattern(formsOf(entry));
     if (!pattern) continue;
     const first = termSpans(text, pattern)[0];

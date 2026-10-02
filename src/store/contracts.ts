@@ -1452,6 +1452,20 @@ export interface ReadingTimeStore {
 }
 
 /**
+ * The glossary entries the owner has hidden on one article, for themselves —
+ * docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
+ * Both methods are owner-scoped (a stranger's slug is a 404), refuse a
+ * malformed id with a 400, and are idempotent. The read is `loadGlossary`,
+ * which attaches `hidden: true`; there is no second GET.
+ */
+export interface GlossaryHiddenStore {
+  /** Hide one entry. **A 404 when the current glossary has no entry with that id.** */
+  hide(slug: string, entryId: string): Promise<void>;
+  /** Show it again. No existence check, so an orphaned row can still be removed. */
+  unhide(slug: string, entryId: string): Promise<void>;
+}
+
+/**
  * The reader's global profile — "about you", true on every article rather
  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string

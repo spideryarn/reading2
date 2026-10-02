@@ -289,7 +289,7 @@
 
 
 /* ------------------------------------------- the wordmark animation gallery --
-   `/design` § Wordmark animations, which draws all dozen at once so they can be
+   `/design` § Wordmark animations, which draws all fourteen at once so they can be
    compared — DesignPage.tsx § LogoAnimations has the argument for the section
    existing at all.
 
@@ -307,8 +307,8 @@
    view's bar clips at 40px (52px under a coarse pointer) around a 20px mark;
    a cell here is a whole card with a caption under it, so a letter may fall
    eight pixels and meet nothing at all. **Dock clearance is verified in the
-   dock**, not here. Nor can this page show a Geist-specific fault: it draws the
-   corner copy's face. GPT Astra, 2026-09-07. */
+   dock**, not here. A Geist-specific fault used to escape too, while the two
+   wrappers had different faces; both are Geist now. GPT Astra, 2026-09-07. */
 .design-logo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));

@@ -1492,8 +1492,9 @@ function Tip({ children }: { children: ReactNode }) {
  *
  * **The heading is still a heading**: `LogoLetters` puts ten spans inside it
  * with no whitespace between them, so its text, and its accessible name, is
- * still "Spideryarn". It keeps its own face, size and colour; Dawn's glow turns
- * it orange for a moment and back, as it does the footer's.
+ * still "Spideryarn". It keeps the heading's size; the letters share every
+ * copy's face, weight, tracking and white, and Dawn turns them orange for a
+ * moment and back, as it does the footer's.
  *
  * **A tap plays one here, where on the reading view it goes home**, because
  * here it does nothing else — `{ tap: true }`, decided on the click.
@@ -1516,8 +1517,10 @@ export function ShelfWordmark() {
       </span>
       {/* A wrapper round the ten letters and nothing else, because the stagger
           is `:nth-child` over exactly those (LogoGlyphs.tsx). The `<h1>` is
-          that wrapper. */}
-      <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">
+          that wrapper. Its face, weight, tracking and colour are the letters'
+          own, the same as every other copy (styles/tokens.css §
+          .logo-letter); the size is the heading's. */}
+      <h1 className="tw:text-3xl">
         <LogoLetters />
       </h1>
     </div>
