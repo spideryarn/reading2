@@ -354,7 +354,8 @@ one of them a total record, so the new kind or step stays red until it has one: 
 ([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` ([`src/pipeline.ts`](../../src/pipeline.ts)) and — via
 `StepsMissingFromOrder` — `STEP_ORDER`, which moved to
 [`src/step-order.ts`](../../src/step-order.ts) on 2026-09-04 so the browser could read the order
-without naming a server module, and which `pipeline.ts` re-exports; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
+without naming a server module, and which `pipeline.ts` re-exports; `ARTICLE_OUTPUT_FORMAT`
+([`src/pipeline.ts`](../../src/pipeline.ts)), each article stage's answer format; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
 `STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
 `REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
 ([`contracts.ts`](../../src/store/contracts.ts)) with its adapter,
@@ -434,7 +435,9 @@ Then the residue nothing refuses at compile time:
 
 A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
 it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
-change.
+change. If the model answers in JSON, the request sends a strict schema through
+`withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids still
+resolved after the parse — [prompting-guide.md § What the model writes back](prompting-guide.md).
 
 ## Its cost
 
