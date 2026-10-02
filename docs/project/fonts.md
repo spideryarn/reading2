@@ -31,10 +31,11 @@ truth.
 | `--font-reader` | anything the reader typed | Arial, from the system | Greg's word, no download |
 | `--font-ui` | the chrome, and every fixed sentence we wrote | Geist | the fourth voice, by being left alone |
 
-The tokens are in [`styles/tokens.css`](../../styles/tokens.css). All four are self-hosted through
-`@fontsource` packages imported in [`tailwind.css`](../../src/web/tailwind.css) (Arial is the
-system's). **A new face must be self-hosted too**: a font CDN would be a new outside party seeing
-every reader's page loads ([privacy.md](privacy.md)).
+The tokens are in [`styles/tokens.css`](../../styles/tokens.css). The three downloaded faces are
+self-hosted through `@fontsource` packages imported in
+[`tailwind.css`](../../src/web/tailwind.css); Arial is the system face. **A new downloaded face must
+be self-hosted too**: a font CDN would be a new outside party seeing every reader's page loads
+([privacy.md](privacy.md)).
 
 How the faces were chosen: Courier Prime and the serif in
 [261001d](../plans/261001d-typeface-per-voice.md); Plex Mono over Courier, with seven candidates
@@ -62,8 +63,11 @@ to it means changing the token and its import.
 
 ## How to put an element in its voice
 
-All of it is in one file, [`src/web/styles/voices.css`](../../src/web/styles/voices.css): one
-selector list per voice, every rule under `:root[data-voices]`. That attribute is set by
+The three voice lists and the placeholder reset are in one file,
+[`src/web/styles/voices.css`](../../src/web/styles/voices.css), every rule under
+`:root[data-voices]`. Two narrow UI resets that undo an inherited voice live beside the rules they
+correct: `.chat-stance-tag` in `mode-band.css`, and `.passage-whole` in `annotations.css` and
+`dock.css`. They carry the same guard. The attribute is set by
 [`useVoiceFaces`](../../src/web/useVoiceFaces.ts) while a reading view is open and the switch is on.
 
 1. **Give the element a class that names only that voice's words**, and add the class to the right

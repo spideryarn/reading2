@@ -1356,7 +1356,7 @@ const MAX_CHILDREN = 5;
  * navigation chrome, and the spine is one of the two places the node shape
  * sanctions it. It is never standing in for prose the reader could be shown.
  */
-function childLabel(e: OutlineEntry): { label: string; voice: TextVoice } {
+export function childLabel(e: OutlineEntry): { label: string; voice: TextVoice } {
   const nav = e.node.navLabel?.trim();
   if (nav) return { label: nav, voice: navLabelVoice(e) };
   return { label: e.node.title?.trim() || "", voice: "ui" };

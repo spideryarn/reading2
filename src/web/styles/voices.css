@@ -82,7 +82,7 @@
     font-family: var(--font-author);
 }
 
-/* ---- the model: everything an AI wrote ----------------------------------- */
+/* ---- the model: prose an AI generated ------------------------------------ */
 :root[data-voices] :is(
     /* summaries and gists */
     .struct-gist,
@@ -121,7 +121,9 @@
        a narrow wrapper so errors and tool-status copy beside it stay UI. */
     .cnd-answer,
     .cnd-answer .fmt-h,
-    .cnd-name,
+    /* Candidate name and affiliation are the model's; the fixed hedge between
+       them stays UI, so the parent line cannot carry the voice. */
+    .cnd-person-name,
     .cnd-requirement,
     .cnd-why,
     /* the rest of the band */

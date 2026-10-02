@@ -852,7 +852,7 @@
   color: var(--ink);
 }
 /* "Whole paragraph" is our label, not the author's words (docs/project/fonts.md). */
-.dock-question-quote .passage-whole { font-family: var(--font-ui); }
+:root[data-voices] .dock-question-quote .passage-whole { font-family: var(--font-ui); }
 .dock-question-state {
   display: block;
   margin-top: 0.25rem;
@@ -949,4 +949,3 @@
   border-top: 1px solid var(--rule);
   color: var(--ink);
 }
-

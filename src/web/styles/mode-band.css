@@ -1068,15 +1068,15 @@
    its quality. Only ever present on a non-default stance. */
 .chat-stance-tag {
   margin-right: auto;
-  /* Our label for how the reply was asked for, not the model's words: without
-     its own face it inherits the AI face from `.chat-turn.model`
-     (docs/project/fonts.md). */
-  font-family: var(--font-ui);
   font-size: 0.83rem;
   font-variant: small-caps;
   letter-spacing: 0.03em;
   color: var(--ink-faint);
 }
+/* Our label for how the reply was asked for, not the model's words: with the
+   voice experiment on it would otherwise inherit the AI face from
+   `.chat-turn.model` (docs/project/fonts.md). */
+:root[data-voices] .chat-stance-tag { font-family: var(--font-ui); }
 
 /* **A band's (i)** (`BandAbout.tsx`), in the band's top-right corner, put
    there by `ModeSurface`'s `about` for every mode alike — what the mode is,

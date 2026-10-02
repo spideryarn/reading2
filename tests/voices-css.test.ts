@@ -36,6 +36,13 @@ function selectorUsing(
   return rule[1]!.trim();
 }
 
+function selectorsUsingIn(file: string, token: "--font-ui", className: string): string[] {
+  const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((m) => m[1]!.includes(className) && m[2]!.includes(`var(${token})`))
+    .map((m) => m[1]!.trim());
+}
+
 /** Every `.class` the file names. */
 const classes = [...new Set([...CSS.matchAll(/\.([A-Za-z][\w-]*)/g)].map((m) => m[1]!))];
 
@@ -159,7 +166,14 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   chat: [".chat-turn.model", ".chat-thread-last.model", ".chat-pointed-why"],
   glossary: [".gloss-gloss", ".gloss-name", ".gloss-detail", ".prose-card-term-lead"],
   search: [".srch-hit-why"],
-  referee: [".clm-list .clm-claim", ".crit-why", ".mir-note", ".cnd-answer", ".cnd-affil-name"],
+  referee: [
+    ".clm-list .clm-claim",
+    ".crit-why",
+    ".mir-note",
+    ".cnd-answer",
+    ".cnd-person-name",
+    ".cnd-affil-name",
+  ],
   summary: [".simple-text"],
   diagram: [".diag-card-gist", ".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
   ideas: [".ideas-name", ".ideas-reason"],
@@ -211,6 +225,17 @@ describe("voices.css", () => {
       for (const branch of selectorBranches(selector)) {
         expect(branch, selector).toMatch(/^:root\[data-voices\]\s/);
       }
+    }
+  });
+
+  it("guards the UI-face corrections that live beside their inherited rules", () => {
+    expect(selectorsUsingIn("src/web/styles/mode-band.css", "--font-ui", ".chat-stance-tag")).toEqual([
+      ":root[data-voices] .chat-stance-tag",
+    ]);
+    for (const file of ["src/web/styles/annotations.css", "src/web/styles/dock.css"]) {
+      expect(selectorsUsingIn(file, "--font-ui", ".passage-whole"), file).toEqual([
+        `:root[data-voices] .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
+      ]);
     }
   });
 
@@ -279,6 +304,8 @@ describe("voices.css", () => {
       ".ideas-quote:not(.ideas-quote-moved)",
       ".tl-quote:not(.tl-quote-moved)",
       ".tl-when-words",
+      ".struct-text-author",
+      ".tip-kid-author",
     ]) {
       expect(author, selector).toContain(selector);
     }
@@ -287,7 +314,7 @@ describe("voices.css", () => {
       ".ideas-name",
       ".cnd-answer",
       ".cnd-answer .fmt-h",
-      ".cnd-name",
+      ".cnd-person-name",
       ".cnd-affil-name",
       ".cnd-requirement",
       ".cnd-why",
@@ -302,6 +329,7 @@ describe("voices.css", () => {
     expect(ai).not.toContain(".cite-verdict-text");
     /* Fixed words that report a model's verdict stay UI (261002b § 2). */
     expect(innerBranches(ai)).not.toContain(".dbt-relation");
+    expect(innerBranches(ai)).not.toContain(".cnd-name");
     expect(innerBranches(ai)).not.toContain(".cnd-affil");
     expect(innerBranches(ai)).not.toContain(".dbt-thread-name");
     /* Hidden, untrusted source text is not obviously the author's (Sol, P2). */

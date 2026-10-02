@@ -655,7 +655,7 @@ function CandidateRow({
   return (
     <li className="cnd-row">
       <p className="cnd-name">
-        {candidate.name}
+        <span className="cnd-person-name">{candidate.name}</span>
         {candidate.affiliation && (
           /* Labelled as the model's claim rather than printed as a fact: nothing
              here verified where anybody works. "said to be at" is our hedge,

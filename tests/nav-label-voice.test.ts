@@ -15,6 +15,7 @@
  * would test only the last step.
  */
 import { describe, expect, it } from "vitest";
+import { childLabel } from "../src/web/Spine.js";
 import { structureProjection } from "../src/web/structure.js";
 import { buildOutline, buildSummaryTree, navLabelVoice } from "../src/web/tree.js";
 import type { Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
@@ -35,7 +36,14 @@ const blocks: Block[] = [
   b("spya-pppppp", "text", "p", "Short wavelengths scatter more, so the sky looks blue."),
 ];
 
-function node(id: string, depth: number, parent: string | null, children: string[], range: [string, string], extra: Partial<TreeNode> = {}): TreeNode {
+function node(
+  id: string,
+  depth: number,
+  parent: string | null,
+  children: string[],
+  range: [string, string],
+  extra: Partial<TreeNode> = {},
+): TreeNode {
   return {
     id: id as NodeId,
     depth,
@@ -77,7 +85,10 @@ describe("navLabel voice", () => {
     const outline = buildOutline(tree, blocks, 3);
     const leaves = outline[0]?.children[0]?.children ?? [];
     expect(leaves.map((l) => l.node.id)).toEqual(["n3", "n4"]);
-    expect(leaves.map((l) => navLabelVoice(l))).toEqual(["author", "ai"]);
+    expect(leaves.map(childLabel)).toEqual([
+      { label: "Why the sky is blue", voice: "author" },
+      { label: "Blue light scatters most in air", voice: "ai" },
+    ]);
   });
 
   it("carries it to Structure's paragraph rows and its section card's children; titles stay UI", () => {
