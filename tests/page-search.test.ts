@@ -183,3 +183,25 @@ describe("searchSections", () => {
     expect(find("what-it-cost")[0]).toBe("What it cost");
   });
 });
+
+/* **A page's own synonym table** — the Help page passes one (plan 261002b,
+   R1). The default must stay Metadata's, and a page's table must replace it
+   rather than add to it, or Help's words would widen Metadata's matches. */
+describe("searchSections with a synonym table of its own", () => {
+  const SPINE = [section("Reading the spine", { keywords: "marks" })];
+  const OWN = [["rail", "sidebar", "spine"]] as const;
+
+  it("finds through the page's own groups", () => {
+    expect(searchSections("sidebar", SPINE, OWN)).toEqual(["Reading the spine"]);
+  });
+
+  it("does not find through them by default", () => {
+    expect(searchSections("sidebar", SPINE)).toEqual([]);
+  });
+
+  it("replaces the default table rather than adding to it", () => {
+    // `price` → `cost` is Metadata's group; the custom table does not have it.
+    expect(find("price")[0]).toBe("What it cost");
+    expect(searchSections("price", PAGE, OWN)).toEqual([]);
+  });
+});

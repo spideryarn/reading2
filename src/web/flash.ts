@@ -133,6 +133,55 @@ export function flashElement(el: HTMLElement): void {
   wash([el], reducedMotion() ? ELEMENT_STILL : ELEMENT_MOVING, FLASH_MS);
 }
 
+/**
+ * **Flash when the scroll has stopped, not when it starts.** The wash holds for
+ * about a third of `FLASH_MS` and then fades; fired at the click, a smooth
+ * scroll across a long page would spend the hold travelling and land on the
+ * fade. There is no settle callback for `scrollIntoView`, and `scrollend` is
+ * not everywhere yet, so: wait until no scroll event has arrived for
+ * `SCROLL_IDLE_MS`. A section already in place never scrolls, and flashes after
+ * that one short wait. `SCROLL_MAX_MS` is the ceiling, for a scroll that keeps
+ * being nudged (an image loading above it, say).
+ */
+const SCROLL_IDLE_MS = 120;
+const SCROLL_MAX_MS = 1500;
+
+/**
+ * **Scroll `el` to the top of the window, then `flashElement` it once the
+ * scroll has settled** — see the constants above for why it waits. Smooth
+ * unless the reader asked for reduced motion. Returns a cancel, for a caller
+ * that is about to scroll somewhere else or unmount.
+ *
+ * Two callers: Metadata's contents list and search box (PageContents.tsx §
+ * reveal, which moved this here), and the Help page's arrival at a fragment
+ * (help/HelpPage.tsx § arrive).
+ */
+export function scrollToAndFlash(el: HTMLElement): () => void {
+  let finished = false;
+  let idle = setTimeout(done, SCROLL_IDLE_MS);
+  const cap = setTimeout(done, SCROLL_MAX_MS);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  /* Optional-called: jsdom has none. */
+  el.scrollIntoView?.({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  function onScroll(): void {
+    clearTimeout(idle);
+    idle = setTimeout(done, SCROLL_IDLE_MS);
+  }
+  function cancel(): void {
+    if (finished) return;
+    finished = true;
+    clearTimeout(idle);
+    clearTimeout(cap);
+    window.removeEventListener("scroll", onScroll);
+  }
+  function done(): void {
+    if (finished) return;
+    cancel();
+    if (el.isConnected) flashElement(el);
+  }
+  return cancel;
+}
+
 /** The prose is exposed again: fire whatever was held for it. */
 export function flushPendingFlash(): void {
   if (pending === null) return;

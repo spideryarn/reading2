@@ -230,7 +230,7 @@ describe("the list itself", () => {
     expect(parseRoute("/admin/vouchers")).toEqual({ kind: "admin", page: "vouchers" });
     expect(adminOnly(parseRoute("/admin/vouchers"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
-    for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/asdf"]) {
+    for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/help", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);
     }
   });
