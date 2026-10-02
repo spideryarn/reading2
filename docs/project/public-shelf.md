@@ -176,6 +176,15 @@ Two consequences worth knowing before changing it:
   `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no network request
   at all.
 
+## On the owner's shelf too, as a section
+
+Since 2026-10-02 the owner's shelf has an **Include public** chip that draws this listing in a
+section under the owner's own articles, narrowed by the shelf's search box
+([library.md § Include public](library.md#include-public-and-an-empty-shelf-that-says-where-to-go)).
+It is the same anonymous read through `loadPublicLibrary` and the same `PublicCard`, so the rule at
+the top of this page still holds: the owner's shelf is *your articles*, and what anybody has shared
+sits beside it, never inside it.
+
 ## What is deliberately not here
 
 - **No search indexing.** `robots.txt` is `Disallow: /` and stays that way for now.

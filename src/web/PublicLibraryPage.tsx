@@ -296,7 +296,7 @@ export function PublicLibraryPage({
  * owner's card follows for the same reason: *"why is this one at the top?"* has
  * to be answerable from the card, and here the answer is when it was shared.
  */
-function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
+export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
   /* Only the facts this article actually has — `byline`, `gist`, `siteName` and
      `words` are all nullable on the wire, and a filtered join beats a chain of `&&`s
      that can leave a stranded separator. Same shape as `ShelfCard`'s. */
@@ -375,7 +375,7 @@ function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
  * component, and giving it a member here would invite somewhere else to
  * construct one without having asked.
  */
-type ShelfState =
+export type ShelfState =
   | { kind: "loading" }
   | { kind: "loaded"; shelf: PublicLibrary }
   | { kind: "failed" };
@@ -397,7 +397,7 @@ type ShelfState =
  * a reader something false about the world with complete confidence, which is
  * worse than admitting we could not read it. src/web/public-api.ts.
  */
-function usePublicShelf(): { state: ShelfState; again: () => void } {
+export function usePublicShelf(): { state: ShelfState; again: () => void } {
   const [state, setState] = useState<ShelfState>({ kind: "loading" });
   /**
    * **Which read is allowed to answer**, and it is a ref rather than state

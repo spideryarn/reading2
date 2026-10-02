@@ -70,6 +70,7 @@ import { useLogoAnimation } from "./logo-animation.js";
 import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
   libraryArchivedParam,
+  libraryPublicParam,
   libraryByParam,
   libraryQueryParam,
   libraryShowParam,
@@ -85,6 +86,8 @@ import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
 import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { ShelfPhoneHint } from "./ShelfPhoneHint.js";
+import { ShelfPublicSection } from "./ShelfPublicSection.js";
 import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -137,6 +140,9 @@ export function Library({
   /* The topics row and the archive switch — docs/project/shelf-terms.md. */
   const [requestedTopics, setTopics] = useQueryState("topics", libraryTopicsParam);
   const [archivedOn, setArchivedOn] = useQueryState("archived", libraryArchivedParam);
+  /* Include public — what other readers have shared, in its own section under
+     the list. ShelfPublicSection.tsx; plan 261002b § Part A. */
+  const [publicOn, setPublicOn] = useQueryState("public", libraryPublicParam);
 
   /**
    * Whether the shelf is showing every row or only the first `SHELF_ROW_CAP`.
@@ -244,6 +250,15 @@ export function Library({
   const scope = useMemo(
     () => shelfScope(articles, shelf.archivedVisible, archivedOn),
     [articles, archivedOn, shelf.archivedVisible],
+  );
+
+  /* Every slug that is yours, so Include public does not list your own shared
+     articles a second time without your verbs on them. The archive too, when it
+     is loaded — the public listing already leaves archived articles out, so
+     this is belt and braces rather than the rule. */
+  const ownSlugs = useMemo(
+    () => new Set([...(articles ?? []), ...(shelf.archived ?? [])].map((a) => a.slug)),
+    [articles, shelf.archived],
   );
 
   /* The archive is fetched when the chip is on and the list is missing — on a
@@ -593,6 +608,11 @@ export function Library({
             docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md. */}
       </header>
 
+      {/* **On a phone, until dismissed: a bigger screen is better.** Greg,
+          spya-fcbnhq. Above the add box so it is the first thing read, and in
+          flow so it scrolls away. ShelfPhoneHint.tsx; plan 261002b § Part C. */}
+      <ShelfPhoneHint />
+
       <AddArticle queue={queue} />
 
       {/* **Several files dropped at once**, each added with only its title,
@@ -654,6 +674,8 @@ export function Library({
           onFilter={(f) => pushView(() => void setShow(f))}
           archived={archivedOn}
           onArchived={(on) => pushView(() => void setArchivedOn(on ? true : null))}
+          publicOn={publicOn}
+          onPublic={(on) => pushView(() => void setPublicOn(on ? true : null))}
           bare={total === 0}
         />
       )}
@@ -711,11 +733,11 @@ export function Library({
           While the archive is still loading, it is not said at all — it may
           be about to be untrue. */}
       {articles !== null && total === 0 && (!archivedOn || inArchive !== null) && (
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {archivedOn
-            ? "Nothing on the shelf, and nothing archived. Paste a URL above and it'll be here in a minute or two."
-            : "Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two."}
-        </p>
+        <EmptyShelf
+          archivedOn={archivedOn}
+          publicOn={publicOn}
+          onPublic={() => pushView(() => void setPublicOn(true))}
+        />
       )}
       {showing === 0 && total > 0 && (
         <p className="tw:text-sm tw:text-muted-foreground">
@@ -803,6 +825,16 @@ export function Library({
           something you have already read" is the useful half of that answer. */}
       {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
 
+      {/* After your own articles and their passages, because it is the
+          further reach: the same search box, someone else's shelf. */}
+      {publicOn && articles !== null && (
+        <ShelfPublicSection
+          query={query}
+          ownSlugs={ownSlugs}
+          narrowedElsewhere={show === "unread" || topics.length > 0}
+        />
+      )}
+
       {/* **No "Show archived" here any more** (plan 260929a): it was a
           disclosure at the foot of the shelf, with its own second list, and
           is the Archived chip beside Unread now — ShelfControls.tsx. */}
@@ -826,6 +858,71 @@ export function Library({
     </main>
   );
 }
+
+/**
+ * **An empty shelf, with somewhere to go from it.**
+ *
+ * > if the user has no articles in their shelf, we probably actually want to,
+ * > as well as saying you have no articles yet, you know, upload them, you know,
+ * > see above or whatever with a link that points them to the top. … So just
+ * > kind of provide a bit more help to new users that don't yet have anything
+ * > on their shelf
+ * >
+ * > — Greg, 2026-10-01 (spya-yy5x66)
+ *
+ * Two ways on: the add box, as a link that takes you to it and puts the cursor
+ * in it, and the public shelf, as a button that turns Include public on — the
+ * same act as the chip, so it lands in the URL and Back undoes it. With Include
+ * public already on, the second is not offered.
+ */
+function EmptyShelf({
+  archivedOn,
+  publicOn,
+  onPublic,
+}: {
+  archivedOn: boolean;
+  publicOn: boolean;
+  onPublic: () => void;
+}) {
+  return (
+    <p className="tw:text-sm tw:text-muted-foreground">
+      {archivedOn ? "Nothing on the shelf, and nothing archived." : "Nothing on your shelf yet."}{" "}
+      <a
+        href={`#${ADD_URL_ID}`}
+        onClick={(e) => {
+          /* Focus does the scrolling, and it is the half a fragment link alone
+             would not do: the reader lands *in* the box, ready to paste. */
+          const box = document.getElementById(ADD_URL_ID);
+          if (!box) return;
+          e.preventDefault();
+          box.focus();
+          box.scrollIntoView({ block: "center" });
+        }}
+        className="tw:text-highlight tw:underline"
+      >
+        Paste a link to an article in the box at the top
+      </a>{" "}
+      and it'll be here in a minute or two.
+      {!publicOn && (
+        <>
+          {" "}
+          Or{" "}
+          <button
+            type="button"
+            onClick={onPublic}
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+          >
+            browse what other readers have shared
+          </button>
+          .
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The add box's input — AddArticle.tsx. */
+const ADD_URL_ID = "add-url";
 
 /**
  * Why nothing is on screen.
