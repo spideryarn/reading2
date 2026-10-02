@@ -16,7 +16,7 @@
  * section existed would be a press that did nothing. The last describe holds
  * that against a section that arrives late, and one that never does.
  */
-import { act, createElement, type RefObject, useRef, useState } from "react";
+import { act, createElement, type RefObject, useEffect, useRef, useState } from "react";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -65,12 +65,12 @@ Object.defineProperty(window, "matchMedia", {
    the page's `useQueryState` hear it, exactly as main.tsx arranges. */
 enableHistorySync();
 
-const { Metadata } = await import("../src/web/Metadata.js");
+const { Metadata, Section } = await import("../src/web/Metadata.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { METADATA_SECTIONS } = await import("../src/web/params.js");
-const { useRevealOnArrival, SECTION_ARRIVAL_GIVE_UP_MS } = await import(
-  "../src/web/PageContents.js"
-);
+const { useRevealOnArrival } = await import("../src/web/PageContents.js");
+
+const OLD_SECTION_ARRIVAL_GIVE_UP_MS = 15_000;
 
 const SLUG = "a-piece";
 
@@ -232,6 +232,7 @@ describe("arriving with ?section=", () => {
     expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
     expect(location.search).toBe("?at=spya-aaaaaa");
     expect(history.length, "the parameter came off with a push, not a replace").toBe(depth);
+    expect(posts, "opening a section from a link started work").toEqual([]);
   });
 
   it("names, in every value it accepts, a section this page really has", async () => {
@@ -266,6 +267,22 @@ describe("arriving with ?section=", () => {
     expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
     expect(location.search).toBe("?at=spya-aaaaaa");
   });
+
+  it("replaces an encoded section key before revealing the accepted run", async () => {
+    await open("?at=spya-aaaaaa&%73ection=what-it-cost");
+    act(() => host.querySelector<HTMLButtonElement>(".dock-commands")?.click());
+    const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(input, "rerun quotes");
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(posts).toEqual([{ slug: SLUG, steps: ["quotes"], force: ["quotes"] }]);
+    expect(expanded("AI processing")).toBe("true");
+    expect(new URLSearchParams(location.search).getAll("section")).toEqual([]);
+  });
 });
 
 /**
@@ -294,6 +311,25 @@ function Harness({
   );
 }
 
+function CollapsibleHarness({ onRevealed }: { onRevealed: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
+  useRevealOnArrival(ref as RefObject<HTMLElement | null>, "sec-late", onRevealed);
+  return createElement(
+    "main",
+    { ref },
+    shown
+      ? <Section label="Late" collapsible>
+          <p>Revealed</p>
+        </Section>
+      : null,
+  );
+}
+
 describe("useRevealOnArrival", () => {
   it("waits for a section that mounts late, and reports only once it has revealed it", async () => {
     vi.useFakeTimers();
@@ -312,18 +348,35 @@ describe("useRevealOnArrival", () => {
     expect(document.activeElement?.textContent).toBe("Late");
   });
 
-  it("gives up after its bound, and reports nothing for a section that never came", async () => {
+  it("does not consume a late section before its reveal listener can open it", async () => {
+    const onRevealed = vi.fn();
+    await act(async () => {
+      root.render(createElement(CollapsibleHarness, { onRevealed }));
+    });
+    /* Deliberately outside `act`: a browser delivers the MutationObserver
+       between React's commit and passive effects. Wrapping the timer in act
+       flushes passive effects first and hides the race this test exists for. */
+    await new Promise((go) => setTimeout(go, 50));
+    expect(host.querySelector("#sec-late p")?.textContent).toBe("Revealed");
+    expect(onRevealed).toHaveBeenCalledOnce();
+  });
+
+  it("keeps waiting past the old bound for a validated section that mounts slowly", async () => {
     vi.useFakeTimers();
     const onRevealed = vi.fn();
     await act(async () => {
       root.render(
-        createElement(Harness, { id: "sec-late", showAfter: SECTION_ARRIVAL_GIVE_UP_MS + 1000, onRevealed }),
+        createElement(Harness, {
+          id: "sec-late",
+          showAfter: OLD_SECTION_ARRIVAL_GIVE_UP_MS + 1000,
+          onRevealed,
+        }),
       );
     });
     await act(async () => {
-      vi.advanceTimersByTime(SECTION_ARRIVAL_GIVE_UP_MS + 2000);
+      await vi.advanceTimersByTimeAsync(OLD_SECTION_ARRIVAL_GIVE_UP_MS + 2000);
     });
-    expect(onRevealed).not.toHaveBeenCalled();
+    expect(onRevealed).toHaveBeenCalledOnce();
   });
 
   it("does nothing at all without an id", async () => {

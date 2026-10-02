@@ -36,6 +36,7 @@ import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
+import { searchWithout } from "./router.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
@@ -1708,9 +1709,6 @@ export const sectionParam = createParser<MetadataSection>({
  * `URLSearchParams` re-encodes `?crits=a,b` into something nobody can read.
  */
 export function withSection(search: string, section: MetadataSection): string {
-  const kept = search
-    .replace(/^\?/, "")
-    .split("&")
-    .filter((pair) => pair !== "" && pair.split("=")[0] !== "section");
-  return [...kept, `section=${section}`].join("&");
+  const kept = searchWithout(search, "section");
+  return kept ? `${kept}&section=${section}` : `section=${section}`;
 }

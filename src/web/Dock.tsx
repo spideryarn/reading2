@@ -3240,6 +3240,7 @@ function DockCommandBar({
       article={article}
       openComments={openComments}
       open={bar.open}
+      onOpen={bar.show}
       onClose={bar.hide}
     />
   );

@@ -135,15 +135,6 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
 }
 
 /**
- * **How long a section named on arrival is waited for**, before the page stops
- * looking. Long enough for the slowest thing a section waits on — the
- * metadata request, which is what mounts the conditional ones — on a slow
- * phone connection; short enough that a section that is never coming does
- * not leave an observer running over a page somebody is using.
- */
-export const SECTION_ARRIVAL_GIVE_UP_MS = 15_000;
-
-/**
  * **Reveal the section an address names, once it exists** — `?section=` on
  * the Metadata page (params.ts § `sectionParam`), which the command bar's *Run
  * again* rows write (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
@@ -157,9 +148,10 @@ export const SECTION_ARRIVAL_GIVE_UP_MS = 15_000;
  * silently did nothing. So it is tried once the page has committed, and again
  * on every change under `containerRef` (a `MutationObserver`, the mechanism
  * the contents list itself uses to notice sections arriving) until it finds
- * one — or until `SECTION_ARRIVAL_GIVE_UP_MS`, after which it stops and calls
- * nothing, leaving the address as it was: the instruction was not carried out,
- * and a reload is the honest way to ask again.
+ * one. Accepted ids are a closed list whose members are checked against the
+ * page's real sections, so a timer that gives up would turn a slow mount into a
+ * successful navigation that never visibly arrives. The observer is stopped
+ * on success, id change or unmount.
  *
  * **Tried from a timer and from the observer, never inside the effect.** The
  * section opens itself with `flushSync` (Metadata.tsx § Section), and React
@@ -183,12 +175,10 @@ export function useRevealOnArrival(
     let finished = false;
     let observer: MutationObserver | null = null;
     let first: ReturnType<typeof setTimeout> | undefined;
-    let giveUp: ReturnType<typeof setTimeout> | undefined;
     const stop = () => {
       finished = true;
       observer?.disconnect();
       clearTimeout(first);
-      clearTimeout(giveUp);
     };
     const attempt = () => {
       if (finished) return;
@@ -200,7 +190,6 @@ export function useRevealOnArrival(
       reported.current();
     };
     first = setTimeout(attempt, 0);
-    giveUp = setTimeout(stop, SECTION_ARRIVAL_GIVE_UP_MS);
     const root = containerRef.current;
     if (root && typeof MutationObserver === "function") {
       observer = new MutationObserver(attempt);

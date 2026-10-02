@@ -1114,6 +1114,19 @@ export function searchWithout(search: string, name: string): string {
 }
 
 /**
+ * Several parameters dropped in one byte-preserving pass — `searchWithout`'s
+ * multi-key form for a rewrite that replaces one whole family of state.
+ */
+export function searchWithoutAny(search: string, names: ReadonlySet<string>): string {
+  return withoutPairs(search, (pair) => {
+    for (const name of names) {
+      if (hasKey(pair, name)) return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Drop the pairs a rewrite is consuming, and keep every other one **exactly as
  * it was written**. Text, never `URLSearchParams` — see `settleAddress`.
  */

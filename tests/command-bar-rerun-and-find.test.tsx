@@ -258,6 +258,40 @@ describe("a Run again row", () => {
     expect(dialog().open).toBe(false);
   });
 
+  it("still lands on the run's visible progress after the bar is dismissed", async () => {
+    holdPost = true;
+    reading();
+    openBar();
+    type("rerun glossary");
+    press("Enter");
+    await settle();
+    act(() => dialog().close());
+    expect(dialog().open).toBe(false);
+    await act(async () => releasePost?.());
+    await settle();
+    expect(posts).toHaveLength(1);
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(location.search).toBe("?at=spya-k3m9qt&section=ai-processing");
+  });
+
+  it("reopens with the refusal if a dismissed run was not accepted", async () => {
+    holdPost = true;
+    postAnswer = () => json({ error: "That article is still being read." }, 409);
+    reading();
+    openBar();
+    type("rerun glossary");
+    press("Enter");
+    await settle();
+    act(() => dialog().close());
+    expect(dialog().open).toBe(false);
+    await act(async () => releasePost?.());
+    await settle();
+    expect(posts).toHaveLength(1);
+    expect(dialog().open).toBe(true);
+    expect(status()?.textContent).toContain("That article is still being read.");
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+  });
+
   it("stays open with the server's sentence when the run is refused", async () => {
     postAnswer = () => json({ error: "That article is still being read." }, 409);
     reading();
@@ -312,6 +346,24 @@ describe("find <words>", () => {
     expect(params.get("at")).toBe("spya-k3m9qt");
     expect(dialog().open).toBe(false);
     expect(requests).toEqual([]);
+  });
+
+  it("replaces encoded search keys and preserves special characters in the new words", () => {
+    history.replaceState(
+      null,
+      "",
+      `/read/${SLUG}?at=spya-k3m9qt&%6dode=summary&%6datch=meaning&%66ind=old`,
+    );
+    reading();
+    openBar();
+    type('find rock & roll # "λ"');
+    press("Enter");
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    const params = new URLSearchParams(location.search);
+    expect(params.getAll("mode")).toEqual(["search"]);
+    expect(params.getAll("match")).toEqual(["words"]);
+    expect(params.getAll("find")).toEqual(['rock & roll # "λ"']);
+    expect(params.get("at")).toBe("spya-k3m9qt");
   });
 
   it("goes back to the reading view from the Metadata page", () => {

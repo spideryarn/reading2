@@ -67,8 +67,8 @@ export const PAID_ENDPOINT_PATHS: readonly string[] = [
      What the path buys is the scan — a source file that names it is a source
      file that can spend, whether or not anything uses it that way today. */
   "/v1/images",
-  /* Jev's Decisions endpoint (added 2026-09-29, plan 260929c). Only the
-     shelf-topics eval calls it, through the declared bypass `shelf-topics-jev`. */
+  /* Jev's Decisions endpoint (added 2026-09-29, plan 260929c). The evals that
+     call it each have their own declared bypass below. */
   "/api/alpha/decisions",
 ];
 

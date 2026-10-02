@@ -192,6 +192,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -3353,7 +3354,7 @@ function sectionIdFor(section: MetadataSection): string {
   return `sec-${section}`;
 }
 
-function Section({
+export function Section({
   label,
   aside,
   keywords,
@@ -3427,7 +3428,10 @@ function Section({
      open section leaves it open. A section that is not collapsible is already
      showing, and setting `open` on it changes nothing. */
   const sectionEl = useRef<HTMLElement>(null);
-  useEffect(() => {
+  /* Layout, not passive: a MutationObserver can see this section's committed
+     DOM before passive effects run. The arrival hook may dispatch immediately,
+     so its listener must exist in the same commit as the element. */
+  useLayoutEffect(() => {
     const el = sectionEl.current;
     if (!el) return;
     /* `flushSync` so the body is in the DOM when the event returns: the

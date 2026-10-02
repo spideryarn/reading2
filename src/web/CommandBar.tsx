@@ -128,6 +128,7 @@ import {
   PUBLIC_LIBRARY_HREF,
   navigate,
   readHref,
+  searchWithoutAny,
 } from "./router.js";
 import { type UseJobs, useJobs } from "./useJobs.js";
 import { stepRunRequest } from "./useStepJob.js";
@@ -417,10 +418,10 @@ const SEARCH_KEYS = new Set(["mode", "match", "find", "run", "runs", "order", "c
  * reason (router.ts).
  */
 function findRow(article: CommandBarArticle, words: string): Command {
-  const kept = article.search
-    .split("&")
-    .filter((pair) => pair !== "" && !SEARCH_KEYS.has(pair.split("=")[0] ?? ""));
-  const search = [...kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`].join("&");
+  const kept = searchWithoutAny(article.search, SEARCH_KEYS);
+  const search = [kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`]
+    .filter(Boolean)
+    .join("&");
   return {
     kind: "page",
     href: readHref(article.slug, search, "article"),
@@ -662,6 +663,8 @@ interface Props {
    */
   openComments?: (() => void) | undefined;
   open: boolean;
+  /** Reopen after an asynchronous action was dismissed but came back refused. */
+  onOpen(): void;
   onClose(): void;
 }
 
@@ -674,6 +677,7 @@ export function CommandBar({
   article,
   openComments,
   open,
+  onOpen,
   onClose,
 }: Props) {
   const ref = useRef<HTMLDialogElement | null>(null);
@@ -697,8 +701,9 @@ export function CommandBar({
    * **The line under the box** — `Starting…` while an action is out, or the
    * sentence an action came back with when it kept the bar open (a refused
    * run). One value, so the two cannot both show; `null` is an empty line.
-   * Cleared by typing and by opening the bar, which is when it stops being
-   * about what is in front of the reader.
+   * Cleared by typing and by an ordinary opening of the bar. The one exception
+   * is a refusal that reopens a bar the reader dismissed while its request was
+   * out: that opening exists to show the sentence.
    */
   const [said, setSaid] = useState<{ kind: "pending" } | { kind: "message"; text: string } | null>(
     null,
@@ -714,11 +719,18 @@ export function CommandBar({
   const inFlight = useRef(false);
   /**
    * **Which opening of the bar an outstanding action belongs to.** An action
-   * can settle after the reader has shut the bar and opened it again; what it
-   * came back with is about the earlier opening, so it must not shut or
-   * annotate this one. Bumped every time the bar opens.
+   * can settle after the reader has shut the bar and opened it again. A success
+   * must not shut that later opening; a refusal still has to be said somewhere,
+   * or the old request reports success by silence. Bumped every time the bar
+   * opens.
    */
   const opening = useRef(0);
+  /**
+   * A refusal that arrives after Escape still belongs to the reader. Reopening
+   * runs the ordinary fresh-open reset below, so carry that one sentence
+   * across the reset rather than relying on state-update ordering.
+   */
+  const reopeningWith = useRef<string | null>(null);
 
   /**
    * **The way into the Feedback dialog**, or `null` where no host is mounted
@@ -836,7 +848,15 @@ export function CommandBar({
       /* Still `Starting…` if the last opening's action is out: a press here
          would be refused until it settles, and an empty line would not say
          why. */
-      setSaid(inFlight.current ? { kind: "pending" } : null);
+      const message = reopeningWith.current;
+      reopeningWith.current = null;
+      setSaid(
+        message === null
+          ? inFlight.current
+            ? { kind: "pending" }
+            : null
+          : { kind: "message", text: message },
+      );
       opening.current += 1;
       closingOurselves.current = false;
       dialog.showModal();
@@ -887,6 +907,30 @@ export function CommandBar({
         setSaid(null);
         onClose();
       };
+      const applyOutcome = (outcome: ActionOutcome) => {
+        switch (outcome.kind) {
+          case "close":
+            finish();
+            return;
+          case "stay":
+            if (ref.current?.open === true) {
+              setSaid({ kind: "message", text: outcome.message });
+            } else {
+              /* Escape cannot turn a server refusal into silent success. The
+                 request has already happened, so put its explanation back in
+                 front of the reader. */
+              reopeningWith.current = outcome.message;
+              onOpen();
+            }
+            return;
+          default: {
+            /* A new outcome must decide its UI here; it cannot silently inherit
+               `stay` merely because it happens to carry a message too. */
+            const never: never = outcome;
+            return never;
+          }
+        }
+      };
       /* **Three verbs, and the switch is the whole of the difference between
          the kinds of row** — a sub-mode is the mode verb with a chip already
          pressed (2026-10-01). A mode is armed exactly as its Dock button
@@ -923,8 +967,7 @@ export function CommandBar({
              its sentence under the box (GPT Sol's F2 on plan 261002c). */
           const outcome = command.run();
           if (!(outcome instanceof Promise)) {
-            if (outcome.kind === "close") finish();
-            else setSaid({ kind: "message", text: outcome.message });
+            applyOutcome(outcome);
             return;
           }
           inFlight.current = true;
@@ -937,14 +980,14 @@ export function CommandBar({
             .then((settled) => {
               inFlight.current = false;
               if (at !== opening.current) {
-                /* Settled after the reader shut the bar and opened it again:
-                   not this opening's to shut or annotate. Only the `Starting…`
-                   it inherited goes. */
-                setSaid((now) => (now?.kind === "pending" ? null : now));
+                /* A success must not shut a later opening. A refusal is
+                   different: dropping the server's explanation would report
+                   success by silence, so show it in the opening now visible. */
+                if (settled.kind === "stay") applyOutcome(settled);
+                else setSaid((now) => (now?.kind === "pending" ? null : now));
                 return;
               }
-              if (settled.kind === "close") finish();
-              else setSaid({ kind: "message", text: settled.message });
+              applyOutcome(settled);
             });
           return;
         }
@@ -957,7 +1000,7 @@ export function CommandBar({
       }
       finish();
     },
-    [activateMode, activateSubMode, onClose],
+    [activateMode, activateSubMode, onOpen, onClose],
   );
 
   return (
