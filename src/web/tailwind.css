@@ -60,14 +60,15 @@
    Experimental switch's per-voice faces). An @font-face downloads nothing until
    a rule uses its family, so a reader with the switch off pays nothing for
    these. `opsz.css` rather than `wght.css`: the same weight axis plus optical
-   size, so a serif at 14px in a quote card is drawn for 14px. Courier Prime is
-   static, so it is four files: 400 and 700, upright and italic. */
+   size, so a serif at 14px in a quote card is drawn for 14px. IBM Plex Mono is
+   static, so it is four files: 400 and 700, upright and italic (no 500: the dark
+   mode's 450 then resolves to 400, as it did for Courier — docs/project/fonts.md). */
 @import "@fontsource-variable/source-serif-4/opsz.css";
 @import "@fontsource-variable/source-serif-4/opsz-italic.css";
-@import "@fontsource/courier-prime/400.css";
-@import "@fontsource/courier-prime/400-italic.css";
-@import "@fontsource/courier-prime/700.css";
-@import "@fontsource/courier-prime/700-italic.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/400-italic.css";
+@import "@fontsource/ibm-plex-mono/700.css";
+@import "@fontsource/ibm-plex-mono/700-italic.css";
 
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
