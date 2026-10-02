@@ -208,7 +208,7 @@ describe("an arm's request is production's with only the declared fields changed
 /* Seen red: decodeScores reading `order[position + 1]`; planBatches dropping the
    anchor from the second batch. */
 describe("the blind batches", () => {
-  const sel = { examples: EXAMPLES.map((e) => e.id), arms: ARMS.map((a) => a.id), runs: 3, judgeRuns: 2, judges: ["opus", "sol", "kimi"], rejudge: true };
+  const sel = { examples: EXAMPLES.map((e) => e.id), arms: ARMS.map((a) => a.id), runs: 3, judgeRuns: 2, judges: ["opus", "sol", "grok"], rejudge: true };
   const { judgements } = expectedSlots(sel, "opus", "261001s");
 
   it("buys three answer runs but judges only the two declared runs", () => {

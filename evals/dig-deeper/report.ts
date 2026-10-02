@@ -22,7 +22,8 @@
  * - **First press** — run 1 where it was cold (read < 10% of the prefix),
  *   measured; else reconstructed as its cost + prefix × (write − read price).
  */
-import { ANCHOR_ARM, type Arm, armFamily, armById, familyOf, judgeById, priceOf, readPrice, writePrice } from "./arms.js";
+import { ANCHOR_ARM, type Arm, armFamily, armById, familyOf, priceOf, readPrice, writePrice } from "./arms.js";
+import { judgeById } from "./judges.js";
 import type { AnswerCell, CallObs } from "./answer.js";
 import type { Capture } from "./capture.js";
 import { exampleById } from "./examples.js";

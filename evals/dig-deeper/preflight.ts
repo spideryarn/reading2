@@ -15,7 +15,8 @@
  */
 import type { AiRequestBody } from "../../src/ai-call.js";
 import { estimateTokens } from "../../src/article-prompt.js";
-import { type Arm, articlePartText, armById, judgeById, lastPartText, priceOf, readPrice, systemText, writePrice } from "./arms.js";
+import { type Arm, articlePartText, armById, lastPartText, priceOf, readPrice, systemText, writePrice } from "./arms.js";
+import { judgeById } from "./judges.js";
 import { cellRequests } from "./answer.js";
 import type { Capture } from "./capture.js";
 import type { Example } from "./examples.js";
