@@ -248,6 +248,39 @@
 .tip-facts dt { color: var(--ink-faint); }
 .tip-facts dd { margin: 0; color: var(--ink-soft); }
 
+/* **The paper card** — PaperCard.tsx, plan 261002f. The title line, then who
+   wrote it and where in the faint ink a byline wears everywhere else, then the
+   row card's gist and facts. Its facts follow the byline when there is no gist,
+   so they are ruled off from whichever came last. The topics are labels with
+   their hue's dot, wrapping in the facts' value column. */
+.tip-byline {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+.tip-paper .tip-facts {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+}
+
+.tip-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tip-topics li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 /* Somebody who has asked not to be moved gets the panel, not the animation.
    Floating UI's transition styles are inline, so this has to !important its
    way past them. */

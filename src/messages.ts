@@ -3660,8 +3660,9 @@ export const SHARING_MARK_HOW_PUBLIC =
  * **`SHARING_ON` for an article that is shared and archived**, where its second
  * half is false: archiving takes a public article off the public list while its
  * link keeps working (src/store/public-library.ts § the `archivedAt` clause).
- * Only the masthead's mark knows both facts, so only it draws this; the sharing
- * card and the shelf badge still say `SHARING_ON` — deferred in
+ * A surface that knows both facts draws this: the masthead's mark and the paper
+ * card (`PaperCard.tsx`). The sharing card and the shelf badge still say
+ * `SHARING_ON` — deferred in
  * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
  */
 export const SHARING_MARK_ON_ARCHIVED =
