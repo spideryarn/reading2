@@ -3,26 +3,34 @@
    Greg, 2026-10-01 (SPIDERYARN-READING2-7C): "Courier for all AI-generated
    text … a serif font for the author-text … Arial or something like that for
    user-generated … Perhaps try a v1 of this and I'll see how I feel about it."
-   This is that v1: docs/plans/261001d-typeface-per-voice.md has the reasoning,
-   docs/project/typography.md § A face per voice the summary.
+   The v1 was docs/plans/261001d-typeface-per-voice.md; the model's face is now
+   IBM Plex Mono rather than Courier, and the trawl that widened these lists is
+   docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md. The rule,
+   and how to voice a new element, is docs/project/fonts.md.
 
    EVERY RULE IS UNDER `:root[data-voices]`, which Reader sets only while the
    Experimental switch is on (useVoiceFaces.ts). Off, this file matches nothing
    and every face is what it was. Promoting it is deleting that guard;
    abandoning it is deleting this file, its import and the hook.
 
-   The whole decision is in this one file on purpose: three lists of selectors.
-   Most already existed; a few narrow wrappers split mixed-provenance text so
-   nearby UI copy can stay Geist. No other stylesheet's rules had to change.
+   The whole decision is in this one file on purpose: three lists of selectors,
+   and one rule putting placeholders in reader inputs back in the app's face.
+   Most already existed; narrow wrappers split mixed-provenance text so nearby
+   UI copy can stay Geist. The two exceptions live in their own sheets because
+   they undo an inheritance rather than set a voice: `.chat-stance-tag`
+   (mode-band.css) and "Whole paragraph" in a quote (`.passage-whole`).
    `:root[data-voices] .x` outranks the plain `.x` it overrides, and this file
-   is imported late (after every sheet but the logo animations). It sits in `@layer app` like its neighbours, so a `tw:font-*`
-   utility on an element still wins — none of the elements below carries one.
+   is imported late (after every sheet but the logo animations). It sits in
+   `@layer app` like its neighbours, so a `tw:font-*` utility on an element
+   still wins — none of the elements below carries one, and where a parent
+   does (Tweets' post) the class is on a child span.
 
    Geist is not named here. The chrome keeps it, and that makes it the fourth
    voice: once the three below move off it, Geist means "the app".
 
    tests/voices-css.test.ts fails if a class named here no longer exists in any
-   component, so a rename cannot drop an element out of its voice quietly. */
+   component, so a rename cannot drop an element out of its voice quietly, and
+   its `VOICES_BY_MODE` makes every mode say which of these it renders. */
 
 /* ---- the author: the article, and verbatim quotes of it ------------------ */
 :root[data-voices] :is(
@@ -53,12 +61,28 @@
     .tip-cite-text,
     .prose-card-quote,
     .cite-entry,
-    .dbt-claim-text
+    .dbt-claim-text,
+    /* the by-claim heading: the same verbatim quote as .dbt-claim-text */
+    .dbt-group-quote,
+    /* "first cited" — the words the article cites the work with */
+    .cite-at,
+    /* the search hit card's passage */
+    .tip-hit-quote,
+    /* Timeline's date phrase: the article's own characters, wrapped so our
+       sentence around it stays UI */
+    .tl-phrase,
+    /* Diagram's footer card: the link text or quoted line, not the score */
+    .diag-card-linkquote,
+    /* A Structure row or a child in a Structure / spine card showing a leaf
+       that starts at a heading: its navLabel is that heading, copied off the
+       block (tree.ts § navLabelVoice). */
+    .struct-text-author,
+    .tip-kid-author
 ) {
     font-family: var(--font-author);
 }
 
-/* ---- the model: everything an AI wrote ----------------------------------- */
+/* ---- the model: prose an AI generated ------------------------------------ */
 :root[data-voices] :is(
     /* summaries and gists */
     .struct-gist,
@@ -97,8 +121,9 @@
        a narrow wrapper so errors and tool-status copy beside it stay UI. */
     .cnd-answer,
     .cnd-answer .fmt-h,
-    .cnd-name,
-    .cnd-affil,
+    /* Candidate name and affiliation are the model's; the fixed hedge between
+       them stays UI, so the parent line cannot carry the voice. */
+    .cnd-person-name,
     .cnd-requirement,
     .cnd-why,
     /* the rest of the band */
@@ -115,10 +140,71 @@
     .crit-why,
     .mir-note,
     .dbt-ai,
-    .dbt-thread-name,
+    /* not the fixed "Key sources" thread */
+    .dbt-thread:not(.dbt-thread-key) .dbt-thread-name,
     .dbt-thread-gist,
     .dbt-key-why,
-    .dbt-relation
+    /* the headline only when it is the model's reading of the page */
+    .dbt-title-ai,
+    /* Tweets: the post, inside a <p> whose `tw:font-prose` would win */
+    .tweets-text,
+    /* Marginalia: the part's question, the idea and its statement, the arc */
+    .marg-question,
+    .marg-idea-name,
+    .marg-idea-tipname,
+    .marg-idea-statement,
+    .marg-arc,
+    .marg-arc-full,
+    /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
+       labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
+       src/sketch-scene.ts) and would spill out of their shapes. */
+    .sk-card-title,
+    .sk-card-sub,
+    .sk-card-detail,
+    .sk-card-caption,
+    .sk-title,
+    .sk-scene,
+    .sk-scene-tip :is(.tip-soon-head, .tip-soon-what),
+    /* Illustrated: the HTML around the plates (the captions in the paint are
+       out of reach) */
+    .ill-plate-chip,
+    .ill-title,
+    .ill-caption,
+    .ill-depicts,
+    .ill-style,
+    .ill-aside-prompt,
+    .ill-prompt,
+    .ill-plate-tip .tip-soon-head,
+    /* Quotes' "why this one", and Skim's stop card */
+    .quotes-why-card,
+    .skim-door-cue-next,
+    .skim-sense-text,
+    .skim-event-label,
+    .skim-chip-name,
+    /* Structure and the spine: a leaf's navLabel shown in place of a title,
+       when the leaf does not start at a heading (tree.ts § navLabelVoice) */
+    .struct-text-ai,
+    .tip-kid-ai,
+    /* hover cards: `.prose-card-text` sets the UI face, so each is named */
+    .prose-card-part-looked .prose-card-text,
+    .prose-card-cite-does-text,
+    .prose-card-term-lead,
+    .prose-card-term-name,
+    /* the glossary's legacy detail, and the canonical name the model writes */
+    .gloss-detail,
+    .gloss-name,
+    /* the realtime model's reason for pointing at a passage */
+    .chat-pointed-why,
+    .diag-card-gist,
+    /* the Dock's preview of an answered comment with no note: its Explanation */
+    .dock-question-state.done:not(.own),
+    /* the chat list's last line, when the model said it */
+    .chat-thread-last.model,
+    /* code inside a model's answer keeps its box but takes the model's face */
+    .chat-turn.model :is(.fmt-code, .fmt-pre code),
+    .cnd-answer :is(.fmt-code, .fmt-pre code),
+    /* Candidates: only the affiliation, not our "said to be at" */
+    .cnd-affil-name
 ) {
     font-family: var(--font-ai);
 }
@@ -146,11 +232,47 @@
     .crit-text,
     .crit-poles input,
     .crit-criterion,
-    .crit-yours,
     .mir-criterion,
     .mir-placement-criterion,
     .cnd-asked,
-    .cnd-box
+    .cnd-box,
+    /* the profile and purpose the reader wrote, and dictation's live guess */
+    .prof-panel-text:not(.quiet),
+    .prof-box-input,
+    .prof-interim,
+    /* a chat thread's title is the reader's first question, or their rename */
+    .chat-thread-title,
+    .chat-head-title,
+    .chat-dialog-title,
+    .chat-thread-last.you,
+    /* "Found by {criterion}": the reader's own query */
+    .tip-hit-criterion,
+    .fb-body,
+    .fb-earlier-body,
+    .cmdbar-input
 ) {
     font-family: var(--font-reader);
+}
+
+/* ---- placeholders in the reader's inputs are ours ------------------------
+   "Add a comment…" is app copy, not something the reader typed, so it keeps
+   the app's face until they type over it. */
+:root[data-voices] :is(
+    .chat-input,
+    .chat-edit-box,
+    .chat-rename,
+    textarea.cmt-note,
+    .cmt-followup input,
+    .annotate-dialog textarea,
+    .quiz-answer,
+    .srch-input,
+    .gloss-ask-input,
+    .skim-purpose-input,
+    .crit-poles input,
+    .cnd-box,
+    .prof-box-input,
+    .fb-body,
+    .cmdbar-input
+)::placeholder {
+    font-family: var(--font-ui);
 }

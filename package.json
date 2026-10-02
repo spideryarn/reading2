@@ -90,7 +90,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@fontsource-variable/source-serif-4": "^5.3.0",
-    "@fontsource/courier-prime": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@mozilla/readability": "^0.6.0",
     "@napi-rs/canvas": "^1.0.8",
     "@sentry/core": "^10.71.0",

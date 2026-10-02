@@ -27,7 +27,7 @@
  * first (2026-09-28) and got one small menu of its own, `ColumnsMenu`, shown
  * in table view only: one dimension did not yet earn a popover of popovers.
  */
-import { Archive, EyeOff, Rows3, Table as TableIcon } from "lucide-react";
+import { Archive, EyeOff, Globe, Rows3, Table as TableIcon } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 import type { Table } from "@tanstack/react-table";
 import type { LibraryEntry } from "../types.js";
@@ -46,6 +46,8 @@ export function ShelfControls({
   onFilter,
   archived,
   onArchived,
+  publicOn,
+  onPublic,
   bare = false,
 }: {
   table: Table<LibraryEntry>;
@@ -58,6 +60,9 @@ export function ShelfControls({
   /** `?archived=1`: archived articles on the shelf too. */
   archived: boolean;
   onArchived: (on: boolean) => void;
+  /** `?public=1`: what other readers have shared, in a section under the list. */
+  publicOn: boolean;
+  onPublic: (on: boolean) => void;
   /**
    * **Nothing is in scope** — no active article, and the archive either off
    * or empty — so only the Archived chip is drawn. A sort control over an
@@ -90,10 +95,31 @@ export function ShelfControls({
     </Chip>
   );
 
+  /* **Include public**, the same shape and the same verb as Include archived,
+     because it does the same kind of thing: it adds. Greg, 2026-10-01
+     (spya-yy5x66): *"Perhaps let's also have a button for include public."*
+     What it adds is drawn in its own section under the list rather than in
+     it — plan 261002b § Part A says why. */
+  const publicChip = (
+    <Chip
+      pressed={publicOn}
+      describe={
+        publicOn
+          ? "Include public — articles other readers have shared are listed below yours, and the search box narrows them too. Activate to hide them."
+          : "Include public — also list articles other readers have shared, below yours"
+      }
+      onClick={() => onPublic(!publicOn)}
+    >
+      <Globe size={12} />
+      Include public
+    </Chip>
+  );
+
   if (bare) {
     return (
       <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
         {archivedChip}
+        {publicChip}
       </div>
     );
   }
@@ -138,6 +164,7 @@ export function ShelfControls({
               of the shelf. On, the archived articles join the one list, so the
               sort, the search, Unread and the topics all apply to them. */}
           {archivedChip}
+          {publicChip}
 
           {/* **Columns, in table view only** — the cards have no columns to
               hide. Beside the switch, because which columns the table shows is a

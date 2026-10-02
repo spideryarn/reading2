@@ -642,7 +642,10 @@ function EventDetail({
         <p className="gloss-part-label">How the piece dates it</p>
         {dating.kind === "dated" && (
           <>
-            <p className="gloss-part-text">“{dating.when.phrase}”</p>
+            <p className="gloss-part-text">
+              {/* The article's own characters (src/timeline.ts), so the author's face. */}
+              <span className="tl-phrase">“{dating.when.phrase}”</span>
+            </p>
             {/* Said on the open row rather than in the column, because on a
                 piece like the test article it is true of seventeen rows out of
                 eighteen and a note repeated seventeen times is noise. What it
@@ -658,7 +661,7 @@ function EventDetail({
         )}
         {dating.kind === "words" && (
           <p className="gloss-part-text">
-            “{dating.phrase}” — the article's own words, and all it says. We do not work out a
+            <span className="tl-phrase">“{dating.phrase}”</span> — the article's own words, and all it says. We do not work out a
             date from them.
           </p>
         )}
@@ -670,7 +673,11 @@ function EventDetail({
         )}
         {dating.kind === "rejected" && (
           <>
-            {dating.phrase !== null && <p className="gloss-part-text">“{dating.phrase}”</p>}
+            {dating.phrase !== null && (
+              <p className="gloss-part-text">
+                <span className="tl-phrase">“{dating.phrase}”</span>
+              </p>
+            )}
             <p className="gloss-part-hint">{DATE_REJECTED_WHY[dating.reason]}</p>
           </>
         )}

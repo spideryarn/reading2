@@ -19,18 +19,28 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as babelParse } from "@babel/parser";
 import { describe, expect, it } from "vitest";
+import type { Mode } from "../src/modes.js";
 
 const CSS = readFileSync("src/web/styles/voices.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Every rule's selector text, one string per rule. */
 const selectors = [...CSS.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1]!.trim());
 
-function selectorUsing(token: "--font-author" | "--font-ai" | "--font-reader"): string {
+function selectorUsing(
+  token: "--font-author" | "--font-ai" | "--font-reader" | "--font-ui",
+): string {
   const rule = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((m) =>
     m[2]!.includes(`var(${token})`),
   );
   if (!rule) throw new Error(`voices.css has no rule using ${token}`);
   return rule[1]!.trim();
+}
+
+function selectorsUsingIn(file: string, token: "--font-ui", className: string): string[] {
+  const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((m) => m[1]!.includes(className) && m[2]!.includes(`var(${token})`))
+    .map((m) => m[1]!.trim());
 }
 
 /** Every `.class` the file names. */
@@ -120,6 +130,7 @@ const SOURCE_LITERALS = sourceLiteralsUnder("src/web");
  * key instead of by its whole name.
  */
 const TEMPLATED: Record<string, { template: string; key: string }> = {
+  done: { template: "dock-question-state ", key: "done" },
   "prose-card-part-senseHere": { template: "prose-card-part-", key: "senseHere" },
   "prose-card-part-background": { template: "prose-card-part-", key: "background" },
   "tl-when-words": { template: "tl-when tl-when-", key: "words" },
@@ -130,6 +141,52 @@ const TEMPLATED: Record<string, { template: string; key: string }> = {
 const TEMPLATED_COMPOUNDS: Record<string, { template: string; key: string }> = {
   ".chat-live-line.companion": { template: "chat-live-line ", key: "companion" },
   ".chat-live-line.reader": { template: "chat-live-line ", key: "reader" },
+  /* Dock.tsx: `dock-question-state ${c.status}…`, status "done" */
+  ".dock-question-state.done": { template: "dock-question-state ", key: "done" },
+};
+
+/**
+ * **Every mode has been asked whose words it shows.** For each mode, a few of
+ * the AI-voice classes it renders — enough that a reader of this table knows the
+ * mode was looked at — or `{ noModelText }` saying why it has none.
+ *
+ * Being a `Record<Mode, …>`, a mode added to `MODES` is a **type error** under
+ * `npm run typecheck` until somebody decides its voices: the question arrives
+ * at the moment it can still be answered cheaply. It cannot prove a new element
+ * in an existing mode is covered — nothing short of provenance-tagging every
+ * string could — so it is a prompt with teeth, not a proof.
+ * docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md § 3;
+ * docs/project/fonts.md says how to voice a new element.
+ */
+const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> = {
+  plain: {
+    noModelText:
+      "the article alone; the spine's cards it shares with every mode are listed under structure",
+  },
+  chat: [".chat-turn.model", ".chat-thread-last.model", ".chat-pointed-why"],
+  glossary: [".gloss-gloss", ".gloss-name", ".gloss-detail", ".prose-card-term-lead"],
+  search: [".srch-hit-why"],
+  referee: [
+    ".clm-list .clm-claim",
+    ".crit-why",
+    ".mir-note",
+    ".cnd-answer",
+    ".cnd-person-name",
+    ".cnd-affil-name",
+  ],
+  summary: [".simple-text"],
+  diagram: [".diag-card-gist", ".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
+  ideas: [".ideas-name", ".ideas-reason"],
+  remember: [".chat-turn.model", ".quiz-question"],
+  quotes: [".quotes-why-card"],
+  timeline: [".tl-label"],
+  debate: [".dbt-ai", ".dbt-title-ai", ".dbt-thread-gist"],
+  structure: [".struct-gist", ".struct-text-ai", ".tip-kid-ai", ".tip-gist"],
+  citations: [".cite-why", ".cite-does", ".prose-card-cite-does-text"],
+  faq: [".faq-question"],
+  skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
+  tweets: [".tweets-text"],
+  marginalia: [".marg-question", ".marg-idea-name", ".marg-arc"],
 };
 
 /** Split a selector list without splitting commas inside :is(), :not(), or attributes. */
@@ -150,9 +207,16 @@ function selectorBranches(selector: string): string[] {
   return branches;
 }
 
+/** The branches inside a rule's `:root[data-voices] :is(…)`, each as written. */
+function innerBranches(selector: string): string[] {
+  const m = /^:root\[data-voices\]\s+:is\(([\s\S]*)\)(?:::placeholder)?$/.exec(selector);
+  if (!m) throw new Error(`not a guarded :is() rule: ${selector.slice(0, 60)}`);
+  return selectorBranches(m[1]!).map((b) => b.replace(/\s+/g, " "));
+}
+
 describe("voices.css", () => {
   it("finds rules to check", () => {
-    expect(selectors.length).toBe(3); // author, AI, reader
+    expect(selectors.length).toBe(4); // author, AI, reader, and reader placeholders
     expect(classes.length).toBeGreaterThan(40);
   });
 
@@ -161,6 +225,17 @@ describe("voices.css", () => {
       for (const branch of selectorBranches(selector)) {
         expect(branch, selector).toMatch(/^:root\[data-voices\]\s/);
       }
+    }
+  });
+
+  it("guards the UI-face corrections that live beside their inherited rules", () => {
+    expect(selectorsUsingIn("src/web/styles/mode-band.css", "--font-ui", ".chat-stance-tag")).toEqual([
+      ":root[data-voices] .chat-stance-tag",
+    ]);
+    for (const file of ["src/web/styles/annotations.css", "src/web/styles/dock.css"]) {
+      expect(selectorsUsingIn(file, "--font-ui", ".passage-whole"), file).toEqual([
+        `:root[data-voices] .${file.includes("annotations") ? "cmt-quote" : "dock-question-quote"} .passage-whole`,
+      ]);
     }
   });
 
@@ -209,7 +284,8 @@ describe("voices.css", () => {
   it("uses only the voice tokens, and tokens.css defines them", () => {
     const tokens = readFileSync("styles/tokens.css", "utf8");
     const used = [...new Set([...CSS.matchAll(/var\((--font-[\w-]+)\)/g)].map((m) => m[1]!))];
-    expect(used.sort()).toEqual(["--font-ai", "--font-author", "--font-reader"]);
+    /* --font-ui only in the placeholder rule: app copy inside a reader's box. */
+    expect(used.sort()).toEqual(["--font-ai", "--font-author", "--font-reader", "--font-ui"]);
     for (const t of used) expect(tokens, t).toMatch(new RegExp(`${t}:`));
   });
 
@@ -228,6 +304,8 @@ describe("voices.css", () => {
       ".ideas-quote:not(.ideas-quote-moved)",
       ".tl-quote:not(.tl-quote-moved)",
       ".tl-when-words",
+      ".struct-text-author",
+      ".tip-kid-author",
     ]) {
       expect(author, selector).toContain(selector);
     }
@@ -236,12 +314,12 @@ describe("voices.css", () => {
       ".ideas-name",
       ".cnd-answer",
       ".cnd-answer .fmt-h",
-      ".cnd-name",
-      ".cnd-affil",
+      ".cnd-person-name",
+      ".cnd-affil-name",
       ".cnd-requirement",
       ".cnd-why",
       ".chat-live-line.companion .chat-live-words",
-      ".dbt-thread-name",
+      ".dbt-thread:not(.dbt-thread-key) .dbt-thread-name",
       ".clm-list .clm-claim",
       ".clm-why:not(.clm-why-withheld)",
     ]) {
@@ -249,6 +327,14 @@ describe("voices.css", () => {
     }
     expect(ai).not.toContain(".ideas-blurb");
     expect(ai).not.toContain(".cite-verdict-text");
+    /* Fixed words that report a model's verdict stay UI (261002b § 2). */
+    expect(innerBranches(ai)).not.toContain(".dbt-relation");
+    expect(innerBranches(ai)).not.toContain(".cnd-name");
+    expect(innerBranches(ai)).not.toContain(".cnd-affil");
+    expect(innerBranches(ai)).not.toContain(".dbt-thread-name");
+    /* Hidden, untrusted source text is not obviously the author's (Sol, P2). */
+    expect(author).not.toContain(".ref-scan-text");
+    expect(ai).not.toContain(".ref-scan-text");
 
     for (const selector of [
       ".crit-text",
@@ -261,8 +347,37 @@ describe("voices.css", () => {
       ".chat-rename",
       ".skim-purpose-text",
       ".skim-purpose-tip p",
+      ".chat-thread-last.you",
+      ".chat-head-title",
+      ".prof-panel-text:not(.quiet)",
     ]) {
       expect(reader, selector).toContain(selector);
+    }
+    /* `You: leans … · −50` is our template around the reader's choice. */
+    expect(innerBranches(reader)).not.toContain(".crit-yours");
+  });
+
+  it("puts placeholders in the reader's boxes back in the app's face", () => {
+    const placeholders = selectorUsing("--font-ui");
+    expect(placeholders).toMatch(/\)::placeholder$/);
+    for (const selector of [".chat-input", "textarea.cmt-note", ".srch-input"]) {
+      expect(innerBranches(placeholders), selector).toContain(selector);
+    }
+  });
+
+  /* Exact branches, not substrings: `.tip-gist` must not pass on the strength
+     of `.tip-gist-something`. */
+  it("finds every mode's AI-voice classes in the AI rule (VOICES_BY_MODE)", () => {
+    const ai = innerBranches(selectorUsing("--font-ai"));
+    const missing = Object.entries(VOICES_BY_MODE).flatMap(([mode, voiced]) =>
+      Array.isArray(voiced)
+        ? voiced.filter((c) => !ai.includes(c)).map((c) => `${mode}: ${c}`)
+        : [],
+    );
+    expect(missing).toEqual([]);
+    for (const voiced of Object.values(VOICES_BY_MODE)) {
+      if (Array.isArray(voiced)) expect(voiced.length).toBeGreaterThan(0);
+      else expect((voiced as { noModelText: string }).noModelText.trim()).not.toBe("");
     }
   });
 });

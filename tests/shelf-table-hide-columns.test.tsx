@@ -435,6 +435,8 @@ describe("the Columns menu", () => {
         onFilter: () => {},
         archived: false,
         onArchived: () => {},
+        publicOn: false,
+        onPublic: () => {},
       });
     }
     act(() => root.render(createElement(Controls, { view: "table" })));

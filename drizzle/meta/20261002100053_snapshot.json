@@ -1,6 +1,6 @@
 {
   "id": "db464ade-83ee-4265-a33a-53657865df5c",
-  "prevId": "2a261c22-cb6b-4236-be03-d6e19e44fa94",
+  "prevId": "86edb5e5-b940-42d8-968e-60be551f2007",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1907,6 +1907,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "recipient_note": {
+          "name": "recipient_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2010,6 +2016,10 @@
         "billing_vouchers_note_length": {
           "name": "billing_vouchers_note_length",
           "value": "\"spideryarn\".\"billing_vouchers\".\"note\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"note\") <= 500"
+        },
+        "billing_vouchers_recipient_note_length": {
+          "name": "billing_vouchers_recipient_note_length",
+          "value": "\"spideryarn\".\"billing_vouchers\".\"recipient_note\" is null or char_length(\"spideryarn\".\"billing_vouchers\".\"recipient_note\") <= 500"
         },
         "billing_vouchers_claimed_together": {
           "name": "billing_vouchers_claimed_together",

@@ -428,7 +428,7 @@ export function ControlTip({
     <>
       <div className="tip-soon-head">{head}</div>
       {state && <p>{state}</p>}
-      <p>{what}</p>
+      <p className="tip-soon-what">{what}</p>
       {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
       {tap && <p className="tip-soon-tap">{tap}</p>}

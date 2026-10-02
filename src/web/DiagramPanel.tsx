@@ -53,7 +53,7 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
   ChartScatter,
@@ -2697,13 +2697,24 @@ function NodeShape({
  * sentence and dressing it as one ("closely related") would be putting our
  * confidence on a model's arithmetic.
  */
-function evidence(r: Related): string {
-  if (r.kind === "anchor") return r.label ? `“${r.label}”` : "linked by the author";
+function evidence(r: Related): ReactNode {
+  /* The quoted words are the author's, in a span of their own so voices.css
+     can give them the author's face while the score and our fixed words beside
+     them stay UI. */
+  if (r.kind === "anchor") {
+    return r.label ? <span className="diag-card-linkquote">“{r.label}”</span> : "linked by the author";
+  }
   if (r.kind === "semantic") {
     /* The passage first, the number second. A cosine on its own asks the reader
        to trust it; a line of the actual prose lets them judge it, which is the
        only thing that makes a dotted line worth drawing. */
-    return r.quote ? `“${r.quote}…” · ${(r.score ?? 0).toFixed(2)}` : `similar meaning · ${(r.score ?? 0).toFixed(2)}`;
+    return r.quote ? (
+      <>
+        <span className="diag-card-linkquote">“{r.quote}…”</span> · {(r.score ?? 0).toFixed(2)}
+      </>
+    ) : (
+      `similar meaning · ${(r.score ?? 0).toFixed(2)}`
+    );
   }
   return r.shared.slice(0, 4).join(" · ");
 }

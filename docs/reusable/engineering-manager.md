@@ -122,7 +122,9 @@ family — never pin a version number here:
 - **GPT Luna** — anything lighter; capable and cheap, and a different family, so the variety is free.
   **Never a stand-in for Sol** on a review or on important work because Sol's usage limit ran out:
   the work waits for the limit instead (Greg, 2026-09-30: *"I'd rather we stop working than risk
-  pushing lower-quality stuff."*).
+  pushing lower-quality stuff."*). So no GPT means no progress: say so to the user at once, since they
+  may be able to reset the limit (Greg, 2026-10-02: *"If GPT account does hit usage limits, I can do
+  a reset to get extra. But you need to let me know."*).
 
 The GPT models run through [codex-cli-as-subagent.md](codex-cli-as-subagent.md). Only a GPT model is
 the cross-family check; an Opus second opinion is a different mind, not a different family. Greg,

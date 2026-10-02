@@ -99,6 +99,10 @@ const PROMISES: Record<string, string> = {
      button out from under the keyboard, which is a sizing fix
      (docs/project/feedback.md), not a key that would have inserted a newline
      while claiming to send. */
+  /* The note to a voucher's recipient is a sentence or two, and may want a
+     line break (plan 261002b). */
+  "AdminVouchersPage.tsx › voucher-new-recipient-note": "newline",
+  "AdminVouchersPage.tsx › Note to them": "newline",
   "AnnotateDialog.tsx › Your comment on this passage": "newline",
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",

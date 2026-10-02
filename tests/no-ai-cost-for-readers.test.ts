@@ -103,8 +103,10 @@ const ALLOWED: Record<string, readonly string[]> = {
      amount in this file still fails rather than inheriting a file-wide pass. */
   "src/web/PlanCards.tsx": ["$10", "£8 · €9", "$50", "£40 · €45"],
   /* The formatter is used only on authenticated admin surfaces. These are
-     dynamic prefixes, not estimates embedded in the bundle. */
-  "src/admin.ts": ["$", "$"],
+     dynamic prefixes, not estimates embedded in the bundle. The last two are
+     `formatWholeDollars`, the spend column's whole-dollar figure (plan 261002b):
+     `<$1` for a real cost under fifty cents, and the prefix. */
+  "src/admin.ts": ["$", "$", "<$1", "$"],
   /* A regular-expression replacement group in reader-visible prose parsing. */
   "src/referee-candidates.ts": ["$1"],
   /* **The two admin surfaces need no entry**, though the plan expected them

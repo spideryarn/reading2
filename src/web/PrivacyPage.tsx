@@ -282,7 +282,8 @@ export function PrivacyPage() {
               gift sentence is the first mail to somebody who never gave us
               their address (docs/plans/261001p); since 2026-10-02 the one to an
               existing reader carries their own remaining allowance
-              (docs/plans/261002a), hence its second clause. */}
+              (docs/plans/261002a), hence its second clause; and since the same day
+              it may carry a note from whoever gave it (docs/plans/261002b). */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
             address. The first time you use Spideryarn after signing up, and whenever you move to a
@@ -290,7 +291,7 @@ export function PrivacyPage() {
             for a plan, which ones), so we know who has joined. That note goes through Resend, then
             our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
             a gift of free articles to an email address, and that address is sent one email saying
-            so — if it is already your account’s, the email also says how many articles you had left
+            so, with a short note from whoever gave it, if they wrote one — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
             it. Ireland (eu-west-1).
           </Third>

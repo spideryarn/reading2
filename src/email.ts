@@ -263,6 +263,22 @@ export function oneLine(text: string, max = 254): string {
   return flat.length > max ? `${flat.slice(0, max - 1).join("")}…` : flat.join("");
 }
 
+/**
+ * **Somebody else's paragraphs, made safe for a mail** — `oneLine`'s sibling
+ * for text that may keep its line breaks (the note to a voucher's recipient,
+ * plan 261002b). Every way of breaking a line — CRLF, a lone CR, the Unicode
+ * line and paragraph separators — becomes one `\n`; every other control
+ * character becomes a space; more than one blank line in a row becomes one.
+ * Escaping for HTML is still the caller's, at the point it meets markup.
+ */
+export function noteText(text: string): string {
+  return text
+    .replace(/\r\n?|[\u2028\u2029]/g, "\n")
+    .replace(/[^\P{Cc}\n]/gu, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Where admin notifications go. */
 export function adminAddress(env: EmailEnv = realEnv()): string {
   return env.SPIDERYARN_ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;
