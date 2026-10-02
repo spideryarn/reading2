@@ -95,6 +95,7 @@ if (!(globalThis as { CSS?: unknown }).CSS) {
 
 const SLUG = "a-crumbs-piece";
 const PARAGRAPH = "The paragraph a herald never covers.";
+const SECOND_PARAGRAPH = "The evidence the section contains.";
 
 const BLOCKS: PublicArticle["blocks"] = [
   {
@@ -116,6 +117,15 @@ const BLOCKS: PublicArticle["blocks"] = [
     html: `<p>${PARAGRAPH}</p>`,
     gistable: true,
   },
+  {
+    id: "spya-cccccc",
+    tag: "p",
+    kind: "text",
+    text: SECOND_PARAGRAPH,
+    words: 5,
+    html: `<p>${SECOND_PARAGRAPH}</p>`,
+    gistable: true,
+  },
 ];
 
 const TREE: PublicArticle["tree"] = {
@@ -129,7 +139,7 @@ const TREE: PublicArticle["tree"] = {
       depth: 0,
       parent: null,
       children: ["n1"],
-      range: ["spya-aaaaaa", "spya-bbbbbb"],
+      range: ["spya-aaaaaa", "spya-cccccc"],
       title: "A piece",
       gist: "What the piece says.",
     },
@@ -137,10 +147,28 @@ const TREE: PublicArticle["tree"] = {
       id: "n1",
       depth: 1,
       parent: "n0",
-      children: [],
-      range: ["spya-bbbbbb", "spya-bbbbbb"],
+      children: ["n2"],
+      range: ["spya-bbbbbb", "spya-cccccc"],
       title: "The argument it makes",
       gist: "Where the piece gets to.",
+    },
+    n2: {
+      id: "n2",
+      depth: 2,
+      parent: "n1",
+      children: ["n3"],
+      range: ["spya-cccccc", "spya-cccccc"],
+      title: "What the evidence shows",
+      gist: "The section's answer.",
+    },
+    n3: {
+      id: "n3",
+      depth: 3,
+      parent: "n2",
+      children: [],
+      range: ["spya-cccccc", "spya-cccccc"],
+      title: "The evidence the section contains",
+      navLabel: "The evidence the section contains",
     },
   },
 };
@@ -241,7 +269,6 @@ async function open(search = ""): Promise<void> {
   await settle();
 }
 
-
 const crumbs = () => host.querySelector<HTMLElement>(".reader > .controls > nav.crumbs");
 
 describe("the headings breadcrumb", () => {
@@ -252,6 +279,16 @@ describe("the headings breadcrumb", () => {
     expect(host.querySelector("nav.crumbs")).toBeNull();
   });
 
+  it("does not give a signed-out visitor breadcrumbs, while preserving their existing bar", async () => {
+    who.set(null);
+    /* Even a lying endpoint cannot turn this on: signed-out is deliberately off
+       and the experimental store must not ask it at all. */
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    await open();
+    expect(host.querySelector(".reader > .controls"), "the read-only chip still has its bar").not.toBeNull();
+    expect(host.querySelector("nav.crumbs")).toBeNull();
+  });
+
   it("with the switch on, the bar holds the path and the last crumb is current", async () => {
     experimentalSince = "2026-10-02T00:00:00.000Z";
     await open();
@@ -259,7 +296,11 @@ describe("the headings breadcrumb", () => {
     expect(nav, "the breadcrumb is in the controls bar").not.toBeNull();
     expect(nav?.getAttribute("aria-label")).toBe("Where you are");
     const buttons = [...(nav?.querySelectorAll("button") ?? [])];
-    expect(buttons.map((b) => b.textContent)).toEqual(["1The argument it makes"]);
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "1The argument it makes",
+      "1.1What the evidence shows",
+    ]);
+    expect(buttons[0]?.hasAttribute("aria-current"), "only the leaf is current").toBe(false);
     expect(buttons.at(-1)?.getAttribute("aria-current")).toBe("location");
     expect(nav?.closest("[aria-live]"), "never announced on scroll").toBeNull();
   });

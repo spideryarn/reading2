@@ -510,8 +510,11 @@ export function Reader({
    * crumbs.ts.
    */
   const crumbsRoot = useMemo(
-    () => buildSummaryTree(article.tree, article.blocks, sectionDepth(geometry)),
-    [article.tree, article.blocks, geometry],
+    () =>
+      experimental.on
+        ? buildSummaryTree(article.tree, article.blocks, sectionDepth(geometry))
+        : null,
+    [experimental.on, article.tree, article.blocks, geometry],
   );
   /**
    * **Is the breadcrumb drawn?** For a reader with Experimental features on,
@@ -527,6 +530,10 @@ export function Reader({
    *
    * **Not for a tree with nothing to name** either, or the bar is 44px of
    * blank. A tree where no part has a title or a navLabel is the case.
+   *
+   * The tree itself is not built while the switch is off. `Reader` renders for
+   * every scroll-independent state change, and an experimental feature should
+   * not add a full block map and tree walk for readers who cannot see it.
    */
   const showCrumbs =
     experimental.on &&
@@ -2647,9 +2654,9 @@ export function Reader({
           the URL still carries `?spine=` for anybody who wants to pin the rail
           by hand (docs/project/url-state.md). */}
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
-          empty**, which on a reading view is most of the time: `showBar` above,
-          `barHasContent` in layout.ts, and shell.css for the 44px that then
-          stops being reserved. It was no longer "the one piece of chrome that
+          empty**, which on a reading view is most of the time: `showBar` above
+          decides whether the element exists, and shell.css then stops reserving
+          its 44px. It was no longer "the one piece of chrome that
           is on screen at every scroll position" — the sentence below is kept
           because it is still the ordering rule for what goes *in* the bar, and
           the Dock is what that claim is now true of.
