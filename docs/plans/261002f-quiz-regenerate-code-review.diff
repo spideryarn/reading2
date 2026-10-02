@@ -1,0 +1,1007 @@
+diff --git a/docs/plans/261002f-quiz-regenerate-for-my-profile.md b/docs/plans/261002f-quiz-regenerate-for-my-profile.md
+new file mode 100644
+index 000000000..4c4166a86
+--- /dev/null
++++ b/docs/plans/261002f-quiz-regenerate-for-my-profile.md
+@@ -0,0 +1,107 @@
++# Quiz gets the "written for your profile" badge, and Regenerate in its panel
++
++Follow-up to [261002b](261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)
++(fb7s, `spya-nq6hnu`), which gave every other profile-aware mode the badge and its panel and left
++Quiz in § Deferred for two reasons: its GET carries no `profileChanged`, and regenerating writes a
++new batch and loses the answers already given. Owner entry points: [quiz.md](../project/quiz.md)
++and [reader-profile.md](../project/reader-profile.md).
++
++> Q-quiz-regenerate yes it needs a "Regenerate for my profile". That's more important, ok to lose
++> answers.
++>
++> — Greg, 2026-10-02
++
++## What gets built
++
++### 1. The quiz records which profile it was written for
++
++- `Quiz` (src/types.ts) gains `profileHash?: string | null` — `hashProfile` of the rendered profile
++  the run used, `null` for none, **absent on a quiz written before this change** (exactly the shape
++  `Ideas` has). Set in `generateQuiz` from the `profile` it already takes, as `generateIdeas` does.
++- **Not in the stamp.** `pipeline.ts`'s `quiz.stamp` is unchanged, so a changed profile still makes
++  nothing stale and never rewrites a quiz on its own — the rule Simple follows too
++  ("the quiz's rule"). Greg's *"no automatic regeneration needed for v1"* still stands; the button
++  is the decision.
++- `GET /api/quiz/:slug` goes through the shared `withProfileChanged` (src/routes.ts), like Simple,
++  Ideas, Sketch. `QuizResponse` gains `profileChanged: boolean`, and `QuizFound` becomes
++  `Omit<QuizResponse, "profileChanged">` like its neighbours. No second mechanism.
++
++### 2. The make-public dialog does not list the quiz
++
++`ProfileCarrying` (src/store/pg.ts) is derived from every artefact type with a `profileHash`, and it
++drives both `personalisedSteps` (the owner's *make public* dialog: "these were written for your
++profile") and `OWNED_ARTEFACT`'s coverage check. The quiz is **not in a shared link** —
++`PublicArtefacts` has no `quiz`, `public-reader.ts` never reads the column — so telling an owner
++"your quiz questions were written for your profile" before they share would describe something the
++visitor never receives. That is the reason src/quiz.ts gave for having no `profileHash` at all.
++
++So: `ProfileCarrying = Exclude<derived, NeverShared>` with `type NeverShared = "quiz"`, one named,
++commented decision. Every *other* artefact gaining a `profileHash` still fails the compiler at
++`personalisedSteps` and at the `OWNED_ARTEFACT` check, which is the property that exists for.
++
++### 3. The badge and Regenerate in the Quiz band
++
++- `useQuizRead` reads `profiled` (`quiz.profileHash != null`) and `profileChanged`, as `useIdeasRead`
++  does, and exposes `refresh` (it already has one).
++- `QuizPanel`'s `head` row, beside the Recall | Quiz control, renders `<WrittenForYou>` with
++  `regenerate = { run: owner.write, busy: job || starting, refresh, consequence }`. `owner.write` is
++  the existing forced run — the same call *Write them again* and Metadata's Quiz row make; forcing is
++  safe because the step replaces.
++- **The consequence is said before the press.** `Regenerate` (src/web/ProfilePanel.tsx) gains an
++  optional `consequence?: string`, rendered as a visible line beside the button when present. Quiz
++  passes *"Writes new questions for your profile; your answers so far are cleared."* A visible line
++  rather than a `title` tooltip: ProfilePanel already refuses native tooltips (they are invisible on
++  touch, and the iPad is where Greg uses this), and rather than a `confirm()`, which would be a second
++  modal on top of the panel for a decision the line already explains.
++- **The answers going is already how a new batch works**: the `batchId` effect in QuizPanel clears
++  the index, verdicts, draft and mark, and `useQuiz` clears the ticks. Nothing new to build there;
++  a test pins it for this path.
++- **Held until the replacement has been read (Sol, P1).** `busy = job || starting` covers the post
++  and the run, but a finished job leaves `job` before its `refresh` GET lands — and a failed GET
++  keeps the old batch *and its old `profileChanged: true`*. Reopening the badge then would offer a
++  second paid rewrite. So `useQuiz` remembers the `batchId` a forced run was pressed on and reports
++  `rewriting` while that batch is still the one on screen and the job has not failed; Regenerate's
++  `busy` includes it. A new batch, or a failed job, releases it.
++
++## Tests, red first
++
++- `quiz.test.ts`: `generateQuiz` with a profile records `hashProfile(profile)`; without one, `null`.
++- Route: `GET /api/quiz` answers `profileChanged: true` when the stored hash differs from the
++  reader's current profile, `false` when equal / absent (the shared rule, `profileIsStale`).
++- `profile-panel.test.tsx`: a `consequence` is shown beside Regenerate; absent when not passed.
++- `quiz-panel.test.tsx`: the badge appears for a profiled quiz; with `profileChanged`, the panel's
++  Regenerate shows the consequence and posts a **forced** `quiz` job; a new batch clears the ticks.
++- Type-level: `personalisedSteps`' record compiles without a `quiz` key (it would not, today, if
++  `Quiz` gained the field without the exclusion — seen red by adding the field first).
++
++## Simpler options passed over
++
++- **No badge, just a Regenerate button in the quiz head.** Smaller, but it is a second way to show
++  "this was written for you / for an older profile", and Greg asked for "the same panel".
++- **Listing the quiz in the make-public dialog** (no exclusion). One fewer type; but the sentence
++  would be false about a shared link, and that dialog's postmortem
++  (260830c-the-dialog-said-nothing-was-personalised) is about exactly a false sentence there.
++- **A `confirm()` before regenerating.** The line beside the button says the same before the press,
++  without a second dialog.
++
++## Deferred, named
++
++- **A quiz written before this change has no stamp**, so it shows no badge and no Regenerate until it
++  is next written (Metadata's Quiz row, or the stale banner). Inferring "written for some profile"
++  from absence would put a badge on quizzes written before 2026-09-30, when the prompt ignored the
++  profile.
++- **Stored answers** are still not stored; "cleared" means the ones on screen this session.
++- **A dictated answer still recording when the new batch arrives (Sol, P1)** could land in the new
++  batch's empty box: the batch reset clears `typed` but does not stop the answer's dictation. It
++  needs the microphone left recording through the whole rewrite (about a minute), and it is the
++  same pre-existing path *Write them again* has had since 260930c; binding dictation delivery to
++  the question is a change to `useDictationField` for every box, not to this feature.
++- **The same post-job window in the other modes' Regenerate.** Ideas, Tweets, Summary and Sketch
++  pass `busy = job || starting` too; this plan closes it for Quiz only, where the batch id makes it
++  one line. Named for whoever next touches `Regenerate`.
++
++## Review
++
++GPT Sol's plan review: [261002f-quiz-regenerate-plan-review-sol.md](261002f-quiz-regenerate-plan-review-sol.md).
++No P0; P1 2 accepted (above), P1 1 deferred with the reason above. It confirmed excluding the quiz
++from `ProfileCarrying` breaks no other consumer and that no public path reads the column.
+diff --git a/docs/project/quiz.md b/docs/project/quiz.md
+index 960af75fa..5719e5483 100644
+--- a/docs/project/quiz.md
++++ b/docs/project/quiz.md
+@@ -416,10 +416,22 @@ numbers and review conclusion:
+   about its proportions"*, and `PROFILE_RULES` speaks of words spent and carries rules the quiz has
+   no use for; the quiz needs the proportions to move and a balance rule in its own terms. So it has
+   its own section and rules in [`src/quiz.ts`](../../src/quiz.ts).
+-- **Not in the stamp, and no `profileHash`.** Changing your goal never rewrites a quiz; *Write them
+-  again* is a forced run and picks up the goal at the press. A `profileHash` would put the quiz in
+-  the *make public* dialog as personalised (`ProfileCarrying`, src/store/pg.ts) though visitors
+-  never see a quiz. It arrives with the label that would read it.
++- **Recorded, but not in the stamp.** Changing your goal never rewrites a quiz on its own. Since
++  2026-10-02 the quiz records which profile it was written for (`profileHash`), and the band's head
++  carries the same *written for you* badge as the other personalised modes, opening the same
++  panel: edit both boxes in place, and when the server says the profile has changed, **Regenerate**
++  — the forced run *Write them again* makes. Greg, 2026-10-02:
++
++  > Q-quiz-regenerate yes it needs a "Regenerate for my profile". That's more important, ok to lose
++  > answers.
++
++  So a new batch clears the answers on screen, and the panel says so beside the button (*"Writes
++  new questions for your profile; your answers so far are cleared."*). Regenerate stays held from
++  the press until the new batch has been read, so a re-read that lags or fails cannot offer a
++  second paid rewrite. The quiz is kept out of the *make public* dialog (`NeverShared`,
++  src/store/pg.ts), because a shared link carries no quiz. A quiz written before 2026-10-02 has no
++  stamp and shows no badge until it is next written.
++  [261002f](../plans/261002f-quiz-regenerate-for-my-profile.md).
+ - **`quiz/5` was not bumped**, so a stored quiz is not marked outdated by this; goal-aware
+   generation arrived inside version 5 and reaches only quizzes written from now on.
+ - **Which jobs carry the goal.** Every quiz the reading view or Metadata asks for. Not a CLI run
+@@ -462,9 +474,8 @@ section's first missed question — the steer. The plan and GPT Sol's review are
+   verdict map also resets on a new batch). The verdict is not written to a log either — a per-answer
+   right/wrong on a log line is a stored grade wearing a different hat, and
+   [privacy.md](privacy.md) makes a public promise about it.
+-- **No reader profile in the stamp**, so no `profileChanged` on the response, although the prompt
+-  reads the profile since 2026-09-30 (above). Adding one later needs no migration — it would be a
+-  field on the JSON.
++- **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is
++  a label for the badge; nothing re-runs on it.
+ - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
+   above. (The lines in the prose are placed by passage, but the band still walks the whole path.)
+ - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
+@@ -474,7 +485,8 @@ section's first missed question — the steer. The plan and GPT Sol's review are
+ - **The questions do not know what you already said in Recall.** Also Greg's, also deferred: *"it
+   should ideally/eventually take into account if the user has provided a freeform brain dump of what
+   they remember"*. That wants a per-reader batch, which wants the profile in the stamp.
+-- **No "written for: …" line** in the band, like Skim's *Reading for*. Greg: keep it simple.
++- **No "written for: …" line** in the band, like Skim's *Reading for* — the badge (above) is the
++  whole of it. Greg: keep it simple.
+ 
+ ## See also
+ 
+diff --git a/docs/project/reader-profile.md b/docs/project/reader-profile.md
+index 689b1bc09..dd45829f8 100644
+--- a/docs/project/reader-profile.md
++++ b/docs/project/reader-profile.md
+@@ -415,7 +415,12 @@ profile currently says ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.
+ are edited in the panel, and it offers Regenerate** when the server says the text was written for a
+ profile you have since changed — in Summary, Glossary, Ideas, Tweets and Sketch; Quotes has the
+ editing but not yet the button
+-([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)). The
++([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)).
++**Quiz joined the same day**: it now records a `profileHash` (not in its stamp), its GET answers
++`profileChanged`, and its Regenerate carries a line saying the answers so far are cleared — Greg
++accepted that loss — passed as the panel's optional `consequence`
++([261002f](../plans/261002f-quiz-regenerate-for-my-profile.md),
++[quiz.md](quiz.md)). The
+ diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
+ 
+ ```
+diff --git a/src/quiz.ts b/src/quiz.ts
+index 9f8332761..629b424ab 100644
+--- a/src/quiz.ts
++++ b/src/quiz.ts
+@@ -85,7 +85,7 @@
+  * attempts. **Nothing may call `readBaseline` for this kind**, because there is
+  * no `BASELINE` row for it and that function throws for a kind with none.
+  *
+- * ## The profile: read, but not stamped or recorded
++ * ## The profile: read and recorded, but not in the stamp
+  *
+  * Until 2026-09-30 the quiz ignored the profile. Greg, SPIDERYARN-READING2-6Q:
+  * *"if I've said I want to understand their methods, most of the questions
+@@ -103,15 +103,22 @@
+  * on the path however narrow the goal.
+  * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
+  *
+- * Three things it deliberately does not do, each Greg's or forced:
++ * **It records which profile it was written for** (`profileHash`, since
++ * 2026-10-02), so the Quiz band can carry the *written for your profile* badge
++ * and its Regenerate. Greg: *"it needs a "Regenerate for my profile". That's
++ * more important, ok to lose answers."* That field was held back until the
++ * label that reads it arrived, because `ProfileCarrying` in src/store/pg.ts is
++ * derived from every artefact type with one and would have put the quiz in
++ * the owner's *make public* dialog — about a mode a shared link never carries.
++ * It arrived with the label, and with `NeverShared` there, which keeps it out.
++ * docs/plans/261002f-quiz-regenerate-for-my-profile.md.
++ *
++ * Two things it deliberately does not do, each Greg's or forced:
+  *
+  * - **Not in the stamp.** Changing your goal does not make a quiz stale or
+- *   rewrite one; *Write them again* is a forced run and resolves the profile at
+- *   the press. Greg: *"no automatic regeneration needed for v1."*
+- * - **No `profileHash` on the artefact.** `ProfileCarrying` in src/store/pg.ts
+- *   is derived from every artefact type with one, so the field would put the
+- *   quiz in the owner's *make public* dialog as personalised — about a mode a
+- *   visitor never sees. It arrives with the label that would read it.
++ *   rewrite one; the badge says *older profile* and its Regenerate, or *Write
++ *   them again*, is a forced run that resolves the profile at the press. Greg:
++ *   *"no automatic regeneration needed for v1."*
+  * - **Not `PROFILE_RULES`.** They speak of words spent and length, and carry a
+  *   web-search rule the quiz has no use for; the quiz needs the path and the
+  *   balance in its own terms, and two rules for one thing would disagree.
+@@ -151,6 +158,7 @@ import {
+ } from "./source-hash.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import { plainWords } from "./plain-words.js";
++import { hashProfile } from "./profile.js";
+ import type {
+   Block,
+   BlockId,
+@@ -1169,14 +1177,18 @@ export async function generateQuiz(opts: {
+     .join("");
+ 
+   const dropped = emptyDropped();
+-  const quiz = buildQuiz(parseJson(raw), {
+-    power: opts.power,
+-    slug: opts.article.slug,
+-    blocks,
+-    sourceHash,
+-    elapsedMs: Date.now() - started,
+-    dropped,
+-  });
++  const quiz: Quiz = {
++    ...buildQuiz(parseJson(raw), {
++      power: opts.power,
++      slug: opts.article.slug,
++      blocks,
++      sourceHash,
++      elapsedMs: Date.now() - started,
++      dropped,
++    }),
++    /* Recorded for the badge, never compared by the step — see the header. */
++    profileHash: opts.profile ? hashProfile(opts.profile) : null,
++  };
+ 
+   /* **The file is written by the caller, not here** — the shape `sketch`,
+      `ideas`, `quotes` and `timeline` already have. A generator that also writes
+diff --git a/src/routes.ts b/src/routes.ts
+index 513e13271..70d9e2320 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -454,6 +454,7 @@ import type {
+   ShelfState,
+   IdeasResponse,
+   QuizFound,
++  QuizResponse,
+   QuotesResponse,
+   SkimResponse,
+   IllustratedResponse,
+@@ -8529,17 +8530,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
+     article: "first-capture",
+     handler: async ({ request: { res } }, captures) => {
+-      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
+-         omission: this artefact was never written for a profile, so there is no
+-         third staleness fact to add and offering one would be a banner about a
+-         thing that cannot have happened. `QuizResponse` in src/types.ts has two
+-         fields where `IdeasResponse` has three.
+-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
++      /* **`withProfileChanged` since 2026-10-02**, for the badge and its
++         Regenerate (plan 261002f). It labels; nothing re-runs on it — the
++         profile is not in this stage's stamp (src/quiz.ts § The profile).
+ 
+          `withOldClientBands` is the bridge for tabs still running the band
+          ladder; it stays until there is an enforceable client-version boundary
+          — src/quiz.ts says why. */
+-      send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
++      const at = slugPart(captures, 1);
++      send(
++        res,
++        200,
++        withOldClientBands(
++          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
++        ),
++      );
+     },
+   },
+ 
+@@ -8552,8 +8557,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     pattern: /^\/api\/faq\/([\w.%-]+)$/,
+     article: "first-capture",
+     handler: async ({ request: { res } }, captures) => {
+-      /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
+-         written for a profile. `FaqResponse` in src/types.ts has two fields. */
++      /* **No `withProfileChanged`**: this artefact is not written for a
++         profile. `FaqResponse` in src/types.ts has two fields. */
+       send(res, 200, await loadFaq(slugPart(captures, 1)));
+     },
+   },
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 1b6934a37..1812eb62b 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -2478,10 +2478,24 @@ export function scalarInputsQuery(
+  * false, and `Tree extends { profileHash?: string | null; version?: string }`
+  * is **true**. A rule held up by the absence of a shared field is not a rule.
+  */
+-export type ProfileCarrying = {
+-  [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
+-}[keyof ArtifactMap] &
+-  StepName;
++export type ProfileCarrying = Exclude<
++  {
++    [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
++  }[keyof ArtifactMap] &
++    StepName,
++  NeverShared
++>;
++
++/**
++ * **Carries a `profileHash`, and is never in a shared link** — so the *make
++ * public* dialog has nothing to say about it. The quiz records its profile for
++ * the owner's badge and Regenerate (plan 261002f), but `PublicArtefacts` has no
++ * quiz and src/store/public-reader.ts never reads the column: telling an owner
++ * "your quiz was written for your profile" before they share would describe
++ * something no visitor receives. One named exception rather than a hand list,
++ * so every *other* artefact gaining the field still fails the compiler here.
++ */
++type NeverShared = "quiz";
+ 
+ function personalisedSteps(revision: {
+   tweets: TweetThread | null;
+diff --git a/src/types.ts b/src/types.ts
+index e14d487bb..7c080bbe7 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -4566,14 +4566,22 @@ export interface Quiz {
+   dropped: QuizDropped;
+   generatedAt: string;
+   elapsedMs: number;
++  /**
++   * `hashProfile` of the rendered profile these were written for, `null` for
++   * none, and **absent on a quiz written before 2026-10-02**, which therefore
++   * shows no badge. Recorded for the owner's *written for your profile* badge
++   * and its Regenerate; **not in the freshness stamp**, so a changed profile
++   * never makes a quiz stale on its own. Not in the *make public* dialog either:
++   * a shared link carries no quiz (`NeverShared`, src/store/pg.ts). Plan 261002f.
++   */
++  profileHash?: string | null;
+ }
+ 
+ /**
+- * `GET /api/quiz/:slug`. Two staleness facts and no third, exactly as
+- * `TimelineResponse` above: the reader profile is **not** in this stage's
+- * stamp, so there is no `profileChanged` to report and the route sends no
+- * `withProfileChanged`.
+- * docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
++ * `GET /api/quiz/:slug`. Two staleness facts and, since 2026-10-02, the
++ * reader's: `profileChanged` comes from `withProfileChanged` like Ideas' and
++ * Simple's, and is a label's fact rather than staleness — nothing re-runs on
++ * it. docs/plans/261002f-quiz-regenerate-for-my-profile.md.
+  */
+ export interface QuizResponse {
+   quiz: Quiz;
+@@ -4581,14 +4589,12 @@ export interface QuizResponse {
+   stale: boolean;
+   /** The article is the same and we would write the questions differently now. */
+   outdated: boolean;
++  /** Written for a profile the reader has since changed. `ThreadResponse`. */
++  profileChanged: boolean;
+ }
+ 
+-/**
+- * As `TimelineFound`, and here too it is the *same* type, for the same reason:
+- * there is no `profileChanged` for a store adapter to leave out. Named rather
+- * than skipped so both adapters agree with their neighbours by shape.
+- */
+-export type QuizFound = QuizResponse;
++/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
++export type QuizFound = Omit<QuizResponse, "profileChanged">;
+ 
+ /**
+  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.
+diff --git a/src/web/ProfilePanel.tsx b/src/web/ProfilePanel.tsx
+index e69435769..b2d909fbd 100644
+--- a/src/web/ProfilePanel.tsx
++++ b/src/web/ProfilePanel.tsx
+@@ -197,6 +197,12 @@ export interface Regenerate {
+    * verdict on the profile as it now is. Never spends.
+    */
+   refresh(): Promise<void>;
++  /**
++   * What pressing it gives up beyond the text itself, said in words beside the
++   * button — Quiz's *"your answers so far are cleared"* (plan 261002f). A line
++   * on the panel rather than a native `title`, which a touch screen never shows.
++   */
++  consequence?: string;
+ }
+ 
+ /** One open editor at a time, even when a surface happens to render two badges. */
+@@ -592,6 +598,9 @@ function PanelBody({
+           empty="You haven't said why you're reading this one."
+         />
+       )}
++      {changed && regenerate?.consequence && (
++        <p className="prof-panel-consequence">{regenerate.consequence}</p>
++      )}
+       <div className="prof-panel-actions">
+         {changed && regenerate && (
+           <Button
+diff --git a/src/web/QuizPanel.tsx b/src/web/QuizPanel.tsx
+index e8df52adf..5a79b184b 100644
+--- a/src/web/QuizPanel.tsx
++++ b/src/web/QuizPanel.tsx
+@@ -98,6 +98,7 @@ import { AboutMade } from "./BandAbout.js";
+ import { ModeSurface } from "./ModeSurface.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+ import { IconButton } from "./IconButton.js";
++import { WrittenForYou } from "./WrittenForYou.js";
+ import { keepDictation } from "./dictation-keep.js";
+ import { sendForTranscription } from "./dictation-upload.js";
+ import { type UseDictationField, useDictationField } from "./useDictationField.js";
+@@ -827,6 +828,25 @@ export function QuizPanel({
+               stays for the Recall | Quiz control, which is the one thing here
+               the Dock does *not* say. */}
+           {subMode}
++          {/* Written for your profile, and the Regenerate in its panel — Greg,
++              2026-10-02: *"it needs a "Regenerate for my profile". That's more
++              important, ok to lose answers."* `write` is the forced run *Write
++              them again* makes; the new batch takes the answers with it (the
++              `batchId` effect above), and the panel says so before the press.
++              Owner-only like the band. Plan 261002f. */}
++          {quiz && owner.status === "ready" && (
++            <WrittenForYou
++              written={owner.profiled}
++              changed={owner.profileChanged}
++              slug={owner.slug}
++              regenerate={{
++                run: () => void owner.write(),
++                busy: owner.job !== null || owner.starting || owner.rewriting,
++                refresh: () => owner.refresh(),
++                consequence: "Writes new questions for your profile; your answers so far are cleared.",
++              }}
++            />
++          )}
+         </>
+       }
+       /* No standing *Write them again* under the question any more — Greg,
+diff --git a/src/web/styles/profile.css b/src/web/styles/profile.css
+index ba58d8774..6df20f258 100644
+--- a/src/web/styles/profile.css
++++ b/src/web/styles/profile.css
+@@ -588,6 +588,13 @@
+   margin-top: 0.5rem;
+ }
+ .prof-panel-done { margin-left: auto; }
++/* What Regenerate gives up, just above it — Quiz's answers (plan 261002f). */
++.prof-panel-consequence {
++  margin: 0.5rem 0 0;
++  color: var(--ink-soft);
++  font-size: 0.76rem;
++  line-height: 1.4;
++}
+ .prof-panel-text {
+   margin: 0.2rem 0 0;
+   /* The reader's own prose, in the reading face — it is a paragraph they wrote,
+diff --git a/src/web/useQuiz.ts b/src/web/useQuiz.ts
+index b9905f3c1..5e4bdb0c9 100644
+--- a/src/web/useQuiz.ts
++++ b/src/web/useQuiz.ts
+@@ -210,6 +210,21 @@ export interface UseQuiz {
+   attempt: Attempt | null;
+   /** Which questions have been marked to a `done` this session. Never persisted. */
+   answered: ReadonlySet<QuizQuestionId>;
++  /** These were written for a reader profile — `quiz.profileHash != null`. */
++  profiled: boolean;
++  /** …and the reader's profile has changed since. The server's verdict. */
++  profileChanged: boolean;
++  /**
++   * **A forced run was pressed on the batch still on screen**, and has neither
++   * replaced it nor failed. Covers the gap `job`/`starting` do not: a finished
++   * job leaves `job` before its re-read lands, and a re-read that fails keeps
++   * the old batch *and its old `profileChanged`*, so the badge's Regenerate
++   * would offer a second paid rewrite. A new batch, or a failed or cancelled
++   * job, releases it. GPT Sol's plan review of 261002f.
++   */
++  rewriting: boolean;
++  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
++  refresh(): Promise<void>;
+   /**
+    * **Write the questions if there are none.** The unforced verb — what the
+    * automatic run takes, and what the button under the empty state takes, which
+@@ -253,6 +268,10 @@ export interface QuizRead {
+   quiz: Quiz | null;
+   stale: boolean;
+   outdated: boolean;
++  /** `UseQuiz.profiled`. */
++  profiled: boolean;
++  /** `UseQuiz.profileChanged`. */
++  profileChanged: boolean;
+   error: string | null;
+   /** Read again, joining a read in flight. `OrderedRead.reload`. */
+   reload(): Promise<void>;
+@@ -265,6 +284,8 @@ export function useQuizRead(slug: string): QuizRead {
+   const [quiz, setQuiz] = useState<Quiz | null>(null);
+   const [stale, setStale] = useState(false);
+   const [outdated, setOutdated] = useState(false);
++  const [profiled, setProfiled] = useState(false);
++  const [profileChanged, setProfileChanged] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+   /**
+@@ -284,6 +305,8 @@ export function useQuizRead(slug: string): QuizRead {
+         setQuiz(null);
+         setStale(false);
+         setOutdated(false);
++        setProfiled(false);
++        setProfileChanged(false);
+         setError(null);
+         setStatus("none");
+         return;
+@@ -293,6 +316,10 @@ export function useQuizRead(slug: string): QuizRead {
+       setQuiz(loaded.quiz);
+       setStale(loaded.stale);
+       setOutdated(loaded.outdated);
++      /* `!= null`, as useIdeas.ts: absent (written before 261002f) and `null`
++         (written for nobody) both mean no badge. */
++      setProfiled(loaded.quiz.profileHash != null);
++      setProfileChanged(loaded.profileChanged);
+       setError(null);
+       setStatus("ready");
+     } catch (err) {
+@@ -322,7 +349,7 @@ export function useQuizRead(slug: string): QuizRead {
+     void reload();
+   }, [reload]);
+ 
+-  return { status, quiz, stale, outdated, error, reload, refresh };
++  return { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh };
+ }
+ 
+ /**
+@@ -330,7 +357,7 @@ export function useQuizRead(slug: string): QuizRead {
+  * `useQuizRead` in `OwnedReader` — see `QuizRead` for why the fetch moved up.
+  */
+ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+-  const { status, quiz, stale, outdated, error, reload, refresh } = read;
++  const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
+   const [attempt, setAttempt] = useState<Attempt | null>(null);
+   const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
+ 
+@@ -364,7 +391,13 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+     await queue.start();
+   }, [queue]);
+ 
++  /* The batch a forced run was pressed on — `UseQuiz.rewriting`. State, not a
++     ref, because the badge's `busy` has to re-render when it changes. */
++  const [pressedOn, setPressedOn] = useState<string | null>(null);
++  const rewriting = pressedOn !== null && pressedOn === batchId && queue.failed === null;
++
+   const write = useCallback(async () => {
++    setPressedOn(batchId ?? null);
+     await queue.start({
+       /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
+          offered beside questions that are current, so an unforced run would skip
+@@ -376,7 +409,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+          have genuinely been rewritten. */
+       force: true,
+     });
+-  }, [queue]);
++  }, [queue, batchId]);
+ 
+   /* **The reader pressed Quiz and there is nothing there — write the questions.**
+      `ensure` and not `write`, for the double-charge reason on the interface; and
+@@ -509,6 +542,10 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
+     stalled: queue.stalled,
+     attempt,
+     answered,
++    profiled,
++    profileChanged,
++    rewriting,
++    refresh,
+     ensure,
+     write,
+     cancel: queue.cancel,
+diff --git a/tests/mode-surface-changes-no-markup.test.tsx b/tests/mode-surface-changes-no-markup.test.tsx
+index 79d3c1362..b80f57d2d 100644
+--- a/tests/mode-surface-changes-no-markup.test.tsx
++++ b/tests/mode-surface-changes-no-markup.test.tsx
+@@ -1403,6 +1403,10 @@ function quizOwner(quiz: Quiz | null, over: Partial<UseQuiz> = {}): UseQuiz {
+     stalled: false,
+     attempt: null,
+     answered: new Set<QuizQuestionId>(),
++    profiled: false,
++    profileChanged: false,
++    rewriting: false,
++    refresh: async () => {},
+     ensure: async () => {},
+     write: async () => {},
+     cancel: () => {},
+diff --git a/tests/profile-panel.test.tsx b/tests/profile-panel.test.tsx
+index 800639426..e725dcc79 100644
+--- a/tests/profile-panel.test.tsx
++++ b/tests/profile-panel.test.tsx
+@@ -129,6 +129,7 @@ interface Spy {
+   run: Mock<() => void>;
+   refresh: Mock<() => Promise<void>>;
+   busy: boolean;
++  consequence?: string;
+ }
+ const spy = (busy = false): Spy => ({
+   run: vi.fn<() => void>(),
+@@ -505,6 +506,22 @@ describe("Regenerate", () => {
+     expect(panel()).toBeNull();
+   });
+ 
++  /* Plan 261002f: Quiz's regenerate throws away the answers given so far, and
++     the reader is told before pressing — in words on the panel, not a native
++     tooltip a touch screen never shows. */
++  it("says what pressing it costs, when the mode says there is a cost", async () => {
++    const r = { ...spy(), consequence: "Your answers so far are cleared." };
++    render({ changed: true, regenerate: r });
++    await open();
++    expect(panel()?.textContent).toContain("Your answers so far are cleared.");
++  });
++
++  it("says nothing extra when the mode names no cost", async () => {
++    render({ changed: true, regenerate: spy() });
++    await open();
++    expect(panel()?.textContent).not.toMatch(/cleared/);
++  });
++
+   /* A regenerate started before the new profile has landed would be written
+      for the old one and then stamped as current — the badge would stop saying
+      *changed* about text that was never written for the new words. */
+diff --git a/tests/quiz-in-prose.test.tsx b/tests/quiz-in-prose.test.tsx
+index 19212c873..22a83ba21 100644
+--- a/tests/quiz-in-prose.test.tsx
++++ b/tests/quiz-in-prose.test.tsx
+@@ -268,7 +268,7 @@ function json(body: unknown, status = 200): Response {
+ }
+ 
+ const quizBody = (quiz: Quiz, stale = false, outdated = false): Response =>
+-  json({ quiz, stale, outdated } satisfies QuizResponse);
++  json({ quiz, stale, outdated, profileChanged: false } satisfies QuizResponse);
+ 
+ function reply(url: string, method: string): Response | Promise<Response> {
+   if (url === `/api/article/${SLUG}`) return json(OWNED);
+diff --git a/tests/quiz-panel.test.tsx b/tests/quiz-panel.test.tsx
+index 2837b472d..e24d3715f 100644
+--- a/tests/quiz-panel.test.tsx
++++ b/tests/quiz-panel.test.tsx
+@@ -64,6 +64,19 @@ vi.mock("../src/web/DictationStrip.js", () => ({
+   DictationStrip: () => null,
+ }));
+ 
++/* The badge's own behaviour — the panel, its boxes, Regenerate's guards — is
++   tests/profile-panel.test.tsx's. Here only what Quiz hands it. */
++type BadgeProps = import("../src/web/WrittenForYou.js").ProfileState & {
++  regenerate?: import("../src/web/ProfilePanel.js").Regenerate;
++};
++let badge: BadgeProps | null = null;
++vi.mock("../src/web/WrittenForYou.js", () => ({
++  WrittenForYou: (props: BadgeProps) => {
++    badge = props;
++    return props.written ? createElement("span", { "data-badge": "" }) : null;
++  },
++}));
++
+ const { QuizPanel } = await import("../src/web/QuizPanel.js");
+ type QuizArrival = import("../src/web/QuizPanel.js").QuizArrival;
+ 
+@@ -138,6 +151,10 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
+     stalled: false,
+     attempt: null,
+     answered: new Set<string>(),
++    profiled: false,
++    profileChanged: false,
++    rewriting: false,
++    refresh: async () => {},
+     ensure: async () => {},
+     write: async () => {},
+     cancel: () => {},
+@@ -552,6 +569,61 @@ describe("the answer box", () => {
+  * `JobProgress` carried a comment claiming the quiz *"watch[es] a job it did
+  * not start"*. It starts its own.
+  */
++/**
++ * **Written for your profile, and Regenerate** — plan 261002f. Greg, 2026-10-02:
++ * *"it needs a "Regenerate for my profile". That's more important, ok to lose
++ * answers."*
++ */
++describe("the written-for-your-profile badge", () => {
++  beforeEach(() => {
++    badge = null;
++  });
++
++  it("is on the head of a quiz written for a profile, with the forced run behind Regenerate", () => {
++    const wrote: number[] = [];
++    paint(
++      owner({
++        profiled: true,
++        profileChanged: true,
++        write: async () => {
++          wrote.push(1);
++        },
++      }),
++    );
++    expect(host.querySelector("[data-badge]"), "no badge on a profiled quiz").not.toBeNull();
++    expect(badge?.written).toBe(true);
++    expect(badge?.changed).toBe(true);
++    badge?.regenerate?.run();
++    /* `write` is the forced verb — `ensure` would skip a current batch. */
++    expect(wrote).toEqual([1]);
++  });
++
++  it("says before the press that the answers so far go", () => {
++    paint(owner({ profiled: true, profileChanged: true }));
++    expect(badge?.regenerate?.consequence).toMatch(/new questions for your profile/i);
++    expect(badge?.regenerate?.consequence).toMatch(/answers so far are cleared/i);
++  });
++
++  it("holds Regenerate while a quiz job is already starting or running", () => {
++    paint(owner({ profiled: true, profileChanged: true, starting: true }));
++    expect(badge?.regenerate?.busy).toBe(true);
++    paint(owner({ profiled: true, profileChanged: true }));
++    expect(badge?.regenerate?.busy).toBe(false);
++  });
++
++  it("holds Regenerate after the job, until the replacement batch has been read", () => {
++    /* Sol's plan review: `job` is gone before the re-read lands, and a failed
++       re-read keeps the old batch with its old `profileChanged`. */
++    paint(owner({ profiled: true, profileChanged: true, rewriting: true }));
++    expect(badge?.regenerate?.busy).toBe(true);
++  });
++
++  it("is absent on a quiz written with no profile", () => {
++    paint(owner({ profiled: false }));
++    expect(host.querySelector("[data-badge]")).toBeNull();
++  });
++});
++
+ describe("the gap between pressing and the job appearing", () => {
+   it("takes the button away rather than offering a second press", () => {
+     paint(owner({ quiz: null, status: "none", starting: true }));
+diff --git a/tests/quiz-regenerate-holds-until-the-new-batch.test.tsx b/tests/quiz-regenerate-holds-until-the-new-batch.test.tsx
+new file mode 100644
+index 000000000..f15a3e90a
+--- /dev/null
++++ b/tests/quiz-regenerate-holds-until-the-new-batch.test.tsx
+@@ -0,0 +1,113 @@
++// @vitest-environment jsdom
++/**
++ * **Regenerate stays held until the replacement quiz has been read** — GPT
++ * Sol's plan review of docs/plans/261002f-quiz-regenerate-for-my-profile.md.
++ *
++ * `job` and `starting` cover the press and the run. They do not cover the gap
++ * after: a finished job leaves `job` before the re-read lands, and a re-read
++ * that fails keeps the old batch *and its old `profileChanged: true`*, so the
++ * badge would offer a second paid rewrite. `useQuiz.rewriting` is that gap: on
++ * from the press, off when a new batch arrives or the job fails or is
++ * cancelled (both are `failed`).
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Quiz } from "../src/types.js";
++import type { QuizRead, UseQuiz } from "../src/web/useQuiz.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/** The job hook, posed: what `useQuiz` reads of it, and nothing more. */
++let failed: { message: string } | null = null;
++const started: unknown[] = [];
++vi.mock("../src/web/useStepJob.js", () => ({
++  useStepJob: () => ({
++    job: null,
++    failed,
++    starting: false,
++    stalled: false,
++    start: async (opts: unknown) => {
++      started.push(opts);
++    },
++    cancel: () => {},
++  }),
++}));
++vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
++
++const { useQuiz } = await import("../src/web/useQuiz.js");
++
++const quizOf = (batchId: string) => ({ batchId, questions: [] }) as unknown as Quiz;
++
++function read(batchId: string): QuizRead {
++  return {
++    status: "ready",
++    quiz: quizOf(batchId),
++    stale: false,
++    outdated: false,
++    profiled: true,
++    profileChanged: true,
++    error: null,
++    reload: async () => {},
++    refresh: async () => {},
++  };
++}
++
++let host: HTMLDivElement;
++let root: Root;
++let owner: UseQuiz | null = null;
++
++function Probe({ r }: { r: QuizRead }) {
++  owner = useQuiz("a-piece", r);
++  return null;
++}
++const paint = (r: QuizRead) => act(() => root.render(createElement(Probe, { r })));
++
++beforeEach(() => {
++  failed = null;
++  started.length = 0;
++  owner = null;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++describe("rewriting", () => {
++  it("is off before anything is pressed", () => {
++    paint(read("spya-batcha"));
++    expect(owner?.rewriting).toBe(false);
++  });
++
++  it("stays on after the press while the old batch is still the one on screen", async () => {
++    const r = read("spya-batcha");
++    paint(r);
++    await act(async () => owner?.write());
++    expect(started).toEqual([{ force: true }]);
++    /* The job has come and gone (`job` is null throughout here) and the re-read
++       has not brought a new batch: exactly the window that offered a second
++       paid press. */
++    paint({ ...r });
++    expect(owner?.rewriting).toBe(true);
++  });
++
++  it("goes off when the replacement batch arrives", async () => {
++    paint(read("spya-batcha"));
++    await act(async () => owner?.write());
++    paint(read("spya-batchb"));
++    expect(owner?.rewriting).toBe(false);
++  });
++
++  it("goes off when the job failed or was cancelled, so the reader can try again", async () => {
++    const r = read("spya-batcha");
++    paint(r);
++    await act(async () => owner?.write());
++    failed = { message: "Stopped." };
++    paint({ ...r });
++    expect(owner?.rewriting).toBe(false);
++  });
++});
+diff --git a/tests/quiz-step-registration.test.ts b/tests/quiz-step-registration.test.ts
+index dd883796f..b72a45657 100644
+--- a/tests/quiz-step-registration.test.ts
++++ b/tests/quiz-step-registration.test.ts
+@@ -84,7 +84,7 @@ import { nullCheckpointStore } from "../src/store/checkpoints.js";
+ import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
+ import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
+ import type { Quiz } from "../src/types.js";
+-import { renderProfile } from "../src/profile.js";
++import { hashProfile, renderProfile } from "../src/profile.js";
+ import { QUIZ_READER_RULES, QUIZ_SYSTEM } from "../src/quiz.js";
+ 
+ /* ------------------------------------------------------- the stubbed model -- */
+@@ -247,7 +247,11 @@ describe("what the store records when the quiz step has run", () => {
+     expect(recorded?.promptVersion, "the artefact carries no version").toEqual(expect.any(String));
+     expect(recorded?.model, "the artefact carries no generator").toEqual(expect.any(String));
+ 
+-    expect(recorded).toEqual(expected);
++    /* The recorded side also carries `profileHash` since 261002f; the step's
++       stamp declares none, so `sameStamp` never compares it — the "does not
++       make the quiz stale" case below is what holds that. */
++    expect(recorded).toEqual({ ...expected, profileHash: null });
++    expect(expected).not.toHaveProperty("profileHash");
+   });
+ 
+   it("spells the three stamp fields the store's way and not the StepStamp way", async () => {
+@@ -393,6 +397,13 @@ describe("the reader's reason for reading", () => {
+     expect(params.system[at]?.cache_control).toBeUndefined();
+   });
+ 
++  it("records which profile the questions were written for, and null for none", async () => {
++    /* Plan 261002f: the stamp the badge and its Regenerate read — recorded,
++       never compared by the step (the case below). */
++    expect((await runAndWrite(PROFILE)).profileHash).toBe(hashProfile(PROFILE));
++    expect((await runAndWrite()).profileHash).toBeNull();
++  });
++
+   it("does not make the quiz stale when it changes — no automatic rewrite", async () => {
+     /* Greg: "no automatic regeneration needed for v1" — *Write them again*
+        picks up a new goal. So the profile is not in the stamp. */
+diff --git a/tests/quiz.test.ts b/tests/quiz.test.ts
+index 46a41f432..3b7d8e4bb 100644
+--- a/tests/quiz.test.ts
++++ b/tests/quiz.test.ts
+@@ -308,6 +308,7 @@ describe("withOldClientBands", () => {
+     quiz: build([raw(1), raw(2, { premise: "Something said before." })]),
+     stale: false,
+     outdated: false,
++    profileChanged: false,
+   });
+ 
+   it("gives every question a band and a value an old ladder can walk", () => {
+diff --git a/tests/remember-url-rules.test.tsx b/tests/remember-url-rules.test.tsx
+index 8027a9494..5b6448997 100644
+--- a/tests/remember-url-rules.test.tsx
++++ b/tests/remember-url-rules.test.tsx
+@@ -189,6 +189,8 @@ const QUIZ_READ: QuizRead = {
+   quiz: null,
+   stale: false,
+   outdated: false,
++  profiled: false,
++  profileChanged: false,
+   error: null,
+   reload: async () => {},
+   refresh: async () => {},
+diff --git a/tests/route-profile-concurrency.test.ts b/tests/route-profile-concurrency.test.ts
+index 94cf07f4b..da7e35559 100644
+--- a/tests/route-profile-concurrency.test.ts
++++ b/tests/route-profile-concurrency.test.ts
+@@ -67,6 +67,9 @@ const ROUTES = [
+   { name: "glossary", url: "/api/glossary/anything", stamp: "glossary" },
+   { name: "ideas", url: "/api/ideas/anything", stamp: "ideas" },
+   { name: "quotes", url: "/api/quotes/anything", stamp: "quotes" },
++  /* Since 2026-10-02: the quiz records the profile it was written for, so the
++     panel can offer to write it again (plan 261002f). */
++  { name: "quiz", url: "/api/quiz/anything", stamp: "quiz" },
+ ] as const;
+ 
+ /** What the store was asked, in the order it was asked. */
+@@ -95,7 +98,9 @@ let profileGate = held<string | null>();
+ 
+ /** What a route's loader resolves to when its gate is released. */
+ const payloadFor = (stamp: string) => ({
+-  [stamp]: STAMP,
++  /* `questions` for the quiz route's `withOldClientBands`, which maps them;
++     the other routes ignore it. */
++  [stamp]: { ...STAMP, questions: [] },
+   stale: false,
+   outdated: false,
+   profiled: true,
+@@ -111,6 +116,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
+     loadGlossary: "glossary",
+     loadIdeas: "ideas",
+     loadQuotes: "quotes",
++    loadQuiz: "quiz",
+   } as const;
+   const mocked: Record<string, unknown> = {};
+   for (const [fn, route] of Object.entries(loaders)) {
+@@ -284,4 +290,17 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
+        "older profile", not "written for you". */
+     expect(body.profileChanged).toBe(name === "quotes");
+   });
++
++  it("says the profile changed when the artefact was written for another one", async () => {
++    /* The positive half. Every case above answers `false`, which is also what a
++       route that never computed the field would leave a reader assuming. */
++    const reply = call(url);
++    await settleQueue();
++    gates[name]!.settle(payloadFor(stamp));
++    profileGate.settle("A reader who has since changed their mind.");
++
++    const { status, body } = await reply;
++    expect(status).toBe(200);
++    expect(body.profileChanged).toBe(true);
++  });
+ });
+diff --git a/tests/step-job-force.test.tsx b/tests/step-job-force.test.tsx
+index 3b06206ac..d8007909e 100644
+--- a/tests/step-job-force.test.tsx
++++ b/tests/step-job-force.test.tsx
+@@ -128,6 +128,8 @@ const QUIZ_READ: QuizRead = {
+   quiz: null,
+   stale: false,
+   outdated: false,
++  profiled: false,
++  profileChanged: false,
+   error: null,
+   reload: async () => {},
+   refresh: async () => {},

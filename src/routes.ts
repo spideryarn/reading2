@@ -454,6 +454,7 @@ import type {
   ShelfState,
   IdeasResponse,
   QuizFound,
+  QuizResponse,
   QuotesResponse,
   SkimResponse,
   IllustratedResponse,
@@ -8529,17 +8530,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
-         omission: this artefact was never written for a profile, so there is no
-         third staleness fact to add and offering one would be a banner about a
-         thing that cannot have happened. `QuizResponse` in src/types.ts has two
-         fields where `IdeasResponse` has three.
-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+      /* **`withProfileChanged` since 2026-10-02**, for the badge and its
+         Regenerate (plan 261002f). It labels; nothing re-runs on it — the
+         profile is not in this stage's stamp (src/quiz.ts § The profile).
 
          `withOldClientBands` is the bridge for tabs still running the band
          ladder; it stays until there is an enforceable client-version boundary
          — src/quiz.ts says why. */
-      send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
+      const at = slugPart(captures, 1);
+      send(
+        res,
+        200,
+        withOldClientBands(
+          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
+        ),
+      );
     },
   },
 
@@ -8552,8 +8557,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
-         written for a profile. `FaqResponse` in src/types.ts has two fields. */
+      /* **No `withProfileChanged`**: this artefact is not written for a
+         profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
     },
   },

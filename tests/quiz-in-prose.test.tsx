@@ -268,7 +268,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 const quizBody = (quiz: Quiz, stale = false, outdated = false): Response =>
-  json({ quiz, stale, outdated } satisfies QuizResponse);
+  json({ quiz, stale, outdated, profileChanged: false } satisfies QuizResponse);
 
 function reply(url: string, method: string): Response | Promise<Response> {
   if (url === `/api/article/${SLUG}`) return json(OWNED);

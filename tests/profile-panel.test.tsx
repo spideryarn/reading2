@@ -129,6 +129,7 @@ interface Spy {
   run: Mock<() => void>;
   refresh: Mock<() => Promise<void>>;
   busy: boolean;
+  consequence?: string;
 }
 const spy = (busy = false): Spy => ({
   run: vi.fn<() => void>(),
@@ -503,6 +504,22 @@ describe("Regenerate", () => {
     await act(async () => b.click());
     expect(r.run).toHaveBeenCalledTimes(1);
     expect(panel()).toBeNull();
+  });
+
+  /* Plan 261002f: Quiz's regenerate throws away the answers given so far, and
+     the reader is told before pressing — in words on the panel, not a native
+     tooltip a touch screen never shows. */
+  it("says what pressing it costs, when the mode says there is a cost", async () => {
+    const r = { ...spy(), consequence: "Your answers so far are cleared." };
+    render({ changed: true, regenerate: r });
+    await open();
+    expect(panel()?.textContent).toContain("Your answers so far are cleared.");
+  });
+
+  it("says nothing extra when the mode names no cost", async () => {
+    render({ changed: true, regenerate: spy() });
+    await open();
+    expect(panel()?.textContent).not.toMatch(/cleared/);
   });
 
   /* A regenerate started before the new profile has landed would be written

@@ -253,6 +253,12 @@ export interface StepJob<S extends StepName = StepName> {
    */
   job: Job | null;
   /**
+   * The job list has been read at least once, so `job === null` means *no job*
+   * rather than *not looked yet*. A pass-through of `useJobs().loaded`; the
+   * quiz's Regenerate hold reads it (useQuiz.ts § `rewriting`).
+   */
+  loaded: boolean;
+  /**
    * Why the run stopped, if it stopped badly — whether this session started it
    * or merely watched it. See `watchedId` below for why the second half
    * matters, and for the two ways it was got wrong first.
@@ -732,6 +738,7 @@ export function useStepJob<S extends StepName>(
 
   return {
     job,
+    loaded: queue.loaded,
     failed,
     stalled,
     /* Never both. Once the job is on the record it is the thing to draw, and a

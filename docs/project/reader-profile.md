@@ -415,7 +415,12 @@ profile currently says ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.
 are edited in the panel, and it offers Regenerate** when the server says the text was written for a
 profile you have since changed — in Summary, Glossary, Ideas, Tweets and Sketch; Quotes has the
 editing but not yet the button
-([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)). The
+([261002b](../plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md)).
+**Quiz joined the same day**: it now records a `profileHash` (not in its stamp), its GET answers
+`profileChanged`, and its Regenerate carries a line saying the answers so far are cleared — Greg
+accepted that loss — passed as the panel's optional `consequence`
+([261002f](../plans/261002f-quiz-regenerate-for-my-profile.md),
+[quiz.md](quiz.md)). The
 diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
 
 ```
