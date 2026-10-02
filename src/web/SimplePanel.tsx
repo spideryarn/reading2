@@ -173,10 +173,10 @@ function Paragraph({ paragraph, onJump }: { paragraph: SimpleParagraph; onJump(i
       {sentences ? (
         <p className="simple-text">
           {sentences.map((s, i) => (
-            /* Keyed on position: the list is the paragraph's, fixed, and two
-               sentences may say the same words. */
-            // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list, never reordered
-            <Fragment key={i}>
+            /* A rewrite can keep the paragraph but change a sentence's passage
+               or wording. Remount that link so the shared card dismisses its
+               old anchor; position distinguishes repeated sentences. */
+            <Fragment key={JSON.stringify([i, s.id, s.text])}>
               {i > 0 && " "}
               {s.id === null ? (
                 <span>{s.text}</span>

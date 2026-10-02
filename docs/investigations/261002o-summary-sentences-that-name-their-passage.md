@@ -40,7 +40,7 @@ The verdicts, key and tally are in `evals/results/simple/sentence-judge-261002/`
 
 | | before | after |
 |---|---|---|
-| valid presses (no retry recorded) | 6 / 6 | 6 / 6 |
+| valid presses (retries and guard outcomes not recorded by the probe — Sol C4) | 6 / 6 | 6 / 6 |
 | words, Brief · Simple · Fuller (mean) | 98 · 196 · 240 | 94 · 193 · 252 |
 | output tokens per press (mean) | 3,380 | 4,700 |
 | wall time per press (median) | 23.5 s | 26.1 s |

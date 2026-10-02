@@ -439,6 +439,53 @@ describe("the Simple view", () => {
     expect(sentenceLinks().map((a) => a.getAttribute("data-block-link"))).toEqual([MIDDLE]);
   });
 
+  it("dismisses a sentence's old passage card when a rewrite changes only its target", async () => {
+    class FakeResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    /* The article stays the same; only the rewritten summary's link changes. */
+    const index = new Map([
+      [EARLY, { text: "The opening evidence.", section: "The question" }],
+      [MIDDLE, { text: "Machines and minds, the second passage.", section: "The question" }],
+      [LATER, { text: "Why it matters.", section: "Why it matters" }],
+    ]);
+    const show = async (id: BlockId) => {
+      await act(async () => root.render(
+        <BlockLinkProvider index={index}>
+          <SimplePanel
+            access={{ kind: "owner", owner: owner({ simple: withSentences([{ text: ASKS, id }, { text: SAYS, id: null }]) }) }}
+            level="simple"
+            onJump={(target: BlockId) => void jumps.push(target)}
+          />
+        </BlockLinkProvider>,
+      ));
+    };
+    const focus = async () => {
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+        sentenceLinks()[0]?.focus();
+        await Promise.resolve();
+      });
+    };
+    const cardText = () => document.querySelector(".tooltip-anchor")?.textContent ?? "";
+    await show(MIDDLE);
+    await focus();
+    expect(cardText()).toContain("Machines and minds, the second passage.");
+    await show(EARLY);
+    expect(sentenceLinks()[0]?.getAttribute("data-block-link")).toBe(EARLY);
+    await settle();
+    /* The shared card keeps its words through an 80 ms closing animation. */
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+    expect(cardText()).not.toContain("Machines and minds, the second passage.");
+    await focus();
+    expect(cardText()).toContain("The opening evidence.");
+    await act(async () => sentenceLinks()[0]?.click());
+    expect(jumps).toEqual([EARLY]);
+  });
+
   it.each([
     ["words that are not the paragraph's text", LINKED, `${ASKS} And something the guard never read.`],
     ["an id the paragraph does not cite", [{ text: ASKS, id: LATER }, { text: SAYS, id: null }], ASKS_SAYS],

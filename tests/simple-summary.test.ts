@@ -474,6 +474,21 @@ describe("sentences that point at their passage (plan 261002e)", () => {
     expect(one.additionalProperties).toBe(false);
   });
 
+  it("requires a sentence in each live paragraph rather than allowing an answer the reader must drop", () => {
+    const sentences = SIMPLE_SUMMARY_OUTPUT_SCHEMA.properties.paragraphs.items.properties.sentences;
+    /* Non-empty lists are expressible in the provider subset. Empty lists
+       remain tolerated by the parser, but cannot be a live orientation. */
+    expect(sentences).toMatchObject({ minItems: 1 });
+  });
+
+  it("excludes blank sentence text from the live schema", () => {
+    const text: Readonly<Record<string, unknown>> =
+      SIMPLE_SUMMARY_OUTPUT_SCHEMA.properties.paragraphs.items.properties.sentences.items.properties.text;
+    const allowed = new RegExp(text.pattern as string);
+    for (const blank of ["", " ", "\n\t", "\u00a0"]) expect(allowed.test(blank), JSON.stringify(blank)).toBe(false);
+    for (const words of ["It asks.", "  It answers.  "]) expect(allowed.test(words), words).toBe(true);
+  });
+
   it("asks for the sentences and their ids in every level's prompt", () => {
     for (const system of Object.values(SIMPLE_SYSTEMS)) {
       expect(system).toContain("Then write the paragraph as its sentences");

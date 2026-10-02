@@ -212,3 +212,13 @@ GPT Sol on this plan before stage 1, and on the code before push.
   plainness 8–8 (2 the same) against a control of 4–1 (4 the same); fidelity flags no worse; links
   29/31 GOOD, 0 WRONG; 96% of sentences carry an id; about 40% more output tokens and +2.6 s median
   per press. Shipped as built.
+- **Code review** (GPT Sol, write-capable, [answer](261002e-summary-sentences-point-at-their-passage-code-review-sol.md)),
+  on 1f323ceea. C1 (P1) the schema admitted an empty sentence list and blank sentence text that
+  the parser discards — fixed by Sol, `minItems: 1` and `pattern: "\\S"`, postmortem
+  [261002e](../postmortems/261002e-a-strict-schema-admits-shapes-its-parser-discards.md). C2 (P1) a
+  sentence whose passage changed under the same words kept its DOM node and an open card's old
+  anchor — fixed by Sol, keyed on position, id and words, postmortem
+  [261002f](../postmortems/261002f-a-reference-keeps-its-dom-identity-after-its-passage-changes.md).
+  Both read and accepted; gates rerun green. C3 (P1, pre-existing) `paragraphs` and `ids` may be
+  empty under the schema — not this change's; left for the schema's owner, named here. C4 (P2) the
+  probe records no retries or guard outcomes — noted in 261002o.

@@ -366,10 +366,11 @@ export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
           ids: { type: "array", items: { type: "string" } },
           sentences: {
             type: "array",
+            minItems: 1,
             items: {
               type: "object",
               properties: {
-                text: { type: "string" },
+                text: { type: "string", pattern: "\\S" },
                 /* Required and nullable, never optional: "omit it when…"
                    makes the model write the comma anyway, and OpenAI's subset
                    wants every property required (prompting-guide.md). */
