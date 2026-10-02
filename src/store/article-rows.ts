@@ -35,6 +35,7 @@ import {
   comments as commentsTable,
   glossaryLookups,
   readingTime,
+  glossaryHiddenEntries,
   refereeClaims,
   refereeCriteria,
   revisionBlocks,
@@ -196,6 +197,14 @@ export const ARTICLE_TABLE_COVERAGE = {
   reading_time: {
     rollback: { exported: true, into: "reading-time.json" },
     bundle: { exported: true, into: "augmentations/reading-time.json" },
+  },
+  /* The glossary entries the owner hid — reader state beside the glossary, as
+     `reading_time` is beside the blocks, and exported for its reason: it is the
+     reader's own. docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md
+     § 2, GPT Sol's plan review finding 3. */
+  glossary_hidden_entries: {
+    rollback: { exported: true, into: "glossary-hidden.json" },
+    bundle: { exported: true, into: "augmentations/glossary-hidden.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -570,6 +579,8 @@ export interface ArticleRows {
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
   readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
+  /** The glossary entries the owner hid, by entry id. Plan 261002c § 2. */
+  readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
 }
 
 /**
@@ -772,6 +783,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(citationInvestigations)
     .where(eq(citationInvestigations.articleId, article.id))
     .orderBy(asc(citationInvestigations.entryId));
+  const hiddenTerms = await tx
+    .select()
+    .from(glossaryHiddenEntries)
+    .where(eq(glossaryHiddenEntries.articleId, article.id))
+    .orderBy(asc(glossaryHiddenEntries.entryId));
   const secondsRead = await tx
     .select()
     .from(readingTime)
@@ -793,6 +809,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     citationFinds: finds,
     citationInvestigations: investigations,
     readingTime: secondsRead,
+    glossaryHiddenEntries: hiddenTerms,
   };
 }
 

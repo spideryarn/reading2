@@ -295,7 +295,7 @@ async function cardFor(el: Element): Promise<Card> {
   await act(async () => {
     await new Promise((r) => setTimeout(r, 400));
   });
-  const cards = document.querySelectorAll('[role="tooltip"]');
+  const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
   const card = cards[0];
   const headElement = card?.querySelector(".tip-soon-head") ?? null;
@@ -315,7 +315,7 @@ async function cardFor(el: Element): Promise<Card> {
     });
   }
   expect(
-    document.querySelectorAll('[role="tooltip"]'),
+    document.querySelectorAll('[role="tooltip"], [role="dialog"]'),
     "the card did not close, so the next one read here would be this one",
   ).toHaveLength(0);
   return {
@@ -559,7 +559,7 @@ describe("CitationsPanel", () => {
       const about = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
       expect(about, "no (i) to open").not.toBeNull();
       await act(async () => about?.click());
-      const text = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+      const text = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
       await act(async () => about?.click());
       return text;
     };
@@ -771,7 +771,7 @@ describe("a by-line that repeats the title", () => {
       return click.defaultPrevented;
     };
     expect(await tap(), "the first tap opens the card, not the link").toBe(true);
-    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("Tap again to open the link.");
+    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain("Tap again to open the link.");
     expect(await tap(), "the second tap follows the link").toBe(false);
   });
 

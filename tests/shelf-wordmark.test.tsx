@@ -8,7 +8,7 @@
  * > — Greg, 2026-09-30, SPIDERYARN-READING2-6D
  *
  * Until then the hook sat on the spider alone, beside a plain-text `<h1>`, so
- * pointing at the word did nothing and the seven letter animations could never
+ * pointing at the word did nothing and the letter animations could never
  * be drawn there (logo-animation.ts § lettersDrawn asks the *host* for a
  * `.logo-letter`). The fix is markup — one host round spider and word, the word
  * spelled as letters — and a stylesheet that scales the letter moves to a 30px

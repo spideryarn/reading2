@@ -268,6 +268,7 @@ describe("the loader's two tracks", () => {
       "spya-register": 1,
       "spya-type": 2,
       "spya-abseil": 2,
+      "spya-dew": 1,
     });
     expect(animationTiming(timedTargets("spya-pluck")[0]?.values ?? new Map())?.delays.at(-1)).toBe(306);
     expect(timedTargets("spya-type").map(({ selector }) => selector).sort()).toEqual([

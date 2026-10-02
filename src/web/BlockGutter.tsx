@@ -180,6 +180,18 @@ interface Props {
   comments?: readonly Comment[] | undefined;
   /** Conversations anchored anywhere in this block, whole-block or selection. */
   chatCount: number;
+  /**
+   * **Whose the notes in `comments` are**, so the mark can say so from the
+   * viewer's side: `"you"` for the owner, `"owner"` for a visitor to a shared
+   * article, who is handed the owner's notes (messages.ts § `ALWAYS_SHARED`).
+   *
+   * A word rather than inferred from the callbacks, unlike the three below:
+   * those are capabilities, and this is a fact about the notes. And required,
+   * because the default anyone would reach for is the owner's *"Your note"* —
+   * which is exactly what a stranger was told until 2026-10-02. GPT Sol, C7 in
+   * docs/plans/261002b-help-page-code-review-sol.md.
+   */
+  notesBy: "you" | "owner";
   onOpenComment(id: string): void;
   /**
    * Open a conversation about this whole block — **and its absence is what
@@ -259,6 +271,7 @@ export function BlockGutter({
   linkBase,
   comments,
   chatCount,
+  notesBy,
   onOpenComment,
   onChatAbout,
   onHelp,
@@ -586,16 +599,8 @@ export function BlockGutter({
             setOpen(false);
             onOpenComment(first.id);
           }}
-          title={
-            comments && comments.length > 1
-              ? `Your notes on this paragraph (${comments.length})`
-              : "Your note on this paragraph"
-          }
-          aria-label={
-            comments && comments.length > 1
-              ? `Open your notes on this paragraph, ${comments.length} of them`
-              : "Open your note on this paragraph"
-          }
+          title={markTitle(notesBy, comments?.length ?? 1)}
+          aria-label={markName(notesBy, comments?.length ?? 1)}
         >
           <Bookmark size={GLYPH} aria-hidden="true" />
           {comments && comments.length > 1 && (
@@ -874,4 +879,26 @@ export function BlockGutter({
       <span className="blk-read" aria-hidden="true" />
     </div>
   );
+}
+
+/**
+ * The mark's tooltip and its name, **from the viewer's side** — `Props.notesBy`
+ * says why there are two voices. The visitor's phrase is the drawer's own,
+ * *"whoever added this article"* (Dock.tsx § `NOT_A_MODE`), so a stranger meets
+ * one name for the owner on every surface.
+ */
+function markTitle(notesBy: "you" | "owner", n: number): string {
+  if (notesBy === "you") return n > 1 ? `Your notes on this paragraph (${n})` : "Your note on this paragraph";
+  return n > 1
+    ? `Notes on this paragraph from whoever added this article (${n})`
+    : "A note on this paragraph from whoever added this article";
+}
+
+/** @see markTitle */
+function markName(notesBy: "you" | "owner", n: number): string {
+  if (notesBy === "you")
+    return n > 1 ? `Open your notes on this paragraph, ${n} of them` : "Open your note on this paragraph";
+  return n > 1
+    ? `Open the notes on this paragraph from whoever added this article, ${n} of them`
+    : "Open the note on this paragraph from whoever added this article";
 }

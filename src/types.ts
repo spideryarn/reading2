@@ -575,6 +575,17 @@ export interface GlossaryEntry {
    * See docs/plans/260826d-glossary-entries-worth-reading.md § The web.
    */
   lookup?: GlossaryLookup;
+  /**
+   * **The owner has hidden this entry, on this article, for themselves** —
+   * docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
+   *
+   * Attached at the owner's read seam (`loadGlossary`, from
+   * `glossary_hidden_entries`) exactly as `lookup` is, never stored on the
+   * entry, and never on the public projection (src/public/dto.ts copies field
+   * by field). Absent means shown. The client filters on it in one place —
+   * `shownEntries` in src/web/glossary-shown.ts.
+   */
+  hidden?: true;
   /** Every block that uses this term, in document order. Found by us. Empty is meaningful. */
   blocks: BlockId[];
 }

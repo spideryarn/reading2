@@ -32,6 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
+import { relocateEntries } from "../glossary-occurrences.js";
 import { decodeAuthors } from "../authors.js";
 import { NOT_READ_YET } from "../messages.js";
 import { NotProcessed } from "../not-processed.js";
@@ -43,6 +44,7 @@ import {
   citationFinds,
   citationInvestigations,
   comments as commentsTable,
+  glossaryHiddenEntries,
   glossaryLookups,
   revisionBlocks,
   revisionStepRuns,
@@ -3457,9 +3459,17 @@ const rawPgArticleReader: ArticleReader = {
        GPT Sol was right that the first version of this comment claimed more
        than it can. docs/plans/260827am-glossary-read-latency.md. */
     const db = getDb();
-    const [blocks, stored] = await Promise.all([
+    /* And the entries the owner hid, in the same round trip, for the same
+       reason: attached as `hidden: true` below, at this seam and only this one
+       — the public read never calls `loadGlossary`. Plan 261002c § 2. */
+    const [blocks, stored, hidden] = await Promise.all([
       blockHashInputs(found.revision.id),
       db.select().from(glossaryLookups).where(eq(glossaryLookups.articleId, found.article.id)),
+      db
+        .select({ entryId: glossaryHiddenEntries.entryId })
+        .from(glossaryHiddenEntries)
+        .where(eq(glossaryHiddenEntries.articleId, found.article.id))
+        .then((rows) => new Set(rows.map((row) => row.entryId))),
     ]);
     const byEntry = new Map(
       stored.map((row) => [
@@ -3473,9 +3483,16 @@ const rawPgArticleReader: ArticleReader = {
         },
       ]),
     );
-    const entries = glossary.entries.map((entry) => {
+    /* **Where each term is used, worked out again against the blocks in
+       hand** rather than read off the stored list, which describes whichever
+       matcher wrote it. Always, stale or not: on a stale list an empty
+       `blocks` already says nothing (`occurrencesFitTheArticle`), and a
+       current one is what the underlines need. src/glossary-occurrences.ts,
+       plan 261002c. */
+    const entries = relocateEntries(glossary.entries, blocks).map((entry) => {
       const lookup = byEntry.get(entry.id);
-      return lookup ? { ...entry, lookup } : entry;
+      const withLookup = lookup ? { ...entry, lookup } : entry;
+      return hidden.has(entry.id) ? { ...withLookup, hidden: true as const } : withLookup;
     });
 
     return {

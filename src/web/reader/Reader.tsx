@@ -94,6 +94,7 @@ import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard } from "../ProseHoverCard.js";
+import { shownEntries } from "../glossary-shown.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -898,8 +899,14 @@ export function Reader({
      the owner's lookup absent (src/public-types.ts), so the same scan reads
      both. `NO_TERMS` is a module constant rather than a fresh `[]`, because
      half a dozen memos below key on it by identity — reader-capability.ts. */
-  const terms: GlossaryEntry[] =
+  const allTerms: GlossaryEntry[] =
     glossaryRead?.glossary?.entries ?? artefacts?.glossary?.entries ?? NO_TERMS;
+  /* **Without the ones the owner hid** — the one visible list
+     (src/web/glossary-shown.ts), so a hidden term has no underline, no card
+     and no G, in every mode. The same array when nothing is hidden, so the
+     memos below keyed on it do not rebuild. A visitor's list never carries
+     `hidden`. Plan 261002c § 2. */
+  const terms = useMemo(() => shownEntries(allTerms), [allTerms]);
 
   /**
    * The glossary term the reader has *pressed* in the panel, of the many now
@@ -1057,6 +1064,10 @@ export function Reader({
   const [, setEventId] = useQueryState("event", eventParam);
   const canOpenFromStopCard = useCallback(
     (target: CardTarget) => {
+      /* A term the owner hid has no row to open on. stop-card.ts already
+         leaves hidden terms off the card; this is the second lock, for a card
+         gathered before the hide landed (GPT Sol's plan review, finding 2). */
+      if (target.kind === "term" && allTerms.some((e) => e.id === target.id && e.hidden)) return false;
       const targetMode = modeForCardTarget(target);
       return shownBehindTheSwitch({
         experimental: MODE_CATALOG[targetMode].experimental,
@@ -1064,7 +1075,7 @@ export function Reader({
         current: mode === targetMode,
       });
     },
-    [experimental.on, mode],
+    [experimental.on, mode, allTerms],
   );
   const openFromStopCard = useCallback(
     (target: CardTarget) => {
@@ -2466,7 +2477,7 @@ export function Reader({
     /* Every block link inside — panels, chips, the chat dialog through its
        portal — reads its card and its "is this block real" answer from here.
        BlockLinkCard.tsx. */
-    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref}>
+    <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
     <div
       /* `text-alone` says the article is the only thing on the page, so the
          stylesheet can centre the reading column and put the masthead over it
@@ -2672,6 +2683,9 @@ export function Reader({
         openComment={note}
         chats={chats}
         chatCounts={chatCounts}
+        /* A visitor is handed the owner's notes, and the gutter's mark must not
+           call them theirs — BlockGutter.tsx § `notesBy`. */
+        notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
@@ -2964,6 +2978,10 @@ export function Reader({
         /* The citation half's "already an article here" line: owner-only,
            named here as the band names it (plan 261001i). */
         showInSpideryarn={owner !== null}
+        /* *Dig deeper* and *Hide* on a term: the owner's read, which carries
+           both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
+           read to pass — the enforcement is that there is nothing here. */
+        termActions={glossaryRead}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

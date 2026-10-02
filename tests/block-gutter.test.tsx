@@ -66,9 +66,14 @@ afterEach(() => {
 function paint(
   comments?: Comment[],
   chatCount = 0,
-  slots: { chat?: boolean; help?: boolean; bookmark?: (id: BlockId) => Promise<boolean> } = {},
+  slots: {
+    chat?: boolean;
+    help?: boolean;
+    bookmark?: (id: BlockId) => Promise<boolean>;
+    notesBy?: "you" | "owner";
+  } = {},
 ): void {
-  const { chat = true, help = true, bookmark } = slots;
+  const { chat = true, help = true, bookmark, notesBy = "you" } = slots;
   act(() => {
     root.render(
       <BlockGutter
@@ -76,6 +81,7 @@ function paint(
         linkBase="/read/example"
         {...(comments ? { comments } : {})}
         chatCount={chatCount}
+        notesBy={notesBy}
         onOpenComment={(id) => opened.push(id)}
         {...(chat ? { onChatAbout: (id: BlockId) => chatted.push(id) } : {})}
         {...(help ? { onHelp: (id: BlockId) => helped.push(id) } : {})}
@@ -279,6 +285,31 @@ describe("the comment marker", () => {
   it("draws no count for a single comment", () => {
     paint([comment("c1", 5)]);
     expect(host.querySelector(".blk-n")).toBeNull();
+  });
+
+  /**
+   * **A visitor's notes are the owner's, and the mark must say so.** A shared
+   * link carries the owner's comments (messages.ts § `ALWAYS_SHARED`), so a
+   * stranger reading one meets this mark — and until 2026-10-02 it told them
+   * *"Your note on this paragraph"*. GPT Sol, C7 in
+   * docs/plans/261002b-help-page-code-review-sol.md;
+   * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md § 4.
+   */
+  it("speaks from the visitor's side when the notes are the owner's", () => {
+    for (const notes of [[comment("c1", 5)], [comment("c1", 5), comment("c2", 40)]]) {
+      paint(notes, 0, { chat: false, help: false, notesBy: "owner" });
+      const mark = host.querySelector(".blk-cmt");
+      for (const words of [mark?.getAttribute("title"), mark?.getAttribute("aria-label")]) {
+        expect(words).toBeTruthy();
+        expect(words).not.toMatch(/\byour\b/i);
+        expect(words).toMatch(/whoever added this article/);
+      }
+    }
+  });
+
+  it("calls the owner's own notes theirs", () => {
+    paint([comment("c1", 5)]);
+    expect(host.querySelector(".blk-cmt")?.getAttribute("title")).toMatch(/^Your note/);
   });
 
   it("is drawn for a comment whose quote no longer resolves", () => {

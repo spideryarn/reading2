@@ -257,7 +257,7 @@ describe("useReadingTime", () => {
     mountRows([[A, 0, 800]]);
     holdGet = true;
     postCommitsToServer = true;
-    await render(true, new Map([[A, 230]]));
+    await render(true, new Map([[A, 100]]));
     latest.setCounting(true);
     await seconds(15);
     visibility = "hidden";
@@ -280,18 +280,18 @@ describe("useReadingTime", () => {
 
   it("waits for the preceding mount's cleanup POST before opening the same article again", async () => {
     mountRows([[A, 0, 800]]);
-    await render(true, new Map([[A, 230]]));
+    await render(true, new Map([[A, 100]]));
     latest.setCounting(true);
     await seconds(15);
 
     holdNextPost = true;
-    await render(false, new Map([[A, 230]]));
+    await render(false, new Map([[A, 100]]));
     await act(async () => {
       await Promise.resolve();
     });
     expect(posts).toHaveLength(1);
 
-    await render(true, new Map([[A, 230]]));
+    await render(true, new Map([[A, 100]]));
     expect(gets, "the second opening read waits behind the cleanup write").toBe(1);
 
     const saved = posts[0]?.seconds[A] ?? 0;
@@ -318,8 +318,8 @@ describe("useReadingTime", () => {
 
   it("draws the server's totals plus this page's, and changes levels only when a step is crossed", async () => {
     mountRows([[A, 0, 800]]);
-    /* 230 words is 60 expected seconds; the server already has 15 (level 1). */
-    serverSeconds = { [A]: 15, [C]: 60 };
+    /* 230 words is 60 expected seconds; the server already has 25 (level 1). */
+    serverSeconds = { [A]: 25, [C]: 170 };
     await render();
     expect(latest.levels.get(A)).toBe(1);
     expect(latest.levels.get(C)).toBe(4);
@@ -328,9 +328,9 @@ describe("useReadingTime", () => {
     latest.setCounting(true);
     const before = latest.levels;
     await seconds(1);
-    /* 16 seconds is still level 1: the same map, so nothing re-renders. */
+    /* 26 seconds is still level 1: the same map, so nothing re-renders. */
     expect(latest.levels).toBe(before);
-    await seconds(10);
+    await seconds(20);
     expect(latest.levels.get(A)).toBe(2);
   });
 
@@ -419,5 +419,69 @@ describe("useReadingTime's status — whether an empty map means read nothing", 
       await Promise.resolve();
     });
     expect(latest.status).toBe("loaded");
+  });
+});
+
+describe("useReadingTime's timeFor — the seconds behind the card (261002e)", () => {
+  it("answers the server's total plus this page's, live, under one stable function", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 25 };
+    await render();
+    const timeFor = latest.timeFor;
+    expect(timeFor(A)).toEqual({ seconds: 25, expected: 60 });
+    expect(timeFor(B)).toEqual({ seconds: 0, expected: 60 });
+
+    latest.setCounting(true);
+    await seconds(3);
+    expect(latest.timeFor).toBe(timeFor);
+    expect(timeFor(A)?.seconds).toBeCloseTo(28, 5);
+  });
+
+  it("answers nothing once the switch is off, and nothing from the previous article", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 25 };
+    await render();
+    const timeFor = latest.timeFor;
+    expect(timeFor(A)?.seconds).toBe(25);
+
+    await render(false);
+    expect(timeFor(A)).toBeNull();
+
+    await render(true);
+    expect(timeFor(A)?.seconds).toBe(25);
+
+    serverSeconds = {};
+    holdGet = true;
+    await render(true, new Map([[A, 230]]), "another-article");
+    expect(timeFor(A)?.seconds).toBe(0);
+  });
+
+  it("still answers after StrictMode's effect replay", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 25 };
+    await act(async () => {
+      root.render(
+        createElement(StrictMode, null, createElement(Harness, { words: new Map([[A, 230]]), enabled: true })),
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest.timeFor(A)?.seconds).toBe(25);
+  });
+
+  it("makes a retained lookup inert on unmount", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 25 };
+    await render();
+    const timeFor = latest.timeFor;
+    expect(timeFor(A)?.seconds).toBe(25);
+
+    await act(async () => root.unmount());
+    expect(timeFor(A)).toBeNull();
+    /* Give afterEach a live root; React roots cannot be rendered again after
+       unmounting, and the shared teardown owns the ordinary cleanup. */
+    root = createRoot(host);
   });
 });

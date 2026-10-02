@@ -641,7 +641,7 @@
 
 /* The wordmark. Structure and class names are the original app's, and on
    2026-09-07 that stopped being a bet and started paying: `.logo-letter` and
-   `.logo-image` are what styles/logo-animations.css keys its dozen hover
+   `.logo-image` are what styles/logo-animations.css keys its hover
    animations off, so the set arrived as one new sheet and two spread props
    rather than as a change to the markup. docs/project/design-logo.md.
 
@@ -655,9 +655,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--highlight);
+  /* No colour, weight or tracking: the letters carry their own, the same in
+     every copy (styles/tokens.css § .logo-letter). */
   font-size: 0.82rem;
-  letter-spacing: 0.02em;
   /* **These two exist for the long press**, which is how a reader with no
      pointer asks the wordmark for an animation (src/web/logo-animation.ts).
      Holding a link on iOS otherwise raises the callout menu and the selection
@@ -733,10 +733,9 @@
      § the bar's fit ladder and .dock above. */
   z-index: 60;
   text-decoration: none;
-  /* Opacity rather than a second colour: the wordmark is already `--highlight`
-     (see .logo above), and every other colour in the palette would be a step
-     *down* from it on hover, which reads as the control going away when you
-     point at it. */
+  /* Opacity rather than a second colour: the wordmark is already the brightest
+     ink, and every other colour in the palette would be a step *down* from it
+     on hover, which reads as the control going away when you point at it. */
   opacity: 0.85;
   transition: opacity 0.15s;
 }
@@ -948,4 +947,19 @@
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
   color: var(--ink);
+}
+/* What pressing the control does — the one line in a card that is an action
+   rather than a statement, so it must not read as a third sentence of the same
+   paragraph. A rule above, full ink, medium weight, and an arrow before it; not
+   italic, which is the gesture hint's (`.tip-soon-tap`) and would make the two
+   look like one kind of line. `ControlTip` § `press`, and spya-d886ah for why.
+   Specificity ladder as `.tip-soon-learned` above. */
+.tip-soon p.tip-soon-press {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+  font-weight: 500;
+}
+.tip-soon p.tip-soon-press::before {
+  content: "→\00a0";
 }

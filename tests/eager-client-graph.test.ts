@@ -549,6 +549,13 @@ const SHARED_WITH_READER = [
   "src/web/diagram.ts",
   "src/web/experimental-copy.ts",
   "src/web/experimental-store.ts",
+  /* Arrived 2026-10-02 by the second predicted route: `ModeSurface`, already
+     here, gained an import of it so every band's (i) can end in *More in
+     Help →* (plan 261002e). The reader already downloaded it through
+     `Dock.tsx`'s Help link; what is new is only that `/design`'s band gallery
+     reaches it too. Plain data — ids and `helpHref` — importing only
+     `modes.ts` and `router.ts`. */
+  "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages
@@ -579,10 +586,10 @@ const SHARED_WITH_READER = [
   /* Arrived 2026-09-07 by the *first* of the two zero-cost routes this list's
      header predicts: a lazy route starting to use something the reader already
      downloads. `HomeLogo` and `Dock` both call `useLogoAnimation`, so the
-     wordmark's thirteen hover animations and their picker were in every
+     wordmark's hover animations and their picker were in every
      reader's startup before `/design` had heard of them — what is new is only
-     that `/design` draws the whole set in a gallery, which is the one way a
-     dozen animations that fire one at a time at random can be compared
+     that `/design` draws the whole set in a gallery, which is the one way
+     animations that fire one at a time at random can be compared
      (DesignPage.tsx § LogoAnimations). Costs the reader nothing: it is a leaf
      whose only imports are React's own. */
   "src/web/logo-animation.ts",
