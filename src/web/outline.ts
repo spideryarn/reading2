@@ -16,7 +16,8 @@
  */
 import type { BlockId, NodeId, TreeNode } from "../types.js";
 import type { Tier } from "./context.js";
-import type { ArcCell, SummaryNode } from "./tree.js";
+import { nodeLabel, type ArcCell, type SummaryNode } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 /**
  * How far down the ladder we got. Each rung adds one thing and every rung is
@@ -79,6 +80,8 @@ export interface OutlineRow {
   endRow: number;
   /** The line itself. Never empty — a node with no text gets no row at all. */
   text: string;
+  /** Whose words `text` is — tree.ts § `nodeLabel`. OutlinePanel puts the face on it. */
+  voice: Voice;
   /** The gist, on the current section only (rung 3). */
   sentence?: string;
   /** The arc sentence, on the current part only (rung 4). */
@@ -116,14 +119,11 @@ export interface OutlineProjection {
  * neither. Without the fallback the first draws a blank row; without the null
  * the second draws one whatever we do. Nothing errors either way.
  */
-function rowText(entry: SummaryNode): string | null {
+function rowText(entry: SummaryNode): { text: string; voice: Voice } | null {
   /* `SummaryNode.title`, not the node's: the article's own "3.2" taken off,
-     since ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q). */
-  const title = entry.title?.trim();
-  if (title) return title;
-  const nav = entry.node.navLabel?.trim();
-  if (nav) return nav;
-  return null;
+     since ours is drawn beside it (tree.ts; SPIDERYARN-READING2-4Q). The words
+     and whose they are come from one call (tree.ts § `nodeLabel`). */
+  return nodeLabel(entry, entry.title);
 }
 
 /** Discrete tiers, never a gradient — see docs/project/column-context.md. */
@@ -221,11 +221,11 @@ export function outlineProjection({
        `level === 3`, because Expanded draws a sub-section at level 3 too. */
     paragraph = false,
   ): OutlineRow | null => {
-    const text = rowText(entry);
+    const label = rowText(entry);
     /* No text of any kind — no row. Never a blank one: an empty line in a list
        whose whole promise is "this is the shape of the document" is a hole
        nothing reports. */
-    if (text === null) return null;
+    if (label === null) return null;
     const supplement = supplementOf.has(entry.node.id);
     const row: OutlineRow = {
       node: entry.node,
@@ -243,7 +243,8 @@ export function outlineProjection({
       blockId: entry.node.range[0],
       startRow: entry.startRow,
       endRow: entry.endRow,
-      text,
+      text: label.text,
+      voice: label.voice,
       ...(extra.sentence !== undefined && { sentence: extra.sentence }),
       ...(extra.arc !== undefined && { arc: extra.arc }),
       supplement,

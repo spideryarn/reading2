@@ -95,6 +95,7 @@
 import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId } from "../types.js";
 import type { SummaryNode } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 /**
  * Which picture. In the URL as `?diagram=` — see params.ts § diagramParam.
@@ -157,6 +158,11 @@ export interface DiagramNode {
   /** "2.3" — the reader's address. Empty string for the root. */
   number: string;
   title: string;
+  /**
+   * Whose words `title` is, for the footer card — tree.ts § `titleVoice`. Not
+   * the SVG labels: those are wrapped at Geist's width and keep it.
+   */
+  titleVoice: Voice;
   gist?: string;
   /** How many blocks are under this — the number the gist columns cannot show. */
   blocks: number;

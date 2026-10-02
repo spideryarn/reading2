@@ -28,6 +28,8 @@ import type {
 import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
+import { titleVoice } from "../tree.js";
+import type { Voice } from "../voice.js";
 
 /** A Debate claim row, the owner's or a visitor's — every owner row is one. */
 export type MarginClaim = PublicClaimDebateRow;
@@ -304,17 +306,24 @@ export function layoutNotes(
  * **The head's path**: the part and the section that hold `blockId`, at most
  * two titles — Sol's "current section title" plus the one ancestor that says
  * where it sits. `[]` above the first part, or where the tree does not cover
- * the block.
+ * the block. Each title carries whose words it is, read off the node while we
+ * have it — tree.ts § `titleVoice`.
  */
 export function headPath(
   tree: Tree | null | undefined,
   index: ReadonlyMap<string, number>,
   blockId: BlockId | null,
-): string[] {
+): HeadStep[] {
   if (!tree || blockId === null) return [];
   return sectionNodesOf(blockId, index, tree)
     .slice(0, 2)
-    .map((node) => node.title);
+    .map((node) => ({ title: node.title, voice: titleVoice(node) }));
+}
+
+/** One title on the head's path, and its voice. */
+export interface HeadStep {
+  title: string;
+  voice: Voice;
 }
 
 /** **The arc's sentence for the part holding `blockId`**, or null. */

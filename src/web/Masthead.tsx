@@ -169,6 +169,8 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
    */
   const heading = (
     <>
+      {/* No voice of its own: the reading view does not know whether the
+          reader renamed it (voice.ts § `articleTitleVoice`). */}
       <h1 className="tw:min-w-0 tw:flex-1">
         {source ? (
           <a href={source} target="_blank" rel="noreferrer noopener">
@@ -1032,7 +1034,7 @@ function RenameableTitle({
     <EditableTitle
       rename={rename}
       title={meta.title}
-      inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
+      inputClassName="tw:text-2xl tw:leading-snug"
     >
       {children}
     </EditableTitle>

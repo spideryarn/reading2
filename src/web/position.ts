@@ -33,7 +33,8 @@
  * *block* of the section, never the id of the node.
  */
 import type { Block, BlockId, NodeId } from "../types.js";
-import { navigableItems, type Geometry } from "./tree.js";
+import { navigableItems, titleVoice, type Geometry } from "./tree.js";
+import type { Voice } from "./voice.js";
 
 export interface Section {
   /** Index into `blocks` of this section's first row. */
@@ -42,6 +43,8 @@ export interface Section {
   blockId: BlockId;
   nodeId: NodeId;
   title: string;
+  /** Whose words `title` is — tree.ts § `titleVoice`, read off the node while we still have it. */
+  titleVoice: Voice;
   /** The article's apparatus rather than its argument. Absent or false means body. */
   supplement?: boolean;
 }
@@ -88,6 +91,7 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
       blockId: block.id,
       nodeId: item.node.id,
       title: item.node.title,
+      titleVoice: titleVoice(item.node),
       supplement: item.supplement,
     });
   }

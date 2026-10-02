@@ -8,10 +8,13 @@
    docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md. The rule,
    and how to voice a new element, is docs/project/fonts.md.
 
-   EVERY RULE IS UNDER `:root[data-voices]`, which Reader sets only while the
-   Experimental switch is on (useVoiceFaces.ts). Off, this file matches nothing
-   and every face is what it was. Promoting it is deleting that guard;
-   abandoning it is deleting this file, its import and the hook.
+   FOR EVERY READER, ON EVERY PAGE, since 2026-10-02. Greg: "Yes they should
+   now be used throughout and always going forwards." Until then every rule
+   was gated by an attribute on `<html>`, set only while the Experimental switch was
+   on; the switch path is gone (docs/plans/261002f-the-three-faces-for-everyone-
+   and-every-surface-voiced.md). Every rule still starts `:root ` because that
+   prefix is part of its specificity: without it several rules would only tie
+   with the ones they override, and the import order would be what decides.
 
    The whole decision is in this one file on purpose: three lists of selectors,
    and one rule putting placeholders in reader inputs back in the app's face.
@@ -19,7 +22,7 @@
    UI copy can stay Geist. The two exceptions live in their own sheets because
    they undo an inheritance rather than set a voice: `.chat-stance-tag`
    (mode-band.css) and "Whole paragraph" in a quote (`.passage-whole`).
-   `:root[data-voices] .x` outranks the plain `.x` it overrides, and this file
+   `:root .x` outranks the plain `.x` it overrides, and this file
    is imported late (after every sheet but the logo animations). It sits in
    `@layer app` like its neighbours, so a `tw:font-*` utility on an element
    still wins — none of the elements below carries one, and where a parent
@@ -30,10 +33,11 @@
 
    tests/voices-css.test.ts fails if a class named here no longer exists in any
    component, so a rename cannot drop an element out of its voice quietly, and
-   its `VOICES_BY_MODE` makes every mode say which of these it renders. */
+   its `VOICES_BY_SURFACE` makes every page and every mode say which of these
+   it renders. */
 
 /* ---- the author: the article, and verbatim quotes of it ------------------ */
-:root[data-voices] :is(
+:root :is(
     .prose,
     /* The author's headings too: shell.css sets `h1` a face of its own, so
        inheriting from `.prose` is not enough. */
@@ -73,17 +77,16 @@
     .tl-phrase,
     /* Diagram's footer card: the link text or quoted line, not the score */
     .diag-card-linkquote,
-    /* A Structure row or a child in a Structure / spine card showing a leaf
-       that starts at a heading: its navLabel is that heading, copied off the
-       block (tree.ts § navLabelVoice). */
-    .struct-text-author,
-    .tip-kid-author
+    /* Whatever computed its voice and found the author's: a Structure title
+       that is the author's heading kept, a shelf blurb that is the excerpt,
+       an article's title (src/web/voice.ts § voiceClass). */
+    .voice-author
 ) {
     font-family: var(--font-author);
 }
 
 /* ---- the model: prose an AI generated ------------------------------------ */
-:root[data-voices] :is(
+:root :is(
     /* summaries and gists */
     .struct-gist,
     .outln-gist,
@@ -181,10 +184,10 @@
     .skim-sense-text,
     .skim-event-label,
     .skim-chip-name,
-    /* Structure and the spine: a leaf's navLabel shown in place of a title,
-       when the leaf does not start at a heading (tree.ts § navLabelVoice) */
-    .struct-text-ai,
-    .tip-kid-ai,
+    /* Whatever computed its voice and found the model's: a Structure title
+       or navLabel the model wrote, a shelf blurb that is the gist
+       (src/web/voice.ts § voiceClass). */
+    .voice-ai,
     /* hover cards: `.prose-card-text` sets the UI face, so each is named */
     .prose-card-part-looked .prose-card-text,
     .prose-card-cite-does-text,
@@ -210,7 +213,10 @@
 }
 
 /* ---- the reader: what they typed ----------------------------------------- */
-:root[data-voices] :is(
+:root :is(
+    /* whatever computed its voice and found the reader's: a renamed title
+       (src/web/voice.ts § voiceClass) */
+    .voice-reader,
     .chat-turn.you,
     .chat-live-line.reader .chat-live-words,
     .chat-input,
@@ -257,7 +263,8 @@
 /* ---- placeholders in the reader's inputs are ours ------------------------
    "Add a comment…" is app copy, not something the reader typed, so it keeps
    the app's face until they type over it. */
-:root[data-voices] :is(
+:root :is(
+    .voice-reader,
     .chat-input,
     .chat-edit-box,
     .chat-rename,
@@ -274,5 +281,13 @@
     .fb-body,
     .cmdbar-input
 )::placeholder {
+    font-family: var(--font-ui);
+}
+
+/* ---- ours, inside an element that carries another voice -------------------
+   `voiceClass("ui")` (src/web/voice.ts): a computed voice that came out as the
+   app's own, e.g. the apparatus's "Notes" in a Structure row, so it does not
+   inherit a voice from around it. */
+:root :is(.voice-ui) {
     font-family: var(--font-ui);
 }

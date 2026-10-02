@@ -55,6 +55,7 @@ const SECTIONS: Section[] = SECTION_ROWS.map((row, i) => ({
   blockId: block(row),
   nodeId: `n000${i}`,
   title: `Section ${i + 1}`,
+  titleVoice: "ai",
 }));
 const [, MIDDLE, LAST] = SECTIONS.map((s) => s.blockId) as [BlockId, BlockId, BlockId];
 
@@ -178,6 +179,7 @@ describe("the section is worked out again every time, never remembered", () => {
     blockId: block(row),
     nodeId: `n100${i}`,
     title: `Reshaped ${i + 1}`,
+    titleVoice: "ai",
   }));
 
   it("places the same block on a different section once the boundaries move", () => {

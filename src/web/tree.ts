@@ -16,6 +16,9 @@
 import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
 import { withoutOwnNumber } from "./heading-number.js";
+import { PREAMBLE_TITLE } from "../heading-tree.js";
+import { sameHeading } from "../tree-invariants.js";
+import type { Voice } from "./voice.js";
 
 export interface Cell {
   node: TreeNode;
@@ -338,13 +341,55 @@ export interface OutlineEntry {
  * docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md (P1).
  *
  * `startsAtHeading` is that fact, carried on `OutlineEntry` and `SummaryNode`
- * the way `supplement` is: present only when true. A title shown in a title slot
- * is `"ui"`, as the v1 decided for section titles.
+ * the way `supplement` is: present only when true.
  */
-export type TextVoice = "author" | "ai" | "ui";
-
 export function navLabelVoice(entry: { startsAtHeading?: true }): "author" | "ai" {
   return entry.startsAtHeading ? "author" : "ai";
+}
+
+/**
+ * **Whose words a node's `title` is** — the author's heading kept, or the
+ * model's. Greg, 2026-10-02 (spya-rp8cr4): "if the headlines are AI-generated,
+ * they should be in AI-generated-font. Ideally, it would use author-font if the
+ * headlines were preserved from the author".
+ *
+ * The tree already says which: `sourceHeading` is the author's heading a node
+ * claims to keep, and the pipeline only lets it stand when a heading block in
+ * the node's range matches it (src/tree-invariants.ts § `sameHeading`; the
+ * structure prompt says to use that heading UNCHANGED as the title). So the
+ * title is the author's exactly when it *is* that heading, by the same
+ * comparison. A `sourceHeading` with a different title is the model's rewrite.
+ *
+ * Ours, not either's: the apparatus's "Notes" (src/supplement.ts) and the
+ * heading tree's preamble. Everything else with a title the model wrote. The
+ * root's title is not drawn by any caller of this; the heading tree's is the
+ * article's own.
+ */
+export function titleVoice(node: TreeNode): Voice {
+  if (node.treatment === "supplement") return "ui";
+  if (node.sourceHeading !== undefined) {
+    return sameHeading(node.title, node.sourceHeading) ? "author" : "ai";
+  }
+  if (node.title === PREAMBLE_TITLE) return "ui";
+  return "ai";
+}
+
+/**
+ * **What a tree row says, and whose words it is** — the title, else the
+ * navLabel standing in for one. One function so the line and its face cannot
+ * come from two different places. `title` is the title to draw, which on a
+ * `SummaryNode` has the article's own section number taken off; the voice is
+ * read off the stored node, whose title is what `sourceHeading` matches.
+ */
+export function nodeLabel(
+  entry: { node: TreeNode; startsAtHeading?: true },
+  title: string | undefined = entry.node.title,
+): { text: string; voice: Voice } | null {
+  const shown = title?.trim();
+  if (shown) return { text: shown, voice: titleVoice(entry.node) };
+  const nav = entry.node.navLabel?.trim();
+  if (nav) return { text: nav, voice: navLabelVoice(entry) };
+  return null;
 }
 
 /** The same test the label writers use: a heading block, by kind or by tag. */

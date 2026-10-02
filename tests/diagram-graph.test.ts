@@ -375,6 +375,22 @@ describe("buildGraph", () => {
     expect(g2.byId.get("q" as NodeId)?.terms[0]).toBe("octopus");
   });
 
+  it("says whose words each title is, for the footer card: a kept heading the author's, a written one the model's", () => {
+    const a = block("p", "Waking up from anaesthesia");
+    const b = block("q", "The octopus has a brain in each arm");
+    const nodes: Record<string, unknown> = {
+      r: { id: "r", depth: 0, parent: null, children: ["p", "q"], range: [a.id, b.id], title: "Root" },
+      p: { id: "p", depth: 1, parent: "r", children: [], range: [a.id, a.id], title: "Waking", sourceHeading: "Waking" },
+      q: { id: "q", depth: 1, parent: "r", children: [], range: [b.id, b.id], title: "Octopus" },
+    };
+    const t = { version: "1", generator: "t", slug: "s", rootId: "r", nodes } as unknown as Tree;
+    const r2 = buildSummaryTree(t, [a, b]);
+    if (!r2) throw new Error("no summary tree");
+    const g2 = buildGraph(r2, [a, b]);
+    expect(g2.byId.get("p" as NodeId)?.titleVoice).toBe("author");
+    expect(g2.byId.get("q" as NodeId)?.titleVoice).toBe("ai");
+  });
+
   it("ignores a single coincidental shared term", () => {
     /* The floor, tested directly — the weather/cricket pair above does NOT
        exercise it, because those two share no top terms at all and so never

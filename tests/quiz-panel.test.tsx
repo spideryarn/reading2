@@ -1402,8 +1402,8 @@ describe("where to look again", () => {
   /** "Opening" is KNOWN; "Middle" is OTHER and THIRD. */
   const SECTIONS = {
     sections: [
-      { row: 0, blockId: KNOWN as BlockId, nodeId: "n1", title: "Opening" },
-      { row: 1, blockId: OTHER as BlockId, nodeId: "n2", title: "Middle" },
+      { row: 0, blockId: KNOWN as BlockId, nodeId: "n1", title: "Opening", titleVoice: "ai" as const },
+      { row: 1, blockId: OTHER as BlockId, nodeId: "n2", title: "Middle", titleVoice: "ai" as const },
     ],
     rowOf: new Map<BlockId, number>([
       [KNOWN as BlockId, 0],
@@ -1451,6 +1451,8 @@ describe("where to look again", () => {
       (host.querySelector(".quiz-look-again-section") as HTMLElement).click();
     });
     expect(jumped.slice(before)).toEqual([KNOWN]);
+    // In the title's voice — the fixture's titles are the model's (fonts.md).
+    expect(host.querySelector(".quiz-look-again-section")?.classList.contains("voice-ai")).toBe(true);
   });
 
   it("offers the missed question from elsewhere on the path, not while it is open, and goes back to it as a jump", () => {

@@ -74,6 +74,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { savePurpose } from "./purpose.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
+import { withVoice } from "./voice.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -713,7 +714,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
             than the address — so until the first poll comes back there is
             genuinely nothing to name, and saying "your file" is better than an
             empty line that fills in a second later. */}
-        <p className="tw:mt-2 tw:mb-0 tw:font-mono tw:text-[13px] tw:break-all tw:text-muted-foreground">
+        <p
+          className={withVoice("tw:mt-2 tw:mb-0 tw:text-[13px] tw:break-all tw:text-muted-foreground", "reader")}
+        >
           {origin.kind === "upload"
             ? /* The engine knows the filename from the moment the reader chose
                  it, where the job only learns it on the first poll — so when

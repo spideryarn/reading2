@@ -70,10 +70,10 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 `kind-callout`, an indent and a big faint quote mark ([260831ae-callouts-the-box-the-author-drew.md](../plans/260831ae-callouts-the-box-the-author-drew.md)),
 and `kind-caption`, which had never been styled at all.
 
-## A face per voice (experimental)
+## A face per voice
 
-Behind the [Experimental switch](experimental-features.md), the author, the model and the reader
-each get their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
+For every reader, on every page, since 2026-10-02: the author, the model and the reader each get
+their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Weight, and the variable axis

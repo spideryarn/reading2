@@ -48,7 +48,7 @@ import {
   wrapText,
 } from "../src/web/diagram.js";
 import { layoutDiagram } from "../src/web/diagrams.js";
-import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
+import { buildSummaryTree, type SummaryNode, titleVoice } from "../src/web/tree.js";
 import { siblingRuns } from "../src/web/DiagramPanel.js";
 
 /**
@@ -123,6 +123,7 @@ function nodesOf(root: SummaryNode, collapsed: ReadonlySet<NodeId> = NONE): Diag
     depth: e.node.node.depth,
     number: e.node.number,
     title: e.node.node.title,
+    titleVoice: titleVoice(e.node.node),
     blocks: e.node.blocks,
     startRow: e.node.startRow,
     endRow: e.node.endRow,
@@ -317,6 +318,7 @@ describe("paragraphStops", () => {
       depth: 1,
       number: "",
       title: `dot ${row}`,
+      titleVoice: "ai",
       blocks: 1,
       startRow,
       endRow,

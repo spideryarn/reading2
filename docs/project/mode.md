@@ -213,7 +213,8 @@ Then the residue, which is why this page exists:
   with the doc that owns it. *[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), for the
   doc; nothing for the line.*
 - **Each voice in its face**: apply the provenance rule in [fonts.md](fonts.md), with a class per
-  element in [`voices.css`](../../src/web/styles/voices.css). *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
+  element in [`voices.css`](../../src/web/styles/voices.css), or `voiceClass` from
+  [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
 

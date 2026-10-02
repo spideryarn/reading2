@@ -84,6 +84,25 @@ export interface LibraryScalars {
 }
 
 /**
+ * **Whose words the blurb is** — the article's own excerpt, or a model's gist
+ * or summary.
+ *
+ * `rootGist` is stored with the fallback already applied (below:
+ * `gist ?? summary ?? excerpt`), so which rung it came from is not stored. It
+ * does not need to be: the excerpt is a column of the same revision row, so a
+ * blurb equal to it is the excerpt, and any other blurb is a rung above it,
+ * which a model wrote. That holds for every row already stored, which is why
+ * this is a comparison at read time rather than a new column and a backfill.
+ * docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md § 4.
+ */
+export function gistVoiceOf(
+  rootGist: string,
+  excerpt: string | null | undefined,
+): "ai" | "author" {
+  return excerpt != null && rootGist === excerpt ? "author" : "ai";
+}
+
+/**
  * The five, from the two artefacts they describe.
  *
  * `excerpt` is the third rung of the blurb's fallback and is passed in rather
@@ -255,7 +274,9 @@ export function describeArticle(input: {
     parts: scalars.partCount,
     sections: scalars.sectionCount,
     comments: input.comments,
-    ...(scalars.rootGist ? { gist: scalars.rootGist } : {}),
+    ...(scalars.rootGist
+      ? { gist: scalars.rootGist, gistVoice: gistVoiceOf(scalars.rootGist, meta.excerpt) }
+      : {}),
     /* **Only when it is public.** Spelling the private case out would put a
        `"private"` on every card — see `LibraryEntry.visibility` in
        src/types.ts, which is optional for this reason. The shelf reads it as

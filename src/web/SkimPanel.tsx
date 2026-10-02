@@ -43,7 +43,7 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   BookA,
   ChevronLeft,
@@ -70,14 +70,30 @@ import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
+import { type Voice, voiceClass } from "./voice.js";
+
+/** One title on a row's section path, and whose words it is — tree.ts § `titleVoice`. */
+export interface PlaceStep {
+  title: string;
+  voice: Voice;
+}
+
+/** A path as one line of text: what a screen reader hears, and what "same place as the row above" compares. */
+export function placeText(place: readonly PlaceStep[]): string {
+  return place.map((step) => step.title).join(" › ");
+}
 
 /** One row of the list. Built by `useSkimMode`, drawn here. */
 export interface SkimRow {
   quoteId: string;
   /** Its number on this pass, from 1. */
   n: number;
-  /** The section path, `Results › Robustness`, or `null` if the tree does not cover it. */
-  place: string | null;
+  /**
+   * The section path, outermost first — drawn `Results › Robustness` — or
+   * `null` if the tree does not cover it. Each title carries its voice, since
+   * one path can hold the author's heading and the model's (fonts.md).
+   */
+  place: readonly PlaceStep[] | null;
   /**
    * What to look for in the passage — the stop's cue, or an old route's role
    * where it has no cue. Drawn on the current row only.
@@ -647,8 +663,9 @@ export function SkimPanel({ access, view, away }: Props) {
               <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
                 <ol className="skim-list">
                   {view.rows.map((row, index) => {
-                    const repeatedPlace =
-                      row.place !== null && row.place === view.rows[index - 1]?.place;
+                    const place = row.place === null ? null : placeText(row.place);
+                    const above = view.rows[index - 1]?.place;
+                    const repeatedPlace = place !== null && above != null && place === placeText(above);
                     const words = rowWords(row);
                     const go = (
                       <button
@@ -667,9 +684,20 @@ export function SkimPanel({ access, view, away }: Props) {
                               beside a quotation reads as another quotation mark,
                               which is the report behind plan 260928e. */}
                           {repeatedPlace ? (
-                            <span className="sr-only">{row.place}</span>
+                            <span className="sr-only">{place}</span>
                           ) : (
-                            <span className="skim-place">{row.place ?? "—"}</span>
+                            <span className="skim-place">
+                              {row.place === null
+                                ? "—"
+                                : /* Each title in its own voice; the › between them is ours. */
+                                  row.place.map((step, i) => (
+                                    // biome-ignore lint/suspicious/noArrayIndexKey: a fixed ancestry, outermost first; position is its identity.
+                                    <Fragment key={i}>
+                                      {i > 0 && " › "}
+                                      <span className={voiceClass(step.voice)}>{step.title}</span>
+                                    </Fragment>
+                                  ))}
+                            </span>
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}

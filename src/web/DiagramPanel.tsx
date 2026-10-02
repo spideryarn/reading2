@@ -100,6 +100,7 @@ import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { voiceClass } from "./voice.js";
 
 /**
  * **Who is reading, and therefore what may be bought.**
@@ -2752,7 +2753,8 @@ function DetailCard({
           onClick={() => onJump(node.blockId)}
         >
           {node.number && <span className="diag-card-num">{node.number}</span>}
-          {node.title}
+          {/* Its own span: the number beside it is ours and keeps the UI face. */}
+          <span className={voiceClass(node.titleVoice)}>{node.title}</span>
         </button>
         <span className="diag-card-count">
           {node.blocks} ¶
