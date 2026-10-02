@@ -5,22 +5,24 @@
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
 > tokens. This is one area of the territory.
 
-**One sans for everything the reader looks at** — the article and the chrome alike. Geist,
-self-hosted from `@fontsource-variable/geist`, imported at the top of
-[`tailwind.css`](../../src/web/tailwind.css) with the system stack behind it.
+**Geist is the base face and the chrome.** It is self-hosted from
+`@fontsource-variable/geist`, imported at the top of
+[`tailwind.css`](../../src/web/tailwind.css) with the system stack behind it. Author, model and
+reader words override that base with the faces in [fonts.md](fonts.md).
 
 | Token | Used for |
 |---|---|
 | `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
-| `--font-reading` | the article, and the reader's own words in a comment |
+| `--font-reading` | the default reading stack before a voice-specific override |
 | `--font-ui` | chrome: controls, masthead facts. The table's column headers wore it until 2026-09-05, when that row lost its height — it is still in the DOM for the fisheye panels' geometry and for a screen reader, and sets no type at all |
 | `--font-mono` | Geist Mono — counts, and anything that wants to line up |
 | `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
 | `--font-brand` | Geist — the wordmark, and only the wordmark. Trebuchet MS until 2026-09-08 |
 
-`--font-reading` and `--font-ui` both resolve to `--font-sans` today. They stay separate names
-anyway: the article and the chrome being one face is a *decision*, and undoing it should be one
-line rather than a search-and-replace.
+`--font-reading` and `--font-ui` both resolve to `--font-sans` today. They remain separate base
+tokens so changing the unvoiced reading stack is one decision. Visible provenance is a different
+decision, carried by `--font-author`, `--font-ai` and `--font-reader` as [fonts.md](fonts.md)
+describes.
 
 **Georgia was here until 2026-08-25, and it should not have been.** The story is worth knowing
 because it is a documentation failure rather than a design one. Our own notes on the previous app
@@ -32,9 +34,8 @@ Sans sits behind Tailwind's `--font-sans`, and Georgia appears nowhere in it. It
 was sans, headings and body in the same face. Greg, 2026-08-25, asked to *"follow how we were doing
 fonts in the previous version"* — so we now follow what they did rather than what they wrote down.
 
-The cost is stated in [`tokens.css`](../../styles/tokens.css) and repeated here because it is the
-thing most likely to want revisiting: **the article column no longer looks different from our own
-chrome.** A gist in the column beside a paragraph is now the same face as the paragraph.
+That 2026-08-25 decision still supplies the base tokens. Since 2026-10-02 the article, model and
+reader voices deliberately differ from the chrome; [fonts.md](fonts.md) owns the current rule.
 
 Two numbers from that research doc *are* worth keeping, because they are independently attested:
 

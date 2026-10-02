@@ -182,7 +182,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".cnd-affil-name",
   ],
   summary: [".simple-text"],
-  diagram: [".diag-card-gist", ".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
+  diagram: [".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
   ideas: [".ideas-name", ".ideas-reason"],
   remember: [".chat-turn.model", ".quiz-question"],
   quotes: [".quotes-why-card"],
@@ -475,7 +475,8 @@ describe("voices.css", () => {
  * **Whose words the shelf's blurb is.** `root_gist` is stored as
  * `gist ?? summary ?? excerpt`, so the blurb that equals the revision's own
  * excerpt is the author's and any other is a model's (library-scalars.ts §
- * `gistVoiceOf`).
+ * `gistVoiceOf`). Equality is a read-time heuristic: an AI gist that exactly
+ * copies the excerpt is the known ambiguous case until provenance is stored.
  */
 describe("gistVoiceOf", () => {
   it("is the author's when the blurb is the excerpt", () => {

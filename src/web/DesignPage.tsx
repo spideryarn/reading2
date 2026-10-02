@@ -379,7 +379,7 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
 
 /** The type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
-  { token: "--font-reading", used: "the article, and the reader's own words in a comment" },
+  { token: "--font-reading", used: "the default reading stack before a voice-specific override" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
      its height and its labels became `.sr-only` spans. The gist columns those
      headers named went on 2026-09-29; one `.sr-only` header is left, for a

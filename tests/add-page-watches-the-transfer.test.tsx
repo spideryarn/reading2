@@ -103,6 +103,20 @@ const buttonSaying = (label: string): HTMLButtonElement | undefined =>
   );
 
 describe("what the page says has happened to the article's text", () => {
+  it("keeps our filename fallback in the app's face, and the reader's filename in theirs", () => {
+    render(null);
+    const label = [...host.querySelectorAll("header p")].find((p) => p.textContent === "your file");
+    expect(label, "the upload header did not draw its fallback").toBeDefined();
+    expect(label?.classList.contains("voice-ui"), "our fallback was dressed as the reader's words").toBe(
+      true,
+    );
+
+    render({ kind: "sending", sent: 1 });
+    const filename = [...host.querySelectorAll("header p")].find((p) => p.textContent === "paper.pdf");
+    expect(filename, "the upload header did not draw the reader's filename").toBeDefined();
+    expect(filename?.classList.contains("voice-reader")).toBe(true);
+  });
+
   /**
    * **The finding I most wanted broken, and it broke.**
    *

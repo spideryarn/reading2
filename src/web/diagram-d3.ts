@@ -286,6 +286,7 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
       title: s.n.title,
       titleVoice: s.n.titleVoice,
       ...(s.n.gist !== undefined && { gist: s.n.gist }),
+      gistVoice: s.n.gistVoice,
       blocks: s.n.blocks,
       startRow: s.n.startRow,
       endRow: s.n.endRow,

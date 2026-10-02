@@ -75,7 +75,9 @@ to it means changing the token and its import.
   page, a library search hit. Guessing "author" would put the reader's own words in the author's
   face.
 - **The shelf's blurb is the model's gist, or the article's own excerpt where there is none.** The
-  server says which (`gistVoiceOf` in [`src/library-scalars.ts`](../../src/library-scalars.ts)).
+  server currently infers which by equality (`gistVoiceOf` in
+  [`src/library-scalars.ts`](../../src/library-scalars.ts)). A model gist that copied the excerpt
+  exactly is therefore the known ambiguous case; exact provenance needs a stored source.
 - **A fixed sentence we wrote is UI**, even when it reports what a model decided: "Key sources",
   `disputes` / `qualifies` / `unclear`, "said to be at", "You: leans …". Inside such a sentence, wrap
   only the model's or the author's words.
@@ -133,9 +135,14 @@ you add text that is not the app's own, put it in its voice at the same time.**
 
 ## Not yet in a voice
 
+- **Exact provenance for a shelf blurb that equals the excerpt.** Equality is the current
+  heuristic; storing `root_gist_source` is the deferred exact fix —
+  [261002f § 4](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
 - **The public shelf's blurb.** Its voice would need a column on `publicLibraryQuery`, which is a
   listed defence ([security-map.md](security-map.md)), so it stays in the app's face; its titles are
   voiced.
+- **A section title inside one of our sentences**: ReturnChip's "back to …" and BlockLinkCard's
+  section line. Voicing them means splitting the string into markup.
 - **Article titles where a rename is not known** (above). Voicing them means carrying
   `titleOverridden` on the owner's article, unread-paper, search-hit and Citations-match payloads —
   [261002f § 6](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).

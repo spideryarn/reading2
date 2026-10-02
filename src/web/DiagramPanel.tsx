@@ -100,7 +100,7 @@ import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { voiceClass } from "./voice.js";
+import { voiceClass, withVoice } from "./voice.js";
 
 /**
  * **Who is reading, and therefore what may be bought.**
@@ -2761,7 +2761,7 @@ function DetailCard({
         </span>
       </div>
       {node.gist && related.length === 0 && (
-        <p className="diag-card-gist" title={node.gist}>
+        <p className={withVoice("diag-card-gist", node.gistVoice)} title={node.gist}>
           {node.gist}
         </p>
       )}

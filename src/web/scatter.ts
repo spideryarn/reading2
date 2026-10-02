@@ -452,6 +452,7 @@ function node(
        would compress — so it gets its own opening words, which is the one piece
        of text that says what this dot is. */
     gist: excerpt(d.block.text),
+    gistVoice: "author",
     blocks: 1,
     startRow: d.startRow,
     endRow: d.endRow,

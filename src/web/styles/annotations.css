@@ -980,8 +980,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .cmt-close:hover { color: var(--highlight); }
 
-/* The reader's own words, in the reading face, because they are the author's
-   words — the only text in this panel that is. */
+/* The author's quoted words — the only article text in this panel. */
 .cmt-quote {
   margin: 0.55rem 0 0.75rem;
   padding-left: 0.7rem;

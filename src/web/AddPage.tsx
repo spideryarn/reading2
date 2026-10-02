@@ -700,6 +700,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      261001s browser check found that line under a failed import. */
   const jobStopped = job?.status === "error" || job?.status === "cancelled";
   const purposeStatus = purposeStatusOf(phase, draft, jobStopped);
+  const uploadFilename =
+    origin.kind === "upload" ? (mine?.filename ?? job?.upload?.filename) : undefined;
+  const originLabel =
+    origin.kind === "upload"
+      ? uploadFilename
+        ? { text: uploadFilename, voice: "reader" as const }
+        : { text: "your file", voice: "ui" as const }
+      : { text: ok ? source : url, voice: "reader" as const };
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
@@ -715,16 +723,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
             genuinely nothing to name, and saying "your file" is better than an
             empty line that fills in a second later. */}
         <p
-          className={withVoice("tw:mt-2 tw:mb-0 tw:text-[13px] tw:break-all tw:text-muted-foreground", "reader")}
+          className={withVoice(
+            "tw:mt-2 tw:mb-0 tw:text-[13px] tw:break-all tw:text-muted-foreground",
+            originLabel.voice,
+          )}
         >
-          {origin.kind === "upload"
-            ? /* The engine knows the filename from the moment the reader chose
-                 it, where the job only learns it on the first poll — so when
-                 this tab owns the transfer there is no second of "your file". */
-              (mine?.filename ?? job?.upload?.filename ?? "your file")
-            : ok
-              ? source
-              : url}
+          {originLabel.text}
         </p>
       </header>
 

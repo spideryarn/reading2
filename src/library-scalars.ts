@@ -88,11 +88,11 @@ export interface LibraryScalars {
  * or summary.
  *
  * `rootGist` is stored with the fallback already applied (below:
- * `gist ?? summary ?? excerpt`), so which rung it came from is not stored. It
- * does not need to be: the excerpt is a column of the same revision row, so a
- * blurb equal to it is the excerpt, and any other blurb is a rung above it,
- * which a model wrote. That holds for every row already stored, which is why
- * this is a comparison at read time rather than a new column and a backfill.
+ * `gist ?? summary ?? excerpt`), so which rung it came from is not stored. The
+ * excerpt is a column of the same revision row, so equality is the best
+ * provenance available without a stored source. It can misclassify the rare
+ * model gist that copied the excerpt exactly; recording exact provenance needs
+ * a new column and a backfill, deliberately deferred by the plan below.
  * docs/plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md § 4.
  */
 export function gistVoiceOf(

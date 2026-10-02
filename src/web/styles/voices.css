@@ -198,7 +198,6 @@
     .gloss-name,
     /* the realtime model's reason for pointing at a passage */
     .chat-pointed-why,
-    .diag-card-gist,
     /* the Dock's preview of an answered comment with no note: its Explanation */
     .dock-question-state.done:not(.own),
     /* the chat list's last line, when the model said it */

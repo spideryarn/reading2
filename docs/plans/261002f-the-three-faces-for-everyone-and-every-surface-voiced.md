@@ -244,3 +244,25 @@ typed seam — a component that computes a `Voice` must call something with it �
   P1s. Taken: 2, 3, 4, 5, 6 (the hover card; Citations' matches deferred with the other unknown
   titles), 7 (renamed to a checklist), 8 (a second field instead), 9. Not taken: 1's column, for the
   reason in § 4.
+- [x] Built (9b4b7a933). The other section-title sites (Quiz, Diagram's card, Skim, Marginalia, the
+  Where card) were threaded by a subagent: each carries `voice` beside the title from the node.
+- [x] Browser check, Playwright, 1280×900 and 390×844, Experimental switch **off**: every element
+  checked had its expected first family — prose and author headings Source Serif 4; Structure's
+  kept headings serif and model titles, gists, hover cards, spine crumbs, Summary, Tweets, Skim
+  crumbs, shelf blurbs and Metadata's one sentence IBM Plex Mono; search box, title input, /add,
+  profile box and About you Arial; masthead and /design's notes Geist. Not exercised: a shelf blurb
+  that is the excerpt (all 20 local blurbs are gists; the unit test covers it) and the "Where you
+  left off" snippet (no reading progress on the dev reader).
+  ![structure, laptop](261002f-shot-1280-struct-hover.png)
+  ![structure, phone](261002f-shot-390-structure.png)
+  ![the shelf table's row card](261002f-shot-1280-table-hover.png)
+  ![skim](261002f-shot-1280-skim.png)
+- [x] Code review (GPT Sol, fixing in-stage): [261002f-code-review-sol.md](261002f-code-review-sol.md),
+  no P0. Fixed: Diagram's Drift/Trail excerpts were in the AI face (a `gistVoice` through graph and
+  scatter, `.diag-card-gist` out of the AI list); the Where card's `▸` inherited the title's voice;
+  /add/upload's "your file" fallback was voiced as the reader's; typography.md and comments still
+  said "one sans for everything". Not fixed, as planned: the gist's equality heuristic (§ 4).
+
+Also deferred, found while building: **ReturnChip's "back to {section}" and BlockLinkCard's section
+line** put a section title inside one of our own sentences; voicing them means splitting the
+string into markup, so they stay in the app's face for now.

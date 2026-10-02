@@ -7,7 +7,7 @@
  *
  * Text only, and it takes no pointer: a card to read, not a menu.
  */
-import { withVoice } from "./voice.js";
+import { voiceClass } from "./voice.js";
 import type { WhereRow } from "./where.js";
 
 export function WhereCard({ rows }: { rows: readonly WhereRow[] }) {
@@ -21,12 +21,13 @@ export function WhereCard({ rows }: { rows: readonly WhereRow[] }) {
         ) : (
           <li
             key={row.key}
-            // Each title in its voice: the author's heading kept, or the model's (fonts.md).
-            className={withVoice(`where-node${row.onPath ? " on-path" : ""}${row.here ? " here" : ""}`, row.voice)}
+            className={`where-node${row.onPath ? " on-path" : ""}${row.here ? " here" : ""}`}
             style={{ paddingLeft: `${row.depth * 0.8}rem` }}
             aria-current={row.here ? "location" : undefined}
           >
-            {row.title}
+            {/* Keep the app-owned disclosure marker on the li in the UI face;
+                only the node title takes the voice of its source. */}
+            <span className={voiceClass(row.voice)}>{row.title}</span>
           </li>
         ),
       )}

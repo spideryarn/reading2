@@ -804,6 +804,14 @@ describe("the panel", () => {
     const card = document.querySelector(".where-card");
     expect(card?.textContent).toBe("MethodsResults");
     expect(card?.querySelector('[aria-current="location"]')?.textContent).toBe("Results");
+    const titles = [...(card?.querySelectorAll<HTMLElement>(".where-node") ?? [])];
+    expect(
+      titles.map((row) => [...row.classList].filter((name) => name.startsWith("voice-"))),
+      "the title's face reached the app's ▸ marker",
+    ).toEqual([[], []]);
+    expect(
+      titles.map((row) => row.querySelector<HTMLElement>("[class^='voice-']")?.className),
+    ).toEqual(["voice-ai", "voice-ai"]);
   });
 
   it("forgets an open where-card when its row leaves the pass", async () => {

@@ -55,7 +55,7 @@ export function TitleEditor({
    */
   overridden?: boolean | undefined;
   onDone: (title: string | null | undefined) => void;
-  /** How the input is typeset — each caller sets it in its own face and size. */
+  /** Size and layout classes; the editable words themselves always use the reader face. */
   className?: string | undefined;
 }) {
   const [value, setValue] = useState(title);
@@ -288,7 +288,7 @@ export function EditableTitle({
    * error is worse than no button, because pressing it is how you find out.
    */
   offer?: boolean | undefined;
-  /** How the input is typeset, so it matches the heading it replaces. */
+  /** Size and line-height for matching the heading; the face remains the reader's. */
   inputClassName?: string | undefined;
   /** The heading. Give it `tw:min-w-0 tw:flex-1` so a long title wraps rather than shoving the pencil off. */
   children: ReactNode;

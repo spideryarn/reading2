@@ -64,6 +64,7 @@ export interface GraphNode {
   /** Whose words `title` is — tree.ts § `titleVoice`. */
   titleVoice: Voice;
   gist?: string;
+  gistVoice: Voice;
   /** Which L1 part this is inside, 0-based; -1 for the root. */
   part: number;
   startRow: number;
@@ -378,6 +379,7 @@ export function buildGraph(
       title: n.title,
       titleVoice: titleVoice(n.node),
       ...(n.gist !== undefined && { gist: n.gist }),
+      gistVoice: "ai",
       part: e.part,
       startRow: n.startRow,
       endRow: n.endRow,

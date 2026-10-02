@@ -164,6 +164,8 @@ export interface DiagramNode {
    */
   titleVoice: Voice;
   gist?: string;
+  /** The source of `gist`; graph summaries are model text, scatter excerpts are article text. */
+  gistVoice: Voice;
   /** How many blocks are under this — the number the gist columns cannot show. */
   blocks: number;
   startRow: number;

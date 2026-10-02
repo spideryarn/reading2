@@ -215,6 +215,12 @@ describe("buildGraph", () => {
   const { root, blocks } = article();
   const g = buildGraph(root, blocks);
 
+  it("keeps model-written node gists in the model's voice", () => {
+    const withGists = g.nodes.filter((n) => n.gist !== undefined);
+    expect(withGists.length).toBeGreaterThan(0);
+    expect(withGists.every((n) => n.gistVoice === "ai")).toBe(true);
+  });
+
   it("measures a node in words, not in blocks", () => {
     const s = g.byId.get("n3" as NodeId);
     expect(s?.blocks).toBe(2);
