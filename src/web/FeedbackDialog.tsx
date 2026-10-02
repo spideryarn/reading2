@@ -1044,7 +1044,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
       >
         <div className="fb-head">
           <h2 className="fb-title">Feedback</h2>
-          <button type="button" className="fb-close" onClick={onClose} aria-label="Close">
+          <button type="button" className="fb-close close-x" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>

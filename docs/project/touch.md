@@ -158,6 +158,15 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   reports correctly, and opens a finger's menu at the click: Radix's trigger would open it at the
   press, under the finger, at the start of a scroll.
 
+  **Since 2026-10-02 a finger meets the row again on a card wide enough for it** — Greg, on an
+  iPad in portrait: *"save me a click. And we could keep the three dots menu just in case things
+  are really, really narrow."* The row moved to the card's bottom row, and where there is a finger
+  a card at least 28rem across (a container query, so the shelf's column decides, not the window)
+  draws it at 40px and opaque; a narrower card, and the table, keep the "⋯". There a tap
+  **presses**: the reveal was already dead on an iPad, and the icons are the explanation Greg chose.
+  The "⋯" itself got a border and a bigger, brighter glyph (*"a bit more visible"*).
+  [261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md).
+
 ## Why the prose is untouched
 
 This is the load-bearing decision, and it came out of the research rather than out of caution.

@@ -968,13 +968,11 @@ td.text.has-hit[data-hues="8"] {
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+/* Its size is styles/close.css § .close-x, with every other modal's cross. */
 .cmt-close {
-  display: inline-flex;
-  align-items: center;
+  align-self: center;
   background: none;
   border: none;
-  padding: 0 0.15rem;
-  line-height: 1;
   color: var(--ink-faint);
   cursor: pointer;
 }

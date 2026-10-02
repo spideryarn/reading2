@@ -252,14 +252,9 @@
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* The size is styles/close.css § .close-x. */
 .fb-close {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;

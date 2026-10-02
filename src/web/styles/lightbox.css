@@ -89,13 +89,8 @@
    cover the one thing the reader opened it to see. */
 .lightbox-close {
   align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
   margin-bottom: 0.4rem;
-  padding: 0;
+  /* The size is styles/close.css § .close-x. */
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
