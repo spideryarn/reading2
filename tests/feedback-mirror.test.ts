@@ -98,7 +98,7 @@ vi.mock("../src/store/index.js", async (importActual) => {
   };
 });
 
-const { ARTICLE_GATHER_MS, mirrorFeedback } = await import("../src/feedback.js");
+const { ARTICLE_GATHER_MS, MIRROR_ACK_MS, mirrorFeedback } = await import("../src/feedback.js");
 
 /* The envelope, as loosely as this file needs to read one: a header, then a
    list of `[itemHeader, payload]` pairs. */
@@ -436,6 +436,45 @@ describe("the Sentry mirror", () => {
     expect(attempted).toEqual([REPORT.id]);
     expect(mirrored).toHaveLength(0);
   });
+
+  /**
+   * **A late wake is not a missing acknowledgement.**
+   *
+   * docs/postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md. A
+   * frozen instance wakes with Sentry's reply waiting *and* the two-second
+   * timer overdue, and Node runs timers before I/O — so the timer won and a
+   * report Sentry had taken (`spya-r2auqd`, 2026-10-01) was recorded as not
+   * acknowledged. The freeze is reproduced here by blocking the event loop past
+   * the ceiling while the send is in flight, with the reply queued behind it.
+   */
+  it("records delivery when the reply and the overdue timer are both waiting", async () => {
+    initWithoutDefaultIntegrations({
+      dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
+      environment: "test",
+      integrations: [],
+      maxBreadcrumbs: 0,
+      transport: () => ({
+        send: (envelope: unknown) => {
+          envelopes.push(envelope as Envelope);
+          /* The instance is suspended: nothing runs, and the timer goes overdue. */
+          const until = Date.now() + MIRROR_ACK_MS + 100;
+          while (Date.now() < until) {
+            /* frozen */
+          }
+          /* The reply is already here when it wakes, but queued *behind* the
+             overdue timer, as a waking instance runs it: a zero timer expires
+             after the ceiling's, so the ceiling fires first. (`setImmediate`
+             would not reproduce it — from here the check phase can come round
+             before the timers phase.) */
+          return new Promise((resolve) => setTimeout(() => resolve({ statusCode: 200 }), 0));
+        },
+        flush: async () => true,
+      }),
+    });
+    await mirrorFeedback({ report: REPORT, user: USER, screenshot: null });
+    expect(attempted).toEqual([REPORT.id]);
+    expect(mirrored).toHaveLength(1);
+  }, 10_000);
 
   it("empties a feedback envelope nothing registered, rather than tidying it", () => {
     /* Fail closed. A `captureFeedback` from somewhere that did not go through
