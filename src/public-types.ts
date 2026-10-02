@@ -82,6 +82,7 @@ import type {
   Quote,
   QuoteDrops,
   SearchHit,
+  SearchKind,
   TimelineEvent,
   SkimStop,
   Tree,
@@ -841,6 +842,14 @@ export interface PublicSearchRun {
   id: string;
   /** What the reader typed, in their own words. */
   criterion: string;
+  /**
+   * **Which matcher answered** — `SearchRun.kind`. It crosses because it says
+   * what the passages and their numbers *are*: a quick run's confidence is
+   * Jev's probability and its quote is the whole paragraph, and a visitor
+   * reading those as a meaning search's would be misreading them. Nothing
+   * about a person in it. Plan 261002e, F6.
+   */
+  kind: SearchKind;
   createdAt: string;
   /** The passages, rebuilt hit by hit — src/public/dto.ts § publicSearchHits. */
   hits: SearchHit[];

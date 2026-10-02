@@ -3078,6 +3078,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-export-isolation.test.ts": "private-postgres",
   "tests/store-export-raw.test.ts": "private-postgres",
   "tests/store-export-referee.test.ts": "private-postgres",
+  "tests/store-export-search-kind.test.ts": "private-postgres",
   "tests/store-glossary-delete-pg.test.ts": "private-postgres",
   "tests/store-glossary-run-kind-pg.test.ts": "private-postgres",
   "tests/store-job-draft.test.ts": "private-postgres",

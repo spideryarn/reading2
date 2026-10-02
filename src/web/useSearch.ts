@@ -30,7 +30,7 @@
  * deleted must be dropped too, not just the final one.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SearchHit, SearchRun } from "../types.js";
+import type { SearchHit, SearchKind, SearchRun } from "../types.js";
 import { mintId } from "../ids.js";
 import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -105,9 +105,12 @@ export interface SearchApi {
    * saved ones had not loaded. Plan 260908f § A.
    */
   loadError: string | null;
-  /** Run a new meaning-search. Returns the id it minted, so `?runs=` can name it. */
-  ask(criterion: string): string;
-  /** The same criterion again — for a run whose model call failed. */
+  /**
+   * Run a new search of this kind — `quick` or `meaning`. Returns the id it
+   * minted, so `?runs=` can name it.
+   */
+  ask(criterion: string, kind: SearchKind): string;
+  /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
    * The requests this tab has out, by the id the **server** is using — which
@@ -117,10 +120,14 @@ export interface SearchApi {
    */
   running: ReadonlySet<string>;
   /**
-   * Is this (trimmed) question already out from this tab? Read from a ref, so
-   * two presses inside one React batch both see the first.
+   * Is this (trimmed) question already out from this tab, **as this kind**?
+   * Read from a ref, so two presses inside one React batch both see the first.
+   *
+   * Keyed on kind as well as words, because a quick search and a meaning
+   * search for the same words are two different questions — *flesh out* asks
+   * the second while the first may still be out (plan 261002e, review F5).
    */
-  isRunning(criterion: string): boolean;
+  isRunning(criterion: string, kind: SearchKind): boolean;
   remove(id: string): void;
   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
@@ -171,14 +178,18 @@ export function useSearch(
    * the guard let the same question be paid for again while it ran.
    * docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md
    */
-  const inFlight = useRef(new Map<string, { criterion: string; owner: symbol }>());
+  const inFlight = useRef(
+    new Map<string, { criterion: string; kind: SearchKind; owner: symbol }>(),
+  );
   const [flights, setFlights] = useState(0);
   const flown = useCallback(() => setFlights((n) => n + 1), []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `flights` is the trigger and not an input — it is bumped whenever the ref changes, and the ref supplies what to read.
   const running = useMemo(() => new Set(inFlight.current.keys()), [flights]);
   const isRunning = useCallback(
-    (criterion: string) =>
-      [...inFlight.current.values()].some((f) => f.criterion === criterion.trim()),
+    (criterion: string, kind: SearchKind) =>
+      [...inFlight.current.values()].some(
+        (f) => f.criterion === criterion.trim() && f.kind === kind,
+      ),
     [],
   );
   const [loaded, setLoaded] = useState(false);
@@ -434,10 +445,13 @@ export function useSearch(
    * ends without `done` is reported as a failure.
    */
   const send = useCallback(
-    (id: string, criterion: string, createdAt: string) => {
+    (id: string, criterion: string, kind: SearchKind, createdAt: string) => {
       // Drop whatever the previous attempt left behind, so a retry shows a
-      // spinner rather than the old error with a spinner under it.
-      const pending: SearchRun = { id, criterion, createdAt, status: "pending", hits: [] };
+      // spinner rather than the old error with a spinner under it. `kind` on
+      // every row this function builds — this one, and the error row below —
+      // because the panel labels a pending quick run before the server has
+      // said anything about it.
+      const pending: SearchRun = { id, criterion, kind, createdAt, status: "pending", hits: [] };
       put(pending);
       setError(null);
       // Searching again un-deletes: the reader is plainly no longer finished
@@ -451,7 +465,7 @@ export function useSearch(
       let settled = false;
       const owner = Symbol(id);
       const belongsHere = () => currentArticle.current === articleToken;
-      inFlight.current.set(id, { criterion: criterion.trim(), owner });
+      inFlight.current.set(id, { criterion: criterion.trim(), kind, owner });
       flown();
       /** Off the in-flight list — only if this `send` still owns the entry. */
       const land = () => {
@@ -498,7 +512,7 @@ export function useSearch(
           const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, criterion }),
+            body: JSON.stringify({ id, criterion, kind }),
           });
           if (!belongsHere()) return;
           /* A failure before the stream opens is ordinary JSON — the server
@@ -571,7 +585,7 @@ export function useSearch(
           if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
           setError(message);
-          put({ id: liveId, criterion, createdAt, status: "error", hits: [], error: message });
+          put({ id: liveId, criterion, kind, createdAt, status: "error", hits: [], error: message });
         } finally {
           land();
         }
@@ -581,9 +595,9 @@ export function useSearch(
   );
 
   const ask = useCallback(
-    (criterion: string) => {
+    (criterion: string, kind: SearchKind) => {
       const id = mintId();
-      send(id, criterion.trim(), new Date().toISOString());
+      send(id, criterion.trim(), kind, new Date().toISOString());
       return id;
     },
     [send],
@@ -601,7 +615,9 @@ export function useSearch(
   const retry = useCallback(
     (id: string) => {
       const existing = runs.find((r) => r.id === id);
-      if (existing) send(existing.id, existing.criterion, existing.createdAt);
+      // Its own kind, never the matcher the box happens to be on: a failed
+      // quick run retried from meaning mode is still a quick run.
+      if (existing) send(existing.id, existing.criterion, existing.kind, existing.createdAt);
     },
     [runs, send],
   );

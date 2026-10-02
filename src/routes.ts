@@ -180,6 +180,9 @@ import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
+/* Quick search (plan 261002e): the same events from Jev, so `search` below
+   takes one generator or the other. */
+import { quickPassagesStream } from "./quick-search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
    has to satisfy before one is made. `referee-criteria.js` is pure (it reaches
    nothing but `quote-match`, `types` and `urls`), so importing its validators
@@ -329,7 +332,12 @@ import { costCategoryOf } from "./cost-categories.js";
 import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
-import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor, parseFeedbackFrom } from "./types.js";
+import {
+  ADMIN_FEEDBACK_DEFAULT_LIMIT,
+  decodeFeedbackCursor,
+  isSearchKind,
+  parseFeedbackFrom,
+} from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
@@ -4337,9 +4345,16 @@ async function refuseAPaperNotReadYet(slug: string): Promise<void> {
 }
 
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, criterion } = (body ?? {}) as Record<string, unknown>;
+  const { id, criterion, kind = "meaning" } = (body ?? {}) as Record<string, unknown>;
   if (typeof criterion !== "string" || criterion.trim() === "") {
     throw httpError(400, "Expected { criterion }");
+  }
+  /* Which matcher (plan 261002e): absent is a meaning search, which is every
+     client that predates the quick one; anything else named is refused rather
+     than quietly run as meaning. Narrowed, not cast, so `SearchKind` is the one
+     list. */
+  if (!isSearchKind(kind)) {
+    throw httpError(400, 'A search kind must be "quick" or "meaning"');
   }
   // The whole article goes in the prompt, so a criterion is not the expensive
   // part — but an unbounded one is still a way to push the article out of the
@@ -4356,6 +4371,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   const { run, attempt } = await searchStore.begin(
     slug,
     criterion.trim(),
+    kind,
     typeof id === "string" ? id : undefined,
   );
   const key = `${slug}/${run.id}`;
@@ -4369,12 +4385,24 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
       const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
       let model = "";
-      for await (const event of findPassagesStream({
-        power: powerOf(article),
-        meta: article.meta,
-        blocks: article.blocks,
-        criterion: run.criterion,
-      })) {
+      /* **The stored run's kind, not the request's.** They agree today —
+         `withRun` resets only a row of the same kind — but the row is what the
+         answer is written onto, so it is the one that decides which matcher
+         writes it. */
+      const events =
+        run.kind === "quick"
+          ? quickPassagesStream({
+              meta: article.meta,
+              blocks: article.blocks,
+              criterion: run.criterion,
+            })
+          : findPassagesStream({
+              power: powerOf(article),
+              meta: article.meta,
+              blocks: article.blocks,
+              criterion: run.criterion,
+            });
+      for await (const event of events) {
         if (event.type === "hit") {
           frame("hit", { hit: event.hit });
           continue;

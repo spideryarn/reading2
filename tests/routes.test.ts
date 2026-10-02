@@ -1779,6 +1779,63 @@ describe("POST /api/search/:slug is a stream too", () => {
     expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(1);
   });
 
+  it("runs a quick search on Jev when asked, and stores it as quick", async () => {
+    /* Plan 261002e. The reply is built from the request, as the Decisions
+       endpoint's is: one answer per question asked, keyed as asked. */
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      expect(url).toBe("https://openrouter.ai/api/alpha/decisions");
+      const body = JSON.parse(String(init.body)) as { questions: Record<string, unknown> };
+      const answers = Object.fromEntries(
+        Object.keys(body.questions).map((id) => [id, { noul: id === BLOCK ? 0.93 : 0.1 }]),
+      );
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () => JSON.stringify({ answers, usage: { input_tokens: 900, cost: 0.00004 } }),
+      } as unknown as Response;
+    });
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      criterion: "the prize the essay won",
+      kind: "quick",
+    });
+    const frames = parseFrames(r.frames);
+    expect(frames.map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+    expect((frames[0]!.data as { kind: string }).kind).toBe("quick");
+    const done = frames[2]!.data as {
+      status: string;
+      kind: string;
+      hits: { blockId: string; confidence: number; start: number }[];
+    };
+    expect(done.status).toBe("done");
+    expect(done.kind).toBe("quick");
+    expect(done.hits.map((h) => [h.blockId, h.confidence, h.start])).toEqual([[BLOCK, 93, 0]]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const stored = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+    expect(stored.map((s) => s.kind)).toEqual(["quick"]);
+  });
+
+  it("is a meaning search when no kind is named, as every older client sends", async () => {
+    fetchMock.mockResolvedValue(openRouterReply([hit()]));
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      criterion: "the prize the essay won",
+    });
+    const frames = parseFrames(r.frames);
+    expect((frames[0]!.data as { kind: string }).kind).toBe("meaning");
+  });
+
+  it("refuses a kind it does not know with a 400, before anything is stored or sent", async () => {
+    for (const kind of ["fuzzy", "", 1, null]) {
+      const r = await call("POST", `/api/search/${SEARCH_SLUG}`, {
+        criterion: "the prize the essay won",
+        kind,
+      });
+      expect(r.status, JSON.stringify(kind)).toBe(400);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(0);
+  });
+
   it("a model failure arrives as a done frame with status: error, not an HTTP error", async () => {
     fetchMock.mockRejectedValue(new Error("network exploded"));
     const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
@@ -1867,8 +1924,8 @@ describe("POST /api/search/:slug is a stream too", () => {
        Driven through `DELETE /api/search/:slug/:id` rather than through the
        store, so the route that carries the id is in the path too — this is the
        only case in the file that reaches that method. */
-    const keep = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to keep"));
-    const doomed = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to delete"));
+    const keep = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to keep", "meaning"));
+    const doomed = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to delete", "meaning"));
     expect(keep.run.id).not.toBe(doomed.run.id);
 
     const r = await call("DELETE", `/api/search/${SEARCH_SLUG}/${doomed.run.id}`);
@@ -1930,7 +1987,7 @@ describe("PATCH /api/search/:slug/:id", () => {
 
   /** A saved search on the colour article, through the store the route uses. */
   async function saved(criterion = "arguments against"): Promise<string> {
-    const { run } = await asTestOwner(() => searchStore.begin(COLOUR_SLUG, criterion));
+    const { run } = await asTestOwner(() => searchStore.begin(COLOUR_SLUG, criterion, "meaning"));
     return run.id;
   }
 

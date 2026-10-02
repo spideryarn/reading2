@@ -1006,6 +1006,7 @@ function publicSearches(runs: readonly (SearchRun & { stale: boolean })[]): Publ
     (run): PublicSearchRun => ({
       id: run.id,
       criterion: run.criterion,
+      kind: run.kind,
       createdAt: run.createdAt,
       hits: publicSearchHits(run.hits),
       ...opt(run, "colour"),

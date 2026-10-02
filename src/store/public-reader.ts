@@ -53,6 +53,7 @@ import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
 import type { PublicArticle, PublicBlock } from "../public-types.js";
+import { isSearchKind } from "../types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
 import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
@@ -614,6 +615,7 @@ export function publicSearchesQuery(
     .select({
       id: searchRuns.id,
       criterion: searchRuns.criterion,
+      kind: searchRuns.kind,
       hits: searchRuns.hits,
       colour: searchRuns.colour,
       createdAt: searchRuns.createdAt,
@@ -847,6 +849,14 @@ export const pgPublicReader: PublicArticleReader = {
         searches: searchRows.map((row) => ({
           id: row.id,
           criterion: row.criterion,
+          /* Narrowed, not cast or defaulted: the column's CHECK allows two
+             values, and a third read as `"meaning"` would be the silent form
+             of somebody loosening it. src/store/pg-searches.ts § toRun. */
+          kind: isSearchKind(row.kind)
+            ? row.kind
+            : (() => {
+                throw new Error(`search run ${row.id} has an unknown kind`);
+              })(),
           hits: row.hits,
           createdAt: row.createdAt.toISOString(),
           ...(row.colour === null ? {} : { colour: row.colour }),

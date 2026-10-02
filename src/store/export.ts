@@ -668,6 +668,11 @@ export async function exportArticle(
       compact({
         id: row.id,
         criterion: row.criterion,
+        /* Which matcher answered. Dropping it would bring every quick search
+           back from a round trip as a meaning one — the column's default — and
+           its whole-paragraph quotes and Jev probabilities would then be read
+           as Sonnet's. Plan 261002e, F6. */
+        kind: row.kind,
         createdAt: row.createdAt.toISOString(),
         status: row.status,
         hits: row.hits,
