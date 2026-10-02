@@ -32,6 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
+import { relocateEntries } from "../glossary-occurrences.js";
 import { decodeAuthors } from "../authors.js";
 import { NOT_READ_YET } from "../messages.js";
 import { NotProcessed } from "../not-processed.js";
@@ -3473,7 +3474,13 @@ const rawPgArticleReader: ArticleReader = {
         },
       ]),
     );
-    const entries = glossary.entries.map((entry) => {
+    /* **Where each term is used, worked out again against the blocks in
+       hand** rather than read off the stored list, which describes whichever
+       matcher wrote it. Always, stale or not: on a stale list an empty
+       `blocks` already says nothing (`occurrencesFitTheArticle`), and a
+       current one is what the underlines need. src/glossary-occurrences.ts,
+       plan 261002c. */
+    const entries = relocateEntries(glossary.entries, blocks).map((entry) => {
       const lookup = byEntry.get(entry.id);
       return lookup ? { ...entry, lookup } : entry;
     });

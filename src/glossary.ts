@@ -57,7 +57,7 @@ import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
-import { formsOf, termAppears, termPattern } from "./term-match.js";
+import { occurrencesOf, orderByFirstUse, type TextBlock } from "./glossary-occurrences.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import {
@@ -679,16 +679,13 @@ export function dedupe(entries: GlossaryEntry[]): GlossaryEntry[] {
  * the empty list is stored rather than smoothed over, and the panel says so.
  *
  * The matching rule itself is src/term-match.ts, shared with the reading view
- * so the underlines and this list cannot disagree.
+ * so the underlines and this list match by the same rule — over different
+ * strings, though: `block.text` here, the rendered text of `block.html` there
+ * (src/web/annotate.ts). The body is src/glossary-occurrences.ts, which both
+ * reads also call, so a stored list is worked out again on every read.
  */
-export function findOccurrences(entry: GlossaryEntry, blocks: Block[]): BlockId[] {
-  const pattern = termPattern(formsOf(entry));
-  if (!pattern) return [];
-  const found: BlockId[] = [];
-  for (const block of blocks) {
-    if (block.text && termAppears(block.text, pattern)) found.push(block.id);
-  }
-  return found;
+export function findOccurrences(entry: GlossaryEntry, blocks: readonly TextBlock[]): BlockId[] {
+  return occurrencesOf(entry, blocks);
 }
 
 /**
@@ -705,21 +702,11 @@ export function findOccurrences(entry: GlossaryEntry, blocks: Block[]): BlockId[
  * relative order. They are the suspicious ones and the foot of a list is where
  * a reader expects to find the dregs.
  */
-export function inDocumentOrder(entries: GlossaryEntry[], blocks: Block[]): GlossaryEntry[] {
-  const position = new Map<BlockId, number>();
-  for (const [i, b] of blocks.entries()) position.set(b.id, i);
-  const rank = (entry: GlossaryEntry): number => {
-    const first = entry.blocks[0];
-    if (first === undefined) return Number.MAX_SAFE_INTEGER;
-    return position.get(first) ?? Number.MAX_SAFE_INTEGER;
-  };
-  // Index as the tie-break so the sort is stable across runs and platforms —
-  // Array.prototype.sort is specified stable now, but two entries first used in
-  // the same block should have a reason for their order, not an accident.
-  return entries
-    .map((entry, i) => ({ entry, i, rank: rank(entry) }))
-    .sort((a, b) => (a.rank === b.rank ? a.i - b.i : a.rank - b.rank))
-    .map((x) => x.entry);
+export function inDocumentOrder(
+  entries: GlossaryEntry[],
+  blocks: readonly TextBlock[],
+): GlossaryEntry[] {
+  return orderByFirstUse(entries, blocks);
 }
 
 /**
