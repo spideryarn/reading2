@@ -1981,7 +1981,7 @@ export function Dock({
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. */
-        article={{ slug, search }}
+        article={{ slug, search, view }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already

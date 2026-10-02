@@ -111,12 +111,16 @@ import {
   commandId,
   commandText,
   modeCommand,
+  parseFindQuery,
   rankCommands,
   subModeCommand,
+  type ActionOutcome,
   type Command,
 } from "./command-match.js";
-import type { Mode } from "./params.js";
+import { type Mode, withSection } from "./params.js";
+import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
 import {
+  type ArticleView,
   CHANGELOG_HREF,
   CHANGELOG_LABEL,
   LIBRARY_HREF,
@@ -125,6 +129,8 @@ import {
   navigate,
   readHref,
 } from "./router.js";
+import { type UseJobs, useJobs } from "./useJobs.js";
+import { stepRunRequest } from "./useStepJob.js";
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
@@ -154,6 +160,14 @@ export interface CommandBarArticle {
   readonly slug: string;
   /** Already through `carriedSearch`; `readHref` adds the `?`. */
   readonly search: string;
+  /**
+   * **Which of the article's pages the bar is open over** — the Dock's own
+   * `view`. Read by one decision only, since 2026-10-02: where an accepted
+   * *Run again* takes the reader (`rerunRows`). From the reading view that is
+   * a step to the Metadata page; on the Metadata page it is the section
+   * below, in place.
+   */
+  readonly view: ArticleView;
 }
 
 /**
@@ -214,15 +228,22 @@ function besideTheModes({
   article,
   openComments,
   openFeedback,
+  queue,
 }: {
   article: CommandBarArticle | undefined;
   /** The Dock drawer's `onPanel`, already bound to `"questions"`, or absent. */
   openComments: (() => void) | undefined;
   /** `useFeedbackOpen()`'s answer — `null` where no host is mounted above. */
   openFeedback: (() => void) | null;
+  /** The job queue the *Run again* rows post through — `RerunQueue`. */
+  queue: RerunQueue;
 }): readonly Command[] {
   return [
     ...(article === undefined ? [] : articleRows(article)),
+    /* After the article's own page and before everything else: these are about
+       this article too. Typed-only, so the list the bar opens on is unchanged
+       (command-match.ts § `CommandWords.typedOnly`). */
+    ...(article === undefined ? [] : rerunRows(article, queue)),
     ...(openComments === undefined
       ? []
       : [
@@ -243,7 +264,10 @@ function besideTheModes({
                command-match.ts § `CommandWords` says why saying `false` out
                loud is the point rather than the noise. */
             generates: false,
-            run: openComments,
+            run: () => {
+              openComments();
+              return CLOSE;
+            },
           } as const,
         ]),
     ...APP_PAGES,
@@ -260,7 +284,10 @@ function besideTheModes({
             description: "Tell us what is wrong, or what you wish it did.",
             aliases: ["bug", "report", "problem", "contact", "help", "suggestion"],
             generates: false,
-            run: openFeedback,
+            run: () => {
+              openFeedback();
+              return CLOSE;
+            },
           } as const,
         ]),
   ];
@@ -288,6 +315,120 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       generates: false,
     },
   ];
+}
+
+/**
+ * **The two things the *Run again* rows need from the job queue** — posting a
+ * run, and why the last post failed. A narrowing of `UseJobs` rather than the
+ * whole of it, handed to a module function so that what the rows can do is
+ * readable at the call: they start a job and read the refusal, and nothing
+ * else.
+ */
+type RerunQueue = Pick<UseJobs, "run" | "lastFailure">;
+
+/**
+ * **What the bar says when a run was refused and the server gave no reason** —
+ * `useStepJob`'s own fallback for the same failure, so the bar and the
+ * Metadata row say one thing.
+ */
+const RUN_NOT_STARTED = "Couldn't start the job.";
+
+/**
+ * **The answer of an action that cannot fail** — Comments opening its drawer,
+ * Feedback its dialog. Returned rather than implied, so the type says every
+ * action decided (command-match.ts § `ActionOutcome`).
+ */
+const CLOSE: ActionOutcome = { kind: "close" };
+
+/**
+ * **One *Run again* row per step Metadata offers** — Greg, 2026-10-01
+ * (SPIDERYARN-READING2-8D): *"Add a lot more Metadata functionality to
+ * Commands, e.g. to reprocess (a particular mode)"*. The words, the label and
+ * which steps are rerun-commands.ts's; this is what Enter does.
+ *
+ * ## Enter posts the run Metadata's row posts, and waits for the answer
+ *
+ * `stepRunRequest(slug, step, { force: true })` — the body `useStepJob.start`
+ * sends for `RerunRow`, from the same function, so the bar cannot force a
+ * different set of steps than the page does. Through `useJobs().run`, the
+ * shared engine's own action, so the post pokes the poller and the row on the
+ * Metadata page finds the job on its next look.
+ *
+ * **A refusal keeps the bar open with the server's sentence**, read from
+ * `lastFailure()` the moment the post comes back — not from `error`, which the
+ * poll the post itself starts clears a few milliseconds later (useJobs.ts §
+ * `lastFailure`; GPT Sol's F2 on plan 261002c).
+ *
+ * ## And then the reader goes to Metadata's *AI processing*, never to the mode
+ *
+ * **This is the finding that shaped the feature** (GPT Sol's F1): a mode
+ * opened with no artefact starts an unforced run of its own on arrival, and
+ * `force` is part of the work key on the server, so the band's run and this
+ * one would be two jobs — two paid runs for one press. In *AI processing* the
+ * step's `RerunRow` watches the queue (`useStepJob` matches any job for the
+ * slug that runs its step), so the run shows there with its progress, its
+ * Stop and its Retry. Landing in the band itself is deferred until there is a
+ * way to tell a mode's auto-run *this job satisfies you*.
+ *
+ * From the reading view that is a step to the Metadata page, pushed so Back
+ * returns to the paragraph. On the Metadata page it is the same address with
+ * `?section=` added, **replaced** and without the jump to the top — the page
+ * does not change, it opens the section and scrolls there itself
+ * (PageContents.tsx § `useRevealOnArrival`).
+ */
+function rerunRows(article: CommandBarArticle, queue: RerunQueue): readonly Command[] {
+  return METADATA_RERUN_STEPS.map((step) =>
+    rerunCommand(step, async (): Promise<ActionOutcome> => {
+      const job = await queue.run(stepRunRequest(article.slug, step, { force: true }));
+      if (job === null) return { kind: "stay", message: queue.lastFailure() ?? RUN_NOT_STARTED };
+      const href = readHref(article.slug, withSection(article.search, RERUN_LANDS_IN), "metadata");
+      if (article.view === "metadata") navigate(href, { replace: true, scroll: false });
+      else navigate(href);
+      return { kind: "close" };
+    }),
+  );
+}
+
+/**
+ * **The search parameters a words search is made of**, and the ones of the
+ * same kind that a new search replaces rather than sits beside — the block
+ * last-view.ts § `NEVER_REMEMBERED` names for the same reason: they are one
+ * search, and a stale `?run=` beside a new `?find=` is two.
+ */
+const SEARCH_KEYS = new Set(["mode", "match", "find", "run", "runs", "order", "conf"]);
+
+/**
+ * **`find <words>`, as a row** — Search in words mode, the words lit up in the
+ * prose (`?mode=search&match=words&find=…`, the address the shelf's passage
+ * links already make: library-hits.ts § `libraryHitHref`). Greg's
+ * *"do they talk about X?"* (SPIDERYARN-READING2-8D).
+ *
+ * **Free and instant**, so `generates: false`: a words search is a literal
+ * match in the browser. *Meaning* search is a model call and is pressed, not
+ * arrived at, so this never opens that one.
+ *
+ * Built from the query rather than ranked against it — `parseFindQuery`
+ * (command-match.ts) decides whether the query is one at all, and says why
+ * that is not the guessed fallback Greg's call 3 refused. Always the reading
+ * view, from either page: that is where the prose is.
+ *
+ * The rest of the carried query string is kept — `?at=` above all, so the
+ * search opens where the reader was — edited as text for `carriedSearch`'s
+ * reason (router.ts).
+ */
+function findRow(article: CommandBarArticle, words: string): Command {
+  const kept = article.search
+    .split("&")
+    .filter((pair) => pair !== "" && !SEARCH_KEYS.has(pair.split("=")[0] ?? ""));
+  const search = [...kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`].join("&");
+  return {
+    kind: "page",
+    href: readHref(article.slug, search, "article"),
+    label: `Find “${words}” in this article`,
+    description: "Search mode, every place these words appear.",
+    aliases: [],
+    generates: false,
+  };
 }
 
 /**
@@ -553,6 +694,33 @@ export function CommandBar({
   const [selected, setSelected] = useState(0);
 
   /**
+   * **The line under the box** — `Starting…` while an action is out, or the
+   * sentence an action came back with when it kept the bar open (a refused
+   * run). One value, so the two cannot both show; `null` is an empty line.
+   * Cleared by typing and by opening the bar, which is when it stops being
+   * about what is in front of the reader.
+   */
+  const [said, setSaid] = useState<{ kind: "pending" } | { kind: "message"; text: string } | null>(
+    null,
+  );
+  /**
+   * **One action at a time, held before the first render can show it.** Two
+   * Enters — or an Enter and a click — can both reach `activate` before React
+   * commits the pending state, and every action that is asynchronous today
+   * starts a paid run. Set synchronously on the way in, cleared when the
+   * action settles. `RerunRow` in Metadata.tsx guards its own button the same
+   * way, for the same two-presses reason.
+   */
+  const inFlight = useRef(false);
+  /**
+   * **Which opening of the bar an outstanding action belongs to.** An action
+   * can settle after the reader has shut the bar and opened it again; what it
+   * came back with is about the earlier opening, so it must not shut or
+   * annotate this one. Bumped every time the bar opens.
+   */
+  const opening = useRef(0);
+
+  /**
    * **The way into the Feedback dialog**, or `null` where no host is mounted
    * above this — which is the ordinary signed-out case rather than a mistake
    * (FeedbackButton.tsx § `useFeedbackOpen`). No opener, no row.
@@ -561,6 +729,33 @@ export function CommandBar({
    * below, where the rules of hooks would not have it.
    */
   const openFeedback = useFeedbackOpen();
+
+  /**
+   * **The job queue the *Run again* rows post through**, subscribed `quiet` —
+   * the bar is not a surface anybody watches the queue on, so being mounted
+   * keeps no idle poll going (useJobs.ts § `QueueCadence`).
+   *
+   * Read through a ref by a wrapper made once, because `useJobs` hands back a
+   * fresh object every render, and the row list below is memoised on what the
+   * rows are built from: a queue in its dependencies would rebuild the list on
+   * every poll for nothing. `lastFailure` is a ref inside `useJobs` and so the
+   * same function across renders — the wrapper reads the newest anyway.
+   *
+   * **The cost, said out loud**: the subscription re-renders the bar when the
+   * job list changes, about once a second while a job runs. The bar is a few
+   * dozen rows and nothing below it is expensive; the day that shows up in a
+   * profile, the rows can move into a child mounted only while the bar is open.
+   */
+  const jobs = useJobs("quiet");
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  const queue = useMemo<RerunQueue>(
+    () => ({
+      run: (request) => jobsRef.current.run(request),
+      lastFailure: () => jobsRef.current.lastFailure(),
+    }),
+    [],
+  );
 
   /**
    * **The Dock's modes, then everything else** — and the concatenation is what
@@ -594,11 +789,23 @@ export function CommandBar({
       /* After every mode and before every page: the mode rows stay exactly the
          Dock's, first, and a sub-mode loses a tie to its own mode. */
       ...subModeRows(modes, experimentalOn, diagram),
-      ...besideTheModes({ article, openComments, openFeedback }),
+      ...besideTheModes({ article, openComments, openFeedback, queue }),
     ],
-    [modes, experimentalOn, diagram, article, openComments, openFeedback],
+    [modes, experimentalOn, diagram, article, openComments, openFeedback, queue],
   );
-  const results = useMemo(() => rankCommands(draft, commands), [draft, commands]);
+  /**
+   * **The ranked rows, and the `find` row after them when the query is one.**
+   *
+   * After, not first: a query that both names a row and parses as a find —
+   * none does today — should go where it names. And not ranked, because the
+   * row's label is made of the query; ranking it against itself would always
+   * hit. command-match.ts § `parseFindQuery` says when there is one.
+   */
+  const results = useMemo(() => {
+    const ranked = rankCommands(draft, commands);
+    const words = article === undefined ? null : parseFindQuery(draft);
+    return article === undefined || words === null ? ranked : [...ranked, findRow(article, words)];
+  }, [draft, commands, article]);
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -626,6 +833,11 @@ export function CommandBar({
          layout effect runs before that paint, so there is no frame to see. */
       setDraft("");
       setSelected(0);
+      /* Still `Starting…` if the last opening's action is out: a press here
+         would be refused until it settles, and an empty line would not say
+         why. */
+      setSaid(inFlight.current ? { kind: "pending" } : null);
+      opening.current += 1;
       closingOurselves.current = false;
       dialog.showModal();
     } else if (!open && dialog.open) {
@@ -665,6 +877,16 @@ export function CommandBar({
    */
   const activate = useCallback(
     (command: Command) => {
+      /* **Nothing while an action is out** — not even a mode row, which would
+         close the bar over a run whose refusal then had nowhere to be said.
+         `inFlight` says why it is a ref. */
+      if (inFlight.current) return;
+      const finish = () => {
+        setDraft("");
+        setSelected(0);
+        setSaid(null);
+        onClose();
+      };
       /* **Three verbs, and the switch is the whole of the difference between
          the kinds of row** — a sub-mode is the mode verb with a chip already
          pressed (2026-10-01). A mode is armed exactly as its Dock button
@@ -692,9 +914,40 @@ export function CommandBar({
         case "page":
           navigate(command.href);
           break;
-        case "action":
-          command.run();
-          break;
+        case "action": {
+          /* **An action says how it went** (command-match.ts §
+             `ActionOutcome`). A plain answer is acted on now, so the drawer
+             and the dialog open and the bar shuts in one step, as they always
+             did. A promise is a request in flight: the bar says so, refuses a
+             second press, and shuts only on `close` — a refusal stays, with
+             its sentence under the box (GPT Sol's F2 on plan 261002c). */
+          const outcome = command.run();
+          if (!(outcome instanceof Promise)) {
+            if (outcome.kind === "close") finish();
+            else setSaid({ kind: "message", text: outcome.message });
+            return;
+          }
+          inFlight.current = true;
+          const at = opening.current;
+          setSaid({ kind: "pending" });
+          void outcome
+            /* A thrown action is a failed one, said as plainly as any other —
+               the bar is not where an exception should end up unseen. */
+            .catch((): ActionOutcome => ({ kind: "stay", message: RUN_NOT_STARTED }))
+            .then((settled) => {
+              inFlight.current = false;
+              if (at !== opening.current) {
+                /* Settled after the reader shut the bar and opened it again:
+                   not this opening's to shut or annotate. Only the `Starting…`
+                   it inherited goes. */
+                setSaid((now) => (now?.kind === "pending" ? null : now));
+                return;
+              }
+              if (settled.kind === "close") finish();
+              else setSaid({ kind: "message", text: settled.message });
+            });
+          return;
+        }
         default: {
           /* A fourth kind fails to compile here rather than silently doing
              nothing — which is what an `else` would have given it. */
@@ -702,9 +955,7 @@ export function CommandBar({
           return never;
         }
       }
-      setDraft("");
-      setSelected(0);
-      onClose();
+      finish();
     },
     [activateMode, activateSubMode, onClose],
   );
@@ -781,6 +1032,9 @@ export function CommandBar({
                letter has Enter pointing at whatever is fourth in a list they
                have not looked at. */
             setSelected(0);
+            /* A refusal was about the row the reader had; typing is moving on
+               from it. `Starting…` stays — the run is still out. */
+            setSaid((now) => (now?.kind === "message" ? null : now));
           }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
@@ -802,6 +1056,22 @@ export function CommandBar({
             }
           }}
         />
+
+        {/* **What an action came to, under the box** — `Starting…`, or the
+            sentence a refused run came back with. Always in the tree and only
+            its text changing, because a live region that is mounted with its
+            message is one a screen reader may not announce; padded only when
+            there is something in it, so an empty one takes no room.
+            `role="status"` is polite: the reader is told when they pause, not
+            interrupted mid-word. */}
+        <p
+          role="status"
+          className={`cmdbar-status tw:m-0 tw:text-sm ${
+            said === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
+          } ${said?.kind === "message" ? "tw:text-ink" : "tw:text-muted-foreground"}`}
+        >
+          {said === null ? "" : said.kind === "pending" ? "Starting…" : said.text}
+        </p>
 
         {results.length === 0 ? (
           /* Exactly this, and nothing beside it — Greg's answer 3. No search

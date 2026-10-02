@@ -1097,7 +1097,10 @@ describe("the rows that are not modes", () => {
     readingSignedIn({ onMode, experimental: EXPERIMENTAL_ON });
     openBar();
     type("tweets");
-    expect(listed()).toEqual(["Tweets"]);
+    /* The mode first, and the thread's *Run again* row after it since
+       2026-10-02 — `tweets again` is one of its words (rerun-commands.ts), and
+       a row that ties the mode loses on order (plan 261002c). */
+    expect(listed()).toEqual(["Tweets", "Thread › Run again"]);
     expect(rows()[0]?.dataset.kind).toBe("mode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");

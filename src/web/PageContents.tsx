@@ -134,6 +134,82 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
   return cancel;
 }
 
+/**
+ * **How long a section named on arrival is waited for**, before the page stops
+ * looking. Long enough for the slowest thing a section waits on — the
+ * metadata request, which is what mounts the conditional ones — on a slow
+ * phone connection; short enough that a section that is never coming does
+ * not leave an observer running over a page somebody is using.
+ */
+export const SECTION_ARRIVAL_GIVE_UP_MS = 15_000;
+
+/**
+ * **Reveal the section an address names, once it exists** — `?section=` on
+ * the Metadata page (params.ts § `sectionParam`), which the command bar's *Run
+ * again* rows write (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+ * The same `reveal` the contents list uses, so arriving by a link opens,
+ * scrolls, focuses and flashes exactly as a click there does.
+ *
+ * **`onRevealed` is called only once `reveal` has found the section**, and is
+ * where the caller takes the parameter off the address. That order is GPT
+ * Sol's F4 on the plan: a page whose sections arrive with a request reveals
+ * nothing on first render, and a parameter consumed then would be a press that
+ * silently did nothing. So it is tried once the page has committed, and again
+ * on every change under `containerRef` (a `MutationObserver`, the mechanism
+ * the contents list itself uses to notice sections arriving) until it finds
+ * one — or until `SECTION_ARRIVAL_GIVE_UP_MS`, after which it stops and calls
+ * nothing, leaving the address as it was: the instruction was not carried out,
+ * and a reload is the honest way to ask again.
+ *
+ * **Tried from a timer and from the observer, never inside the effect.** The
+ * section opens itself with `flushSync` (Metadata.tsx § Section), and React
+ * will not flush from inside its own effect pass.
+ *
+ * A reveal already under way is left to finish when the id goes to `null` —
+ * which is what taking the parameter off does, a moment after it started — and
+ * cancelled only on unmount.
+ */
+export function useRevealOnArrival(
+  containerRef: RefObject<HTMLElement | null>,
+  id: string | null,
+  onRevealed: () => void,
+): void {
+  const reported = useRef(onRevealed);
+  reported.current = onRevealed;
+  const underway = useRef<(() => void) | null>(null);
+  useEffect(() => () => underway.current?.(), []);
+  useEffect(() => {
+    if (id === null) return;
+    let finished = false;
+    let observer: MutationObserver | null = null;
+    let first: ReturnType<typeof setTimeout> | undefined;
+    let giveUp: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      finished = true;
+      observer?.disconnect();
+      clearTimeout(first);
+      clearTimeout(giveUp);
+    };
+    const attempt = () => {
+      if (finished) return;
+      const cancel = reveal(containerRef.current, id);
+      if (cancel === null) return;
+      stop();
+      underway.current?.();
+      underway.current = cancel;
+      reported.current();
+    };
+    first = setTimeout(attempt, 0);
+    giveUp = setTimeout(stop, SECTION_ARRIVAL_GIVE_UP_MS);
+    const root = containerRef.current;
+    if (root && typeof MutationObserver === "function") {
+      observer = new MutationObserver(attempt);
+      observer.observe(root, { childList: true, subtree: true });
+    }
+    return stop;
+  }, [containerRef, id]);
+}
+
 /** Whether a mutation can change the labels, keywords or asides in the index. */
 function changesIndex(record: MutationRecord): boolean {
   if (record.type === "attributes") return true;

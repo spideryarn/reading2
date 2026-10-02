@@ -377,7 +377,7 @@ const AN_ACTION: Extract<Command, { kind: "action" }> = {
   description: "Tell us what went wrong.",
   aliases: ["bug"],
   generates: false,
-  run: () => {},
+  run: () => ({ kind: "close" }),
 };
 
 describe("the ranking handles an action exactly as it handles a page", () => {
@@ -466,7 +466,7 @@ describe("a row that starts work carries it as a property", () => {
       label: "No marker",
       description: "An action that never said whether it spends.",
       aliases: [],
-      run: () => {},
+      run: () => ({ kind: "close" }),
     };
     /* Read them, so `noUnusedLocals` does not delete the point of the test.
        The runtime values are beside the point — what is asserted is above. */

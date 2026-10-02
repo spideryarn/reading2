@@ -1669,3 +1669,48 @@ export const libraryTopicsViewParam = createParser<"detail">({
   parse: (v) => (v === "detail" ? v : null),
   serialize: (v) => v,
 }).withOptions({ history: "push" });
+
+/**
+ * **The Metadata sections a link may open** — `?section=ai-processing`.
+ *
+ * Since 2026-10-02, for the command bar's *Run again* rows: a run accepted on
+ * the reading view lands on the Metadata page with its *AI processing* section
+ * opened and flashed, where that step's row shows the run
+ * (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+ *
+ * **A closed list, not any section's id.** A section is otherwise local state
+ * — open or shut is not worth linking to (Metadata.tsx § Section says why) —
+ * so this is an address only for the places something in the app sends a
+ * reader, and each one is a decision. The value is the section's id without
+ * its `sec-` prefix (Metadata.tsx § `sectionId`), which
+ * tests/metadata-section-param.test.tsx holds against the page itself, so a
+ * renamed heading cannot leave a value here that opens nothing. Anything else
+ * parses to `null` and does nothing, as a mangled `?at=` does.
+ */
+export const METADATA_SECTIONS = ["ai-processing"] as const;
+export type MetadataSection = (typeof METADATA_SECTIONS)[number];
+
+/**
+ * `replace`: it is an instruction the page carries out once and then takes off
+ * the address (Metadata.tsx § `useSectionOnArrival`), so neither writing it
+ * nor removing it is a step Back should retrace. Never remembered
+ * (last-view.ts), for the same reason.
+ */
+export const sectionParam = createParser<MetadataSection>({
+  parse: (v) => (METADATA_SECTIONS.includes(v as MetadataSection) ? (v as MetadataSection) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
+ * A carried query string with `section=` set to this one — any earlier
+ * `section` pair dropped, everything else kept byte for byte. Textual, for
+ * `carriedSearch`'s reason (router.ts): a round trip through
+ * `URLSearchParams` re-encodes `?crits=a,b` into something nobody can read.
+ */
+export function withSection(search: string, section: MetadataSection): string {
+  const kept = search
+    .replace(/^\?/, "")
+    .split("&")
+    .filter((pair) => pair !== "" && pair.split("=")[0] !== "section");
+  return [...kept, `section=${section}`].join("&");
+}

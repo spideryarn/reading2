@@ -266,7 +266,7 @@ import { isWebUrl } from "../urls.js";
 import { savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
-import { atParam } from "./params.js";
+import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
@@ -289,12 +289,14 @@ import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { flushSync } from "react-dom";
-import { PageContents, SECTION_REVEAL } from "./PageContents.js";
+import { PageContents, SECTION_REVEAL, useRevealOnArrival } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
 import { ResetArticle } from "./ResetArticle.js";
-import { SKETCH_WAIT } from "./sketch-cost.js";
+/* The labels and notes the command bar shares — that file's header says why
+   they are not here. */
+import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 
@@ -715,6 +717,24 @@ export function Metadata({
    * one page's contents list the other page's sections.
    */
   const body = useRef<HTMLElement>(null);
+
+  /**
+   * **`?section=`: open the section an address names, then take it off.**
+   * Written by the command bar's *Run again* rows, which land a run here, in
+   * *AI processing*, rather than in the mode (plan 261002c, GPT Sol's F1) —
+   * from the reading view as a link, and on this page as the same address
+   * with the parameter added in place.
+   *
+   * Taken off with `replace` (the parameter's own history) **only once the
+   * section has been found and revealed** — `useRevealOnArrival`, which waits
+   * for a section still mounting and says why the order matters (F4). After
+   * that the address is the page's own again, so a reload does not flash the
+   * section a second time and a copied link does not carry the instruction.
+   */
+  const [section, setSection] = useQueryState("section", sectionParam);
+  useRevealOnArrival(body, section === null ? null : sectionIdFor(section), () => {
+    void setSection(null);
+  });
 
   /* Share… in `TopActions`: to the sharing card, landing on its heading.
      Through `body` rather than `document`, for the reason `body`'s docstring
@@ -1561,36 +1581,17 @@ function StageRecord({
   );
 }
 
-/**
- * The reader-facing name of each — a noun, not the present-tense
- * label the stage rows carry.
- *
- * `Record<MetadataRerunStep, string>`, so a new member of the list is a
- * typecheck failure here rather than a blank row.
- */
-const RERUN_LABEL: Record<MetadataRerunStep, string> = {
-  arc: "Arc",
-  tweets: "Thread",
-  glossary: "Glossary",
-  quotes: "Quotes",
-  ideas: "Ideas",
-  timeline: "Timeline",
-  quiz: "Quiz",
-  faq: "FAQ",
-  sketch: "Sketch",
-  skim: "Skim",
-  debate: "Debate",
-  citations: "Citations",
-  /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
-  crossrefs: "Cross-references",
-  /* A sub-mode of Summary, named as its chip is. */
-  simple: "Simple summary",
-};
+/* `RERUN_LABEL` and `RERUN_COST_NOTE` live in ./rerun-commands.ts since
+   2026-10-02, because the command bar's *Run again* rows name the same steps and
+   cannot import them from here (this file imports the Dock, the Dock the bar —
+   GPT Sol's F8 on docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+   What stays here is the glossary's verdict-driven override, below, which is a
+   fact about this article rather than about the step. */
 
-/**
- * **The four rows for which "another model call" is not the whole story**,
- * said under the mode's name, before the press, because nothing else on this
- * page says it.
+/*
+ * **`RERUN_COST_NOTE` (now in ./rerun-commands.ts): the four rows for which
+ * "another model call" is not the whole story**, said under the mode's name,
+ * before the press, because nothing else on this page says it.
  *
  * Until 2026-09-30 these were the four special sentences in an inline confirm
  * that every press went through; Greg asked for the confirm to go (below, at
@@ -1624,6 +1625,7 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
  * `JobProgress`), because a sibling `<span>` is not read to somebody who
  * reaches the button by keyboard.
  */
+
 /**
  * **The glossary's label and note once the server has said which** — plan
  * 261001i § 3. `glossaryRun` is `glossaryRunKind` (src/glossary.ts), the
@@ -1646,18 +1648,6 @@ const GLOSSARY_RUN: Record<
     label: null,
     note: "Writes a new list, because the article, the glossary's instructions or your profile has changed",
   },
-};
-
-const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
-  glossary:
-    /* *Up to date* is doing the work: `existingFor` refuses the old list when
-       there is none, or the source, the prompt version or the reader profile
-       differs — GPT Sol's second review listed the branches, and a note naming
-       all four was too long to be read as a note. */
-    "Adds more terms to an up-to-date list; otherwise writes a new one",
-  sketch: `One model call, ${SKETCH_WAIT}`,
-  debate: "Up to two model calls, each of which searches the web",
-  skim: "Needs Quotes first; without them it stops before any model call",
 };
 
 /**
@@ -3351,6 +3341,16 @@ function found(recall: number): number {
  */
 function sectionId(label: string): string {
   return `sec-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
+/**
+ * **The element a `?section=` value names** — the value is the id `sectionId`
+ * makes, without its prefix, so the address reads `section=ai-processing`
+ * rather than `section=sec-ai-processing`. tests/metadata-section-param.test.tsx
+ * checks every accepted value against this page's real sections.
+ */
+function sectionIdFor(section: MetadataSection): string {
+  return `sec-${section}`;
 }
 
 function Section({
