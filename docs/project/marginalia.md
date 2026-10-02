@@ -17,9 +17,10 @@ opening the column never starts a run. The owner's lists are read through each m
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
 
-**So a mode run later still reaches the margin, and nothing is run for it.** The column keeps no
-copy: it reads each list every time it opens, and while it is open it re-reads FAQ, Debate or Ideas
-when a job that wrote it finishes — the same completion feed each band listens to, through
+**So a FAQ, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+The column keeps no copy of these lists: it reads them every time it opens, and while it is open
+it re-reads them when this tab's job engine announces a completion for them — the same feed each
+band listens to, through
 `useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations is the
 exception: the band and the Reader share one read, so it is fresh whenever the band is, but a run
 that finishes after the reader has left the Citations band reaches neither the margin nor the prose

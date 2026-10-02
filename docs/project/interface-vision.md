@@ -167,10 +167,11 @@ These are the reasons to go carefully, each one already said by Greg in another 
   >
   > — Greg, 2026-10-02
 
-  The worry does not hold: the margin keeps no copy and reads every list each time it opens, and
-  since [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md) an open
-  margin also re-reads a list when its job finishes — his "ideal", which turned out small.
-  [marginalia.md § What it shows](marginalia.md).
+  For the owner's FAQ, Debate and Ideas, the worry does not hold: the margin reads them each time
+  it opens, and since [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md)
+  it also refreshes them on completions announced by this tab's job engine — his "ideal", which
+  turned out small. Citations uses the Reader's shared read and has a remaining refresh gap;
+  [marginalia.md § What it shows](marginalia.md) names it.
 - **Phones.** On a phone a band already covers the article, and a passage link in it scrolls text
   you cannot see (5A), and the notes do not fit at all under 612px. The vision has no phone answer
   yet.
