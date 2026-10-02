@@ -19,6 +19,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  EXTRACT_SEPARATOR,
   MAX_EVIDENCE_EXCERPT,
   collectCitations,
   collectSearchEvidence,
@@ -234,5 +235,95 @@ describe("collectSearchEvidence", () => {
     const into = new Map<string, SearchEvidence>();
     expect(() => collectSearchEvidence(undefined, into)).not.toThrow();
     expect(into.size).toBe(0);
+  });
+});
+
+/**
+ * `extracts: "all"` — the opt-in for a caller that checks once the answer is
+ * complete (Debate). The default above stays first-sighting-wins.
+ */
+describe('collectSearchEvidence with extracts: "all"', () => {
+  const gatherAll = (annotations: unknown[], onDropped?: () => void): SearchEvidence[] => {
+    const into = new Map<string, SearchEvidence>();
+    collectSearchEvidence(annotations as Parameters<typeof collectSearchEvidence>[0], into, onDropped, {
+      extracts: "all",
+    });
+    return [...into.values()];
+  };
+
+  it("joins a page's distinct extracts in arrival order, keeping the first title", () => {
+    expect(
+      gatherAll([
+        found("https://a.test", "First", "first extract"),
+        found("https://b.test", "B", "other page"),
+        found("https://a.test", "Second", "second extract"),
+      ]),
+    ).toStrictEqual([
+      { url: "https://a.test", title: "First", excerpt: `first extract${EXTRACT_SEPARATOR}second extract` },
+      { url: "https://b.test", title: "B", excerpt: "other page" },
+    ]);
+  });
+
+  it("does not repeat an extract it already holds, including a later substring, and ignores an empty one", () => {
+    expect(
+      gatherAll([
+        found("https://a.test", "A", "before the same words after"),
+        found("https://a.test", "A", "the same words"),
+        found("https://a.test", "A", ""),
+      ]),
+    ).toStrictEqual([{ url: "https://a.test", title: "A", excerpt: "before the same words after" }]);
+  });
+
+  it("replaces an earlier extract with a later superset instead of spending the cap on duplicate text", () => {
+    const first = "x".repeat(MAX_EVIDENCE_EXCERPT - 1_000);
+    const later = `${first}${"y".repeat(1_000)}`;
+    expect(gatherAll([found("https://a.test", "First", first), found("https://a.test", "Second", later)])).toStrictEqual([
+      { url: "https://a.test", title: "First", excerpt: later },
+    ]);
+  });
+
+  it("replaces a superseded extract after other distinct extracts have already been joined", () => {
+    expect(
+      gatherAll([
+        found("https://a.test", "A", "first distinct extract"),
+        found("https://a.test", "A", "middle words"),
+        found("https://a.test", "A", "before middle words after"),
+      ]),
+    ).toStrictEqual([
+      {
+        url: "https://a.test",
+        title: "A",
+        excerpt: `first distinct extract${EXTRACT_SEPARATOR}before middle words after`,
+      },
+    ]);
+  });
+
+  it("takes an extract from a later sighting when the first had none", () => {
+    expect(gatherAll([found("https://a.test", "A"), found("https://a.test", "A", "late words")])).toStrictEqual([
+      { url: "https://a.test", title: "A", excerpt: "late words" },
+    ]);
+  });
+
+  it("caps the joined text as one excerpt", () => {
+    const got = gatherAll([
+      found("https://a.test", undefined, "x".repeat(MAX_EVIDENCE_EXCERPT - 10)),
+      found("https://a.test", undefined, "y".repeat(500)),
+    ]);
+    expect(got[0]?.excerpt).toHaveLength(MAX_EVIDENCE_EXCERPT);
+  });
+
+  it("does not spend the last bytes of the cap on a partial or content-free separator", () => {
+    const first = "x".repeat(MAX_EVIDENCE_EXCERPT - EXTRACT_SEPARATOR.length);
+    expect(gatherAll([found("https://a.test", undefined, first), found("https://a.test", undefined, "later")])).toStrictEqual([
+      { url: "https://a.test", excerpt: first },
+    ]);
+  });
+
+  it("still refuses a URL that is not http(s), however often it appears", () => {
+    const dropped = vi.fn();
+    expect(
+      gatherAll([found("javascript:alert(1)", "x", "one"), found("javascript:alert(1)", "x", "two")], dropped),
+    ).toStrictEqual([]);
+    expect(dropped).toHaveBeenCalledTimes(2);
   });
 });

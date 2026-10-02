@@ -13,6 +13,14 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-01 · SPIDERYARN-READING2-9D (the report itself shipped as stage 1; this is its stage 2)
+  · may Debate send an article's DOI to a citation index, to list every work that cites it? OpenAlex
+  is licence-compatible today (CC0; a free key and a daily budget) and gives the list but not what
+  each citer said. Semantic Scholar gives the citing sentence, which makes for/against checkable,
+  but its standard licence excludes commercial use: ask AI2 for the expanded one first? ·
+  [261002i § The question for Greg](../plans/261002i-debate-leads-with-who-has-cited-this-article.md) ·
+  [note](261001_1914-debate-leads-with-who-has-cited-this.md)
+
 - 2026-10-01 · SPIDERYARN-READING2-8A (the report itself shipped; this is its follow-up) · may a
   failed import's pre-filled Problem report also carry the source URL, filename and error sentence?
   Today it carries ids, step names and times only, because those three would bend

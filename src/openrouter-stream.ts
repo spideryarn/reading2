@@ -487,17 +487,98 @@ export function collectCitations(
  * `content` is absent on some rows and under some engines, so it is spread in
  * only when there is something in it — an empty excerpt is a claim we cannot
  * make, not a page that said nothing.
+ *
+ * ## `extracts: "all"` — every extract of a page, for a caller that checks after the answer
+ *
+ * **One page can come back several times with a different extract each
+ * time**, and the model reads all of them. First sighting wins by default, so
+ * the extract cannot change under a row a streaming caller has already
+ * checked. But a caller that checks only once the whole answer is in — Debate
+ * — was refusing quotations the model copied correctly from a page's *second*
+ * extract: 33 of 76 quotations missing from a first extract, measured over 48
+ * recorded Debate runs on 2026-10-02
+ * (docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md).
+ *
+ * So such a caller may ask for **every distinct extract, in the order they
+ * came**, joined by `EXTRACT_SEPARATOR` and capped as one. Opt-in, so chat,
+ * explain, Citations and Dig deeper are untouched. The vetting is unchanged:
+ * the URL was already accepted the first time it was seen, and the title stays
+ * the first sighting's.
  */
 export function collectSearchEvidence(
   annotations: Annotation[] | undefined,
   into: Map<string, SearchEvidence>,
   onDropped?: () => void,
+  opts: { extracts?: "first" | "all" } = {},
 ): void {
-  collectAnnotated(annotations, into, onDropped, (c) => ({
-    url: c.url,
-    ...(c.title ? { title: c.title } : {}),
-    ...(c.content ? { excerpt: c.content.slice(0, MAX_EVIDENCE_EXCERPT) } : {}),
-  }));
+  const merge =
+    opts.extracts === "all"
+      ? (seen: SearchEvidence, c: CitedPage): SearchEvidence => mergeSearchExtract(seen, c.content ?? "")
+      : undefined;
+  collectAnnotated(
+    annotations,
+    into,
+    onDropped,
+    (c) => ({
+      url: c.url,
+      ...(c.title ? { title: c.title } : {}),
+      ...(c.content ? { excerpt: c.content.slice(0, MAX_EVIDENCE_EXCERPT) } : {}),
+    }),
+    merge,
+  );
+}
+
+/**
+ * **What stands between two extracts of one page** under `extracts: "all"`.
+ *
+ * It has to stop a quotation running from the end of one extract into the
+ * start of the next, because those words are adjacent only in our buffer,
+ * never on the page. The quote matchers collapse whitespace, so blank lines
+ * alone would not do it; a character no page puts between two sentences of
+ * prose, and no model copies into a quotation, does.
+ */
+export const EXTRACT_SEPARATOR = "\n\n⁂\n\n";
+
+/** Add one later extract without keeping a narrower copy of the same passage. */
+function mergeSearchExtract(seen: SearchEvidence, more: string): SearchEvidence {
+  if (more === "") return seen;
+  const extracts = seen.excerpt === undefined ? [] : seen.excerpt.split(EXTRACT_SEPARATOR);
+  if (extracts.some((held) => held.includes(more))) return seen;
+
+  /* Search engines sometimes return a wider window around an earlier passage.
+     Put the wider one in the narrower one's position and remove every extract
+     it subsumes. Appending would spend the shared cap repeating old text and
+     could still lose the new tail this option exists to recover. */
+  const merged: string[] = [];
+  let inserted = false;
+  for (const held of extracts) {
+    if (!more.includes(held)) {
+      merged.push(held);
+      continue;
+    }
+    if (!inserted) merged.push(more);
+    inserted = true;
+  }
+  if (!inserted) merged.push(more);
+  return { ...seen, excerpt: joinSearchExtracts(merged) };
+}
+
+/** Join extracts under the one cap, but never retain a partial or empty separator. */
+function joinSearchExtracts(extracts: readonly string[]): string {
+  let joined = "";
+  for (const extract of extracts) {
+    if (joined === "") {
+      joined = extract.slice(0, MAX_EVIDENCE_EXCERPT);
+      continue;
+    }
+    const room = MAX_EVIDENCE_EXCERPT - joined.length;
+    /* A separator with no later text protects no boundary. Keeping a partial
+       marker would also stop `shingleOverlap` recognising the synthetic
+       boundary and put invented windows back into its density denominator. */
+    if (room <= EXTRACT_SEPARATOR.length) break;
+    joined += EXTRACT_SEPARATOR + extract.slice(0, room - EXTRACT_SEPARATOR.length);
+  }
+  return joined;
 }
 
 /**
@@ -519,10 +600,18 @@ function collectAnnotated<T>(
   into: Map<string, T>,
   onDropped: (() => void) | undefined,
   keep: (c: CitedPage) => T,
+  /** A later sighting of a URL already kept; absent means first sighting wins. */
+  merge?: (seen: T, c: CitedPage) => T,
 ): void {
   for (const a of annotations ?? []) {
     const c = a.url_citation;
-    if (a.type !== "url_citation" || !c?.url || into.has(c.url)) continue;
+    if (a.type !== "url_citation" || !c?.url) continue;
+    const seen = into.get(c.url);
+    if (seen !== undefined) {
+      /* Already vetted when it was first kept, so nothing below needs asking again. */
+      if (merge) into.set(c.url, merge(seen, { ...c, url: c.url }));
+      continue;
+    }
     // Refused here rather than guarded at the point of render, because this
     // is where model output stops being a string and starts being stored.
     if (!isWebUrl(c.url)) {
