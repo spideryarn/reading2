@@ -240,8 +240,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           <strong>quick</strong> asks the same kind of question and answers in about a second: a
           fast model scores every paragraph, and the ones that match are marked whole, with no
-          reasons. Use it for a first look; <strong>flesh out</strong> on a quick search runs the
-          full meaning search on the same words.
+          reasons. It searches as you pause typing, and keeps one saved search for what you typed,
+          updated as you go. Use it for a first look; <strong>flesh out</strong> on a quick search
+          runs the full meaning search on the same words.
+        </p>
+        <p>
+          To start a quick search from anywhere in the article, type in the{" "}
+          <strong>Quick search</strong> box in the bottom bar (the <strong>⚡</strong> on a phone or
+          tablet), or press <strong>/</strong>.
         </p>
       </>
     ),
