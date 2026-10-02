@@ -374,3 +374,46 @@ describe("the search box above it (83)", () => {
     expect(entries()).toEqual(all);
   });
 });
+
+/* **The words a reader brings, against the real page** — Greg, `spya-nkjpte`,
+   2026-10-02: *"Add lots more keyword-aliases for Metadata page search to make
+   it more flexible/forgiving (e.g. I tried searching for "regenerate" to find
+   ways to regenerate the AI processing, and nothing matched)."* Run on the
+   rendered page rather than a copied list, so a section whose `keywords` drift
+   fails here. docs/plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md. */
+describe("the search box finds a section by the words a reader brings (nkjpte)", () => {
+  const CASES: [string, string][] = [
+    ["regenerate", "AI processing"],
+    ["regen", "AI processing"],
+    ["rerun", "AI processing"],
+    ["re-run", "AI processing"],
+    ["reprocess", "AI processing"],
+    ["recompute", "AI processing"],
+    ["start again", "AI processing"],
+    ["start over", "AI processing"],
+    ["reset", "AI processing"],
+    ["redo the whole article", "AI processing"],
+    ["update", "AI processing"],
+    ["fix", "AI processing"],
+    ["high powered", "AI processing"],
+    ["opus", "AI processing"],
+    ["better model", "AI processing"],
+    ["regenerate glossary", "AI processing"],
+    ["regenerate my glossary please", "AI processing"],
+    ["redo the quiz", "AI processing"],
+    ["thread", "AI processing"],
+    ["tldr", "In one sentence"],
+    ["make it private", "Access & sharing"],
+    ["get rid of it forever", "Delete this article"],
+    ["hide it", "Archive this article"],
+    ["json", "Export"],
+    /* Authors is not here: this article has none, so the page draws no
+       section for it. tests/page-search.test.ts covers *who wrote this*. */
+  ];
+  for (const [query, expected] of CASES) {
+    it(`"${query}" → ${expected}`, async () => {
+      await type(query);
+      expect(entries()[0]).toBe(expected);
+    });
+  }
+});

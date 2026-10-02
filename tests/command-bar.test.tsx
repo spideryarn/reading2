@@ -1069,6 +1069,22 @@ describe("the rows that are not modes", () => {
     }
   });
 
+  /**
+   * **The words for what you do on the Metadata page reach it** — Greg,
+   * `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to find
+   * ways to regenerate the AI processing, and nothing matched"*. On the reading
+   * view the bar has no row for re-running anything; the page that does is
+   * Metadata. Plan 261002c.
+   */
+  it("answers the words for re-running and the page's other controls with Metadata", () => {
+    readingSignedIn();
+    openBar();
+    for (const query of ["regenerate", "rerun", "reprocess", "ai processing", "cost", "export", "delete"]) {
+      type(query);
+      expect(listed(), `typing ${JSON.stringify(query)} did not offer Metadata`).toContain("Metadata");
+    }
+  });
+
   it("navigates to this article's metadata page, carrying the reader's place", () => {
     history.replaceState(null, "", "/read/a-piece?at=spya-k3m9qt");
     readingSignedIn();

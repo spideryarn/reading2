@@ -893,7 +893,7 @@ export function Metadata({
             the article's own voice, which makes it read as part of the heading
             rather than as the first of nine cards. */}
         {Boolean(root?.gist || root?.summary || meta.note) && (
-          <Section label="In one sentence">
+          <Section label="In one sentence" keywords="takeaway gist summary short brief one line what is it about">
             <div className={`${CARD} tw:p-5`}>
               {root?.gist && (
                 <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
@@ -927,7 +927,7 @@ export function Metadata({
           <Section
             label="Authors"
             aside={`${meta.authors.length}`}
-            keywords="names writers byline who wrote it affiliations"
+            keywords="names writers byline who wrote it affiliations people person researchers institution university"
             collapsible
           >
             <ol className={`${CARD} tw:m-0 tw:list-none tw:p-5 tw:text-sm`} data-testid="metadata-authors">
@@ -1074,7 +1074,7 @@ export function Metadata({
             rather than about the article. */}
         <Section
           label="Your reading"
-          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off"
+          keywords="purpose reason goal notes comments questions annotations highlights bookmarks progress left off resume continue position"
         >
           {/* The per-article half of the reader profile. The global half is
               read-only here with a link to /profile, because a global value
@@ -1194,7 +1194,7 @@ export function Metadata({
             takes the article off the shelf, followed only by permanent
             deletion. Both belong past everything somebody might have come here
             to read. */}
-        <Section label="Archive this article" keywords="remove from shelf">
+        <Section label="Archive this article" keywords="remove from shelf put away tidy done unarchive restore library">
           <ArchiveArticle archive={archive} fixture={showingFixture} />
         </Section>
 
@@ -1212,7 +1212,7 @@ export function Metadata({
             and shutting the section only adds a press in front of it. */}
         <Section
           label="Delete this article"
-          keywords="permanent permanently forever"
+          keywords="permanent permanently forever gone wipe for good irreversible"
           collapsible
           keepMounted
         >
@@ -1291,7 +1291,7 @@ function SharingSection({
   return (
     <Section
       label="Access & sharing"
-      keywords="anyone everybody readers signed in account permission public link privacy visible who can read"
+      keywords="anyone everybody readers signed in account permission public link privacy visible who can read send friend colleague republish"
     >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
@@ -1419,7 +1419,7 @@ function RerunSection({
        a failed metadata request draws the section open, with the error first. */
     <Section
       label="AI processing"
-      keywords="steps stages pipeline models summaries glossary structure hierarchy"
+      keywords={AI_PROCESSING_KEYWORDS}
       collapsible={!error}
       keepMounted
       aside={error ? null : aside}
@@ -1586,6 +1586,28 @@ const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   /* A sub-mode of Summary, named as its chip is. */
   simple: "Simple summary",
 };
+
+/**
+ * **What a reader might type looking for *AI processing*** — the section where
+ * everything is asked for again, and so the one with the most ways to say it.
+ * Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to
+ * find ways to regenerate the AI processing, and nothing matched"*.
+ *
+ * The words for *again* that mean only that are a synonym group in
+ * page-search.ts § METADATA_SYNONYMS (*regenerate*, *reprocess*, …). The
+ * broader ones are here, on this section alone: a synonym applies to every
+ * section, so *update* or *over* in that group would rank this above *At a
+ * glance* for *over time* (GPT Sol, plan review of 261002c, P2). Then the
+ * High-powered AI switch and the *Whole article* row, which `RERUN_LABEL` does
+ * not name, and every row it does — built from it, so a new row is findable
+ * the day it is added.
+ */
+const AI_PROCESSING_KEYWORDS = [
+  "steps stages pipeline models summaries glossary structure hierarchy",
+  "start over again reset whole update fix generate",
+  "high powered power opus sonnet model better smarter stronger capable",
+  ...Object.values(RERUN_LABEL),
+].join(" ");
 
 /**
  * **The four rows for which "another model call" is not the whole story**,
@@ -1836,7 +1858,7 @@ function CostSection({ slug }: { slug: string }) {
   return (
     <Section
       label="What it cost"
-      keywords="ai calls models tokens breakdown"
+      keywords="ai calls models tokens breakdown total expensive cheap"
       collapsible={!failed}
       aside={articleCostSummary(load)}
     >
@@ -1949,7 +1971,7 @@ function ExportSection({
        Its error, if one arrives while shut, is inside `hidden` and so is not
        announced until the section is opened — accepted: the reader shut it
        themselves, mid-wait. GPT Sol, plan review. */
-    <Section label="Export" keywords="data files zip" collapsible keepMounted>
+    <Section label="Export" keywords="data files zip markdown take out keep offline" collapsible keepMounted>
       <div className={`${CARD} tw:p-4`}>
         {/* An inline button in the card, in `ArchiveArticle`'s shape rather than
             the toolbar's `IconButton` — this one has a label to carry and no
@@ -2225,7 +2247,7 @@ function CameFrom({ meta }: { meta: Meta }) {
        heading now says that. Fable, 2026-09-03. */
     <Section
       label="How well we read the PDF"
-      keywords="transcription missed missing words pages"
+      keywords="transcription missed missing words pages accuracy errors mistakes garbled ocr scanned"
     >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
@@ -2353,7 +2375,7 @@ function TechnicalDetails({
   return (
     <Section
       label="Technical details"
-      keywords="address url source original stored storage location link fingerprint hash slug id revision"
+      keywords="address url source original stored storage location link fingerprint hash slug id revision where from website web page developer"
       collapsible
     >
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
@@ -3369,10 +3391,17 @@ function Section({
    * search box above the contents list reads them (`data-keywords`,
    * page-search.ts). Mostly for the sections that unmount their body when
    * shut, whose words are otherwise not on the page to find. The synonyms
-   * every page shares live in page-search.ts § SYNONYMS; these are this
-   * section's own. Plan 261001s.
+   * the whole page shares live in page-search.ts § METADATA_SYNONYMS; these
+   * are this section's own. Plan 261001s.
+   *
+   * **Required, and generous**: the words a reader *types* — *regenerate*,
+   * *get rid of*, *who can see it* — not the words the section prints. A new
+   * section, or a new control in one, comes with its words, and a case in
+   * tests/metadata-contents-reveal.test.tsx § the words a reader brings.
+   * Greg, `spya-nkjpte`, 2026-10-02 — docs/project/web-client.md, the
+   * Metadata.tsx row. Plan 261002c.
    */
-  keywords?: string;
+  keywords: string;
   collapsible?: boolean;
   /**
    * **Shut hides the children rather than unmounting them.** For *AI
@@ -3460,7 +3489,7 @@ function Section({
       ref={sectionEl}
       id={sectionId(label)}
       data-section={label}
-      {...(keywords ? { "data-keywords": keywords } : {})}
+      data-keywords={keywords}
       className="tw:mt-8 tw:scroll-mt-24"
     >
       {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a

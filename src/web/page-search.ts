@@ -12,7 +12,7 @@
  * keystroke; it needs the words a reader types to reach the section that means
  * them. Four things do that here, each pinned in tests/page-search.test.ts:
  *
- * - **A synonym table** (`SYNONYMS`), hand-written for the words this page is
+ * - **A synonym table** (`METADATA_SYNONYMS`), hand-written for the words this page is
  *   about — *price* finds *What it cost*, *download* finds *Export*.
  * - **A light stem** on both sides, so *costs*, *sharing* and *authored* meet
  *   *cost*, *share* and *author*.
@@ -63,13 +63,14 @@ export type SynonymTable = readonly (readonly string[])[];
  * rather than adding its words here, where they would widen Metadata's matches
  * with words that mean nothing on it.
  */
-const SYNONYMS: SynonymTable = [
+export const METADATA_SYNONYMS: SynonymTable = [
   ["cost", "price", "spend", "spent", "money", "dollar", "bill", "expense", "charge", "paid", "usage"],
-  ["delete", "remove", "erase", "trash", "destroy", "bin", "purge"],
+  ["delete", "remove", "erase", "trash", "destroy", "bin", "purge", "rid"],
   ["archive", "hide", "shelve", "shelf", "unshelve"],
   ["share", "public", "private", "link", "visibility", "visible", "access", "publish", "permission"],
   ["export", "download", "backup", "save", "copy", "json"],
-  ["rerun", "regenerate", "redo", "refresh", "retry", "rebuild", "again", "run", "restart", "processing"],
+  ["rerun", "regenerate", "regen", "redo", "refresh", "retry", "rebuild", "again", "run", "restart",
+    "reprocess", "recompute", "remake", "rewrite", "reanalyse", "reanalyze", "processing"],
   ["author", "writer", "byline", "wrote", "written"],
   ["reading", "read", "finished"],
   ["time", "duration", "long"],
@@ -85,7 +86,7 @@ const SYNONYMS: SynonymTable = [
  * purpose: both sides go through it, so it only has to be consistent, not
  * right. Short words are left alone, or *is* and *as* would vanish.
  */
-function stem(word: string): string {
+export function searchStem(word: string): string {
   let w = word;
   if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
   if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
@@ -102,7 +103,7 @@ function words(text: string): string[] {
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
-    .map(stem);
+    .map(searchStem);
 }
 
 /** Stemmed word → its stemmed group, for one table. */
@@ -117,7 +118,7 @@ function groupsOf(table: SynonymTable): GroupIndex {
   if (cached) return cached;
   const index = new Map<string, readonly string[]>();
   for (const group of table) {
-    const stems = group.map(stem);
+    const stems = group.map(searchStem);
     for (const s of stems) index.set(s, stems);
   }
   INDEXES.set(table, index);
@@ -136,10 +137,11 @@ const STOPWORDS = new Set(
     "were", "be", "been", "it", "its", "this", "that", "my", "me", "i", "you", "your", "we", "our",
     "how", "much", "many", "what", "which", "where", "when", "why", "do", "does", "did", "can",
     "show", "see", "find", "about", "make", "change", "used", "want", "need", "like", "article", "page",
+    "get", "please",
     /* Fragments produced when punctuation splits ordinary contractions:
        "what's", "you're", "I've", "I'll", "I'd", "can't". */
     "s", "re", "ve", "ll", "d", "m", "t",
-  ].map(stem),
+  ].map(searchStem),
 );
 
 /** A query word shorter than this does not expand through the table by prefix. */
@@ -178,11 +180,20 @@ function hit(term: string, synonyms: Set<string>, have: readonly string[]): numb
  * The ids of the sections that answer `query`, best first. An empty query
  * answers nothing, and the caller shows its whole list instead. `synonyms` is
  * the page's own table; omitted, it is Metadata's.
+ *
+ * **Every word must hit somewhere — among the words that mean anything here.**
+ * When no section answers every word, a word that no section answers at all
+ * (*please*, *zebra*) is dropped and the rest are tried again, so *regenerate
+ * my glossary please* finds AI processing. Words that each mean something on
+ * the page still have to agree: *delete cost* finds nothing rather than both,
+ * so a second word only ever narrows. Not "rank by how many words hit", which
+ * would make it widen. Greg, `spya-nkjpte` ("more flexible/forgiving"); GPT
+ * Sol, plan review of 261002c, P1.
  */
 export function searchSections(
   query: string,
   sections: readonly SearchableSection[],
-  synonyms: SynonymTable = SYNONYMS,
+  synonyms: SynonymTable = METADATA_SYNONYMS,
 ): string[] {
   const all = words(query);
   if (all.length === 0) return [];
@@ -190,23 +201,31 @@ export function searchSections(
   const terms = content.length > 0 ? content : all;
   const groups = groupsOf(synonyms);
   const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t, groups) }));
-  const scored: { id: string; score: number; order: number }[] = [];
-  sections.forEach((section, order) => {
+  /* Each section's best score for each query word, 0 for a miss. */
+  const rows = sections.map((section, order) => {
     const fields: Record<Field, string[]> = {
       label: words(section.label),
       keywords: words(section.keywords),
       aside: words(section.aside),
     };
-    let score = 0;
-    for (const { term, synonyms } of expanded) {
+    const scores = expanded.map(({ term, synonyms }) => {
       let best = 0;
       for (const field of Object.keys(FIELD_WEIGHT) as Field[]) {
         best = Math.max(best, FIELD_WEIGHT[field] * hit(term, synonyms, fields[field]));
       }
-      if (best === 0) return; // every word must hit somewhere
-      score += best;
-    }
-    scored.push({ id: section.id, score, order });
+      return best;
+    });
+    return { id: section.id, order, scores };
   });
-  return scored.sort((a, b) => b.score - a.score || a.order - b.order).map((s) => s.id);
+  const answering = (wanted: readonly number[]) =>
+    rows
+      .filter((r) => wanted.every((i) => (r.scores[i] ?? 0) > 0))
+      .map((r) => ({ ...r, score: wanted.reduce((sum, i) => sum + (r.scores[i] ?? 0), 0) }))
+      .sort((a, b) => b.score - a.score || a.order - b.order)
+      .map((r) => r.id);
+  const every = terms.map((_, i) => i);
+  const found = answering(every);
+  if (found.length > 0) return found;
+  const known = every.filter((i) => rows.some((r) => (r.scores[i] ?? 0) > 0));
+  return known.length > 0 && known.length < every.length ? answering(known) : [];
 }
