@@ -36,7 +36,7 @@ points at the right corner even though it is not the cause — and the covering 
 
 - `useWindowWidth` measures the root's `clientWidth` (`pageWidth` in `reader/measure.ts`), and also
   listens with a `ResizeObserver` on the root, because a scrollbar arriving after the article loads
-  fires no `resize`. It cannot loop: narrowing makes the page taller, which keeps the scrollbar.
+  fires no `resize`. (It could loop — see Sol's P1 below — so `scrollbar-gutter: stable` now keeps the width fixed.)
   The iOS-zoom case 260912b fixed is unchanged — there the root's `clientWidth` *is* what
   `layoutViewportWidth` picked.
 - `.reader` writes that same number as `--page-w`, and the two sticky bars use it instead of
@@ -162,6 +162,34 @@ failure because a failed request is not proof nothing was written.
 the Undo strip already lives. No new field on the payload — but it kicks you out of the article,
 which Greg said Archive should not do, and it cannot show *Put back* on an article you open that is
 already archived.
+
+## GPT Sol's plan review, and what was done with it
+
+[261002a-plan-review-sol.md](261002a-plan-review-sol.md) — *changes requested*; the band formula
+and the visitor boundary passed.
+
+1. **P1, taken: the root observer could flip.** "A narrower page is a taller one" is false:
+   Structure's band drops from its columns (~619px) to 400 near a 1175px window, handing the prose
+   200px, and a shorter page can lose its scrollbar and so its width back. `html {
+   scrollbar-gutter: stable }` in shell.css keeps the scrollbar's room whether or not the page
+   scrolls (nothing on overlay scrollbars), so the width cannot depend on the layout; the observer
+   stays as the fallback where the property is unsupported, coalesced to one read a frame.
+2. **P1, taken: Archive went stale between the reading view and Metadata.** `OwnedArticle` keeps
+   one fetched payload across both views, so archiving on one and stepping to the other showed the
+   old state. `useArchive` now reports every known answer (`onAnswer`), and `ArticlePage` layers it
+   over the payload as it already does the sharing switch (`archivedTo`, beside `sharedTo`). The
+   `key={slug}` on `ArchiveMark` went: `OwnedArticle key={slug}` already does that job.
+3. **P2, declined: the offline cache of `/api/article/:slug` keeps the old `archivedAt`.** Online,
+   `apiFetch` never answers from the cache, so only an offline reopen sees it, and there the press
+   cannot succeed anyway. Invalidating would throw away the offline copy of an article the reader
+   has just archived *and is still reading*. The title after a rename has the same property today.
+4. **P2, taken: `.sk-full` and `.ill-full` were `100vw` too**, so the full-screen Sketch and
+   Illustrated hung their right edge under a classic scrollbar. Now `left`/`right`, as
+   lightbox.css does it; pinned in the same test.
+5. **P2, declined: "the 731px query disagrees with the layout".** Nothing in `layout.ts` changes
+   at 731/732 any more — gist columns are gone, and `fitView` has no threshold there — and the CSS
+   was always comparing the window with the scrollbar against a page 15px narrower; this change
+   did not alter that relationship, only the JS one, which now matches the page.
 
 ## Order
 

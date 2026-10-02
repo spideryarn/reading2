@@ -108,9 +108,14 @@ interface Props {
    * the same rule Delete follows on the metadata page. 2026-08-28.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
+  /**
+   * The Archive button's latest answer, handed up so the payload the metadata
+   * page and this masthead share carries it — ArticlePage.tsx § `archived`.
+   */
+  onArchived?: ((slug: string, at: string | null) => void) | undefined;
 }
 
-export function Masthead({ article, slug, onRenamed }: Props) {
+export function Masthead({ article, slug, onRenamed, onArchived }: Props) {
   const { meta, tree } = article;
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
@@ -184,12 +189,11 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
       />
-      {/* Owner-only on the same two guards, and keyed on the slug so a press
-          on one article cannot carry its answer to the next — `useArchive`
-          holds what the reader did in state, and nothing else here remounts
-          when the reader moves between articles. */}
+      {/* Owner-only on the same two guards. No `key`: ArticlePage mounts the
+          owner's page as `OwnedArticle key={slug}`, so another article is a
+          fresh mount and `useArchive`'s state cannot cross to it. */}
       {onRenamed !== undefined && article.archivedAt !== undefined ? (
-        <ArchiveMark key={slug} slug={slug} archivedAt={article.archivedAt} />
+        <ArchiveMark slug={slug} archivedAt={article.archivedAt} onArchived={onArchived} />
       ) : null}
     </>
   );
@@ -861,8 +865,16 @@ function SharingMark({
  * which is what `SharingMark` beside it shows.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-function ArchiveMark({ slug, archivedAt }: { slug: string; archivedAt: string | null }) {
-  const archive = useArchive(slug, archivedAt, true, false);
+function ArchiveMark({
+  slug,
+  archivedAt,
+  onArchived,
+}: {
+  slug: string;
+  archivedAt: string | null;
+  onArchived: ((slug: string, at: string | null) => void) | undefined;
+}) {
+  const archive = useArchive(slug, archivedAt, true, false, onArchived);
   const { at, busy, error, set } = archive;
   /* `at` turns `undefined` only when a failed press could not be re-read —
      we no longer know, so the button goes, as it does on the Metadata page. */

@@ -47,11 +47,20 @@ describe("page-wide boxes beside a classic scrollbar", () => {
   it.each([
     ["dock.css", ".dock"],
     ["narrow-window.css", ".reader.band-covers .mode-band"],
+    // The two full-screen pictures, which hung their right edge under it too.
+    ["diagram-sketch.css", ".sk-full"],
+    ["diagram-illustrated.css", ".ill-full"],
   ])("%s %s spans the viewport by its edges, not by 100vw", (file, selector) => {
     const found = blocks(file, selector);
     expect(found.length).toBeGreaterThan(0);
     for (const b of found) expect(b).not.toContain("100vw");
     expect(found.some((b) => /(^|;)\s*right\s*:/.test(b))).toBe(true);
+  });
+
+  /* Without it the width depends on whether the page scrolls, which the layout
+     decides — and Structure's band jump can flip both (GPT Sol, plan 261002a). */
+  it("keeps the scrollbar's room whether or not the page scrolls", () => {
+    expect(blocks("shell.css", "html").join(";")).toMatch(/scrollbar-gutter\s*:\s*stable/);
   });
 
   it("is written on .reader by the reader, from the width the layout used", () => {

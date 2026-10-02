@@ -304,7 +304,7 @@
 
    `fitMode` returning `modeW: 0` is what makes the rest of the page need no
    changes at all: every rule that reserves horizontal room for a band reserves
-   none, so the two sticky bars keep their full `100vw` and `.reader` keeps its
+   none, so the two sticky bars keep their full `--page-w` and `.reader` keeps its
    ordinary padding. All that is left is to widen the band, which is
    `position: fixed` and therefore costs the layout underneath it nothing.
 

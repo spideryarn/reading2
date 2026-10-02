@@ -436,6 +436,7 @@ export function Metadata({
   article,
   onRenamed,
   onVisibility,
+  onArchived,
 }: {
   slug: string;
   article: Article;
@@ -456,6 +457,12 @@ export function Metadata({
    * is one of the values.
    */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  /**
+   * Archived or not, as this page last heard — handed up for `onVisibility`'s
+   * reason, since the masthead has an Archive button too (plan 261002a).
+   * Optional so the tests that mount this page alone need not pass one.
+   */
+  onArchived?: ((slug: string, at: string | null) => void) | undefined;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -681,6 +688,9 @@ export function Metadata({
     provenance?.archivedAt,
     provenance !== null,
     Boolean(provenanceError),
+    /* Handed up so the masthead one click away agrees; never from the
+       fixture, which has no row and no masthead button. */
+    showingFixture ? undefined : onArchived,
   );
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */

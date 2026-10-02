@@ -285,6 +285,14 @@ and every check anybody ran with a mouse would look fine.
 So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
 case nothing. `GET /api/library?archived=1` is the other half of the shelf.
 
+**Off the shelf, the same act has three more buttons, all off one hook** (`src/web/useArchive.ts`):
+two on the article's metadata page, and since 2026-10-02 one on the reading view's masthead beside
+the sharing mark (Greg, spya-br27ef: *"Add a button at the top of the reading view to archive the
+article, next to the button to share it publicly"*). None of them navigates or needs an Undo strip:
+an archived article stays readable by its link, so each shows the state it is now in and Put back.
+The masthead learns that state from `Article.archivedAt`, which only the owner's payload carries —
+[261002a](../plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md).
+
 The **Include archived** chip beside Unread (it read just *Archived* until 2026-09-30, below) is the other way back, and it is not optional decoration:
 without it Archive is permanent from the interface the moment the nine-second Undo strip goes, which
 would make "nothing is destroyed" true of the database and false of the product. It is off by

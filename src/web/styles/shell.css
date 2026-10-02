@@ -163,6 +163,17 @@
   z-index: 39;
 }
 
+/* **The scrollbar's room is kept whether or not the page scrolls**, since
+   2026-10-02. The reading view lays out for the root's width
+   (reader/measure.ts § `pageWidth`), and beside a classic scrollbar that width
+   used to depend on whether the page was tall enough to scroll — which the
+   layout itself decides. Structure's band jumps from 619px to 400 at a window
+   near 1175px, and a narrower page can be a shorter one, so the scrollbar
+   could come and go and take the layout with it (GPT Sol, plan 261002a).
+   Reserved, the width is fixed and nothing can flip. On overlay scrollbars —
+   phones, trackpad Macs — it reserves nothing. */
+html { scrollbar-gutter: stable; }
+
 body {
   margin: 0;
   background: var(--page);

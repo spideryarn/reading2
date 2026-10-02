@@ -216,6 +216,7 @@ export function Reader({
   article,
   capability,
   onRenamed,
+  onArchived,
 }: {
   slug: string;
   article: Article;
@@ -230,6 +231,8 @@ export function Reader({
    * worse than no button because pressing it is how you find out.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
+  /** Straight through to the masthead's Archive button — Masthead.tsx § `ArchiveMark`. */
+  onArchived?: ((slug: string, at: string | null) => void) | undefined;
 }) {
   useRenderCount("Reader");
   /**
@@ -2513,7 +2516,7 @@ export function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} slug={slug} onRenamed={onRenamed} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} onArchived={onArchived} />
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not

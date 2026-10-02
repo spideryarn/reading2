@@ -320,6 +320,19 @@ function OwnedArticle({
   const visibility = shared?.slug === slug ? shared.visibility : null;
 
   /**
+   * **Archived or not, as the last Archive button to answer said** — the
+   * sharing switch's hazard again, since 2026-10-02, when the masthead got an
+   * Archive button beside the sharing mark (plan 261002a). The metadata page
+   * reads its own answer and the masthead remounts from the payload, so
+   * archiving on one and stepping to the other showed the state from before
+   * the press. Both report here (`useArchive`'s answer, via `onArchived`) and
+   * the payload carries the latest. `undefined` here is *nobody has said*,
+   * and leaves the payload alone. GPT Sol, plan review.
+   */
+  const [archived, setArchived] = useState<{ slug: string; at: string | null } | null>(null);
+  const archivedAt = archived?.slug === slug ? archived.at : undefined;
+
+  /**
    * **Where an uploaded paper probably lives on the web, once somebody has
    * looked** — the third thing layered over the payload, for the rename's
    * reason: it is drawn in the masthead and on the metadata page, and the
@@ -336,7 +349,11 @@ function OwnedArticle({
        truthy that would silently fall through to `fetched`, which is still
        carrying the override that was just cleared. */
     const titled = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
-    const named = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const named =
+      archivedAt !== undefined && archivedAt !== guessedAt.archivedAt
+        ? { ...guessedAt, archivedAt }
+        : guessedAt;
     if (visibility === null) return named;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -346,12 +363,16 @@ function OwnedArticle({
       return rest;
     }
     return { ...named, visibility };
-  }, [fetched, title, guessed, visibility]);
+  }, [fetched, title, guessed, visibility, archivedAt]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
     [],
   );
+  /* The same answer twice keeps the state object, for `sharedTo`'s reason below. */
+  const archivedTo = useCallback((forSlug: string, at: string | null) => {
+    setArchived((was) => (was?.slug === forSlug && was.at === at ? was : { slug: forSlug, at }));
+  }, []);
   /**
    * **The same answer twice is not a change.**
    *
@@ -409,9 +430,10 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        onArchived={archivedTo}
       />
     );
-  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
+  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} onArchived={archivedTo} />;
 }
 /**
  * **Where the private hooks are mounted, and the only place they are.**
@@ -433,10 +455,13 @@ function OwnedReader({
   slug,
   article,
   onRenamed,
+  onArchived,
 }: {
   slug: string;
   article: Article;
   onRenamed: (slug: string, title: string) => void;
+  /** The masthead's Archive button answered — `ArticlePage` § `archived`. */
+  onArchived: (slug: string, at: string | null) => void;
 }) {
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
@@ -554,6 +579,7 @@ function OwnedReader({
           readingTime,
         }}
         onRenamed={onRenamed}
+        onArchived={onArchived}
       />
       {/* **"Why are you reading this?", asked once** after a silent import —
           Greg, 2026-10-01, spya-hbqezu; plan 261001s § Stage 3. Owner-only by

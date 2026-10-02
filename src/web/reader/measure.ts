@@ -36,8 +36,13 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * arriving fires no `resize`: the article loads, the page grows taller than
  * the window, and 15px of the width goes to the scrollbar without the window
  * changing at all. The root's box is what shrinks, so the root is what is
- * watched. It cannot loop: a narrower layout only makes the page taller, which
- * keeps the scrollbar it narrowed for.
+ * watched. Since shell.css reserves the scrollbar's room (`scrollbar-gutter:
+ * stable`) that no longer happens where the property is supported, and this
+ * is the fallback for where it is not. **It could flip**, which an earlier
+ * version of this comment denied: a narrower page is not always a taller one,
+ * because Structure's band jumps from its columns to 400px near 1175 and hands
+ * the prose 200px more (GPT Sol). So it is coalesced to one read a frame, as
+ * dock-fit.ts's observer is, and the gutter is what actually stops the flip.
  */
 export function useWindowWidth(): number {
   const measure = () => pageWidth() - horizontalInset(safeAreaInsets());
@@ -46,12 +51,18 @@ export function useWindowWidth(): number {
     const on = () => setW(measure());
     window.addEventListener("resize", on);
     window.addEventListener("orientationchange", on);
-    const root = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(on);
+    let frame = 0;
+    const onRoot = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(on);
+    };
+    const root = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onRoot);
     root?.observe(document.documentElement);
     return () => {
       window.removeEventListener("resize", on);
       window.removeEventListener("orientationchange", on);
       root?.disconnect();
+      cancelAnimationFrame(frame);
     };
   }, []);
   return w;
@@ -108,6 +119,11 @@ export function pageWidth(): number {
  * by the root's own width or by overflow, so it only wins where `innerWidth`
  * has fallen below the layout — which on the browsers we support means iOS
  * zoomed in. Everywhere else the answer is exactly `innerWidth`, as it was.
+ *
+ * **No longer what the reading view lays out for**, since 2026-10-02 — that is
+ * `pageWidth` above, because the scrollbar this counts is width the page does
+ * not have. It stays as the answer to *where is the viewport's edge*, which is
+ * the shelf's question (Library.tsx) and `pageWidth`'s jsdom stand-in.
  *
  * `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` elsewhere in
  * `src/web`, and lists the files that want the browser's own answer.

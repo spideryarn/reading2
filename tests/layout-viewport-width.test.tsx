@@ -21,7 +21,7 @@ import { parse as babelParse } from "@babel/parser";
 import { isReferenced, type Node } from "@babel/types";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWindowWidth } from "../src/web/reader/measure.js";
 
 /**
@@ -245,8 +245,20 @@ describe("useWindowWidth under zoom", () => {
       const onRoot = observed.filter((o) => o.target === document.documentElement);
       expect(onRoot.length).toBe(1);
       setWidths(1280, 1265);
-      act(() => onRoot[0]!.cb([], {} as ResizeObserver));
+      /* Coalesced to one read a frame (measure.ts), so the frame has to run. */
+      const frames: FrameRequestCallback[] = [];
+      const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+        frames.push(cb);
+        return frames.length;
+      });
+      act(() => {
+        onRoot[0]!.cb([], {} as ResizeObserver);
+        onRoot[0]!.cb([], {} as ResizeObserver);
+      });
+      expect(seen.at(-1)).toBe(1280); // nothing until the frame
+      act(() => frames.at(-1)!(0));
       expect(seen.at(-1)).toBe(1265);
+      raf.mockRestore();
     } finally {
       globalThis.ResizeObserver = Original;
     }

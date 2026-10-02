@@ -9,7 +9,7 @@
  * that missed one would offer Archive over an archived article.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ArticleMetadata } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -115,6 +115,13 @@ export function useArchive(
   /** Distinguishes an unanswered request from an answered body missing its required field. */
   answered: boolean,
   failed: boolean,
+  /**
+   * Told every known answer, so the article payload the reading view and the
+   * metadata page share can carry it — ArticlePage.tsx § `archived`. Never
+   * told *we do not know*: an unknown leaves the last known answer standing,
+   * and the button that lost track hides itself.
+   */
+  onAnswer?: (slug: string, at: string | null) => void,
 ): ArchiveControl {
   /* What the reader has just done, if anything — `null` means they have not
      touched it, and the server's answer stands. A sentinel object rather than
@@ -190,6 +197,14 @@ export function useArchive(
       setBusy(false);
     }
   }
+
+  /* Latest callback in a ref, so a parent's new function identity is not an
+     answer to report again. */
+  const tell = useRef(onAnswer);
+  tell.current = onAnswer;
+  useEffect(() => {
+    if (at !== undefined) tell.current?.(slug, at);
+  }, [slug, at]);
 
   return {
     at,

@@ -99,6 +99,7 @@ beforeEach(() => {
   root = createRoot(host);
   history.replaceState(null, "", `/read/${SLUG}`);
   apiFetch.mockReset();
+  onArchived.mockReset();
 });
 
 afterEach(async () => {
@@ -112,11 +113,15 @@ async function mount(archivedAt: string | null | undefined, owner: boolean) {
       createElement(Masthead, {
         article: article(archivedAt),
         slug: SLUG,
-        ...(owner ? { onRenamed: () => {} } : {}),
+        ...(owner ? { onRenamed: () => {}, onArchived } : {}),
       }),
     );
   });
 }
+
+/* The answer handed up to ArticlePage, so the metadata page and a remounted
+   masthead read the state after the press rather than the payload's. */
+const onArchived = vi.fn();
 
 const button = () => host.querySelector<HTMLButtonElement>('[data-testid="masthead-archive"]');
 
@@ -136,6 +141,7 @@ describe("the masthead's Archive button", () => {
     expect(JSON.parse(init.body as string)).toEqual({ archived: true });
     expect(button()?.dataset.archived).toBe("true");
     expect(button()?.getAttribute("aria-label")).toBe("Archived — put back on the shelf");
+    expect(onArchived).toHaveBeenLastCalledWith(SLUG, WHEN);
   });
 
   it("opens an archived article the right way round, and puts it back", async () => {
