@@ -449,7 +449,7 @@ export function ControlTip({
       {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
       {press && <p className="tip-soon-press">{press}</p>}
-      {tap &&<p className="tip-soon-tap">{tap}</p>}
+      {tap && <p className="tip-soon-tap">{tap}</p>}
     </>
   );
 }

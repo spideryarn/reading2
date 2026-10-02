@@ -56,6 +56,7 @@ import {
   SHARING_MARK_HOW_PUBLIC,
   SHARING_MARK_NAME_PRIVATE,
   SHARING_MARK_NAME_PUBLIC,
+  SHARING_MARK_ON_ARCHIVE_UNKNOWN,
   SHARING_MARK_ON_ARCHIVED,
   SHARING_MARK_PRESS_PRIVATE,
   SHARING_MARK_PRESS_PUBLIC,
@@ -192,9 +193,13 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
       />
       {/* Owner-only: the controller is mounted by OwnedArticle and is absent
           from the visitor arm altogether. `shared` because archiving a shared
-          article also takes it off the public list — the card has to say so. */}
+          article also takes it off the public list — and optional because an
+          uncertain sharing write must not be collapsed into private. */}
       {onRenamed !== undefined && archive !== undefined ? (
-        <ArchiveMark archive={archive} shared={article.visibility === "public"} />
+        <ArchiveMark
+          archive={archive}
+          shared={article.visibility === undefined ? undefined : article.visibility === "public"}
+        />
       ) : null}
     </>
   );
@@ -792,8 +797,9 @@ function SharingMark({
    * clause), while the public link keeps working — so a shared, archived
    * article must not be told *"it's listed publicly"*. GPT Sol, plan review of
    * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
-   * Unknown keeps the plain sentence: the archive question has its own mark
-   * beside this one, which goes when it cannot answer.
+   * Unknown keeps only the fact visibility can establish: the public link
+   * works. It cannot promise the listing, whose query also requires a known
+   * unarchived state.
    */
   archived: boolean | undefined;
 }) {
@@ -803,7 +809,13 @@ function SharingMark({
   /* Two strings, and they are deliberately not one — see `SHARING_MARK_NAME_PUBLIC`
      in src/messages.ts. The tooltip becomes `aria-describedby`, so a name
      holding the same sentence is announced twice. */
-  const tip = shared ? (archived === true ? SHARING_MARK_ON_ARCHIVED : SHARING_ON) : SHARING_OFF;
+  const tip = shared
+    ? archived === true
+      ? SHARING_MARK_ON_ARCHIVED
+      : archived === false
+        ? SHARING_ON
+        : SHARING_MARK_ON_ARCHIVE_UNKNOWN
+    : SHARING_OFF;
   const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
   /* The state as a word, which is what a reader hovering this actually came for
      — `SHARING_BADGE` because the shelf already calls it that, and an owner who
@@ -881,7 +893,7 @@ function SharingMark({
  * which is what `SharingMark` beside it shows.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boolean }) {
+function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boolean | undefined }) {
   const { at, busy, error, set } = archive;
   /* `at` turns `undefined` only when a failed press could not be re-read —
      we no longer know, so the button goes, as it does on the Metadata page. */
@@ -891,7 +903,7 @@ function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boo
   /* The state, then the press on its own line — the sharing mark's shape since
      spya-d886ah, where a state sentence and an action sharing one paragraph was
      the complaint. These two read *"Off your shelf. Press to put it back."* and
-     *"Press to archive it: …"* until 2026-10-02. No `go` while the press has
+     *"Press to archive it: …"* until 2026-10-02. No `press` while the press has
      just failed: the card is then about what went wrong. */
   const what = error
     ? `${error} This shows the article as it is now.`
@@ -900,12 +912,17 @@ function ArchiveMark({ archive, shared }: { archive: ArchiveControl; shared: boo
       : "Archiving takes it off your shelf, and can be undone.";
   /* On a shared article archiving is also the public listing — public-library.ts
      § the `archivedAt` clause — so *"Nothing else changes"* was false there.
-     GPT Sol, plan review of 261002e. The link itself keeps working either way. */
-  const how = !shared
-    ? "Nothing else changes — you stay here and can carry on reading."
-    : archived
-      ? "Putting it back lists it publicly again. Its public link works either way, and you stay here."
-      : "It comes off the public list too, though its public link keeps working. You stay here and can carry on reading.";
+     Unknown is its own branch too: a failed sharing write is not proof of the
+     private state. GPT Sol, plan review of 261002e. The link itself keeps
+     working either way only when sharing is known on. */
+  const how =
+    shared === undefined
+      ? "You stay here and can carry on reading. Whether this also changes a public listing couldn't be confirmed."
+      : !shared
+        ? "Nothing else changes — you stay here and can carry on reading."
+        : archived
+          ? "Putting it back lists it publicly again. Its public link works either way, and you stay here."
+          : "It comes off the public list too, though its public link keeps working. You stay here and can carry on reading.";
   const press = error ? undefined : archived ? "Press to put it back on your shelf." : "Press to archive it.";
   return (
     /* `tip-soon`, which `SharingMark` beside it has always carried and this

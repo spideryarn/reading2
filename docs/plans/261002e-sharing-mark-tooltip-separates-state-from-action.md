@@ -165,6 +165,27 @@ Found while building: **the Archive mark's card had no `className="tip-soon"`**,
 card rules in dock.css applied to it (body-size text, no styled head). Fixed; the new test of its
 card is what found it.
 
-### Code: GPT Sol, workspace-write
+### Code: GPT Sol, workspace-write, 2026-10-02
 
-Results below.
+[261002e-sharing-mark-tooltip-code-review-sol.md](261002e-sharing-mark-tooltip-code-review-sol.md)
+(exit 0, answer file fresh). Five findings, all fixed by Sol inside the change, read and kept:
+
+1. **P1** — a shared article whose archive state is unknown was told it is listed publicly. Now
+   `SHARING_MARK_ON_ARCHIVE_UNKNOWN`. Only reachable after a failed re-read: the one owner path
+   (`ArticlePage` → `Reader` → `Masthead`) always passes the controller.
+2. **P1** — `ArchiveMark` treated unknown visibility as private, saying *"Nothing else changes"*.
+   Now its own branch.
+3. **P2** — the card tests compared rendered text with imported constants, so a false constant
+   passed. Semantic assertions added, plus all four archive/shared combinations and a press that
+   flips both marks.
+4. **P3** — **four test fixtures render `TableView` through casts that hid the new required
+   `notesBy`**, so "required" did not hold there; they would have exercised the visitor's words
+   silently. Fixed in `annotation-cost`, `annotation-reuse`, `prose-not-rebuilt` and
+   `short-selection-in-a-mark`. Worth knowing for the next required prop on `TableView`: the
+   typecheck does not find every caller.
+5. **P3** — stale comments and leftover `go` wording.
+
+Browser pass (Sonnet, Playwright, dark theme, 1400px): all four cards as intended — private,
+archive, shared, and a visitor's gutter mark titled *"A note on this paragraph from whoever added
+this article"*. Shots: `261002e-shot-1-private.png` to `-4-visitor-gutter.png`. The rule above the
+press line is faint in the dark theme, the same as the existing `tap` line's.

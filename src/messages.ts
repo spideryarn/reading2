@@ -3511,11 +3511,13 @@ export const SHARING_OFF = "Only you can read this.";
  * docs/plans/260904b-pricing-page-and-public-showcase.md § 1.
  *
  * **It stays one short sentence because it is three surfaces**, not one — the
- * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and half of
- * the masthead's mark (`SHARING_MARK_PUBLIC`, which appends *"Change who can
- * read it."*). So the listing is a clause inside the existing sentence and not
- * a second sentence after it: a badge tooltip and a link's description have to
- * read as one voice, and two sentences read as a correction of the first.
+ * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and the
+ * masthead's mark while the article is known to be unarchived. The masthead
+ * substitutes `SHARING_MARK_ON_ARCHIVED` or
+ * `SHARING_MARK_ON_ARCHIVE_UNKNOWN` when the listing clause cannot be made.
+ * So the listing is a clause inside the existing sentence and not a second
+ * sentence after it: a badge tooltip and a link's description have to read as
+ * one voice, and two sentences read as a correction of the first.
  */
 export const SHARING_ON = "Anyone can read this without signing in, and it's listed publicly.";
 
@@ -3588,7 +3590,7 @@ export const SHARING_BADGE = "Shared";
  * functionality works, or any UI differentiation between these two kinds of
  * sentence."* So the state is `SHARING_ON`/`SHARING_OFF` alone again, in the
  * card's `what`; what sharing means is `SHARING_MARK_HOW_*`; and these are the
- * press, in `ControlTip`'s `go` line, styled as a different kind of sentence.
+ * press, in `ControlTip`'s `press` line, styled as a different kind of sentence.
  * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
  *
  * **They name the Metadata page, not *Access & sharing*, because that is where
@@ -3664,6 +3666,17 @@ export const SHARING_MARK_HOW_PUBLIC =
  */
 export const SHARING_MARK_ON_ARCHIVED =
   "Anyone with the link can read this without signing in. It's archived, so it isn't listed publicly.";
+
+/**
+ * **The public state while the archive question is unknown.** Public visibility
+ * still proves that the direct link works (`publicSlug` ignores `archived_at`),
+ * but the public listing requires `archived_at is null`, so silence about the
+ * archive state cannot honestly promise the listing. `useArchive` reaches this
+ * state when the article payload cannot say, or after both a write and its
+ * verifying read fail.
+ */
+export const SHARING_MARK_ON_ARCHIVE_UNKNOWN =
+  "Anyone can read this without signing in. Whether it's listed publicly couldn't be confirmed.";
 
 /** @see SHARING_MARK_HOW_PUBLIC */
 export const SHARING_MARK_HOW_PRIVATE =
@@ -4227,7 +4240,7 @@ export const SHARED_ARC = {
 /**
  * **What never goes out, whatever the switch says.**
  *
- * The modes among these — Chat, Search, Remember, Referee — are not listed
+ * The modes among these — Chat, Remember and Referee — are not listed
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
