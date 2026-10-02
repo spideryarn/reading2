@@ -439,7 +439,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
      * It is only read on the failing branch, and there is no case where it
      * arrives with a `done` ending: the all-skipped claim that ends `done`
      * through `settleJob` never begins a step at all. Worth knowing if that ever
-     * changes — the publication gate checks the `hierarchy` run row and no other, so a
+     * changes — the publication gate checks the `structure` run row and no other, so a
      * revision published with some *other* step still `running` would not be
      * refused by it.
      */
@@ -568,7 +568,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
        *
        * **`unfinished`, not the job's step list**, and it is exactly the right
        * signal: it is the step that opened a `revision_step_runs` row and never
-       * closed it, so a two-step job whose `hierarchy` failed before `labels`
+       * closed it, so a two-step job whose `structure` failed before `labels`
        * ever started does not reach this line. And **`error` only** — a reader
        * who pressed Stop has not been told anything went wrong, and asking again
        * is the remedy the pending sentence already implies.

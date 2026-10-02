@@ -305,7 +305,7 @@ function capture(run: () => void): string[] {
  * **Would it have fired on the actual incident?** — the bar
  * docs/reusable/improve-the-codebase.md sets for a check added after the fact.
  *
- * On 2026-08-30 one article's `hierarchy` step ran eleven times at once under a
+ * On 2026-08-30 one article's `structure` step ran eleven times at once under a
  * single job id, and nothing ever asked the ledger about it: the two big ones
  * were spotted by eye three days later and the six on `read` were never found
  * at all. docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
@@ -321,7 +321,7 @@ describe("steps that ran more than once", () => {
       scopeKind: "job_step",
       runId: "run-1",
       jobId: "job-1",
-      stepName: "hierarchy",
+      stepName: "structure",
       isByok: false,
       costSource: "provider",
       creditsUsedNanos: 1_000,
@@ -342,7 +342,7 @@ describe("steps that ran more than once", () => {
     const found = duplicateJobSteps(rows);
     expect(found).toHaveLength(1);
     expect(found[0]?.jobId).toBe("job-1");
-    expect(found[0]?.stepName).toBe("hierarchy");
+    expect(found[0]?.stepName).toBe("structure");
     expect(found[0]?.runs).toBe(11);
     expect(found[0]?.calls).toBe(33);
     /* And what it cost, which is the argument for reading it at all: eleven
@@ -391,9 +391,9 @@ describe("steps that ran more than once", () => {
 
   it("keeps two steps of one job apart, and two jobs running the same step", () => {
     const rows = [
-      row({ runId: "run-a", jobId: "job-1", stepName: "hierarchy" }),
+      row({ runId: "run-a", jobId: "job-1", stepName: "structure" }),
       row({ runId: "run-b", jobId: "job-1", stepName: "summarise" }),
-      row({ runId: "run-c", jobId: "job-2", stepName: "hierarchy" }),
+      row({ runId: "run-c", jobId: "job-2", stepName: "structure" }),
     ];
     expect(duplicateJobSteps(rows)).toEqual([]);
   });
@@ -402,8 +402,8 @@ describe("steps that ran more than once", () => {
     /* The report shows the worst few and counts the rest, so which ones are at
        the top is what a reader actually sees. */
     const rows = [
-      row({ runId: "run-a", jobId: "job-1", stepName: "hierarchy" }),
-      row({ runId: "run-b", jobId: "job-1", stepName: "hierarchy" }),
+      row({ runId: "run-a", jobId: "job-1", stepName: "structure" }),
+      row({ runId: "run-b", jobId: "job-1", stepName: "structure" }),
       row({ runId: "run-c", jobId: "job-2", stepName: "summarise" }),
       row({ runId: "run-d", jobId: "job-2", stepName: "summarise" }),
       row({ runId: "run-e", jobId: "job-2", stepName: "summarise" }),
@@ -470,8 +470,8 @@ describe("the ordinary report, end to end", () => {
       runId: "00000000-0000-4000-8000-00000000f000",
       scopeKind: "job_step",
       ownerId: "00000000-0000-4000-8000-00000000f0a1",
-      stepName: "hierarchy",
-      job: "hierarchy",
+      stepName: "structure",
+      job: "structure",
       wire: "messages",
       requestedModel: "test-model",
       startedAt: "2026-09-01T00:00:00.000Z",

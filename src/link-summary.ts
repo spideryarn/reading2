@@ -255,7 +255,7 @@ function clip(text: string, max: number): string {
  * Four things, and each is doing a different job:
  *
  * - the **title**, so the model knows what piece this is;
- * - the piece's **one-sentence gist** — the hierarchy root's, which is the
+ * - the piece's **one-sentence gist** — the tree root's, which is the
  *   cheapest true statement of what the whole article is about, and absent on an
  *   article whose tree was carved from headings (src/types.ts § `Tree.provisional`);
  * - the link's **own words**, which are the author's characterisation of the

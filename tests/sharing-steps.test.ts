@@ -44,10 +44,10 @@ describe("isSharingJob", () => {
   });
 
   it("is false when any step is not a sharing step", () => {
-    expect(isSharingJob(job(["hierarchy"]))).toBe(false);
+    expect(isSharingJob(job(["structure"]))).toBe(false);
     expect(isSharingJob(job(["labels"]))).toBe(false);
     expect(isSharingJob(job(["assets"]))).toBe(false);
-    expect(isSharingJob(job(["fetch", "extract", "blocks", "hierarchy", "arc"]))).toBe(false);
+    expect(isSharingJob(job(["fetch", "extract", "blocks", "structure", "arc"]))).toBe(false);
   });
 
   it("is false for a reset, even one whose steps are all sharing steps", () => {
@@ -78,7 +78,7 @@ describe("mayOverlap", () => {
       [["skim"], ["quotes"]],
       [["sketch"], ["illustrated"]],
       [["quotes"], ["quotes"]],
-      [["hierarchy"], ["quotes"]],
+      [["structure"], ["quotes"]],
     ];
     for (const [a, b] of pairs) {
       expect(mayOverlap(job(a), job(b)), `${a} / ${b}`).toBe(mayOverlap(job(b), job(a)));
@@ -106,9 +106,9 @@ describe("mayOverlap", () => {
   });
 
   it("keeps every exclusive job exclusive", () => {
-    expect(mayOverlap(job(["hierarchy"]), job(["quotes"]))).toBe(false);
+    expect(mayOverlap(job(["structure"]), job(["quotes"]))).toBe(false);
     expect(mayOverlap(job(["labels"]), job(["tweets"]))).toBe(false);
-    expect(mayOverlap(job(["fetch", "extract", "blocks", "hierarchy"]), job(["arc"]))).toBe(false);
+    expect(mayOverlap(job(["fetch", "extract", "blocks", "structure"]), job(["arc"]))).toBe(false);
   });
 
   it("keeps an all-sharing reset exclusive", () => {

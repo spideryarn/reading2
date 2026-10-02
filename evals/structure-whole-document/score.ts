@@ -6,7 +6,7 @@
  * Everything here is mechanical, and none of it decides whether a tree is
  * *good*; each measure is a proxy for a specific way the structure pass could
  * go wrong, or a fact two arms can be compared on. See evals/README.md
- * § hierarchy-structure for what each one is a proxy for and — just as important —
+ * § structure-whole-document for what each one is a proxy for and — just as important —
  * which ones are deliberately NOT scores where higher is better.
  *
  * `contentWords` and `sameHeading` are imported from the stages themselves

@@ -132,7 +132,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
               attempt(async () => {
                 const { body } = splitBlocks(article.blocks);
                 const { params } = wholeDocumentRequest(body);
-                const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
+                const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
                 const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
                 /* Production's own parse (src/structure.ts § `parseJson`), not the
                    strict one evals/plain-words uses: the first `after` run lost two

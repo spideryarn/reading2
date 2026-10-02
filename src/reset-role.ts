@@ -12,7 +12,7 @@
  *
  * - **`import`** — `DEFAULT_INGEST_STEPS`. The reset job runs these, with
  *   `extract` forced and `cascadeForce` sweeping the rest in behind it.
- * - **`successor`** — `labels`. Not dropped by hand: a forced `hierarchy`
+ * - **`successor`** — `labels`. Not dropped by hand: a forced `structure`
  *   writes a pending manifest and the reset's publication buys the free labels
  *   job exactly as any import's does.
  * - **`extra`** — everything a mode makes on demand. Dropped from the reset's
@@ -55,7 +55,7 @@ export const RESET_ROLE = {
   metadata: "import",
   extract: "import",
   blocks: "import",
-  hierarchy: "import",
+  structure: "import",
   labels: "successor",
   assets: "import",
   arc: "extra",

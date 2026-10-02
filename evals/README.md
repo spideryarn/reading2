@@ -316,7 +316,7 @@ The direct test of a label's job needs a person: show a label with its 5–9 sib
 shuffled, and ask which paragraph it points to. Measure correct identification, time, and whether
 distinctive terms survived. `--shuffle` prints those sets ready to hand to someone.
 
-## `hierarchy-structure/` — is the structure pass worth what it costs?
+## `structure-whole-document/` — is the whole-document pass worth what it costs?
 
 Written for [260830a-opening-an-article-before-the-toc.md](../docs/research/260830a-opening-an-article-before-the-toc.md).
 `structure-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
@@ -338,7 +338,7 @@ skipped".
 
 ### The corpus is a committed manifest of seven documents
 
-The corpus lives in `hierarchy-structure/corpus.ts` — one entry per document with its role, its
+The corpus lives in `structure-whole-document/corpus.ts` — one entry per document with its role, its
 selection reason, and the sha256 of the `blocks.json` that was measured (data/ is gitignored and
 regenerates, so a results file that only named a slug would name bytes nothing can recover; the
 runner checks the hash and says so when it has drifted). `source`, `source-2` and
@@ -419,7 +419,7 @@ built on it. Between an arm and the incumbent it is descriptive; between repeats
 it is **the noise floor**, the resolution of the whole instrument, to be reported before any
 comparison. The mechanical measures are diagnostics and guards, not the verdict — every one of
 them can be won by a worse arm (GPT Sol's review has the table) — so close arms go to a **blinded
-judging pass over the finalists' trees** (`hierarchy-structure/blind.ts`, fed by the per-run `trees/`
+judging pass over the finalists' trees** (`structure-whole-document/blind.ts`, fed by the per-run `trees/`
 directory). **The judge is a model, not a person** — Greg's decision, 2026-08-30, with a budget of
 about ten comparisons, spent on the documents where arms disagree. The weakness is stated here
 rather than discovered later: a model judging model output tends to prefer writing that resembles
@@ -445,7 +445,7 @@ corpus the means are `within1Block` 0.56 against exact `allBoundaries` 0.39 (0.6
 constitution alone), so **roughly a quarter to a third of the deep "disagreement" is one-block
 wobble** — which softens, without erasing, the claim that the model earns its money below L1.
 
-Each run writes a **directory** under `results/hierarchy-structure/` — `run.json` (scores, arm specs,
+Each run writes a **directory** under `results/structure-whole-document/` (`results/hierarchy-structure/` before 2026-10-02) — `run.json` (scores, arm specs,
 the git commit, and the measured input hashes), rewritten incrementally after every article × arm
 so a run that dies after six paid calls keeps six results, plus every produced tree under
 `trees/`, the disk arm's included, because `data/` regenerates under old results.
@@ -572,7 +572,7 @@ verbatim). Adding a fifth variant is a `## V5` section in that file plus one ent
 
 Production asks for structure, titles, gists and questions in **one** long-context response. This
 runs the variants over a **fixed existing tree** and asks only for wording, which is why it costs a
-few dollars instead of $8–20 and two hours. By `hierarchy-structure/arms.ts`'s own discipline that
+few dollars instead of $8–20 and two hours. By `structure-whole-document/arms.ts`'s own discipline that
 makes every arm here a `bakeoff` and none of them `isolated` — the control arm is production's
 *rules* under a different request, not production's call — and what it cannot catch is an
 interaction between the new wording and the structure the model proposes in the same breath. It also
@@ -704,7 +704,7 @@ npm run eval:cost:interactions -- --slug <slug> --list     # the twelve per-inte
 pressing every mode button takes those to $0.35 and $1.55.** The write-up is
 [results/cost-per-article-2026-09-03.md](results/cost-per-article-2026-09-03.md) — per-article ×
 per-step, the range, cost per 1,000 words, the per-interaction table, the observed variation in
-long-article hierarchy, what is ranked most expensive and why, and the reproduction command for
+the long-article structure step, what is ranked most expensive and why, and the reproduction command for
 every figure. The plan is
 [260902g](../docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md).
 
@@ -767,14 +767,14 @@ the five questions
 [260904d § What the live run must answer](../docs/plans/260904d-deepen-fat-sections.md#stage-5-questions)
 wrote down *before* the money moved, so that a paid run cannot quietly succeed at nothing: is the
 verdict stable across repeats, does the model always say yes, how often does a mechanical bound
-overrule it, what does it cost against the incumbent's $1.00 a book, and does the hierarchy step
+overrule it, what does it cost against the incumbent's $1.00 a book, and does the structure step (called `hierarchy` until 2026-10-02)
 still fit its budget under load.
 
 **Preflight is the default posture**: with no flag it runs every gate, proves the seam for free and
 prints the bill, and buys nothing. `--spend` is the only way to spend.
 
 Four phases: the book ingested with deepening on (repeat 1); the repeats, **serial**, as
-`{steps: ["hierarchy"], force: ["hierarchy"]}` against the same slug; an ordinary article run with
+`{steps: ["structure"], force: ["structure"]}` against the same slug; an ordinary article run with
 the flag off and then on, which must come out byte-identical; and `DEFAULT_JOB_CONCURRENCY` jobs at
 once for the wall clocks, with a start rendezvous so that "at once" is true of the measured *step*
 and not merely of the job promises.
@@ -816,7 +816,7 @@ Four things in it are worth copying:
   whether the wave was really bought *and* whether the structure call was wrongly re-bought with it.
 - **The load phase is started together before it is measured, and concurrency is measured over the
   STEPS' windows, never the jobs'.** The original three-wide arithmetic was right and the phase did
-  not arrange it: the book's job is a forced `hierarchy` and starts its measured step at once, while
+  not arrange it: the book's job is a forced `structure` and starts its measured step at once, while
   the load articles start at `fetch` and get there only after stages 1-3. The load jobs are driven
   first and are **held at the entry** to their measured step; a **readiness wait** ends when all are
   there, with the gate still shut and nothing of the
@@ -825,7 +825,7 @@ Four things in it are worth copying:
   instructive ways. Merely *announcing* an arrival held nobody, so load1 could announce, run its
   whole step and finish before load2 announced. Holding only the loads and releasing them before
   driving the book moved the same hole one party over: with the third queue slot taken, both released
-  loads could finish before the book reached `hierarchy` — and the outcome still said "all". The book
+  loads could finish before the book reached `structure` — and the outcome still said "all". The book
   therefore *does* wait inside its own claim, and it costs nothing, because by then everybody else is
   waiting for it; the load steps are the ones that really hold, bounded, and what it cost them is
   reported. **A phase that cannot line up buys nothing trying to.** A readiness wait that does not end
@@ -835,7 +835,7 @@ Four things in it are worth copying:
   fate**: once any of them has failed its measured step, fallen back to wave 1, or handed its claim
   back, the others stop before their next claim **and cancel the calls their running step has not
   yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
-  whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
+  whole `structure` step — structure call, expansion wave *and* a whole pass of labels, which
   `generateStructure` starts even after the wave failed. So the fate carries an `AbortSignal` that
   `announcing` combines into the measured step's own `ctx.signal`; label batches are queued with that
   signal, and `tests/labels-batching.test.ts` already pins the property that matters — *"the callback
@@ -849,13 +849,13 @@ Four things in it are worth copying:
   slots — so `peakConcurrency` reaching the default cap is *arranged* and confirms the wiring rather
   than measuring anything. The load measurement is **`fullConcurrencyMs`**, the longest interval with every job
   genuinely in flight, held to a floor **declared in preflight before anything is bought**. It is
-  bounded by the shortest job, and the load articles' `hierarchy` is far shorter than a
+  bounded by the shortest job, and the load articles' `structure` is far shorter than a
   book's 658-778 s — so below the floor, question 5 reports latency after a synchronised start rather
   than sustained full load, and says so. All phase-D promises
   stay alive while jobs without slots are being told `busy`, so a whole-job overlap check passes over a
   phase that ran one job at a time — which is exactly what `SPIDERYARN_JOB_CONCURRENCY=1` or another
   agent's dev server holding a claim slot looks like. `peakConcurrency` has to reach the default cap over the
-  hierarchy steps' own windows, all of them have to have finished `done` with a wave's stats
+  structure steps' own windows, all of them have to have finished `done` with a wave's stats
   behind them, and the runtime `jobConcurrency()` is asserted before anything is enqueued.
 - **Repeats are paired on parent-plus-range, never on `where`.** `where` is an ordinal path derived
   from the answer's own fan-out, so two repeats that split a parent in different places both emit
@@ -893,7 +893,7 @@ concurrent load phase, the cleanup — and says so rather than printing a table 
 
 **Run it before you run anything that spends**, and read the last line as well as the first. On
 2026-09-05 it died at its very first `enqueue` — `dev` had merged in a rule refusing `blocks`
-without `hierarchy`, which is exactly what the free step list asked for — created nothing, and
+without `structure`, which is exactly what the free step list asked for — created nothing, and
 printed its entire closing report on the way down: an empty driving table, `Findings: none`, a
 written `run.json`. Three things came out of that and are the reason to trust it now: the step lists
 are checked against the queue's own rule before anything is enqueued, the summaries can say *there

@@ -155,7 +155,7 @@ taste. The old `high` measurements were 121–194 seconds and about $0.20.
   [`tests/sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx).
 - **It remains in `FORCE_ONLY_WHEN_NAMED`.** At `high`, its 194-second measured
   maximum supplied a third, timeout-specific reason: a positional cascade beside
-  a 320-second Hierarchy could run an invocation out of time. Moving to `low`
+  a 320-second structure step could run an invocation out of time. Moving to `low`
   removes that measured reason, not the two ordinary ones: it is a model call the
   reader asks for, and nothing except Illustrated reads what it writes.
 

@@ -74,7 +74,7 @@ function step(over: Partial<JobStep> & { name: StepName }): JobStep {
 
 /** Just enough labels to tell the rows apart when a test reads text. */
 const LABELS: Partial<Record<StepName, string>> = {
-  hierarchy: "Building the hierarchy",
+  structure: "Building the structure",
   sketch: "Drawing the argument",
   fetch: "Fetching the page",
 };
@@ -120,7 +120,7 @@ it("a running step is working, and carries how long it has been going", () => {
 });
 
 /**
- * **`sketch` is the only step with a sentence, and `hierarchy` lost its on
+ * **`sketch` is the only step with a sentence, and `structure` lost its on
  * 2026-09-01.** The number under it — six ingest runs, median 409s — was a
  * median of five *failures*, taken off the model-call log rather than off the
  * two fields the card subtracts. One successful attempt is not "usually".
@@ -133,10 +133,10 @@ it("says nothing about how long a step usually takes unless it was measured", ()
   const guessed = displayJob(job("running", { steps: [running("fetch")] }), START + 1000);
   expect(guessed.usually, "invented a number for a step nobody has timed").toBeNull();
 
-  /* A threshold is not a measurement. `hierarchy` keeps its own ten minutes —
+  /* A threshold is not a measurement. `structure` keeps its own ten minutes —
      the default would fire under the only successful run there has ever been —
      and still says nothing about how long it takes. */
-  const thresholded = displayJob(job("running", { steps: [running("hierarchy")] }), START + 1000);
+  const thresholded = displayJob(job("running", { steps: [running("structure")] }), START + 1000);
   expect(thresholded.usually, "promised a duration off one successful run").toBeNull();
 
   /* And it stops saying it once it is no longer true. A reassurance the same
@@ -147,7 +147,7 @@ it("says nothing about how long a step usually takes unless it was measured", ()
 });
 
 /**
- * **The threshold is the step's, not the job's.** Six minutes into `hierarchy`
+ * **The threshold is the step's, not the job's.** Six minutes into `structure`
  * is well inside what that step has been seen doing — the longest recorded
  * attempt was still making successful model calls at eight — and six minutes
  * into `fetch` is a fetch that is never coming back. One global number is wrong
@@ -155,7 +155,7 @@ it("says nothing about how long a step usually takes unless it was measured", ()
  */
 it("takes longer than usual per step, not per job", () => {
   const late = START + 6 * 60_000;
-  expect(displayJob(job("running", { steps: [running("hierarchy")] }), late).state).toBe("working");
+  expect(displayJob(job("running", { steps: [running("structure")] }), late).state).toBe("working");
   expect(displayJob(job("running", { steps: [running("fetch")] }), late).state).toBe("slow");
 });
 
@@ -163,7 +163,7 @@ it("takes longer than usual per step, not per job", () => {
  * **Every threshold, pinned either side — and exhaustively, so the next step
  * cannot be left out.**
  *
- * The test above only proves `hierarchy` and `fetch` differ at six minutes, so
+ * The test above only proves `structure` and `fetch` differ at six minutes, so
  * every threshold in `STEP_TIMING` could move by minutes and stay green — which
  * is the whole of what those numbers are, and each of them is argued for from
  * evidence in that table's comment. If one changes, this is what should say so.
@@ -183,15 +183,15 @@ it("takes longer than usual per step, not per job", () => {
  */
 const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   /* The guess everything unmeasured falls back to: three minutes, past every
-     successful step in the ledger that is not `hierarchy` or `sketch`. */
+     successful step in the ledger that is not `structure` or `sketch`. */
   fetch: 180_000,
   /* Unmeasured, and one cheap call: the fallback, as `fetch`. */
   metadata: 180_000,
   extract: 180_000,
   blocks: 180_000,
-  /* Ten minutes: past every hierarchy attempt on record (the longest ran 498s)
+  /* Ten minutes: past every structure attempt on record (the longest ran 498s)
      and ~140s short of the claimant's own 740s self-abort. */
-  hierarchy: 600_000,
+  structure: 600_000,
   /* The same ten minutes, and the same argument: the worst recorded label pass
      is 682s, against a 180s fallback that would raise a false alarm on every
      long article. docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
@@ -252,10 +252,10 @@ it("offers the same way out without claiming to know what usual is", () => {
   expect(guessed.sentence).toBe(RUNNING_A_WHILE);
   expect(guessed.sentence, "told a reader an unmeasured step was unusual").not.toBe(TAKING_LONGER);
 
-  /* `hierarchy` is the interesting one: a threshold argued from evidence, and
+  /* `structure` is the interesting one: a threshold argued from evidence, and
      still no distribution to compare against. It gets the warning and not the
      claim. */
-  const thresholded = displayJob(job("running", { steps: [running("hierarchy")] }), START + 11 * 60_000);
+  const thresholded = displayJob(job("running", { steps: [running("structure")] }), START + 11 * 60_000);
   expect(thresholded.state).toBe("slow");
   expect(thresholded.sentence).toBe(RUNNING_A_WHILE);
 });
@@ -432,7 +432,7 @@ it("times the attempt in front of the reader, not the age of the job", () => {
   const shown = displayJob(
     job("running", {
       startedAt: new Date(START - 60 * 60_000).toISOString(),
-      steps: [step({ name: "fetch", status: "done" }), running("hierarchy")],
+      steps: [step({ name: "fetch", status: "done" }), running("structure")],
     }),
     START + 12_000,
   );

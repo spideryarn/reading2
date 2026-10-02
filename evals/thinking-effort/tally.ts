@@ -151,7 +151,7 @@ async function structureRows(runDir: string): Promise<Row[]> {
     if (prefix === null || (result.run !== 1 && result.run !== 2)) return [];
     const calls = result.calls ?? [];
     return [{
-      mode: "hierarchy",
+      mode: "structure",
       arm: `${prefix}-${result.run === 1 ? "a" : "b"}`,
       slug: result.slug,
       chars: 0,
@@ -246,10 +246,10 @@ async function main(): Promise<void> {
 
   // Savings and validity.
   const structureRun = argv[argv.indexOf("--hierarchy-run") + 1];
-  const rows = mode === "hierarchy"
+  const rows = mode === "structure"
     ? structureRun && argv.indexOf("--hierarchy-run") >= 0
       ? await structureRows(structureRun)
-      : (() => { throw new Error("--mode hierarchy needs --hierarchy-run <dir>"); })()
+      : (() => { throw new Error("--mode structure needs --hierarchy-run <dir>"); })()
     : (await readFile(path.join(results, `runs.${mode}.jsonl`), "utf-8"))
         .split("\n")
         .filter((line) => line.trim())
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
         : ((typical[typical.length / 2 - 1] as number) + (typical[typical.length / 2] as number)) / 2;
   out.savings = { perArticle, medianTypicalThinkingReduction: median, invalid };
   lines.push("");
-  if (mode === "hierarchy") {
+  if (mode === "structure") {
     lines.push("**Thinking reduction**: not a gate — toc/10 and toc/11 both run at production `low` effort.");
   } else {
     lines.push(
@@ -319,7 +319,7 @@ async function main(): Promise<void> {
      the literal one is never quietly dropped. */
   const invalidCand = invalid.filter((x) => !x.includes(" base-")).length;
   const invalidBase = invalid.length - invalidCand;
-  const saving = mode === "hierarchy" || (median != null && median >= MIN_SAVING);
+  const saving = mode === "structure" || (median != null && median >= MIN_SAVING);
   const literal = saving && invalidCand === 0;
   const compared = saving && invalidCand <= invalidBase;
   out.gatesPass = { literal, compared, invalidCandidate: invalidCand, invalidBase };

@@ -152,7 +152,7 @@ and Why-are-you-reading"*). Its evaluation did not establish that *About you* ac
 output beyond the old prompt; the measured limits are recorded with the prompt design in Quiz.
 [quiz.md § Shaped by who you are and why you are reading](quiz.md#shaped-by-who-you-are-and-why-you-are-reading).
 
-**Not the structural stages.** The hierarchy, the arc and the section labels never see it. The tree is
+**Not the structural stages.** The structure step, the arc and the section labels never see it. The tree is
 [the one structure](granularity-zoom.md#the-tree) that Structure, the zoom, the summaries and the spine
 all address, and a reader-specific tree is one that shifts under a reader who edits their profile.
 Structure stays shared; only the prose *about* it is personalised. **Not semantic search** either:

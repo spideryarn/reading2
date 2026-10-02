@@ -1,7 +1,7 @@
 /**
  * Fill judge-rank.md and judge-score.md for one mode — free, no model calls.
  *
- *   npx tsx evals/thinking-effort/make-judge-prompts.ts --results <dir> --mode sketch|illustrated|ideas|hierarchy
+ *   npx tsx evals/thinking-effort/make-judge-prompts.ts --results <dir> --mode sketch|illustrated|ideas|structure
  *
  * Writes `<dir>/judging/<mode>/prompt-rank.md` and `prompt-score.md`. The prompt
  * files sit beside the lineups so the judgement can be reproduced from the
@@ -16,7 +16,7 @@ const SECTION: Record<string, string> = {
   sketch: "Sketch — a model's drawing of the shape of the argument",
   illustrated: "Illustrated — the Sketch, painted (judged on the brief)",
   ideas: "Ideas — the propositions this piece needs you to hold",
-  hierarchy: "Hierarchy — the tree Structure, the zoom and the gists all read",
+  structure: "Structure — the tree the Structure mode, the zoom and the gists all read",
 };
 
 const PICTURES: Record<string, string> = {
@@ -24,7 +24,7 @@ const PICTURES: Record<string, string> = {
     "- Each candidate has a rendered picture (a PNG) at the path its lineup gives. **Look at it** —\n  the picture is what a reader sees; the scene JSON is its source, useful for checking block ids.",
   illustrated: "- There are no pictures: you judge the written brief an image model would paint from.",
   ideas: "- There are no pictures.",
-  hierarchy: "- There are no pictures.",
+  structure: "- There are no pictures.",
 };
 
 async function main(): Promise<void> {

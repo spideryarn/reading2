@@ -115,7 +115,7 @@ values — arc at `medium` loses 11 points of vocabulary retention on one articl
 wins, so aligning would mean paying in writing quality to win a cache. The settings on disk were
 chosen for what each stage writes, and that is the right reason to choose them.
 
-The same choice was measured for four more modes on 2026-10-01 — Sketch, Illustrated, Hierarchy and
+The same choice was measured for four more modes on 2026-10-01 — Sketch, Illustrated, Structure and
 Ideas, eight articles and two blind judges —
 [261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
 Only Sketch moved, from `high` to `low`, which took it out of the `ids` group: it chose quality and
@@ -142,7 +142,7 @@ renderer was that fact.
 
 ### And on the normal path, the pipeline breakpoints lose money
 
-`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy, assets`
+`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, structure, assets`
 ([`src/pipeline.ts`](../../src/pipeline.ts)) — `arc` moved out of it on 2026-08-29
 ([260829f](../plans/260829f-defer-arc-and-rename-hierarchy.md)), and `tweets`, `glossary` and
 `summary` were always things a reader asks for later, by Greg's decision of 2026-08-25. So an
@@ -207,12 +207,12 @@ optimisation, which is the wrong way round. It costs less than it sounds — the
 first touch, it is that explain used to hit a cache *never* and chat re-paid the article on *every
 turn*.
 
-**Not cached, on purpose:** the hierarchy's **whole-document structure call** (one call per article —
+**Not cached, on purpose:** the structure step's **whole-document call** (one call per article —
 a prefix used once costs 1.25× and earns nothing back) and summaries (each batch sends only the slice
 its scope covers, so batches mostly share nothing; the `repair` retry was moved out of position zero
 as the prerequisite, but the breakpoint is not in yet).
 
-**The hierarchy's other calls are a different question, and they do mark a prefix.** The deepening
+**The structure step's other calls are a different question, and they do mark a prefix.** The deepening
 wave ([`src/structure-expand.ts`](../../src/structure-expand.ts) § `expansionRequest`) sends one
 scoped call per fat section, all sharing `EXPAND_SYSTEM` plus the frozen wave-1 outline, and every
 one of them carries a breakpoint on that shared part. Two things about it that are decisions rather

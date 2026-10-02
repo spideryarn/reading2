@@ -56,8 +56,8 @@ function summary(): string | null | undefined {
 function line(over: Partial<ArticleCostLine>): ArticleCostLine {
   return {
     scopeKind: "job_step",
-    job: "hierarchy",
-    stepName: "hierarchy",
+    job: "structure",
+    stepName: "structure",
     category: "default-step work",
     calls: 1,
     creditsNanos: 0,
@@ -133,7 +133,7 @@ describe("the article cost section", () => {
     );
     expect(host.textContent).toContain("over 6 calls");
     const rows = [...host.querySelectorAll("tbody tr")].map((r) => r.firstChild?.textContent);
-    expect(rows).toEqual(["hierarchy", "hierarchy · labels", "chat"]);
+    expect(rows).toEqual(["structure", "structure · labels", "chat"]);
     /* The shut heading says the same total as the body. */
     expect(summary()).toBe("$0.1030 · 6 calls");
     /* Nothing is unpriced, so the total is not called a floor. */
@@ -235,9 +235,9 @@ describe("the article cost section", () => {
 
 describe("lineName", () => {
   it("names step work by its step and request work by its job", () => {
-    expect(lineName(line({}))).toBe("hierarchy");
+    expect(lineName(line({}))).toBe("structure");
     expect(lineName(line({ job: "referee_claims", stepName: null }))).toBe("referee claims");
-    expect(lineName(line({ job: "labels" }))).toBe("hierarchy · labels");
+    expect(lineName(line({ job: "labels" }))).toBe("structure · labels");
   });
 });
 

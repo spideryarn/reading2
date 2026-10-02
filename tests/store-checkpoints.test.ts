@@ -131,7 +131,7 @@ async function attempt(
   keys: readonly string[],
   stopAfter = Number.POSITIVE_INFINITY,
 ): Promise<Batch[]> {
-  const have = await store.read<Batch>(slug, "hierarchy-labels", keys);
+  const have = await store.read<Batch>(slug, "structure-labels", keys);
   const out: Batch[] = [];
   for (const key of keys) {
     const hit = have.get(key);
@@ -141,7 +141,7 @@ async function attempt(
     }
     if (out.length >= stopAfter) throw new Error("the attempt died here");
     const bought = buyLabels(key);
-    await store.write(slug, "hierarchy-labels", key, bought);
+    await store.write(slug, "structure-labels", key, bought);
     out.push(bought);
   }
   return out;
@@ -323,17 +323,17 @@ describe("the checkpoint store, in Postgres", () => {
 
   it("two articles do not see each other's entries, in Postgres", async () => {
     const key = KEYS[0] as string;
-    await store().write(SLUG, "hierarchy-labels", key, { from: "one" });
-    expect(await store(otherArticleId, OTHER_SLUG).read(OTHER_SLUG, "hierarchy-labels", [key])).toEqual(
+    await store().write(SLUG, "structure-labels", key, { from: "one" });
+    expect(await store(otherArticleId, OTHER_SLUG).read(OTHER_SLUG, "structure-labels", [key])).toEqual(
       new Map(),
     );
   });
 
   it("two namespaces do not see each other's keys, in Postgres", async () => {
     const key = KEYS[1] as string;
-    await store().write(SLUG, "hierarchy-labels", key, { from: "labels" });
+    await store().write(SLUG, "structure-labels", key, { from: "labels" });
     await store().write(SLUG, "pdf-chunk", key, { from: "chunks" });
-    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
+    expect(await store().read(SLUG, "structure-labels", [key])).toEqual(
       new Map([[key, { from: "labels" }]]),
     );
     expect(await store().read(SLUG, "pdf-chunk", [key])).toEqual(
@@ -343,9 +343,9 @@ describe("the checkpoint store, in Postgres", () => {
 
   it("the last write wins, in Postgres", async () => {
     const key = KEYS[2] as string;
-    await store().write(SLUG, "hierarchy-labels", key, { answer: "first" });
-    await store().write(SLUG, "hierarchy-labels", key, { answer: "second" });
-    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
+    await store().write(SLUG, "structure-labels", key, { answer: "first" });
+    await store().write(SLUG, "structure-labels", key, { answer: "second" });
+    expect(await store().read(SLUG, "structure-labels", [key])).toEqual(
       new Map([[key, { answer: "second" }]]),
     );
   });
@@ -368,17 +368,17 @@ describe("the checkpoint store, in Postgres", () => {
   it("heals an unusable row after exactly one repurchase, in Postgres", async () => {
     const key = "0011223344556677";
     /* Valid JSON, valid jsonb, and not something a caller can use. */
-    await store().write(SLUG, "hierarchy-labels", key, { wrong: "shape" });
+    await store().write(SLUG, "structure-labels", key, { wrong: "shape" });
 
     let bought = 0;
     async function validatingAttempt(): Promise<void> {
-      const have = await store().read<Batch>(SLUG, "hierarchy-labels", [key]);
+      const have = await store().read<Batch>(SLUG, "structure-labels", [key]);
       const hit = have.get(key);
       /* The caller's own gate, not the store's — the store never looks at a
          value's shape, deliberately. */
       if (hit && typeof hit.fingerprint === "string") return;
       bought += 1;
-      await store().write(SLUG, "hierarchy-labels", key, buyLabels(key));
+      await store().write(SLUG, "structure-labels", key, buyLabels(key));
     }
 
     await validatingAttempt();
@@ -405,8 +405,8 @@ describe("the checkpoint store, in Postgres", () => {
    */
   it("asks the database nothing for an empty key list", async () => {
     const bogus = mod.pg.createPgCheckpointStore({ slug: SLUG, articleId: "not-a-uuid" });
-    expect(await bogus.read(SLUG, "hierarchy-labels", [])).toEqual(new Map());
-    await expect(bogus.read(SLUG, "hierarchy-labels", [KEYS[0] as string])).rejects.toThrow();
+    expect(await bogus.read(SLUG, "structure-labels", [])).toEqual(new Map());
+    await expect(bogus.read(SLUG, "structure-labels", [KEYS[0] as string])).rejects.toThrow();
   });
 
   it("refuses a value that will not serialise, in Postgres too", async () => {
@@ -414,7 +414,7 @@ describe("the checkpoint store, in Postgres", () => {
        means the two stores cannot disagree about what is writable, which they
        did before — Postgres refused `undefined` and the filesystem wrote the
        word. */
-    await expect(store().write(SLUG, "hierarchy-labels", "aabb00112233ffee", undefined)).rejects.toThrow(
+    await expect(store().write(SLUG, "structure-labels", "aabb00112233ffee", undefined)).rejects.toThrow(
       /must serialise to JSON/,
     );
   });
@@ -422,7 +422,7 @@ describe("the checkpoint store, in Postgres", () => {
   it("a hit stamps last_used_at", async () => {
     const { schema } = mod;
     const key = "aabbccddeeff0011";
-    await store().write(SLUG, "hierarchy-labels", key, { answer: "x" });
+    await store().write(SLUG, "structure-labels", key, { answer: "x" });
     /* Backdated by hand, because the test cannot wait ninety days and the point
        is the *difference* between created and last used. */
     const long = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
@@ -433,7 +433,7 @@ describe("the checkpoint store, in Postgres", () => {
         and(eq(schema.checkpoints.articleId, articleId), eq(schema.checkpoints.key, key)),
       );
 
-    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(new Map([[key, { answer: "x" }]]));
+    expect(await store().read(SLUG, "structure-labels", [key])).toEqual(new Map([[key, { answer: "x" }]]));
 
     const [row] = await db
       .select()
@@ -470,7 +470,7 @@ describe("the checkpoint store, in Postgres", () => {
       return "IT WAS ACCEPTED";
     }
     expect(
-      await refusal({ articleId, namespace: "hierarchy-labels", key: "../../etc/passwd", value: {} }),
+      await refusal({ articleId, namespace: "structure-labels", key: "../../etc/passwd", value: {} }),
     ).toBe("checkpoints_key_format");
     expect(await refusal({ articleId, namespace: "made-up", key: "abc123", value: {} })).toBe(
       "checkpoints_namespace",
@@ -478,7 +478,7 @@ describe("the checkpoint store, in Postgres", () => {
     /* The control: the same insert with nothing wrong with it is accepted, so a
        table that refused everything could not pass this test. */
     expect(
-      await refusal({ articleId, namespace: "hierarchy-labels", key: "abc123", value: {} }),
+      await refusal({ articleId, namespace: "structure-labels", key: "abc123", value: {} }),
     ).toBe("IT WAS ACCEPTED");
   });
 
@@ -504,12 +504,12 @@ describe("the checkpoint store, in Postgres", () => {
           .values({ articleId, status: "draft" })
           .returning();
         /* Inside the failing attempt, exactly where a stage writes one. */
-        await store().write(SLUG, "hierarchy-labels", key, { answer: "paid for" });
+        await store().write(SLUG, "structure-labels", key, { answer: "paid for" });
         throw new RollBack("the attempt failed");
       }),
     ).rejects.toThrow(RollBack);
 
-    expect(await store().read(SLUG, "hierarchy-labels", [key])).toEqual(
+    expect(await store().read(SLUG, "structure-labels", [key])).toEqual(
       new Map([[key, { answer: "paid for" }]]),
     );
   });
@@ -520,14 +520,14 @@ describe("the checkpoint store, in Postgres", () => {
     const cold = "44ee55ff66007711";
     const long = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
     for (const key of [hot, cold]) {
-      await store().write(SLUG, "hierarchy-labels", key, { answer: key });
+      await store().write(SLUG, "structure-labels", key, { answer: key });
       await db
         .update(schema.checkpoints)
         .set({ createdAt: long, lastUsedAt: long })
         .where(and(eq(schema.checkpoints.articleId, articleId), eq(schema.checkpoints.key, key)));
     }
     /* One of them gets used. */
-    await store().read(SLUG, "hierarchy-labels", [hot]);
+    await store().read(SLUG, "structure-labels", [hot]);
 
     const before = checkpointCutoff(CHECKPOINT_RETENTION_DAYS);
     const dry = await mod.pg.sweepPgCheckpoints(before);

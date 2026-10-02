@@ -97,9 +97,9 @@ const OWNED = [
   /* **The row the eleven-file list could not have.** It shared
      `output/writes.html` with `extract/extractedHtml` above. */
   { step: "blocks", kind: "stampedHtml", part: "output.html" },
-  { step: "hierarchy", kind: "tree", part: "tree.json" },
-  { step: "hierarchy", kind: "labels", part: "labels.json" },
-  { step: "hierarchy", kind: "blocks", part: "blocks.json" },
+  { step: "structure", kind: "tree", part: "tree.json" },
+  { step: "structure", kind: "labels", part: "labels.json" },
+  { step: "structure", kind: "blocks", part: "blocks.json" },
   { step: "arc", kind: "arc", part: "arc.json" },
   { step: "tweets", kind: "tweets", part: "tweets.json" },
   { step: "glossary", kind: "glossary", part: "glossary.json" },

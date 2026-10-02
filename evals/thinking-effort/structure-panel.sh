@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Plan 261001s's Hierarchy panel: toc/10 and toc/11, two draws of each, on the
+# Plan 261001s's Structure panel: toc/10 and toc/11, two draws of each, on the
 # eight full-length articles. One run directory is deliberate: lineup.ts reads
 # one run.json and its sibling trees, so all eight articles must stay together.
 # One cell is ~3 minutes, making the serial panel roughly 1.5 hours.

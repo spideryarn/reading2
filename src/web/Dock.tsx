@@ -2361,7 +2361,7 @@ const NOT_A_MODE = {
        before it were each false, a few hours apart.**
 
        *"Nothing on it is generated"* was inherited from `Metadata.tsx`'s own
-       header, and the page opens with the hierarchy's `gist` and `summary`
+       header, and the page opens with the tree's `gist` and `summary`
        under *In one sentence*, which are model output. GPT Sol.
 
        *"The page itself generates nothing and makes no model call"* survived

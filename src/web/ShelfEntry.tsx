@@ -439,13 +439,13 @@ const TIPS = {
   },
   /**
    * **Five steps, not eleven** — `DEFAULT_INGEST_STEPS` in src/pipeline.ts is
-   * `fetch`, `extract`, `blocks`, `hierarchy`, `assets`. The arc, the glossary,
+   * `fetch`, `extract`, `blocks`, `structure`, `assets`. The arc, the glossary,
    * the quotes, the timeline and the rest are not rebuilt, and saying "the
    * whole pipeline" promised a reader something this button does not do.
    */
   rerun: {
     head: "Re-fetch and rebuild",
-    what: "Fetches the page again and reads it afresh: the text is re-extracted, the blocks and the hierarchy are rebuilt, and the article's images are re-hosted.",
+    what: "Fetches the page again and reads it afresh: the text is re-extracted, the blocks and the structure are rebuilt, and the article's images are re-hosted.",
     how: "A few minutes, and it spends model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the page itself has rewritten can lose its marker.",
   },
   /**
@@ -474,7 +474,7 @@ const TIPS = {
    */
   rebuild: {
     head: "Rebuild",
-    what: "There is no web address to fetch this article from, so nothing is fetched: the copy we already hold is processed again — the text is re-extracted, the blocks and the hierarchy are rebuilt, and the article's images are re-hosted.",
+    what: "There is no web address to fetch this article from, so nothing is fetched: the copy we already hold is processed again — the text is re-extracted, the blocks and the structure are rebuilt, and the article's images are re-hosted.",
     how: "A few minutes, and it may spend model calls. What you have written stays where the text did — notes are keyed to block ids, which are minted once and kept, so only a passage the new extraction rewrites can lose its marker.",
   },
   /**

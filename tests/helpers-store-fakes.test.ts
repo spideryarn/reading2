@@ -117,16 +117,16 @@ describe("the memory store hands back copies, not its own objects", () => {
    */
   it("does not change when a value it returned is mutated afterwards", async () => {
     const store = memoryArtefacts();
-    store.plant(SLUG, "hierarchy", "blocks", {
+    store.plant(SLUG, "structure", "blocks", {
       blocks: [{ id: "spya-aaaaaa", tag: "p", kind: "text", text: "before", words: 1, html: "", gistable: true }],
     });
 
-    const first = await store.read(SLUG, "hierarchy", "blocks");
+    const first = await store.read(SLUG, "structure", "blocks");
     const block = first?.blocks[0];
     if (!block) throw new Error("the planted artefact came back without its block");
     block.text = "mutated";
 
-    const second = await store.read(SLUG, "hierarchy", "blocks");
+    const second = await store.read(SLUG, "structure", "blocks");
     expect(
       second?.blocks[0]?.text,
       "editing a read result changed the store — the fake is aliasing, and every " +

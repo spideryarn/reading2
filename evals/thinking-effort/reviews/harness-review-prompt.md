@@ -10,7 +10,7 @@ itself; you can run `npx vitest run <file>` on tests that need nothing outside t
 `git show --stat 61f78bb1d` lists every path; `git show 61f78bb1d -- <path>` the diff. Start with:
 - `evals/thinking-effort/run.ts`, `arms.ts`, `lineup.ts`, `tests/thinking-effort-eval.test.ts`
 - `src/illustrated.ts` (the optional `effort` override) and `tests/illustrated-run.test.ts`
-- `evals/structure-whole-document/{arms,model-arms,run,preflight}.ts`
+- `evals/hierarchy-structure/{arms,model-arms,run,preflight}.ts`
 - the smoke output: `evals/results/thinking-effort-smoke/runs.jsonl`, `README.md`, `order.json`
 That list does not limit scope.
 

@@ -3,7 +3,7 @@
  * with it — and that deletion is the whole of this design's freshness check.**
  *
  * Stage 2 of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
- * splits the label pass out of `hierarchy`. `hierarchy` now writes a
+ * splits the label pass out of `structure`. `structure` now writes a
  * `PendingLabelsFile` (src/labels.ts — the three hashes and `batches: null`),
  * and the `labels` step writes the real one later, in a free successor job.
  *
@@ -12,7 +12,7 @@
  * **Receipts are inherited.** `beginDraftIn` (src/store/pg-revisions.ts) copies
  * *every* `revision_step_runs` row forward into a new draft, in the same
  * transaction as the columns. So a **second** ingest of an article that already
- * has labels begins holding a `labels = done` receipt, and then `hierarchy`
+ * has labels begins holding a `labels = done` receipt, and then `structure`
  * overwrites the labels column underneath it. Two ways that ends badly, and
  * neither of them looks like this test:
  *
@@ -71,7 +71,7 @@
  * `beginStep` / `write` / `finishStep` through `pgArtifactsIn`, inside a claim,
  * exactly as src/jobs.ts runs a step — so the `done` row it starts from is one
  * the fenced write path actually produced, and the deletion is one a real
- * `hierarchy` write performs. The shape is copied from
+ * `structure` write performs. The shape is copied from
  * tests/shared-site-run-row-gate.test.ts, which explains the harness at length.
  * Everything happens inside a transaction that is rolled back.
  */
@@ -172,7 +172,7 @@ function aDifferentTree(): Tree {
  * `mergeLabels(structure, …)` beside it. `structureHash` hashes id, parent,
  * range, title and gist (and `treatment`) and not `navLabel`, so the two are
  * equal — pinned as a property of `mergeLabels` in tests/labels-batching.test.ts
- * and end to end on the `hierarchy` writer in tests/structure-step-write-guard.test.ts.
+ * and end to end on the `structure` writer in tests/structure-step-write-guard.test.ts.
  * It read `"hash-of-the-tree"` until 2026-09-07, when `writeArtefacts` started
  * checking the claim.
  */
@@ -263,7 +263,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 class RollBack extends Error {}
 
 const JOB_STEPS: JobStep[] = [
-  { name: "hierarchy", label: "Building the hierarchy", status: "pending" },
+  { name: "structure", label: "Building the structure", status: "pending" },
   { name: "labels", label: "Labelling the paragraphs", status: "pending" },
 ];
 
@@ -305,7 +305,7 @@ async function runLabelsStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
 }
 
 /**
- * Stage 3, so there are block rows to hash. `hierarchy` writes its own copy of
+ * Stage 3, so there are block rows to hash. `structure` writes its own copy of
  * them too, and both point at the same rows (`STORAGE`, src/store/artifacts-pg.ts).
  */
 async function runBlocksStep(tx: Tx, claimed: JobDraftRef, blocks = BLOCKS): Promise<void> {
@@ -327,7 +327,7 @@ async function runBlocksStep(tx: Tx, claimed: JobDraftRef, blocks = BLOCKS): Pro
 }
 
 /**
- * A second `hierarchy` run, exactly as the step performs it — the pending
+ * A second `structure` run, exactly as the step performs it — the pending
  * manifest, the freshly cut tree and stage 4's copy of the blocks, in one write.
  */
 async function runStructureStep(
@@ -337,14 +337,14 @@ async function runStructureStep(
 ): Promise<void> {
   const store = pgArtifactsIn(claimed, tx);
   const hash = hashBlocks(blocks);
-  const attempt = await store.beginStep(SLUG, "hierarchy");
+  const attempt = await store.beginStep(SLUG, "structure");
   await store.write(
     SLUG,
-    "hierarchy",
+    "structure",
     { tree: treeSaying(false), labels: pendingOver(hash), blocks: { blocks } },
     { inputHash: hash },
   );
-  await store.finishStep(SLUG, "hierarchy", attempt);
+  await store.finishStep(SLUG, "structure", attempt);
 }
 
 /**
@@ -358,7 +358,7 @@ async function runStructureStep(
  * same attempt* has already ended (src/store/pg-revisions.ts — GPT Sol's finding
  * 4), so a second `blocks` run inside one claim throws `StepRunNotHeld` before
  * any of this file's claims are reached. A real re-ingest is a new attempt on a
- * new draft. It costs nothing to skip: `hierarchy` writes stage 4's own copy of
+ * new draft. It costs nothing to skip: `structure` writes stage 4's own copy of
  * the blocks, and `STORAGE` points both steps at the same rows, so the new
  * blocks land here exactly as they would have.
  */
@@ -366,7 +366,7 @@ async function reIngest(tx: Tx, claimed: JobDraftRef): Promise<void> {
   await runStructureStep(tx, claimed, BLOCKS_V2);
 }
 
-async function runRow(tx: Tx, step: "labels" | "hierarchy") {
+async function runRow(tx: Tx, step: "labels" | "structure") {
   const [row] = await tx
     .select()
     .from(revisionStepRuns)
@@ -418,9 +418,9 @@ describe("a re-ingest, which is where the receipt turns dangerous", () => {
          are the same write — and it is not the `labels` step making it. */
       await reIngest(tx, claimed);
       expect((await runRow(tx, "labels"))?.status).toBeUndefined();
-      /* `hierarchy`'s own receipt is untouched. The rule is keyed on the
+      /* `structure`'s own receipt is untouched. The rule is keyed on the
          artefact, and it deletes one row rather than every row. */
-      expect((await runRow(tx, "hierarchy"))?.status).toBe("done");
+      expect((await runRow(tx, "structure"))?.status).toBe("done");
     });
   });
 
@@ -472,7 +472,7 @@ describe("a re-cut over the same blocks", () => {
    * The other half of the P0, and it is the **union** that closes this one
    * rather than the deletion — worth its own case so the two are not confused.
    *
-   * A `hierarchy` re-run that changes nothing but the section boundaries leaves
+   * A `structure` re-run that changes nothing but the section boundaries leaves
    * the carried row and the fresh manifest agreeing on `sourceHash`, so there is
    * no clash to throw on. What stops the labels step skipping is that a
    * `PendingLabelsFile` carries no `version` and no `generator`: the stamp
@@ -511,16 +511,16 @@ describe("a tree with no manifest beside it", () => {
   /**
    * The refusal that makes the rule above a rule rather than a habit. The next
    * writer of this column is the deepening wave, which re-cuts the tree
-   * *without* running `hierarchy`; under a convention living inside one step's
+   * *without* running `structure`; under a convention living inside one step's
    * `run` it would have had to remember. Here the store refuses it.
    */
   it("is refused, naming what the writer has to decide", async () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
       const store = pgArtifactsIn(claimed, tx);
-      const attempt = await store.beginStep(SLUG, "hierarchy");
+      const attempt = await store.beginStep(SLUG, "structure");
       await expect(
-        store.write(SLUG, "hierarchy", { tree: treeSaying(true) }, { inputHash: BLOCKS_HASH }),
+        store.write(SLUG, "structure", { tree: treeSaying(true) }, { inputHash: BLOCKS_HASH }),
       ).rejects.toThrow(/tree was written with no labels manifest/);
       void attempt;
     });
@@ -615,7 +615,7 @@ describe("a completed manifest about a different tree", () => {
  * `copyArtefacts` (src/store/copy-artefacts.ts) walks `STEP_ORDER` and copies
  * every step the source holds, `beginStep` … `write` … `finishStep`, exactly as
  * the runner does. The fixture reader lists `tree.json` and `labels.json` under
- * **both** `hierarchy` and `labels` (tests/helpers/fixture-artefacts.ts § LAYOUT),
+ * **both** `structure` and `labels` (tests/helpers/fixture-artefacts.ts § LAYOUT),
  * because on disk the corpus predates the split and those really are the files
  * stage 4 as a whole produced.
  *
@@ -641,7 +641,7 @@ describe("copying an article whose labels are still pending", () => {
   /** The tree, the pending manifest and the blocks — under both steps, as the fixture reader lists them. */
   function pendingArticle(): ArtifactSource {
     const held: { [S in string]?: Partial<Record<ArtifactKind, unknown>> } = {
-      hierarchy: {
+      structure: {
         tree: treeSaying(false),
         labels: pendingOver(BLOCKS_HASH),
         blocks: { blocks: BLOCKS },
@@ -652,14 +652,14 @@ describe("copying an article whose labels are still pending", () => {
       read: async <K extends ArtifactKind>(_slug: string, step: string, kind: K) =>
         (held[step]?.[kind] ?? null) as ArtifactMap[K] | null,
       stampFor: async (_slug: string, step: string) =>
-        step === "hierarchy" ? { inputHash: BLOCKS_HASH } : {},
+        step === "structure" ? { inputHash: BLOCKS_HASH } : {},
     } as ArtifactSource;
   }
 
-  it("copies the tree once, as hierarchy, and does not claim the labels step ran", async () => {
+  it("copies the tree once, as structure, and does not claim the labels step ran", async () => {
     await withClaim(async (tx, claimed) => {
       const copied = await copyArtefacts(pendingArticle(), pgArtifactsIn(claimed, tx), SLUG);
-      expect(copied).toEqual(["hierarchy"]);
+      expect(copied).toEqual(["structure"]);
       expect(await statusOf(tx)).toBe("pending");
     });
   });
@@ -680,7 +680,7 @@ describe("copying an article whose labels are still pending", () => {
     const done: ArtifactSource = {
       read: async <K extends ArtifactKind>(_slug: string, step: string, kind: K) => {
         const held: Record<string, Partial<Record<ArtifactKind, unknown>>> = {
-          hierarchy: { tree: treeSaying(true), labels: DONE, blocks: { blocks: BLOCKS } },
+          structure: { tree: treeSaying(true), labels: DONE, blocks: { blocks: BLOCKS } },
           labels: { tree: treeSaying(true), labels: DONE },
         };
         return (held[step]?.[kind] ?? null) as ArtifactMap[K] | null;
@@ -693,7 +693,7 @@ describe("copying an article whose labels are still pending", () => {
     } as ArtifactSource;
     await withClaim(async (tx, claimed) => {
       const copied = await copyArtefacts(done, pgArtifactsIn(claimed, tx), SLUG);
-      expect(copied).toEqual(["hierarchy", "labels"]);
+      expect(copied).toEqual(["structure", "labels"]);
       expect(await statusOf(tx)).toBe("ready");
       expect((await runRow(tx, "labels"))?.status).toBe("done");
     });

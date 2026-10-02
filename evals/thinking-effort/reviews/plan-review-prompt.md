@@ -15,9 +15,9 @@ and leanings are quoted in the plan.
 - `src/models.ts` § `STAGE_EFFORT`, `effortFor`, `ArticleStage`, `ARTICLE_RENDERER`
 - `src/illustrated.ts` (the brief call around line 1030), `src/sketch.ts` § generateSketch,
   `src/ideas.ts` § generateIdeas
-- `src/structure-prompt.ts` § EFFORT, `src/structure.ts` § wholeDocumentRequest,
-  `src/structure-expand.ts` § EXPAND_EFFORT
-- `evals/structure-whole-document/` (arms.ts, model-arms.ts, run.ts, score.ts, blind.ts) — the existing harness
+- `src/hierarchy-prompt.ts` § EFFORT, `src/hierarchy.ts` § structureRequest,
+  `src/hierarchy-expand.ts` § EXPAND_EFFORT
+- `evals/hierarchy-structure/` (arms.ts, model-arms.ts, run.ts, score.ts, blind.ts) — the existing harness
 - `evals/sketch/run.ts`, `evals/illustrated/run.ts`, `evals/results/effort-vs-quality.md` (the prior effort eval)
 - `src/pipeline.ts` § sharesArticleCache, `tests/article-cache-group.test.ts`
 - `docs/project/{sketch,illustrated,ideas,hierarchy}.md`

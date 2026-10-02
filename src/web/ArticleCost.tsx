@@ -38,8 +38,8 @@ export type ArticleCostLoad =
 /** What a line is called: the pipeline step for step work, the job otherwise. */
 export function lineName(line: ArticleCostLine): string {
   const name = line.stepName ?? line.job;
-  /* `labels` runs inside the `hierarchy` step and is recorded with both names;
-     saying only "hierarchy" would hide which of the two calls cost what. */
+  /* `labels` runs inside the `structure` step and is recorded with both names;
+     saying only "structure" would hide which of the two calls cost what. */
   const detail = line.stepName && line.job !== line.stepName ? ` · ${line.job}` : "";
   return `${name.replaceAll("_", " ")}${detail.replaceAll("_", " ")}`;
 }

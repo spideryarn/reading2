@@ -6,7 +6,7 @@
  * ```
  *
  * The corpus is the parseable `before-*.raw.txt` answers plus every local
- * `hierarchy-structure` checkpoint. Each is built through today's ranged path,
+ * `structure-whole-document` checkpoint. Each is built through today's ranged path,
  * then transformed mechanically to the starts-only DTO and built through
  * `modelNodeFromStarts`. The command is read-only: the direct checkpoint query
  * deliberately does not use `CheckpointStore.read`, whose contract updates
@@ -289,7 +289,7 @@ async function sourcesFromLocalDatabase(): Promise<{
     })
     .from(checkpoints)
     .innerJoin(articles, eq(checkpoints.articleId, articles.id))
-    .where(eq(checkpoints.namespace, "hierarchy-structure"));
+    .where(eq(checkpoints.namespace, "structure-whole-document"));
   const sources = rows.flatMap((row): ReplaySource[] => {
     const raw = checkpointAnswer(row.value);
     return raw === null

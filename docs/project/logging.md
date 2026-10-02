@@ -28,7 +28,7 @@ happened to mention it. That was the gap.
 
 Every `console.log`/`console.error` call in `src/` and `scripts/` is **staying**. They are in
 pipeline stages' `main()` functions and in the standalone scripts — `db-migrate`, `typecheck`,
-`run-codex`, `validate-tree`, `hierarchy-flatten` — and they all write to a terminal somebody is watching:
+`run-codex`, `validate-tree`, `structure-flatten` — and they all write to a terminal somebody is watching:
 
 ```
 Blocks:    412  ({"paragraph":331,"heading":38,…})

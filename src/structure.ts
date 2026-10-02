@@ -1,5 +1,6 @@
 /**
- * Pipeline stage 4 — build the deeply-nested table of contents / granularity
+ * Pipeline stage 4, the `structure` step (called `hierarchy` until 2026-10-02)
+ * — build the deeply-nested table of contents / granularity
  * tree over a block sequence. See docs/project/structure-step.md.
  *
  *   npm run structure -- <slug> [--force]
@@ -629,7 +630,7 @@ export function estimateStructureTokens(blocks: Block[]): number {
  * `THINKING_HEADROOM`'s 40,000 (src/token-budget.ts) was measured on a call with
  * 48,107 tokens of article in front of it. This stage reads every block of the
  * whole document, so it is the call that meets the longest inputs, and on
- * 2026-09-04 the real Kuhn structure call reported **47,289 thinking tokens**
+ * 2026-09-04 the real Kuhn whole-document call reported **47,289 thinking tokens**
  * against 365,930 of input — over the general reservation, at `EFFORT` medium,
  * with `end_turn` and a valid answer.
  *
@@ -656,7 +657,7 @@ export function estimateStructureTokens(blocks: Block[]): number {
 export const STRUCTURE_HEADROOM = 64_000;
 
 /**
- * **How long the deadline must still be, for a structure call to be asked
+ * **How long the deadline must still be, for a whole-document call to be asked
  * again** — the first call's own length, plus half of it again, plus at least
  * `REASK_MARGIN_MS`. A second answer is not the same length as the first: the
  * book this was written for took 129 s once and 94 s the next time, so a margin
@@ -673,7 +674,7 @@ export function reaskReserveMs(firstCallMs: number): number {
 export const REASK_MARGIN_MS = 30_000;
 
 /**
- * The structure call's request, assembled in the one place `generateStructure`
+ * The whole-document call's request, assembled in the one place `generateStructure`
  * itself uses.
  *
  * Exported for the structure eval (evals/structure-whole-document/model-arms.ts), whose
@@ -739,7 +740,7 @@ export function wholeDocumentRequest(body: Block[]): {
  * written to remove, and GPT Sol's review of this plan (finding 4) named four
  * things the proposed list already omitted: `thinking`, `max_tokens`, the
  * routing `streamMessage` injects, and the difference between `CAPABLE_MODEL`,
- * which is the model's *name*, and `modelFor("hierarchy")`, which is the
+ * which is the model's *name*, and `modelFor("structure")`, which is the
  * *address* the request is actually sent to.
  *
  * **So `request` is the finished wire body**, built by the same
@@ -781,7 +782,7 @@ export function canonicalWholeDocumentRequest(
        the model moves the key rather than silently answering its question —
        and so does the article's power: an Opus run must not reuse a Sonnet
        structure and call it Opus's (plan 260930f decision 7). */
-    request: messagesWireBody("hierarchy", params, power),
+    request: messagesWireBody("structure", params, power),
   };
 }
 
@@ -799,7 +800,7 @@ export function canonicalWholeDocumentRequest(
  * The hoist is not cosmetic. `src/structure-deepen.ts` needs this function, and
  * `src/structure.ts` will import *it* when stage 5 wires the cascade into
  * `generateStructure` — so a version of it that only existed here would be a
- * value import closing `hierarchy → hierarchy-deepen → hierarchy`, and
+ * value import closing `structure → structure-deepen → structure`, and
  * `npm run cycles` is a gate at zero rather than advice.
  */
 export { checkpointKey as wholeDocumentKey } from "./source-hash.js";
@@ -1392,7 +1393,7 @@ type ChildPlan = { keep: true; range: readonly [string, string] } | { keep: fals
  * left is measurement. Every boundary the model got wrong is recorded with
  * `where`, `kind`, `at` and `size`, summed and maxed into `StructureRun`, printed by
  * the CLI at zero as well as above it, logged by src/pipeline.ts and scored per
- * result by evals/hierarchy-structure — because a repair nobody is told about is the
+ * result by evals/structure-whole-document — because a repair nobody is told about is the
  * same shape as the bug it repaired (docs/reusable/silent-success.md).
  *
  * **A count that used to be a gate is now the trigger for the next stage.**
@@ -1835,7 +1836,7 @@ function collapseRestatedRungs(
  * (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked claim is
  * a badge that would lie, and the whole cost of dropping it is that one node
  * stops claiming an authorship it never had. Throwing, by contrast, costs the
- * reader the article: four structure calls in four made the same wrong claim on
+ * reader the article: four whole-document calls in four made the same wrong claim on
  * the same document, which makes a refusal not an occasional loss but a
  * guaranteed failure loop for it
  * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
@@ -2223,14 +2224,14 @@ export interface StructureRun {
    * **The hash the caller must record for this step**, read off `labels.json`
    * rather than computed beside it.
    *
-   * `hierarchy` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
+   * `structure` deliberately has no `PipelineStep.stamp` — src/pipeline.ts says why,
    * at length, and it is not an oversight. Recording *no input hash* is a
-   * different thing: `reasonsNotToPublish` compares `hierarchy`'s `input_hash`
+   * different thing: `reasonsNotToPublish` compares `structure`'s `input_hash`
    * against the stored blocks and refuses the publication when they differ, so
    * a run left carrying `NO_INPUT_HASH` makes the article unpublishable
    * (src/store/pg-revisions.ts, src/store/artifacts-pg.ts § `writeArtefacts`).
    *
-   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.hierarchy` is
+   * Taken from `parts.labels.sourceHash` because `STAMP_SOURCE.structure` is
    * `"labels"`: whatever the caller passes as `inputHash` is compared against
    * that same field by `assertStampAgrees` on the way into either store, and a
    * second computation of "the blocks hash" is how the two come to disagree.
@@ -2346,7 +2347,7 @@ export interface StructureRun {
   internal: number;
   /**
    * **Whether the tree itself came out of a checkpoint rather than out of a
-   * call.** True means this attempt made no structure call at all.
+   * call.** True means this attempt made no whole-document call at all.
    *
    * Reported for the same reason `labelsResumed` is: a checkpoint that silently
    * never hits looks exactly like one that is working, and this is the most
@@ -2357,7 +2358,7 @@ export interface StructureRun {
    */
   wholeDocumentResumed: boolean;
   /**
-   * **How many structure calls this attempt made**: 0 when it was resumed, 1
+   * **How many whole-document calls this attempt made**: 0 when it was resumed, 1
    * ordinarily, 2 when the first answer could not become a tree and was asked
    * for again — `REASK_STRUCTURE`. Logged at every value, because a re-ask that
    * has quietly become the common case doubles the stage's bill and its wait.
@@ -2393,7 +2394,7 @@ export interface StructureRun {
   inputTokens: number;
   outputTokens: number;
   /* **From the deepening wave alone, since the label pass left on 2026-09-06.**
-     Not the structure call, which is one call per article and is deliberately
+     Not the whole-document call, which is one call per article and is deliberately
      not cached, so there is nothing for it to read — see
      docs/plans/260826g-prompt-caching.md on why a prefix used once is worth
      1.25× and no more. The wave is the other way round: its calls share
@@ -2433,7 +2434,7 @@ export interface StructureRun {
  *
  * **Two model passes, one pipeline step, and nothing returned until both are
  * done** — three when the deepening wave is switched on, which runs between the
- * structure call and the labels (`deepenTree`, off for every reader today). The
+ * whole-document call and the labels (`deepenTree`, off for every reader today). The
  * split exists so the unbounded half can be batched
  * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
  * stored with a third of its labels missing is a valid-looking artefact that
@@ -2443,7 +2444,7 @@ export interface StructureRun {
  * can start sooner is a real option and a deliberate later one; it needs a
  * state that says "still arriving" rather than an absence that says nothing.
  *
- * `onProgress` reports what is arriving. For the structure call there is nothing
+ * `onProgress` reports what is arriving. For the whole-document call there is nothing
  * useful to say about *what* has been written — the JSON is unparseable until it
  * is complete — so it reports that something is still coming. The label pass can
  * do better, and counts finished sections. The deepening wave, where it runs at
@@ -2457,7 +2458,7 @@ export async function generateStructure(opts: {
   /**
    * Where each finished **label batch** goes as it lands — passed straight down
    * to `generateLabels`. It was the only thing here that checkpointed until the
-   * structure call and the deepening wave gained rows of their own; this option
+   * whole-document call and the deepening wave gained rows of their own; this option
    * is still the label pass's alone.
    *
    * It was a directory until 2026-09-01, and the store was not the seam this
@@ -2647,7 +2648,7 @@ export async function generateStructure(opts: {
   const wholeDocumentFingerprint = checkpointKey(canonicalWholeDocumentRequest(params, opts.power));
   let raw: string | null = null;
   try {
-    const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
+    const stored = await opts.checkpoints.read<unknown>(slug, "structure-whole-document", [
       wholeDocumentFingerprint,
     ]);
     raw = usableWholeDocument(stored.get(wholeDocumentFingerprint), wholeDocumentFingerprint, body);
@@ -2656,7 +2657,7 @@ export async function generateStructure(opts: {
        and reporting only the first would make a format change look like a cold
        cache. */
     log("pipeline").info(
-      { slug, namespace: "hierarchy-structure", asked: 1, found: stored.size, usable: raw !== null },
+      { slug, namespace: "structure-whole-document", asked: 1, found: stored.size, usable: raw !== null },
       "read the structure checkpoint",
     );
   } catch (err) {
@@ -2725,7 +2726,7 @@ export async function generateStructure(opts: {
    */
   let wholeDocumentUsage = { input_tokens: 0, output_tokens: 0 };
   /**
-   * **One structure call, from request to an answer we can try to build** —
+   * **One whole-document call, from request to an answer we can try to build** —
    * everything that refuses an answer *before* it is read as a tree (transport,
    * refusal, truncation) throws in here, so none of them is ever asked again.
    */
@@ -2737,7 +2738,7 @@ export async function generateStructure(opts: {
     const began = Date.now();
     let message: Anthropic.Message;
     try {
-      const call = streamMessage("hierarchy", params, {
+      const call = streamMessage("structure", params, {
         power: opts.power,
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
@@ -2878,7 +2879,7 @@ export async function generateStructure(opts: {
   if (!wholeDocumentResumed && raw !== null) {
     const entry: WholeDocumentCheckpointEntry = { fingerprint: wholeDocumentFingerprint, answer: raw };
     try {
-      await opts.checkpoints.write(slug, "hierarchy-structure", wholeDocumentFingerprint, entry);
+      await opts.checkpoints.write(slug, "structure-whole-document", wholeDocumentFingerprint, entry);
     } catch (err) {
       log("pipeline").warn(
         { slug, key: wholeDocumentFingerprint, err },
@@ -3025,7 +3026,7 @@ export async function generateStructure(opts: {
    * - **`assertTreeSound` did not move**, and must not: a structure-only tree
    *   is still either sound or not, and this is the only place that asks.
    *
-   * `opts.checkpoints` is still used, by the structure call above — see
+   * `opts.checkpoints` is still used, by the whole-document call above — see
    * `wholeDocumentResumed`.
    * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
    */
@@ -3234,10 +3235,10 @@ export async function generateStructure(opts: {
        The deepening term is zero on every run with the flag off, because
        `deepen` is `null` there — so an undeepened run's four figures are
        arithmetically identical to what it reported before the wave was metered,
-       and `tests/hierarchy-deepen-tokens.test.ts` is the gate on that. What it
+       and `tests/structure-deepen-tokens.test.ts` is the gate on that. What it
        cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
        up, and `deepenFailed` beside these says the AI-spend ledger under task
-       `hierarchy` is where that attempt's money is. */
+       `structure` is where that attempt's money is. */
     inputTokens: wholeDocumentUsage.input_tokens + (deepen?.usage.inputTokens ?? 0),
     outputTokens: wholeDocumentUsage.output_tokens + (deepen?.usage.outputTokens ?? 0),
     cacheReadTokens: deepen?.usage.cacheReadTokens ?? 0,
@@ -3264,7 +3265,7 @@ export async function generateStructure(opts: {
  * batches out of `checkpoints` — measured 2026-09-05, two consecutive forced
  * runs on an unchanged article, the first buying two model calls and the second
  * **none**. So `--force` re-runs the step and not the purchase, and an earlier
- * version of this sentence claiming "the extra structure call is the honest
+ * version of this sentence claiming "the extra whole-document call is the honest
  * price" was wrong in the expensive direction. `scripts/stage.ts` has the
  * contract and the measurement.
  *

@@ -650,7 +650,7 @@ describe("a checkpoint survives the job that paid for it", () => {
   /* ------------------------------------------------------- and the label half -- */
 
   /**
-   * The other caller, and it is the same plumbing: `hierarchy` hands the store
+   * The other caller, and it is the same plumbing: `structure` hands the store
    * down to `generateLabels`, which reads every batch fingerprint in one
    * statement and writes each answer as it lands.
    *
@@ -758,7 +758,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       const writer = storeFor();
       for (const batch of batches) {
         const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
-        await writer.write(SLUG, "hierarchy-labels", fingerprint, {
+        await writer.write(SLUG, "structure-labels", fingerprint, {
           fingerprint,
           labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
           record: {
@@ -794,7 +794,7 @@ describe("a checkpoint survives the job that paid for it", () => {
       const writer = storeFor();
       for (const batch of batches) {
         const fingerprint = batchFingerprint(batch, blocks, outline, "standard");
-        await writer.write(SLUG, "hierarchy-labels", fingerprint, {
+        await writer.write(SLUG, "structure-labels", fingerprint, {
           fingerprint,
           labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
           record: {

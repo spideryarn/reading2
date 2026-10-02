@@ -1837,11 +1837,11 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   metadata: ["article_revisions.title", "article_revisions.abstract", "article_revisions.doi"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
-  hierarchy: ["article_revisions.tree", "article_revisions.labels"],
-  /* The same two columns as `hierarchy` above, and that is right rather than a
+  structure: ["article_revisions.tree", "article_revisions.labels"],
+  /* The same two columns as `structure` above, and that is right rather than a
      copy-paste: stage 4 writes the tree and an empty manifest, and this step
      rewrites both with the labels merged in. Two steps over one site is a shape
-     this store already has — `blocks`/`hierarchy` share the block rows
+     this store already has — `blocks`/`structure` share the block rows
      (src/store/artifacts-pg.ts § STORAGE) — and what keeps their doneness apart
      is each step's own run row, pinned by
      tests/shared-site-run-row-gate.test.ts. */
@@ -2860,7 +2860,7 @@ const rawPgArticleReader: ArticleReader = {
    *
    * ## What "current" means per step, and the one half that is still missing
    *
-   * `hierarchy` is checked the way `publishRevision` checks it, so the metadata page
+   * `structure` is checked the way `publishRevision` checks it, so the metadata page
    * and the publication guard cannot disagree: the recorded `input_hash` must
    * equal `hashBlocks` of this revision's blocks.
    *
@@ -2932,7 +2932,7 @@ const rawPgArticleReader: ArticleReader = {
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
-        case "hierarchy": {
+        case "structure": {
           /* No tree and no blocks are this function's own preconditions, not
              `structureCurrency`'s: it answers "is this run the one that
              describes these blocks", which is not a question you can ask when
@@ -2948,10 +2948,10 @@ const rawPgArticleReader: ArticleReader = {
              still required by the caller below as well, which is belt and
              braces rather than duplication: this arm is the only one of the
              fifteen that could answer it, and every other arm relies on it. */
-          return structureCurrency(byStep.get("hierarchy"), blocksHash).current;
+          return structureCurrency(byStep.get("structure"), blocksHash).current;
         }
         /**
-         * **Asked of the run row, like `hierarchy` above and unlike everything
+         * **Asked of the run row, like `structure` above and unlike everything
          * below** — and the reason is this step's own design rather than a
          * shortcut.
          *
@@ -2966,7 +2966,7 @@ const rawPgArticleReader: ArticleReader = {
          *   Reading the row means this page answers the same question the
          *   pipeline does, from the same fact. A missing row is `undefined`
          *   here and answers not-current, which is right for both of its causes:
-         *   never run, and invalidated by a fresh `hierarchy`.
+         *   never run, and invalidated by a fresh `structure`.
          * - **The column is one of the largest on the table** — a label per
          *   paragraph — and `REVISION_READ_POLICY` exists to keep exactly that
          *   off a read that does not need it. Granting `labels` to `metadata`
@@ -3000,7 +3000,7 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
-        /* The same two questions as `hierarchy`, and the same answer — but asked of
+        /* The same two questions as `structure`, and the same answer — but asked of
            the artefact rather than of the step row, because the manifest
            carries its own `sourceHash` and its own version. That second half
            matters: the step re-runs when what it *decides* changes (which URLs

@@ -40,7 +40,7 @@
  * ## Why the fixture is built by hand rather than through the pipeline
  *
  * `tests/store-carry-forward.test.ts` is the model for the shape, but it needs a
- * *publishable* article — a tree, blocks, a hierarchy run — because publication
+ * *publishable* article — a tree, blocks, a structure run — because publication
  * is its subject. Nothing here reads a block or a tree: the delete touches one
  * column and `hasArtefacts` reads that same column. So the rows go in directly,
  * the way `tests/store-raw-source-race.test.ts` builds its article, and the

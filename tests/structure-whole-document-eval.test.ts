@@ -596,7 +596,7 @@ describe("chatBody", () => {
   });
 
   it("asks for zero retention on every candidate arm, and on neither incumbent arm", () => {
-    /* The incumbent-shaped arms are exempt on purpose: production's hierarchy
+    /* The incumbent-shaped arms are exempt on purpose: production's whole-document
        call sets no `zdr`, and an incumbent routed differently from production
        is not the incumbent — the same rule that produced PRODUCTION_EFFORT.
        `cheap-high` is exempt for a different and weaker reason: it is the
@@ -1113,7 +1113,7 @@ describe("throwAnatomy", () => {
  * `elapsedMs` (ArmResult) and the per-call `wave`/`startedOffsetMs`/`endedOffsetMs`
  * (CallStats), added 2026-09-04 so a reader stops having to reconstruct latency
  * as "first call + max(the parallel calls)" — the approximation GPT Sol called
- * "defensible... but not generally valid" (evals/README.md § hierarchy-structure).
+ * "defensible... but not generally valid" (evals/README.md § structure-whole-document).
  *
  * No model calls here — `run.ts` is not invoked, `runModelArm` is not invoked.
  * These are fixture round-trips through plain `JSON.stringify`/`JSON.parse`,

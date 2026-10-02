@@ -28,7 +28,7 @@
  * model call keeps running, keeps being billed, and keeps believing it holds a
  * claim that the new copy has never heard of.
  *
- * On 2026-08-30 that ran one article's `hierarchy` step **eleven times at once**
+ * On 2026-08-30 that ran one article's `structure` step **eleven times at once**
  * under a single job id. See
  * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  *

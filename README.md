@@ -76,9 +76,9 @@ enough to show a stranger by default.
 
 - **Plain** — the prose and nothing else, the default. Every other mode is a step away from it and a
   step back.
-- **Hierarchy** — granularity zoom itself, one column per level of detail beside the text.
-- **Outline** — a constantly evolving table of contents, detailed where you are and sparse
-  elsewhere, a semantic fisheye lens ([column-context.md](docs/project/column-context.md)).
+- **Structure** — the piece's parts and sections as a tree: two linked columns in a wide window, and
+  in a narrow one a nested list, detailed where you are and sparse elsewhere
+  ([structure.md](docs/project/structure.md)).
 - **Summary** — a sentence on every part of the piece, and every section of every part, as deep as
   you ask ([summaries.md](docs/project/summaries.md)).
 - **Diagram** — the shape of the piece as a picture, with where you are marked on it

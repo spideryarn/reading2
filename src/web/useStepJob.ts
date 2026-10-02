@@ -143,7 +143,7 @@ interface StepRun<S extends StepName> {
    * **`StepBefore<S>` is what makes the name true, and it is a fix rather than
    * decoration.** `orderSteps` sorts by `STEP_ORDER` and by nothing else, so a
    * caller naming a *later* step here would get it back **after** their own:
-   * `precededBy: ["assets"]` on `hierarchy` comes out as `["hierarchy",
+   * `precededBy: ["assets"]` on `structure` comes out as `["structure",
    * "assets"]`, a "preceding" step that runs afterwards, with nothing anywhere
    * saying so. GPT Sol reproduced exactly that on 2026-09-03. No caller does it,
    * so this was a trap for the next one rather than a live bug — and the choice

@@ -104,7 +104,8 @@ import { articles, jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
 import { mayOverlap, type JobShape } from "../sharing-steps.js";
-import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
+import type { Job, JobStatus, JobStep, OwnerId, StepName } from "../types.js";
+import { currentStepName } from "../step-order.js";
 import {
   ACTIVE,
   type ClaimOutcome,
@@ -190,13 +191,20 @@ function toJob(row: Row): Job {
     id: row.id,
     ownerId: row.ownerId as OwnerId,
     slug: row.slug,
-    steps: row.steps,
+    /* A renamed step's old name, read as its new one — `RETIRED_STEPS` in
+       src/step-order.ts says when a row can still hold one. */
+    steps: row.steps.map((s) => {
+      const name = currentStepName(s.name) as StepName;
+      return name === s.name ? s : { ...s, name };
+    }),
     status: row.status as JobStatus,
     createdAt: row.createdAt.toISOString(),
     ...(row.url !== null && { url: row.url }),
     ...(row.title !== null && { title: row.title }),
     ...(row.profile !== null && { profile: row.profile }),
-    ...(row.reset !== null && { reset: row.reset }),
+    ...(row.reset !== null && {
+      reset: { ...row.reset, regenerate: row.reset.regenerate.map((n) => currentStepName(n) as StepName) },
+    }),
     ...(row.error !== null && { error: row.error }),
     ...(row.failureKind !== null && { failureKind: row.failureKind as FailureKind }),
     ...(row.startedAt !== null && { startedAt: row.startedAt.toISOString() }),
@@ -821,7 +829,8 @@ async function blockedByAnother(tx: Tx, id: string): Promise<boolean> {
             or (other.created_at, other.id) < (mine.created_at, mine.id))
   `);
   const shape = (steps: JobStep[], reset: boolean, reservesName: boolean): JobShape => ({
-    steps: steps.map((step) => step.name),
+    /* Raw rows, not `toJob`, so the retired names are translated here too. */
+    steps: steps.map((step) => currentStepName(step.name) as StepName),
     reset,
     reservesName,
   });
@@ -1595,7 +1604,7 @@ const rawPgJobStore: JobStore = {
        * `noteProgress`, but a claimant can die before that write lands — after
        * `claim`, or inside `stepIsDone`, which runs before it — and the job then
        * ended `error` having marked nothing, which is the bug this whole change
-       * exists to fix. And a `["hierarchy","labels"]` job that dies inside
+       * exists to fix. And a `["structure","labels"]` job that dies inside
        * `hierarchy` leaves the base `pending` with **no other successor** — and
        * that last clause is the whole of it, which is why the live-promise check
        * below exists. GPT Sol, F4 of the stage 2c review and G1 of the second.
@@ -1852,7 +1861,7 @@ const rawPgJobStore: JobStore = {
        * died before it wrote the status down; widening it to membership then let
        * in the case Sol found (G1 of the second stage 2c review):
        *
-       * 1. Job A, `["hierarchy","labels"]`, queues behind running job C.
+       * 1. Job A, `["structure","labels"]`, queues behind running job C.
        * 2. C publishes a `pending` revision and queues successor B, `["labels"]`.
        * 3. A predates B, so A claims first and opens its draft from that revision.
        * 4. A dies inside `hierarchy`.

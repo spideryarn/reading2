@@ -342,7 +342,7 @@ describe("readMode, and the mode a shared address asked for", () => {
     /* The rule `modeParam` already keeps on the client: a link naming a mode
        this version has not got degrades to the article rather than to an error.
 
-       **`DEFAULT_MODE`, not the literal `"hierarchy"` it was.** `toc` is in this
+       **`DEFAULT_MODE`, not the literal `"structure"` it was.** `toc` is in this
        list as one unrecognised string among six and nothing more. It used to be
        here as *the* case, because it named the hierarchy until 2026-08-29 and
        old links carrying it survived on this very rule landing them on a default
