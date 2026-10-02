@@ -117,6 +117,7 @@ import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
+import { isFolded } from "./fold.js";
 
 /**
  * Where a band sits inside the part it belongs to.
@@ -201,6 +202,14 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   // the blocks array clamps here rather than reading past the end.
   const edge = (row: number) => (row < tops.length ? tops[row]! : docBottom);
 
+  /** Whether every row from `start` to `end`, inclusive, is folded away. */
+  const foldedThrough = (start: number, end: number): boolean => {
+    for (let i = start; i <= end && i < rows.length; i++) {
+      if (!isFolded(rows[i]!.dataset.block ?? "")) return false;
+    }
+    return start < rows.length;
+  };
+
   const bandFor = (e: OutlineEntry, parent?: BandParent): Band => ({
     entry: e,
     top: edge(e.startRow) - docTop,
@@ -226,15 +235,26 @@ function measure(outline: OutlineEntry[]): Metrics | null {
     // tooltip and nothing to click. L2s partition their parent, so they cover
     // it exactly — *unless* a part has no children at all, and then the part
     // itself stands in for them.
-    hits: outline.flatMap((e) =>
-      e.children.length > 0 ? childBands(e) : [bandFor(e)],
-    ),
+    /* **Not a band folded away to nothing** (fold.ts). A folded section's rows
+       sit at zero height, so its band does too — and a hit target is drawn at
+       a minimum height, so several of them would stack on one pixel and hide
+       each other. A partly folded band keeps the height it still has. GPT
+       Sol's plan review of 261002e, finding 3. Asked of the fold store rather
+       than of the band's height, which is a measurement: zero for every row
+       wherever there is no layout. */
+    hits: outline
+      .flatMap((e) => (e.children.length > 0 ? childBands(e) : [bandFor(e)]))
+      .filter((b) => !foldedThrough(b.entry.startRow, b.entry.endRow)),
     rows: new Map(
       rows.flatMap((r, i) => {
         const id = r.dataset.block;
         // A row with no id cannot be addressed by anything upstream, so it is
-        // dropped rather than given an index nothing will ever look up.
-        return id ? [[id, { index: i, top: tops[i]! - docTop, height: rects[i]!.height }] as const] : [];
+        // dropped rather than given an index nothing will ever look up. A
+        // folded row likewise, so no search, reading or origin mark is drawn
+        // for words that are not on the page.
+        return id && !isFolded(id)
+          ? [[id, { index: i, top: tops[i]! - docTop, height: rects[i]!.height }] as const]
+          : [];
       }),
     ),
   };

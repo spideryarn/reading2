@@ -194,7 +194,15 @@ function canonical(artefact: string, value: unknown): unknown {
            would otherwise quietly delete. */
         key === "threads"
         ? raw.map((t) => ({ kind: "chat", ...(t as Record<string, unknown>) }))
-        : raw;
+        : /* **A run with no `kind` IS a meaning search**, for the same reason:
+             `not null default 'meaning'` on the column, and every
+             `searches.json` written before 2026-10-02 predates the field
+             (plan 261002e). The export writes it out; the original never had
+             it. tests/store-export-search-kind.test.ts asserts a quick run
+             survives, which is the half this normalisation cannot see. */
+          key === "runs"
+          ? raw.map((r) => ({ kind: "meaning", ...(r as Record<string, unknown>) }))
+          : raw;
   const rank = (x: unknown) => {
     const o = x as { createdAt?: string; id?: string };
     return `${o.createdAt ?? ""}|${o.id ?? ""}`;

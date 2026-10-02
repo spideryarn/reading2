@@ -1,0 +1,8 @@
+No F13+ findings. Both fixes are correct within the reviewed scope.
+
+- **F10:** Each split settles both children before propagating failure ([quick-search.ts:294](/home/greg/code/spideryarn2/.claude/worktrees/fb-c77zuq-quick-search/src/quick-search.ts:294)), and the outer catch drains every top-level chunk ([quick-search.ts:372](/home/greg/code/spideryarn2/.claude/worktrees/fb-c77zuq-quick-search/src/quick-search.ts:372)). Gateway meters finish synchronously in `finally` before their promises settle ([ai-call.ts:2755](/home/greg/code/spideryarn2/.claude/worktrees/fb-c77zuq-quick-search/src/ai-call.ts:2755)). No remaining late-meter path found.
+- **F11:** Node v26.8.1’s implementation and runtime probes confirm that the composite used by fetch preserves the first abort’s exact reason; repeated cancellation cannot overwrite it. This matches [Node’s documented contract](https://nodejs.org/api/globals.html#static-method-abortsignalanysignals). After reader/deadline cancellation, `cancel.signal.reason` can contain a secondary transport `AbortError`, but classification checks the composite first, so that remains correct ([quick-search.ts:368](/home/greg/code/spideryarn2/.claude/worktrees/fb-c77zuq-quick-search/src/quick-search.ts:368)).
+
+Validation: all **27 targeted tests passed**. Additional in-memory probes covered three-level recursion, top-level failure during halving, success, and unreadable replies; every meter finished before collector closure, with zero pending calls. No files changed.
+
+VERDICT: land

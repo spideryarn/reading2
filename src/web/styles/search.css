@@ -405,6 +405,35 @@
 .srch-saved-stale::before { content: "·"; margin-right: 0.2rem; }
 .srch-saved-stale svg { flex: none; color: var(--highlight); }
 
+/* A quick search's row says so before its count — "⚡ quick · 3 passages" —
+   in the meta line's own faint ink: it is a fact about the row, not a warning.
+   Plan 261002e. */
+.srch-saved-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.srch-saved-kind::after { content: "·"; margin-left: 0.2rem; }
+
+/* *Flesh out* on a finished quick row: the `find` button's small outlined
+   shape, in the row's control group, because it is the same act — asking — on
+   the same words. */
+.srch-flesh {
+  flex: none;
+  align-self: center;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.srch-flesh:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
+.srch-flesh:disabled { opacity: 0.4; cursor: default; }
+
 /* The same banner the glossary and the tweet thread page carry, in the same
    words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the
    ticks and the results, so it reads as being about the marks below it. */

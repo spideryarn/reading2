@@ -596,6 +596,7 @@ const SEARCHES: SearchRun[] = [
   {
     id: "spya-run234",
     criterion: SEARCH_CRITERION,
+    kind: "meaning",
     createdAt: "2026-09-02T09:00:00.000Z",
     status: "done",
     hits: [

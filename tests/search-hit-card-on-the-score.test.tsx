@@ -34,6 +34,7 @@ let jumps: string[] = [];
 const RUN: SavedSearch = {
   id: "spya-runcc3",
   criterion: "where the context is reinstated",
+  kind: "meaning",
   createdAt: "2026-09-12T00:00:00.000Z",
   status: "done",
   hits: [],

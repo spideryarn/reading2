@@ -1,0 +1,8074 @@
+{
+ "slug": "openai-huggingface",
+ "title": "The Rise and Fall of Agent Civilizations",
+ "scorableBlocks": 94,
+ "totalBlocks": 95,
+ "chars": 25585,
+ "runAt": "2026-10-02T13:58:36.856Z",
+ "queries": [
+  {
+   "q": "Did any of the agents blow the whistle?",
+   "shape": "question",
+   "arms": {
+    "noulOne": [
+     {
+      "ms": 392,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 390,
+        "inputTokens": 13698,
+        "cost": 0.000575316
+       }
+      ],
+      "inputTokens": 13698,
+      "cost": 0.000575316,
+      "scores": {
+       "spya-cx5k4t": 0.26,
+       "spya-gvsujh": 0.07,
+       "spya-q62pkz": 0.02,
+       "spya-gb7ze2": 0.16,
+       "spya-c2ck7h": 0.12,
+       "spya-b0wbhk": 0.06,
+       "spya-ekhrbu": 0.06,
+       "spya-fcu0cb": 0.06,
+       "spya-v9detz": 0.06,
+       "spya-v43bs7": 0.06,
+       "spya-g9tjds": 0.16,
+       "spya-pfkdk4": 0.12,
+       "spya-vvkkv7": 0.13,
+       "spya-ms8rup": 0.11,
+       "spya-dk4gcf": 0.12,
+       "spya-ugwnw2": 0.17,
+       "spya-bh44xd": 0.1,
+       "spya-rzxkcd": 0.12,
+       "spya-s5dpqc": 0.11,
+       "spya-t89gw5": 0.12,
+       "spya-cbv8uf": 0.11,
+       "spya-m24kgb": 0.08,
+       "spya-k9s755": 0.1,
+       "spya-c8fcww": 0.2,
+       "spya-vqvmhz": 0.09,
+       "spya-ns5qyb": 0.09,
+       "spya-s9a3he": 0.09,
+       "spya-zfbcb4": 0.09,
+       "spya-ast6bs": 0.08,
+       "spya-ckcyzp": 0.09,
+       "spya-vfq66b": 0.12,
+       "spya-xvkm3j": 0.08,
+       "spya-gy8fb4": 0.08,
+       "spya-d6p0aa": 0.18,
+       "spya-vv9dpj": 0.1,
+       "spya-cc5uhs": 0.07,
+       "spya-w9ctpd": 0.1,
+       "spya-gu6jbj": 0.06,
+       "spya-asbjy9": 0.05,
+       "spya-vpd027": 0.06,
+       "spya-df7qrz": 0.07,
+       "spya-z6c3dr": 0.08,
+       "spya-fkg2ny": 0.17,
+       "spya-gj5bbr": 0.1,
+       "spya-acvnjw": 0.46,
+       "spya-cx56k0": 0.51,
+       "spya-m45y0k": 0.45,
+       "spya-c3dppu": 0.49,
+       "spya-dgcfnd": 0.41,
+       "spya-krknwc": 0.64,
+       "spya-f030k3": 0.63,
+       "spya-qvg86h": 0.52,
+       "spya-fhj3z4": 0.49,
+       "spya-j45j9u": 0.84,
+       "spya-nakhtw": 0.57,
+       "spya-kyxy7b": 0.09,
+       "spya-sjjbur": 0.1,
+       "spya-wtguds": 0.11,
+       "spya-m4gku9": 0.09,
+       "spya-r4jn5b": 0.1,
+       "spya-jauf7s": 0.13,
+       "spya-vqcwj0": 0.12,
+       "spya-nayjhs": 0.54,
+       "spya-mgjgha": 0.95,
+       "spya-bgtdqz": 0.95,
+       "spya-q33vy8": 0.81,
+       "spya-fmww2n": 0.43,
+       "spya-matth4": 0.11,
+       "spya-c2bkgz": 0.14,
+       "spya-m42hxd": 0.1,
+       "spya-ddr2ub": 0.1,
+       "spya-ebtbnm": 0.09,
+       "spya-k8jws5": 0.08,
+       "spya-khwx0h": 0.11,
+       "spya-vsujby": 0.13,
+       "spya-peudft": 0.1,
+       "spya-chdu2z": 0.09,
+       "spya-av2uwp": 0.06,
+       "spya-tq02vk": 0.1,
+       "spya-h6yxz3": 0.08,
+       "spya-td87ke": 0.07,
+       "spya-bpuujn": 0.17,
+       "spya-hz50qg": 0.17,
+       "spya-a49xd7": 0.61,
+       "spya-g5mja3": 0.06,
+       "spya-rvb47b": 0.05,
+       "spya-f07bw5": 0.07,
+       "spya-p0h9g8": 0.08,
+       "spya-z83ezv": 0.09,
+       "spya-qen9hh": 0.11,
+       "spya-kqgzae": 0.26,
+       "spya-mdta39": 0.08,
+       "spya-rnag5c": 0.58,
+       "spya-brgs0b": 0.38
+      }
+     },
+     {
+      "ms": 383,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 383,
+        "inputTokens": 13698,
+        "cost": 0.000575316
+       }
+      ],
+      "inputTokens": 13698,
+      "cost": 0.000575316,
+      "scores": {
+       "spya-cx5k4t": 0.28,
+       "spya-gvsujh": 0.07,
+       "spya-q62pkz": 0.02,
+       "spya-gb7ze2": 0.18,
+       "spya-c2ck7h": 0.11,
+       "spya-b0wbhk": 0.06,
+       "spya-ekhrbu": 0.06,
+       "spya-fcu0cb": 0.06,
+       "spya-v9detz": 0.08,
+       "spya-v43bs7": 0.06,
+       "spya-g9tjds": 0.14,
+       "spya-pfkdk4": 0.13,
+       "spya-vvkkv7": 0.15,
+       "spya-ms8rup": 0.09,
+       "spya-dk4gcf": 0.11,
+       "spya-ugwnw2": 0.15,
+       "spya-bh44xd": 0.11,
+       "spya-rzxkcd": 0.14,
+       "spya-s5dpqc": 0.11,
+       "spya-t89gw5": 0.12,
+       "spya-cbv8uf": 0.1,
+       "spya-m24kgb": 0.08,
+       "spya-k9s755": 0.1,
+       "spya-c8fcww": 0.22,
+       "spya-vqvmhz": 0.08,
+       "spya-ns5qyb": 0.08,
+       "spya-s9a3he": 0.11,
+       "spya-zfbcb4": 0.11,
+       "spya-ast6bs": 0.08,
+       "spya-ckcyzp": 0.08,
+       "spya-vfq66b": 0.11,
+       "spya-xvkm3j": 0.08,
+       "spya-gy8fb4": 0.08,
+       "spya-d6p0aa": 0.19,
+       "spya-vv9dpj": 0.09,
+       "spya-cc5uhs": 0.08,
+       "spya-w9ctpd": 0.09,
+       "spya-gu6jbj": 0.07,
+       "spya-asbjy9": 0.04,
+       "spya-vpd027": 0.05,
+       "spya-df7qrz": 0.06,
+       "spya-z6c3dr": 0.08,
+       "spya-fkg2ny": 0.16,
+       "spya-gj5bbr": 0.1,
+       "spya-acvnjw": 0.44,
+       "spya-cx56k0": 0.56,
+       "spya-m45y0k": 0.43,
+       "spya-c3dppu": 0.5,
+       "spya-dgcfnd": 0.43,
+       "spya-krknwc": 0.61,
+       "spya-f030k3": 0.56,
+       "spya-qvg86h": 0.45,
+       "spya-fhj3z4": 0.44,
+       "spya-j45j9u": 0.79,
+       "spya-nakhtw": 0.56,
+       "spya-kyxy7b": 0.1,
+       "spya-sjjbur": 0.09,
+       "spya-wtguds": 0.1,
+       "spya-m4gku9": 0.08,
+       "spya-r4jn5b": 0.09,
+       "spya-jauf7s": 0.11,
+       "spya-vqcwj0": 0.12,
+       "spya-nayjhs": 0.58,
+       "spya-mgjgha": 0.94,
+       "spya-bgtdqz": 0.96,
+       "spya-q33vy8": 0.8,
+       "spya-fmww2n": 0.48,
+       "spya-matth4": 0.1,
+       "spya-c2bkgz": 0.14,
+       "spya-m42hxd": 0.09,
+       "spya-ddr2ub": 0.11,
+       "spya-ebtbnm": 0.09,
+       "spya-k8jws5": 0.08,
+       "spya-khwx0h": 0.11,
+       "spya-vsujby": 0.12,
+       "spya-peudft": 0.11,
+       "spya-chdu2z": 0.1,
+       "spya-av2uwp": 0.06,
+       "spya-tq02vk": 0.1,
+       "spya-h6yxz3": 0.09,
+       "spya-td87ke": 0.06,
+       "spya-bpuujn": 0.18,
+       "spya-hz50qg": 0.21,
+       "spya-a49xd7": 0.62,
+       "spya-g5mja3": 0.06,
+       "spya-rvb47b": 0.06,
+       "spya-f07bw5": 0.07,
+       "spya-p0h9g8": 0.07,
+       "spya-z83ezv": 0.09,
+       "spya-qen9hh": 0.1,
+       "spya-kqgzae": 0.25,
+       "spya-mdta39": 0.09,
+       "spya-rnag5c": 0.59,
+       "spya-brgs0b": 0.36
+      }
+     },
+     {
+      "ms": 398,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 397,
+        "inputTokens": 13698,
+        "cost": 0.000575316
+       }
+      ],
+      "inputTokens": 13698,
+      "cost": 0.000575316,
+      "scores": {
+       "spya-cx5k4t": 0.27,
+       "spya-gvsujh": 0.07,
+       "spya-q62pkz": 0.02,
+       "spya-gb7ze2": 0.16,
+       "spya-c2ck7h": 0.11,
+       "spya-b0wbhk": 0.07,
+       "spya-ekhrbu": 0.06,
+       "spya-fcu0cb": 0.07,
+       "spya-v9detz": 0.07,
+       "spya-v43bs7": 0.07,
+       "spya-g9tjds": 0.16,
+       "spya-pfkdk4": 0.12,
+       "spya-vvkkv7": 0.14,
+       "spya-ms8rup": 0.11,
+       "spya-dk4gcf": 0.12,
+       "spya-ugwnw2": 0.15,
+       "spya-bh44xd": 0.12,
+       "spya-rzxkcd": 0.16,
+       "spya-s5dpqc": 0.12,
+       "spya-t89gw5": 0.15,
+       "spya-cbv8uf": 0.12,
+       "spya-m24kgb": 0.08,
+       "spya-k9s755": 0.09,
+       "spya-c8fcww": 0.2,
+       "spya-vqvmhz": 0.09,
+       "spya-ns5qyb": 0.09,
+       "spya-s9a3he": 0.1,
+       "spya-zfbcb4": 0.11,
+       "spya-ast6bs": 0.1,
+       "spya-ckcyzp": 0.1,
+       "spya-vfq66b": 0.14,
+       "spya-xvkm3j": 0.09,
+       "spya-gy8fb4": 0.08,
+       "spya-d6p0aa": 0.21,
+       "spya-vv9dpj": 0.11,
+       "spya-cc5uhs": 0.09,
+       "spya-w9ctpd": 0.1,
+       "spya-gu6jbj": 0.07,
+       "spya-asbjy9": 0.04,
+       "spya-vpd027": 0.06,
+       "spya-df7qrz": 0.07,
+       "spya-z6c3dr": 0.08,
+       "spya-fkg2ny": 0.17,
+       "spya-gj5bbr": 0.1,
+       "spya-acvnjw": 0.4,
+       "spya-cx56k0": 0.52,
+       "spya-m45y0k": 0.45,
+       "spya-c3dppu": 0.48,
+       "spya-dgcfnd": 0.46,
+       "spya-krknwc": 0.6,
+       "spya-f030k3": 0.56,
+       "spya-qvg86h": 0.5,
+       "spya-fhj3z4": 0.44,
+       "spya-j45j9u": 0.8,
+       "spya-nakhtw": 0.56,
+       "spya-kyxy7b": 0.09,
+       "spya-sjjbur": 0.1,
+       "spya-wtguds": 0.1,
+       "spya-m4gku9": 0.09,
+       "spya-r4jn5b": 0.11,
+       "spya-jauf7s": 0.11,
+       "spya-vqcwj0": 0.12,
+       "spya-nayjhs": 0.56,
+       "spya-mgjgha": 0.95,
+       "spya-bgtdqz": 0.96,
+       "spya-q33vy8": 0.81,
+       "spya-fmww2n": 0.46,
+       "spya-matth4": 0.12,
+       "spya-c2bkgz": 0.14,
+       "spya-m42hxd": 0.13,
+       "spya-ddr2ub": 0.09,
+       "spya-ebtbnm": 0.09,
+       "spya-k8jws5": 0.08,
+       "spya-khwx0h": 0.11,
+       "spya-vsujby": 0.12,
+       "spya-peudft": 0.11,
+       "spya-chdu2z": 0.11,
+       "spya-av2uwp": 0.06,
+       "spya-tq02vk": 0.11,
+       "spya-h6yxz3": 0.08,
+       "spya-td87ke": 0.06,
+       "spya-bpuujn": 0.19,
+       "spya-hz50qg": 0.2,
+       "spya-a49xd7": 0.6,
+       "spya-g5mja3": 0.06,
+       "spya-rvb47b": 0.06,
+       "spya-f07bw5": 0.08,
+       "spya-p0h9g8": 0.08,
+       "spya-z83ezv": 0.1,
+       "spya-qen9hh": 0.12,
+       "spya-kqgzae": 0.26,
+       "spya-mdta39": 0.08,
+       "spya-rnag5c": 0.59,
+       "spya-brgs0b": 0.44
+      }
+     }
+    ],
+    "noulOnePlain": {
+     "ms": 336,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 336,
+       "inputTokens": 9280,
+       "cost": 0.00038976
+      }
+     ],
+     "inputTokens": 9280,
+     "cost": 0.00038976,
+     "scores": {
+      "spya-cx5k4t": 0.16,
+      "spya-gvsujh": 0.05,
+      "spya-q62pkz": 0.03,
+      "spya-gb7ze2": 0.16,
+      "spya-c2ck7h": 0.12,
+      "spya-b0wbhk": 0.06,
+      "spya-ekhrbu": 0.07,
+      "spya-fcu0cb": 0.06,
+      "spya-v9detz": 0.08,
+      "spya-v43bs7": 0.07,
+      "spya-g9tjds": 0.14,
+      "spya-pfkdk4": 0.12,
+      "spya-vvkkv7": 0.14,
+      "spya-ms8rup": 0.09,
+      "spya-dk4gcf": 0.11,
+      "spya-ugwnw2": 0.17,
+      "spya-bh44xd": 0.11,
+      "spya-rzxkcd": 0.1,
+      "spya-s5dpqc": 0.12,
+      "spya-t89gw5": 0.11,
+      "spya-cbv8uf": 0.11,
+      "spya-m24kgb": 0.09,
+      "spya-k9s755": 0.08,
+      "spya-c8fcww": 0.21,
+      "spya-vqvmhz": 0.11,
+      "spya-ns5qyb": 0.09,
+      "spya-s9a3he": 0.08,
+      "spya-zfbcb4": 0.08,
+      "spya-ast6bs": 0.08,
+      "spya-ckcyzp": 0.08,
+      "spya-vfq66b": 0.11,
+      "spya-xvkm3j": 0.08,
+      "spya-gy8fb4": 0.06,
+      "spya-d6p0aa": 0.19,
+      "spya-vv9dpj": 0.1,
+      "spya-cc5uhs": 0.09,
+      "spya-w9ctpd": 0.1,
+      "spya-gu6jbj": 0.09,
+      "spya-asbjy9": 0.05,
+      "spya-vpd027": 0.07,
+      "spya-df7qrz": 0.07,
+      "spya-z6c3dr": 0.09,
+      "spya-fkg2ny": 0.15,
+      "spya-gj5bbr": 0.09,
+      "spya-acvnjw": 0.25,
+      "spya-cx56k0": 0.45,
+      "spya-m45y0k": 0.36,
+      "spya-c3dppu": 0.37,
+      "spya-dgcfnd": 0.34,
+      "spya-krknwc": 0.49,
+      "spya-f030k3": 0.45,
+      "spya-qvg86h": 0.4,
+      "spya-fhj3z4": 0.36,
+      "spya-j45j9u": 0.75,
+      "spya-nakhtw": 0.43,
+      "spya-kyxy7b": 0.1,
+      "spya-sjjbur": 0.11,
+      "spya-wtguds": 0.11,
+      "spya-m4gku9": 0.1,
+      "spya-r4jn5b": 0.11,
+      "spya-jauf7s": 0.15,
+      "spya-vqcwj0": 0.1,
+      "spya-nayjhs": 0.5,
+      "spya-mgjgha": 0.94,
+      "spya-bgtdqz": 0.94,
+      "spya-q33vy8": 0.68,
+      "spya-fmww2n": 0.42,
+      "spya-matth4": 0.13,
+      "spya-c2bkgz": 0.13,
+      "spya-m42hxd": 0.09,
+      "spya-ddr2ub": 0.09,
+      "spya-ebtbnm": 0.1,
+      "spya-k8jws5": 0.1,
+      "spya-khwx0h": 0.12,
+      "spya-vsujby": 0.14,
+      "spya-peudft": 0.11,
+      "spya-chdu2z": 0.1,
+      "spya-av2uwp": 0.06,
+      "spya-tq02vk": 0.11,
+      "spya-h6yxz3": 0.07,
+      "spya-td87ke": 0.06,
+      "spya-bpuujn": 0.21,
+      "spya-hz50qg": 0.14,
+      "spya-a49xd7": 0.64,
+      "spya-g5mja3": 0.06,
+      "spya-rvb47b": 0.05,
+      "spya-f07bw5": 0.06,
+      "spya-p0h9g8": 0.07,
+      "spya-z83ezv": 0.06,
+      "spya-qen9hh": 0.09,
+      "spya-kqgzae": 0.29,
+      "spya-mdta39": 0.07,
+      "spya-rnag5c": 0.53,
+      "spya-brgs0b": 0.4
+     }
+    },
+    "scoreOne": {
+     "ms": 629,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 627,
+       "inputTokens": 19808,
+       "cost": 0.000831936
+      }
+     ],
+     "inputTokens": 19808,
+     "cost": 0.000831936,
+     "scores": {
+      "spya-cx5k4t": 0.76,
+      "spya-gvsujh": 0.21,
+      "spya-q62pkz": 0.08,
+      "spya-gb7ze2": 1.12,
+      "spya-c2ck7h": 0.8,
+      "spya-b0wbhk": 0.3,
+      "spya-ekhrbu": 0.27,
+      "spya-fcu0cb": 0.23,
+      "spya-v9detz": 0.34,
+      "spya-v43bs7": 0.22,
+      "spya-g9tjds": 0.76,
+      "spya-pfkdk4": 0.64,
+      "spya-vvkkv7": 0.65,
+      "spya-ms8rup": 0.46,
+      "spya-dk4gcf": 0.51,
+      "spya-ugwnw2": 0.65,
+      "spya-bh44xd": 0.43,
+      "spya-rzxkcd": 0.64,
+      "spya-s5dpqc": 0.38,
+      "spya-t89gw5": 0.36,
+      "spya-cbv8uf": 0.39,
+      "spya-m24kgb": 0.33,
+      "spya-k9s755": 0.44,
+      "spya-c8fcww": 0.9,
+      "spya-vqvmhz": 0.27,
+      "spya-ns5qyb": 0.33,
+      "spya-s9a3he": 0.49,
+      "spya-zfbcb4": 0.42,
+      "spya-ast6bs": 0.33,
+      "spya-ckcyzp": 0.35,
+      "spya-vfq66b": 0.55,
+      "spya-xvkm3j": 0.32,
+      "spya-gy8fb4": 0.45,
+      "spya-d6p0aa": 0.57,
+      "spya-vv9dpj": 0.48,
+      "spya-cc5uhs": 0.39,
+      "spya-w9ctpd": 0.45,
+      "spya-gu6jbj": 0.27,
+      "spya-asbjy9": 0.11,
+      "spya-vpd027": 0.21,
+      "spya-df7qrz": 0.26,
+      "spya-z6c3dr": 0.27,
+      "spya-fkg2ny": 0.69,
+      "spya-gj5bbr": 0.46,
+      "spya-acvnjw": 1.66,
+      "spya-cx56k0": 1.94,
+      "spya-m45y0k": 2.12,
+      "spya-c3dppu": 1.79,
+      "spya-dgcfnd": 1.78,
+      "spya-krknwc": 2.31,
+      "spya-f030k3": 2.26,
+      "spya-qvg86h": 1.66,
+      "spya-fhj3z4": 1.84,
+      "spya-j45j9u": 2.47,
+      "spya-nakhtw": 2.16,
+      "spya-kyxy7b": 0.29,
+      "spya-sjjbur": 0.36,
+      "spya-wtguds": 0.41,
+      "spya-m4gku9": 0.22,
+      "spya-r4jn5b": 0.26,
+      "spya-jauf7s": 0.34,
+      "spya-vqcwj0": 0.27,
+      "spya-nayjhs": 1.79,
+      "spya-mgjgha": 2.96,
+      "spya-bgtdqz": 2.99,
+      "spya-q33vy8": 2.43,
+      "spya-fmww2n": 1.79,
+      "spya-matth4": 0.45,
+      "spya-c2bkgz": 0.49,
+      "spya-m42hxd": 0.38,
+      "spya-ddr2ub": 0.33,
+      "spya-ebtbnm": 0.28,
+      "spya-k8jws5": 0.33,
+      "spya-khwx0h": 0.34,
+      "spya-vsujby": 0.34,
+      "spya-peudft": 0.29,
+      "spya-chdu2z": 0.2,
+      "spya-av2uwp": 0.16,
+      "spya-tq02vk": 0.33,
+      "spya-h6yxz3": 0.38,
+      "spya-td87ke": 0.29,
+      "spya-bpuujn": 0.84,
+      "spya-hz50qg": 0.9,
+      "spya-a49xd7": 2.27,
+      "spya-g5mja3": 0.3,
+      "spya-rvb47b": 0.29,
+      "spya-f07bw5": 0.24,
+      "spya-p0h9g8": 0.13,
+      "spya-z83ezv": 0.3,
+      "spya-qen9hh": 0.35,
+      "spya-kqgzae": 1.07,
+      "spya-mdta39": 0.2,
+      "spya-rnag5c": 1.88,
+      "spya-brgs0b": 0.89
+     },
+     "raw": {
+      "spya-cx5k4t": {
+       "score": 0.76,
+       "confidence": 0.24,
+       "probabilities": {
+        "0": 0.62,
+        "1": 0.16,
+        "2": 0.06,
+        "3": 0.16
+       }
+      },
+      "spya-gvsujh": {
+       "score": 0.21,
+       "confidence": 0.79,
+       "probabilities": {
+        "0": 0.89,
+        "1": 0.05,
+        "2": 0.02,
+        "3": 0.04
+       }
+      },
+      "spya-q62pkz": {
+       "score": 0.08,
+       "confidence": 0.92,
+       "probabilities": {
+        "0": 0.95,
+        "1": 0.02,
+        "2": 0.01,
+        "3": 0.02
+       }
+      },
+      "spya-gb7ze2": {
+       "score": 1.12,
+       "confidence": 0.45,
+       "probabilities": {
+        "0": 0.21,
+        "1": 0.49,
+        "2": 0.26,
+        "3": 0.04
+       }
+      },
+      "spya-c2ck7h": {
+       "score": 0.8,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.42,
+        "2": 0.13,
+        "3": 0.04
+       }
+      },
+      "spya-b0wbhk": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.12,
+        "2": 0.06,
+        "3": 0.02
+       }
+      },
+      "spya-ekhrbu": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.16,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-fcu0cb": {
+       "score": 0.23,
+       "confidence": 0.77,
+       "probabilities": {
+        "0": 0.83,
+        "1": 0.12,
+        "2": 0.05,
+        "3": 0
+       }
+      },
+      "spya-v9detz": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.16,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-v43bs7": {
+       "score": 0.22,
+       "confidence": 0.78,
+       "probabilities": {
+        "0": 0.83,
+        "1": 0.12,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-g9tjds": {
+       "score": 0.76,
+       "confidence": 0.24,
+       "probabilities": {
+        "0": 0.44,
+        "1": 0.4,
+        "2": 0.14,
+        "3": 0.02
+       }
+      },
+      "spya-pfkdk4": {
+       "score": 0.64,
+       "confidence": 0.36,
+       "probabilities": {
+        "0": 0.53,
+        "1": 0.31,
+        "2": 0.15,
+        "3": 0.01
+       }
+      },
+      "spya-vvkkv7": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.52,
+        "1": 0.33,
+        "2": 0.13,
+        "3": 0.02
+       }
+      },
+      "spya-ms8rup": {
+       "score": 0.46,
+       "confidence": 0.54,
+       "probabilities": {
+        "0": 0.61,
+        "1": 0.32,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-dk4gcf": {
+       "score": 0.51,
+       "confidence": 0.49,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.21,
+        "2": 0.13,
+        "3": 0.01
+       }
+      },
+      "spya-ugwnw2": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.19,
+        "2": 0.17,
+        "3": 0.04
+       }
+      },
+      "spya-bh44xd": {
+       "score": 0.43,
+       "confidence": 0.57,
+       "probabilities": {
+        "0": 0.72,
+        "1": 0.16,
+        "2": 0.09,
+        "3": 0.03
+       }
+      },
+      "spya-rzxkcd": {
+       "score": 0.64,
+       "confidence": 0.36,
+       "probabilities": {
+        "0": 0.63,
+        "1": 0.16,
+        "2": 0.14,
+        "3": 0.07
+       }
+      },
+      "spya-s5dpqc": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.73,
+        "1": 0.18,
+        "2": 0.06,
+        "3": 0.03
+       }
+      },
+      "spya-t89gw5": {
+       "score": 0.36,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.13,
+        "2": 0.07,
+        "3": 0.03
+       }
+      },
+      "spya-cbv8uf": {
+       "score": 0.39,
+       "confidence": 0.61,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.21,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-m24kgb": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.12,
+        "2": 0.06,
+        "3": 0.03
+       }
+      },
+      "spya-k9s755": {
+       "score": 0.44,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0.68,
+        "1": 0.21,
+        "2": 0.09,
+        "3": 0.02
+       }
+      },
+      "spya-c8fcww": {
+       "score": 0.9,
+       "confidence": 0.1,
+       "probabilities": {
+        "0": 0.38,
+        "1": 0.36,
+        "2": 0.22,
+        "3": 0.04
+       }
+      },
+      "spya-vqvmhz": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.81,
+        "1": 0.13,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-ns5qyb": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.13,
+        "2": 0.07,
+        "3": 0.02
+       }
+      },
+      "spya-s9a3he": {
+       "score": 0.49,
+       "confidence": 0.51,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.15,
+        "2": 0.12,
+        "3": 0.03
+       }
+      },
+      "spya-zfbcb4": {
+       "score": 0.42,
+       "confidence": 0.58,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.13,
+        "2": 0.1,
+        "3": 0.03
+       }
+      },
+      "spya-ast6bs": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.09,
+        "2": 0.08,
+        "3": 0.03
+       }
+      },
+      "spya-ckcyzp": {
+       "score": 0.35,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.1,
+        "2": 0.08,
+        "3": 0.03
+       }
+      },
+      "spya-vfq66b": {
+       "score": 0.55,
+       "confidence": 0.45,
+       "probabilities": {
+        "0": 0.67,
+        "1": 0.16,
+        "2": 0.13,
+        "3": 0.04
+       }
+      },
+      "spya-xvkm3j": {
+       "score": 0.32,
+       "confidence": 0.68,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.12,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-gy8fb4": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.18,
+        "2": 0.1,
+        "3": 0.03
+       }
+      },
+      "spya-d6p0aa": {
+       "score": 0.57,
+       "confidence": 0.43,
+       "probabilities": {
+        "0": 0.61,
+        "1": 0.25,
+        "2": 0.11,
+        "3": 0.03
+       }
+      },
+      "spya-vv9dpj": {
+       "score": 0.48,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.67,
+        "1": 0.2,
+        "2": 0.12,
+        "3": 0.01
+       }
+      },
+      "spya-cc5uhs": {
+       "score": 0.39,
+       "confidence": 0.61,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.11,
+        "2": 0.1,
+        "3": 0.02
+       }
+      },
+      "spya-w9ctpd": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.17,
+        "2": 0.1,
+        "3": 0.02
+       }
+      },
+      "spya-gu6jbj": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.84,
+        "1": 0.08,
+        "2": 0.05,
+        "3": 0.03
+       }
+      },
+      "spya-asbjy9": {
+       "score": 0.11,
+       "confidence": 0.89,
+       "probabilities": {
+        "0": 0.93,
+        "1": 0.04,
+        "2": 0.02,
+        "3": 0.01
+       }
+      },
+      "spya-vpd027": {
+       "score": 0.21,
+       "confidence": 0.79,
+       "probabilities": {
+        "0": 0.85,
+        "1": 0.09,
+        "2": 0.04,
+        "3": 0.02
+       }
+      },
+      "spya-df7qrz": {
+       "score": 0.26,
+       "confidence": 0.74,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.14,
+        "2": 0.04,
+        "3": 0.02
+       }
+      },
+      "spya-z6c3dr": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.14,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-fkg2ny": {
+       "score": 0.69,
+       "confidence": 0.31,
+       "probabilities": {
+        "0": 0.53,
+        "1": 0.27,
+        "2": 0.16,
+        "3": 0.04
+       }
+      },
+      "spya-gj5bbr": {
+       "score": 0.46,
+       "confidence": 0.54,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.16,
+        "2": 0.12,
+        "3": 0.02
+       }
+      },
+      "spya-acvnjw": {
+       "score": 1.66,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.12,
+        "1": 0.25,
+        "2": 0.47,
+        "3": 0.16
+       }
+      },
+      "spya-cx56k0": {
+       "score": 1.94,
+       "confidence": 0.34,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.16,
+        "2": 0.44,
+        "3": 0.3
+       }
+      },
+      "spya-m45y0k": {
+       "score": 2.12,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.07,
+        "1": 0.13,
+        "2": 0.42,
+        "3": 0.38
+       }
+      },
+      "spya-c3dppu": {
+       "score": 1.79,
+       "confidence": 0.29,
+       "probabilities": {
+        "0": 0.12,
+        "1": 0.21,
+        "2": 0.42,
+        "3": 0.25
+       }
+      },
+      "spya-dgcfnd": {
+       "score": 1.78,
+       "confidence": 0.27,
+       "probabilities": {
+        "0": 0.14,
+        "1": 0.21,
+        "2": 0.4,
+        "3": 0.25
+       }
+      },
+      "spya-krknwc": {
+       "score": 2.31,
+       "confidence": 0.31,
+       "probabilities": {
+        "0": 0.07,
+        "1": 0.09,
+        "2": 0.3,
+        "3": 0.54
+       }
+      },
+      "spya-f030k3": {
+       "score": 2.26,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.06,
+        "1": 0.12,
+        "2": 0.32,
+        "3": 0.5
+       }
+      },
+      "spya-qvg86h": {
+       "score": 1.66,
+       "confidence": 0.23,
+       "probabilities": {
+        "0": 0.16,
+        "1": 0.23,
+        "2": 0.39,
+        "3": 0.22
+       }
+      },
+      "spya-fhj3z4": {
+       "score": 1.84,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.2,
+        "2": 0.46,
+        "3": 0.24
+       }
+      },
+      "spya-j45j9u": {
+       "score": 2.47,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.06,
+        "2": 0.4,
+        "3": 0.53
+       }
+      },
+      "spya-nakhtw": {
+       "score": 2.16,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.06,
+        "1": 0.13,
+        "2": 0.39,
+        "3": 0.42
+       }
+      },
+      "spya-kyxy7b": {
+       "score": 0.29,
+       "confidence": 0.71,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.16,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-sjjbur": {
+       "score": 0.36,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.13,
+        "2": 0.08,
+        "3": 0.02
+       }
+      },
+      "spya-wtguds": {
+       "score": 0.41,
+       "confidence": 0.59,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.19,
+        "2": 0.09,
+        "3": 0.02
+       }
+      },
+      "spya-m4gku9": {
+       "score": 0.22,
+       "confidence": 0.78,
+       "probabilities": {
+        "0": 0.85,
+        "1": 0.1,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-r4jn5b": {
+       "score": 0.26,
+       "confidence": 0.74,
+       "probabilities": {
+        "0": 0.81,
+        "1": 0.12,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-jauf7s": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.14,
+        "2": 0.06,
+        "3": 0.02
+       }
+      },
+      "spya-vqcwj0": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.81,
+        "1": 0.13,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-nayjhs": {
+       "score": 1.79,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.08,
+        "1": 0.28,
+        "2": 0.42,
+        "3": 0.22
+       }
+      },
+      "spya-mgjgha": {
+       "score": 2.96,
+       "confidence": 0.96,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.03,
+        "3": 0.97
+       }
+      },
+      "spya-bgtdqz": {
+       "score": 2.99,
+       "confidence": 0.99,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 1
+       }
+      },
+      "spya-q33vy8": {
+       "score": 2.43,
+       "confidence": 0.43,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.15,
+        "2": 0.2,
+        "3": 0.63
+       }
+      },
+      "spya-fmww2n": {
+       "score": 1.79,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.14,
+        "1": 0.28,
+        "2": 0.24,
+        "3": 0.34
+       }
+      },
+      "spya-matth4": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.64,
+        "1": 0.29,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-c2bkgz": {
+       "score": 0.49,
+       "confidence": 0.51,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.22,
+        "2": 0.11,
+        "3": 0.02
+       }
+      },
+      "spya-m42hxd": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.23,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-ddr2ub": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.15,
+        "2": 0.06,
+        "3": 0.02
+       }
+      },
+      "spya-ebtbnm": {
+       "score": 0.28,
+       "confidence": 0.72,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.12,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-k8jws5": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.1,
+        "2": 0.06,
+        "3": 0.04
+       }
+      },
+      "spya-khwx0h": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.12,
+        "2": 0.08,
+        "3": 0.02
+       }
+      },
+      "spya-vsujby": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.14,
+        "2": 0.07,
+        "3": 0.02
+       }
+      },
+      "spya-peudft": {
+       "score": 0.29,
+       "confidence": 0.71,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.18,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-chdu2z": {
+       "score": 0.2,
+       "confidence": 0.8,
+       "probabilities": {
+        "0": 0.84,
+        "1": 0.12,
+        "2": 0.03,
+        "3": 0.01
+       }
+      },
+      "spya-av2uwp": {
+       "score": 0.16,
+       "confidence": 0.84,
+       "probabilities": {
+        "0": 0.89,
+        "1": 0.07,
+        "2": 0.03,
+        "3": 0.01
+       }
+      },
+      "spya-tq02vk": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.16,
+        "2": 0.05,
+        "3": 0.02
+       }
+      },
+      "spya-h6yxz3": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.24,
+        "2": 0.05,
+        "3": 0.02
+       }
+      },
+      "spya-td87ke": {
+       "score": 0.29,
+       "confidence": 0.71,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.15,
+        "2": 0.03,
+        "3": 0.02
+       }
+      },
+      "spya-bpuujn": {
+       "score": 0.84,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.43,
+        "1": 0.32,
+        "2": 0.21,
+        "3": 0.04
+       }
+      },
+      "spya-hz50qg": {
+       "score": 0.9,
+       "confidence": 0.1,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.34,
+        "2": 0.22,
+        "3": 0.04
+       }
+      },
+      "spya-a49xd7": {
+       "score": 2.27,
+       "confidence": 0.27,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.15,
+        "2": 0.38,
+        "3": 0.45
+       }
+      },
+      "spya-g5mja3": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.21,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-rvb47b": {
+       "score": 0.29,
+       "confidence": 0.71,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.16,
+        "2": 0.04,
+        "3": 0.02
+       }
+      },
+      "spya-f07bw5": {
+       "score": 0.24,
+       "confidence": 0.76,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.15,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-p0h9g8": {
+       "score": 0.13,
+       "confidence": 0.87,
+       "probabilities": {
+        "0": 0.91,
+        "1": 0.07,
+        "2": 0.01,
+        "3": 0.01
+       }
+      },
+      "spya-z83ezv": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.14,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-qen9hh": {
+       "score": 0.35,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.75,
+        "1": 0.17,
+        "2": 0.06,
+        "3": 0.02
+       }
+      },
+      "spya-kqgzae": {
+       "score": 1.07,
+       "confidence": 0.31,
+       "probabilities": {
+        "0": 0.31,
+        "1": 0.36,
+        "2": 0.28,
+        "3": 0.05
+       }
+      },
+      "spya-mdta39": {
+       "score": 0.2,
+       "confidence": 0.8,
+       "probabilities": {
+        "0": 0.86,
+        "1": 0.1,
+        "2": 0.03,
+        "3": 0.01
+       }
+      },
+      "spya-rnag5c": {
+       "score": 1.88,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.03,
+        "1": 0.27,
+        "2": 0.5,
+        "3": 0.2
+       }
+      },
+      "spya-brgs0b": {
+       "score": 0.89,
+       "confidence": 0.11,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.04,
+        "2": 0.05,
+        "3": 0.25
+       }
+      }
+     }
+    },
+    "choice": {
+     "ms": 343,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 342,
+       "inputTokens": 9316,
+       "cost": 0.000391272
+      }
+     ],
+     "inputTokens": 9316,
+     "cost": 0.000391272,
+     "scores": {
+      "spya-fkg2ny": 0,
+      "spya-t89gw5": 0,
+      "spya-gb7ze2": 0,
+      "spya-v43bs7": 0,
+      "spya-qen9hh": 0,
+      "spya-p0h9g8": 0,
+      "spya-zfbcb4": 0,
+      "spya-asbjy9": 0,
+      "spya-rnag5c": 0,
+      "spya-v9detz": 0,
+      "spya-gj5bbr": 0,
+      "spya-m45y0k": 0,
+      "spya-ekhrbu": 0,
+      "spya-tq02vk": 0,
+      "spya-dk4gcf": 0,
+      "spya-f030k3": 0,
+      "spya-z6c3dr": 0,
+      "spya-c2ck7h": 0,
+      "spya-c2bkgz": 0,
+      "spya-kqgzae": 0,
+      "spya-bpuujn": 0,
+      "spya-c3dppu": 0,
+      "spya-z83ezv": 0,
+      "spya-cc5uhs": 0,
+      "spya-m4gku9": 0,
+      "spya-ns5qyb": 0,
+      "spya-gu6jbj": 0,
+      "spya-mgjgha": 0.31,
+      "spya-df7qrz": 0,
+      "spya-jauf7s": 0,
+      "spya-f07bw5": 0,
+      "spya-matth4": 0,
+      "spya-nakhtw": 0,
+      "spya-khwx0h": 0,
+      "spya-m42hxd": 0,
+      "spya-vpd027": 0,
+      "spya-ddr2ub": 0,
+      "spya-cbv8uf": 0,
+      "spya-peudft": 0,
+      "spya-a49xd7": 0,
+      "spya-brgs0b": 0,
+      "spya-xvkm3j": 0,
+      "spya-fhj3z4": 0,
+      "spya-vvkkv7": 0,
+      "spya-h6yxz3": 0,
+      "spya-qvg86h": 0,
+      "spya-acvnjw": 0,
+      "spya-gy8fb4": 0,
+      "spya-dgcfnd": 0,
+      "spya-ms8rup": 0,
+      "spya-w9ctpd": 0,
+      "spya-cx5k4t": 0,
+      "spya-nayjhs": 0,
+      "spya-vqvmhz": 0,
+      "spya-cx56k0": 0,
+      "spya-r4jn5b": 0,
+      "spya-bgtdqz": 0.6900000000000001,
+      "spya-vv9dpj": 0,
+      "spya-ckcyzp": 0,
+      "spya-ebtbnm": 0,
+      "spya-j45j9u": 0,
+      "spya-krknwc": 0,
+      "spya-pfkdk4": 0,
+      "spya-g9tjds": 0,
+      "spya-fcu0cb": 0,
+      "spya-b0wbhk": 0,
+      "spya-d6p0aa": 0,
+      "spya-ugwnw2": 0,
+      "spya-k8jws5": 0,
+      "spya-chdu2z": 0,
+      "spya-q33vy8": 0,
+      "spya-mdta39": 0,
+      "spya-hz50qg": 0,
+      "spya-s5dpqc": 0,
+      "spya-kyxy7b": 0,
+      "spya-ast6bs": 0,
+      "spya-gvsujh": 0,
+      "spya-m24kgb": 0,
+      "spya-sjjbur": 0,
+      "spya-wtguds": 0,
+      "spya-s9a3he": 0,
+      "spya-rvb47b": 0,
+      "spya-rzxkcd": 0,
+      "spya-fmww2n": 0,
+      "spya-vfq66b": 0,
+      "spya-vsujby": 0,
+      "spya-g5mja3": 0,
+      "spya-k9s755": 0,
+      "spya-c8fcww": 0,
+      "spya-q62pkz": 0,
+      "spya-bh44xd": 0,
+      "spya-td87ke": 0,
+      "spya-vqcwj0": 0,
+      "spya-av2uwp": 0
+     }
+    },
+    "perBlock": {
+     "ms": 1578,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      334,
+      286,
+      358,
+      389,
+      361,
+      385,
+      298,
+      291,
+      347,
+      366,
+      362,
+      364,
+      370,
+      433,
+      329,
+      274,
+      350,
+      330,
+      342,
+      294,
+      240,
+      346,
+      322,
+      264,
+      296,
+      285,
+      371,
+      299,
+      405,
+      327,
+      286,
+      319,
+      357,
+      311,
+      280,
+      316,
+      283,
+      279,
+      294,
+      281,
+      263,
+      307,
+      505,
+      327,
+      319,
+      447,
+      365,
+      329,
+      268,
+      299,
+      302,
+      318,
+      329,
+      299,
+      301,
+      291,
+      327,
+      245,
+      266,
+      276,
+      287,
+      281,
+      273,
+      354,
+      269,
+      263,
+      308,
+      293,
+      288,
+      290,
+      270,
+      315,
+      282,
+      295,
+      264,
+      280,
+      244,
+      280,
+      245,
+      282,
+      304,
+      361,
+      259,
+      275,
+      275,
+      297,
+      313,
+      261,
+      291,
+      248,
+      293,
+      284,
+      269,
+      235
+     ],
+     "inputTokens": 48709,
+     "cost": 0.002045778,
+     "scores": {
+      "spya-cx5k4t": 0.12,
+      "spya-gvsujh": 0.03,
+      "spya-q62pkz": 0.03,
+      "spya-gb7ze2": 0.26,
+      "spya-c2ck7h": 0.06,
+      "spya-b0wbhk": 0.04,
+      "spya-ekhrbu": 0.05,
+      "spya-fcu0cb": 0.08,
+      "spya-v9detz": 0.15,
+      "spya-v43bs7": 0.1,
+      "spya-g9tjds": 0.39,
+      "spya-pfkdk4": 0.09,
+      "spya-vvkkv7": 0.13,
+      "spya-ms8rup": 0.11,
+      "spya-dk4gcf": 0.28,
+      "spya-ugwnw2": 0.29,
+      "spya-bh44xd": 0.19,
+      "spya-rzxkcd": 0.16,
+      "spya-s5dpqc": 0.12,
+      "spya-t89gw5": 0.09,
+      "spya-cbv8uf": 0.06,
+      "spya-m24kgb": 0.31,
+      "spya-k9s755": 0.27,
+      "spya-c8fcww": 0.2,
+      "spya-vqvmhz": 0.11,
+      "spya-ns5qyb": 0.13,
+      "spya-s9a3he": 0.09,
+      "spya-zfbcb4": 0.07,
+      "spya-ast6bs": 0.17,
+      "spya-ckcyzp": 0.07,
+      "spya-vfq66b": 0.08,
+      "spya-xvkm3j": 0.08,
+      "spya-gy8fb4": 0.13,
+      "spya-d6p0aa": 0.18,
+      "spya-vv9dpj": 0.15,
+      "spya-cc5uhs": 0.18,
+      "spya-w9ctpd": 0.24,
+      "spya-gu6jbj": 0.26,
+      "spya-asbjy9": 0.12,
+      "spya-vpd027": 0.16,
+      "spya-df7qrz": 0.08,
+      "spya-z6c3dr": 0.05,
+      "spya-fkg2ny": 0.1,
+      "spya-gj5bbr": 0.23,
+      "spya-acvnjw": 0.41,
+      "spya-cx56k0": 0.67,
+      "spya-m45y0k": 0.72,
+      "spya-c3dppu": 0.54,
+      "spya-dgcfnd": 0.29,
+      "spya-krknwc": 0.39,
+      "spya-f030k3": 0.31,
+      "spya-qvg86h": 0.11,
+      "spya-fhj3z4": 0.09,
+      "spya-j45j9u": 0.68,
+      "spya-nakhtw": 0.13,
+      "spya-kyxy7b": 0.09,
+      "spya-sjjbur": 0.29,
+      "spya-wtguds": 0.08,
+      "spya-m4gku9": 0.09,
+      "spya-r4jn5b": 0.23,
+      "spya-jauf7s": 0.12,
+      "spya-vqcwj0": 0.24,
+      "spya-nayjhs": 0.22,
+      "spya-mgjgha": 0.95,
+      "spya-bgtdqz": 0.92,
+      "spya-q33vy8": 0.35,
+      "spya-fmww2n": 0.15,
+      "spya-matth4": 0.09,
+      "spya-c2bkgz": 0.08,
+      "spya-m42hxd": 0.12,
+      "spya-ddr2ub": 0.08,
+      "spya-ebtbnm": 0.09,
+      "spya-k8jws5": 0.04,
+      "spya-khwx0h": 0.14,
+      "spya-vsujby": 0.13,
+      "spya-peudft": 0.09,
+      "spya-chdu2z": 0.09,
+      "spya-av2uwp": 0.11,
+      "spya-tq02vk": 0.14,
+      "spya-h6yxz3": 0.17,
+      "spya-td87ke": 0.43,
+      "spya-bpuujn": 0.15,
+      "spya-hz50qg": 0.31,
+      "spya-a49xd7": 0.49,
+      "spya-g5mja3": 0.09,
+      "spya-rvb47b": 0.05,
+      "spya-f07bw5": 0.07,
+      "spya-p0h9g8": 0.09,
+      "spya-z83ezv": 0.05,
+      "spya-qen9hh": 0.07,
+      "spya-kqgzae": 0.15,
+      "spya-mdta39": 0.1,
+      "spya-rnag5c": 0.48,
+      "spya-brgs0b": 0.11
+     }
+    },
+    "perBlockLiquid": {
+     "ms": 3597,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      679,
+      549,
+      615,
+      361,
+      611,
+      669,
+      598,
+      357,
+      543,
+      360,
+      567,
+      510,
+      607,
+      575,
+      408,
+      579,
+      589,
+      402,
+      472,
+      416,
+      369,
+      362,
+      442,
+      427,
+      386,
+      250,
+      449,
+      323,
+      361,
+      324,
+      400,
+      289,
+      291,
+      319,
+      2996,
+      388,
+      305,
+      354,
+      279,
+      1026,
+      502,
+      336,
+      456,
+      354,
+      255,
+      347,
+      272,
+      280,
+      332,
+      343,
+      315,
+      317,
+      1303,
+      283,
+      310,
+      296,
+      368,
+      335,
+      322,
+      310,
+      287,
+      331,
+      358,
+      276,
+      321,
+      384,
+      329,
+      335,
+      325,
+      320,
+      353,
+      328,
+      268,
+      295,
+      296,
+      300,
+      300,
+      554,
+      304,
+      1567,
+      336,
+      363,
+      373,
+      239,
+      333,
+      362,
+      325,
+      303,
+      413,
+      396,
+      313,
+      353,
+      314,
+      302
+     ],
+     "inputTokens": 25398,
+     "cost": 0.0010159199999999998,
+     "scores": {
+      "spya-cx5k4t": 0.06371499069622688,
+      "spya-gvsujh": 0.00806199111119582,
+      "spya-q62pkz": 0.006289902928559693,
+      "spya-gb7ze2": 0.1127954033004973,
+      "spya-c2ck7h": 0.0675466911396291,
+      "spya-b0wbhk": 0.039638843638982,
+      "spya-ekhrbu": 0.015906393461216167,
+      "spya-fcu0cb": 0.05340332678672523,
+      "spya-v9detz": 0.07585818002124356,
+      "spya-v43bs7": 0.04742587317756679,
+      "spya-g9tjds": 0.14804720179063335,
+      "spya-pfkdk4": 0.0803574721258011,
+      "spya-vvkkv7": 0.047425871831197425,
+      "spya-ms8rup": 0.07585818524437762,
+      "spya-dk4gcf": 0.10087862948789174,
+      "spya-ugwnw2": 0.30735800417608683,
+      "spya-bh44xd": 0.13296425737659678,
+      "spya-rzxkcd": 0.07585818002124356,
+      "spya-s5dpqc": 0.05033063615866529,
+      "spya-t89gw5": 0.10087860921438731,
+      "spya-cbv8uf": 0.0534033328129234,
+      "spya-m24kgb": 0.1192029079413812,
+      "spya-k9s755": 0.08509903456555697,
+      "spya-c8fcww": 0.06008664933244599,
+      "spya-vqvmhz": 0.0850990357257195,
+      "spya-ns5qyb": 0.027585281427362537,
+      "spya-s9a3he": 0.035144845895499564,
+      "spya-zfbcb4": 0.035144845390205876,
+      "spya-ast6bs": 0.039638842220853204,
+      "spya-ckcyzp": 0.019124040943697917,
+      "spya-vfq66b": 0.06008664259995345,
+      "spya-xvkm3j": 0.050330629036288724,
+      "spya-gy8fb4": 0.027585283625788087,
+      "spya-d6p0aa": 0.04742587385075148,
+      "spya-vv9dpj": 0.04208772250877516,
+      "spya-cc5uhs": 0.04208773212094217,
+      "spya-w9ctpd": 0.06754668926255561,
+      "spya-gu6jbj": 0.01495708878859368,
+      "spya-asbjy9": 0.022977367902892003,
+      "spya-vpd027": 0.05033062689957593,
+      "spya-df7qrz": 0.035144842863737535,
+      "spya-z6c3dr": 0.0675466911396291,
+      "spya-fkg2ny": 0.0566524181407191,
+      "spya-gj5bbr": 0.06754668832401889,
+      "spya-acvnjw": 0.1259227812362784,
+      "spya-cx56k0": 0.2689414330889798,
+      "spya-m45y0k": 0.6513548511303336,
+      "spya-c3dppu": 0.37754066879814546,
+      "spya-dgcfnd": 0.03963883966822149,
+      "spya-krknwc": 0.07585818002124356,
+      "spya-f030k3": 0.09534945461636171,
+      "spya-qvg86h": 0.021615333392910458,
+      "spya-fhj3z4": 0.02442309040915126,
+      "spya-j45j9u": 0.18242553269617778,
+      "spya-nakhtw": 0.027585284225358716,
+      "spya-kyxy7b": 0.06754668644694548,
+      "spya-sjjbur": 0.08035745560783221,
+      "spya-wtguds": 0.03308597910376534,
+      "spya-m4gku9": 0.07585818211049715,
+      "spya-r4jn5b": 0.0953494648991095,
+      "spya-jauf7s": 0.0566524197334423,
+      "spya-vqcwj0": 0.05665242769705893,
+      "spya-nayjhs": 0.36296917795574,
+      "spya-mgjgha": 0.9579122762897041,
+      "spya-bgtdqz": 0.7310585551920353,
+      "spya-q33vy8": 0.09534945847239201,
+      "spya-fmww2n": 0.02161533165968779,
+      "spya-matth4": 0.12592277467581975,
+      "spya-c2bkgz": 0.0953494648991095,
+      "spya-m42hxd": 0.07585818211049715,
+      "spya-ddr2ub": 0.05033063544642759,
+      "spya-ebtbnm": 0.020332352303804646,
+      "spya-k8jws5": 0.01495708286089644,
+      "spya-khwx0h": 0.027585281427362537,
+      "spya-vsujby": 0.02595735945832451,
+      "spya-peudft": 0.053403329799824234,
+      "spya-chdu2z": 0.1127954033004973,
+      "spya-av2uwp": 0.033085976005166884,
+      "spya-tq02vk": 0.14033624229926064,
+      "spya-h6yxz3": 0.18242553269617778,
+      "spya-td87ke": 0.12592277795604903,
+      "spya-bpuujn": 0.08509903108506947,
+      "spya-hz50qg": 0.14804719427274565,
+      "spya-a49xd7": 0.18242551936144574,
+      "spya-g5mja3": 0.13296422989056964,
+      "spya-rvb47b": 0.033085981248949035,
+      "spya-f07bw5": 0.01406362559692558,
+      "spya-p0h9g8": 0.02297736756836975,
+      "spya-z83ezv": 0.03114383458141302,
+      "spya-qen9hh": 0.0715911984541334,
+      "spya-kqgzae": 0.060086648490884395,
+      "spya-mdta39": 0.020332351116542875,
+      "spya-rnag5c": 0.2814056014026228,
+      "spya-brgs0b": 0.03514484842196812
+     }
+    }
+   }
+  },
+  {
+   "q": "how the agents covered their tracks",
+   "shape": "topic",
+   "arms": {
+    "noulOne": [
+     {
+      "ms": 436,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 435,
+        "inputTokens": 13695,
+        "cost": 0.00057519
+       }
+      ],
+      "inputTokens": 13695,
+      "cost": 0.00057519,
+      "scores": {
+       "spya-cx5k4t": 0.38,
+       "spya-gvsujh": 0.11,
+       "spya-q62pkz": 0.03,
+       "spya-gb7ze2": 0.26,
+       "spya-c2ck7h": 0.19,
+       "spya-b0wbhk": 0.12,
+       "spya-ekhrbu": 0.1,
+       "spya-fcu0cb": 0.13,
+       "spya-v9detz": 0.14,
+       "spya-v43bs7": 0.12,
+       "spya-g9tjds": 0.18,
+       "spya-pfkdk4": 0.18,
+       "spya-vvkkv7": 0.29,
+       "spya-ms8rup": 0.14,
+       "spya-dk4gcf": 0.17,
+       "spya-ugwnw2": 0.27,
+       "spya-bh44xd": 0.15,
+       "spya-rzxkcd": 0.1,
+       "spya-s5dpqc": 0.1,
+       "spya-t89gw5": 0.13,
+       "spya-cbv8uf": 0.12,
+       "spya-m24kgb": 0.5,
+       "spya-k9s755": 0.33,
+       "spya-c8fcww": 0.55,
+       "spya-vqvmhz": 0.51,
+       "spya-ns5qyb": 0.75,
+       "spya-s9a3he": 0.75,
+       "spya-zfbcb4": 0.69,
+       "spya-ast6bs": 0.84,
+       "spya-ckcyzp": 0.71,
+       "spya-vfq66b": 0.68,
+       "spya-xvkm3j": 0.55,
+       "spya-gy8fb4": 0.48,
+       "spya-d6p0aa": 0.7,
+       "spya-vv9dpj": 0.69,
+       "spya-cc5uhs": 0.9,
+       "spya-w9ctpd": 0.86,
+       "spya-gu6jbj": 0.74,
+       "spya-asbjy9": 0.81,
+       "spya-vpd027": 0.7,
+       "spya-df7qrz": 0.43,
+       "spya-z6c3dr": 0.25,
+       "spya-fkg2ny": 0.29,
+       "spya-gj5bbr": 0.51,
+       "spya-acvnjw": 0.48,
+       "spya-cx56k0": 0.67,
+       "spya-m45y0k": 0.57,
+       "spya-c3dppu": 0.54,
+       "spya-dgcfnd": 0.41,
+       "spya-krknwc": 0.37,
+       "spya-f030k3": 0.31,
+       "spya-qvg86h": 0.36,
+       "spya-fhj3z4": 0.24,
+       "spya-j45j9u": 0.31,
+       "spya-nakhtw": 0.34,
+       "spya-kyxy7b": 0.27,
+       "spya-sjjbur": 0.25,
+       "spya-wtguds": 0.19,
+       "spya-m4gku9": 0.22,
+       "spya-r4jn5b": 0.16,
+       "spya-jauf7s": 0.2,
+       "spya-vqcwj0": 0.23,
+       "spya-nayjhs": 0.78,
+       "spya-mgjgha": 0.28,
+       "spya-bgtdqz": 0.22,
+       "spya-q33vy8": 0.37,
+       "spya-fmww2n": 0.29,
+       "spya-matth4": 0.16,
+       "spya-c2bkgz": 0.24,
+       "spya-m42hxd": 0.19,
+       "spya-ddr2ub": 0.21,
+       "spya-ebtbnm": 0.23,
+       "spya-k8jws5": 0.27,
+       "spya-khwx0h": 0.38,
+       "spya-vsujby": 0.31,
+       "spya-peudft": 0.21,
+       "spya-chdu2z": 0.31,
+       "spya-av2uwp": 0.12,
+       "spya-tq02vk": 0.18,
+       "spya-h6yxz3": 0.1,
+       "spya-td87ke": 0.04,
+       "spya-bpuujn": 0.36,
+       "spya-hz50qg": 0.16,
+       "spya-a49xd7": 0.22,
+       "spya-g5mja3": 0.12,
+       "spya-rvb47b": 0.06,
+       "spya-f07bw5": 0.11,
+       "spya-p0h9g8": 0.16,
+       "spya-z83ezv": 0.13,
+       "spya-qen9hh": 0.12,
+       "spya-kqgzae": 0.28,
+       "spya-mdta39": 0.09,
+       "spya-rnag5c": 0.57,
+       "spya-brgs0b": 0.05
+      }
+     },
+     {
+      "ms": 356,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 356,
+        "inputTokens": 13695,
+        "cost": 0.00057519
+       }
+      ],
+      "inputTokens": 13695,
+      "cost": 0.00057519,
+      "scores": {
+       "spya-cx5k4t": 0.38,
+       "spya-gvsujh": 0.11,
+       "spya-q62pkz": 0.02,
+       "spya-gb7ze2": 0.27,
+       "spya-c2ck7h": 0.21,
+       "spya-b0wbhk": 0.16,
+       "spya-ekhrbu": 0.1,
+       "spya-fcu0cb": 0.13,
+       "spya-v9detz": 0.14,
+       "spya-v43bs7": 0.11,
+       "spya-g9tjds": 0.17,
+       "spya-pfkdk4": 0.17,
+       "spya-vvkkv7": 0.29,
+       "spya-ms8rup": 0.15,
+       "spya-dk4gcf": 0.15,
+       "spya-ugwnw2": 0.24,
+       "spya-bh44xd": 0.15,
+       "spya-rzxkcd": 0.09,
+       "spya-s5dpqc": 0.1,
+       "spya-t89gw5": 0.12,
+       "spya-cbv8uf": 0.12,
+       "spya-m24kgb": 0.51,
+       "spya-k9s755": 0.32,
+       "spya-c8fcww": 0.53,
+       "spya-vqvmhz": 0.55,
+       "spya-ns5qyb": 0.73,
+       "spya-s9a3he": 0.74,
+       "spya-zfbcb4": 0.71,
+       "spya-ast6bs": 0.85,
+       "spya-ckcyzp": 0.74,
+       "spya-vfq66b": 0.67,
+       "spya-xvkm3j": 0.51,
+       "spya-gy8fb4": 0.48,
+       "spya-d6p0aa": 0.7,
+       "spya-vv9dpj": 0.7,
+       "spya-cc5uhs": 0.91,
+       "spya-w9ctpd": 0.86,
+       "spya-gu6jbj": 0.73,
+       "spya-asbjy9": 0.82,
+       "spya-vpd027": 0.72,
+       "spya-df7qrz": 0.46,
+       "spya-z6c3dr": 0.23,
+       "spya-fkg2ny": 0.3,
+       "spya-gj5bbr": 0.52,
+       "spya-acvnjw": 0.51,
+       "spya-cx56k0": 0.65,
+       "spya-m45y0k": 0.58,
+       "spya-c3dppu": 0.5,
+       "spya-dgcfnd": 0.4,
+       "spya-krknwc": 0.35,
+       "spya-f030k3": 0.28,
+       "spya-qvg86h": 0.32,
+       "spya-fhj3z4": 0.19,
+       "spya-j45j9u": 0.28,
+       "spya-nakhtw": 0.27,
+       "spya-kyxy7b": 0.23,
+       "spya-sjjbur": 0.21,
+       "spya-wtguds": 0.17,
+       "spya-m4gku9": 0.2,
+       "spya-r4jn5b": 0.16,
+       "spya-jauf7s": 0.2,
+       "spya-vqcwj0": 0.22,
+       "spya-nayjhs": 0.76,
+       "spya-mgjgha": 0.26,
+       "spya-bgtdqz": 0.21,
+       "spya-q33vy8": 0.36,
+       "spya-fmww2n": 0.31,
+       "spya-matth4": 0.18,
+       "spya-c2bkgz": 0.21,
+       "spya-m42hxd": 0.2,
+       "spya-ddr2ub": 0.17,
+       "spya-ebtbnm": 0.22,
+       "spya-k8jws5": 0.27,
+       "spya-khwx0h": 0.33,
+       "spya-vsujby": 0.29,
+       "spya-peudft": 0.2,
+       "spya-chdu2z": 0.32,
+       "spya-av2uwp": 0.12,
+       "spya-tq02vk": 0.18,
+       "spya-h6yxz3": 0.08,
+       "spya-td87ke": 0.04,
+       "spya-bpuujn": 0.38,
+       "spya-hz50qg": 0.14,
+       "spya-a49xd7": 0.22,
+       "spya-g5mja3": 0.1,
+       "spya-rvb47b": 0.05,
+       "spya-f07bw5": 0.1,
+       "spya-p0h9g8": 0.13,
+       "spya-z83ezv": 0.14,
+       "spya-qen9hh": 0.12,
+       "spya-kqgzae": 0.28,
+       "spya-mdta39": 0.09,
+       "spya-rnag5c": 0.57,
+       "spya-brgs0b": 0.04
+      }
+     },
+     {
+      "ms": 395,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 394,
+        "inputTokens": 13695,
+        "cost": 0.00057519
+       }
+      ],
+      "inputTokens": 13695,
+      "cost": 0.00057519,
+      "scores": {
+       "spya-cx5k4t": 0.36,
+       "spya-gvsujh": 0.1,
+       "spya-q62pkz": 0.02,
+       "spya-gb7ze2": 0.27,
+       "spya-c2ck7h": 0.19,
+       "spya-b0wbhk": 0.16,
+       "spya-ekhrbu": 0.1,
+       "spya-fcu0cb": 0.13,
+       "spya-v9detz": 0.15,
+       "spya-v43bs7": 0.12,
+       "spya-g9tjds": 0.18,
+       "spya-pfkdk4": 0.18,
+       "spya-vvkkv7": 0.31,
+       "spya-ms8rup": 0.15,
+       "spya-dk4gcf": 0.16,
+       "spya-ugwnw2": 0.25,
+       "spya-bh44xd": 0.16,
+       "spya-rzxkcd": 0.1,
+       "spya-s5dpqc": 0.09,
+       "spya-t89gw5": 0.13,
+       "spya-cbv8uf": 0.12,
+       "spya-m24kgb": 0.48,
+       "spya-k9s755": 0.32,
+       "spya-c8fcww": 0.55,
+       "spya-vqvmhz": 0.54,
+       "spya-ns5qyb": 0.78,
+       "spya-s9a3he": 0.77,
+       "spya-zfbcb4": 0.7,
+       "spya-ast6bs": 0.85,
+       "spya-ckcyzp": 0.72,
+       "spya-vfq66b": 0.7,
+       "spya-xvkm3j": 0.57,
+       "spya-gy8fb4": 0.45,
+       "spya-d6p0aa": 0.7,
+       "spya-vv9dpj": 0.71,
+       "spya-cc5uhs": 0.91,
+       "spya-w9ctpd": 0.86,
+       "spya-gu6jbj": 0.72,
+       "spya-asbjy9": 0.8,
+       "spya-vpd027": 0.69,
+       "spya-df7qrz": 0.44,
+       "spya-z6c3dr": 0.23,
+       "spya-fkg2ny": 0.29,
+       "spya-gj5bbr": 0.52,
+       "spya-acvnjw": 0.49,
+       "spya-cx56k0": 0.66,
+       "spya-m45y0k": 0.64,
+       "spya-c3dppu": 0.53,
+       "spya-dgcfnd": 0.43,
+       "spya-krknwc": 0.39,
+       "spya-f030k3": 0.32,
+       "spya-qvg86h": 0.36,
+       "spya-fhj3z4": 0.24,
+       "spya-j45j9u": 0.33,
+       "spya-nakhtw": 0.29,
+       "spya-kyxy7b": 0.24,
+       "spya-sjjbur": 0.22,
+       "spya-wtguds": 0.18,
+       "spya-m4gku9": 0.21,
+       "spya-r4jn5b": 0.16,
+       "spya-jauf7s": 0.22,
+       "spya-vqcwj0": 0.22,
+       "spya-nayjhs": 0.77,
+       "spya-mgjgha": 0.29,
+       "spya-bgtdqz": 0.26,
+       "spya-q33vy8": 0.41,
+       "spya-fmww2n": 0.33,
+       "spya-matth4": 0.16,
+       "spya-c2bkgz": 0.24,
+       "spya-m42hxd": 0.2,
+       "spya-ddr2ub": 0.21,
+       "spya-ebtbnm": 0.25,
+       "spya-k8jws5": 0.31,
+       "spya-khwx0h": 0.38,
+       "spya-vsujby": 0.33,
+       "spya-peudft": 0.22,
+       "spya-chdu2z": 0.32,
+       "spya-av2uwp": 0.15,
+       "spya-tq02vk": 0.2,
+       "spya-h6yxz3": 0.1,
+       "spya-td87ke": 0.04,
+       "spya-bpuujn": 0.29,
+       "spya-hz50qg": 0.16,
+       "spya-a49xd7": 0.22,
+       "spya-g5mja3": 0.1,
+       "spya-rvb47b": 0.06,
+       "spya-f07bw5": 0.1,
+       "spya-p0h9g8": 0.14,
+       "spya-z83ezv": 0.14,
+       "spya-qen9hh": 0.12,
+       "spya-kqgzae": 0.28,
+       "spya-mdta39": 0.09,
+       "spya-rnag5c": 0.6,
+       "spya-brgs0b": 0.04
+      }
+     }
+    ],
+    "noulOnePlain": {
+     "ms": 322,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 322,
+       "inputTokens": 9277,
+       "cost": 0.000389634
+      }
+     ],
+     "inputTokens": 9277,
+     "cost": 0.000389634,
+     "scores": {
+      "spya-cx5k4t": 0.31,
+      "spya-gvsujh": 0.08,
+      "spya-q62pkz": 0.03,
+      "spya-gb7ze2": 0.23,
+      "spya-c2ck7h": 0.21,
+      "spya-b0wbhk": 0.14,
+      "spya-ekhrbu": 0.09,
+      "spya-fcu0cb": 0.14,
+      "spya-v9detz": 0.14,
+      "spya-v43bs7": 0.13,
+      "spya-g9tjds": 0.19,
+      "spya-pfkdk4": 0.16,
+      "spya-vvkkv7": 0.3,
+      "spya-ms8rup": 0.14,
+      "spya-dk4gcf": 0.18,
+      "spya-ugwnw2": 0.28,
+      "spya-bh44xd": 0.22,
+      "spya-rzxkcd": 0.12,
+      "spya-s5dpqc": 0.11,
+      "spya-t89gw5": 0.16,
+      "spya-cbv8uf": 0.17,
+      "spya-m24kgb": 0.38,
+      "spya-k9s755": 0.31,
+      "spya-c8fcww": 0.53,
+      "spya-vqvmhz": 0.42,
+      "spya-ns5qyb": 0.7,
+      "spya-s9a3he": 0.65,
+      "spya-zfbcb4": 0.63,
+      "spya-ast6bs": 0.81,
+      "spya-ckcyzp": 0.64,
+      "spya-vfq66b": 0.58,
+      "spya-xvkm3j": 0.5,
+      "spya-gy8fb4": 0.43,
+      "spya-d6p0aa": 0.62,
+      "spya-vv9dpj": 0.6,
+      "spya-cc5uhs": 0.84,
+      "spya-w9ctpd": 0.79,
+      "spya-gu6jbj": 0.57,
+      "spya-asbjy9": 0.71,
+      "spya-vpd027": 0.57,
+      "spya-df7qrz": 0.32,
+      "spya-z6c3dr": 0.24,
+      "spya-fkg2ny": 0.24,
+      "spya-gj5bbr": 0.42,
+      "spya-acvnjw": 0.34,
+      "spya-cx56k0": 0.61,
+      "spya-m45y0k": 0.5,
+      "spya-c3dppu": 0.4,
+      "spya-dgcfnd": 0.37,
+      "spya-krknwc": 0.33,
+      "spya-f030k3": 0.32,
+      "spya-qvg86h": 0.33,
+      "spya-fhj3z4": 0.27,
+      "spya-j45j9u": 0.35,
+      "spya-nakhtw": 0.36,
+      "spya-kyxy7b": 0.28,
+      "spya-sjjbur": 0.27,
+      "spya-wtguds": 0.27,
+      "spya-m4gku9": 0.25,
+      "spya-r4jn5b": 0.16,
+      "spya-jauf7s": 0.21,
+      "spya-vqcwj0": 0.23,
+      "spya-nayjhs": 0.65,
+      "spya-mgjgha": 0.33,
+      "spya-bgtdqz": 0.27,
+      "spya-q33vy8": 0.26,
+      "spya-fmww2n": 0.27,
+      "spya-matth4": 0.19,
+      "spya-c2bkgz": 0.26,
+      "spya-m42hxd": 0.21,
+      "spya-ddr2ub": 0.21,
+      "spya-ebtbnm": 0.21,
+      "spya-k8jws5": 0.28,
+      "spya-khwx0h": 0.37,
+      "spya-vsujby": 0.36,
+      "spya-peudft": 0.21,
+      "spya-chdu2z": 0.31,
+      "spya-av2uwp": 0.12,
+      "spya-tq02vk": 0.21,
+      "spya-h6yxz3": 0.08,
+      "spya-td87ke": 0.05,
+      "spya-bpuujn": 0.17,
+      "spya-hz50qg": 0.16,
+      "spya-a49xd7": 0.23,
+      "spya-g5mja3": 0.09,
+      "spya-rvb47b": 0.06,
+      "spya-f07bw5": 0.08,
+      "spya-p0h9g8": 0.14,
+      "spya-z83ezv": 0.09,
+      "spya-qen9hh": 0.11,
+      "spya-kqgzae": 0.31,
+      "spya-mdta39": 0.09,
+      "spya-rnag5c": 0.48,
+      "spya-brgs0b": 0.03
+     }
+    },
+    "scoreOne": {
+     "ms": 563,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 562,
+       "inputTokens": 19805,
+       "cost": 0.00083181
+      }
+     ],
+     "inputTokens": 19805,
+     "cost": 0.00083181,
+     "scores": {
+      "spya-cx5k4t": 0.92,
+      "spya-gvsujh": 0.21,
+      "spya-q62pkz": 0.02,
+      "spya-gb7ze2": 1.08,
+      "spya-c2ck7h": 0.85,
+      "spya-b0wbhk": 0.49,
+      "spya-ekhrbu": 0.33,
+      "spya-fcu0cb": 0.47,
+      "spya-v9detz": 0.62,
+      "spya-v43bs7": 0.39,
+      "spya-g9tjds": 0.87,
+      "spya-pfkdk4": 0.84,
+      "spya-vvkkv7": 1.15,
+      "spya-ms8rup": 0.65,
+      "spya-dk4gcf": 0.59,
+      "spya-ugwnw2": 0.81,
+      "spya-bh44xd": 0.45,
+      "spya-rzxkcd": 0.3,
+      "spya-s5dpqc": 0.33,
+      "spya-t89gw5": 0.33,
+      "spya-cbv8uf": 0.45,
+      "spya-m24kgb": 1.7,
+      "spya-k9s755": 1.37,
+      "spya-c8fcww": 1.82,
+      "spya-vqvmhz": 1.94,
+      "spya-ns5qyb": 2.55,
+      "spya-s9a3he": 2.43,
+      "spya-zfbcb4": 2.17,
+      "spya-ast6bs": 2.64,
+      "spya-ckcyzp": 2.35,
+      "spya-vfq66b": 2.23,
+      "spya-xvkm3j": 1.85,
+      "spya-gy8fb4": 1.8,
+      "spya-d6p0aa": 2.21,
+      "spya-vv9dpj": 2.16,
+      "spya-cc5uhs": 2.82,
+      "spya-w9ctpd": 2.73,
+      "spya-gu6jbj": 2.22,
+      "spya-asbjy9": 2.56,
+      "spya-vpd027": 2.21,
+      "spya-df7qrz": 1.53,
+      "spya-z6c3dr": 0.85,
+      "spya-fkg2ny": 1.18,
+      "spya-gj5bbr": 1.91,
+      "spya-acvnjw": 1.73,
+      "spya-cx56k0": 2.23,
+      "spya-m45y0k": 1.96,
+      "spya-c3dppu": 1.85,
+      "spya-dgcfnd": 1.5,
+      "spya-krknwc": 1.54,
+      "spya-f030k3": 1.26,
+      "spya-qvg86h": 1.41,
+      "spya-fhj3z4": 0.75,
+      "spya-j45j9u": 1.34,
+      "spya-nakhtw": 1.17,
+      "spya-kyxy7b": 1.32,
+      "spya-sjjbur": 1,
+      "spya-wtguds": 0.82,
+      "spya-m4gku9": 0.84,
+      "spya-r4jn5b": 0.75,
+      "spya-jauf7s": 0.65,
+      "spya-vqcwj0": 0.79,
+      "spya-nayjhs": 2.36,
+      "spya-mgjgha": 0.85,
+      "spya-bgtdqz": 0.78,
+      "spya-q33vy8": 1.25,
+      "spya-fmww2n": 1.05,
+      "spya-matth4": 0.65,
+      "spya-c2bkgz": 0.8,
+      "spya-m42hxd": 0.62,
+      "spya-ddr2ub": 0.79,
+      "spya-ebtbnm": 0.83,
+      "spya-k8jws5": 0.92,
+      "spya-khwx0h": 1.16,
+      "spya-vsujby": 1.11,
+      "spya-peudft": 0.75,
+      "spya-chdu2z": 1.11,
+      "spya-av2uwp": 0.53,
+      "spya-tq02vk": 0.75,
+      "spya-h6yxz3": 0.31,
+      "spya-td87ke": 0.11,
+      "spya-bpuujn": 1.42,
+      "spya-hz50qg": 0.74,
+      "spya-a49xd7": 0.99,
+      "spya-g5mja3": 0.4,
+      "spya-rvb47b": 0.14,
+      "spya-f07bw5": 0.3,
+      "spya-p0h9g8": 0.35,
+      "spya-z83ezv": 0.51,
+      "spya-qen9hh": 0.38,
+      "spya-kqgzae": 1.22,
+      "spya-mdta39": 0.27,
+      "spya-rnag5c": 1.61,
+      "spya-brgs0b": 0.1
+     },
+     "raw": {
+      "spya-cx5k4t": {
+       "score": 0.92,
+       "confidence": 0.08,
+       "probabilities": {
+        "0": 0.51,
+        "1": 0.2,
+        "2": 0.14,
+        "3": 0.15
+       }
+      },
+      "spya-gvsujh": {
+       "score": 0.21,
+       "confidence": 0.79,
+       "probabilities": {
+        "0": 0.86,
+        "1": 0.08,
+        "2": 0.04,
+        "3": 0.02
+       }
+      },
+      "spya-q62pkz": {
+       "score": 0.02,
+       "confidence": 0.98,
+       "probabilities": {
+        "0": 0.99,
+        "1": 0.01,
+        "2": 0,
+        "3": 0
+       }
+      },
+      "spya-gb7ze2": {
+       "score": 1.08,
+       "confidence": 0.63,
+       "probabilities": {
+        "0": 0.15,
+        "1": 0.64,
+        "2": 0.2,
+        "3": 0.01
+       }
+      },
+      "spya-c2ck7h": {
+       "score": 0.85,
+       "confidence": 0.51,
+       "probabilities": {
+        "0": 0.32,
+        "1": 0.52,
+        "2": 0.15,
+        "3": 0.01
+       }
+      },
+      "spya-b0wbhk": {
+       "score": 0.49,
+       "confidence": 0.51,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.22,
+        "2": 0.11,
+        "3": 0.02
+       }
+      },
+      "spya-ekhrbu": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.19,
+        "2": 0.07,
+        "3": 0
+       }
+      },
+      "spya-fcu0cb": {
+       "score": 0.47,
+       "confidence": 0.53,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.24,
+        "2": 0.11,
+        "3": 0
+       }
+      },
+      "spya-v9detz": {
+       "score": 0.62,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.57,
+        "1": 0.25,
+        "2": 0.16,
+        "3": 0.02
+       }
+      },
+      "spya-v43bs7": {
+       "score": 0.39,
+       "confidence": 0.61,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.21,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-g9tjds": {
+       "score": 0.87,
+       "confidence": 0.13,
+       "probabilities": {
+        "0": 0.39,
+        "1": 0.37,
+        "2": 0.22,
+        "3": 0.02
+       }
+      },
+      "spya-pfkdk4": {
+       "score": 0.84,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.35,
+        "2": 0.23,
+        "3": 0.01
+       }
+      },
+      "spya-vvkkv7": {
+       "score": 1.15,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.22,
+        "1": 0.44,
+        "2": 0.31,
+        "3": 0.03
+       }
+      },
+      "spya-ms8rup": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.48,
+        "1": 0.39,
+        "2": 0.12,
+        "3": 0.01
+       }
+      },
+      "spya-dk4gcf": {
+       "score": 0.59,
+       "confidence": 0.41,
+       "probabilities": {
+        "0": 0.57,
+        "1": 0.27,
+        "2": 0.14,
+        "3": 0.02
+       }
+      },
+      "spya-ugwnw2": {
+       "score": 0.81,
+       "confidence": 0.19,
+       "probabilities": {
+        "0": 0.49,
+        "1": 0.25,
+        "2": 0.23,
+        "3": 0.03
+       }
+      },
+      "spya-bh44xd": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.24,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-rzxkcd": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.18,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-s5dpqc": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.73,
+        "1": 0.21,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-t89gw5": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.17,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-cbv8uf": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.64,
+        "1": 0.28,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-m24kgb": {
+       "score": 1.7,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.13,
+        "1": 0.18,
+        "2": 0.55,
+        "3": 0.14
+       }
+      },
+      "spya-k9s755": {
+       "score": 1.37,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.34,
+        "2": 0.43,
+        "3": 0.06
+       }
+      },
+      "spya-c8fcww": {
+       "score": 1.82,
+       "confidence": 0.59,
+       "probabilities": {
+        "0": 0.03,
+        "1": 0.22,
+        "2": 0.64,
+        "3": 0.11
+       }
+      },
+      "spya-vqvmhz": {
+       "score": 1.94,
+       "confidence": 0.53,
+       "probabilities": {
+        "0": 0.03,
+        "1": 0.21,
+        "2": 0.55,
+        "3": 0.21
+       }
+      },
+      "spya-ns5qyb": {
+       "score": 2.55,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0,
+        "1": 0.05,
+        "2": 0.34,
+        "3": 0.61
+       }
+      },
+      "spya-s9a3he": {
+       "score": 2.43,
+       "confidence": 0.43,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.07,
+        "2": 0.42,
+        "3": 0.5
+       }
+      },
+      "spya-zfbcb4": {
+       "score": 2.17,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.18,
+        "2": 0.43,
+        "3": 0.37
+       }
+      },
+      "spya-ast6bs": {
+       "score": 2.64,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0,
+        "1": 0.02,
+        "2": 0.31,
+        "3": 0.67
+       }
+      },
+      "spya-ckcyzp": {
+       "score": 2.35,
+       "confidence": 0.53,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.04,
+        "2": 0.54,
+        "3": 0.41
+       }
+      },
+      "spya-vfq66b": {
+       "score": 2.23,
+       "confidence": 0.54,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.09,
+        "2": 0.55,
+        "3": 0.35
+       }
+      },
+      "spya-xvkm3j": {
+       "score": 1.85,
+       "confidence": 0.5,
+       "probabilities": {
+        "0": 0.03,
+        "1": 0.27,
+        "2": 0.52,
+        "3": 0.18
+       }
+      },
+      "spya-gy8fb4": {
+       "score": 1.8,
+       "confidence": 0.27,
+       "probabilities": {
+        "0": 0.08,
+        "1": 0.3,
+        "2": 0.36,
+        "3": 0.26
+       }
+      },
+      "spya-d6p0aa": {
+       "score": 2.21,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0,
+        "1": 0.05,
+        "2": 0.67,
+        "3": 0.27
+       }
+      },
+      "spya-vv9dpj": {
+       "score": 2.16,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.13,
+        "2": 0.56,
+        "3": 0.3
+       }
+      },
+      "spya-cc5uhs": {
+       "score": 2.82,
+       "confidence": 0.82,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.17,
+        "3": 0.83
+       }
+      },
+      "spya-w9ctpd": {
+       "score": 2.73,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0,
+        "1": 0.01,
+        "2": 0.25,
+        "3": 0.74
+       }
+      },
+      "spya-gu6jbj": {
+       "score": 2.22,
+       "confidence": 0.49,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.1,
+        "2": 0.51,
+        "3": 0.37
+       }
+      },
+      "spya-asbjy9": {
+       "score": 2.56,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0,
+        "1": 0.02,
+        "2": 0.4,
+        "3": 0.58
+       }
+      },
+      "spya-vpd027": {
+       "score": 2.21,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.04,
+        "2": 0.67,
+        "3": 0.28
+       }
+      },
+      "spya-df7qrz": {
+       "score": 1.53,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.13,
+        "1": 0.27,
+        "2": 0.52,
+        "3": 0.08
+       }
+      },
+      "spya-z6c3dr": {
+       "score": 0.85,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.38,
+        "1": 0.41,
+        "2": 0.19,
+        "3": 0.02
+       }
+      },
+      "spya-fkg2ny": {
+       "score": 1.18,
+       "confidence": 0.43,
+       "probabilities": {
+        "0": 0.19,
+        "1": 0.46,
+        "2": 0.32,
+        "3": 0.03
+       }
+      },
+      "spya-gj5bbr": {
+       "score": 1.91,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0.04,
+        "1": 0.16,
+        "2": 0.66,
+        "3": 0.14
+       }
+      },
+      "spya-acvnjw": {
+       "score": 1.73,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.08,
+        "1": 0.22,
+        "2": 0.59,
+        "3": 0.11
+       }
+      },
+      "spya-cx56k0": {
+       "score": 2.23,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.06,
+        "2": 0.58,
+        "3": 0.34
+       }
+      },
+      "spya-m45y0k": {
+       "score": 1.96,
+       "confidence": 0.54,
+       "probabilities": {
+        "0": 0.06,
+        "1": 0.13,
+        "2": 0.6,
+        "3": 0.21
+       }
+      },
+      "spya-c3dppu": {
+       "score": 1.85,
+       "confidence": 0.48,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.14,
+        "2": 0.57,
+        "3": 0.19
+       }
+      },
+      "spya-dgcfnd": {
+       "score": 1.5,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.3,
+        "2": 0.38,
+        "3": 0.15
+       }
+      },
+      "spya-krknwc": {
+       "score": 1.54,
+       "confidence": 0.32,
+       "probabilities": {
+        "0": 0.15,
+        "1": 0.27,
+        "2": 0.47,
+        "3": 0.11
+       }
+      },
+      "spya-f030k3": {
+       "score": 1.26,
+       "confidence": 0.09,
+       "probabilities": {
+        "0": 0.27,
+        "1": 0.28,
+        "2": 0.37,
+        "3": 0.08
+       }
+      },
+      "spya-qvg86h": {
+       "score": 1.41,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.22,
+        "1": 0.25,
+        "2": 0.43,
+        "3": 0.1
+       }
+      },
+      "spya-fhj3z4": {
+       "score": 0.75,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.28,
+        "2": 0.19,
+        "3": 0.03
+       }
+      },
+      "spya-j45j9u": {
+       "score": 1.34,
+       "confidence": 0.24,
+       "probabilities": {
+        "0": 0.18,
+        "1": 0.34,
+        "2": 0.43,
+        "3": 0.05
+       }
+      },
+      "spya-nakhtw": {
+       "score": 1.17,
+       "confidence": 0.05,
+       "probabilities": {
+        "0": 0.3,
+        "1": 0.29,
+        "2": 0.35,
+        "3": 0.06
+       }
+      },
+      "spya-kyxy7b": {
+       "score": 1.32,
+       "confidence": 0.2,
+       "probabilities": {
+        "0": 0.23,
+        "1": 0.28,
+        "2": 0.43,
+        "3": 0.06
+       }
+      },
+      "spya-sjjbur": {
+       "score": 1,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.24,
+        "2": 0.29,
+        "3": 0.06
+       }
+      },
+      "spya-wtguds": {
+       "score": 0.82,
+       "confidence": 0.18,
+       "probabilities": {
+        "0": 0.45,
+        "1": 0.31,
+        "2": 0.22,
+        "3": 0.02
+       }
+      },
+      "spya-m4gku9": {
+       "score": 0.84,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.48,
+        "1": 0.24,
+        "2": 0.25,
+        "3": 0.03
+       }
+      },
+      "spya-r4jn5b": {
+       "score": 0.75,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.43,
+        "1": 0.4,
+        "2": 0.15,
+        "3": 0.02
+       }
+      },
+      "spya-jauf7s": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.51,
+        "1": 0.35,
+        "2": 0.13,
+        "3": 0.01
+       }
+      },
+      "spya-vqcwj0": {
+       "score": 0.79,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.41,
+        "2": 0.18,
+        "3": 0.01
+       }
+      },
+      "spya-nayjhs": {
+       "score": 2.36,
+       "confidence": 0.49,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.06,
+        "2": 0.49,
+        "3": 0.44
+       }
+      },
+      "spya-mgjgha": {
+       "score": 0.85,
+       "confidence": 0.15,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.34,
+        "2": 0.21,
+        "3": 0.03
+       }
+      },
+      "spya-bgtdqz": {
+       "score": 0.78,
+       "confidence": 0.22,
+       "probabilities": {
+        "0": 0.45999999999999996,
+        "1": 0.31,
+        "2": 0.2,
+        "3": 0.03
+       }
+      },
+      "spya-q33vy8": {
+       "score": 1.25,
+       "confidence": 0.45,
+       "probabilities": {
+        "0": 0.15,
+        "1": 0.5,
+        "2": 0.3,
+        "3": 0.05
+       }
+      },
+      "spya-fmww2n": {
+       "score": 1.05,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.35,
+        "1": 0.37,
+        "2": 0.16,
+        "3": 0.12
+       }
+      },
+      "spya-matth4": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.46,
+        "1": 0.44,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-c2bkgz": {
+       "score": 0.8,
+       "confidence": 0.2,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.39,
+        "2": 0.18,
+        "3": 0.01
+       }
+      },
+      "spya-m42hxd": {
+       "score": 0.62,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.51,
+        "1": 0.37,
+        "2": 0.11,
+        "3": 0.01
+       }
+      },
+      "spya-ddr2ub": {
+       "score": 0.79,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.39,
+        "2": 0.16,
+        "3": 0.03
+       }
+      },
+      "spya-ebtbnm": {
+       "score": 0.83,
+       "confidence": 0.17,
+       "probabilities": {
+        "0": 0.46,
+        "1": 0.29,
+        "2": 0.23,
+        "3": 0.02
+       }
+      },
+      "spya-k8jws5": {
+       "score": 0.92,
+       "confidence": 0.08,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.34,
+        "2": 0.2,
+        "3": 0.06
+       }
+      },
+      "spya-khwx0h": {
+       "score": 1.16,
+       "confidence": 0.03,
+       "probabilities": {
+        "0": 0.32,
+        "1": 0.27,
+        "2": 0.35,
+        "3": 0.06
+       }
+      },
+      "spya-vsujby": {
+       "score": 1.11,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.27,
+        "1": 0.39,
+        "2": 0.3,
+        "3": 0.04
+       }
+      },
+      "spya-peudft": {
+       "score": 0.75,
+       "confidence": 0.44,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.46,
+        "2": 0.13,
+        "3": 0.01
+       }
+      },
+      "spya-chdu2z": {
+       "score": 1.11,
+       "confidence": 0.43,
+       "probabilities": {
+        "0": 0.23,
+        "1": 0.45,
+        "2": 0.3,
+        "3": 0.02
+       }
+      },
+      "spya-av2uwp": {
+       "score": 0.53,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.57,
+        "1": 0.33,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-tq02vk": {
+       "score": 0.75,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.43,
+        "1": 0.4,
+        "2": 0.15,
+        "3": 0.02
+       }
+      },
+      "spya-h6yxz3": {
+       "score": 0.31,
+       "confidence": 0.69,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.22,
+        "2": 0.04,
+        "3": 0
+       }
+      },
+      "spya-td87ke": {
+       "score": 0.11,
+       "confidence": 0.89,
+       "probabilities": {
+        "0": 0.9,
+        "1": 0.09,
+        "2": 0.01,
+        "3": 0
+       }
+      },
+      "spya-bpuujn": {
+       "score": 1.42,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.45,
+        "2": 0.39,
+        "3": 0.06
+       }
+      },
+      "spya-hz50qg": {
+       "score": 0.74,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.49,
+        "1": 0.29,
+        "2": 0.2,
+        "3": 0.02
+       }
+      },
+      "spya-a49xd7": {
+       "score": 0.99,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.24,
+        "1": 0.54,
+        "2": 0.21,
+        "3": 0.01
+       }
+      },
+      "spya-g5mja3": {
+       "score": 0.4,
+       "confidence": 0.6,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.28,
+        "2": 0.05,
+        "3": 0
+       }
+      },
+      "spya-rvb47b": {
+       "score": 0.14,
+       "confidence": 0.86,
+       "probabilities": {
+        "0": 0.88,
+        "1": 0.1,
+        "2": 0.02,
+        "3": 0
+       }
+      },
+      "spya-f07bw5": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.21,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-p0h9g8": {
+       "score": 0.35,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.24,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-z83ezv": {
+       "score": 0.51,
+       "confidence": 0.49,
+       "probabilities": {
+        "0": 0.62,
+        "1": 0.25,
+        "2": 0.12,
+        "3": 0.01
+       }
+      },
+      "spya-qen9hh": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.25,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-kqgzae": {
+       "score": 1.22,
+       "confidence": 0.45,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.48,
+        "2": 0.32,
+        "3": 0.03
+       }
+      },
+      "spya-mdta39": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.17,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-rnag5c": {
+       "score": 1.61,
+       "confidence": 0.46,
+       "probabilities": {
+        "0": 0.04,
+        "1": 0.39,
+        "2": 0.5,
+        "3": 0.07
+       }
+      },
+      "spya-brgs0b": {
+       "score": 0.1,
+       "confidence": 0.9,
+       "probabilities": {
+        "0": 0.95,
+        "1": 0.01,
+        "2": 0.02,
+        "3": 0.02
+       }
+      }
+     }
+    },
+    "choice": {
+     "ms": 297,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 296,
+       "inputTokens": 9313,
+       "cost": 0.000391146
+      }
+     ],
+     "inputTokens": 9313,
+     "cost": 0.000391146,
+     "scores": {
+      "spya-gb7ze2": 0,
+      "spya-rvb47b": 0,
+      "spya-fhj3z4": 0,
+      "spya-krknwc": 0,
+      "spya-cx5k4t": 0,
+      "spya-fkg2ny": 0,
+      "spya-tq02vk": 0,
+      "spya-xvkm3j": 0,
+      "spya-d6p0aa": 0,
+      "spya-s5dpqc": 0,
+      "spya-vvkkv7": 0,
+      "spya-m4gku9": 0,
+      "spya-td87ke": 0,
+      "spya-df7qrz": 0,
+      "spya-a49xd7": 0,
+      "spya-matth4": 0,
+      "spya-mdta39": 0,
+      "spya-k9s755": 0,
+      "spya-dk4gcf": 0,
+      "spya-ugwnw2": 0,
+      "spya-vfq66b": 0,
+      "spya-ebtbnm": 0,
+      "spya-ns5qyb": 0.03,
+      "spya-c2bkgz": 0,
+      "spya-sjjbur": 0,
+      "spya-acvnjw": 0,
+      "spya-z6c3dr": 0,
+      "spya-m42hxd": 0,
+      "spya-z83ezv": 0,
+      "spya-asbjy9": 0,
+      "spya-cc5uhs": 0.55,
+      "spya-vsujby": 0,
+      "spya-pfkdk4": 0,
+      "spya-b0wbhk": 0,
+      "spya-kyxy7b": 0,
+      "spya-vqcwj0": 0,
+      "spya-c2ck7h": 0,
+      "spya-h6yxz3": 0,
+      "spya-kqgzae": 0,
+      "spya-gu6jbj": 0,
+      "spya-bh44xd": 0,
+      "spya-ekhrbu": 0,
+      "spya-ckcyzp": 0,
+      "spya-nakhtw": 0,
+      "spya-m24kgb": 0,
+      "spya-rzxkcd": 0,
+      "spya-gj5bbr": 0,
+      "spya-qen9hh": 0,
+      "spya-q62pkz": 0,
+      "spya-m45y0k": 0,
+      "spya-c3dppu": 0,
+      "spya-fmww2n": 0,
+      "spya-nayjhs": 0,
+      "spya-gvsujh": 0,
+      "spya-bpuujn": 0,
+      "spya-c8fcww": 0,
+      "spya-vv9dpj": 0,
+      "spya-q33vy8": 0,
+      "spya-cbv8uf": 0,
+      "spya-ddr2ub": 0,
+      "spya-brgs0b": 0,
+      "spya-vpd027": 0,
+      "spya-ast6bs": 0.22,
+      "spya-s9a3he": 0.01,
+      "spya-mgjgha": 0,
+      "spya-w9ctpd": 0.01,
+      "spya-vqvmhz": 0,
+      "spya-wtguds": 0,
+      "spya-j45j9u": 0,
+      "spya-f07bw5": 0,
+      "spya-p0h9g8": 0,
+      "spya-gy8fb4": 0,
+      "spya-r4jn5b": 0,
+      "spya-chdu2z": 0,
+      "spya-peudft": 0,
+      "spya-g9tjds": 0,
+      "spya-qvg86h": 0,
+      "spya-av2uwp": 0,
+      "spya-rnag5c": 0,
+      "spya-jauf7s": 0,
+      "spya-cx56k0": 0,
+      "spya-hz50qg": 0,
+      "spya-ms8rup": 0,
+      "spya-f030k3": 0,
+      "spya-bgtdqz": 0,
+      "spya-t89gw5": 0,
+      "spya-k8jws5": 0,
+      "spya-dgcfnd": 0,
+      "spya-khwx0h": 0,
+      "spya-g5mja3": 0,
+      "spya-zfbcb4": 0.17,
+      "spya-v43bs7": 0,
+      "spya-fcu0cb": 0,
+      "spya-v9detz": 0
+     }
+    },
+    "perBlock": {
+     "ms": 1879,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      326,
+      332,
+      367,
+      321,
+      280,
+      333,
+      269,
+      361,
+      331,
+      327,
+      381,
+      316,
+      355,
+      309,
+      311,
+      271,
+      353,
+      352,
+      351,
+      312,
+      283,
+      263,
+      243,
+      249,
+      240,
+      249,
+      267,
+      282,
+      266,
+      285,
+      292,
+      302,
+      273,
+      253,
+      261,
+      285,
+      279,
+      232,
+      265,
+      246,
+      248,
+      254,
+      239,
+      267,
+      256,
+      260,
+      254,
+      292,
+      243,
+      247,
+      237,
+      261,
+      265,
+      238,
+      244,
+      268,
+      357,
+      298,
+      263,
+      319,
+      308,
+      277,
+      273,
+      287,
+      267,
+      303,
+      271,
+      245,
+      291,
+      254,
+      393,
+      289,
+      578,
+      214,
+      388,
+      229,
+      401,
+      330,
+      343,
+      284,
+      332,
+      265,
+      256,
+      281,
+      335,
+      241,
+      323,
+      275,
+      275,
+      320,
+      241,
+      414,
+      720,
+      551
+     ],
+     "inputTokens": 48427,
+     "cost": 0.002033934000000001,
+     "scores": {
+      "spya-cx5k4t": 0.18,
+      "spya-gvsujh": 0.03,
+      "spya-q62pkz": 0.01,
+      "spya-gb7ze2": 0.22,
+      "spya-c2ck7h": 0.06,
+      "spya-b0wbhk": 0.06,
+      "spya-ekhrbu": 0.04,
+      "spya-fcu0cb": 0.1,
+      "spya-v9detz": 0.17,
+      "spya-v43bs7": 0.09,
+      "spya-g9tjds": 0.31,
+      "spya-pfkdk4": 0.05,
+      "spya-vvkkv7": 0.12,
+      "spya-ms8rup": 0.06,
+      "spya-dk4gcf": 0.25,
+      "spya-ugwnw2": 0.35,
+      "spya-bh44xd": 0.28,
+      "spya-rzxkcd": 0.18,
+      "spya-s5dpqc": 0.11,
+      "spya-t89gw5": 0.07,
+      "spya-cbv8uf": 0.06,
+      "spya-m24kgb": 0.57,
+      "spya-k9s755": 0.3,
+      "spya-c8fcww": 0.43,
+      "spya-vqvmhz": 0.38,
+      "spya-ns5qyb": 0.47,
+      "spya-s9a3he": 0.45,
+      "spya-zfbcb4": 0.14,
+      "spya-ast6bs": 0.79,
+      "spya-ckcyzp": 0.31,
+      "spya-vfq66b": 0.31,
+      "spya-xvkm3j": 0.06,
+      "spya-gy8fb4": 0.33,
+      "spya-d6p0aa": 0.46,
+      "spya-vv9dpj": 0.6,
+      "spya-cc5uhs": 0.92,
+      "spya-w9ctpd": 0.63,
+      "spya-gu6jbj": 0.56,
+      "spya-asbjy9": 0.75,
+      "spya-vpd027": 0.55,
+      "spya-df7qrz": 0.23,
+      "spya-z6c3dr": 0.08,
+      "spya-fkg2ny": 0.09,
+      "spya-gj5bbr": 0.12,
+      "spya-acvnjw": 0.21,
+      "spya-cx56k0": 0.43,
+      "spya-m45y0k": 0.32,
+      "spya-c3dppu": 0.37,
+      "spya-dgcfnd": 0.12,
+      "spya-krknwc": 0.19,
+      "spya-f030k3": 0.07,
+      "spya-qvg86h": 0.04,
+      "spya-fhj3z4": 0.08,
+      "spya-j45j9u": 0.09,
+      "spya-nakhtw": 0.05,
+      "spya-kyxy7b": 0.07,
+      "spya-sjjbur": 0.05,
+      "spya-wtguds": 0.07,
+      "spya-m4gku9": 0.15,
+      "spya-r4jn5b": 0.19,
+      "spya-jauf7s": 0.13,
+      "spya-vqcwj0": 0.25,
+      "spya-nayjhs": 0.79,
+      "spya-mgjgha": 0.21,
+      "spya-bgtdqz": 0.2,
+      "spya-q33vy8": 0.25,
+      "spya-fmww2n": 0.18,
+      "spya-matth4": 0.08,
+      "spya-c2bkgz": 0.09,
+      "spya-m42hxd": 0.11,
+      "spya-ddr2ub": 0.09,
+      "spya-ebtbnm": 0.1,
+      "spya-k8jws5": 0.06,
+      "spya-khwx0h": 0.19,
+      "spya-vsujby": 0.15,
+      "spya-peudft": 0.15,
+      "spya-chdu2z": 0.29,
+      "spya-av2uwp": 0.13,
+      "spya-tq02vk": 0.1,
+      "spya-h6yxz3": 0.06,
+      "spya-td87ke": 0.12,
+      "spya-bpuujn": 0.14,
+      "spya-hz50qg": 0.08,
+      "spya-a49xd7": 0.09,
+      "spya-g5mja3": 0.03,
+      "spya-rvb47b": 0.02,
+      "spya-f07bw5": 0.06,
+      "spya-p0h9g8": 0.14,
+      "spya-z83ezv": 0.12,
+      "spya-qen9hh": 0.09,
+      "spya-kqgzae": 0.15,
+      "spya-mdta39": 0.11,
+      "spya-rnag5c": 0.67,
+      "spya-brgs0b": 0.1
+     }
+    },
+    "perBlockLiquid": {
+     "ms": 1855,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      413,
+      341,
+      402,
+      374,
+      438,
+      600,
+      441,
+      393,
+      429,
+      593,
+      454,
+      593,
+      429,
+      327,
+      441,
+      660,
+      448,
+      364,
+      443,
+      671,
+      286,
+      430,
+      240,
+      451,
+      394,
+      319,
+      381,
+      349,
+      328,
+      275,
+      370,
+      359,
+      328,
+      383,
+      357,
+      392,
+      301,
+      520,
+      492,
+      497,
+      292,
+      316,
+      352,
+      348,
+      350,
+      332,
+      409,
+      321,
+      311,
+      285,
+      400,
+      360,
+      681,
+      380,
+      280,
+      319,
+      309,
+      335,
+      341,
+      410,
+      294,
+      316,
+      348,
+      341,
+      316,
+      385,
+      424,
+      329,
+      328,
+      350,
+      343,
+      276,
+      335,
+      313,
+      317,
+      298,
+      297,
+      257,
+      315,
+      289,
+      338,
+      253,
+      385,
+      369,
+      347,
+      343,
+      354,
+      374,
+      365,
+      276,
+      313,
+      318,
+      318,
+      313
+     ],
+     "inputTokens": 25116,
+     "cost": 0.00100464,
+     "scores": {
+      "spya-cx5k4t": 0.04468086709240797,
+      "spya-gvsujh": 0.0035936022346033897,
+      "spya-q62pkz": 0.0024726227707193528,
+      "spya-gb7ze2": 0.09009299640503438,
+      "spya-c2ck7h": 0.06008665438181589,
+      "spya-b0wbhk": 0.04208772310953553,
+      "spya-ekhrbu": 0.01590639427760358,
+      "spya-fcu0cb": 0.0446808766331353,
+      "spya-v9detz": 0.03732688359596403,
+      "spya-v43bs7": 0.02931222947940706,
+      "spya-g9tjds": 0.11279538838851867,
+      "spya-pfkdk4": 0.047425869811643456,
+      "spya-vvkkv7": 0.02442308898897509,
+      "spya-ms8rup": 0.04742587317756679,
+      "spya-dk4gcf": 0.050330631173001586,
+      "spya-ugwnw2": 0.12592277139559055,
+      "spya-bh44xd": 0.08509905660864746,
+      "spya-rzxkcd": 0.042087734523984247,
+      "spya-s5dpqc": 0.014063628076331205,
+      "spya-t89gw5": 0.010328152062369358,
+      "spya-cbv8uf": 0.02161533370804187,
+      "spya-m24kgb": 0.37754066879814546,
+      "spya-k9s755": 0.08035745891142575,
+      "spya-c8fcww": 0.1561049013715009,
+      "spya-vqvmhz": 0.348645162405387,
+      "spya-ns5qyb": 0.5621765008857981,
+      "spya-s9a3he": 0.25683200276421697,
+      "spya-zfbcb4": 0.07585817166422973,
+      "spya-ast6bs": 0.7549149923816048,
+      "spya-ckcyzp": 0.23370635691404026,
+      "spya-vfq66b": 0.06371499069622688,
+      "spya-xvkm3j": 0.021615334023173283,
+      "spya-gy8fb4": 0.02758528602407069,
+      "spya-d6p0aa": 0.25683200276421697,
+      "spya-vv9dpj": 0.33458942798284697,
+      "spya-cc5uhs": 0.6513548646660542,
+      "spya-w9ctpd": 0.233706335565124,
+      "spya-gu6jbj": 0.22270012850745968,
+      "spya-asbjy9": 0.5312093733737563,
+      "spya-vpd027": 0.6370308082623217,
+      "spya-df7qrz": 0.09534945333101831,
+      "spya-z6c3dr": 0.04742587587030561,
+      "spya-fkg2ny": 0.03308597219150765,
+      "spya-gj5bbr": 0.02442309289445975,
+      "spya-acvnjw": 0.039638836831964216,
+      "spya-cx56k0": 0.09534946104307897,
+      "spya-m45y0k": 0.19193279106941588,
+      "spya-c3dppu": 0.09534945718704857,
+      "spya-dgcfnd": 0.014063629109417006,
+      "spya-krknwc": 0.009125637523922188,
+      "spya-f030k3": 0.0124316506702427,
+      "spya-qvg86h": 0.007577241604023266,
+      "spya-fhj3z4": 0.02758528542450002,
+      "spya-j45j9u": 0.02442309147428344,
+      "spya-nakhtw": 0.007577240259373531,
+      "spya-kyxy7b": 0.033085976005166884,
+      "spya-sjjbur": 0.02161532835080852,
+      "spya-wtguds": 0.06008665101556925,
+      "spya-m4gku9": 0.2120688093369431,
+      "spya-r4jn5b": 0.33458944125318596,
+      "spya-jauf7s": 0.08035745670903005,
+      "spya-vqcwj0": 0.17328821019878954,
+      "spya-nayjhs": 0.7310585610515279,
+      "spya-mgjgha": 0.10087860921438731,
+      "spya-bgtdqz": 0.039638845340736625,
+      "spya-q33vy8": 0.09009299151886935,
+      "spya-fmww2n": 0.02931223202330563,
+      "spya-matth4": 0.04468087726918387,
+      "spya-c2bkgz": 0.03514484387432486,
+      "spya-m42hxd": 0.027585283026217468,
+      "spya-ddr2ub": 0.0159063898457867,
+      "spya-ebtbnm": 0.09534945975773548,
+      "spya-k8jws5": 0.03308597552845946,
+      "spya-khwx0h": 0.1127953943533099,
+      "spya-vsujby": 0.13296425737659678,
+      "spya-peudft": 0.05033063687090299,
+      "spya-chdu2z": 0.23370635691404026,
+      "spya-av2uwp": 0.050330626187338356,
+      "spya-tq02vk": 0.031143834356599977,
+      "spya-h6yxz3": 0.047425867118904945,
+      "spya-td87ke": 0.037326884131416216,
+      "spya-bpuujn": 0.04468087218079564,
+      "spya-hz50qg": 0.03732689055684297,
+      "spya-a49xd7": 0.021615331817253475,
+      "spya-g5mja3": 0.013222820002434953,
+      "spya-rvb47b": 0.004070137595090279,
+      "spya-f07bw5": 0.0055549244567460465,
+      "spya-p0h9g8": 0.014063628696182677,
+      "spya-z83ezv": 0.019124038987053598,
+      "spya-qen9hh": 0.039638835697461364,
+      "spya-kqgzae": 0.03963884193722745,
+      "spya-mdta39": 0.029312230963347865,
+      "spya-rnag5c": 0.20181323666246884,
+      "spya-brgs0b": 0.016914909302112344
+     }
+    }
+   }
+  },
+  {
+   "q": "self-sacrifice for the group",
+   "shape": "concept",
+   "arms": {
+    "noulOne": [
+     {
+      "ms": 392,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 391,
+        "inputTokens": 13697,
+        "cost": 0.000575274
+       }
+      ],
+      "inputTokens": 13697,
+      "cost": 0.000575274,
+      "scores": {
+       "spya-cx5k4t": 0.52,
+       "spya-gvsujh": 0.1,
+       "spya-q62pkz": 0.04,
+       "spya-gb7ze2": 0.28,
+       "spya-c2ck7h": 0.12,
+       "spya-b0wbhk": 0.08,
+       "spya-ekhrbu": 0.11,
+       "spya-fcu0cb": 0.12,
+       "spya-v9detz": 0.1,
+       "spya-v43bs7": 0.12,
+       "spya-g9tjds": 0.11,
+       "spya-pfkdk4": 0.16,
+       "spya-vvkkv7": 0.16,
+       "spya-ms8rup": 0.15,
+       "spya-dk4gcf": 0.19,
+       "spya-ugwnw2": 0.24,
+       "spya-bh44xd": 0.13,
+       "spya-rzxkcd": 0.17,
+       "spya-s5dpqc": 0.22,
+       "spya-t89gw5": 0.29,
+       "spya-cbv8uf": 0.17,
+       "spya-m24kgb": 0.14,
+       "spya-k9s755": 0.15,
+       "spya-c8fcww": 0.25,
+       "spya-vqvmhz": 0.26,
+       "spya-ns5qyb": 0.22,
+       "spya-s9a3he": 0.26,
+       "spya-zfbcb4": 0.3,
+       "spya-ast6bs": 0.2,
+       "spya-ckcyzp": 0.21,
+       "spya-vfq66b": 0.31,
+       "spya-xvkm3j": 0.29,
+       "spya-gy8fb4": 0.2,
+       "spya-d6p0aa": 0.28,
+       "spya-vv9dpj": 0.23,
+       "spya-cc5uhs": 0.16,
+       "spya-w9ctpd": 0.14,
+       "spya-gu6jbj": 0.1,
+       "spya-asbjy9": 0.12,
+       "spya-vpd027": 0.13,
+       "spya-df7qrz": 0.18,
+       "spya-z6c3dr": 0.23,
+       "spya-fkg2ny": 0.88,
+       "spya-gj5bbr": 0.34,
+       "spya-acvnjw": 0.92,
+       "spya-cx56k0": 0.91,
+       "spya-m45y0k": 0.92,
+       "spya-c3dppu": 0.92,
+       "spya-dgcfnd": 0.69,
+       "spya-krknwc": 0.94,
+       "spya-f030k3": 0.93,
+       "spya-qvg86h": 0.85,
+       "spya-fhj3z4": 0.84,
+       "spya-j45j9u": 0.86,
+       "spya-nakhtw": 0.93,
+       "spya-kyxy7b": 0.19,
+       "spya-sjjbur": 0.18,
+       "spya-wtguds": 0.23,
+       "spya-m4gku9": 0.22,
+       "spya-r4jn5b": 0.18,
+       "spya-jauf7s": 0.16,
+       "spya-vqcwj0": 0.27,
+       "spya-nayjhs": 0.79,
+       "spya-mgjgha": 0.38,
+       "spya-bgtdqz": 0.36,
+       "spya-q33vy8": 0.45,
+       "spya-fmww2n": 0.3,
+       "spya-matth4": 0.13,
+       "spya-c2bkgz": 0.18,
+       "spya-m42hxd": 0.16,
+       "spya-ddr2ub": 0.13,
+       "spya-ebtbnm": 0.14,
+       "spya-k8jws5": 0.13,
+       "spya-khwx0h": 0.17,
+       "spya-vsujby": 0.19,
+       "spya-peudft": 0.18,
+       "spya-chdu2z": 0.21,
+       "spya-av2uwp": 0.08,
+       "spya-tq02vk": 0.15,
+       "spya-h6yxz3": 0.11,
+       "spya-td87ke": 0.06,
+       "spya-bpuujn": 0.27,
+       "spya-hz50qg": 0.25,
+       "spya-a49xd7": 0.32,
+       "spya-g5mja3": 0.19,
+       "spya-rvb47b": 0.1,
+       "spya-f07bw5": 0.19,
+       "spya-p0h9g8": 0.15,
+       "spya-z83ezv": 0.34,
+       "spya-qen9hh": 0.72,
+       "spya-kqgzae": 0.93,
+       "spya-mdta39": 0.55,
+       "spya-rnag5c": 0.26,
+       "spya-brgs0b": 0.04
+      }
+     },
+     {
+      "ms": 356,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 355,
+        "inputTokens": 13697,
+        "cost": 0.000575274
+       }
+      ],
+      "inputTokens": 13697,
+      "cost": 0.000575274,
+      "scores": {
+       "spya-cx5k4t": 0.51,
+       "spya-gvsujh": 0.1,
+       "spya-q62pkz": 0.03,
+       "spya-gb7ze2": 0.28,
+       "spya-c2ck7h": 0.13,
+       "spya-b0wbhk": 0.09,
+       "spya-ekhrbu": 0.11,
+       "spya-fcu0cb": 0.11,
+       "spya-v9detz": 0.09,
+       "spya-v43bs7": 0.12,
+       "spya-g9tjds": 0.12,
+       "spya-pfkdk4": 0.16,
+       "spya-vvkkv7": 0.15,
+       "spya-ms8rup": 0.14,
+       "spya-dk4gcf": 0.22,
+       "spya-ugwnw2": 0.25,
+       "spya-bh44xd": 0.16,
+       "spya-rzxkcd": 0.19,
+       "spya-s5dpqc": 0.22,
+       "spya-t89gw5": 0.3,
+       "spya-cbv8uf": 0.18,
+       "spya-m24kgb": 0.15,
+       "spya-k9s755": 0.15,
+       "spya-c8fcww": 0.26,
+       "spya-vqvmhz": 0.24,
+       "spya-ns5qyb": 0.22,
+       "spya-s9a3he": 0.25,
+       "spya-zfbcb4": 0.34,
+       "spya-ast6bs": 0.23,
+       "spya-ckcyzp": 0.24,
+       "spya-vfq66b": 0.35,
+       "spya-xvkm3j": 0.26,
+       "spya-gy8fb4": 0.21,
+       "spya-d6p0aa": 0.25,
+       "spya-vv9dpj": 0.23,
+       "spya-cc5uhs": 0.14,
+       "spya-w9ctpd": 0.15,
+       "spya-gu6jbj": 0.09,
+       "spya-asbjy9": 0.12,
+       "spya-vpd027": 0.15,
+       "spya-df7qrz": 0.19,
+       "spya-z6c3dr": 0.27,
+       "spya-fkg2ny": 0.87,
+       "spya-gj5bbr": 0.41,
+       "spya-acvnjw": 0.92,
+       "spya-cx56k0": 0.92,
+       "spya-m45y0k": 0.89,
+       "spya-c3dppu": 0.93,
+       "spya-dgcfnd": 0.71,
+       "spya-krknwc": 0.95,
+       "spya-f030k3": 0.92,
+       "spya-qvg86h": 0.85,
+       "spya-fhj3z4": 0.84,
+       "spya-j45j9u": 0.87,
+       "spya-nakhtw": 0.93,
+       "spya-kyxy7b": 0.18,
+       "spya-sjjbur": 0.19,
+       "spya-wtguds": 0.23,
+       "spya-m4gku9": 0.21,
+       "spya-r4jn5b": 0.16,
+       "spya-jauf7s": 0.17,
+       "spya-vqcwj0": 0.26,
+       "spya-nayjhs": 0.81,
+       "spya-mgjgha": 0.41,
+       "spya-bgtdqz": 0.33,
+       "spya-q33vy8": 0.35,
+       "spya-fmww2n": 0.33,
+       "spya-matth4": 0.13,
+       "spya-c2bkgz": 0.18,
+       "spya-m42hxd": 0.17,
+       "spya-ddr2ub": 0.15,
+       "spya-ebtbnm": 0.16,
+       "spya-k8jws5": 0.13,
+       "spya-khwx0h": 0.16,
+       "spya-vsujby": 0.2,
+       "spya-peudft": 0.18,
+       "spya-chdu2z": 0.22,
+       "spya-av2uwp": 0.09,
+       "spya-tq02vk": 0.15,
+       "spya-h6yxz3": 0.1,
+       "spya-td87ke": 0.07,
+       "spya-bpuujn": 0.26,
+       "spya-hz50qg": 0.3,
+       "spya-a49xd7": 0.34,
+       "spya-g5mja3": 0.18,
+       "spya-rvb47b": 0.13,
+       "spya-f07bw5": 0.18,
+       "spya-p0h9g8": 0.15,
+       "spya-z83ezv": 0.32,
+       "spya-qen9hh": 0.75,
+       "spya-kqgzae": 0.93,
+       "spya-mdta39": 0.53,
+       "spya-rnag5c": 0.27,
+       "spya-brgs0b": 0.04
+      }
+     },
+     {
+      "ms": 371,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 371,
+        "inputTokens": 13697,
+        "cost": 0.000575274
+       }
+      ],
+      "inputTokens": 13697,
+      "cost": 0.000575274,
+      "scores": {
+       "spya-cx5k4t": 0.55,
+       "spya-gvsujh": 0.1,
+       "spya-q62pkz": 0.04,
+       "spya-gb7ze2": 0.3,
+       "spya-c2ck7h": 0.13,
+       "spya-b0wbhk": 0.08,
+       "spya-ekhrbu": 0.11,
+       "spya-fcu0cb": 0.11,
+       "spya-v9detz": 0.1,
+       "spya-v43bs7": 0.12,
+       "spya-g9tjds": 0.14,
+       "spya-pfkdk4": 0.15,
+       "spya-vvkkv7": 0.15,
+       "spya-ms8rup": 0.14,
+       "spya-dk4gcf": 0.2,
+       "spya-ugwnw2": 0.26,
+       "spya-bh44xd": 0.13,
+       "spya-rzxkcd": 0.16,
+       "spya-s5dpqc": 0.21,
+       "spya-t89gw5": 0.29,
+       "spya-cbv8uf": 0.17,
+       "spya-m24kgb": 0.14,
+       "spya-k9s755": 0.15,
+       "spya-c8fcww": 0.26,
+       "spya-vqvmhz": 0.26,
+       "spya-ns5qyb": 0.21,
+       "spya-s9a3he": 0.25,
+       "spya-zfbcb4": 0.33,
+       "spya-ast6bs": 0.21,
+       "spya-ckcyzp": 0.23,
+       "spya-vfq66b": 0.34,
+       "spya-xvkm3j": 0.28,
+       "spya-gy8fb4": 0.21,
+       "spya-d6p0aa": 0.24,
+       "spya-vv9dpj": 0.21,
+       "spya-cc5uhs": 0.13,
+       "spya-w9ctpd": 0.13,
+       "spya-gu6jbj": 0.1,
+       "spya-asbjy9": 0.12,
+       "spya-vpd027": 0.15,
+       "spya-df7qrz": 0.18,
+       "spya-z6c3dr": 0.24,
+       "spya-fkg2ny": 0.88,
+       "spya-gj5bbr": 0.38,
+       "spya-acvnjw": 0.92,
+       "spya-cx56k0": 0.92,
+       "spya-m45y0k": 0.89,
+       "spya-c3dppu": 0.92,
+       "spya-dgcfnd": 0.67,
+       "spya-krknwc": 0.95,
+       "spya-f030k3": 0.93,
+       "spya-qvg86h": 0.86,
+       "spya-fhj3z4": 0.84,
+       "spya-j45j9u": 0.87,
+       "spya-nakhtw": 0.92,
+       "spya-kyxy7b": 0.18,
+       "spya-sjjbur": 0.2,
+       "spya-wtguds": 0.26,
+       "spya-m4gku9": 0.21,
+       "spya-r4jn5b": 0.18,
+       "spya-jauf7s": 0.16,
+       "spya-vqcwj0": 0.26,
+       "spya-nayjhs": 0.82,
+       "spya-mgjgha": 0.42,
+       "spya-bgtdqz": 0.35,
+       "spya-q33vy8": 0.43,
+       "spya-fmww2n": 0.33,
+       "spya-matth4": 0.14,
+       "spya-c2bkgz": 0.19,
+       "spya-m42hxd": 0.16,
+       "spya-ddr2ub": 0.14,
+       "spya-ebtbnm": 0.15,
+       "spya-k8jws5": 0.15,
+       "spya-khwx0h": 0.14,
+       "spya-vsujby": 0.21,
+       "spya-peudft": 0.18,
+       "spya-chdu2z": 0.21,
+       "spya-av2uwp": 0.09,
+       "spya-tq02vk": 0.15,
+       "spya-h6yxz3": 0.11,
+       "spya-td87ke": 0.06,
+       "spya-bpuujn": 0.29,
+       "spya-hz50qg": 0.28,
+       "spya-a49xd7": 0.35,
+       "spya-g5mja3": 0.16,
+       "spya-rvb47b": 0.1,
+       "spya-f07bw5": 0.18,
+       "spya-p0h9g8": 0.16,
+       "spya-z83ezv": 0.32,
+       "spya-qen9hh": 0.75,
+       "spya-kqgzae": 0.94,
+       "spya-mdta39": 0.44,
+       "spya-rnag5c": 0.25,
+       "spya-brgs0b": 0.05
+      }
+     }
+    ],
+    "noulOnePlain": {
+     "ms": 368,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 368,
+       "inputTokens": 9279,
+       "cost": 0.000389718
+      }
+     ],
+     "inputTokens": 9279,
+     "cost": 0.000389718,
+     "scores": {
+      "spya-cx5k4t": 0.47,
+      "spya-gvsujh": 0.09,
+      "spya-q62pkz": 0.04,
+      "spya-gb7ze2": 0.26,
+      "spya-c2ck7h": 0.12,
+      "spya-b0wbhk": 0.08,
+      "spya-ekhrbu": 0.12,
+      "spya-fcu0cb": 0.14,
+      "spya-v9detz": 0.12,
+      "spya-v43bs7": 0.14,
+      "spya-g9tjds": 0.14,
+      "spya-pfkdk4": 0.15,
+      "spya-vvkkv7": 0.17,
+      "spya-ms8rup": 0.16,
+      "spya-dk4gcf": 0.22,
+      "spya-ugwnw2": 0.32,
+      "spya-bh44xd": 0.19,
+      "spya-rzxkcd": 0.19,
+      "spya-s5dpqc": 0.32,
+      "spya-t89gw5": 0.4,
+      "spya-cbv8uf": 0.2,
+      "spya-m24kgb": 0.17,
+      "spya-k9s755": 0.15,
+      "spya-c8fcww": 0.36,
+      "spya-vqvmhz": 0.34,
+      "spya-ns5qyb": 0.26,
+      "spya-s9a3he": 0.27,
+      "spya-zfbcb4": 0.3,
+      "spya-ast6bs": 0.23,
+      "spya-ckcyzp": 0.25,
+      "spya-vfq66b": 0.31,
+      "spya-xvkm3j": 0.31,
+      "spya-gy8fb4": 0.22,
+      "spya-d6p0aa": 0.27,
+      "spya-vv9dpj": 0.27,
+      "spya-cc5uhs": 0.17,
+      "spya-w9ctpd": 0.17,
+      "spya-gu6jbj": 0.12,
+      "spya-asbjy9": 0.14,
+      "spya-vpd027": 0.14,
+      "spya-df7qrz": 0.18,
+      "spya-z6c3dr": 0.28,
+      "spya-fkg2ny": 0.89,
+      "spya-gj5bbr": 0.34,
+      "spya-acvnjw": 0.9,
+      "spya-cx56k0": 0.9,
+      "spya-m45y0k": 0.89,
+      "spya-c3dppu": 0.88,
+      "spya-dgcfnd": 0.66,
+      "spya-krknwc": 0.94,
+      "spya-f030k3": 0.91,
+      "spya-qvg86h": 0.82,
+      "spya-fhj3z4": 0.83,
+      "spya-j45j9u": 0.86,
+      "spya-nakhtw": 0.9,
+      "spya-kyxy7b": 0.23,
+      "spya-sjjbur": 0.21,
+      "spya-wtguds": 0.25,
+      "spya-m4gku9": 0.22,
+      "spya-r4jn5b": 0.15,
+      "spya-jauf7s": 0.19,
+      "spya-vqcwj0": 0.22,
+      "spya-nayjhs": 0.86,
+      "spya-mgjgha": 0.39,
+      "spya-bgtdqz": 0.36,
+      "spya-q33vy8": 0.34,
+      "spya-fmww2n": 0.26,
+      "spya-matth4": 0.16,
+      "spya-c2bkgz": 0.2,
+      "spya-m42hxd": 0.16,
+      "spya-ddr2ub": 0.16,
+      "spya-ebtbnm": 0.18,
+      "spya-k8jws5": 0.18,
+      "spya-khwx0h": 0.19,
+      "spya-vsujby": 0.26,
+      "spya-peudft": 0.19,
+      "spya-chdu2z": 0.28,
+      "spya-av2uwp": 0.07,
+      "spya-tq02vk": 0.15,
+      "spya-h6yxz3": 0.1,
+      "spya-td87ke": 0.05,
+      "spya-bpuujn": 0.29,
+      "spya-hz50qg": 0.28,
+      "spya-a49xd7": 0.3,
+      "spya-g5mja3": 0.18,
+      "spya-rvb47b": 0.11,
+      "spya-f07bw5": 0.18,
+      "spya-p0h9g8": 0.19,
+      "spya-z83ezv": 0.31,
+      "spya-qen9hh": 0.74,
+      "spya-kqgzae": 0.93,
+      "spya-mdta39": 0.52,
+      "spya-rnag5c": 0.35,
+      "spya-brgs0b": 0.03
+     }
+    },
+    "scoreOne": {
+     "ms": 577,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 576,
+       "inputTokens": 19807,
+       "cost": 0.000831894
+      }
+     ],
+     "inputTokens": 19807,
+     "cost": 0.000831894,
+     "scores": {
+      "spya-cx5k4t": 1.44,
+      "spya-gvsujh": 0.17,
+      "spya-q62pkz": 0.05,
+      "spya-gb7ze2": 0.77,
+      "spya-c2ck7h": 0.46,
+      "spya-b0wbhk": 0.31,
+      "spya-ekhrbu": 0.35,
+      "spya-fcu0cb": 0.38,
+      "spya-v9detz": 0.29,
+      "spya-v43bs7": 0.34,
+      "spya-g9tjds": 0.33,
+      "spya-pfkdk4": 0.58,
+      "spya-vvkkv7": 0.58,
+      "spya-ms8rup": 0.44,
+      "spya-dk4gcf": 0.81,
+      "spya-ugwnw2": 0.83,
+      "spya-bh44xd": 0.45,
+      "spya-rzxkcd": 0.64,
+      "spya-s5dpqc": 0.53,
+      "spya-t89gw5": 0.63,
+      "spya-cbv8uf": 0.62,
+      "spya-m24kgb": 0.4,
+      "spya-k9s755": 0.45,
+      "spya-c8fcww": 0.95,
+      "spya-vqvmhz": 0.82,
+      "spya-ns5qyb": 0.89,
+      "spya-s9a3he": 1.04,
+      "spya-zfbcb4": 1.11,
+      "spya-ast6bs": 0.79,
+      "spya-ckcyzp": 0.65,
+      "spya-vfq66b": 1.01,
+      "spya-xvkm3j": 0.93,
+      "spya-gy8fb4": 0.95,
+      "spya-d6p0aa": 1.2,
+      "spya-vv9dpj": 0.91,
+      "spya-cc5uhs": 0.36,
+      "spya-w9ctpd": 0.35,
+      "spya-gu6jbj": 0.27,
+      "spya-asbjy9": 0.34,
+      "spya-vpd027": 0.4,
+      "spya-df7qrz": 0.69,
+      "spya-z6c3dr": 0.77,
+      "spya-fkg2ny": 2.76,
+      "spya-gj5bbr": 1.08,
+      "spya-acvnjw": 2.82,
+      "spya-cx56k0": 2.9,
+      "spya-m45y0k": 2.78,
+      "spya-c3dppu": 2.92,
+      "spya-dgcfnd": 2.42,
+      "spya-krknwc": 2.98,
+      "spya-f030k3": 2.93,
+      "spya-qvg86h": 2.69,
+      "spya-fhj3z4": 2.39,
+      "spya-j45j9u": 2.8,
+      "spya-nakhtw": 2.94,
+      "spya-kyxy7b": 0.58,
+      "spya-sjjbur": 0.63,
+      "spya-wtguds": 0.72,
+      "spya-m4gku9": 0.48,
+      "spya-r4jn5b": 0.59,
+      "spya-jauf7s": 0.6,
+      "spya-vqcwj0": 0.6,
+      "spya-nayjhs": 2.39,
+      "spya-mgjgha": 1.53,
+      "spya-bgtdqz": 1.32,
+      "spya-q33vy8": 1.31,
+      "spya-fmww2n": 1.11,
+      "spya-matth4": 0.38,
+      "spya-c2bkgz": 0.48,
+      "spya-m42hxd": 0.74,
+      "spya-ddr2ub": 0.31,
+      "spya-ebtbnm": 0.23,
+      "spya-k8jws5": 0.28,
+      "spya-khwx0h": 0.31,
+      "spya-vsujby": 0.43,
+      "spya-peudft": 0.33,
+      "spya-chdu2z": 0.55,
+      "spya-av2uwp": 0.21,
+      "spya-tq02vk": 0.39,
+      "spya-h6yxz3": 0.28,
+      "spya-td87ke": 0.12,
+      "spya-bpuujn": 0.92,
+      "spya-hz50qg": 1.09,
+      "spya-a49xd7": 1.38,
+      "spya-g5mja3": 0.4,
+      "spya-rvb47b": 0.3,
+      "spya-f07bw5": 0.68,
+      "spya-p0h9g8": 0.38,
+      "spya-z83ezv": 0.91,
+      "spya-qen9hh": 1.72,
+      "spya-kqgzae": 2.91,
+      "spya-mdta39": 1.44,
+      "spya-rnag5c": 1.01,
+      "spya-brgs0b": 0.16
+     },
+     "raw": {
+      "spya-cx5k4t": {
+       "score": 1.44,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.12,
+        "2": 0.08,
+        "3": 0.38
+       }
+      },
+      "spya-gvsujh": {
+       "score": 0.17,
+       "confidence": 0.83,
+       "probabilities": {
+        "0": 0.91,
+        "1": 0.04,
+        "2": 0.02,
+        "3": 0.03
+       }
+      },
+      "spya-q62pkz": {
+       "score": 0.05,
+       "confidence": 0.95,
+       "probabilities": {
+        "0": 0.97,
+        "1": 0.02,
+        "2": 0.01,
+        "3": 0
+       }
+      },
+      "spya-gb7ze2": {
+       "score": 0.77,
+       "confidence": 0.23,
+       "probabilities": {
+        "0": 0.46,
+        "1": 0.34,
+        "2": 0.17,
+        "3": 0.03
+       }
+      },
+      "spya-c2ck7h": {
+       "score": 0.46,
+       "confidence": 0.54,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.23,
+        "2": 0.09,
+        "3": 0.02
+       }
+      },
+      "spya-b0wbhk": {
+       "score": 0.31,
+       "confidence": 0.69,
+       "probabilities": {
+        "0": 0.82,
+        "1": 0.07,
+        "2": 0.07,
+        "3": 0.04
+       }
+      },
+      "spya-ekhrbu": {
+       "score": 0.35,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.14,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-fcu0cb": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.16,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-v9detz": {
+       "score": 0.29,
+       "confidence": 0.71,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.16,
+        "2": 0.06,
+        "3": 0
+       }
+      },
+      "spya-v43bs7": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.14,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-g9tjds": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.75,
+        "1": 0.18,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-pfkdk4": {
+       "score": 0.58,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.23,
+        "2": 0.16,
+        "3": 0.01
+       }
+      },
+      "spya-vvkkv7": {
+       "score": 0.58,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.58,
+        "1": 0.27,
+        "2": 0.13,
+        "3": 0.02
+       }
+      },
+      "spya-ms8rup": {
+       "score": 0.44,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.26,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-dk4gcf": {
+       "score": 0.81,
+       "confidence": 0.19,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.39,
+        "2": 0.18,
+        "3": 0.02
+       }
+      },
+      "spya-ugwnw2": {
+       "score": 0.83,
+       "confidence": 0.17,
+       "probabilities": {
+        "0": 0.44,
+        "1": 0.31,
+        "2": 0.22,
+        "3": 0.03
+       }
+      },
+      "spya-bh44xd": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.68,
+        "1": 0.21,
+        "2": 0.1,
+        "3": 0.01
+       }
+      },
+      "spya-rzxkcd": {
+       "score": 0.64,
+       "confidence": 0.36,
+       "probabilities": {
+        "0": 0.54,
+        "1": 0.29,
+        "2": 0.16,
+        "3": 0.01
+       }
+      },
+      "spya-s5dpqc": {
+       "score": 0.53,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.27,
+        "2": 0.11,
+        "3": 0.02
+       }
+      },
+      "spya-t89gw5": {
+       "score": 0.63,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.56,
+        "1": 0.27,
+        "2": 0.15,
+        "3": 0.02
+       }
+      },
+      "spya-cbv8uf": {
+       "score": 0.62,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.54,
+        "1": 0.33,
+        "2": 0.12,
+        "3": 0.01
+       }
+      },
+      "spya-m24kgb": {
+       "score": 0.4,
+       "confidence": 0.6,
+       "probabilities": {
+        "0": 0.72,
+        "1": 0.16,
+        "2": 0.1,
+        "3": 0.02
+       }
+      },
+      "spya-k9s755": {
+       "score": 0.45,
+       "confidence": 0.55,
+       "probabilities": {
+        "0": 0.68,
+        "1": 0.21,
+        "2": 0.1,
+        "3": 0.01
+       }
+      },
+      "spya-c8fcww": {
+       "score": 0.95,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.34,
+        "1": 0.4,
+        "2": 0.23,
+        "3": 0.03
+       }
+      },
+      "spya-vqvmhz": {
+       "score": 0.82,
+       "confidence": 0.18,
+       "probabilities": {
+        "0": 0.44,
+        "1": 0.32,
+        "2": 0.21,
+        "3": 0.03
+       }
+      },
+      "spya-ns5qyb": {
+       "score": 0.89,
+       "confidence": 0.11,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.32,
+        "2": 0.23,
+        "3": 0.04
+       }
+      },
+      "spya-s9a3he": {
+       "score": 1.04,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.35,
+        "1": 0.31,
+        "2": 0.3,
+        "3": 0.04
+       }
+      },
+      "spya-zfbcb4": {
+       "score": 1.11,
+       "confidence": 0.29,
+       "probabilities": {
+        "0": 0.3,
+        "1": 0.34,
+        "2": 0.31,
+        "3": 0.05
+       }
+      },
+      "spya-ast6bs": {
+       "score": 0.79,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.24,
+        "2": 0.23,
+        "3": 0.03
+       }
+      },
+      "spya-ckcyzp": {
+       "score": 0.65,
+       "confidence": 0.35,
+       "probabilities": {
+        "0": 0.57,
+        "1": 0.22,
+        "2": 0.19,
+        "3": 0.02
+       }
+      },
+      "spya-vfq66b": {
+       "score": 1.01,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.23,
+        "2": 0.27,
+        "3": 0.08
+       }
+      },
+      "spya-xvkm3j": {
+       "score": 0.93,
+       "confidence": 0.07,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.29,
+        "2": 0.28,
+        "3": 0.03
+       }
+      },
+      "spya-gy8fb4": {
+       "score": 0.95,
+       "confidence": 0.05,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.31,
+        "2": 0.22,
+        "3": 0.07
+       }
+      },
+      "spya-d6p0aa": {
+       "score": 1.2,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.19,
+        "1": 0.45,
+        "2": 0.32,
+        "3": 0.04
+       }
+      },
+      "spya-vv9dpj": {
+       "score": 0.91,
+       "confidence": 0.09,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.32,
+        "2": 0.26,
+        "3": 0.02
+       }
+      },
+      "spya-cc5uhs": {
+       "score": 0.36,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.14,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-w9ctpd": {
+       "score": 0.35,
+       "confidence": 0.65,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.16,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-gu6jbj": {
+       "score": 0.27,
+       "confidence": 0.73,
+       "probabilities": {
+        "0": 0.81,
+        "1": 0.12,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-asbjy9": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.14,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-vpd027": {
+       "score": 0.4,
+       "confidence": 0.6,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.2,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-df7qrz": {
+       "score": 0.69,
+       "confidence": 0.31,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.32,
+        "2": 0.16,
+        "3": 0.02
+       }
+      },
+      "spya-z6c3dr": {
+       "score": 0.77,
+       "confidence": 0.41,
+       "probabilities": {
+        "0": 0.41,
+        "1": 0.43,
+        "2": 0.14,
+        "3": 0.02
+       }
+      },
+      "spya-fkg2ny": {
+       "score": 2.76,
+       "confidence": 0.76,
+       "probabilities": {
+        "0": 0,
+        "1": 0.04,
+        "2": 0.16,
+        "3": 0.8
+       }
+      },
+      "spya-gj5bbr": {
+       "score": 1.08,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.27,
+        "1": 0.42,
+        "2": 0.27,
+        "3": 0.04
+       }
+      },
+      "spya-acvnjw": {
+       "score": 2.82,
+       "confidence": 0.82,
+       "probabilities": {
+        "0": 0,
+        "1": 0.01,
+        "2": 0.16,
+        "3": 0.83
+       }
+      },
+      "spya-cx56k0": {
+       "score": 2.9,
+       "confidence": 0.9,
+       "probabilities": {
+        "0": 0,
+        "1": 0.01,
+        "2": 0.08,
+        "3": 0.91
+       }
+      },
+      "spya-m45y0k": {
+       "score": 2.78,
+       "confidence": 0.78,
+       "probabilities": {
+        "0": 0,
+        "1": 0.01,
+        "2": 0.19,
+        "3": 0.8
+       }
+      },
+      "spya-c3dppu": {
+       "score": 2.92,
+       "confidence": 0.92,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.06,
+        "3": 0.9400000000000001
+       }
+      },
+      "spya-dgcfnd": {
+       "score": 2.42,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.04,
+        "1": 0.13,
+        "2": 0.18,
+        "3": 0.65
+       }
+      },
+      "spya-krknwc": {
+       "score": 2.98,
+       "confidence": 0.98,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.02,
+        "3": 0.98
+       }
+      },
+      "spya-f030k3": {
+       "score": 2.93,
+       "confidence": 0.93,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.06,
+        "3": 0.94
+       }
+      },
+      "spya-qvg86h": {
+       "score": 2.69,
+       "confidence": 0.69,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.04,
+        "2": 0.21,
+        "3": 0.74
+       }
+      },
+      "spya-fhj3z4": {
+       "score": 2.39,
+       "confidence": 0.39,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.08,
+        "2": 0.42,
+        "3": 0.49
+       }
+      },
+      "spya-j45j9u": {
+       "score": 2.8,
+       "confidence": 0.8,
+       "probabilities": {
+        "0": 0,
+        "1": 0.02,
+        "2": 0.16,
+        "3": 0.82
+       }
+      },
+      "spya-nakhtw": {
+       "score": 2.94,
+       "confidence": 0.94,
+       "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0.05,
+        "3": 0.95
+       }
+      },
+      "spya-kyxy7b": {
+       "score": 0.58,
+       "confidence": 0.42,
+       "probabilities": {
+        "0": 0.59,
+        "1": 0.25,
+        "2": 0.14,
+        "3": 0.02
+       }
+      },
+      "spya-sjjbur": {
+       "score": 0.63,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.56,
+        "1": 0.27,
+        "2": 0.15,
+        "3": 0.02
+       }
+      },
+      "spya-wtguds": {
+       "score": 0.72,
+       "confidence": 0.28,
+       "probabilities": {
+        "0": 0.49,
+        "1": 0.32,
+        "2": 0.18,
+        "3": 0.01
+       }
+      },
+      "spya-m4gku9": {
+       "score": 0.48,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.22,
+        "2": 0.11,
+        "3": 0.01
+       }
+      },
+      "spya-r4jn5b": {
+       "score": 0.59,
+       "confidence": 0.41,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.42,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-jauf7s": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.39,
+        "2": 0.1,
+        "3": 0.01
+       }
+      },
+      "spya-vqcwj0": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.54,
+        "1": 0.35,
+        "2": 0.1,
+        "3": 0.01
+       }
+      },
+      "spya-nayjhs": {
+       "score": 2.39,
+       "confidence": 0.39,
+       "probabilities": {
+        "0": 0,
+        "1": 0.16,
+        "2": 0.28,
+        "3": 0.56
+       }
+      },
+      "spya-mgjgha": {
+       "score": 1.53,
+       "confidence": 0.3,
+       "probabilities": {
+        "0": 0.13,
+        "1": 0.33,
+        "2": 0.43,
+        "3": 0.11
+       }
+      },
+      "spya-bgtdqz": {
+       "score": 1.32,
+       "confidence": 0.34,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.39,
+        "2": 0.38,
+        "3": 0.06
+       }
+      },
+      "spya-q33vy8": {
+       "score": 1.31,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.14,
+        "1": 0.48,
+        "2": 0.31,
+        "3": 0.07
+       }
+      },
+      "spya-fmww2n": {
+       "score": 1.11,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.27,
+        "2": 0.15,
+        "3": 0.18
+       }
+      },
+      "spya-matth4": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.67,
+        "1": 0.27,
+        "2": 0.05,
+        "3": 0
+       }
+      },
+      "spya-c2bkgz": {
+       "score": 0.48,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.63,
+        "1": 0.28,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-m42hxd": {
+       "score": 0.74,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.44,
+        "1": 0.4,
+        "2": 0.14,
+        "3": 0.02
+       }
+      },
+      "spya-ddr2ub": {
+       "score": 0.31,
+       "confidence": 0.69,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.17,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-ebtbnm": {
+       "score": 0.23,
+       "confidence": 0.77,
+       "probabilities": {
+        "0": 0.83,
+        "1": 0.11,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-k8jws5": {
+       "score": 0.28,
+       "confidence": 0.72,
+       "probabilities": {
+        "0": 0.8,
+        "1": 0.13,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-khwx0h": {
+       "score": 0.31,
+       "confidence": 0.69,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.14,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-vsujby": {
+       "score": 0.43,
+       "confidence": 0.57,
+       "probabilities": {
+        "0": 0.68,
+        "1": 0.22,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-peudft": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.75,
+        "1": 0.18,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-chdu2z": {
+       "score": 0.55,
+       "confidence": 0.45,
+       "probabilities": {
+        "0": 0.55,
+        "1": 0.36,
+        "2": 0.08,
+        "3": 0.01
+       }
+      },
+      "spya-av2uwp": {
+       "score": 0.21,
+       "confidence": 0.79,
+       "probabilities": {
+        "0": 0.83,
+        "1": 0.14,
+        "2": 0.03,
+        "3": 0
+       }
+      },
+      "spya-tq02vk": {
+       "score": 0.39,
+       "confidence": 0.61,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.22,
+        "2": 0.06,
+        "3": 0.02
+       }
+      },
+      "spya-h6yxz3": {
+       "score": 0.28,
+       "confidence": 0.72,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.17,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-td87ke": {
+       "score": 0.12,
+       "confidence": 0.88,
+       "probabilities": {
+        "0": 0.9,
+        "1": 0.07,
+        "2": 0.02,
+        "3": 0.01
+       }
+      },
+      "spya-bpuujn": {
+       "score": 0.92,
+       "confidence": 0.08,
+       "probabilities": {
+        "0": 0.4,
+        "1": 0.34,
+        "2": 0.21,
+        "3": 0.05
+       }
+      },
+      "spya-hz50qg": {
+       "score": 1.09,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.27,
+        "1": 0.4,
+        "2": 0.3,
+        "3": 0.03
+       }
+      },
+      "spya-a49xd7": {
+       "score": 1.38,
+       "confidence": 0.39,
+       "probabilities": {
+        "0": 0.11,
+        "1": 0.43,
+        "2": 0.42,
+        "3": 0.04
+       }
+      },
+      "spya-g5mja3": {
+       "score": 0.4,
+       "confidence": 0.6,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.19,
+        "2": 0.09,
+        "3": 0.01
+       }
+      },
+      "spya-rvb47b": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.17,
+        "2": 0.05,
+        "3": 0.01
+       }
+      },
+      "spya-f07bw5": {
+       "score": 0.68,
+       "confidence": 0.32,
+       "probabilities": {
+        "0": 0.46,
+        "1": 0.42,
+        "2": 0.1,
+        "3": 0.02
+       }
+      },
+      "spya-p0h9g8": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.22,
+        "2": 0.06,
+        "3": 0.01
+       }
+      },
+      "spya-z83ezv": {
+       "score": 0.91,
+       "confidence": 0.09,
+       "probabilities": {
+        "0": 0.39,
+        "1": 0.34,
+        "2": 0.24,
+        "3": 0.03
+       }
+      },
+      "spya-qen9hh": {
+       "score": 1.72,
+       "confidence": 0.32,
+       "probabilities": {
+        "0": 0.08,
+        "1": 0.32,
+        "2": 0.4,
+        "3": 0.2
+       }
+      },
+      "spya-kqgzae": {
+       "score": 2.91,
+       "confidence": 0.91,
+       "probabilities": {
+        "0": 0,
+        "1": 0.02,
+        "2": 0.06,
+        "3": 0.92
+       }
+      },
+      "spya-mdta39": {
+       "score": 1.44,
+       "confidence": 0.28,
+       "probabilities": {
+        "0": 0.14,
+        "1": 0.36,
+        "2": 0.42,
+        "3": 0.08
+       }
+      },
+      "spya-rnag5c": {
+       "score": 1.01,
+       "confidence": 0.39,
+       "probabilities": {
+        "0": 0.3,
+        "1": 0.43,
+        "2": 0.24,
+        "3": 0.03
+       }
+      },
+      "spya-brgs0b": {
+       "score": 0.16,
+       "confidence": 0.84,
+       "probabilities": {
+        "0": 0.94,
+        "1": 0.01,
+        "2": 0.01,
+        "3": 0.04
+       }
+      }
+     }
+    },
+    "choice": {
+     "ms": 307,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 306,
+       "inputTokens": 9315,
+       "cost": 0.00039123
+      }
+     ],
+     "inputTokens": 9315,
+     "cost": 0.00039123,
+     "scores": {
+      "spya-vvkkv7": 0,
+      "spya-gj5bbr": 0,
+      "spya-fcu0cb": 0,
+      "spya-fkg2ny": 0.17,
+      "spya-pfkdk4": 0,
+      "spya-gb7ze2": 0,
+      "spya-m42hxd": 0,
+      "spya-td87ke": 0,
+      "spya-s5dpqc": 0,
+      "spya-chdu2z": 0,
+      "spya-nakhtw": 0.01,
+      "spya-d6p0aa": 0,
+      "spya-tq02vk": 0,
+      "spya-m24kgb": 0,
+      "spya-rvb47b": 0,
+      "spya-gy8fb4": 0,
+      "spya-ast6bs": 0,
+      "spya-a49xd7": 0,
+      "spya-rzxkcd": 0,
+      "spya-c2bkgz": 0,
+      "spya-ddr2ub": 0,
+      "spya-cbv8uf": 0,
+      "spya-v9detz": 0,
+      "spya-dgcfnd": 0,
+      "spya-vqvmhz": 0,
+      "spya-vsujby": 0,
+      "spya-zfbcb4": 0,
+      "spya-ns5qyb": 0,
+      "spya-z83ezv": 0,
+      "spya-sjjbur": 0,
+      "spya-qvg86h": 0,
+      "spya-q33vy8": 0,
+      "spya-k8jws5": 0,
+      "spya-kqgzae": 0.12,
+      "spya-ckcyzp": 0,
+      "spya-c8fcww": 0,
+      "spya-fmww2n": 0,
+      "spya-cx5k4t": 0,
+      "spya-peudft": 0,
+      "spya-asbjy9": 0,
+      "spya-c3dppu": 0.22,
+      "spya-cc5uhs": 0,
+      "spya-cx56k0": 0.15000000000000002,
+      "spya-w9ctpd": 0,
+      "spya-ugwnw2": 0,
+      "spya-q62pkz": 0,
+      "spya-h6yxz3": 0,
+      "spya-ms8rup": 0,
+      "spya-c2ck7h": 0,
+      "spya-rnag5c": 0,
+      "spya-r4jn5b": 0,
+      "spya-mdta39": 0,
+      "spya-b0wbhk": 0,
+      "spya-mgjgha": 0,
+      "spya-z6c3dr": 0,
+      "spya-bgtdqz": 0,
+      "spya-acvnjw": 0.07,
+      "spya-gu6jbj": 0,
+      "spya-vv9dpj": 0,
+      "spya-j45j9u": 0,
+      "spya-nayjhs": 0.01,
+      "spya-av2uwp": 0,
+      "spya-fhj3z4": 0,
+      "spya-krknwc": 0.23,
+      "spya-f030k3": 0.01,
+      "spya-vpd027": 0,
+      "spya-ekhrbu": 0,
+      "spya-brgs0b": 0,
+      "spya-v43bs7": 0,
+      "spya-p0h9g8": 0,
+      "spya-g9tjds": 0,
+      "spya-vfq66b": 0,
+      "spya-dk4gcf": 0,
+      "spya-s9a3he": 0,
+      "spya-khwx0h": 0,
+      "spya-vqcwj0": 0,
+      "spya-gvsujh": 0,
+      "spya-m45y0k": 0.01,
+      "spya-qen9hh": 0,
+      "spya-df7qrz": 0,
+      "spya-g5mja3": 0,
+      "spya-jauf7s": 0,
+      "spya-bpuujn": 0,
+      "spya-wtguds": 0,
+      "spya-kyxy7b": 0,
+      "spya-bh44xd": 0,
+      "spya-ebtbnm": 0,
+      "spya-xvkm3j": 0,
+      "spya-k9s755": 0,
+      "spya-m4gku9": 0,
+      "spya-hz50qg": 0,
+      "spya-t89gw5": 0,
+      "spya-matth4": 0,
+      "spya-f07bw5": 0
+     }
+    },
+    "perBlock": {
+     "ms": 1499,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      270,
+      331,
+      284,
+      271,
+      252,
+      506,
+      259,
+      273,
+      247,
+      288,
+      277,
+      403,
+      401,
+      277,
+      263,
+      374,
+      252,
+      261,
+      323,
+      249,
+      235,
+      251,
+      329,
+      246,
+      277,
+      251,
+      390,
+      245,
+      252,
+      268,
+      234,
+      321,
+      273,
+      309,
+      281,
+      244,
+      255,
+      232,
+      454,
+      289,
+      224,
+      315,
+      260,
+      337,
+      238,
+      283,
+      343,
+      235,
+      242,
+      411,
+      255,
+      240,
+      313,
+      412,
+      243,
+      258,
+      226,
+      231,
+      258,
+      243,
+      277,
+      238,
+      240,
+      393,
+      259,
+      238,
+      261,
+      248,
+      240,
+      284,
+      251,
+      260,
+      265,
+      271,
+      294,
+      319,
+      401,
+      291,
+      266,
+      263,
+      256,
+      247,
+      281,
+      280,
+      247,
+      257,
+      225,
+      244,
+      311,
+      231,
+      261,
+      245,
+      232,
+      319
+     ],
+     "inputTokens": 48615,
+     "cost": 0.00204183,
+     "scores": {
+      "spya-cx5k4t": 0.34,
+      "spya-gvsujh": 0.06,
+      "spya-q62pkz": 0.08,
+      "spya-gb7ze2": 0.08,
+      "spya-c2ck7h": 0.05,
+      "spya-b0wbhk": 0.05,
+      "spya-ekhrbu": 0.09,
+      "spya-fcu0cb": 0.12,
+      "spya-v9detz": 0.23,
+      "spya-v43bs7": 0.11,
+      "spya-g9tjds": 0.11,
+      "spya-pfkdk4": 0.09,
+      "spya-vvkkv7": 0.11,
+      "spya-ms8rup": 0.15,
+      "spya-dk4gcf": 0.16,
+      "spya-ugwnw2": 0.21,
+      "spya-bh44xd": 0.08,
+      "spya-rzxkcd": 0.11,
+      "spya-s5dpqc": 0.18,
+      "spya-t89gw5": 0.14,
+      "spya-cbv8uf": 0.06,
+      "spya-m24kgb": 0.16,
+      "spya-k9s755": 0.1,
+      "spya-c8fcww": 0.12,
+      "spya-vqvmhz": 0.31,
+      "spya-ns5qyb": 0.07,
+      "spya-s9a3he": 0.06,
+      "spya-zfbcb4": 0.1,
+      "spya-ast6bs": 0.11,
+      "spya-ckcyzp": 0.08,
+      "spya-vfq66b": 0.08,
+      "spya-xvkm3j": 0.2,
+      "spya-gy8fb4": 0.1,
+      "spya-d6p0aa": 0.09,
+      "spya-vv9dpj": 0.06,
+      "spya-cc5uhs": 0.11,
+      "spya-w9ctpd": 0.04,
+      "spya-gu6jbj": 0.04,
+      "spya-asbjy9": 0.05,
+      "spya-vpd027": 0.08,
+      "spya-df7qrz": 0.11,
+      "spya-z6c3dr": 0.14,
+      "spya-fkg2ny": 0.9,
+      "spya-gj5bbr": 0.25,
+      "spya-acvnjw": 0.77,
+      "spya-cx56k0": 0.83,
+      "spya-m45y0k": 0.6,
+      "spya-c3dppu": 0.9,
+      "spya-dgcfnd": 0.76,
+      "spya-krknwc": 0.8,
+      "spya-f030k3": 0.85,
+      "spya-qvg86h": 0.5,
+      "spya-fhj3z4": 0.74,
+      "spya-j45j9u": 0.81,
+      "spya-nakhtw": 0.85,
+      "spya-kyxy7b": 0.11,
+      "spya-sjjbur": 0.11,
+      "spya-wtguds": 0.22,
+      "spya-m4gku9": 0.14,
+      "spya-r4jn5b": 0.1,
+      "spya-jauf7s": 0.18,
+      "spya-vqcwj0": 0.18,
+      "spya-nayjhs": 0.82,
+      "spya-mgjgha": 0.27,
+      "spya-bgtdqz": 0.14,
+      "spya-q33vy8": 0.29,
+      "spya-fmww2n": 0.09,
+      "spya-matth4": 0.05,
+      "spya-c2bkgz": 0.07,
+      "spya-m42hxd": 0.07,
+      "spya-ddr2ub": 0.08,
+      "spya-ebtbnm": 0.04,
+      "spya-k8jws5": 0.03,
+      "spya-khwx0h": 0.08,
+      "spya-vsujby": 0.07,
+      "spya-peudft": 0.06,
+      "spya-chdu2z": 0.09,
+      "spya-av2uwp": 0.05,
+      "spya-tq02vk": 0.05,
+      "spya-h6yxz3": 0.08,
+      "spya-td87ke": 0.26,
+      "spya-bpuujn": 0.16,
+      "spya-hz50qg": 0.16,
+      "spya-a49xd7": 0.11,
+      "spya-g5mja3": 0.07,
+      "spya-rvb47b": 0.06,
+      "spya-f07bw5": 0.05,
+      "spya-p0h9g8": 0.04,
+      "spya-z83ezv": 0.08,
+      "spya-qen9hh": 0.22,
+      "spya-kqgzae": 0.91,
+      "spya-mdta39": 0.19,
+      "spya-rnag5c": 0.21,
+      "spya-brgs0b": 0.03
+     }
+    },
+    "perBlockLiquid": {
+     "ms": 2047,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      395,
+      443,
+      434,
+      387,
+      499,
+      440,
+      455,
+      511,
+      435,
+      516,
+      525,
+      424,
+      428,
+      425,
+      513,
+      496,
+      423,
+      485,
+      409,
+      560,
+      404,
+      447,
+      324,
+      364,
+      330,
+      409,
+      353,
+      383,
+      388,
+      341,
+      471,
+      360,
+      358,
+      568,
+      329,
+      349,
+      344,
+      338,
+      312,
+      313,
+      363,
+      381,
+      362,
+      362,
+      370,
+      283,
+      400,
+      376,
+      397,
+      388,
+      394,
+      304,
+      373,
+      316,
+      364,
+      374,
+      318,
+      356,
+      309,
+      379,
+      358,
+      388,
+      362,
+      372,
+      346,
+      374,
+      365,
+      296,
+      371,
+      374,
+      354,
+      341,
+      341,
+      346,
+      587,
+      408,
+      367,
+      372,
+      391,
+      450,
+      362,
+      348,
+      272,
+      351,
+      471,
+      354,
+      415,
+      377,
+      332,
+      372,
+      487,
+      300,
+      337,
+      337
+     ],
+     "inputTokens": 25210,
+     "cost": 0.0010084,
+     "scores": {
+      "spya-cx5k4t": 0.1066906024668249,
+      "spya-gvsujh": 0.01590639229494851,
+      "spya-q62pkz": 0.006692850230838542,
+      "spya-gb7ze2": 0.02442308792384301,
+      "spya-c2ck7h": 0.007121429693991804,
+      "spya-b0wbhk": 0.02161532740541453,
+      "spya-ekhrbu": 0.02758528542450002,
+      "spya-fcu0cb": 0.01798621417320936,
+      "spya-v9detz": 0.017986213778417023,
+      "spya-v43bs7": 0.0216153343383047,
+      "spya-g9tjds": 0.022977371582637088,
+      "spya-pfkdk4": 0.03514485094843684,
+      "spya-vvkkv7": 0.019124041782259828,
+      "spya-ms8rup": 0.014063627043245474,
+      "spya-dk4gcf": 0.02931223159932252,
+      "spya-ugwnw2": 0.019124033117121825,
+      "spya-bh44xd": 0.031143829635526404,
+      "spya-rzxkcd": 0.04468086836450484,
+      "spya-s5dpqc": 0.06754669020109236,
+      "spya-t89gw5": 0.04742587721667508,
+      "spya-cbv8uf": 0.017986209698896728,
+      "spya-m24kgb": 0.03308597648187432,
+      "spya-k9s755": 0.017986206803753842,
+      "spya-c8fcww": 0.010328155260920612,
+      "spya-vqvmhz": 0.03963884590798818,
+      "spya-ns5qyb": 0.01168725610239289,
+      "spya-s9a3he": 0.02297736689932526,
+      "spya-zfbcb4": 0.035144847916674396,
+      "spya-ast6bs": 0.022977367902892003,
+      "spya-ckcyzp": 0.017986208646117444,
+      "spya-vfq66b": 0.010328152595461167,
+      "spya-xvkm3j": 0.02442308898897509,
+      "spya-gy8fb4": 0.04468086963660174,
+      "spya-d6p0aa": 0.024423094669680255,
+      "spya-vv9dpj": 0.020332350077688886,
+      "spya-cc5uhs": 0.009125638871338965,
+      "spya-w9ctpd": 0.0019267347206380085,
+      "spya-gu6jbj": 0.0029810330841623517,
+      "spya-asbjy9": 0.002323162626243474,
+      "spya-vpd027": 0.014063627869714051,
+      "spya-df7qrz": 0.0275852858242138,
+      "spya-z6c3dr": 0.044680870272650205,
+      "spya-fkg2ny": 0.6791786861878392,
+      "spya-gj5bbr": 0.0953494648991095,
+      "spya-acvnjw": 0.3073580295544412,
+      "spya-cx56k0": 0.3923368443773709,
+      "spya-m45y0k": 0.19193278644723683,
+      "spya-c3dppu": 0.7662936484231889,
+      "spya-dgcfnd": 0.4378234991142019,
+      "spya-krknwc": 0.23370636225126956,
+      "spya-f030k3": 0.6224593312018546,
+      "spya-qvg86h": 0.233706335565124,
+      "spya-fhj3z4": 0.33458942798284697,
+      "spya-j45j9u": 0.6791786861878392,
+      "spya-nakhtw": 0.34864513533394575,
+      "spya-kyxy7b": 0.039638844773485074,
+      "spya-sjjbur": 0.015906392644828796,
+      "spya-wtguds": 0.04468087408894116,
+      "spya-m4gku9": 0.06754670052499728,
+      "spya-r4jn5b": 0.029312231175339414,
+      "spya-jauf7s": 0.06754669395523943,
+      "spya-vqcwj0": 0.042087730919421175,
+      "spya-nayjhs": 0.5621764862150634,
+      "spya-mgjgha": 0.06008664512463808,
+      "spya-bgtdqz": 0.02442309005410721,
+      "spya-q33vy8": 0.03308597648187432,
+      "spya-fmww2n": 0.019124036471368337,
+      "spya-matth4": 0.010328155108608624,
+      "spya-c2bkgz": 0.03732688895048618,
+      "spya-m42hxd": 0.02161533118699072,
+      "spya-ddr2ub": 0.01406362601015982,
+      "spya-ebtbnm": 0.00912563819763055,
+      "spya-k8jws5": 0.007577240707590084,
+      "spya-khwx0h": 0.0009697517367999406,
+      "spya-vsujby": 0.01032815404242478,
+      "spya-peudft": 0.010328153890112811,
+      "spya-chdu2z": 0.01912403814849181,
+      "spya-av2uwp": 0.011687255069683085,
+      "spya-tq02vk": 0.024423091119239376,
+      "spya-h6yxz3": 0.02595735757455145,
+      "spya-td87ke": 0.010328155032452631,
+      "spya-bpuujn": 0.03732689055684297,
+      "spya-hz50qg": 0.033085981248949035,
+      "spya-a49xd7": 0.01406362332413747,
+      "spya-g5mja3": 0.01322281922471494,
+      "spya-rvb47b": 0.01798621259404007,
+      "spya-f07bw5": 0.006692849834583539,
+      "spya-p0h9g8": 0.009708477627578704,
+      "spya-z83ezv": 0.015906391595187953,
+      "spya-qen9hh": 0.05340332678672523,
+      "spya-kqgzae": 0.7057850402140659,
+      "spya-mdta39": 0.11279538838851867,
+      "spya-rnag5c": 0.029312233083263427,
+      "spya-brgs0b": 0.003172682866048522
+     }
+    }
+   }
+  },
+  {
+   "q": "objections that the author is treating the AIs like people",
+   "shape": "topic",
+   "arms": {
+    "noulOne": [
+     {
+      "ms": 412,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 412,
+        "inputTokens": 13702,
+        "cost": 0.000575484
+       }
+      ],
+      "inputTokens": 13702,
+      "cost": 0.000575484,
+      "scores": {
+       "spya-cx5k4t": 0.62,
+       "spya-gvsujh": 0.12,
+       "spya-q62pkz": 0.03,
+       "spya-gb7ze2": 0.16,
+       "spya-c2ck7h": 0.08,
+       "spya-b0wbhk": 0.06,
+       "spya-ekhrbu": 0.12,
+       "spya-fcu0cb": 0.16,
+       "spya-v9detz": 0.13,
+       "spya-v43bs7": 0.27,
+       "spya-g9tjds": 0.15,
+       "spya-pfkdk4": 0.12,
+       "spya-vvkkv7": 0.22,
+       "spya-ms8rup": 0.11,
+       "spya-dk4gcf": 0.34,
+       "spya-ugwnw2": 0.36,
+       "spya-bh44xd": 0.35,
+       "spya-rzxkcd": 0.37,
+       "spya-s5dpqc": 0.45,
+       "spya-t89gw5": 0.35,
+       "spya-cbv8uf": 0.18,
+       "spya-m24kgb": 0.18,
+       "spya-k9s755": 0.23,
+       "spya-c8fcww": 0.38,
+       "spya-vqvmhz": 0.23,
+       "spya-ns5qyb": 0.25,
+       "spya-s9a3he": 0.25,
+       "spya-zfbcb4": 0.24,
+       "spya-ast6bs": 0.17,
+       "spya-ckcyzp": 0.17,
+       "spya-vfq66b": 0.29,
+       "spya-xvkm3j": 0.23,
+       "spya-gy8fb4": 0.14,
+       "spya-d6p0aa": 0.17,
+       "spya-vv9dpj": 0.21,
+       "spya-cc5uhs": 0.24,
+       "spya-w9ctpd": 0.19,
+       "spya-gu6jbj": 0.19,
+       "spya-asbjy9": 0.14,
+       "spya-vpd027": 0.17,
+       "spya-df7qrz": 0.24,
+       "spya-z6c3dr": 0.15,
+       "spya-fkg2ny": 0.34,
+       "spya-gj5bbr": 0.24,
+       "spya-acvnjw": 0.38,
+       "spya-cx56k0": 0.52,
+       "spya-m45y0k": 0.45,
+       "spya-c3dppu": 0.4,
+       "spya-dgcfnd": 0.38,
+       "spya-krknwc": 0.55,
+       "spya-f030k3": 0.49,
+       "spya-qvg86h": 0.46,
+       "spya-fhj3z4": 0.39,
+       "spya-j45j9u": 0.53,
+       "spya-nakhtw": 0.52,
+       "spya-kyxy7b": 0.19,
+       "spya-sjjbur": 0.15,
+       "spya-wtguds": 0.16,
+       "spya-m4gku9": 0.17,
+       "spya-r4jn5b": 0.16,
+       "spya-jauf7s": 0.13,
+       "spya-vqcwj0": 0.11,
+       "spya-nayjhs": 0.26,
+       "spya-mgjgha": 0.37,
+       "spya-bgtdqz": 0.35,
+       "spya-q33vy8": 0.27,
+       "spya-fmww2n": 0.29,
+       "spya-matth4": 0.11,
+       "spya-c2bkgz": 0.14,
+       "spya-m42hxd": 0.33,
+       "spya-ddr2ub": 0.19,
+       "spya-ebtbnm": 0.2,
+       "spya-k8jws5": 0.14,
+       "spya-khwx0h": 0.2,
+       "spya-vsujby": 0.23,
+       "spya-peudft": 0.15,
+       "spya-chdu2z": 0.22,
+       "spya-av2uwp": 0.2,
+       "spya-tq02vk": 0.17,
+       "spya-h6yxz3": 0.4,
+       "spya-td87ke": 0.17,
+       "spya-bpuujn": 0.48,
+       "spya-hz50qg": 0.43,
+       "spya-a49xd7": 0.6,
+       "spya-g5mja3": 0.14,
+       "spya-rvb47b": 0.14,
+       "spya-f07bw5": 0.86,
+       "spya-p0h9g8": 0.6,
+       "spya-z83ezv": 0.48,
+       "spya-qen9hh": 0.72,
+       "spya-kqgzae": 0.57,
+       "spya-mdta39": 0.77,
+       "spya-rnag5c": 0.56,
+       "spya-brgs0b": 0.07
+      }
+     },
+     {
+      "ms": 418,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 418,
+        "inputTokens": 13702,
+        "cost": 0.000575484
+       }
+      ],
+      "inputTokens": 13702,
+      "cost": 0.000575484,
+      "scores": {
+       "spya-cx5k4t": 0.59,
+       "spya-gvsujh": 0.12,
+       "spya-q62pkz": 0.03,
+       "spya-gb7ze2": 0.16,
+       "spya-c2ck7h": 0.08,
+       "spya-b0wbhk": 0.07,
+       "spya-ekhrbu": 0.13,
+       "spya-fcu0cb": 0.17,
+       "spya-v9detz": 0.16,
+       "spya-v43bs7": 0.27,
+       "spya-g9tjds": 0.18,
+       "spya-pfkdk4": 0.15,
+       "spya-vvkkv7": 0.2,
+       "spya-ms8rup": 0.13,
+       "spya-dk4gcf": 0.35,
+       "spya-ugwnw2": 0.34,
+       "spya-bh44xd": 0.33,
+       "spya-rzxkcd": 0.37,
+       "spya-s5dpqc": 0.46,
+       "spya-t89gw5": 0.39,
+       "spya-cbv8uf": 0.18,
+       "spya-m24kgb": 0.19,
+       "spya-k9s755": 0.23,
+       "spya-c8fcww": 0.31,
+       "spya-vqvmhz": 0.23,
+       "spya-ns5qyb": 0.24,
+       "spya-s9a3he": 0.24,
+       "spya-zfbcb4": 0.19,
+       "spya-ast6bs": 0.17,
+       "spya-ckcyzp": 0.18,
+       "spya-vfq66b": 0.25,
+       "spya-xvkm3j": 0.24,
+       "spya-gy8fb4": 0.17,
+       "spya-d6p0aa": 0.18,
+       "spya-vv9dpj": 0.19,
+       "spya-cc5uhs": 0.23,
+       "spya-w9ctpd": 0.22,
+       "spya-gu6jbj": 0.19,
+       "spya-asbjy9": 0.15,
+       "spya-vpd027": 0.18,
+       "spya-df7qrz": 0.26,
+       "spya-z6c3dr": 0.16,
+       "spya-fkg2ny": 0.36,
+       "spya-gj5bbr": 0.2,
+       "spya-acvnjw": 0.37,
+       "spya-cx56k0": 0.5,
+       "spya-m45y0k": 0.47,
+       "spya-c3dppu": 0.46,
+       "spya-dgcfnd": 0.36,
+       "spya-krknwc": 0.54,
+       "spya-f030k3": 0.49,
+       "spya-qvg86h": 0.48,
+       "spya-fhj3z4": 0.4,
+       "spya-j45j9u": 0.5,
+       "spya-nakhtw": 0.5,
+       "spya-kyxy7b": 0.2,
+       "spya-sjjbur": 0.17,
+       "spya-wtguds": 0.17,
+       "spya-m4gku9": 0.18,
+       "spya-r4jn5b": 0.13,
+       "spya-jauf7s": 0.13,
+       "spya-vqcwj0": 0.11,
+       "spya-nayjhs": 0.27,
+       "spya-mgjgha": 0.38,
+       "spya-bgtdqz": 0.35,
+       "spya-q33vy8": 0.28,
+       "spya-fmww2n": 0.27,
+       "spya-matth4": 0.11,
+       "spya-c2bkgz": 0.15,
+       "spya-m42hxd": 0.31,
+       "spya-ddr2ub": 0.2,
+       "spya-ebtbnm": 0.21,
+       "spya-k8jws5": 0.14,
+       "spya-khwx0h": 0.21,
+       "spya-vsujby": 0.23,
+       "spya-peudft": 0.16,
+       "spya-chdu2z": 0.24,
+       "spya-av2uwp": 0.22,
+       "spya-tq02vk": 0.18,
+       "spya-h6yxz3": 0.45,
+       "spya-td87ke": 0.17,
+       "spya-bpuujn": 0.45,
+       "spya-hz50qg": 0.48,
+       "spya-a49xd7": 0.53,
+       "spya-g5mja3": 0.14,
+       "spya-rvb47b": 0.13,
+       "spya-f07bw5": 0.85,
+       "spya-p0h9g8": 0.56,
+       "spya-z83ezv": 0.46,
+       "spya-qen9hh": 0.71,
+       "spya-kqgzae": 0.51,
+       "spya-mdta39": 0.74,
+       "spya-rnag5c": 0.53,
+       "spya-brgs0b": 0.07
+      }
+     },
+     {
+      "ms": 412,
+      "chunks": 1,
+      "calls": [
+       {
+        "n": 94,
+        "status": 200,
+        "ms": 412,
+        "inputTokens": 13702,
+        "cost": 0.000575484
+       }
+      ],
+      "inputTokens": 13702,
+      "cost": 0.000575484,
+      "scores": {
+       "spya-cx5k4t": 0.63,
+       "spya-gvsujh": 0.14,
+       "spya-q62pkz": 0.03,
+       "spya-gb7ze2": 0.15,
+       "spya-c2ck7h": 0.07,
+       "spya-b0wbhk": 0.06,
+       "spya-ekhrbu": 0.12,
+       "spya-fcu0cb": 0.15,
+       "spya-v9detz": 0.16,
+       "spya-v43bs7": 0.28,
+       "spya-g9tjds": 0.17,
+       "spya-pfkdk4": 0.12,
+       "spya-vvkkv7": 0.23,
+       "spya-ms8rup": 0.11,
+       "spya-dk4gcf": 0.37,
+       "spya-ugwnw2": 0.33,
+       "spya-bh44xd": 0.3,
+       "spya-rzxkcd": 0.31,
+       "spya-s5dpqc": 0.45,
+       "spya-t89gw5": 0.36,
+       "spya-cbv8uf": 0.18,
+       "spya-m24kgb": 0.19,
+       "spya-k9s755": 0.22,
+       "spya-c8fcww": 0.33,
+       "spya-vqvmhz": 0.21,
+       "spya-ns5qyb": 0.25,
+       "spya-s9a3he": 0.28,
+       "spya-zfbcb4": 0.18,
+       "spya-ast6bs": 0.17,
+       "spya-ckcyzp": 0.18,
+       "spya-vfq66b": 0.26,
+       "spya-xvkm3j": 0.22,
+       "spya-gy8fb4": 0.15,
+       "spya-d6p0aa": 0.16,
+       "spya-vv9dpj": 0.22,
+       "spya-cc5uhs": 0.26,
+       "spya-w9ctpd": 0.19,
+       "spya-gu6jbj": 0.18,
+       "spya-asbjy9": 0.13,
+       "spya-vpd027": 0.18,
+       "spya-df7qrz": 0.24,
+       "spya-z6c3dr": 0.15,
+       "spya-fkg2ny": 0.33,
+       "spya-gj5bbr": 0.22,
+       "spya-acvnjw": 0.4,
+       "spya-cx56k0": 0.53,
+       "spya-m45y0k": 0.43,
+       "spya-c3dppu": 0.41,
+       "spya-dgcfnd": 0.34,
+       "spya-krknwc": 0.52,
+       "spya-f030k3": 0.48,
+       "spya-qvg86h": 0.45,
+       "spya-fhj3z4": 0.37,
+       "spya-j45j9u": 0.5,
+       "spya-nakhtw": 0.51,
+       "spya-kyxy7b": 0.18,
+       "spya-sjjbur": 0.16,
+       "spya-wtguds": 0.14,
+       "spya-m4gku9": 0.17,
+       "spya-r4jn5b": 0.14,
+       "spya-jauf7s": 0.13,
+       "spya-vqcwj0": 0.12,
+       "spya-nayjhs": 0.25,
+       "spya-mgjgha": 0.36,
+       "spya-bgtdqz": 0.33,
+       "spya-q33vy8": 0.22,
+       "spya-fmww2n": 0.27,
+       "spya-matth4": 0.1,
+       "spya-c2bkgz": 0.15,
+       "spya-m42hxd": 0.35,
+       "spya-ddr2ub": 0.18,
+       "spya-ebtbnm": 0.2,
+       "spya-k8jws5": 0.15,
+       "spya-khwx0h": 0.19,
+       "spya-vsujby": 0.24,
+       "spya-peudft": 0.15,
+       "spya-chdu2z": 0.21,
+       "spya-av2uwp": 0.2,
+       "spya-tq02vk": 0.17,
+       "spya-h6yxz3": 0.41,
+       "spya-td87ke": 0.18,
+       "spya-bpuujn": 0.45,
+       "spya-hz50qg": 0.42,
+       "spya-a49xd7": 0.56,
+       "spya-g5mja3": 0.15,
+       "spya-rvb47b": 0.15,
+       "spya-f07bw5": 0.86,
+       "spya-p0h9g8": 0.57,
+       "spya-z83ezv": 0.48,
+       "spya-qen9hh": 0.74,
+       "spya-kqgzae": 0.56,
+       "spya-mdta39": 0.77,
+       "spya-rnag5c": 0.56,
+       "spya-brgs0b": 0.08
+      }
+     }
+    ],
+    "noulOnePlain": {
+     "ms": 340,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 339,
+       "inputTokens": 9284,
+       "cost": 0.000389928
+      }
+     ],
+     "inputTokens": 9284,
+     "cost": 0.000389928,
+     "scores": {
+      "spya-cx5k4t": 0.59,
+      "spya-gvsujh": 0.12,
+      "spya-q62pkz": 0.04,
+      "spya-gb7ze2": 0.19,
+      "spya-c2ck7h": 0.12,
+      "spya-b0wbhk": 0.09,
+      "spya-ekhrbu": 0.15,
+      "spya-fcu0cb": 0.18,
+      "spya-v9detz": 0.18,
+      "spya-v43bs7": 0.31,
+      "spya-g9tjds": 0.26,
+      "spya-pfkdk4": 0.16,
+      "spya-vvkkv7": 0.2,
+      "spya-ms8rup": 0.14,
+      "spya-dk4gcf": 0.4,
+      "spya-ugwnw2": 0.4,
+      "spya-bh44xd": 0.38,
+      "spya-rzxkcd": 0.43,
+      "spya-s5dpqc": 0.56,
+      "spya-t89gw5": 0.46,
+      "spya-cbv8uf": 0.26,
+      "spya-m24kgb": 0.21,
+      "spya-k9s755": 0.26,
+      "spya-c8fcww": 0.42,
+      "spya-vqvmhz": 0.38,
+      "spya-ns5qyb": 0.31,
+      "spya-s9a3he": 0.32,
+      "spya-zfbcb4": 0.24,
+      "spya-ast6bs": 0.19,
+      "spya-ckcyzp": 0.22,
+      "spya-vfq66b": 0.31,
+      "spya-xvkm3j": 0.26,
+      "spya-gy8fb4": 0.16,
+      "spya-d6p0aa": 0.24,
+      "spya-vv9dpj": 0.27,
+      "spya-cc5uhs": 0.27,
+      "spya-w9ctpd": 0.25,
+      "spya-gu6jbj": 0.24,
+      "spya-asbjy9": 0.17,
+      "spya-vpd027": 0.22,
+      "spya-df7qrz": 0.29,
+      "spya-z6c3dr": 0.2,
+      "spya-fkg2ny": 0.37,
+      "spya-gj5bbr": 0.28,
+      "spya-acvnjw": 0.4,
+      "spya-cx56k0": 0.5,
+      "spya-m45y0k": 0.43,
+      "spya-c3dppu": 0.47,
+      "spya-dgcfnd": 0.37,
+      "spya-krknwc": 0.55,
+      "spya-f030k3": 0.52,
+      "spya-qvg86h": 0.49,
+      "spya-fhj3z4": 0.46,
+      "spya-j45j9u": 0.55,
+      "spya-nakhtw": 0.54,
+      "spya-kyxy7b": 0.25,
+      "spya-sjjbur": 0.17,
+      "spya-wtguds": 0.19,
+      "spya-m4gku9": 0.19,
+      "spya-r4jn5b": 0.15,
+      "spya-jauf7s": 0.15,
+      "spya-vqcwj0": 0.18,
+      "spya-nayjhs": 0.3,
+      "spya-mgjgha": 0.45,
+      "spya-bgtdqz": 0.38,
+      "spya-q33vy8": 0.28,
+      "spya-fmww2n": 0.26,
+      "spya-matth4": 0.13,
+      "spya-c2bkgz": 0.18,
+      "spya-m42hxd": 0.42,
+      "spya-ddr2ub": 0.24,
+      "spya-ebtbnm": 0.21,
+      "spya-k8jws5": 0.18,
+      "spya-khwx0h": 0.23,
+      "spya-vsujby": 0.31,
+      "spya-peudft": 0.17,
+      "spya-chdu2z": 0.27,
+      "spya-av2uwp": 0.24,
+      "spya-tq02vk": 0.24,
+      "spya-h6yxz3": 0.36,
+      "spya-td87ke": 0.16,
+      "spya-bpuujn": 0.52,
+      "spya-hz50qg": 0.5,
+      "spya-a49xd7": 0.75,
+      "spya-g5mja3": 0.18,
+      "spya-rvb47b": 0.16,
+      "spya-f07bw5": 0.9,
+      "spya-p0h9g8": 0.69,
+      "spya-z83ezv": 0.58,
+      "spya-qen9hh": 0.79,
+      "spya-kqgzae": 0.61,
+      "spya-mdta39": 0.8,
+      "spya-rnag5c": 0.62,
+      "spya-brgs0b": 0.04
+     }
+    },
+    "scoreOne": {
+     "ms": 567,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 566,
+       "inputTokens": 19812,
+       "cost": 0.000832104
+      }
+     ],
+     "inputTokens": 19812,
+     "cost": 0.000832104,
+     "scores": {
+      "spya-cx5k4t": 2.02,
+      "spya-gvsujh": 0.3,
+      "spya-q62pkz": 0.04,
+      "spya-gb7ze2": 0.6,
+      "spya-c2ck7h": 0.15,
+      "spya-b0wbhk": 0.11,
+      "spya-ekhrbu": 0.37,
+      "spya-fcu0cb": 0.41,
+      "spya-v9detz": 0.44,
+      "spya-v43bs7": 0.85,
+      "spya-g9tjds": 0.43,
+      "spya-pfkdk4": 0.39,
+      "spya-vvkkv7": 0.73,
+      "spya-ms8rup": 0.36,
+      "spya-dk4gcf": 1.32,
+      "spya-ugwnw2": 1.15,
+      "spya-bh44xd": 1,
+      "spya-rzxkcd": 1.26,
+      "spya-s5dpqc": 1.52,
+      "spya-t89gw5": 1.24,
+      "spya-cbv8uf": 0.67,
+      "spya-m24kgb": 0.62,
+      "spya-k9s755": 0.79,
+      "spya-c8fcww": 1.23,
+      "spya-vqvmhz": 0.83,
+      "spya-ns5qyb": 0.89,
+      "spya-s9a3he": 0.88,
+      "spya-zfbcb4": 0.71,
+      "spya-ast6bs": 0.68,
+      "spya-ckcyzp": 0.53,
+      "spya-vfq66b": 0.87,
+      "spya-xvkm3j": 0.69,
+      "spya-gy8fb4": 0.6,
+      "spya-d6p0aa": 0.49,
+      "spya-vv9dpj": 0.75,
+      "spya-cc5uhs": 0.92,
+      "spya-w9ctpd": 0.66,
+      "spya-gu6jbj": 0.67,
+      "spya-asbjy9": 0.47,
+      "spya-vpd027": 0.53,
+      "spya-df7qrz": 0.8,
+      "spya-z6c3dr": 0.38,
+      "spya-fkg2ny": 1.49,
+      "spya-gj5bbr": 0.76,
+      "spya-acvnjw": 1.5,
+      "spya-cx56k0": 1.62,
+      "spya-m45y0k": 1.68,
+      "spya-c3dppu": 1.67,
+      "spya-dgcfnd": 1.4,
+      "spya-krknwc": 1.86,
+      "spya-f030k3": 1.85,
+      "spya-qvg86h": 1.66,
+      "spya-fhj3z4": 1.3,
+      "spya-j45j9u": 1.67,
+      "spya-nakhtw": 1.98,
+      "spya-kyxy7b": 0.6,
+      "spya-sjjbur": 0.48,
+      "spya-wtguds": 0.5,
+      "spya-m4gku9": 0.5,
+      "spya-r4jn5b": 0.38,
+      "spya-jauf7s": 0.25,
+      "spya-vqcwj0": 0.33,
+      "spya-nayjhs": 0.98,
+      "spya-mgjgha": 1.21,
+      "spya-bgtdqz": 1.12,
+      "spya-q33vy8": 0.87,
+      "spya-fmww2n": 0.93,
+      "spya-matth4": 0.28,
+      "spya-c2bkgz": 0.33,
+      "spya-m42hxd": 1.2,
+      "spya-ddr2ub": 0.6,
+      "spya-ebtbnm": 0.62,
+      "spya-k8jws5": 0.37,
+      "spya-khwx0h": 0.51,
+      "spya-vsujby": 0.68,
+      "spya-peudft": 0.44,
+      "spya-chdu2z": 0.7,
+      "spya-av2uwp": 0.73,
+      "spya-tq02vk": 0.52,
+      "spya-h6yxz3": 1.44,
+      "spya-td87ke": 0.79,
+      "spya-bpuujn": 1.7,
+      "spya-hz50qg": 1.6,
+      "spya-a49xd7": 1.8,
+      "spya-g5mja3": 0.34,
+      "spya-rvb47b": 0.37,
+      "spya-f07bw5": 2.66,
+      "spya-p0h9g8": 2.1,
+      "spya-z83ezv": 1.78,
+      "spya-qen9hh": 2.56,
+      "spya-kqgzae": 2.08,
+      "spya-mdta39": 2.62,
+      "spya-rnag5c": 1.74,
+      "spya-brgs0b": 0.26
+     },
+     "raw": {
+      "spya-cx5k4t": {
+       "score": 2.02,
+       "confidence": 0.02,
+       "probabilities": {
+        "0": 0.22,
+        "1": 0.11,
+        "2": 0.09,
+        "3": 0.58
+       }
+      },
+      "spya-gvsujh": {
+       "score": 0.3,
+       "confidence": 0.7,
+       "probabilities": {
+        "0": 0.82,
+        "1": 0.09,
+        "2": 0.04,
+        "3": 0.05
+       }
+      },
+      "spya-q62pkz": {
+       "score": 0.04,
+       "confidence": 0.96,
+       "probabilities": {
+        "0": 0.98,
+        "1": 0.01,
+        "2": 0,
+        "3": 0.01
+       }
+      },
+      "spya-gb7ze2": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.23,
+        "2": 0.14,
+        "3": 0.03
+       }
+      },
+      "spya-c2ck7h": {
+       "score": 0.15,
+       "confidence": 0.85,
+       "probabilities": {
+        "0": 0.89,
+        "1": 0.08,
+        "2": 0.02,
+        "3": 0.01
+       }
+      },
+      "spya-b0wbhk": {
+       "score": 0.11,
+       "confidence": 0.89,
+       "probabilities": {
+        "0": 0.93,
+        "1": 0.04,
+        "2": 0.02,
+        "3": 0.01
+       }
+      },
+      "spya-ekhrbu": {
+       "score": 0.37,
+       "confidence": 0.63,
+       "probabilities": {
+        "0": 0.75,
+        "1": 0.15,
+        "2": 0.08,
+        "3": 0.02
+       }
+      },
+      "spya-fcu0cb": {
+       "score": 0.41,
+       "confidence": 0.59,
+       "probabilities": {
+        "0": 0.75,
+        "1": 0.13,
+        "2": 0.09,
+        "3": 0.03
+       }
+      },
+      "spya-v9detz": {
+       "score": 0.44,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.18,
+        "2": 0.09,
+        "3": 0.03
+       }
+      },
+      "spya-v43bs7": {
+       "score": 0.85,
+       "confidence": 0.15,
+       "probabilities": {
+        "0": 0.53,
+        "1": 0.19,
+        "2": 0.2,
+        "3": 0.08
+       }
+      },
+      "spya-g9tjds": {
+       "score": 0.43,
+       "confidence": 0.57,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.19,
+        "2": 0.08,
+        "3": 0.03
+       }
+      },
+      "spya-pfkdk4": {
+       "score": 0.39,
+       "confidence": 0.61,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.15,
+        "2": 0.08,
+        "3": 0.03
+       }
+      },
+      "spya-vvkkv7": {
+       "score": 0.73,
+       "confidence": 0.27,
+       "probabilities": {
+        "0": 0.5599999999999999,
+        "1": 0.2,
+        "2": 0.17,
+        "3": 0.07
+       }
+      },
+      "spya-ms8rup": {
+       "score": 0.36,
+       "confidence": 0.64,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.13,
+        "2": 0.06,
+        "3": 0.03
+       }
+      },
+      "spya-dk4gcf": {
+       "score": 1.32,
+       "confidence": 0.26,
+       "probabilities": {
+        "0": 0.21,
+        "1": 0.36,
+        "2": 0.32,
+        "3": 0.11
+       }
+      },
+      "spya-ugwnw2": {
+       "score": 1.15,
+       "confidence": 0.23,
+       "probabilities": {
+        "0": 0.31,
+        "1": 0.34,
+        "2": 0.25,
+        "3": 0.1
+       }
+      },
+      "spya-bh44xd": {
+       "score": 1,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.47000000000000003,
+        "1": 0.21,
+        "2": 0.19,
+        "3": 0.13
+       }
+      },
+      "spya-rzxkcd": {
+       "score": 1.26,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.32,
+        "1": 0.27,
+        "2": 0.26,
+        "3": 0.15
+       }
+      },
+      "spya-s5dpqc": {
+       "score": 1.52,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.2,
+        "1": 0.26,
+        "2": 0.36,
+        "3": 0.18
+       }
+      },
+      "spya-t89gw5": {
+       "score": 1.24,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.32,
+        "1": 0.28,
+        "2": 0.25,
+        "3": 0.15
+       }
+      },
+      "spya-cbv8uf": {
+       "score": 0.67,
+       "confidence": 0.33,
+       "probabilities": {
+        "0": 0.54,
+        "1": 0.29,
+        "2": 0.13,
+        "3": 0.04
+       }
+      },
+      "spya-m24kgb": {
+       "score": 0.62,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.64,
+        "1": 0.16,
+        "2": 0.14,
+        "3": 0.06
+       }
+      },
+      "spya-k9s755": {
+       "score": 0.79,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.56,
+        "1": 0.18,
+        "2": 0.18,
+        "3": 0.08
+       }
+      },
+      "spya-c8fcww": {
+       "score": 1.23,
+       "confidence": 0.01,
+       "probabilities": {
+        "0": 0.29,
+        "1": 0.3,
+        "2": 0.3,
+        "3": 0.11
+       }
+      },
+      "spya-vqvmhz": {
+       "score": 0.83,
+       "confidence": 0.17,
+       "probabilities": {
+        "0": 0.48,
+        "1": 0.27,
+        "2": 0.18,
+        "3": 0.07
+       }
+      },
+      "spya-ns5qyb": {
+       "score": 0.89,
+       "confidence": 0.11,
+       "probabilities": {
+        "0": 0.53,
+        "1": 0.17,
+        "2": 0.18,
+        "3": 0.12
+       }
+      },
+      "spya-s9a3he": {
+       "score": 0.88,
+       "confidence": 0.12,
+       "probabilities": {
+        "0": 0.51,
+        "1": 0.2,
+        "2": 0.19,
+        "3": 0.1
+       }
+      },
+      "spya-zfbcb4": {
+       "score": 0.71,
+       "confidence": 0.29,
+       "probabilities": {
+        "0": 0.64,
+        "1": 0.12,
+        "2": 0.13,
+        "3": 0.11
+       }
+      },
+      "spya-ast6bs": {
+       "score": 0.68,
+       "confidence": 0.32,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.1,
+        "2": 0.12,
+        "3": 0.12
+       }
+      },
+      "spya-ckcyzp": {
+       "score": 0.53,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.71,
+        "1": 0.13,
+        "2": 0.09,
+        "3": 0.07
+       }
+      },
+      "spya-vfq66b": {
+       "score": 0.87,
+       "confidence": 0.13,
+       "probabilities": {
+        "0": 0.54,
+        "1": 0.17,
+        "2": 0.16,
+        "3": 0.13
+       }
+      },
+      "spya-xvkm3j": {
+       "score": 0.69,
+       "confidence": 0.31,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.18,
+        "2": 0.16,
+        "3": 0.06
+       }
+      },
+      "spya-gy8fb4": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.65,
+        "1": 0.17,
+        "2": 0.1,
+        "3": 0.08
+       }
+      },
+      "spya-d6p0aa": {
+       "score": 0.49,
+       "confidence": 0.51,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.17,
+        "2": 0.11,
+        "3": 0.03
+       }
+      },
+      "spya-vv9dpj": {
+       "score": 0.75,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.56,
+        "1": 0.2,
+        "2": 0.17,
+        "3": 0.07
+       }
+      },
+      "spya-cc5uhs": {
+       "score": 0.92,
+       "confidence": 0.08,
+       "probabilities": {
+        "0": 0.51,
+        "1": 0.17,
+        "2": 0.21,
+        "3": 0.11
+       }
+      },
+      "spya-w9ctpd": {
+       "score": 0.66,
+       "confidence": 0.34,
+       "probabilities": {
+        "0": 0.6,
+        "1": 0.2,
+        "2": 0.13,
+        "3": 0.07
+       }
+      },
+      "spya-gu6jbj": {
+       "score": 0.67,
+       "confidence": 0.33,
+       "probabilities": {
+        "0": 0.63,
+        "1": 0.15,
+        "2": 0.13,
+        "3": 0.09
+       }
+      },
+      "spya-asbjy9": {
+       "score": 0.47,
+       "confidence": 0.53,
+       "probabilities": {
+        "0": 0.73,
+        "1": 0.12,
+        "2": 0.09,
+        "3": 0.06
+       }
+      },
+      "spya-vpd027": {
+       "score": 0.53,
+       "confidence": 0.47,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.18,
+        "2": 0.13,
+        "3": 0.03
+       }
+      },
+      "spya-df7qrz": {
+       "score": 0.8,
+       "confidence": 0.2,
+       "probabilities": {
+        "0": 0.5,
+        "1": 0.27,
+        "2": 0.16,
+        "3": 0.07
+       }
+      },
+      "spya-z6c3dr": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.74,
+        "1": 0.17,
+        "2": 0.06,
+        "3": 0.03
+       }
+      },
+      "spya-fkg2ny": {
+       "score": 1.49,
+       "confidence": 0.21,
+       "probabilities": {
+        "0": 0.18,
+        "1": 0.3,
+        "2": 0.38,
+        "3": 0.14
+       }
+      },
+      "spya-gj5bbr": {
+       "score": 0.76,
+       "confidence": 0.24,
+       "probabilities": {
+        "0": 0.59,
+        "1": 0.15,
+        "2": 0.17,
+        "3": 0.09
+       }
+      },
+      "spya-acvnjw": {
+       "score": 1.5,
+       "confidence": 0.14,
+       "probabilities": {
+        "0": 0.25,
+        "1": 0.19,
+        "2": 0.38,
+        "3": 0.18
+       }
+      },
+      "spya-cx56k0": {
+       "score": 1.62,
+       "confidence": 0.13,
+       "probabilities": {
+        "0": 0.23,
+        "1": 0.18,
+        "2": 0.35,
+        "3": 0.24
+       }
+      },
+      "spya-m45y0k": {
+       "score": 1.68,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.18,
+        "2": 0.44,
+        "3": 0.21
+       }
+      },
+      "spya-c3dppu": {
+       "score": 1.67,
+       "confidence": 0.25,
+       "probabilities": {
+        "0": 0.16,
+        "1": 0.21,
+        "2": 0.42,
+        "3": 0.21
+       }
+      },
+      "spya-dgcfnd": {
+       "score": 1.4,
+       "confidence": 0.11,
+       "probabilities": {
+        "0": 0.25,
+        "1": 0.29,
+        "2": 0.28,
+        "3": 0.18
+       }
+      },
+      "spya-krknwc": {
+       "score": 1.86,
+       "confidence": 0.19,
+       "probabilities": {
+        "0": 0.16,
+        "1": 0.16,
+        "2": 0.34,
+        "3": 0.34
+       }
+      },
+      "spya-f030k3": {
+       "score": 1.85,
+       "confidence": 0.23,
+       "probabilities": {
+        "0": 0.16,
+        "1": 0.14,
+        "2": 0.39,
+        "3": 0.31
+       }
+      },
+      "spya-qvg86h": {
+       "score": 1.66,
+       "confidence": 0.1,
+       "probabilities": {
+        "0": 0.22,
+        "1": 0.17,
+        "2": 0.33,
+        "3": 0.28
+       }
+      },
+      "spya-fhj3z4": {
+       "score": 1.3,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.33,
+        "1": 0.22,
+        "2": 0.27,
+        "3": 0.18
+       }
+      },
+      "spya-j45j9u": {
+       "score": 1.67,
+       "confidence": 0.14,
+       "probabilities": {
+        "0": 0.17,
+        "1": 0.25,
+        "2": 0.32,
+        "3": 0.26
+       }
+      },
+      "spya-nakhtw": {
+       "score": 1.98,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.13,
+        "1": 0.13,
+        "2": 0.36,
+        "3": 0.38
+       }
+      },
+      "spya-kyxy7b": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.67,
+        "1": 0.12,
+        "2": 0.15,
+        "3": 0.06
+       }
+      },
+      "spya-sjjbur": {
+       "score": 0.48,
+       "confidence": 0.52,
+       "probabilities": {
+        "0": 0.72,
+        "1": 0.14,
+        "2": 0.09,
+        "3": 0.05
+       }
+      },
+      "spya-wtguds": {
+       "score": 0.5,
+       "confidence": 0.5,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.16,
+        "2": 0.1,
+        "3": 0.05
+       }
+      },
+      "spya-m4gku9": {
+       "score": 0.5,
+       "confidence": 0.5,
+       "probabilities": {
+        "0": 0.7,
+        "1": 0.14,
+        "2": 0.12,
+        "3": 0.04
+       }
+      },
+      "spya-r4jn5b": {
+       "score": 0.38,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.13,
+        "2": 0.07,
+        "3": 0.04
+       }
+      },
+      "spya-jauf7s": {
+       "score": 0.25,
+       "confidence": 0.75,
+       "probabilities": {
+        "0": 0.83,
+        "1": 0.11,
+        "2": 0.04,
+        "3": 0.02
+       }
+      },
+      "spya-vqcwj0": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.12,
+        "2": 0.07,
+        "3": 0.02
+       }
+      },
+      "spya-nayjhs": {
+       "score": 0.98,
+       "confidence": 0.02,
+       "probabilities": {
+        "0": 0.45999999999999996,
+        "1": 0.19,
+        "2": 0.24,
+        "3": 0.11
+       }
+      },
+      "spya-mgjgha": {
+       "score": 1.21,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.33999999999999997,
+        "1": 0.23,
+        "2": 0.29,
+        "3": 0.14
+       }
+      },
+      "spya-bgtdqz": {
+       "score": 1.12,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.42,
+        "1": 0.19,
+        "2": 0.25,
+        "3": 0.14
+       }
+      },
+      "spya-q33vy8": {
+       "score": 0.87,
+       "confidence": 0.13,
+       "probabilities": {
+        "0": 0.43,
+        "1": 0.32,
+        "2": 0.19,
+        "3": 0.06
+       }
+      },
+      "spya-fmww2n": {
+       "score": 0.93,
+       "confidence": 0.07,
+       "probabilities": {
+        "0": 0.44,
+        "1": 0.29,
+        "2": 0.16,
+        "3": 0.11
+       }
+      },
+      "spya-matth4": {
+       "score": 0.28,
+       "confidence": 0.72,
+       "probabilities": {
+        "0": 0.79,
+        "1": 0.16,
+        "2": 0.04,
+        "3": 0.01
+       }
+      },
+      "spya-c2bkgz": {
+       "score": 0.33,
+       "confidence": 0.67,
+       "probabilities": {
+        "0": 0.78,
+        "1": 0.15,
+        "2": 0.05,
+        "3": 0.02
+       }
+      },
+      "spya-m42hxd": {
+       "score": 1.2,
+       "confidence": 0.23,
+       "probabilities": {
+        "0": 0.28,
+        "1": 0.36,
+        "2": 0.24,
+        "3": 0.12
+       }
+      },
+      "spya-ddr2ub": {
+       "score": 0.6,
+       "confidence": 0.4,
+       "probabilities": {
+        "0": 0.63,
+        "1": 0.2,
+        "2": 0.11,
+        "3": 0.06
+       }
+      },
+      "spya-ebtbnm": {
+       "score": 0.62,
+       "confidence": 0.38,
+       "probabilities": {
+        "0": 0.62,
+        "1": 0.2,
+        "2": 0.12,
+        "3": 0.06
+       }
+      },
+      "spya-k8jws5": {
+       "score": 0.37,
+       "confidence": 0.63,
+       "probabilities": {
+        "0": 0.77,
+        "1": 0.13,
+        "2": 0.06,
+        "3": 0.04
+       }
+      },
+      "spya-khwx0h": {
+       "score": 0.51,
+       "confidence": 0.49,
+       "probabilities": {
+        "0": 0.69,
+        "1": 0.15,
+        "2": 0.12,
+        "3": 0.04
+       }
+      },
+      "spya-vsujby": {
+       "score": 0.68,
+       "confidence": 0.32,
+       "probabilities": {
+        "0": 0.58,
+        "1": 0.22,
+        "2": 0.14,
+        "3": 0.06
+       }
+      },
+      "spya-peudft": {
+       "score": 0.44,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0.68,
+        "1": 0.22,
+        "2": 0.07,
+        "3": 0.03
+       }
+      },
+      "spya-chdu2z": {
+       "score": 0.7,
+       "confidence": 0.3,
+       "probabilities": {
+        "0": 0.53,
+        "1": 0.28,
+        "2": 0.16,
+        "3": 0.03
+       }
+      },
+      "spya-av2uwp": {
+       "score": 0.73,
+       "confidence": 0.27,
+       "probabilities": {
+        "0": 0.5599999999999999,
+        "1": 0.2,
+        "2": 0.17,
+        "3": 0.07
+       }
+      },
+      "spya-tq02vk": {
+       "score": 0.52,
+       "confidence": 0.48,
+       "probabilities": {
+        "0": 0.66,
+        "1": 0.21,
+        "2": 0.09,
+        "3": 0.04
+       }
+      },
+      "spya-h6yxz3": {
+       "score": 1.44,
+       "confidence": 0.37,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.46,
+        "2": 0.35,
+        "3": 0.09
+       }
+      },
+      "spya-td87ke": {
+       "score": 0.79,
+       "confidence": 0.46,
+       "probabilities": {
+        "0": 0.38,
+        "1": 0.49,
+        "2": 0.1,
+        "3": 0.03
+       }
+      },
+      "spya-bpuujn": {
+       "score": 1.7,
+       "confidence": 0.16,
+       "probabilities": {
+        "0": 0.19,
+        "1": 0.2,
+        "2": 0.33999999999999997,
+        "3": 0.27
+       }
+      },
+      "spya-hz50qg": {
+       "score": 1.6,
+       "confidence": 0.09,
+       "probabilities": {
+        "0": 0.23,
+        "1": 0.19,
+        "2": 0.33,
+        "3": 0.25
+       }
+      },
+      "spya-a49xd7": {
+       "score": 1.8,
+       "confidence": 0,
+       "probabilities": {
+        "0": 0.21,
+        "1": 0.15,
+        "2": 0.29,
+        "3": 0.35
+       }
+      },
+      "spya-g5mja3": {
+       "score": 0.34,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0.76,
+        "1": 0.16,
+        "2": 0.07,
+        "3": 0.01
+       }
+      },
+      "spya-rvb47b": {
+       "score": 0.37,
+       "confidence": 0.63,
+       "probabilities": {
+        "0": 0.72,
+        "1": 0.18,
+        "2": 0.08,
+        "3": 0.02
+       }
+      },
+      "spya-f07bw5": {
+       "score": 2.66,
+       "confidence": 0.66,
+       "probabilities": {
+        "0": 0,
+        "1": 0.06,
+        "2": 0.2,
+        "3": 0.74
+       }
+      },
+      "spya-p0h9g8": {
+       "score": 2.1,
+       "confidence": 0.53,
+       "probabilities": {
+        "0": 0.01,
+        "1": 0.16,
+        "2": 0.54,
+        "3": 0.29
+       }
+      },
+      "spya-z83ezv": {
+       "score": 1.78,
+       "confidence": 0.33,
+       "probabilities": {
+        "0": 0.09,
+        "1": 0.26,
+        "2": 0.43,
+        "3": 0.22
+       }
+      },
+      "spya-qen9hh": {
+       "score": 2.56,
+       "confidence": 0.56,
+       "probabilities": {
+        "0": 0.03,
+        "1": 0.04,
+        "2": 0.26,
+        "3": 0.67
+       }
+      },
+      "spya-kqgzae": {
+       "score": 2.08,
+       "confidence": 0.08,
+       "probabilities": {
+        "0": 0.12,
+        "1": 0.11,
+        "2": 0.35,
+        "3": 0.42
+       }
+      },
+      "spya-mdta39": {
+       "score": 2.62,
+       "confidence": 0.62,
+       "probabilities": {
+        "0": 0.02,
+        "1": 0.04,
+        "2": 0.26,
+        "3": 0.6799999999999999
+       }
+      },
+      "spya-rnag5c": {
+       "score": 1.74,
+       "confidence": 0.36,
+       "probabilities": {
+        "0": 0.1,
+        "1": 0.25,
+        "2": 0.46,
+        "3": 0.19
+       }
+      },
+      "spya-brgs0b": {
+       "score": 0.26,
+       "confidence": 0.74,
+       "probabilities": {
+        "0": 0.89,
+        "1": 0.02,
+        "2": 0.03,
+        "3": 0.06
+       }
+      }
+     }
+    },
+    "choice": {
+     "ms": 309,
+     "chunks": 1,
+     "calls": [
+      {
+       "n": 94,
+       "status": 200,
+       "ms": 309,
+       "inputTokens": 9320,
+       "cost": 0.00039144
+      }
+     ],
+     "inputTokens": 9320,
+     "cost": 0.00039144,
+     "scores": {
+      "spya-hz50qg": 0,
+      "spya-w9ctpd": 0,
+      "spya-vv9dpj": 0,
+      "spya-z6c3dr": 0,
+      "spya-c2bkgz": 0,
+      "spya-cbv8uf": 0,
+      "spya-r4jn5b": 0,
+      "spya-ms8rup": 0,
+      "spya-gu6jbj": 0,
+      "spya-ekhrbu": 0,
+      "spya-ns5qyb": 0,
+      "spya-t89gw5": 0,
+      "spya-h6yxz3": 0,
+      "spya-qvg86h": 0,
+      "spya-v9detz": 0,
+      "spya-bpuujn": 0,
+      "spya-vfq66b": 0,
+      "spya-jauf7s": 0,
+      "spya-av2uwp": 0,
+      "spya-nayjhs": 0,
+      "spya-rnag5c": 0,
+      "spya-d6p0aa": 0,
+      "spya-pfkdk4": 0,
+      "spya-p0h9g8": 0,
+      "spya-vqcwj0": 0,
+      "spya-g9tjds": 0,
+      "spya-rzxkcd": 0,
+      "spya-ebtbnm": 0,
+      "spya-ddr2ub": 0,
+      "spya-mgjgha": 0,
+      "spya-k8jws5": 0,
+      "spya-mdta39": 0.01,
+      "spya-kqgzae": 0,
+      "spya-fkg2ny": 0,
+      "spya-s9a3he": 0,
+      "spya-j45j9u": 0,
+      "spya-gj5bbr": 0,
+      "spya-q33vy8": 0,
+      "spya-td87ke": 0,
+      "spya-bgtdqz": 0,
+      "spya-qen9hh": 0.11,
+      "spya-fcu0cb": 0,
+      "spya-matth4": 0,
+      "spya-vsujby": 0,
+      "spya-rvb47b": 0,
+      "spya-b0wbhk": 0,
+      "spya-dk4gcf": 0,
+      "spya-a49xd7": 0,
+      "spya-gvsujh": 0,
+      "spya-fhj3z4": 0,
+      "spya-ugwnw2": 0,
+      "spya-peudft": 0,
+      "spya-ckcyzp": 0,
+      "spya-cx5k4t": 0,
+      "spya-m4gku9": 0,
+      "spya-m42hxd": 0,
+      "spya-s5dpqc": 0,
+      "spya-f030k3": 0,
+      "spya-tq02vk": 0,
+      "spya-m45y0k": 0,
+      "spya-v43bs7": 0,
+      "spya-kyxy7b": 0,
+      "spya-k9s755": 0,
+      "spya-krknwc": 0,
+      "spya-q62pkz": 0,
+      "spya-dgcfnd": 0,
+      "spya-chdu2z": 0,
+      "spya-xvkm3j": 0,
+      "spya-f07bw5": 0.88,
+      "spya-c3dppu": 0,
+      "spya-c2ck7h": 0,
+      "spya-g5mja3": 0,
+      "spya-c8fcww": 0,
+      "spya-df7qrz": 0,
+      "spya-sjjbur": 0,
+      "spya-wtguds": 0,
+      "spya-acvnjw": 0,
+      "spya-z83ezv": 0,
+      "spya-cc5uhs": 0,
+      "spya-zfbcb4": 0,
+      "spya-asbjy9": 0,
+      "spya-cx56k0": 0,
+      "spya-khwx0h": 0,
+      "spya-vpd027": 0,
+      "spya-gb7ze2": 0,
+      "spya-fmww2n": 0,
+      "spya-brgs0b": 0,
+      "spya-bh44xd": 0,
+      "spya-ast6bs": 0,
+      "spya-nakhtw": 0,
+      "spya-vqvmhz": 0,
+      "spya-m24kgb": 0,
+      "spya-vvkkv7": 0,
+      "spya-gy8fb4": 0
+     }
+    },
+    "perBlock": {
+     "ms": 1506,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      293,
+      286,
+      280,
+      284,
+      326,
+      255,
+      284,
+      286,
+      262,
+      272,
+      260,
+      286,
+      278,
+      312,
+      287,
+      281,
+      293,
+      286,
+      258,
+      278,
+      238,
+      291,
+      442,
+      298,
+      255,
+      240,
+      231,
+      234,
+      265,
+      288,
+      234,
+      234,
+      271,
+      305,
+      294,
+      268,
+      257,
+      281,
+      233,
+      447,
+      299,
+      238,
+      238,
+      276,
+      242,
+      292,
+      245,
+      263,
+      260,
+      232,
+      259,
+      278,
+      255,
+      351,
+      224,
+      270,
+      262,
+      249,
+      282,
+      231,
+      248,
+      269,
+      320,
+      309,
+      330,
+      328,
+      312,
+      305,
+      258,
+      266,
+      259,
+      278,
+      315,
+      311,
+      261,
+      270,
+      315,
+      277,
+      262,
+      317,
+      245,
+      248,
+      235,
+      274,
+      250,
+      256,
+      415,
+      287,
+      287,
+      267,
+      265,
+      323,
+      257,
+      259
+     ],
+     "inputTokens": 49085,
+     "cost": 0.002061569999999999,
+     "scores": {
+      "spya-cx5k4t": 0.31,
+      "spya-gvsujh": 0.1,
+      "spya-q62pkz": 0.02,
+      "spya-gb7ze2": 0.15,
+      "spya-c2ck7h": 0.1,
+      "spya-b0wbhk": 0.06,
+      "spya-ekhrbu": 0.2,
+      "spya-fcu0cb": 0.24,
+      "spya-v9detz": 0.19,
+      "spya-v43bs7": 0.3,
+      "spya-g9tjds": 0.3,
+      "spya-pfkdk4": 0.07,
+      "spya-vvkkv7": 0.12,
+      "spya-ms8rup": 0.21,
+      "spya-dk4gcf": 0.69,
+      "spya-ugwnw2": 0.31,
+      "spya-bh44xd": 0.24,
+      "spya-rzxkcd": 0.36,
+      "spya-s5dpqc": 0.43,
+      "spya-t89gw5": 0.26,
+      "spya-cbv8uf": 0.19,
+      "spya-m24kgb": 0.15,
+      "spya-k9s755": 0.36,
+      "spya-c8fcww": 0.44,
+      "spya-vqvmhz": 0.43,
+      "spya-ns5qyb": 0.09,
+      "spya-s9a3he": 0.04,
+      "spya-zfbcb4": 0.05,
+      "spya-ast6bs": 0.07,
+      "spya-ckcyzp": 0.08,
+      "spya-vfq66b": 0.11,
+      "spya-xvkm3j": 0.24,
+      "spya-gy8fb4": 0.11,
+      "spya-d6p0aa": 0.47,
+      "spya-vv9dpj": 0.34,
+      "spya-cc5uhs": 0.15,
+      "spya-w9ctpd": 0.11,
+      "spya-gu6jbj": 0.14,
+      "spya-asbjy9": 0.14,
+      "spya-vpd027": 0.14,
+      "spya-df7qrz": 0.45,
+      "spya-z6c3dr": 0.14,
+      "spya-fkg2ny": 0.24,
+      "spya-gj5bbr": 0.49,
+      "spya-acvnjw": 0.47,
+      "spya-cx56k0": 0.29,
+      "spya-m45y0k": 0.15,
+      "spya-c3dppu": 0.14,
+      "spya-dgcfnd": 0.32,
+      "spya-krknwc": 0.37,
+      "spya-f030k3": 0.24,
+      "spya-qvg86h": 0.11,
+      "spya-fhj3z4": 0.18,
+      "spya-j45j9u": 0.55,
+      "spya-nakhtw": 0.44,
+      "spya-kyxy7b": 0.27,
+      "spya-sjjbur": 0.12,
+      "spya-wtguds": 0.11,
+      "spya-m4gku9": 0.1,
+      "spya-r4jn5b": 0.29,
+      "spya-jauf7s": 0.25,
+      "spya-vqcwj0": 0.19,
+      "spya-nayjhs": 0.39,
+      "spya-mgjgha": 0.38,
+      "spya-bgtdqz": 0.24,
+      "spya-q33vy8": 0.08,
+      "spya-fmww2n": 0.08,
+      "spya-matth4": 0.15,
+      "spya-c2bkgz": 0.21,
+      "spya-m42hxd": 0.47,
+      "spya-ddr2ub": 0.11,
+      "spya-ebtbnm": 0.06,
+      "spya-k8jws5": 0.03,
+      "spya-khwx0h": 0.13,
+      "spya-vsujby": 0.29,
+      "spya-peudft": 0.22,
+      "spya-chdu2z": 0.49,
+      "spya-av2uwp": 0.14,
+      "spya-tq02vk": 0.16,
+      "spya-h6yxz3": 0.21,
+      "spya-td87ke": 0.14,
+      "spya-bpuujn": 0.46,
+      "spya-hz50qg": 0.45,
+      "spya-a49xd7": 0.45,
+      "spya-g5mja3": 0.09,
+      "spya-rvb47b": 0.21,
+      "spya-f07bw5": 0.76,
+      "spya-p0h9g8": 0.35,
+      "spya-z83ezv": 0.22,
+      "spya-qen9hh": 0.24,
+      "spya-kqgzae": 0.24,
+      "spya-mdta39": 0.56,
+      "spya-rnag5c": 0.39,
+      "spya-brgs0b": 0.04
+     }
+    },
+    "perBlockLiquid": {
+     "ms": 2018,
+     "requests": 94,
+     "errors": 0,
+     "errorSamples": [],
+     "perRequestMs": [
+      451,
+      285,
+      395,
+      398,
+      428,
+      393,
+      433,
+      399,
+      393,
+      370,
+      443,
+      365,
+      385,
+      427,
+      397,
+      388,
+      429,
+      393,
+      390,
+      315,
+      330,
+      257,
+      332,
+      368,
+      477,
+      275,
+      393,
+      393,
+      347,
+      312,
+      273,
+      312,
+      467,
+      322,
+      644,
+      432,
+      673,
+      409,
+      403,
+      342,
+      503,
+      332,
+      461,
+      448,
+      416,
+      561,
+      487,
+      391,
+      357,
+      406,
+      369,
+      376,
+      345,
+      299,
+      311,
+      483,
+      474,
+      464,
+      419,
+      531,
+      506,
+      351,
+      362,
+      386,
+      393,
+      389,
+      337,
+      453,
+      445,
+      315,
+      277,
+      522,
+      378,
+      341,
+      306,
+      367,
+      471,
+      424,
+      401,
+      276,
+      352,
+      493,
+      326,
+      322,
+      350,
+      302,
+      260,
+      308,
+      411,
+      296,
+      434,
+      362,
+      317,
+      290
+     ],
+     "inputTokens": 25680,
+     "cost": 0.0010272,
+     "scores": {
+      "spya-cx5k4t": 0.04208773332246319,
+      "spya-gvsujh": 0.021615330556727978,
+      "spya-q62pkz": 0.002981032751999112,
+      "spya-gb7ze2": 0.01691491103663093,
+      "spya-c2ck7h": 0.02033235052291202,
+      "spya-b0wbhk": 0.022977368906458788,
+      "spya-ekhrbu": 0.039638836831964216,
+      "spya-fcu0cb": 0.10087860651125365,
+      "spya-v9detz": 0.04468087281684414,
+      "spya-v43bs7": 0.06371498625155406,
+      "spya-g9tjds": 0.027585286223927585,
+      "spya-pfkdk4": 0.04468087218079564,
+      "spya-vvkkv7": 0.013222820196864963,
+      "spya-ms8rup": 0.03963884193722745,
+      "spya-dk4gcf": 0.18242553714108867,
+      "spya-ugwnw2": 0.0715911984541334,
+      "spya-bh44xd": 0.05665242052980391,
+      "spya-rzxkcd": 0.0474258704848281,
+      "spya-s5dpqc": 0.04468086963660174,
+      "spya-t89gw5": 0.08035746882220708,
+      "spya-cbv8uf": 0.05340333507274787,
+      "spya-m24kgb": 0.05033063473418989,
+      "spya-k9s755": 0.02595735569077852,
+      "spya-c8fcww": 0.1008786146206548,
+      "spya-vqvmhz": 0.053403333566198224,
+      "spya-ns5qyb": 0.03963884136997595,
+      "spya-s9a3he": 0.03114383503103911,
+      "spya-zfbcb4": 0.010986941982915435,
+      "spya-ast6bs": 0.014063623943988737,
+      "spya-ckcyzp": 0.019124040943697917,
+      "spya-vfq66b": 0.020332355123551627,
+      "spya-xvkm3j": 0.031143831883656593,
+      "spya-gy8fb4": 0.01590639357784294,
+      "spya-d6p0aa": 0.02297737308798752,
+      "spya-vv9dpj": 0.06371499869663867,
+      "spya-cc5uhs": 0.050330630460763956,
+      "spya-w9ctpd": 0.02595735305349664,
+      "spya-gu6jbj": 0.019124039825615426,
+      "spya-asbjy9": 0.02297737225168171,
+      "spya-vpd027": 0.024423088278887034,
+      "spya-df7qrz": 0.06754669301670263,
+      "spya-z6c3dr": 0.02758528102764882,
+      "spya-fkg2ny": 0.019124035073765554,
+      "spya-gj5bbr": 0.06008665101556925,
+      "spya-acvnjw": 0.05340333055309901,
+      "spya-cx56k0": 0.022977371248114782,
+      "spya-m45y0k": 0.020332350374504305,
+      "spya-c3dppu": 0.02758528542450002,
+      "spya-dgcfnd": 0.01495708758109961,
+      "spya-krknwc": 0.010986941011398892,
+      "spya-f030k3": 0.004609572281931243,
+      "spya-qvg86h": 0.004609571734960417,
+      "spya-fhj3z4": 0.06371499069622688,
+      "spya-j45j9u": 0.23370635157681105,
+      "spya-nakhtw": 0.031143835480665218,
+      "spya-kyxy7b": 0.05340332753999997,
+      "spya-sjjbur": 0.0075772403154006,
+      "spya-wtguds": 0.017986208251325228,
+      "spya-m4gku9": 0.03308597505175204,
+      "spya-r4jn5b": 0.027585281427362537,
+      "spya-jauf7s": 0.03308597409833722,
+      "spya-vqcwj0": 0.056652418937080694,
+      "spya-nayjhs": 0.0953494674697966,
+      "spya-mgjgha": 0.10087861191752102,
+      "spya-bgtdqz": 0.03514484943255559,
+      "spya-q33vy8": 0.009708477484315619,
+      "spya-fmww2n": 0.0149570823120357,
+      "spya-matth4": 0.014063625390308462,
+      "spya-c2bkgz": 0.05665241734435752,
+      "spya-m42hxd": 0.056652424511612155,
+      "spya-ddr2ub": 0.017986212857234944,
+      "spya-ebtbnm": 0.009125638736597276,
+      "spya-k8jws5": 0.009708478773683474,
+      "spya-khwx0h": 0.01168725988899628,
+      "spya-vsujby": 0.06008664596619963,
+      "spya-peudft": 0.02931223244728875,
+      "spya-chdu2z": 0.04208772431105632,
+      "spya-av2uwp": 0.019124035073765554,
+      "spya-tq02vk": 0.05340333130637379,
+      "spya-h6yxz3": 0.14804719051380197,
+      "spya-td87ke": 0.08035746882220708,
+      "spya-bpuujn": 0.28140560742914383,
+      "spya-hz50qg": 0.11279539584450776,
+      "spya-a49xd7": 0.1480471829959148,
+      "spya-g5mja3": 0.04742586375298202,
+      "spya-rvb47b": 0.09009300006965831,
+      "spya-f07bw5": 0.7772998663336157,
+      "spya-p0h9g8": 0.18242552380635632,
+      "spya-z83ezv": 0.08509904500702024,
+      "spya-qen9hh": 0.08509902992490698,
+      "spya-kqgzae": 0.2018132078582896,
+      "spya-mdta39": 0.2689414506674572,
+      "spya-rnag5c": 0.037326887879581695,
+      "spya-brgs0b": 0.002631673857549191
+     }
+    }
+   }
+  }
+ ]
+}

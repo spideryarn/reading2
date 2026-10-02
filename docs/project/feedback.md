@@ -194,6 +194,9 @@ say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped
 split reports (`parts:`), the accepted limits, and why this beat a status column are in
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
 `tests/feedback-endings.test.ts` goes red when a header does not parse or the committed map is stale.
+**The same flip emails the reader**, since 2026-10-02, if they are not an admin: the deploy that
+carries the note sends it once that deploy is live —
+[email.md § Feedback that shipped](email.md#feedback-that-shipped).
 
 **The Write panel is hidden, not unmounted, and hiding is not switching off.** Its microphone, the
 paste and drop handlers on the whole `<dialog>`, and the form's submit all still reach a draft the

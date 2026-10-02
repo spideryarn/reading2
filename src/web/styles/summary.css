@@ -119,6 +119,38 @@
 /* Prose, so it reads at the band's own size and leading rather than as a
    caption; `pre-line` is not used — a paragraph is one paragraph. */
 .simple-text { margin: 0; color: var(--ink); line-height: 1.5; }
+/* **A sentence that names its passage** (SimplePanel.tsx § `Paragraph`, plan
+   261002e) is a `BlockRef`, so it wears `.block-ref`'s id chip — mono, tiny,
+   faint, half opacity. Undone here so it reads as the paragraph it is part of:
+   the paragraph's face (the model's voice is set on `.simple-text`), size,
+   leading and ink, at full opacity. Two classes, to outrank `.block-ref` and
+   `.block-ref:hover` without leaning on file order.
+
+   The hover cue is a quiet underline in the highlight's ink, not a wash: the
+   wash is the on-screen signal (on-screen.ts § `onScreenLinkCss`, an unlayered
+   rule, so it wins over anything in this layer anyway), and the two must not
+   look alike. Not a colour change either — the sentence stays prose.
+
+   A sentence whose block the article no longer has keeps `.block-ref-missing`'s
+   dim, struck-through look (prose.css) in the prose face: the ink and opacity
+   are left alone for it. */
+.simple-text .simple-sentence {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: normal;
+}
+.simple-text .simple-sentence:not(.block-ref-missing) {
+  color: inherit;
+  opacity: 1;
+  text-decoration: none;
+}
+.simple-text .simple-sentence:not(.block-ref-missing):hover {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--highlight);
+  text-underline-offset: 2px;
+}
 /* The doors, in the key the gists' ranges wear. */
 .simple-refs {
   display: flex;

@@ -181,6 +181,9 @@ import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
+/* Quick search (plan 261002e): the same events from Jev, so `search` below
+   takes one generator or the other. */
+import { quickPassagesStream } from "./quick-search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
    has to satisfy before one is made. `referee-criteria.js` is pure (it reaches
    nothing but `quote-match`, `types` and `urls`), so importing its validators
@@ -330,7 +333,12 @@ import { costCategoryOf } from "./cost-categories.js";
 import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
-import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor, parseFeedbackFrom } from "./types.js";
+import {
+  ADMIN_FEEDBACK_DEFAULT_LIMIT,
+  decodeFeedbackCursor,
+  isSearchKind,
+  parseFeedbackFrom,
+} from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
@@ -454,6 +462,7 @@ import type {
   ShelfState,
   IdeasResponse,
   QuizFound,
+  QuizResponse,
   QuotesResponse,
   SkimResponse,
   IllustratedResponse,
@@ -4338,9 +4347,16 @@ async function refuseAPaperNotReadYet(slug: string): Promise<void> {
 }
 
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, criterion } = (body ?? {}) as Record<string, unknown>;
+  const { id, criterion, kind = "meaning" } = (body ?? {}) as Record<string, unknown>;
   if (typeof criterion !== "string" || criterion.trim() === "") {
     throw httpError(400, "Expected { criterion }");
+  }
+  /* Which matcher (plan 261002e): absent is a meaning search, which is every
+     client that predates the quick one; anything else named is refused rather
+     than quietly run as meaning. Narrowed, not cast, so `SearchKind` is the one
+     list. */
+  if (!isSearchKind(kind)) {
+    throw httpError(400, 'A search kind must be "quick" or "meaning"');
   }
   // The whole article goes in the prompt, so a criterion is not the expensive
   // part — but an unbounded one is still a way to push the article out of the
@@ -4357,6 +4373,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   const { run, attempt } = await searchStore.begin(
     slug,
     criterion.trim(),
+    kind,
     typeof id === "string" ? id : undefined,
   );
   const key = `${slug}/${run.id}`;
@@ -4370,12 +4387,24 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
       const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
       let model = "";
-      for await (const event of findPassagesStream({
-        power: powerOf(article),
-        meta: article.meta,
-        blocks: article.blocks,
-        criterion: run.criterion,
-      })) {
+      /* **The stored run's kind, not the request's.** They agree today —
+         `withRun` resets only a row of the same kind — but the row is what the
+         answer is written onto, so it is the one that decides which matcher
+         writes it. */
+      const events =
+        run.kind === "quick"
+          ? quickPassagesStream({
+              meta: article.meta,
+              blocks: article.blocks,
+              criterion: run.criterion,
+            })
+          : findPassagesStream({
+              power: powerOf(article),
+              meta: article.meta,
+              blocks: article.blocks,
+              criterion: run.criterion,
+            });
+      for await (const event of events) {
         if (event.type === "hit") {
           frame("hit", { hit: event.hit });
           continue;
@@ -8529,17 +8558,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      /* **No `withProfileChanged`**, for `timeline`'s reason rather than by
-         omission: this artefact was never written for a profile, so there is no
-         third staleness fact to add and offering one would be a banner about a
-         thing that cannot have happened. `QuizResponse` in src/types.ts has two
-         fields where `IdeasResponse` has three.
-         docs/plans/260831al-review-quiz-sub-mode.md § No profile in v1.
+      /* **`withProfileChanged` since 2026-10-02**, for the badge and its
+         Regenerate (plan 261002f). It labels; nothing re-runs on it — the
+         profile is not in this stage's stamp (src/quiz.ts § The profile).
 
          `withOldClientBands` is the bridge for tabs still running the band
          ladder; it stays until there is an enforceable client-version boundary
          — src/quiz.ts says why. */
-      send(res, 200, withOldClientBands(await loadQuiz(slugPart(captures, 1))));
+      const at = slugPart(captures, 1);
+      send(
+        res,
+        200,
+        withOldClientBands(
+          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
+        ),
+      );
     },
   },
 
@@ -8552,8 +8585,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      /* **No `withProfileChanged`**, for `quiz`'s reason: this artefact is not
-         written for a profile. `FaqResponse` in src/types.ts has two fields. */
+      /* **No `withProfileChanged`**: this artefact is not written for a
+         profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
     },
   },

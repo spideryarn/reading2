@@ -78,6 +78,7 @@ const BLOCKS: Block[] = [
 const RUN_DONE: SearchRun = {
   id: RUN,
   criterion: "how big was the trial",
+  kind: "meaning",
   createdAt: "2026-09-12T10:00:00.000Z",
   status: "done",
   hits: [

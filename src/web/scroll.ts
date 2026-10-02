@@ -11,6 +11,7 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
+import { isFolded, revealBlock } from "./fold.js";
 import { blockRow, passageMarks } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
@@ -913,6 +914,8 @@ export function arrivalAnchor(): { id: string; passage: string | undefined } | n
      viewport. Never let module state make position readers name a block that
      the current article no longer draws. */
   if (anchor !== null && blockRow(anchor.id) === null) clearArrivalAnchor();
+  /* Nor a block folded away since the arrival (fold.ts). */
+  if (anchor !== null && isFolded(anchor.id)) clearArrivalAnchor();
   return anchor;
 }
 
@@ -922,6 +925,12 @@ export function scrollToBlock(
   done?: (outcome: ScrollOutcome) => void,
   how: ScrollHow = {},
 ) {
+  /* **A jump to a block is a request to see it**, so a folded section holding
+     it opens first — synchronously, so the row measured below already has its
+     height (fold.ts § Why a style element). Every jump comes through here,
+     which is why this is the one place folding needs to be told. ↑ / ↓ step
+     over folded rows before they get this far (keynav.ts § `step`). */
+  revealBlock(id);
   const row = blockRow(id);
   /* A request that cannot move is still a newer request. Letting the old glide
      carry on would make its callback report `settled` after this one has
@@ -1071,6 +1080,11 @@ export function arrivalTarget(
 export function isBlockOnScreen(id: string): boolean {
   const row = blockRow(id);
   if (!row) return false;
+  /* **A folded row is never on screen**, though its zero-height rectangle
+     may sit inside the viewport — and "already there" is what lets a caller
+     skip the `scrollToBlock` that would have unfolded it. GPT Sol's plan
+     review of 261002e, finding 1. The same in the two below. */
+  if (isFolded(id)) return false;
   /* A centred arrival is on screen by construction; a large one may reach the
      bottom margin, which would call it away (Sol F1). */
   if (anchor?.id === id) return true;
@@ -1108,6 +1122,7 @@ export type Whereabouts = "nowhere" | "here" | "away";
  * drawn: nothing says it is there, so the jump goes ahead.
  */
 export function isPassageOnScreen(id: string, passage: string): boolean {
+  if (isFolded(id)) return false;
   const cell = blockRow(id)?.querySelector("td.text");
   const marks = cell ? passageMarks(cell, passage) : [];
   if (marks.length === 0) return false;
@@ -1120,6 +1135,7 @@ export function isPassageOnScreen(id: string, passage: string): boolean {
 export function whereIsBlock(id: string): Whereabouts {
   const row = blockRow(id);
   if (!row) return "nowhere";
+  if (isFolded(id)) return "away"; // a jump to it will unfold it
   if (anchor?.id === id) return "here"; // § `anchor`
   const { top, bottom } = row.getBoundingClientRect();
   const line = stickyOffset();

@@ -166,6 +166,38 @@ describe("resolveHits", () => {
     expect(found!.start).toBe(0);
   });
 
+  /**
+   * A quick search's hit quotes its **whole paragraph**, by design (plan
+   * 261002e). `snippet` never cuts the span it is given, so the list row and
+   * the hover card both came back as the entire paragraph — 6,499 characters
+   * in GPT Sol's probe (review F2). The mark keeps the whole paragraph; only
+   * the previews are bounded, and `whole` stays false because placement
+   * worked.
+   */
+  it("bounds a quick hit's previews while marking its whole paragraph", () => {
+    const sentence = "Each of the forty volunteers was scanned twice under the same protocol. ";
+    const text = sentence.repeat(60).trim();
+    const long = [block("spya-k3m9qt", `<p>${text}</p>`)];
+    const quick = [
+      { id: "spya-run2aa", slot: 0, kind: "quick" as const, hits: [hit({ quote: text, confidence: 91 })] },
+    ];
+    const [found] = resolveHits(long, quick);
+    expect(found!.whole).toBe(false);
+    expect(found!.start).toBe(0);
+    expect(found!.end).toBe(text.length);
+    // The budgets are 90 and 400; a word boundary may stretch each by a little.
+    expect(found!.short.length).toBeLessThan(120);
+    expect(found!.long.length).toBeLessThan(430);
+    expect(found!.short.startsWith("Each of the forty")).toBe(true);
+    expect(found!.short.endsWith("…")).toBe(true);
+  });
+
+  it("leaves a meaning hit with the same quote as it was — the whole quote in its preview", () => {
+    const text = "Each of the forty volunteers was scanned twice under the same protocol. ".repeat(3).trim();
+    const [found] = resolveHits([block("spya-k3m9qt", `<p>${text}</p>`)], one([hit({ quote: text })]));
+    expect(found!.long).toBe(text);
+  });
+
   it("drops a hit naming a block the article no longer has", () => {
     // Only reachable after a re-extraction. An id that is simply gone has
     // nowhere to point, and a row that does nothing when pressed is worse than

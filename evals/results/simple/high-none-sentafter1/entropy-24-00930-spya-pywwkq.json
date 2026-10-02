@@ -1,0 +1,274 @@
+{
+  "arm": "high-none-sentafter1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple-prompt/4",
+  "sourceSha256": "6f6c85f0adc6d1035d31fc86abe3489ba276c113203d29d4f7004f90053fdd3b",
+  "at": "2026-10-02T15:11:39.299Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 25026,
+  "costUsd": 0.200951,
+  "tokens": {
+    "input": 14060,
+    "output": 4289,
+    "reasoning": 2126
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 184,
+  "fullerWords": 248,
+  "briefWords": 108,
+  "paragraphs": [
+    {
+      "text": "This review asks how groups of brain cells, called neurons, actually handle information. It introduces a math tool called partial information decomposition, or PID, and shows what it has revealed so far.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks how groups of brain cells, called neurons, actually handle information.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "It introduces a math tool called partial information decomposition, or PID, and shows what it has revealed so far.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors call understanding how brains process information a grand challenge of modern neuroscience. New tools can now record hundreds or thousands of neurons at once, but scientists still need ways to make sense of that data.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call understanding how brains process information a grand challenge of modern neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "New tools can now record hundreds or thousands of neurons at once, but scientists still need ways to make sense of that data.",
+          "id": "spya-s9kmxa"
+        }
+      ]
+    },
+    {
+      "text": "PID splits what two input neurons tell a target neuron into parts. Some information is redundant, meaning either input alone carries it, and some is synergy, meaning it only appears when both inputs are read together. In mouse brain tissue grown in dishes, synergy was 2.7 times higher among a tightly linked core of busy neurons, called a rich club. Groups where the two inputs also connected to each other had up to 50% more synergy.",
+      "ids": [
+        "spya-e94ury",
+        "spya-fud8q3",
+        "spya-sd9fzd"
+      ],
+      "sentences": [
+        {
+          "text": "PID splits what two input neurons tell a target neuron into parts.",
+          "id": null
+        },
+        {
+          "text": "Some information is redundant, meaning either input alone carries it, and some is synergy, meaning it only appears when both inputs are read together.",
+          "id": "spya-e94ury"
+        },
+        {
+          "text": "In mouse brain tissue grown in dishes, synergy was 2.7 times higher among a tightly linked core of busy neurons, called a rich club.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Groups where the two inputs also connected to each other had up to 50% more synergy.",
+          "id": "spya-sd9fzd"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons do not simply add up their inputs; they also respond to the patterns those inputs form. In monkeys, the balance of synergy and redundancy shifted with the task, such as reaching and grasping.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons do not simply add up their inputs; they also respond to the patterns those inputs form.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "In monkeys, the balance of synergy and redundancy shifted with the task, such as reaching and grasping.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This review asks how groups of neurons actually process information, and it introduces a math tool for studying this, called partial information decomposition, or PID. It is meant as an approachable overview, and it leans on the authors' own recent studies.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks how groups of neurons actually process information, and it introduces a math tool for studying this, called partial information decomposition, or PID.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "It is meant as an approachable overview, and it leans on the authors' own recent studies.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors call working out how brains process information a grand challenge of modern neuroscience. Two things held this back: too little data, and too few ways to analyse it. New recording tools now capture hundreds or thousands of neurons at once, but making sense of that data still needs suitable methods.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call working out how brains process information a grand challenge of modern neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "Two things held this back: too little data, and too few ways to analyse it.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "New recording tools now capture hundreds or thousands of neurons at once, but making sense of that data still needs suitable methods.",
+          "id": "spya-s9kmxa"
+        }
+      ]
+    },
+    {
+      "text": "PID splits what two input neurons tell us about a target neuron into parts. Redundant information is what either input alone could reveal, and unique information is what only one input reveals. Synergy is what appears only from both inputs' combined pattern, which the authors treat as a sign of real processing.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-e94ury"
+      ],
+      "sentences": [
+        {
+          "text": "PID splits what two input neurons tell us about a target neuron into parts.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Redundant information is what either input alone could reveal, and unique information is what only one input reveals.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Synergy is what appears only from both inputs' combined pattern, which the authors treat as a sign of real processing.",
+          "id": "spya-e94ury"
+        }
+      ]
+    },
+    {
+      "text": "In slices of mouse cortex grown in a dish, a \"rich club\" of tightly linked neurons had 2.7 times more synergy than neurons outside it. Groups where the two inputs were also linked to each other showed more synergy. In monkeys, brain activity was mostly synergy-led, but redundancy rose sharply while the animals reached and grasped.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "In slices of mouse cortex grown in a dish, a \"rich club\" of tightly linked neurons had 2.7 times more synergy than neurons outside it.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Groups where the two inputs were also linked to each other showed more synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "In monkeys, brain activity was mostly synergy-led, but redundancy rose sharply while the animals reached and grasped.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons do not seem to simply add up their inputs; they also respond to particular input patterns. How much synergy appears depends on a neuron's surroundings and on the animal's behaviour. Still, PID finds statistical links, not the biological mechanism behind them.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons do not seem to simply add up their inputs; they also respond to particular input patterns.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "How much synergy appears depends on a neuron's surroundings and on the animal's behaviour.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "Still, PID finds statistical links, not the biological mechanism behind them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review explains a math tool for studying how brain cells handle information together. It is called partial information decomposition, or PID. PID splits what input cells tell us about a target cell into shared, one-source, and combined parts. The authors call learning how brains process information a grand challenge of brain science.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains a math tool for studying how brain cells handle information together.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "It is called partial information decomposition, or PID.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "PID splits what input cells tell us about a target cell into shared, one-source, and combined parts.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "The authors call learning how brains process information a grand challenge of brain science.",
+          "id": "spya-rxcze4"
+        }
+      ]
+    },
+    {
+      "text": "The focus is synergy: information you only get by looking at two input cells together. In grown slices of mouse brain, synergy was 2.7 times higher in groups of the best-connected cells. The main conclusion is that brain cells do not just add up their inputs. They also respond to the patterns their inputs make.",
+      "ids": [
+        "spya-e94ury",
+        "spya-fud8q3",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "The focus is synergy: information you only get by looking at two input cells together.",
+          "id": "spya-e94ury"
+        },
+        {
+          "text": "In grown slices of mouse brain, synergy was 2.7 times higher in groups of the best-connected cells.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "The main conclusion is that brain cells do not just add up their inputs.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "They also respond to the patterns their inputs make.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -48,10 +48,17 @@ import { sslDecisionFor } from "../src/db/ssl.js";
 import { readEnvProd } from "../src/env.js";
 import { notesAt } from "./changelog/release-paths.js";
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
+import {
+  GENERATED_REPO_PATH,
+  productionDeps,
+  runShippedEmails,
+  STEP_NAME as FEEDBACK_STEP,
+} from "./feedback-shipped-emails.js";
 import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
+  afterTheFactSummary,
   codeMayNotHaveShipped,
   deployBranchProblem,
   describeRedirect,
@@ -1727,6 +1734,9 @@ async function main(): Promise<void> {
     await verify({ commit: sha, deploymentId: deployment.uid }, smoke);
     await readLogs(deployment, new Date(pushedAt), smoke);
 
+    /* Only once the code is live and verified: the letter says "now live". */
+    if (!codeMayNotHaveShipped(failures)) await feedbackShippedEmails(sha);
+
     /* Rollback is offered only when the code may not be live. An unreadable log
        is not a reason to undo a verified deployment — and doing so silently
        turns off production-domain auto-assignment, which is the trap the advice
@@ -1734,6 +1744,37 @@ async function main(): Promise<void> {
     return summarise(codeMayNotHaveShipped(failures) && wasServing ? `https://${wasServing.url}` : null);
   } finally {
     release();
+  }
+}
+
+/**
+ * **Tell readers their feedback is live** — every report whose note says
+ * `shipped` at the commit just deployed, from a reader (never an admin) the
+ * ledger has not yet emailed. It reconciles, so a deploy whose step did not
+ * run is caught up by this one. scripts/feedback-shipped-emails.ts, and
+ * docs/plans/261002f-email-readers-when-their-feedback-ships.md.
+ *
+ * Its failure is in `AFTER_THE_FACT_CHECKS`: the code is live, only a letter
+ * is missing, and the next deploy tries a definite failure again.
+ */
+async function feedbackShippedEmails(sha: string): Promise<void> {
+  step("Feedback shipped emails");
+  const dryRun = `npx tsx scripts/feedback-shipped-emails.ts --sha ${sha.slice(0, 12)} (a dry run; --send to send)`;
+  const generated = fileAt(sha, GENERATED_REPO_PATH);
+  if (generated === null) {
+    record(FEEDBACK_STEP, [`${GENERATED_REPO_PATH} is not in this commit`]);
+    return;
+  }
+  let close: (() => Promise<void>) | null = null;
+  try {
+    const production = productionDeps(info);
+    close = production.close;
+    const result = await runShippedEmails(generated, { send: true }, production.deps);
+    record(FEEDBACK_STEP, result.problems.length ? [...result.problems, `to look again: ${dryRun}`] : []);
+  } catch (err) {
+    record(FEEDBACK_STEP, [(err as Error).message, `to look again: ${dryRun}`]);
+  } finally {
+    await close?.().catch(() => {});
   }
 }
 
@@ -1774,8 +1815,9 @@ function summarise(previous: string | null): void {
      plainly: the banner and the rollback advice below are both about code that
      may not have shipped, and this is not that. */
   if (didDeploy && !codeMayNotHaveShipped(failures)) {
-    say(`${GREEN}Deployed, and the functional checks passed.${OFF} Log verification was inconclusive —`);
-    say("the deployment is live; this is a gap in what we can see, not a reason to roll back.");
+    const [headline, detail] = afterTheFactSummary(failures);
+    say(`${GREEN}${headline}${OFF}`);
+    say(detail);
   }
 
   if (schemaAdvanced > 0 && codeMayNotHaveShipped(failures)) {

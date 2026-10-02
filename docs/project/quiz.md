@@ -416,10 +416,24 @@ numbers and review conclusion:
   about its proportions"*, and `PROFILE_RULES` speaks of words spent and carries rules the quiz has
   no use for; the quiz needs the proportions to move and a balance rule in its own terms. So it has
   its own section and rules in [`src/quiz.ts`](../../src/quiz.ts).
-- **Not in the stamp, and no `profileHash`.** Changing your goal never rewrites a quiz; *Write them
-  again* is a forced run and picks up the goal at the press. A `profileHash` would put the quiz in
-  the *make public* dialog as personalised (`ProfileCarrying`, src/store/pg.ts) though visitors
-  never see a quiz. It arrives with the label that would read it.
+- **Recorded, but not in the stamp.** Changing your goal never rewrites a quiz on its own. Since
+  2026-10-02 the quiz records which profile it was written for (`profileHash`), and the band's head
+  carries the same *written for you* badge as the other personalised modes, opening the same
+  panel: edit both boxes in place, and when the server says the profile has changed, **Regenerate**
+  — the forced run *Write them again* makes. Greg, 2026-10-02:
+
+  > Q-quiz-regenerate yes it needs a "Regenerate for my profile". That's more important, ok to lose
+  > answers.
+
+  So a new batch clears the answers on screen, and the panel says so beside the button (*"Writes
+  new questions for your profile; your answers so far are cleared."*). Regenerate stays held from
+  the press until the new batch has been read — across leaving Quiz and coming back, because the
+  hold lives with the page's quiz read rather than the band. If that read fails, *Read the new
+  questions* retries the GET without paying for another rewrite. The quiz is kept
+  out of the *make public* dialog (`NeverShared`, src/store/pg.ts), because a shared link carries
+  no quiz. A quiz written before 2026-10-02 has no recorded profile hash; it shows no badge until
+  it is next written with a profile. A newly written quiz without a profile also has no badge.
+  [261002f](../plans/261002f-quiz-regenerate-for-my-profile.md).
 - **`quiz/5` was not bumped**, so a stored quiz is not marked outdated by this; goal-aware
   generation arrived inside version 5 and reaches only quizzes written from now on.
 - **Which jobs carry the goal.** Every quiz the reading view or Metadata asks for. Not a CLI run
@@ -462,9 +476,8 @@ section's first missed question — the steer. The plan and GPT Sol's review are
   verdict map also resets on a new batch). The verdict is not written to a log either — a per-answer
   right/wrong on a log line is a stored grade wearing a different hat, and
   [privacy.md](privacy.md) makes a public promise about it.
-- **No reader profile in the stamp**, so no `profileChanged` on the response, although the prompt
-  reads the profile since 2026-09-30 (above). Adding one later needs no migration — it would be a
-  field on the JSON.
+- **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is
+  a label for the badge; nothing re-runs on it.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,
   above. (The lines in the prose are placed by passage, but the band still walks the whole path.)
 - **No spoken quizzing.** Greg asked for it — *"ideally this would work well with Live Dialogue
@@ -474,7 +487,8 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 - **The questions do not know what you already said in Recall.** Also Greg's, also deferred: *"it
   should ideally/eventually take into account if the user has provided a freeform brain dump of what
   they remember"*. That wants a per-reader batch, which wants the profile in the stamp.
-- **No "written for: …" line** in the band, like Skim's *Reading for*. Greg: keep it simple.
+- **No "written for: …" line** in the band, like Skim's *Reading for* — the badge (above) is the
+  whole of it. Greg: keep it simple.
 
 ## See also
 

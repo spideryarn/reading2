@@ -1,0 +1,260 @@
+{
+ "arguments that minds are not software": {
+  "ms": 12876,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 19065,
+   "completionTokens": 1601,
+   "cacheReadTokens": 0,
+   "cacheWriteTokens": 19015
+  },
+  "hits": [
+   {
+    "blockId": "spya-a8jgf4",
+    "confidence": 97,
+    "quote": "First, and most important, brains are not computers.",
+    "reasoning": "States directly the core argument that the mind/brain is not a computer."
+   },
+   {
+    "blockId": "spya-b0086e",
+    "confidence": 95,
+    "quote": "Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer.",
+    "reasoning": "Argues against the brain having a software/hardware split like a computer."
+   },
+   {
+    "blockId": "spya-zw2m7u",
+    "confidence": 95,
+    "quote": "Unlike computers, even computers running neural network algorithms, brains are the kinds of things for which it is difficult, and likely impossible, to separate what they do from what they are.",
+    "reasoning": "Directly argues minds can't be separated into software-like function from hardware."
+   },
+   {
+    "blockId": "spya-uwxe4h",
+    "confidence": 95,
+    "quote": "The brain is not a Turing machine made of meat.",
+    "reasoning": "Explicit conclusion that the brain is not a computer/algorithm."
+   },
+   {
+    "blockId": "spya-p4vmm0",
+    "confidence": 92,
+    "quote": "If you cannot separate what brains do from what they are, the mathematical marriage of convenience starts to fall apart, and there is less reason to think of biological wetware as there simply to implement algorithmic mindware.",
+    "reasoning": "Argues against the idea that the brain is hardware running mind-software."
+   },
+   {
+    "blockId": "spya-ycpfzs",
+    "confidence": 88,
+    "quote": "The sharp division between software and hardware in modern computers is imposed by human design, following Turing’s principles. Biological evolution operates under different constraints and with different goals.",
+    "reasoning": "Explains why brains lack the software/hardware separation found in computers."
+   },
+   {
+    "blockId": "spya-jnwfxp",
+    "confidence": 80,
+    "quote": "you cannot assume it is possible to replace a single biological neuron with a silicon equivalent, while leaving its function, its input-output behavior, perfectly preserved.",
+    "reasoning": "Supports the argument that brain function can't be reduced to swappable algorithmic parts like software."
+   },
+   {
+    "blockId": "spya-ahtr6e",
+    "confidence": 82,
+    "quote": "This reveals the weakness of the popular “neural replacement” thought experiment",
+    "reasoning": "Challenges a classic argument for minds being substrate-independent software."
+   },
+   {
+    "blockId": "spya-v2q8qk",
+    "confidence": 78,
+    "quote": "Digital computers and brains differ fundamentally in how they relate to time.",
+    "reasoning": "Argues brains differ fundamentally from computers, undermining the mind-as-software view."
+   },
+   {
+    "blockId": "spya-v52g4f",
+    "confidence": 75,
+    "quote": "This means that neurobiological activity is anchored in continuous time in ways that algorithms, by design, are not.",
+    "reasoning": "Further argument that brain processes don't match computational/software models."
+   },
+   {
+    "blockId": "spya-ecfgkp",
+    "confidence": 85,
+    "quote": "Abstracting the brain into the arid sequence space of algorithms does justice neither to our biology nor to the phenomenology of the stream of consciousness.",
+    "reasoning": "States that treating the brain as an algorithm misses what minds really are."
+   },
+   {
+    "blockId": "spya-wepmnr",
+    "confidence": 70,
+    "quote": "This assumption, which philosophers call computational functionalism, is so deeply ingrained that it can be difficult to recognize it as an assumption at all.",
+    "reasoning": "Names and questions the assumption that mind is computation/software."
+   },
+   {
+    "blockId": "spya-cf8rt8",
+    "confidence": 65,
+    "quote": "Even a single neuron is a spectacularly complicated biological machine, busy maintaining its own integrity and regenerating the conditions and material basis for its own continued existence.",
+    "reasoning": "Illustrates biological complexity that resists reduction to software-like computation."
+   }
+  ]
+ },
+ "Why do people mistake chatbots for being conscious?": {
+  "ms": 16372,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 19073,
+   "completionTokens": 1982,
+   "cacheReadTokens": 19015,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-cvaqgs",
+    "confidence": 90,
+    "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+    "reasoning": "Directly introduces the psychological biases that cause people to mistake machines for conscious."
+   },
+   {
+    "blockId": "spya-h4mwb2",
+    "confidence": 85,
+    "quote": "This is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together.",
+    "reasoning": "Explains anthropocentrism, one of the biases behind mistaking AI for conscious."
+   },
+   {
+    "blockId": "spya-her4zk",
+    "confidence": 88,
+    "quote": "This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities.",
+    "reasoning": "Describes anthropomorphism, the bias of projecting human traits like consciousness onto machines."
+   },
+   {
+    "blockId": "spya-nxxnrj",
+    "confidence": 92,
+    "quote": "Taken together, these biases explain why it’s hardly surprising that when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too.",
+    "reasoning": "Summarizes why intelligent-seeming systems get mistaken for conscious."
+   },
+   {
+    "blockId": "spya-k6fpme",
+    "confidence": 95,
+    "quote": "One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language.",
+    "reasoning": "Explains specifically why language-using chatbots trigger belief in their consciousness."
+   },
+   {
+    "blockId": "spya-t29n67",
+    "confidence": 85,
+    "quote": "When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience.",
+    "reasoning": "Shows how the language we use about chatbots encourages mistaking them for conscious beings."
+   },
+   {
+    "blockId": "spya-cqh2pq",
+    "confidence": 90,
+    "quote": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does.",
+    "reasoning": "Directly states the mechanism by which people mistake AI for conscious."
+   },
+   {
+    "blockId": "spya-f87ghx",
+    "confidence": 80,
+    "quote": "As humans, we know we are conscious and like to think we are intelligent, so we find it natural to assume the two go together.",
+    "reasoning": "Gives the root psychological reason people conflate intelligence (like chatbots show) with consciousness."
+   },
+   {
+    "blockId": "spya-cke6sj",
+    "confidence": 60,
+    "quote": "Because of this, it’s tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness?",
+    "reasoning": "Describes the exponential-growth bias that fuels belief in imminent conscious AI."
+   },
+   {
+    "blockId": "spya-v4sduf",
+    "confidence": 60,
+    "quote": "If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine.",
+    "reasoning": "Explains the techno-rapture temptation that leads some to believe AI is conscious."
+   },
+   {
+    "blockId": "spya-k850tu",
+    "confidence": 75,
+    "quote": "In his book “More Everything Forever,” Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia",
+    "reasoning": "Compares seeing consciousness in AI to seeing faces in random patterns, a direct explanation of the mistake."
+   },
+   {
+    "blockId": "spya-cvyfqe",
+    "confidence": 55,
+    "quote": "He claimed it was conscious, that it had feelings, and was, in an important sense, like a real person.",
+    "reasoning": "Concrete example of someone mistaking a chatbot for conscious."
+   },
+   {
+    "blockId": "spya-xk9gne",
+    "confidence": 70,
+    "quote": "even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is.",
+    "reasoning": "Explains that the feeling of AI consciousness can persist like a visual illusion regardless of knowledge."
+   },
+   {
+    "blockId": "spya-d89xf7",
+    "confidence": 65,
+    "quote": "Our psychological biases are more likely to lead to false positives than false negatives. Compared to non-human animals, the apparent wonders of AI may be more similar to us in ways that do not matter for consciousness, like linguistic ability, and less similar in ways that do, like being alive.",
+    "reasoning": "Explains why chatbots' surface similarities (language) lead to overattributing consciousness."
+   }
+  ]
+ },
+ "machines that do clever things without computing anything": {
+  "ms": 4208,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 19068,
+   "completionTokens": 393,
+   "cacheReadTokens": 19015,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-sq9v5k",
+    "confidence": 96,
+    "quote": "Many systems do what they do without it being reasonable or useful to describe them as being computational at all. Three decades ago, the cognitive scientist Tim van Gelder gave an influential example, in the form of the governor of a steam engine",
+    "reasoning": "Describes the steam-engine governor as a system that does clever regulatory work through physics, not computation."
+   },
+   {
+    "blockId": "spya-t54yqa",
+    "confidence": 60,
+    "quote": "all reject, in ways relating to van Gelder’s insight, the idea that mind and brain can be exhaustively accounted for algorithmically",
+    "reasoning": "Discusses non-computational accounts of mind-like behavior."
+   },
+   {
+    "blockId": "spya-zg9me8",
+    "confidence": 40,
+    "quote": "The earliest computers were not digital Turing machines but analogue devices operating in continuous time.",
+    "reasoning": "Mentions devices that perform computation-like functions without digital computation."
+   }
+  ]
+ },
+ "what the author thinks we should do about it": {
+  "ms": 4787,
+  "model": "anthropic/claude-sonnet-5",
+  "usage": {
+   "promptTokens": 19067,
+   "completionTokens": 532,
+   "cacheReadTokens": 19015,
+   "cacheWriteTokens": 0
+  },
+  "hits": [
+   {
+    "blockId": "spya-yverz7",
+    "confidence": 95,
+    "quote": "nobody should be deliberately setting out to create conscious AI, whether in the service of some poorly thought-through techno-rapture, or for any other reason",
+    "reasoning": "Directly states the author's recommendation on what to do about conscious AI."
+   },
+   {
+    "blockId": "spya-e7fdmb",
+    "confidence": 60,
+    "quote": "What (Not) To Do?",
+    "reasoning": "Section heading introducing the author's recommendations."
+   },
+   {
+    "blockId": "spya-vs0vpj",
+    "confidence": 70,
+    "quote": "For my money, we ought to be more worried about the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells) than in any new wave of LLM.",
+    "reasoning": "Gives a specific recommendation about where to direct concern."
+   },
+   {
+    "blockId": "spya-x63ycg",
+    "confidence": 75,
+    "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+    "reasoning": "Advises a practical distinction to guide action on AI consciousness."
+   },
+   {
+    "blockId": "spya-hbueqc",
+    "confidence": 65,
+    "quote": "Time is short, but collectively we can still decide which kinds of AI we really want and which we really don’t.",
+    "reasoning": "Closing call to action about collectively deciding the future of AI."
+   }
+  ]
+ }
+}

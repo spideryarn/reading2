@@ -116,6 +116,7 @@ import {
   type SimpleLevelCheck,
   type SimpleRetryFailure,
   type SimpleParagraph,
+  type SimpleSentence,
   type SimpleSummary,
   type Tree,
 } from "./types.js";
@@ -146,8 +147,13 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  *
  * `simple-prompt/3` (2026-10-02): the request gained
  * `SIMPLE_SUMMARY_OUTPUT_SCHEMA`; the prompt text is unchanged.
+ *
+ * `simple-prompt/4` (2026-10-02): each paragraph is written as its sentences,
+ * each naming the one of the paragraph's ids it rests on, or none (Greg,
+ * SPIDERYARN-READING2-8V; plan 261002e). The stored shape only gained an
+ * optional field, so `SIMPLE_VERSION` stays.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/3";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/4";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -169,14 +175,32 @@ export const FIRST_LEVEL: SimpleLevel = "fuller";
 export const LEVEL_ATTEMPTS = 2;
 
 /**
+ * The most sentences a paragraph is asked for — "two to four" in `PITCH`'s
+ * shapes. Not enforced (a sentence count is the prompt's ask, not a limit);
+ * here only to size `ANSWER_TOKENS`.
+ */
+const MAX_SENTENCES_ASKED = 4;
+
+/**
+ * What each sentence costs beyond its words: `{"text": "", "id": "spya-k3m9qt"}`
+ * and the comma — the braces, two keys, the quotes and an id or `null`. A
+ * generous round number; an id alone is six or seven tokens.
+ */
+const SENTENCE_JSON_TOKENS = 20;
+
+/**
  * One call's answer budget in tokens, sized for the larger level: Fuller's
  * word ceiling (480 words, ~640 tokens at 0.75 words a token, nearly doubled for
- * safety), plus three ids and the JSON around each of its paragraphs.
+ * safety), plus, for each of its paragraphs, three ids and the JSON around
+ * them, and the JSON around each sentence at twice the sentences asked for
+ * (the model runs over a count it is given, as it does over a length).
  * Undersizing does not degrade: it throws `truncationFailure` and loses the
  * whole pass.
  */
 export const ANSWER_TOKENS =
-  1_200 + Math.max(...SIMPLE_LEVELS.map((level) => SIMPLE_LIMITS[level].maxParagraphs)) * MAX_IDS * 10;
+  1_200 +
+  Math.max(...SIMPLE_LEVELS.map((level) => SIMPLE_LIMITS[level].maxParagraphs)) *
+    (MAX_IDS * 10 + 2 * MAX_SENTENCES_ASKED * SENTENCE_JSON_TOKENS);
 
 /*
  * **The word asks are below what the ceiling allows, on evidence.** The first
@@ -295,7 +319,14 @@ that best support it. "ids" MUST be ids listed in the article; never invent one.
 A paragraph with no id that checks out is thrown away — so a paragraph about
 why it matters has to rest on where the piece says why it matters.
 
-The ids go only in "ids". Never write an id, or "block …", in the text.
+Then write the paragraph as its sentences, in order, one sentence to each
+"text". Give each sentence the "id" of the one block, from that paragraph's own
+"ids", that the sentence most rests on. Use null when it rests on none of them
+in particular: a sentence that frames the piece, or a takeaway drawn from the
+whole paragraph. A sentence never names an id its paragraph did not list.
+
+The ids go only in "ids" and "id". Never write an id, or "block …", in a
+sentence's text.
 
 ${plainWords("explain")}
 
@@ -308,7 +339,11 @@ OUTPUT
 JSON only, no prose, no code fence:
 
 {"paragraphs": [
-  {"text": "...", "ids": ["spya-k3m9qt", "spya-p7w2dn"]}
+  {"ids": ["spya-k3m9qt", "spya-p7w2dn"],
+   "sentences": [
+     {"text": "...", "id": "spya-k3m9qt"},
+     {"text": "...", "id": null},
+     {"text": "...", "id": "spya-p7w2dn"}]}
 ]}
 
 Plain text in "text": no markdown, no bullet points, no headings. Never put a
@@ -328,10 +363,25 @@ export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          text: { type: "string" },
           ids: { type: "array", items: { type: "string" } },
+          sentences: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              properties: {
+                text: { type: "string", pattern: "\\S" },
+                /* Required and nullable, never optional: "omit it when…"
+                   makes the model write the comma anyway, and OpenAI's subset
+                   wants every property required (prompting-guide.md). */
+                id: { type: ["string", "null"] },
+              },
+              required: ["text", "id"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["text", "ids"],
+        required: ["ids", "sentences"],
         additionalProperties: false,
       },
     },
@@ -341,7 +391,7 @@ export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
 } as const;
 
 validateAnthropicJsonSchema(SIMPLE_SUMMARY_OUTPUT_SCHEMA);
-assertNoBlockIdEnums(SIMPLE_SUMMARY_OUTPUT_SCHEMA, ["ids"]);
+assertNoBlockIdEnums(SIMPLE_SUMMARY_OUTPUT_SCHEMA, ["ids", "id"]);
 
 /**
  * The user message's constant half — and all of what `inputFingerprint` hashes
@@ -413,8 +463,15 @@ export function isStale(
 export interface SimpleDropped {
   /** A paragraph that was not an object. */
   malformed: number;
-  /** A paragraph with no text. */
+  /** A paragraph with no sentence that has text. */
   empty: number;
+  /** A sentence that was not an object, or had no text — left out of its paragraph. */
+  emptySentences: number;
+  /**
+   * A sentence's id that is not one of its paragraph's surviving `ids` (or not
+   * a string): the sentence is kept, unlinked. Never promoted into `ids`.
+   */
+  sentenceIds: number;
   /** An id that is not a body-evidence block of this article (or not a string). */
   unknownIds: number;
   /** An id a paragraph had already named. */
@@ -426,7 +483,16 @@ export interface SimpleDropped {
 }
 
 export function emptyDropped(): SimpleDropped {
-  return { malformed: 0, empty: 0, unknownIds: 0, duplicateIds: 0, overCap: 0, unanchored: 0 };
+  return {
+    malformed: 0,
+    empty: 0,
+    emptySentences: 0,
+    sentenceIds: 0,
+    unknownIds: 0,
+    duplicateIds: 0,
+    overCap: 0,
+    unanchored: 0,
+  };
 }
 
 /** Words as a reader counts them: runs of non-space. */
@@ -460,11 +526,43 @@ function keptIds(raw: unknown, evidenceIds: ReadonlySet<string>, dropped: Simple
 }
 
 /**
+ * One paragraph's sentences: each with text, trimmed, and an id only when it is
+ * one of the paragraph's own surviving `ids` — anything else becomes `null` and
+ * is counted, so a sentence can only point at a passage the paragraph already
+ * rests on and the guard already reads.
+ */
+function keptSentences(raw: unknown, ids: readonly BlockId[], dropped: SimpleDropped): SimpleSentence[] {
+  const own = new Set<string>(ids);
+  const out: SimpleSentence[] = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const r = item && typeof item === "object" ? (item as { text?: unknown; id?: unknown }) : null;
+    const text = typeof r?.text === "string" ? r.text.trim() : "";
+    if (!r || !text) {
+      dropped.emptySentences++;
+      continue;
+    }
+    const id = typeof r.id === "string" ? r.id.trim() : r.id;
+    if (id === null) out.push({ text, id: null });
+    else if (typeof id === "string" && own.has(id)) out.push({ text, id: id as BlockId });
+    else {
+      dropped.sentenceIds++;
+      out.push({ text, id: null });
+    }
+  }
+  return out;
+}
+
+/**
  * Turn what the model said into paragraphs, believing as little as possible:
  * ids checked against **the exact body-evidence set sent**, deduplicated,
  * capped at `MAX_IDS`; an empty paragraph dropped; a paragraph with no
  * surviving id dropped. The model's order is kept — it is the shape the prompt
  * asked for (about → why → key ideas), not reading order.
+ *
+ * **`text` is derived, never the model's**: the kept sentences' trimmed texts
+ * joined with one space, which is exactly what `usableSentences` (src/types.ts)
+ * requires before a reader sees them. Word limits, the fidelity guard and
+ * everything else read `text`, as before.
  */
 export function toParagraphs(
   raw: readonly unknown[],
@@ -477,18 +575,24 @@ export function toParagraphs(
       dropped.malformed++;
       continue;
     }
-    const r = item as { text?: unknown; ids?: unknown };
-    const text = typeof r.text === "string" ? r.text.trim() : "";
+    const r = item as { sentences?: unknown; ids?: unknown };
+    /* The ids first, so each sentence is checked against the ones that
+       survived — tallied aside, because an empty paragraph's ids were never
+       counted as dropped and still are not. */
+    const tally = emptyDropped();
+    const ids = keptIds(r.ids, evidenceIds, tally);
+    const sentences = keptSentences(r.sentences, ids, tally);
+    const text = sentences.map((s) => s.text).join(" ");
     if (!text) {
       dropped.empty++;
       continue;
     }
-    const ids = keptIds(r.ids, evidenceIds, dropped);
+    for (const k of Object.keys(dropped) as (keyof SimpleDropped)[]) dropped[k] += tally[k];
     if (ids.length === 0) {
       dropped.unanchored++;
       continue;
     }
-    out.push({ text, ids });
+    out.push({ text, ids, sentences });
   }
   return out;
 }

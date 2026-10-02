@@ -99,6 +99,71 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
   return cancel;
 }
 
+/**
+ * **Reveal the section an address names, once it exists** — `?section=` on
+ * the Metadata page (params.ts § `sectionParam`), which the command bar's *Run
+ * again* rows write (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+ * The same `reveal` the contents list uses, so arriving by a link opens,
+ * scrolls, focuses and flashes exactly as a click there does.
+ *
+ * **`onRevealed` is called only once `reveal` has found the section**, and is
+ * where the caller takes the parameter off the address. That order is GPT
+ * Sol's F4 on the plan: a page whose sections arrive with a request reveals
+ * nothing on first render, and a parameter consumed then would be a press that
+ * silently did nothing. So it is tried once the page has committed, and again
+ * on every change under `containerRef` (a `MutationObserver`, the mechanism
+ * the contents list itself uses to notice sections arriving) until it finds
+ * one. Accepted ids are a closed list whose members are checked against the
+ * page's real sections, so a timer that gives up would turn a slow mount into a
+ * successful navigation that never visibly arrives. The observer is stopped
+ * on success, id change or unmount.
+ *
+ * **Tried from a timer and from the observer, never inside the effect.** The
+ * section opens itself with `flushSync` (Metadata.tsx § Section), and React
+ * will not flush from inside its own effect pass.
+ *
+ * A reveal already under way is left to finish when the id goes to `null` —
+ * which is what taking the parameter off does, a moment after it started — and
+ * cancelled only on unmount.
+ */
+export function useRevealOnArrival(
+  containerRef: RefObject<HTMLElement | null>,
+  id: string | null,
+  onRevealed: () => void,
+): void {
+  const reported = useRef(onRevealed);
+  reported.current = onRevealed;
+  const underway = useRef<(() => void) | null>(null);
+  useEffect(() => () => underway.current?.(), []);
+  useEffect(() => {
+    if (id === null) return;
+    let finished = false;
+    let observer: MutationObserver | null = null;
+    let first: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      finished = true;
+      observer?.disconnect();
+      clearTimeout(first);
+    };
+    const attempt = () => {
+      if (finished) return;
+      const cancel = reveal(containerRef.current, id);
+      if (cancel === null) return;
+      stop();
+      underway.current?.();
+      underway.current = cancel;
+      reported.current();
+    };
+    first = setTimeout(attempt, 0);
+    const root = containerRef.current;
+    if (root && typeof MutationObserver === "function") {
+      observer = new MutationObserver(attempt);
+      observer.observe(root, { childList: true, subtree: true });
+    }
+    return stop;
+  }, [containerRef, id]);
+}
+
 /** Whether a mutation can change the labels, keywords or asides in the index. */
 function changesIndex(record: MutationRecord): boolean {
   if (record.type === "attributes") return true;

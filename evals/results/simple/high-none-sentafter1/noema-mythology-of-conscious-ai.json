@@ -1,0 +1,277 @@
+{
+  "arm": "high-none-sentafter1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "noema-mythology-of-conscious-ai",
+  "version": "simple-prompt/4",
+  "sourceSha256": "6f6c85f0adc6d1035d31fc86abe3489ba276c113203d29d4f7004f90053fdd3b",
+  "at": "2026-10-02T15:11:39.164Z",
+  "bodyWords": 8283,
+  "bodyBlocks": 141,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "e0b5339399255bfb",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 40029,
+  "costUsd": 0.2207518,
+  "tokens": {
+    "input": 11838,
+    "output": 5191,
+    "reasoning": 2912
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 206,
+  "fullerWords": 257,
+  "briefWords": 91,
+  "paragraphs": [
+    {
+      "text": "In this essay, neuroscientist Anil Seth asks whether AI systems are, or could ever be, conscious. Being conscious means there is something it feels like to be you, like seeing a blue sky or tasting coffee. Seth stresses that this is different from intelligence, which is about getting things done.",
+      "ids": [
+        "spya-gjy45p",
+        "spya-j0a9rq",
+        "spya-nj888h"
+      ],
+      "sentences": [
+        {
+          "text": "In this essay, neuroscientist Anil Seth asks whether AI systems are, or could ever be, conscious.",
+          "id": "spya-gjy45p"
+        },
+        {
+          "text": "Being conscious means there is something it feels like to be you, like seeing a blue sky or tasting coffee.",
+          "id": "spya-j0a9rq"
+        },
+        {
+          "text": "Seth stresses that this is different from intelligence, which is about getting things done.",
+          "id": "spya-nj888h"
+        }
+      ]
+    },
+    {
+      "text": "He says the question matters for machines, because conscious beings could suffer and might deserve rights. It matters for us too, since believing chatbots feel things can leave us open to being exploited. And confusing ourselves with machines makes us overrate them and underrate ourselves.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-sge6a2"
+      ],
+      "sentences": [
+        {
+          "text": "He says the question matters for machines, because conscious beings could suffer and might deserve rights.",
+          "id": "spya-e68t9h"
+        },
+        {
+          "text": "It matters for us too, since believing chatbots feel things can leave us open to being exploited.",
+          "id": "spya-z2b4ny"
+        },
+        {
+          "text": "And confusing ourselves with machines makes us overrate them and underrate ourselves.",
+          "id": "spya-sge6a2"
+        }
+      ]
+    },
+    {
+      "text": "Conscious AI rests on an assumption called computational functionalism: that running the right kind of computing is enough for consciousness. Seth doubts it, because what a living brain does cannot be cleanly split from what it is made of. He also argues that being alive probably matters for consciousness, though he admits he has no knock-down proof.",
+      "ids": [
+        "spya-wepmnr",
+        "spya-zw2m7u",
+        "spya-hj5y6s"
+      ],
+      "sentences": [
+        {
+          "text": "Conscious AI rests on an assumption called computational functionalism: that running the right kind of computing is enough for consciousness.",
+          "id": "spya-wepmnr"
+        },
+        {
+          "text": "Seth doubts it, because what a living brain does cannot be cleanly split from what it is made of.",
+          "id": "spya-zw2m7u"
+        },
+        {
+          "text": "He also argues that being alive probably matters for consciousness, though he admits he has no knock-down proof.",
+          "id": "spya-hj5y6s"
+        }
+      ]
+    },
+    {
+      "text": "Finally, a computer copy of something is not the real thing: a simulated rainstorm makes nothing wet. Together, these arguments suggest consciousness is very unlikely to arise in silicon computers just because AI gets smarter. Seth does not rule it out, but warns that AI which only seems conscious is a much nearer problem.",
+      "ids": [
+        "spya-npjt4j",
+        "spya-c5ve5t",
+        "spya-x63ycg"
+      ],
+      "sentences": [
+        {
+          "text": "Finally, a computer copy of something is not the real thing: a simulated rainstorm makes nothing wet.",
+          "id": "spya-npjt4j"
+        },
+        {
+          "text": "Together, these arguments suggest consciousness is very unlikely to arise in silicon computers just because AI gets smarter.",
+          "id": "spya-c5ve5t"
+        },
+        {
+          "text": "Seth does not rule it out, but warns that AI which only seems conscious is a much nearer problem.",
+          "id": "spya-x63ycg"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This prize-winning essay by neuroscientist Anil Seth asks whether today's AI systems are, or could ever be, conscious: whether there is anything it feels like to be them. He argues that the belief in conscious AI is largely a myth built on a shaky assumption.",
+      "ids": [
+        "spya-gjy45p",
+        "spya-wepmnr"
+      ],
+      "sentences": [
+        {
+          "text": "This prize-winning essay by neuroscientist Anil Seth asks whether today's AI systems are, or could ever be, conscious: whether there is anything it feels like to be them.",
+          "id": "spya-gjy45p"
+        },
+        {
+          "text": "He argues that the belief in conscious AI is largely a myth built on a shaky assumption.",
+          "id": "spya-wepmnr"
+        }
+      ]
+    },
+    {
+      "text": "Seth says the question matters because a conscious being has moral status: it could suffer and might deserve rights. Even false beliefs matter, since they can exploit our feelings or stop us switching off machines that act against us. And mixing ourselves up with machines makes us overrate them and underrate ourselves.",
+      "ids": [
+        "spya-e68t9h",
+        "spya-z2b4ny",
+        "spya-sge6a2"
+      ],
+      "sentences": [
+        {
+          "text": "Seth says the question matters because a conscious being has moral status: it could suffer and might deserve rights.",
+          "id": "spya-e68t9h"
+        },
+        {
+          "text": "Even false beliefs matter, since they can exploit our feelings or stop us switching off machines that act against us.",
+          "id": "spya-z2b4ny"
+        },
+        {
+          "text": "And mixing ourselves up with machines makes us overrate them and underrate ourselves.",
+          "id": "spya-sge6a2"
+        }
+      ]
+    },
+    {
+      "text": "Intelligence is about doing things, while consciousness is about experience, and the two need not go together. Human biases, such as seeing human traits in things that only look humanlike, push us to bundle them. The deeper assumption is \"computational functionalism\": the idea that running the right computer program is enough for consciousness.",
+      "ids": [
+        "spya-nj888h",
+        "spya-cvaqgs",
+        "spya-wepmnr"
+      ],
+      "sentences": [
+        {
+          "text": "Intelligence is about doing things, while consciousness is about experience, and the two need not go together.",
+          "id": "spya-nj888h"
+        },
+        {
+          "text": "Human biases, such as seeing human traits in things that only look humanlike, push us to bundle them.",
+          "id": "spya-cvaqgs"
+        },
+        {
+          "text": "The deeper assumption is \"computational functionalism\": the idea that running the right computer program is enough for consciousness.",
+          "id": "spya-wepmnr"
+        }
+      ]
+    },
+    {
+      "text": "Seth gives four arguments against it, beginning with the claim that brains are not computers, since what they do cannot be separated from what they are. Second, brains may rely on processes that are not step-by-step programs at all, and third, being alive may (probably) be needed for consciousness. Finally, a computer simulation of something is not the thing itself, just as a simulated rainstorm makes nothing wet.",
+      "ids": [
+        "spya-zw2m7u",
+        "spya-hj5y6s",
+        "spya-npjt4j"
+      ],
+      "sentences": [
+        {
+          "text": "Seth gives four arguments against it, beginning with the claim that brains are not computers, since what they do cannot be separated from what they are.",
+          "id": "spya-zw2m7u"
+        },
+        {
+          "text": "Second, brains may rely on processes that are not step-by-step programs at all, and third, being alive may (probably) be needed for consciousness.",
+          "id": "spya-hj5y6s"
+        },
+        {
+          "text": "Finally, a computer simulation of something is not the thing itself, just as a simulated rainstorm makes nothing wet.",
+          "id": "spya-npjt4j"
+        }
+      ]
+    },
+    {
+      "text": "He concludes that consciousness is very unlikely in silicon-based digital computers, though he does not rule out artificial consciousness entirely. Nobody should try to build conscious AI, he says, and machines that merely seem conscious are a nearer danger.",
+      "ids": [
+        "spya-c5ve5t",
+        "spya-yverz7",
+        "spya-x63ycg"
+      ],
+      "sentences": [
+        {
+          "text": "He concludes that consciousness is very unlikely in silicon-based digital computers, though he does not rule out artificial consciousness entirely.",
+          "id": "spya-c5ve5t"
+        },
+        {
+          "text": "Nobody should try to build conscious AI, he says, and machines that merely seem conscious are a nearer danger.",
+          "id": "spya-x63ycg"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay asks whether AI could ever be conscious, meaning able to feel and experience things. It matters because a conscious machine could suffer and might deserve rights. Even machines that only seem conscious could fool us and bend our sense of right and wrong.",
+      "ids": [
+        "spya-gjy45p",
+        "spya-e68t9h",
+        "spya-z2b4ny"
+      ],
+      "sentences": [
+        {
+          "text": "This essay asks whether AI could ever be conscious, meaning able to feel and experience things.",
+          "id": "spya-gjy45p"
+        },
+        {
+          "text": "It matters because a conscious machine could suffer and might deserve rights.",
+          "id": "spya-e68t9h"
+        },
+        {
+          "text": "Even machines that only seem conscious could fool us and bend our sense of right and wrong.",
+          "id": "spya-z2b4ny"
+        }
+      ]
+    },
+    {
+      "text": "Anil Seth argues that being smart and being conscious are different things. He thinks brains are not just computers, and that being alive probably matters for consciousness. He concludes that conscious AI is very unlikely, and may be impossible for today's computers, though not ruled out.",
+      "ids": [
+        "spya-nj888h",
+        "spya-hj5y6s",
+        "spya-c5ve5t"
+      ],
+      "sentences": [
+        {
+          "text": "Anil Seth argues that being smart and being conscious are different things.",
+          "id": "spya-nj888h"
+        },
+        {
+          "text": "He thinks brains are not just computers, and that being alive probably matters for consciousness.",
+          "id": "spya-hj5y6s"
+        },
+        {
+          "text": "He concludes that conscious AI is very unlikely, and may be impossible for today's computers, though not ruled out.",
+          "id": "spya-c5ve5t"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

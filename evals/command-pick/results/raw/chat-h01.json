@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944967-G0KAQo9oz9fnVa6IwM4J",
+ "object": "chat.completion",
+ "created": 1790944967,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"action:find\", \"argument\": \"entropy\", \"confidence\": 0.65}",
+    "refusal": null,
+    "reasoning": "\"Show me where they define entropy\" sounds like they want the specific passage location rather than a standalone glossary definition, so this leans toward action:find rather than mode:glossary - they're asking to locate the moment in the text where the term gets defined, not just requesting its meaning.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "\"Show me where they define entropy\" sounds like they want the specific passage location rather than a standalone glossary definition, so this leans toward action:find rather than mode:glossary - they're asking to locate the moment in the text where the term gets defined, not just requesting its meaning.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "Eu0JCsQBCBIYAipAJ5g3cdN9Qr1BUTMlxbvgZEu/2Bvzskcv/UAcaKd14Gl2aYOwYFFwg+wq1bJf/AgyKenP1Kd+SI1OOJN173VRHzIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAHNzf7VBhIMfIsdXqRVw+sCy8SkGgzbDZr4224Lp9dpAfoiMCTGs3GtCpB36wrpg6BLTzsteGZfhA2wpVmgCPIiWHZPyoNccexvJLrYmxMs2ZiFvyrVBxDTk+i7j3BT+IR2Yg2YPa9bxRD9PukQHcquAsr3lFGaK8rBkSpCdnqn4YiVjXOGflD9sWnw/xxHMMzxOmJPRVvPTvwIXZJBs2e/79gySQvVSwF/JZepe7bgRjhyR+/6vVXMZdc8vzZNa6RYWuXoIBpUg8w3dNGEQhX1q57sAKQJ/3s/5X84CFi7YBLItk1ola6uOz5NUHpXE1dKf7Jm3oB4SOLaCq8PBELtHfCcY0CqHycd5uxYeKecKWpDN7mkwePXZijArbc4HCmlfQYMAiD0jxI1aruNQAx6W+j9XgfRX77qUEoH/JVM1DLBPC6vXAlHYU55EbTybMUgdl36lvtyqo1lw6zdNlCU2MAW2Xcn0B2PK4cu324U0uN1yTcy2S3ER7cMCnEFWRjXmM1LHBaWXOW2aX2EnbGO+ND00Rnih/61s2irTv/QhkdxdtEo2hUy/maN74VFnPIVKEScuppE79p5rbIfrKV4nKU1wZKIHWRS2zNINPM6IEVHOy7v7hugB2KABombCZ1lPk8yj3geNSxr7uPoH1LHc1EMzT5P4HVQwOsprLnWIoM56HpbV/BgAWuShKQjmOQ6hH8B6L/EJKgOSGPiMFL70JL6HWCPomTnZDiQzbguHzU2Z0jUAHfq3QwcGmIeDdWepQDRu7P+nKGYhGf7GE7BYJnEr0FFjfpngAfT8Znzt8rL8t9cxmTYgz3IG74OS/IaLX6LTjAuF/fBaHc7gf5GC/aAR8yNhiTimSn+U/ckE/yAx6PO7oY/SVawHE5RFyk5qixFBjGc9zbWzhSEp1SbOFsLVtJPd1SPINoQw1QQOuZDKG+zl+SFN58dopGO1EUTbNhUM71LaovjrTbLlmlaqaqlzCrjYKJ+bElLdOZ9tmR5IQv73EAt4Q4vQkKxPja2VShCxI3bShoyMIvmpL7pnOvN4uxwzM1dajVjW015Bt3JARQcFqkAo8sWm4YKb/t+F/k2Zv3Bx9xdCv3hoyDq0JYwh1VyswcvX/h4gA5hndFXkJRWyYGfm5xw9BnFKiJPmmXHOdeSFRRJqf822SB5kUVARaUsfASkjHxVKWa1rD8wV4t/JHzTjGlRkdpcujldzO4Wombrg1+K99cGJkbxMts5o2UgFBAqPhYL4+l+/heYTPvsbak5hbuMtR3Jkxuw6S9eS54edWlEhjMIC4kZVy6m/iO6+uL9xtGmZzAkSV8F83dr6n22Ch0SEEBjuykkBO2p62W82gxEssLmys7/oVTwcjpnm1Y/bUay97xLoFNGud2USgBR75FZkVg5K5h9GJHcgNBuvqRL3BgB.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2816,
+  "completion_tokens": 318,
+  "total_tokens": 3134,
+  "cost": 0.008812,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.008812,
+   "upstream_inference_prompt_cost": 0.005632,
+   "upstream_inference_completions_cost": 0.00318
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 287,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 6559
+ }
+}

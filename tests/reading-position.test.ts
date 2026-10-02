@@ -131,6 +131,10 @@ describe("what the scroll spy writes", () => {
        replaces it rather than the spy going quiet forever. */
     expect(spy(14, "spya-gone11" as BlockId)).toEqual({ at: MIDDLE });
   });
+
+  it("writes no hidden Structure start when every sparse start is folded", () => {
+    expect(spy(14, null, { skip: () => true })).toBeNull();
+  });
 });
 
 describe("a jump in flight", () => {

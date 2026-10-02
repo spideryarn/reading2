@@ -1062,14 +1062,24 @@ describe("the artefacts a shared link carries", () => {
         { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
       ],
       simple: [
-        { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
+        /* Sentences that are its text exactly (plan 261002e): they cross, rebuilt. */
+        {
+          text: "This essay asks what a measurement has to carry.",
+          ids: ["spya-bbbbbb" as BlockId],
+          sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb", stray: "x" }],
+        },
         {
           text: "It matters because a copy would not do.",
           ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
         },
       ],
       fuller: [
-        { text: "This essay asks what a measurement has to carry, and why.", ids: ["spya-bbbbbb" as BlockId] },
+        /* Sentences that say something the checked text does not: they do not cross. */
+        {
+          text: "This essay asks what a measurement has to carry, and why.",
+          ids: ["spya-bbbbbb" as BlockId],
+          sentences: [{ text: "This essay asks nothing unchecked-words-here.", id: null }],
+        },
         { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
       ],
@@ -1565,6 +1575,9 @@ describe("the artefacts a shared link carries", () => {
         {
           id: "spya-run23z",
           criterion: "anywhere the argument turns on a number",
+          /* A quick run, so the one field that says what the numbers mean is
+             seen crossing with a value its default would not give it. */
+          kind: "quick",
           createdAt: "2026-09-02T09:00:00.000Z",
           stale: false,
           colour: 3,
@@ -1598,9 +1611,12 @@ describe("the artefacts a shared link carries", () => {
         "[].hits[].reasoning",
         "[].hits[].start",
         "[].id",
+        "[].kind",
         "[].stale",
       ].sort(),
     );
+    /* Plan 261002e, F6: a quick run reaches a visitor labelled quick. */
+    expect(built.searches[0]?.kind).toBe("quick");
     /* And not vacuously: the reader's own words really are there, and so is the
        passage they found. */
     expect(built.searches[0]?.criterion).toContain("turns on a number");
@@ -1626,9 +1642,9 @@ describe("the artefacts a shared link carries", () => {
       ...ARTICLE_BASE,
       ...NO_ARTEFACTS,
       searches: [
-        { id: "spya-run22z", criterion: "fresh", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run22z", criterion: "fresh", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: false },
-        { id: "spya-run33z", criterion: "old", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run33z", criterion: "old", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: true },
       ],
     });
@@ -1649,7 +1665,7 @@ describe("the artefacts a shared link carries", () => {
       ...ARTICLE_BASE,
       ...NO_ARTEFACTS,
       searches: [
-        { id: "spya-run44z", criterion: "unpinned", createdAt: "2026-09-02T09:00:00.000Z",
+        { id: "spya-run44z", criterion: "unpinned", kind: "meaning", createdAt: "2026-09-02T09:00:00.000Z",
           status: "done", hits: [], stale: false },
       ],
     });
@@ -1744,10 +1760,22 @@ describe("the artefacts a shared link carries", () => {
         "levels.fuller[].text",
         "levels.simple",
         "levels.simple[].ids",
+        "levels.simple[].sentences",
+        "levels.simple[].sentences[].id",
+        "levels.simple[].sentences[].text",
         "levels.simple[].text",
       ].sort(),
     );
-    expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
+    /* Through the one accessor: the usable list rebuilt, the unusable one gone. */
+    expect(built.simpleSummary?.levels.simple[0]).toEqual({
+      text: "This essay asks what a measurement has to carry.",
+      ids: ["spya-bbbbbb"],
+      sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb" }],
+    });
+    const plain = ({ text, ids }: SimpleSummary["levels"]["brief"][number]) => ({ text, ids });
+    expect(built.simpleSummary?.levels.fuller).toEqual(SIMPLE.levels.fuller.map(plain));
+    expect(built.simpleSummary?.levels.brief).toEqual(SIMPLE.levels.brief);
+    expect(built.simpleSummary?.levels.simple.slice(1)).toEqual(SIMPLE.levels.simple.slice(1));
     const json = JSON.stringify(built.simpleSummary);
     for (const provenance of [
       "simple/2",
@@ -1760,6 +1788,8 @@ describe("the artefacts a shared link carries", () => {
       "simple-check/1",
       "checker-model",
       "checker-why-sentence",
+      "stray",
+      "unchecked-words-here",
     ]) {
       expect(json, provenance).not.toContain(provenance);
     }

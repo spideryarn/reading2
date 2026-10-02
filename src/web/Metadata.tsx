@@ -192,6 +192,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -266,7 +267,7 @@ import { isWebUrl } from "../urls.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
-import { atParam } from "./params.js";
+import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
@@ -278,7 +279,8 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
+import { downloadExport } from "./export-download.js";
+import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -289,12 +291,14 @@ import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { flushSync } from "react-dom";
-import { PageContents, SECTION_REVEAL } from "./PageContents.js";
+import { PageContents, SECTION_REVEAL, useRevealOnArrival } from "./PageContents.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
 import { ResetArticle } from "./ResetArticle.js";
-import { SKETCH_WAIT } from "./sketch-cost.js";
+/* The labels and notes the command bar shares — that file's header says why
+   they are not here. */
+import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
@@ -711,6 +715,24 @@ export function Metadata({
    * one page's contents list the other page's sections.
    */
   const body = useRef<HTMLElement>(null);
+
+  /**
+   * **`?section=`: open the section an address names, then take it off.**
+   * Written by the command bar's *Run again* rows, which land a run here, in
+   * *AI processing*, rather than in the mode (plan 261002c, GPT Sol's F1) —
+   * from the reading view as a link, and on this page as the same address
+   * with the parameter added in place.
+   *
+   * Taken off with `replace` (the parameter's own history) **only once the
+   * section has been found and revealed** — `useRevealOnArrival`, which waits
+   * for a section still mounting and says why the order matters (F4). After
+   * that the address is the page's own again, so a reload does not flash the
+   * section a second time and a copied link does not carry the instruction.
+   */
+  const [section, setSection] = useQueryState("section", sectionParam);
+  useRevealOnArrival(body, section === null ? null : sectionIdFor(section), () => {
+    void setSection(null);
+  });
 
   /* Share… in `TopActions`: to the sharing card, landing on its heading.
      Through `body` rather than `document`, for the reason `body`'s docstring
@@ -1251,7 +1273,18 @@ export function Metadata({
       {/* No `drawer` prop, and that is the whole reason the Questions button on
           this page is a link back to the article rather than a drawer trigger.
           See Dock.tsx. */}
-      <Dock slug={slug} view="metadata" experimental={experimental} />
+      <Dock
+        slug={slug}
+        view="metadata"
+        experimental={experimental}
+        /* The bar's Archive and Export act on this page's one controller, so
+           a press there and the buttons here are one state. Not on the
+           fixture, where there is no row and both requests would 404 — the
+           rule `ArchiveArticle` and `ExportSection` follow. Not gated on
+           `hasShelfRow`'s provenance wait: CommandBar.tsx §
+           `CommandBarArticle.shelfRow` says why the bar need not wait. */
+        shelfRow={showingFixture ? undefined : { archive }}
+      />
     </>
   );
 }
@@ -1569,31 +1602,12 @@ function StageRecord({
   );
 }
 
-/**
- * The reader-facing name of each — a noun, not the present-tense
- * label the stage rows carry.
- *
- * `Record<MetadataRerunStep, string>`, so a new member of the list is a
- * typecheck failure here rather than a blank row.
- */
-const RERUN_LABEL: Record<MetadataRerunStep, string> = {
-  arc: "Arc",
-  tweets: "Thread",
-  glossary: "Glossary",
-  quotes: "Quotes",
-  ideas: "Ideas",
-  timeline: "Timeline",
-  quiz: "Quiz",
-  faq: "FAQ",
-  sketch: "Sketch",
-  skim: "Skim",
-  debate: "Debate",
-  citations: "Citations",
-  /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
-  crossrefs: "Cross-references",
-  /* A sub-mode of Summary, named as its chip is. */
-  simple: "Simple summary",
-};
+/* `RERUN_LABEL` and `RERUN_COST_NOTE` live in ./rerun-commands.ts since
+   2026-10-02, because the command bar's *Run again* rows name the same steps and
+   cannot import them from here (this file imports the Dock, the Dock the bar —
+   GPT Sol's F8 on docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+   What stays here is the glossary's verdict-driven override, below, which is a
+   fact about this article rather than about the step. */
 
 /**
  * **What a reader might type looking for *AI processing*** — the section where
@@ -1622,10 +1636,10 @@ const AI_PROCESSING_KEYWORDS = [
 
 const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
 
-/**
- * **The four rows for which "another model call" is not the whole story**,
- * said under the mode's name, before the press, because nothing else on this
- * page says it.
+/*
+ * **`RERUN_COST_NOTE` (now in ./rerun-commands.ts): the four rows for which
+ * "another model call" is not the whole story**, said under the mode's name,
+ * before the press, because nothing else on this page says it.
  *
  * Until 2026-09-30 these were the four special sentences in an inline confirm
  * that every press went through; Greg asked for the confirm to go (below, at
@@ -1659,6 +1673,7 @@ const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
  * `JobProgress`), because a sibling `<span>` is not read to somebody who
  * reaches the button by keyboard.
  */
+
 /**
  * **The glossary's label and note once the server has said which** — plan
  * 261001i § 3. `glossaryRun` is `glossaryRunKind` (src/glossary.ts), the
@@ -1681,18 +1696,6 @@ const GLOSSARY_RUN: Record<
     label: null,
     note: "Writes a new list, because the article, the glossary's instructions or your profile has changed",
   },
-};
-
-const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
-  glossary:
-    /* *Up to date* is doing the work: `existingFor` refuses the old list when
-       there is none, or the source, the prompt version or the reader profile
-       differs — GPT Sol's second review listed the branches, and a note naming
-       all four was too long to be read as a note. */
-    "Adds more terms to an up-to-date list; otherwise writes a new one",
-  sketch: `One model call, ${SKETCH_WAIT}`,
-  debate: "Up to two model calls, each of which searches the web",
-  skim: "Needs Quotes first; without them it stops before any model call",
 };
 
 /**
@@ -1928,52 +1931,20 @@ function ExportSection({
   /* The zip is assembled on the server before a byte is sent, so this is a real
      wait — a second or two on a long article — and the button is disabled for
      it. Not only to say so: a second press would start a second assembly and
-     hand the reader two copies of the same file. */
+     hand the reader two copies of the same file. The request itself, and the
+     guard that also covers the command bar's Export row, are
+     export-download.ts's since 2026-10-02 (plan 261002c). */
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function download(): Promise<void> {
     setBusy(true);
     setError(null);
-    try {
-      const res = await apiFetch(`/api/export/${encodeURIComponent(slug)}`);
-      /* `failure`, not `readJson`: the success body is a zip and reading it as
-         text to look for an `error` key would consume the bytes we came for.
-         On a refusal it hands back the server's own sentence. */
-      if (!res.ok) throw await failure(res);
-
-      const url = URL.createObjectURL(await res.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${slug}.zip`;
-      /* In the document, not detached: Firefox has never dispatched the default
-         action for a `click()` on an anchor that is not in a tree, and the
-         symptom is nothing happening at all. */
-      document.body.append(link);
-      link.click();
-      link.remove();
-      /* A macrotask later, not synchronously. Revoking inside the same task can
-         land before the browser has resolved the URL for the download, and the
-         download then fails silently. A tick is enough — unlike SourceLink's
-         minute-long timer, where a *new tab* has to fetch the URL itself; here
-         the fetch starts during the click above. */
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    } catch (e) {
-      /* The 413's prose is the server's and it is already written for the
-         reader (src/routes.ts § `sendExport`): it says what happened and that
-         trying again will not help, which is what docs/project/copy.md asks
-         for. Putting "Couldn't build the download" in front of it would add a
-         lead that sentence does not need. Everything else gets the lead,
-         because a bare "No such article." beside a button says nothing about
-         which button. */
-      setError(
-        statusOf(e) === 413
-          ? `${(e as Error).message} [export-too-big]`
-          : `Couldn't build the download. ${(e as Error).message} [export-failed]`,
-      );
-    } finally {
-      setBusy(false);
-    }
+    const result = await downloadExport(slug);
+    /* `busy` is a bar press already building this zip: that one will arrive,
+       so this press has nothing to say. */
+    if (result.kind === "failed") setError(result.message);
+    setBusy(false);
   }
 
   if (!offer) return null;
@@ -3388,7 +3359,17 @@ function sectionId(label: string): string {
   return `sec-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }
 
-function Section({
+/**
+ * **The element a `?section=` value names** — the value is the id `sectionId`
+ * makes, without its prefix, so the address reads `section=ai-processing`
+ * rather than `section=sec-ai-processing`. tests/metadata-section-param.test.tsx
+ * checks every accepted value against this page's real sections.
+ */
+function sectionIdFor(section: MetadataSection): string {
+  return `sec-${section}`;
+}
+
+export function Section({
   label,
   aside,
   keywords,
@@ -3469,7 +3450,10 @@ function Section({
      open section leaves it open. A section that is not collapsible is already
      showing, and setting `open` on it changes nothing. */
   const sectionEl = useRef<HTMLElement>(null);
-  useEffect(() => {
+  /* Layout, not passive: a MutationObserver can see this section's committed
+     DOM before passive effects run. The arrival hook may dispatch immediately,
+     so its listener must exist in the same commit as the element. */
+  useLayoutEffect(() => {
     const el = sectionEl.current;
     if (!el) return;
     /* `flushSync` so the body is in the DOM when the event returns: the

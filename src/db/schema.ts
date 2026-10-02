@@ -3662,10 +3662,22 @@ export const searchRuns = spideryarn.table(
      * migrate. `MAX_STORED_COLOUR`, src/searches.ts, is the same number.
      */
     colour: integer("colour"),
+
+    /**
+     * **Which matcher answered** — `'meaning'` (src/search.ts) or `'quick'`
+     * (Jev, src/quick-search.ts). Plan 261002e.
+     *
+     * Stated rather than inferred from `model`, because a pending or failed run
+     * has no model and the panel still has to label it. `NOT NULL DEFAULT
+     * 'meaning'` because every row before 2026-10-02 was one, and the CHECK
+     * because a third value read back as either would be wrong in silence.
+     */
+    kind: text("kind").notNull().default("meaning"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
     check("search_runs_status", sql`${t.status} in ('pending','done','error')`),
+    check("search_runs_kind", sql`${t.kind} in ('quick','meaning')`),
     check("search_runs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     check("search_runs_colour", sql`${t.colour} is null or (${t.colour} >= 0 and ${t.colour} < 64)`),
     /* An attempt is both columns or neither. Half of one is a run that either
@@ -4541,6 +4553,51 @@ export const feedback = spideryarn.table(
      * src/store/pg-feedback.ts.
      */
     index("feedback_owner_created_idx").on(t.ownerId, t.createdAt),
+  ],
+);
+
+/**
+ * **One row per report whose reader we have emailed, or tried to, that it
+ * shipped** — the ledger behind the last step of `npm run deploy`
+ * (scripts/feedback-shipped-emails.ts). Greg, 2026-10-02: *"When someone (other
+ * than an admin …) has submitted a Feedback report that gets shipped &
+ * deployed, send them an email"*.
+ *
+ * Every deploy reconciles against it: a shipped report from a reader with no
+ * `sent` row here gets a letter. `failed` is a definite refusal and is retried
+ * by the next deploy; `sending` is either in flight or a send that may have
+ * gone, and only a person moves it on. **No address is stored**: the letter
+ * goes to the account's current confirmed address, read at send time, and
+ * `feedback.reporter_email` stays the address the reader had when they wrote.
+ * docs/plans/261002f-email-readers-when-their-feedback-ships.md.
+ */
+export const feedbackShippedEmails = spideryarn.table(
+  "feedback_shipped_emails",
+  {
+    ownerId: uuid("owner_id").notNull(),
+    reportId: text("report_id").notNull(),
+    status: text("status").notNull(),
+    /** Bumped by each reservation. */
+    attempts: integer("attempts").notNull().default(1),
+    /** Why the last attempt did not end `sent`: an error name, never a body or an address. */
+    detail: text("detail"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.reportId] }),
+    /* Erasing the report erases the record that we wrote about it. */
+    foreignKey({
+      name: "feedback_shipped_emails_feedback_fk",
+      columns: [t.ownerId, t.reportId],
+      foreignColumns: [feedback.ownerId, feedback.id],
+    }).onDelete("cascade"),
+    check("feedback_shipped_emails_status", sql`${t.status} in ('sending', 'sent', 'failed')`),
+    check("feedback_shipped_emails_attempts", sql`${t.attempts} >= 1`),
+    check(
+      "feedback_shipped_emails_detail_length",
+      sql`${t.detail} is null or char_length(${t.detail}) <= 200`,
+    ),
   ],
 );
 

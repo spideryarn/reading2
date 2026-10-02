@@ -24,6 +24,7 @@ import {
   classifyEnd,
   openRouterJson,
   openRouterStream,
+  openRouterDecisions,
   openRouterTranscription,
   pathFor,
   UnreadableAnswer,
@@ -234,6 +235,7 @@ describe("the routing table", () => {
       embeddings: "/v1/embeddings",
       images: "/v1/images",
       transcription: "/v1/audio/transcriptions",
+      decisions: "/alpha/decisions",
     };
     for (const [job, route] of Object.entries(AI_JOB_ROUTE)) {
       const wire = AI_JOB_WIRE[job as keyof typeof AI_JOB_WIRE];
@@ -1503,5 +1505,141 @@ describe("the upstream that is written down", () => {
       frame({ provider: "Anthropic", choices: [], usage: { cost: 0.04 } }),
     );
     expect(upstream).toBe("Anthropic");
+  });
+});
+
+/**
+ * **The Decisions wire** — `openRouterDecisions`, quick search's endpoint
+ * (docs/plans/261002e-quick-search-v1.md). The response shape below is the
+ * spike's, measured live on 2026-10-02
+ * (docs/investigations/261002o-quick-search-spike.md): `answers` keyed as the
+ * questions were, and `usage` as `{input_tokens, output_tokens, cost}`.
+ */
+describe("the decisions wire", () => {
+  const ASK = {
+    model: "typesafe/jev-1.13",
+    state: { query: "q", passages: { "spya-aaaaa1": "text" } },
+    questions: {
+      "spya-aaaaa1": {
+        type: "noul" as const,
+        instructions: "Does passage spya-aaaaa1 match what the reader is looking for (query)?",
+      },
+    },
+  };
+
+  function decided(body: unknown, status = 200): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      headers: new Headers({ "x-generation-id": "gen-test-decide" }),
+      text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+    } as unknown as Response;
+  }
+
+  it("posts exactly the measured body to the alpha decisions endpoint", async () => {
+    const sent = stubTransport(() =>
+      decided({ answers: { "spya-aaaaa1": { noul: 0.9 } } }),
+    );
+    await collectSpend(() => openRouterDecisions("search-quick", ASK));
+    expect(sent[0]?.url).toBe("https://openrouter.ai/api/alpha/decisions");
+    /* The whole body, not a field: chat-wire furniture (`usage`, `stream`,
+       `provider`) on an alpha endpoint nobody measured it on is the thing
+       this asserts is absent. */
+    expect(sent[0]?.body).toEqual(ASK);
+  });
+
+  it("records one spend row on the decisions wire, with the cost and both token counts", async () => {
+    stubTransport(() =>
+      decided({
+        answers: { "spya-aaaaa1": { noul: 0.9 } },
+        usage: { input_tokens: 4339, output_tokens: 26, cost: 0.000182238 },
+      }),
+    );
+    const { result, report } = await collectSpend(() =>
+      openRouterDecisions("search-quick", ASK),
+    );
+    expect(result.noul).toEqual({ "spya-aaaaa1": 0.9 });
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.job).toBe("search-quick");
+    expect(report.calls[0]?.wire).toBe("decisions");
+    expect(report.calls[0]?.model).toBe("typesafe/jev-1.13");
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 182_238 });
+    expect(report.calls[0]?.inputTokens).toBe(4339);
+    expect(report.calls[0]?.outputTokens).toBe(26);
+    expect(report.calls[0]?.generationId).toBe("gen-test-decide");
+    expect(report.calls[0]?.outcome).toBe("ok");
+  });
+
+  it("keeps only answers that are a probability, never a guess", async () => {
+    stubTransport(() =>
+      decided({
+        answers: {
+          a: { noul: 0.5 },
+          b: { noul: 1.5 },
+          c: { noul: "0.9" },
+          d: {},
+          e: { noul: 0 },
+        },
+      }),
+    );
+    const { result } = await collectSpend(() => openRouterDecisions("search-quick", ASK));
+    expect(result.noul).toEqual({ a: 0.5, e: 0 });
+  });
+
+  it("names the context overflow, and only that, so a caller can halve and ask again", async () => {
+    /* Copied from the spike's `mechanics.json` → `overflow`. */
+    const overflow =
+      '{"error":{"message":"HTTP 400: {\\"detail\\":{\\"error_type\\":\\"max_tokens_exceeded\\"}}","code":400}}';
+    stubTransport(() => decided(overflow, 400));
+    const first = await collectSpend(() => openRouterDecisions("search-quick", ASK)).catch(
+      (e: unknown) => e,
+    );
+    expect(first).toBeInstanceOf(ProviderRefused);
+    expect((first as ProviderRefused).kind).toBe("context-exceeded");
+    /* And not on an ordinary 400, which halving cannot fix. */
+    stubTransport(() => decided('{"error":{"message":"HTTP 400: bad","code":400}}', 400));
+    const other = await collectSpend(() => openRouterDecisions("search-quick", ASK)).catch(
+      (e: unknown) => e,
+    );
+    expect((other as ProviderRefused).kind).toBeNull();
+    /* Nor on a body that is not JSON at all, nor on the words arriving under
+       a status that is not the context refusal's. */
+    stubTransport(() => decided("<html>Bad Gateway</html>", 400));
+    const malformed = await collectSpend(() => openRouterDecisions("search-quick", ASK)).catch(
+      (e: unknown) => e,
+    );
+    expect(malformed).toBeInstanceOf(ProviderRefused);
+    expect((malformed as ProviderRefused).kind).toBeNull();
+    stubTransport(() => decided(overflow, 502));
+    const wrongStatus = await collectSpend(() => openRouterDecisions("search-quick", ASK)).catch(
+      (e: unknown) => e,
+    );
+    expect((wrongStatus as ProviderRefused).kind).toBeNull();
+    /* And the provider's words are not on the error: the message is ours. */
+    expect((first as Error).message).not.toContain("max_tokens_exceeded");
+  });
+
+  it("records a refused call as an error row, not as nothing", async () => {
+    stubTransport(() => decided("{}", 500));
+    let report: Awaited<ReturnType<typeof collectSpend>>["report"] | undefined;
+    await collectSpend(async () => {
+      try {
+        await openRouterDecisions("search-quick", ASK);
+      } catch {
+        /* expected */
+      }
+    }).then((r) => {
+      report = r.report;
+    });
+    expect(report?.calls).toHaveLength(1);
+    expect(report?.calls[0]?.outcome).toBe("error");
+    expect(report?.calls[0]?.wire).toBe("decisions");
+  });
+
+  it("refuses an answer with no answers object rather than reading it as no match", async () => {
+    stubTransport(() => decided({ nothing: "useful" }));
+    await expect(
+      collectSpend(() => openRouterDecisions("search-quick", ASK)),
+    ).rejects.toThrowError(UnreadableAnswer);
   });
 });

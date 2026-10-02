@@ -1,0 +1,21 @@
+No P0 findings. Two P1 gaps should be addressed before implementation.
+
+1. **P1 — A late dictation can put an old answer into the replacement quiz.** The plan’s “nothing new to build” claim is incomplete. The batch effect clears `typed` and the mark, but leaves dictation running ([QuizPanel.tsx:407](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/QuizPanel.tsx:407)). Dictation still writes through `setTyped` ([QuizPanel.tsx:528](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/QuizPanel.tsx:528)); changing its keeper key deliberately does **not** invalidate the active transcript ([useDictation.ts:904](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useDictation.ts:904)). On Safari, where there are no live words, that transcript can insert into the newly emptied box ([useDictationField.ts:223](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useDictationField.ts:223)).
+   
+   Bind answer dictation delivery to the batch/question identity, preserving recoverable audio when rejecting an old delivery. Test a transcript arriving **after** the replacement batch.
+
+2. **P1 — Job completion can re-enable Regenerate before the replacement quiz has been read.** The proposed `busy = job || starting` covers posting and execution, but not the subsequent GET. Completed jobs disappear from `job` ([useStepJob.ts:427](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useStepJob.ts:427)), and completion invokes `refresh` without awaiting it ([useStepJob.ts:395](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useStepJob.ts:395)). A failed GET retains the old quiz—and would retain its old `profileChanged` verdict ([useQuiz.ts:298](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useQuiz.ts:298)). Reopening the panel can therefore offer another forced, paid rewrite. Server deduplication protects only queued/running jobs ([schema.ts:2460](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/db/schema.ts:2460)).
+   
+   Hold regeneration unavailable until post-job revalidation succeeds; on failure, offer a read retry. Test both a delayed and failed GET after successful generation.
+
+The other checks support the plan:
+
+- **Excluding Quiz from `ProfileCarrying` breaks no other current consumer.** Its consumers are the sharing inventory’s exhaustive record ([pg.ts:2499](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/store/pg.ts:2499)) and `OWNED_ARTEFACT`’s coverage assertion ([messages.test.ts:447](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/tests/messages.test.ts:447)). Other profile-bearing artefacts remain checked.
+- **Ordinary answer resets work.** Generation mints a new batch ([quiz.ts:493](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/quiz.ts:493)); the panel resets navigation, verdicts, draft and mark, and the hook resets ticks ([useQuiz.ts:349](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/web/useQuiz.ts:349)).
+- **No intrinsic regeneration loop:** hashing the exact profile used makes the next successful GET report unchanged. Keeping that hash outside the pipeline stamp preserves manual regeneration.
+- **No public leak found.** The public SQL projection omits Quiz ([public-reader.ts:269](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/store/public-reader.ts:269)), and the DTO constructs an explicit public response ([dto.ts:1193](/home/greg/code/spideryarn2/.claude/worktrees/quiz-regenerate-for-profile/src/public/dto.ts:1193)).
+- **The proposed design is appropriately small.** Reuse the existing hash comparison, panel and forced run. Preserve `withOldClientBands` when wrapping the GET. Also recognize that newly generated **unprofiled** quizzes, alongside legacy quizzes, get no badge or panel entry.
+
+Read-only code review; no files edited or tests run.
+
+**Verdict: sound design, but revise the plan to guard late dictation and post-generation revalidation before building.**

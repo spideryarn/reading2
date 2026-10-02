@@ -85,7 +85,7 @@
  * attempts. **Nothing may call `readBaseline` for this kind**, because there is
  * no `BASELINE` row for it and that function throws for a kind with none.
  *
- * ## The profile: read, but not stamped or recorded
+ * ## The profile: read and recorded, but not in the stamp
  *
  * Until 2026-09-30 the quiz ignored the profile. Greg, SPIDERYARN-READING2-6Q:
  * *"if I've said I want to understand their methods, most of the questions
@@ -103,15 +103,22 @@
  * on the path however narrow the goal.
  * docs/plans/261001c-quiz-adapts-heavily-to-the-reader-profile-and-reading-goal.md.
  *
- * Three things it deliberately does not do, each Greg's or forced:
+ * **It records which profile it was written for** (`profileHash`, since
+ * 2026-10-02), so the Quiz band can carry the *written for your profile* badge
+ * and its Regenerate. Greg: *"it needs a "Regenerate for my profile". That's
+ * more important, ok to lose answers."* That field was held back until the
+ * label that reads it arrived, because `ProfileCarrying` in src/store/pg.ts is
+ * derived from every artefact type with one and would have put the quiz in
+ * the owner's *make public* dialog — about a mode a shared link never carries.
+ * It arrived with the label, and with `NeverShared` there, which keeps it out.
+ * docs/plans/261002f-quiz-regenerate-for-my-profile.md.
+ *
+ * Two things it deliberately does not do, each Greg's or forced:
  *
  * - **Not in the stamp.** Changing your goal does not make a quiz stale or
- *   rewrite one; *Write them again* is a forced run and resolves the profile at
- *   the press. Greg: *"no automatic regeneration needed for v1."*
- * - **No `profileHash` on the artefact.** `ProfileCarrying` in src/store/pg.ts
- *   is derived from every artefact type with one, so the field would put the
- *   quiz in the owner's *make public* dialog as personalised — about a mode a
- *   visitor never sees. It arrives with the label that would read it.
+ *   rewrite one; the badge says *older profile* and its Regenerate, or *Write
+ *   them again*, is a forced run that resolves the profile at the press. Greg:
+ *   *"no automatic regeneration needed for v1."*
  * - **Not `PROFILE_RULES`.** They speak of words spent and length, and carry a
  *   web-search rule the quiz has no use for; the quiz needs the path and the
  *   balance in its own terms, and two rules for one thing would disagree.
@@ -151,6 +158,7 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { hashProfile } from "./profile.js";
 import type {
   Block,
   BlockId,
@@ -1169,14 +1177,18 @@ export async function generateQuiz(opts: {
     .join("");
 
   const dropped = emptyDropped();
-  const quiz = buildQuiz(parseJson(raw), {
-    power: opts.power,
-    slug: opts.article.slug,
-    blocks,
-    sourceHash,
-    elapsedMs: Date.now() - started,
-    dropped,
-  });
+  const quiz: Quiz = {
+    ...buildQuiz(parseJson(raw), {
+      power: opts.power,
+      slug: opts.article.slug,
+      blocks,
+      sourceHash,
+      elapsedMs: Date.now() - started,
+      dropped,
+    }),
+    /* Recorded for the badge, never compared by the step — see the header. */
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
+  };
 
   /* **The file is written by the caller, not here** — the shape `sketch`,
      `ideas`, `quotes` and `timeline` already have. A generator that also writes
