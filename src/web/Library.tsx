@@ -827,13 +827,18 @@ export function Library({
 
       {/* After your own articles and their passages, because it is the
           further reach: the same search box, someone else's shelf. */}
-      {publicOn && articles !== null && (
-        <ShelfPublicSection
-          query={query}
-          ownSlugs={ownSlugs}
-          narrowedElsewhere={show === "unread" || topics.length > 0}
-        />
-      )}
+      {/* A saved shelf copy is deliberately enough to paint the owner's cards,
+          but not enough to call a public article somebody else's: it may be
+          missing an article added since the last visit. Wait for the live
+          owner list before starting the anonymous public read. */}
+      <ShelfPublicSection
+        enabled={publicOn}
+        ownerLoaded={articles !== null}
+        ownerReady={shelf.liveArticlesLoaded}
+        query={query}
+        ownSlugs={ownSlugs}
+        narrowedElsewhere={show === "unread" || topics.length > 0}
+      />
 
       {/* **No "Show archived" here any more** (plan 260929a): it was a
           disclosure at the foot of the shelf, with its own second list, and

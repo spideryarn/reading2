@@ -47,6 +47,9 @@ let shared: PublicLibraryEntry[];
 let truncated: boolean;
 let publicReads: number;
 let publicFails: boolean;
+let cached: LibraryEntry[] | null;
+let activeGate: Promise<void> | null;
+let activeIsOfflineCopy: boolean;
 
 const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0, chosenBy: "program", refreshing: false };
 
@@ -54,7 +57,14 @@ vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
     if (url.startsWith("/api/library/terms")) return json(NO_TERMS);
-    if (url === "/api/library") return json({ articles: [...active] });
+    if (url === "/api/library") {
+      const answer = [...active];
+      if (activeGate) await activeGate;
+      return new Response(JSON.stringify({ articles: answer }), {
+        status: 200,
+        ...(activeIsOfflineCopy ? { headers: { "x-spideryarn-offline": "copy" } } : {}),
+      });
+    }
     if (url.startsWith("/api/library/search?")) {
       const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
       return json({ query: params.get("q") ?? "", archived: false, hits: [], articles: 0, capped: false });
@@ -78,7 +88,7 @@ vi.mock("../src/web/public-api.js", async (orig) => ({
     return { kind: "ok", body: { entries: [...shared], truncated } };
   },
 }));
-vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => null }));
+vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => cached }));
 vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
 /* The real add box pulls in the whole ingest machinery; this stands in for its
    one fact the empty shelf depends on — an input with id `add-url`. */
@@ -125,6 +135,9 @@ beforeEach(() => {
   truncated = false;
   publicReads = 0;
   publicFails = false;
+  cached = null;
+  activeGate = null;
+  activeIsOfflineCopy = false;
 });
 
 afterEach(() => {
@@ -146,6 +159,25 @@ async function show(path: string) {
 async function settle(ms = 80) {
   await act(async () => {
     await new Promise((r) => setTimeout(r, ms));
+  });
+}
+
+async function traverse(go: () => void) {
+  const landed = new Promise<void>((resolve) =>
+    window.addEventListener("popstate", () => resolve(), { once: true }),
+  );
+  await act(async () => {
+    go();
+    await landed;
+  });
+  await settle();
+}
+
+function typeIn(el: HTMLInputElement, value: string) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    set?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 
@@ -173,10 +205,64 @@ describe("the Include public chip", () => {
     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
   });
 
+  it("waits for the live owner shelf before calling one of its articles somebody else's", async () => {
+    cached = [entry("alpha", "Alpha")];
+    let release = () => {};
+    activeGate = new Promise<void>((resolve) => (release = resolve));
+    await show("/?public=1");
+
+    expect(section(), "the saved copy cannot establish who owns a public article").toBeNull();
+    expect(publicReads).toBe(0);
+    expect(host.querySelector("[role=status]")?.textContent).toContain("once your shelf is up to date");
+
+    await act(async () => release());
+    await settle();
+    expect(publicReads).toBe(1);
+    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+  });
+
+  it("does not mistake apiFetch's offline copy for a live owner shelf", async () => {
+    active = [entry("alpha", "Alpha")];
+    cached = [...active];
+    activeIsOfflineCopy = true;
+    await show("/?public=1");
+
+    expect(section()).toBeNull();
+    expect(publicReads).toBe(0);
+    expect(host.querySelector("[role=status]")?.textContent).toContain("once your shelf is up to date");
+  });
+
   it("is narrowed by the shelf's search box, on the card's words", async () => {
     await show("/?public=1&q=ann");
     expect(publicTitles()).toEqual(["Zebra crossings"]);
     expect(section()?.textContent).toContain("isn't searched");
+  });
+
+  it("carries a half-typed search into the public history entry", async () => {
+    await show("/");
+    typeIn(host.querySelector<HTMLInputElement>('[aria-label="Search the library"]')!, "ann");
+    act(() => publicChip()?.click());
+    await settle(300);
+
+    expect(new URLSearchParams(location.search).get("q")).toBe("ann");
+    expect(new URLSearchParams(location.search).get("public")).toBe("1");
+    expect(publicTitles()).toEqual(["Zebra crossings"]);
+  });
+
+  it("restores Include public through Back and Forward", async () => {
+    await show("/");
+    act(() => publicChip()?.click());
+    await settle();
+    expect(section()).toBeTruthy();
+
+    await traverse(() => history.back());
+    expect(publicChip()?.getAttribute("aria-pressed")).toBe("false");
+    expect(section()).toBeNull();
+
+    await traverse(() => history.forward());
+    expect(publicChip()?.getAttribute("aria-pressed")).toBe("true");
+    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+    expect(publicReads).toBe(2);
   });
 
   it("says when a search leaves none, and says the cap", async () => {
@@ -223,9 +309,12 @@ describe("an empty shelf", () => {
   it("links to the add box and puts the cursor in it", async () => {
     await show("/");
     const link = host.querySelector<HTMLAnchorElement>('a[href="#add-url"]');
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
     expect(link, "a link to the add box").toBeTruthy();
     act(() => link?.click());
     expect(document.activeElement?.id).toBe("add-url");
+    expect(scroll).toHaveBeenCalledWith({ block: "center" });
+    scroll.mockRestore();
   });
 
   it("offers the public shelf, which turns the chip on, and the chip is there too", async () => {

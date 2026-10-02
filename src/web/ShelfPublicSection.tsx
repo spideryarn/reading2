@@ -18,7 +18,10 @@
  * and the same anonymous read (`usePublicShelf`) that page makes: no new route,
  * no new query, nothing new in the public import graph.
  *
- * Mounted only while the chip is on, so the read happens only then.
+ * The results child is mounted only while the chip is on and a live owner
+ * shelf has established whose slugs must be removed, so the public read happens
+ * only then. A saved shelf copy may paint the owner's cards but cannot make
+ * that ownership claim.
  *
  * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part A.
  */
@@ -29,10 +32,27 @@ import { filterEntries } from "./shelf-narrow.js";
 import { useSlow } from "./useSlow.js";
 
 export function ShelfPublicSection({
-  query,
-  ownSlugs,
-  narrowedElsewhere,
-}: {
+  enabled,
+  ownerLoaded,
+  ownerReady,
+  ...props
+}: ShelfPublicProps & {
+  enabled: boolean;
+  ownerLoaded: boolean;
+  ownerReady: boolean;
+}) {
+  if (!enabled || !ownerLoaded) return null;
+  if (!ownerReady) {
+    return (
+      <p role="status" className="tw:mt-10 tw:text-sm tw:text-muted-foreground">
+        Shared articles will appear once your shelf is up to date.
+      </p>
+    );
+  }
+  return <ShelfPublicResults {...props} />;
+}
+
+interface ShelfPublicProps {
   /** The shelf's search box — the one narrowing that applies here. */
   query: string;
   /**
@@ -46,7 +66,13 @@ export function ShelfPublicSection({
    * reading — so the section says so rather than looking unnarrowed by mistake.
    */
   narrowedElsewhere: boolean;
-}) {
+}
+
+function ShelfPublicResults({
+  query,
+  ownSlugs,
+  narrowedElsewhere,
+}: ShelfPublicProps) {
   const { state, again } = usePublicShelf();
   const slow = useSlow(state.kind === "loading");
 
