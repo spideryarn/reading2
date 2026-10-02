@@ -3494,6 +3494,49 @@ export const TAKEDOWN_TIP_HOW =
  */
 export const TAKEDOWN_HEADING = "If something here is yours";
 
+/**
+ * **The banner on a shared article** — three more lines in the visitor's
+ * `SharedNotice` (src/web/PublicChrome.tsx), on Greg's ask, 2026-09-29:
+ *
+ * > For anything public readable, let's make sure there's a banner at the top
+ * > … that highlights the URL where it came from … if you're the, you know, IP
+ * > owner and you don't want this to be public readable, that email … hello at
+ * > spideryarn.com and we'll take it down. And … that we explicitly use models
+ * > that don't train on your content, and then point them to the privacy page.
+ *
+ * docs/plans/261002g-a-banner-on-every-public-readable-article.md.
+ *
+ * **Pointers, not restatements.** What *taken down* means, what to put in the
+ * email and how long it takes belong to `/privacy` § If something here is
+ * yours, and the hedge on the training promise belongs to `/privacy`'s
+ * paragraph about providers. These lines say the mailbox and the promise, and
+ * link to the place that qualifies each — the link is load-bearing (GPT Sol,
+ * plan review). **No "provide evidence"**: Greg's transcript starts that clause
+ * and drops it, and `/privacy` promises the opposite.
+ *
+ * **"Source", not "first published at".** The address is stage 1's post-redirect
+ * URL, or for an upload a page we matched, and neither proves which copy came
+ * first (GPT Sol, plan review P1-2). The guessed leads are the metadata page's
+ * own words for the same two kinds (Metadata.tsx § `GuessedLine`).
+ *
+ * Second person is the author here, as on the sharing page
+ * (docs/project/public-readable-sharing.md § The page has two readers).
+ * tests/shared-notice-banner.test.tsx pins the training phrases against the two
+ * pages that make the same promise.
+ */
+export const BANNER_SOURCE = "Source:";
+export const BANNER_SOURCE_GUESS_CANONICAL = "Probably the original:";
+export const BANNER_SOURCE_GUESS_MATCHING = "A page that matches this paper:";
+/** Then the address as a `mailto:` link, then `BANNER_TAKEDOWN_AFTER`. */
+export const BANNER_TAKEDOWN_BEFORE = "If this is yours and you'd rather it weren't here, email";
+export const BANNER_TAKEDOWN_AFTER = "and we'll take it down.";
+/** The link to `TAKEDOWN_HREF`, after the sentence above. */
+export const BANNER_TAKEDOWN_LINK = "What that involves";
+/** Then a link to `/privacy` reading `BANNER_TRAINING_LINK`, then a full stop. */
+export const BANNER_TRAINING =
+  "Nobody trains a model on it — a commitment we hold ourselves to, explained in our";
+export const BANNER_TRAINING_LINK = "privacy policy";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */
@@ -4184,10 +4227,15 @@ export const ALWAYS_SHARED = [
        uploaded PDF has no address at all, and `publicSourceUrl` (src/urls.ts)
        refuses some of the ones we do have — a `user:pw@` address among them. The
        masthead already draws the absence honestly; a flat promise of a link here
-       would be the one row of this list the article itself contradicts. */
+       would be the one row of this list the article itself contradicts.
+
+       **And for an upload, the page we matched it to**, since 2026-10-02: a
+       found source guess crosses to a visitor's banner (plan 261002g,
+       `PublicArticle.sourceGuess`), so the owner is told it goes out. */
     detail:
       "The title the page itself carried, the byline, the publication, the language, the " +
-      "publication's own one-line excerpt, and a link back to the original where we have one.",
+      "publication's own one-line excerpt, and a link back to the original where we have one " +
+      "— for an uploaded file, the page we found that matches it.",
   },
   {
     /**

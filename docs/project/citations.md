@@ -520,7 +520,9 @@ three things 260930b deferred:
   also matches by the DOI or arXiv id we found for it (`upload_source_guesses`, a `canonical` row
   only — one built from an identifier checked against the PDF, never a page that merely looked
   like it). The tooltip says it is the id *we found*, not one the article gave. Only for the
-  reader's own: the guess is owner-only, and a stranger's public page does not publish it.
+  reader's own uploads: a stranger's shared upload shows its guess in the visitor's banner
+  ([261002g](../plans/261002g-a-banner-on-every-public-readable-article.md)), but it is not used
+  for matching here.
 
 It does not change *what we have read*: a copy here is not a reading of the work, so the row still
 says we have not read it. It is attached in the owner's `GET /api/citations` only — not in

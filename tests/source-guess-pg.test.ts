@@ -234,17 +234,57 @@ describe("the owner's payload, the visitor's, and the route", () => {
     });
   });
 
-  it("never reaches a visitor, even on a shared article", async () => {
+  /**
+   * **A found guess reaches a visitor since 2026-10-02**, for the banner on a
+   * shared article (plan 261002g § Decisions 3). This case said the opposite
+   * until then — *"never reaches a visitor, even on a shared article"* — which
+   * was 260929g's deferral, now built. What it still holds: the projection, not
+   * the row; only while the article is public; and the host derived from the
+   * published address rather than the stored column.
+   */
+  it("reaches a visitor on a shared article, as the projection and nothing more", async () => {
+    const id = scratch?.articleId ?? "";
+    /* A stored host that disagrees with the address, which no constraint
+       forbids — the published one must come from the URL. GPT Sol, P2-1. */
+    await getDb()
+      .update(uploadSourceGuesses)
+      .set({ host: "evil.example" })
+      .where(eq(uploadSourceGuesses.articleId, id));
+
+    /* Private first: nothing, though the row is there. */
+    await expect(pgPublicReader.loadArticle(SCRATCH_SLUG)).rejects.toThrow();
+
     await getDb()
       .update(articles)
       .set({ visibility: "public", publicAt: new Date() })
       .where(eq(articles.slug, SCRATCH_SLUG));
     const shared = await pgPublicReader.loadArticle(SCRATCH_SLUG);
-    /* The row from the case above is still there; neither the key nor the
-       address may be anywhere in what a stranger is sent. */
-    expect(await row(scratch?.articleId)).toMatchObject({ status: "found" });
-    expect("sourceGuess" in shared).toBe(false);
-    expect(JSON.stringify(shared)).not.toContain("10.1234/hpc.2024.5678");
+    expect(shared.sourceGuess).toEqual({
+      url: FOUND.url,
+      host: "doi.org",
+      kind: "canonical",
+      matchedBy: "doi",
+    });
+    expect(JSON.stringify(shared)).not.toContain("evil.example");
+  });
+
+  it("does not reach a visitor when the address fails the public policy, or the search is unsettled", async () => {
+    const id = scratch?.articleId ?? "";
+    /* A query string is the clause `publicSourceUrl` refuses — a signature is
+       a capability, not an address (src/urls.ts). */
+    await getDb()
+      .update(uploadSourceGuesses)
+      .set({ url: "https://example.org/paper?sig=SECRET" })
+      .where(eq(uploadSourceGuesses.articleId, id));
+    expect("sourceGuess" in (await pgPublicReader.loadArticle(SCRATCH_SLUG))).toBe(false);
+
+    await getDb()
+      .update(uploadSourceGuesses)
+      .set({ status: "none", url: null, host: null, kind: null, matchedBy: null, why: "no match — private reasoning" })
+      .where(eq(uploadSourceGuesses.articleId, id));
+    const unsettled = await pgPublicReader.loadArticle(SCRATCH_SLUG);
+    expect("sourceGuess" in unsettled).toBe(false);
+    expect(JSON.stringify(unsettled)).not.toContain("private reasoning");
   });
 
   it("the route refuses an article that was not uploaded with a 409, and a stranger's with a 404", async () => {

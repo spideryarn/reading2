@@ -2173,8 +2173,9 @@ function Origin({
  * (src/web/useSourceGuess.ts), and this line fills in when the answer is
  * layered onto the payload.
  *
- * Owner-only by construction: this page is unreachable for a visitor, and a
- * visitor's payload carries no guess (Origin's header, src/types.ts).
+ * Owner-only by construction: this page is unreachable for a visitor. A
+ * visitor sees a shared upload's found guess in the banner instead
+ * (PublicChrome.tsx § `SharedNotice`, plan 261002g).
  */
 function GuessedLine({ guess }: { guess: SourceGuess | undefined }) {
   if (guess === undefined || guess.status === "searching") return null;

@@ -1826,9 +1826,11 @@ export interface Article {
    * never see a guess. `undefined` is the real answer *nobody has looked yet*
    * (and every article that is not an upload).
    *
-   * **Owner-only.** The public projection (src/public/dto.ts) is a hand-built
-   * allowlist and does not carry it; a visitor sees no guess (plan § Decisions
-   * 4).
+   * **Owner-only until 2026-10-02**, when a visitor's banner began naming a
+   * shared upload's source. The public projection still does not carry this
+   * field: it carries its own, `PublicArticle.sourceGuess` (src/public-types.ts),
+   * a `found` guess only, through `publicSourceUrl`, which access.ts dresses as
+   * this type for the reading view. Plan 261002g § Decisions 3.
    */
   sourceGuess: SourceGuess | undefined;
 

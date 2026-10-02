@@ -449,6 +449,7 @@ describe("all five roles", () => {
       tree,
       arc: null,
       navLabelStatus: "ready" as const,
+      sourceGuess: null,
       assets: null,
       /* The four artefacts a synthetic article has never generated. Spelled out
          as `null` rather than omitted because `publicArticle` distinguishes

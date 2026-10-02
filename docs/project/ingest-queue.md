@@ -360,7 +360,9 @@ reviews and the real-page eval. Four things are worth knowing:
   page that matches*.
 - **It is never `final_url`**, for the reason [§ the document with no
   address](content-extraction.md#stage-2-and-the-document-with-no-address) gives, and it is
-  owner-only: a visitor sees no guess.
+  owner-only until 2026-10-02. Since then a visitor to a shared upload sees a found guess in the
+  banner under the masthead, through the same public policy as the article's own address
+  ([261002g](../plans/261002g-a-banner-on-every-public-readable-article.md)).
 
 ### The checks are the cheap ones, and they are not the real ones
 

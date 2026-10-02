@@ -202,7 +202,16 @@ export function PublicMetadataPage({
             where every deep link and arrow jump lands.
 
             **Quiet, and last.** A visitor came here to read; the person this is
-            for is looking for it. */}
+            for is looking for it.
+
+            **The paragraph above was overruled on 2026-10-02, on purpose.**
+            Greg asked for the offer on every public-readable article, in the
+            visitor's banner (`SharedNotice`, PublicChrome.tsx; plan 261002g),
+            so the reading view carries it now too — in that box under the
+            masthead, which is not the sticky bar and moves no deep link. This
+            page draws the same banner above, so this line is a second way to
+            the same section; it stays because it is where somebody who
+            scrolled past the box will look. */}
         <p className="tw:mt-10 tw:mb-0 tw:text-xs tw:text-ink-faint">
           <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
             {TAKEDOWN_LINK}
