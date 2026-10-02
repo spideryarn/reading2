@@ -178,7 +178,7 @@ The individual files are not indexed here — there are a lot of them and they k
 the directory and read the file names; they say what each one is about, and the first paragraph of
 the file says the rest. They are named `yyMMdd<letter>-kebab-description.md` (`.html` for a
 tutorial), so they sort by the day the work started; a plan and its reviews share one letter. Get
-the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
+the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other four) —
 [write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters
