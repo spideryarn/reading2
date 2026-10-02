@@ -296,6 +296,14 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The hide write may outlive the article it started on. Kept beside the
+     other per-article state so the render-time slug reset below can clear it
+     before the next article's children see a pending id from this one. */
+  const hidingLive = useRef(new Set<string>());
+  const hidingGeneration = useRef(0);
+  const currentSlug = useRef(slug);
+  currentSlug.current = slug;
+  const [hiding, setHiding] = useState<ReadonlySet<string>>(NOTHING_HIDING);
 
   /**
    * The read itself. Everything about *ordering* it — the dedupe, the trailing
@@ -359,6 +367,12 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* An old hide completion must never call the `refresh` closure it captured,
+     because that closure reads the old slug. If the reader has meanwhile gone
+     away and come back, though, the current article still needs reconciling;
+     this ref is the safe route to its current closure. */
+  const latestRefresh = useRef(refresh);
+  latestRefresh.current = refresh;
 
   /**
    * A new article clears the old one's list — **during render, not in an
@@ -384,6 +398,14 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     setProfiled(false);
     setProfileChanged(false);
     setError(null);
+    /* Entry ids are scoped to an article, and an old write's completion must
+       not call its captured `refresh()` after this reset: that closure reads
+       the previous slug and can otherwise replace this article's list. The
+       write itself is allowed to finish on its own article; only its client
+       state and follow-up read are disowned. */
+    hidingGeneration.current += 1;
+    hidingLive.current.clear();
+    setHiding(NOTHING_HIDING);
   }
 
   /* The opening read. Everything after it goes through `reload`, which does not
@@ -570,11 +592,12 @@ export function useGlossaryRead(slug: string): GlossaryRead {
 
   /* `setHidden` — see the interface. The ref admits and the state draws: two
      presses in one tick both see the state unchanged. */
-  const hidingLive = useRef(new Set<string>());
-  const [hiding, setHiding] = useState<ReadonlySet<string>>(NOTHING_HIDING);
   const setHidden = useCallback(
     async (id: string, hidden: boolean): Promise<void> => {
       if (hidingLive.current.has(id)) return;
+      const mine = hidingGeneration.current;
+      const current = () => hidingGeneration.current === mine;
+      const startedSlug = slug;
       hidingLive.current.add(id);
       setHiding(new Set(hidingLive.current));
       try {
@@ -584,16 +607,30 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         );
         /* A refusal is JSON carrying the server's sentence, which `readJson` throws. */
         if (!res.ok) await readJson(res);
+        /* The server may have completed the write to the previous article
+           after navigation. That is fine; refreshing through this callback is
+           not — it captured that article's slug. */
+        if (!current()) {
+          /* A → B stays disowned. A → B → A needs a new read: the returning
+             GET may have beaten this write and still show the term. */
+          if (currentSlug.current === startedSlug) await latestRefresh.current();
+          return;
+        }
         /* Inside the pending window, so the button stays disabled until the
            list on screen says what the server now holds. */
         await refresh();
       } catch (err) {
+        if (!current()) return;
         throw new Error(
           `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${(err as Error).message}`,
         );
       } finally {
-        hidingLive.current.delete(id);
-        setHiding(hidingLive.current.size > 0 ? new Set(hidingLive.current) : NOTHING_HIDING);
+        /* A request for the new article may already own the same entry id.
+           Never let the old request remove it from the new article's set. */
+        if (current()) {
+          hidingLive.current.delete(id);
+          setHiding(hidingLive.current.size > 0 ? new Set(hidingLive.current) : NOTHING_HIDING);
+        }
       }
     },
     [slug, refresh],

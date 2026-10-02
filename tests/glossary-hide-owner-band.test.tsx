@@ -40,6 +40,7 @@ const frame = (event: string, data: unknown) =>
 const BLOCK = "spya-hdq4zt";
 const SHOWN_ID = "spya-hdq5wr";
 const HIDDEN_ID = "spya-hdq6xm";
+const OTHER_ID = "spya-hdq7yn";
 
 function entry(id: string, name: string): GlossaryEntry {
   return {
@@ -55,6 +56,7 @@ function entry(id: string, name: string): GlossaryEntry {
 }
 const SHOWN = entry(SHOWN_ID, "Win-shift");
 const HIDDEN = entry(HIDDEN_ID, "Radial arm maze");
+const OTHER = entry(OTHER_ID, "Another article's term");
 
 const LOOKUP: GlossaryLookup = {
   answer: "What the web says about win-shift.",
@@ -71,15 +73,18 @@ let refuseWrite: string | null = null;
 let lookupBody: ReadableStreamDefaultController<Uint8Array> | null = null;
 let lookupSignal: AbortSignal | undefined;
 let lookupLanded = false;
+let writeGate: Promise<void> | null = null;
+let releaseWrite: (() => void) | null = null;
 
-function listResponse(): GlossaryResponse {
+function listResponse(slug = "a-piece"): GlossaryResponse {
+  const entries = slug === "another-piece" ? [OTHER] : [SHOWN, HIDDEN];
   return {
     glossary: {
       version: "glossary/3",
       sourceHash: "abc",
       profileHash: null,
       passes: 1,
-      entries: [SHOWN, HIDDEN].map((e) => {
+      entries: entries.map((e) => {
         const withLookup = e.id === SHOWN_ID && lookupLanded ? { ...e, lookup: LOOKUP } : e;
         return serverHidden.has(e.id) ? { ...withLookup, hidden: true as const } : withLookup;
       }),
@@ -96,6 +101,7 @@ vi.mock("../src/web/lib/api.js", () => {
       const method = init?.method ?? "GET";
       if (input.includes("/hidden/")) {
         writes.push(`${method} ${input}`);
+        if (writeGate) await writeGate;
         if (refuseWrite) {
           return new Response(JSON.stringify({ error: refuseWrite }), {
             status: 404,
@@ -118,7 +124,8 @@ vi.mock("../src/web/lib/api.js", () => {
           { status: 200, headers: { "content-type": "text/event-stream" } },
         );
       }
-      return new Response(JSON.stringify(listResponse()), {
+      const slug = decodeURIComponent(input.split("/").pop() ?? "");
+      return new Response(JSON.stringify(listResponse(slug)), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
@@ -152,15 +159,15 @@ const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js
 
 let reading: GlossaryRead | null = null;
 
-function Reading({ band }: { band: boolean }): ReactElement {
-  const read = useGlossaryRead("a-piece");
+function Reading({ band, slug = "a-piece" }: { band: boolean; slug?: string }): ReactElement {
+  const read = useGlossaryRead(slug);
   reading = read;
   return createElement(
     "div",
     null,
     band
       ? createElement(GlossaryBand, {
-          slug: "a-piece",
+          slug,
           read,
           onJump: () => {},
           onSelected: () => {},
@@ -182,6 +189,8 @@ beforeEach(() => {
   lookupBody = null;
   lookupSignal = undefined;
   lookupLanded = false;
+  writeGate = null;
+  releaseWrite = null;
   reading = null;
   host = document.createElement("div");
   document.body.append(host);
@@ -209,6 +218,13 @@ async function mount(search: string, band = true): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(Reading, { band })));
+  });
+  await settle();
+}
+
+async function showArticle(slug: string, band = false): Promise<void> {
+  await act(async () => {
+    root.render(createElement(NuqsAdapter, null, createElement(Reading, { band, slug })));
   });
   await settle();
 }
@@ -288,6 +304,56 @@ describe("the trash button and Unhide", () => {
     const error = host.querySelector(".gloss-error")?.textContent ?? "";
     expect(error).toContain("Hiding that term did not go through.");
     expect(error).toContain("That term is not in this article's glossary.");
+  });
+
+  it("does not refresh the previous article when its hide finishes after navigation", async () => {
+    await mount("?mode=glossary&sort=document", false);
+    writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+
+    let hiding = Promise.resolve();
+    await act(async () => {
+      hiding = reading?.setHidden(HIDDEN_ID, true) ?? hiding;
+      await Promise.resolve();
+    });
+    expect(reading?.hiding.has(HIDDEN_ID)).toBe(true);
+
+    await showArticle("another-piece");
+    expect(reading?.glossary?.entries.map((entry) => entry.id)).toEqual([OTHER_ID]);
+    expect(reading?.hiding.has(HIDDEN_ID)).toBe(false);
+
+    releaseWrite?.();
+    await act(async () => {
+      await hiding;
+    });
+    await settle();
+
+    expect(reading?.glossary?.entries.map((entry) => entry.id)).toEqual([OTHER_ID]);
+  });
+
+  it("reconciles a finishing hide after navigating away and back to its article", async () => {
+    await mount("?mode=glossary&sort=document", false);
+    writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+
+    let hiding = Promise.resolve();
+    await act(async () => {
+      hiding = reading?.setHidden(HIDDEN_ID, true) ?? hiding;
+      await Promise.resolve();
+    });
+    await showArticle("another-piece");
+    await showArticle("a-piece");
+    expect(reading?.glossary?.entries.find((entry) => entry.id === HIDDEN_ID)?.hidden).toBeUndefined();
+
+    releaseWrite?.();
+    await act(async () => {
+      await hiding;
+    });
+    await settle();
+
+    expect(reading?.glossary?.entries.find((entry) => entry.id === HIDDEN_ID)?.hidden).toBe(true);
   });
 });
 
