@@ -283,7 +283,8 @@ export function PrivacyPage() {
               their address (docs/plans/261001p); since 2026-10-02 the one to an
               existing reader carries their own remaining allowance
               (docs/plans/261002a), hence its second clause; and since the same day
-              it may carry a note from whoever gave it (docs/plans/261002b). */}
+              it may carry a note from whoever gave it (docs/plans/261002b). The
+              copy of each reader's feedback mailed to us is docs/plans/261002j. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
             address. The first time you use Spideryarn after signing up, and whenever you move to a
@@ -293,8 +294,10 @@ export function PrivacyPage() {
             a gift of free articles to an email address, and that address is sent one email saying
             so, with a short note from whoever gave it, if they wrote one — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
-            it. If you send us feedback through the Feedback button and we act on it, we email you once the change is live;
-            that email does not quote what you wrote. Ireland (eu-west-1).
+            it. When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you
+            were on, and your email address — the same way. If you send us feedback through the Feedback button and we
+            act on it, we email you once the change is live; that email does not quote what you wrote. Ireland
+            (eu-west-1).
           </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept

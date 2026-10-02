@@ -171,6 +171,15 @@ describe("the privacy page", () => {
     expect(prose).toContain("that email does not quote what you wrote");
   });
 
+  it("says the admin is emailed a copy of each reader's feedback, words and address included", () => {
+    /* Plan 261002j: src/feedback-notice.ts mails the report — what they wrote,
+       the page address and their email address — through Resend to our inbox. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you were on, and your email address — the same way",
+    );
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

@@ -279,6 +279,7 @@ import {
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
+import { noticeFeedback } from "./feedback-notice.js";
 import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
@@ -6852,7 +6853,22 @@ async function fileFeedback(
     createdAt: answer.report.createdAt,
     status: answer.kind,
   });
-  if (mirror) await mirror;
+  /* **The third destination: a mail to the admin**, for a newly created report
+     only — a retry must not mail twice. `noticeFeedback` skips an admin's own
+     report and anything past its allowance itself (src/feedback-notice.ts,
+     plan 261002j).
+
+     Started **after** `send`, so the reader is never waiting on Resend, and
+     **beside** the mirror rather than behind it: `afterResponse` would start
+     it only once this function returned, which is after Sentry's
+     acknowledgement — so a slow Sentry would hold the mail. Like the mirror it
+     cannot throw. Started here rather than queued also keeps it inside the
+     reader's owner scope, which its allowance counts by. */
+  const notice =
+    answer.kind === "created"
+      ? noticeFeedback(answer.report, user.id, { allowance: fetchAllowanceStore })
+      : null;
+  await Promise.all([mirror, notice]);
 }
 
 

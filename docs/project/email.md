@@ -108,7 +108,7 @@ Resend's HTTP API, from the same `hello@` sender) and `notifyAdmin` (the same, t
   notices after the routed callback has ended its response, then keeps the serverless invocation
   alive until they settle. A direct non-HTTP caller waits normally rather than dropping the mail.
 
-The two notices, and why each fires when it does:
+The three notices, and why each fires when it does:
 
 - **A sign-up** is an account's **first authenticated request**, because the server never sees a
   sign-up — that is Supabase Auth in the browser. `spideryarn.reader_arrivals` is the ledger: its
@@ -124,7 +124,20 @@ The two notices, and why each fires when it does:
   nothing. Because the transition is read against the row it replaces, a redelivered webhook or the
   confirm route racing it cannot send twice — [billing.md](billing.md).
 
-**Both are best-effort.** A crash between the commit and the send loses that notice for good; it is
+- **A reader's feedback**, since 2026-10-02 ([261002j](../plans/261002j-email-the-admin-each-reader-s-feedback.md)):
+  every newly created report whose owner is not an admin, after the reader's `POST /api/feedback`
+  has been answered — [`src/feedback-notice.ts`](../../src/feedback-notice.ts). It is the first
+  admin notice to carry **a reader's own prose**, so the words are quoted line by line (so they
+  cannot pass for our lines), defanged (`https[:]//`, `www[.]`, so a mail client draws no link),
+  and kept out of the subject; the page address stays live only on our own origin. **It has its
+  own cap, because this is the one notice a reader can trigger at will:** at most 20 in any 24 hours
+  across every reader and 5 from any one, taken from the `feedback-notice` bucket of the shared
+  rate-limit table (`FEEDBACK_NOTICE_POLICY`, [pg-rate-limit.ts](../../src/store/pg-rate-limit.ts)),
+  which counts mails attempted, atomically, rather than reports filed. Resend's 100 a day is shared
+  with auth mail, and one reader at the feedback hourly cap of 30 would otherwise spend it in under
+  four hours. Every mail says the cap exists; `/admin/feedback` is the full record.
+
+**All three are best-effort.** A crash between the commit and the send loses that notice for good; it is
 logged, and `/admin` is the record. A sign-up whose send fails (or finds no key in production) gives
 its ledger row back, so the reader's next request tries again — at the cost of a possible duplicate,
 and with two double faults still able to lose it
