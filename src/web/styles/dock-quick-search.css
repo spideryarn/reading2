@@ -9,7 +9,10 @@
 
      rung 0           a 14rem box
      rungs 1 and 2    a 9rem box
-     rung 3           the ⚡ button
+     rung 3           a 7rem box, no `/` hint — every label has gone first
+     rung 4           the ⚡ button (added 2026-10-02: an owner's reading view
+                      is on rung 3 at 1440×900, and while rung 3 drew the ⚡ a
+                      laptop never saw a search bar at all)
      under 732px      the ⚡ button (narrow-window.css's width)
      pointer: coarse  the ⚡ button, at any width — a text box in a fixed bar
                       at the foot of an iPad is where the on-screen keyboard
@@ -17,7 +20,7 @@
      .dock-qs--bolt   the ⚡ button: Search mode is open and the box does not
                       have focus, so there is one box to type in, not two
 
-   Loaded straight after dock-fit.css, whose `.dock.dock-fit-3` rules it
+   Loaded straight after dock-fit.css, whose `.dock.dock-fit-3`/`-4` rules it
    extends, and before narrow-window.css, which does not touch these classes. */
 
 .dock-qs {
@@ -76,10 +79,18 @@
 
 .dock.dock-fit-1 .dock-qs-input,
 .dock.dock-fit-2 .dock-qs-input { width: 9rem; }
+/* Rung 3: every label is gone and the box is still here, compact and without
+   its `/` hint — the hint is a nicety, the box is the point. Rung 4 is listed
+   so it stays a strict superset of rung 3 (dock-fit.css), though the box is
+   hidden there anyway. */
+.dock.dock-fit-3 .dock-qs-input,
+.dock.dock-fit-4 .dock-qs-input { width: 7rem; }
+.dock.dock-fit-3 .dock-qs-key,
+.dock.dock-fit-4 .dock-qs-key { display: none; }
 
-.dock.dock-fit-3 .dock-qs-field,
+.dock.dock-fit-4 .dock-qs-field,
 .dock-qs--bolt .dock-qs-field { display: none; }
-.dock.dock-fit-3 .dock-qs-bolt,
+.dock.dock-fit-4 .dock-qs-bolt,
 .dock-qs--bolt .dock-qs-bolt { display: inline-flex; }
 
 @media (max-width: 731px), (pointer: coarse) {

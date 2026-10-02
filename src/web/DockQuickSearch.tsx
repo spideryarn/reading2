@@ -26,8 +26,10 @@
  * picks one, so the fit ladder (dock-fit.ts) can measure each rung by class
  * without React swapping elements in the middle of a measurement:
  *
- * - a mouse, at the bar's wide rungs: the box;
- * - the narrowest rung, a window under 732px, or **any touch screen**
+ * - a mouse, at every rung but the last: the box — compact at rung 3, so it
+ *   outlives every label in the bar (rung 4 went in below for this,
+ *   2026-10-02: an owner's laptop sits on rung 3);
+ * - the last rung (4), a window under 732px, or **any touch screen**
  *   (`pointer: coarse` — a text box in a fixed bar at the foot of an iPad is
  *   where the on-screen keyboard misbehaves): the ⚡, which opens Search mode
  *   on *quick* with the panel's box focused;

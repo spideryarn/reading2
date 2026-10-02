@@ -82,7 +82,14 @@ import { onFontsChanged } from "./fonts.js";
  *  - `dock-fit-2`: the modes lose their labels too (all but `keepLabel`), and
  *    keep 0.6rem of icon padding. The old `max-width: 1100px` rule.
  *  - `dock-fit-3`: *every* button loses its label and closes to 0.55rem. What
- *    § a narrow window did at 731px.
+ *    § a narrow window did at 731px. The quick-search box stays, compact.
+ *  - `dock-fit-4`: rung 3, plus the quick-search box becomes the ⚡ button
+ *    (styles/dock-quick-search.css). **Added at the bottom on 2026-10-02, so
+ *    nothing renumbered**: an owner's reading view is already on rung 3 at
+ *    1440×900, and while rung 3 drew the ⚡ a laptop never saw the search bar
+ *    Greg asked for (docs/plans/261002h-quick-search-bar-in-the-dock.md).
+ *    Every rung-3 rule names rung 4 too — a bar wears one rung class, so a
+ *    rule missing its twin would put a word back on a narrower bar.
  *
  * **Rung 1 is new on 2026-09-06 and the rungs below it shifted down one**, when
  * the wordmark and the Feedback button moved off the top corners and into this
@@ -123,7 +130,7 @@ import { onFontsChanged } from "./fonts.js";
  * decision rather than a consequence of how the selectors happened to be
  * written: rung 1 exists precisely because they are the words worth losing
  * first, so a rung below it that showed them again would be undoing its own
- * argument. styles.css § the bar's fit ladder spells all three rungs out.
+ * argument. styles.css § the bar's fit ladder spells every rung out.
  *
  * Past the last rung the row simply overflows, and § a narrow window makes it
  * scroll rather than clip — the floor under this ladder, and deliberately so:
@@ -138,7 +145,7 @@ import { onFontsChanged } from "./fonts.js";
  * selectors: a comment naming the wrong rung is not a compile error and not a
  * failing test. docs/reusable/rename-or-move.md.
  */
-export const DOCK_FIT_CLASSES = ["", "dock-fit-1", "dock-fit-2", "dock-fit-3"] as const;
+export const DOCK_FIT_CLASSES = ["", "dock-fit-1", "dock-fit-2", "dock-fit-3", "dock-fit-4"] as const;
 
 /** Every class this module owns, so `applyDockFit` can clear the others. */
 const ALL = DOCK_FIT_CLASSES.filter((c) => c !== "");
@@ -152,7 +159,7 @@ function applyDockFit(el: HTMLElement, level: number): void {
 /**
  * The narrowest rung the bar needs, left applied to `el` when this returns.
  *
- * Walks from rung 0 down, applying each and asking the browser. Up to four
+ * Walks from rung 0 down, applying each and asking the browser. Up to five
  * forced reflows — one per rung — on a twenty-element row, and only when
  * something changed.
  *

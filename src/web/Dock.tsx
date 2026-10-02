@@ -2089,7 +2089,7 @@ export function Dock({
             measures the row's scroll width against its client width and steps
             down by class (dock-fit.ts), so DOM order is not an input. What does
             change is which label is second on a narrow bar: rungs 1 and 2 drop
-            `.dock-home` and `.dock-feedback`, and only rung 3 sweeps every
+            `.dock-home` and `.dock-feedback`, and only rungs 3 and 4 sweep every
             `.dock-btn-label` — so `Commands` keeps its word **two rungs longer
             than the wordmark beside it**, and on a middling window the row
             begins with a wordless mark and the word *Commands*. Read off

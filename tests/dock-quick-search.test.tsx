@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, SearchRun } from "../src/types.js";
 import { PAUSE_MS } from "../src/web/quick-session.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 
@@ -459,6 +460,42 @@ describe("preserved boundaries", () => {
     expect(key(document.body, { key: "/" }).defaultPrevented).toBe(false);
     expect(searchDraftFor(SLUG).band()).toBeNull();
     expect(searchDraftFor(SLUG).focusBox()).toBe(false);
+  });
+});
+
+/**
+ * **Which shape each rung draws, read off the stylesheet** — jsdom cannot lay
+ * the bar out, so this pins the rules rather than the pixels.
+ *
+ * A browser check on 2026-10-02 found an owner's reading view already at the
+ * last rung at 1440×900, and the last rung drew the ⚡ — so a laptop never saw
+ * the search *bar* Greg asked for. Rung 4 went in below it: rung 3 drops every
+ * label and keeps a compact box, and only rung 4 swaps it for the ⚡.
+ */
+describe("the box outlives the labels (the fit ladder's CSS)", () => {
+  const rules = (): { sel: string[]; body: string }[] =>
+    [...readerCssNoComments().matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      sel: (m[1] ?? "").split(",").map((x) => x.trim()),
+      body: m[2] ?? "",
+    }));
+  const hides = (sel: string) =>
+    rules().some((r) => r.sel.includes(sel) && /display:\s*none/.test(r.body));
+  const shows = (sel: string) =>
+    rules().some((r) => r.sel.includes(sel) && /display:\s*inline-flex/.test(r.body));
+  const width = (sel: string) => {
+    const r = rules().find((x) => x.sel.includes(sel) && /\bwidth:/.test(x.body));
+    return Number(/\bwidth:\s*([\d.]+)rem/.exec(r?.body ?? "")?.[1] ?? Number.NaN);
+  };
+
+  it("keeps the box at rung 3, narrower than at rungs 1 and 2", () => {
+    expect(hides(".dock.dock-fit-3 .dock-qs-field")).toBe(false);
+    expect(shows(".dock.dock-fit-3 .dock-qs-bolt")).toBe(false);
+    expect(width(".dock.dock-fit-3 .dock-qs-input")).toBeLessThan(width(".dock.dock-fit-2 .dock-qs-input"));
+  });
+
+  it("turns it into the ⚡ at rung 4", () => {
+    expect(hides(".dock.dock-fit-4 .dock-qs-field")).toBe(true);
+    expect(shows(".dock.dock-fit-4 .dock-qs-bolt")).toBe(true);
   });
 });
 

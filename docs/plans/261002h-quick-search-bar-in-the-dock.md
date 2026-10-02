@@ -351,3 +351,22 @@ exported from `src/web/key-chord.ts` (it was the private `composing` behind `isS
 flag and `keyCode` 229 are spelled once. Red first in `tests/quick-search-panel.test.tsx`; the bar's
 twin in `tests/dock-quick-search.test.tsx` was already green and was watched red by removing the
 guard.
+
+**Rung 4, after the stage 3 browser check.** An owner's reading view is already on the fit
+ladder's last rung (`dock-fit-3`) at 1440×900, and that rung drew the ⚡, so a laptop never saw a
+search *bar*. `dock-fit-4` went in at the bottom of `DOCK_FIT_CLASSES` (no renumbering): it is rung
+3 exactly plus the box turning into the ⚡; rung 3 now keeps a 7rem box without the `/` hint. Every
+`.dock-fit-3` selector has a `.dock-fit-4` twin in the same list, checked generically in
+`tests/dock-fit.test.ts`. Measured in Chrome, owner, plain mode on `article-spya-uzf7vk`:
+
+| viewport | rung | shows | box px | scrollWidth / clientWidth |
+|---|---|---|---|---|
+| 1280×800 | 3 | box | 147 | 1265 / 1265 |
+| 1440×900 | 3 | box | 147 | 1425 / 1425 |
+| 1680×1050 | 2 | box | 202 | 1665 / 1665 |
+| 1920×1080 | 2 | box | 202 | 1905 / 1905 |
+| 1024×768 | 4 | ⚡ | — | 1027 / 1009 |
+| 768×1024 | 4 | ⚡ | — | 1027 / 753 |
+
+At 1440, rung 2 (mode labels shown) is 89px short; at 1024, rung 3 (the box) is 133px short. The
+two narrow rows overflow by the ladder's design (the scroll floor), as they did before.
