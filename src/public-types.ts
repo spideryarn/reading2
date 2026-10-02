@@ -515,7 +515,10 @@ export interface PublicFaq {
  *
  * **The paragraphs cross field by field** — `{ text, ids }`: the model's plain
  * words about the piece and the block ids of passages the payload already
- * carries whole, at every level.
+ * carries whole, at every level. And `sentences` when `usableSentences` says
+ * they are that paragraph's text exactly (plan 261002e): the same words, cut
+ * at sentence ends, each with one of the paragraph's own ids or none, so
+ * nothing new is disclosed.
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
  * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —

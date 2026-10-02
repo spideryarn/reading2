@@ -32,6 +32,7 @@ vi.mock("../src/web/perf.js", () => ({
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,
+  ControlTip: () => null,
 }));
 vi.mock("../src/web/lib/api.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/web/lib/api.js")>();
@@ -184,6 +185,7 @@ function Page({ xrefs, extras }: { xrefs: readonly Crossref[] | null; extras: Ex
         openComment={null}
         chats={[]}
         chatCounts={new Map()}
+        notesBy="you"
         openChat={null}
         onOpenChat={() => {}}
         onSelect={() => {}}

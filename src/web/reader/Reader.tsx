@@ -2683,6 +2683,9 @@ export function Reader({
         openComment={note}
         chats={chats}
         chatCounts={chatCounts}
+        /* A visitor is handed the owner's notes, and the gutter's mark must not
+           call them theirs — BlockGutter.tsx § `notesBy`. */
+        notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,

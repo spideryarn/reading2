@@ -2336,6 +2336,26 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The gutter's mark over the owner's note does not call it the visitor's.**
+   * Through the whole path — public payload, visitor arm, `Reader`, `TableView`,
+   * the gutter — because a test on `BlockGutter` alone stays green if `Reader`
+   * hands every visitor `"you"`. GPT Sol, C7 in
+   * docs/plans/261002b-help-page-code-review-sol.md, and the plan review of
+   * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+   */
+  it("labels the owner's note in the gutter from the visitor's side", async () => {
+    await open("");
+
+    const marks = [...host.querySelectorAll(".blk-cmt")];
+    expect(marks.length, "the owner's note is marked in the gutter").toBeGreaterThan(0);
+    for (const mark of marks) {
+      expect(mark.getAttribute("title")).toMatch(/whoever added this article/);
+      expect(mark.getAttribute("title")).not.toMatch(/\byour\b/i);
+      expect(mark.getAttribute("aria-label")).not.toMatch(/\byour\b/i);
+    }
+  });
+
+  /**
    * **Opening one gives the answer and none of the verbs.**
    *
    * The dialog is where every owner capability lives — edit, delete, retry,

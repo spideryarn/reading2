@@ -50,6 +50,7 @@ vi.mock("../src/web/perf.js", () => ({
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,
+  ControlTip: () => null,
 }));
 
 import { renderedText, type Mark, type TermSelection } from "../src/web/annotate.js";
@@ -117,6 +118,7 @@ function propsFor(loaded: Loaded, over: Record<string, unknown> = {}) {
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     linkBase: "/read/x",
     ...over,

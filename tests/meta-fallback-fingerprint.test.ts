@@ -406,9 +406,9 @@ describe("an article with no metadata", () => {
        paragraphs is inside both levels' limits. */
     answer = JSON.stringify({
       paragraphs: [
-        { text: "This piece is about something.", ids: [block.id] },
-        { text: "It matters for a reason it gives.", ids: [second.id] },
-        { text: "And it says why, in more detail.", ids: [block.id, second.id] },
+        { ids: [block.id], sentences: [{ text: "This piece is about something.", id: null }] },
+        { ids: [second.id], sentences: [{ text: "It matters for a reason it gives.", id: null }] },
+        { ids: [block.id, second.id], sentences: [{ text: "And it says why, in more detail.", id: null }] },
       ],
     });
 

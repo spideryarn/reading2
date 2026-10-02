@@ -6,7 +6,7 @@
  * `isSendEnter` in the boxes that use it, in tests/the-enter-key-really-sends.test.tsx.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { isModChord, isSendEnter, isTyping } from "../src/web/key-chord.js";
+import { isModAltChord, isModChord, isSendEnter, isTyping } from "../src/web/key-chord.js";
 
 const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
 
@@ -111,5 +111,30 @@ describe("isTyping", () => {
     expect(isTyping(document.body)).toBe(false);
     expect(isTyping(null)).toBe(false);
     expect(isTyping(window)).toBe(false);
+  });
+});
+
+describe("isModAltChord", () => {
+  it("matches ⌘⌥T and Ctrl+Alt+T by the physical key, whatever character ⌥ made", () => {
+    expect(isModAltChord(key({ code: "KeyT", key: "†", metaKey: true, altKey: true }), "KeyT")).toBe(true);
+    expect(isModAltChord(key({ code: "KeyT", key: "t", ctrlKey: true, altKey: true }), "KeyT")).toBe(true);
+  });
+
+  it("refuses it without Alt, without ⌘/Ctrl, with Shift, on repeat, and on another key", () => {
+    expect(isModAltChord(key({ code: "KeyT", metaKey: true }), "KeyT")).toBe(false);
+    expect(isModAltChord(key({ code: "KeyT", altKey: true }), "KeyT")).toBe(false);
+    expect(
+      isModAltChord(key({ code: "KeyT", metaKey: true, altKey: true, shiftKey: true }), "KeyT"),
+    ).toBe(false);
+    expect(
+      isModAltChord(key({ code: "KeyT", metaKey: true, altKey: true, repeat: true }), "KeyT"),
+    ).toBe(false);
+    expect(isModAltChord(key({ code: "KeyR", metaKey: true, altKey: true }), "KeyT")).toBe(false);
+  });
+
+  it("refuses a press in the middle of an IME composition", () => {
+    expect(
+      isModAltChord(key({ code: "KeyT", metaKey: true, altKey: true, isComposing: true }), "KeyT"),
+    ).toBe(false);
   });
 });

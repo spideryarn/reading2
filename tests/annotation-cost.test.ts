@@ -41,6 +41,7 @@ vi.mock("../src/web/perf.js", () => ({
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,
+  ControlTip: () => null,
 }));
 
 import { annotateHtml, renderedText, resolveMark, type Mark } from "../src/web/annotate.js";
@@ -428,6 +429,7 @@ function propsFor(
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     ...over,
   };

@@ -99,6 +99,7 @@ import {
   isUsableSimpleSummary,
   readStoredBears,
   readStoredLean,
+  usableSentences,
 } from "../types.js";
 import type { DebateSynthesis } from "../types.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
@@ -519,13 +520,19 @@ function publicFaq(faq: Faq): PublicFaq {
 
 /**
  * **Simple, rebuilt level by level and paragraph by paragraph** — each
- * `{ text, ids }` and nothing else; the stamp is pipeline provenance, and
- * `profileHash` is the owner's. src/public-types.ts § `PublicSimpleSummary` is
- * the argument.
+ * `{ text, ids }`, plus `sentences` when they are usable, and nothing else;
+ * the stamp is pipeline provenance, and `profileHash` is the owner's.
+ * src/public-types.ts § `PublicSimpleSummary` is the argument.
  */
 function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
+  /* Sentences cross only through `usableSentences` — the owner's panel asks
+     the same question — so a visitor never gets a list that is not the
+     paragraph's own checked text (plan 261002e, Sol F2). */
   const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
-    paragraphs.map((p): SimpleParagraph => ({ text: p.text, ids: [...p.ids] }));
+    paragraphs.map((p): SimpleParagraph => {
+      const sentences = usableSentences(p);
+      return { text: p.text, ids: [...p.ids], ...(sentences ? { sentences } : {}) };
+    });
   return {
     levels: {
       brief: level(simple.levels.brief),

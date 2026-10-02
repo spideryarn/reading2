@@ -1062,14 +1062,24 @@ describe("the artefacts a shared link carries", () => {
         { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
       ],
       simple: [
-        { text: "This essay asks what a measurement has to carry.", ids: ["spya-bbbbbb" as BlockId] },
+        /* Sentences that are its text exactly (plan 261002e): they cross, rebuilt. */
+        {
+          text: "This essay asks what a measurement has to carry.",
+          ids: ["spya-bbbbbb" as BlockId],
+          sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb", stray: "x" }],
+        },
         {
           text: "It matters because a copy would not do.",
           ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
         },
       ],
       fuller: [
-        { text: "This essay asks what a measurement has to carry, and why.", ids: ["spya-bbbbbb" as BlockId] },
+        /* Sentences that say something the checked text does not: they do not cross. */
+        {
+          text: "This essay asks what a measurement has to carry, and why.",
+          ids: ["spya-bbbbbb" as BlockId],
+          sentences: [{ text: "This essay asks nothing unchecked-words-here.", id: null }],
+        },
         { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
       ],
@@ -1750,10 +1760,22 @@ describe("the artefacts a shared link carries", () => {
         "levels.fuller[].text",
         "levels.simple",
         "levels.simple[].ids",
+        "levels.simple[].sentences",
+        "levels.simple[].sentences[].id",
+        "levels.simple[].sentences[].text",
         "levels.simple[].text",
       ].sort(),
     );
-    expect(built.simpleSummary).toEqual({ levels: SIMPLE.levels });
+    /* Through the one accessor: the usable list rebuilt, the unusable one gone. */
+    expect(built.simpleSummary?.levels.simple[0]).toEqual({
+      text: "This essay asks what a measurement has to carry.",
+      ids: ["spya-bbbbbb"],
+      sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb" }],
+    });
+    const plain = ({ text, ids }: SimpleSummary["levels"]["brief"][number]) => ({ text, ids });
+    expect(built.simpleSummary?.levels.fuller).toEqual(SIMPLE.levels.fuller.map(plain));
+    expect(built.simpleSummary?.levels.brief).toEqual(SIMPLE.levels.brief);
+    expect(built.simpleSummary?.levels.simple.slice(1)).toEqual(SIMPLE.levels.simple.slice(1));
     const json = JSON.stringify(built.simpleSummary);
     for (const provenance of [
       "simple/2",
@@ -1766,6 +1788,8 @@ describe("the artefacts a shared link carries", () => {
       "simple-check/1",
       "checker-model",
       "checker-why-sentence",
+      "stray",
+      "unchecked-words-here",
     ]) {
       expect(json, provenance).not.toContain(provenance);
     }

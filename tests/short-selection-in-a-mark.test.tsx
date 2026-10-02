@@ -35,6 +35,7 @@ vi.mock("../src/web/perf.js", () => ({
 vi.mock("../src/web/Tooltip.js", () => ({
   Tooltip: ({ children }: { children: unknown }) => children,
   TooltipGroup: ({ children }: { children: unknown }) => children,
+  ControlTip: () => null,
 }));
 
 import { TableView } from "../src/web/TableView.js";
@@ -88,6 +89,7 @@ function propsFor(article: Article, comments: Comment[], spies: Spies) {
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     linkBase: "/read/x",
     ...spies,

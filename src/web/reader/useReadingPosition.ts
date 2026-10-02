@@ -27,6 +27,7 @@ import {
 import { positionToWrite, type Section } from "../position.js";
 import { beginJump } from "../keynav.js";
 import { rowsForBlockIds } from "../rows.js";
+import { isFolded, subscribeFold } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -175,6 +176,12 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         atTop: window.scrollY <= stickyOffset(),
         held: synced.current,
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
+        /* A folded section start is never written: restoring it would unfold
+           it (scroll.ts § `scrollToBlock`). fold.ts. */
+        skip: (i) => {
+          const s = sections[i];
+          return s !== undefined && isFolded(s.blockId);
+        },
       });
       if (next === null) return;
       synced.current = next.at;
@@ -184,8 +191,13 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
       if (!frame) frame = requestAnimationFrame(measure);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    /* Folding moves rows without a scroll event, and can fold away the very
+       section `?at=` names — which a later reflow would then restore, and so
+       unfold. fold.ts § `subscribeFold`. */
+    const unfold = subscribeFold(onScroll);
     measure(); // a column toggle reflows every row without the reader scrolling
     return () => {
+      unfold();
       window.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };

@@ -99,16 +99,41 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
  * the top of the viewport and the line we measure against.
  *
  * `tops` is in document order, so this is the last one that has already gone
- * past the line. Above the first section it clamps to 0 rather than returning
- * -1: there is always a section you are in, even if it hasn't reached the top
- * of the screen yet.
+ * past the line. Above the first section it clamps to the first eligible entry:
+ * there is always a section you are in, even if it hasn't reached the top of
+ * the screen yet. With a `skip` predicate and no eligible entry it returns -1,
+ * because naming a hidden section would be worse than having no answer.
  */
-export function activeSectionIndex(tops: number[], line: number): number {
-  let active = 0;
+export function activeSectionIndex(
+  tops: number[],
+  line: number,
+  /**
+   * **Entries that cannot be the answer** — a row folded away (fold.ts). A
+   * folded row sits at zero height at the top of the next visible row, so it
+   * ties with that row and the "last one past the line" rule would pick it
+   * whenever the array holds no visible row after it: a sparse list of
+   * Structure starts, or a folded last section. Skipped entries neither win
+   * nor stop the walk, and the index returned is still into `tops`. GPT Sol's
+   * plan review of 261002e, finding 2.
+   */
+  skip?: (i: number) => boolean,
+): number {
+  /* With no filter, index 0 is the deliberate answer above the first section
+     (and for an empty array, for compatibility with the original helper). With
+     a filter there may be no answer at all, so -1 is honest and lets callers'
+     existing optional indexing produce `null` / their row-zero fallback. */
+  let active = skip ? -1 : 0;
   // `.entries()` rather than an index loop: it hands out the value already
   // typed, so there is no indexing to bounds-check.
   for (const [i, top] of tops.entries()) {
-    if (top > line) break;
+    if (skip?.(i)) continue;
+    if (top > line) {
+      /* Above the first visible entry, clamp to that entry rather than to a
+         skipped index 0. This is reachable when a folded authored section
+         contains the first starts in the sparse Structure projection. */
+      if (active < 0) active = i;
+      break;
+    }
     active = i;
   }
   return active;
@@ -210,6 +235,8 @@ export function positionToWrite(opts: {
    * GPT Sol F1). Omitted means none.
    */
   anchored?: BlockId | null;
+  /** Sections whose start is folded away, which cannot be named — fold.ts. */
+  skip?: (i: number) => boolean;
 }): { at: BlockId | null } | null {
   const { sections, rowOf, tops, line, jumpInFlight, atTop, held } = opts;
   if (jumpInFlight) return null;
@@ -221,7 +248,7 @@ export function positionToWrite(opts: {
   // Above the first section there is no section to name, and saying so keeps
   // ?at= out of the URL until the reader has actually moved.
   if (atTop) return held === null ? null : { at: null };
-  const visible = sections[activeSectionIndex(tops, line)]?.blockId ?? null;
+  const visible = sections[activeSectionIndex(tops, line, opts.skip)]?.blockId ?? null;
   if (visible === null) return null;
   if (visible === sectionContaining(sections, rowOf, held)) return null;
   return { at: visible };
