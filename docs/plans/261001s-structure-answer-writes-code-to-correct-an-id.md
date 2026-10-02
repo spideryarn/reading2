@@ -371,3 +371,24 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
   - **Dig deeper** is not a JSON call at all.
   - **Schema identity will make most of today's shared cache groups incompatible**, which is the
     correct outcome, and a cost to measure.
+- **Stage 2 measured: both gates pass.**
+  - **Validity** (`evals/results/paperwork/structure-parse/toc11-*`, spend recorded): **0 parse
+    failures in 70 answers** (against 2 in 70 for `toc/10` in stage 0), 70 of 70 trees built, 0
+    dropped children, 0 refusals on invented starts. About $8.40 for the 70 calls. One shape
+    change: on `analog-cognition` (4 `h1`, 15 `h2`) the depth-1 count went from a mean of 8.7 to
+    14.8, often putting every `h2` at depth 1. The other three articles moved 8.9 → 10.7 at most.
+  - **Quality**, the pre-registered thinking-effort rule
+    (`evals/results/hierarchy-structure/2026-10-02-00-04-59-toc10-frozen+incumbent/`, judging in
+    `evals/results/thinking-effort-261001/judging/hierarchy/`): **no visible loss from either
+    judge.**
+    - The mean U is 2.13 from Sol's ranking and 2.56 from Opus' scoring. Without cargocult, whose
+      `toc/10` arm lost a draw to malformed JSON and so flatters `toc/11`, it is 2.0 and 2.36.
+    - The analog flattening was judged *better* by both judges (U 4 and 3.5).
+    - Sol saw a per-article loss on entropy and after-work (U 0 each), and on entropy `toc/11`
+      did not think at all. Opus had both even or better.
+    - Hard gates: `toc/11` had 0 invalid draws, against 1 for `toc/10`.
+    - `toc/11` costs 27 % less ($1.83 against $2.52 for 16 draws), runs 37 % faster (62 s against
+      98 s), and thinks about half as much (3,400 against 7,400 tokens).
+  - **So it ships at `low`, as the rule says.** The think-first arm was not needed. Its
+    per-article risk — no thinking at all on some articles — is written down for Greg, not
+    hidden.

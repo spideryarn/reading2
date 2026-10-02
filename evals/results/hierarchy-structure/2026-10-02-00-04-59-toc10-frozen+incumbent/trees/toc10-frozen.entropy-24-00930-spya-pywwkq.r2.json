@@ -1,0 +1,1815 @@
+{
+  "version": "toc/11",
+  "generator": "claude-sonnet-5",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0011",
+        "n0020",
+        "n0034",
+        "n0041",
+        "n0071",
+        "n0101",
+        "n0118",
+        "n0131"
+      ],
+      "range": [
+        "spya-ekjksy",
+        "spya-gajhn8"
+      ],
+      "title": "Information Decomposition in Neural Circuits",
+      "gist": "Partial information decomposition shows neurons combine inputs synergistically, producing computation that structural features like rich clubs and recurrence reliably predict.",
+      "question": "Neural information processing — how do neural circuits actually combine and transform information? (a conceptual and empirical review)"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007",
+        "n0009"
+      ],
+      "range": [
+        "spya-ekjksy",
+        "spya-y66sc5"
+      ],
+      "title": "Overview and Abstract",
+      "gist": "Multivariate information decomposition, especially partial information decomposition, reveals redundant, unique, and synergistic modes by which neurons integrate inputs, with synergy linked to network structure.",
+      "question": "Neural computation — what does information theory reveal about how neurons integrate multiple inputs? (an overview)"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-ekjksy",
+        "spya-mt3bd6"
+      ],
+      "title": "Authors and affiliations",
+      "gist": "The authors and their institutional affiliations."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-ekjksy",
+        "spya-ekjksy"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-edcccm",
+        "spya-edcccm"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-mt3bd6",
+        "spya-mt3bd6"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008"
+      ],
+      "range": [
+        "spya-xn9j9k",
+        "spya-xn9j9k"
+      ],
+      "title": "Abstract",
+      "gist": "The review argues that partial information decomposition exposes redundant, unique, and synergistic ways neurons combine multiple inputs, with synergy serving as a signature of genuine computation, structurally linked to rich-club membership, recurrent connectivity, and correlated convergent inputs."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-xn9j9k",
+        "spya-xn9j9k"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0010"
+      ],
+      "range": [
+        "spya-y66sc5",
+        "spya-y66sc5"
+      ],
+      "title": "Keywords",
+      "gist": "A list of the article's keywords."
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0009",
+      "children": [],
+      "range": [
+        "spya-y66sc5",
+        "spya-y66sc5"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0012",
+        "n0016",
+        "n0018"
+      ],
+      "range": [
+        "spya-yb735k",
+        "spya-gzwbsr"
+      ],
+      "title": "1. Introduction",
+      "gist": "Neuroscience lacks tools to explain how neural circuits transform information, a gap only recently addressed by large-scale recordings paired with multivariate information theory such as partial information decomposition.",
+      "question": "Neural information processing — what has prevented understanding of how circuits transform information, and what now makes progress possible? (two historical limitations)",
+      "sourceHeading": "1. Introduction"
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 2,
+      "parent": "n0011",
+      "children": [
+        "n0013",
+        "n0014",
+        "n0015"
+      ],
+      "range": [
+        "spya-yb735k",
+        "spya-fmdncw"
+      ],
+      "title": "Grand challenge and open questions",
+      "gist": "Brains convert sensory signals into adaptive behavior through poorly understood transformations, and basic questions remain about which circuit structures and physiological systems best support such information processing."
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-yb735k",
+        "spya-yb735k"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-rxcze4",
+        "spya-rxcze4"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-fmdncw",
+        "spya-fmdncw"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0011",
+      "children": [
+        "n0017"
+      ],
+      "range": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ],
+      "title": "Two historical limitations",
+      "gist": "Progress was long blocked by insufficient recording data and the absence of analytical tools able to detect synergistic dependencies, though new high-density recording technologies have now eased the data shortage."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0016",
+      "children": [],
+      "range": [
+        "spya-s9kmxa",
+        "spya-s9kmxa"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 2,
+      "parent": "n0011",
+      "children": [
+        "n0019"
+      ],
+      "range": [
+        "spya-gzwbsr",
+        "spya-gzwbsr"
+      ],
+      "title": "This review's aim",
+      "gist": "This review introduces partial information decomposition as a partial solution to the analytical gap, aimed at both newcomers and specialists, highlighting the authors' own recent findings and future directions."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-gzwbsr",
+        "spya-gzwbsr"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0021",
+        "n0024",
+        "n0029"
+      ],
+      "range": [
+        "spya-ygkzd8",
+        "spya-p4pyuy"
+      ],
+      "title": "2. Tracking Information in Neural Circuits",
+      "gist": "Information theory can track how activity in one neuron reduces uncertainty about another, but applying it requires choosing data type, elements of interest, and timescale, and distinguishing correlation from directed information flow.",
+      "question": "Information tracking — what choices and tools let information theory measure how activity spreads through neural circuits? (key dimensions and two tools)",
+      "sourceHeading": "2. Tracking Information in Neural Circuits"
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0022",
+        "n0023"
+      ],
+      "range": [
+        "spya-ygkzd8",
+        "spya-t4pc0p"
+      ],
+      "title": "Field versus spike data",
+      "gist": "Information theory applied to neural circuits must account for whether activity is continuous field data or discrete spiking data, since each format demands different information-theoretic approaches to analysis."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-ygkzd8",
+        "spya-ygkzd8"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-t4pc0p",
+        "spya-t4pc0p"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028"
+      ],
+      "range": [
+        "spya-ds7nxh",
+        "spya-bdrp5d"
+      ],
+      "title": "2.1. Defining Key Dimensions",
+      "gist": "Analyzing neural information processing requires choosing whether states are continuous or discrete, which elements (neurons, regions, or electrodes) to study, and a timescale matched to the process of interest, from milliseconds to seconds.",
+      "sourceHeading": "2.1. Defining Key Dimensions"
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-ds7nxh",
+        "spya-ds7nxh"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-qxggyj",
+        "spya-qxggyj"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-rsnjdm",
+        "spya-rsnjdm"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-bdrp5d",
+        "spya-bdrp5d"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 2,
+      "parent": "n0020",
+      "children": [
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-mx45r0",
+        "spya-p4pyuy"
+      ],
+      "title": "2.2. Tracking Information",
+      "gist": "Mutual information measures undirected statistical dependence between neurons akin to functional connectivity, while transfer entropy measures directed information flow from one neuron's past to another's future, akin to effective connectivity.",
+      "sourceHeading": "2.2. Tracking Information"
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-mx45r0",
+        "spya-mx45r0"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-qjdbvj",
+        "spya-qjdbvj"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-f6sbgx",
+        "spya-f6sbgx"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-p4pyuy",
+        "spya-p4pyuy"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0035",
+        "n0038"
+      ],
+      "range": [
+        "spya-dhy39x",
+        "spya-wer4cd"
+      ],
+      "title": "3. Information Processing in Neural Circuits",
+      "gist": "Measuring information flow alone cannot show how neurons combine multiple inputs into new information, a gap multivariate information decomposition is proposed to fill.",
+      "question": "Information processing — how can we examine what neurons do with combined inputs, beyond simple transfer? (a proposed framework)",
+      "sourceHeading": "3. Information Processing in Neural Circuits"
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 2,
+      "parent": "n0034",
+      "children": [
+        "n0036",
+        "n0037"
+      ],
+      "range": [
+        "spya-dhy39x",
+        "spya-s0db2g"
+      ],
+      "title": "Limits of information transfer",
+      "gist": "Transfer entropy quantifies the flow of information between pairs of neurons but cannot reveal how a target neuron combines multiple incoming streams, motivating a turn toward multivariate information decomposition."
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-dhy39x",
+        "spya-dhy39x"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-s0db2g",
+        "spya-s0db2g"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0034",
+      "children": [
+        "n0039",
+        "n0040"
+      ],
+      "range": [
+        "spya-u5ra3d",
+        "spya-wer4cd"
+      ],
+      "title": "Decomposing joint inputs",
+      "gist": "Partial information decomposition parses how the joint past states of two source neurons shape a target's future beyond what either source explains alone, distinguishing processing from mere information transfer."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-u5ra3d",
+        "spya-u5ra3d"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-wer4cd",
+        "spya-wer4cd"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0042",
+        "n0045",
+        "n0052",
+        "n0059",
+        "n0068"
+      ],
+      "range": [
+        "spya-u0wm5e",
+        "spya-rc76qn"
+      ],
+      "title": "4. PID: Partial Information Decomposition",
+      "gist": "Partial information decomposition algebraically splits the information two or more sources carry about a target into redundant, unique, and synergistic parts, though the synergy measure chosen remains an open, contested problem.",
+      "question": "Partial information decomposition — how can joint information from multiple neurons be decomposed into interpretable parts? (formal framework in four steps)",
+      "sourceHeading": "4. PID: Partial Information Decomposition"
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0043",
+        "n0044"
+      ],
+      "range": [
+        "spya-u0wm5e",
+        "spya-crsey4"
+      ],
+      "title": "Overview of PID in this section",
+      "gist": "This section builds from the two-parent case toward the general lattice-based mathematics of partial information decomposition and confronts the unresolved problem of defining redundant information."
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-u0wm5e",
+        "spya-u0wm5e"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-crsey4",
+        "spya-crsey4"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-euzn9r",
+        "spya-q09pga"
+      ],
+      "title": "4.1. The Basic Problem and Intuition",
+      "gist": "The joint mutual information two source neurons give about a target need not equal the sum of their individual contributions, with any surplus revealing synergistic computation and any deficit revealing redundancy.",
+      "sourceHeading": "4.1. The Basic Problem and Intuition"
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-euzn9r",
+        "spya-euzn9r"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-h5dz45",
+        "spya-h5dz45"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-e94ury",
+        "spya-e94ury"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-pjdgu6",
+        "spya-pjdgu6"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-t02v4p",
+        "spya-t02v4p"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-q09pga",
+        "spya-q09pga"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058"
+      ],
+      "range": [
+        "spya-y7wdb7",
+        "spya-q9gytb"
+      ],
+      "title": "The Special Case of Two Parents",
+      "gist": "For two sources and one target, mutual information splits into redundant, unique, and synergistic terms, but these four unknowns from three equations are underdetermined, requiring an externally chosen redundancy function.",
+      "sourceHeading": "The Special Case of Two Parents"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-y7wdb7",
+        "spya-y7wdb7"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-q2b0e5",
+        "spya-q2b0e5"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-h5jzvm",
+        "spya-h5jzvm"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-k29rg5",
+        "spya-k29rg5"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-bgsd4n",
+        "spya-bgsd4n"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-q9gytb",
+        "spya-q9gytb"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067"
+      ],
+      "range": [
+        "spya-k378fv",
+        "spya-atvpm9"
+      ],
+      "title": "4.2. The Partial Information Lattice",
+      "gist": "Williams and Beer's lattice structure, built from an idealized redundancy function over all non-redundant source combinations, lets Mobius inversion recursively assign a unique value to every partial information atom.",
+      "sourceHeading": "4.2. The Partial Information Lattice"
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-k378fv",
+        "spya-k378fv"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-pvavq4",
+        "spya-pvavq4"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-t8mg0s",
+        "spya-t8mg0s"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-fe63d8",
+        "spya-fe63d8"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-t0bbpb",
+        "spya-t0bbpb"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-m37w5y",
+        "spya-m37w5y"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-aft2rx",
+        "spya-aft2rx"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [],
+      "range": [
+        "spya-atvpm9",
+        "spya-atvpm9"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 2,
+      "parent": "n0041",
+      "children": [
+        "n0069",
+        "n0070"
+      ],
+      "range": [
+        "spya-d2quz5",
+        "spya-rc76qn"
+      ],
+      "title": "4.3. Choosing a Redundancy Measure",
+      "gist": "No single redundancy measure is universally accepted; nearly a dozen compete, each suited to different data types, and most of the cited studies rely on the original, criticized Imin measure.",
+      "sourceHeading": "4.3. Choosing a Redundancy Measure"
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-d2quz5",
+        "spya-d2quz5"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-rc76qn",
+        "spya-rc76qn"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0072",
+        "n0079",
+        "n0084",
+        "n0088",
+        "n0093",
+        "n0096"
+      ],
+      "range": [
+        "spya-cc282b",
+        "spya-b32ecw"
+      ],
+      "title": "5. PID in Action",
+      "gist": "Applying partial information decomposition to recordings from cortical cultures and behaving primates shows synergy concentrates in rich clubs, grows with recurrent connectivity, and tracks task demands.",
+      "question": "PID in action — what do empirical recordings reveal about where and when synergistic computation occurs? (five empirical findings)"
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078"
+      ],
+      "range": [
+        "spya-cc282b",
+        "spya-urrypy"
+      ],
+      "title": "Overview and methods",
+      "gist": "Recording hundreds of neurons from mouse cortical cultures with multielectrode arrays and transfer entropy let the authors identify thousands of two-source, one-target triads for full partial information decomposition analysis."
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-cc282b",
+        "spya-cc282b"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-dk32tp",
+        "spya-dk32tp"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-sw5ukx",
+        "spya-sw5ukx"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-tfcqnh",
+        "spya-tfcqnh"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-kqkb58",
+        "spya-kqkb58"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0072",
+      "children": [],
+      "range": [
+        "spya-urrypy",
+        "spya-urrypy"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083"
+      ],
+      "range": [
+        "spya-e3ghxj",
+        "spya-akxt70"
+      ],
+      "title": "5.1. Synergy in Rich Clubs",
+      "gist": "Rich clubs, the densely interconnected best-propagating neurons, showed 2.7 times more synergy per triad than non-rich-club triads and accounted for about 88% of all network-wide synergistic computation.",
+      "sourceHeading": "5.1. Synergy in Rich Clubs"
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-e3ghxj",
+        "spya-e3ghxj"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-bftp48",
+        "spya-bftp48"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-fud8q3",
+        "spya-fud8q3"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-akxt70",
+        "spya-akxt70"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0085",
+        "n0086",
+        "n0087"
+      ],
+      "range": [
+        "spya-p8by2y",
+        "spya-sd9fzd"
+      ],
+      "title": "5.2. The Importance of Feedforward, Feedback, and Recurrent Connections",
+      "gist": "More recurrent connections between source neurons increased synergy by up to 50%, feedback connections slightly reduced it, and feedforward strength remained the strongest overall predictor of synergistic computation.",
+      "sourceHeading": "5.2. The Importance of Feedforward, Feedback, and Recurrent Connections"
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-p8by2y",
+        "spya-p8by2y"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-xs5660",
+        "spya-xs5660"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0084",
+      "children": [],
+      "range": [
+        "spya-sd9fzd",
+        "spya-sd9fzd"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092"
+      ],
+      "range": [
+        "spya-zfs2z7",
+        "spya-cs9fdy"
+      ],
+      "title": "5.3. Synergy from the Convergence of Correlated Information",
+      "gist": "At short, synaptic timescales greater similarity between converging source neurons increased synergy, but at longer timescales similarity instead fed redundancy, so synergy peaked only at intermediate correlation levels.",
+      "sourceHeading": "5.3. Synergy from the Convergence of Correlated Information"
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-zfs2z7",
+        "spya-zfs2z7"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-hkhpex",
+        "spya-hkhpex"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-ybmve2",
+        "spya-ybmve2"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0088",
+      "children": [],
+      "range": [
+        "spya-cs9fdy",
+        "spya-cs9fdy"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0094",
+        "n0095"
+      ],
+      "range": [
+        "spya-vjzxxm",
+        "spya-j4cy9j"
+      ],
+      "title": "5.4. Caveats to Consider",
+      "gist": "The reported findings rest on bivariate transfer entropy networks, which can overstate connection significance, and on in vitro cortical cultures, leaving open how these patterns would appear in a behaving animal.",
+      "sourceHeading": "5.4. Caveats to Consider"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-vjzxxm",
+        "spya-vjzxxm"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-j4cy9j",
+        "spya-j4cy9j"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100"
+      ],
+      "range": [
+        "spya-aqcngt",
+        "spya-b32ecw"
+      ],
+      "title": "5.5. PID in Behaving Primates",
+      "gist": "In macaques performing a multi-phase task, synergy again concentrated in high-degree, clustered neurons as in cultures, but redundancy rose during motor execution, suggesting redundancy serves reliable signal transmission.",
+      "sourceHeading": "5.5. PID in Behaving Primates"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-aqcngt",
+        "spya-aqcngt"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-wr7f6y",
+        "spya-wr7f6y"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-t8fayf",
+        "spya-t8fayf"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0096",
+      "children": [],
+      "range": [
+        "spya-b32ecw",
+        "spya-b32ecw"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0102",
+        "n0106",
+        "n0111",
+        "n0114"
+      ],
+      "range": [
+        "spya-kmgwhs",
+        "spya-qa7gt2"
+      ],
+      "title": "6. Practical Considerations in PID",
+      "gist": "Applying partial information decomposition well requires matching a redundancy function to one's data type, ensuring sufficient data to avoid sampling bias, and choosing among available software tools.",
+      "question": "Practical PID — what must a researcher decide to apply partial information decomposition correctly? (data type, sample size, tools, limits)"
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 2,
+      "parent": "n0101",
+      "children": [
+        "n0103",
+        "n0104",
+        "n0105"
+      ],
+      "range": [
+        "spya-kmgwhs",
+        "spya-tz99zn"
+      ],
+      "title": "Data type and sample size",
+      "gist": "Different redundancy functions suit discrete, Gaussian, or mixed continuous data differently, and because joint probability distributions grow exponentially with the number of variables, undersampling can severely distort results."
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0102",
+      "children": [],
+      "range": [
+        "spya-kmgwhs",
+        "spya-kmgwhs"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0102",
+      "children": [],
+      "range": [
+        "spya-uktkdy",
+        "spya-uktkdy"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0102",
+      "children": [],
+      "range": [
+        "spya-tz99zn",
+        "spya-tz99zn"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 2,
+      "parent": "n0101",
+      "children": [
+        "n0107",
+        "n0108",
+        "n0109",
+        "n0110"
+      ],
+      "range": [
+        "spya-rf4pp0",
+        "spya-cwsuea"
+      ],
+      "title": "6.1. Tools for Data Analysis",
+      "gist": "Three main software packages implement partial information decomposition: the Python DIT toolbox with its automated lattice solver, the time-series-oriented IDTxl package, and a MATLAB toolbox limited to the Imin measure.",
+      "sourceHeading": "6.1. Tools for Data Analysis"
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-rf4pp0",
+        "spya-rf4pp0"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-cqrzab",
+        "spya-cqrzab"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-ng5zs5",
+        "spya-ng5zs5"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-cwsuea",
+        "spya-cwsuea"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 2,
+      "parent": "n0101",
+      "children": [
+        "n0112",
+        "n0113"
+      ],
+      "range": [
+        "spya-h6h922",
+        "spya-spdx0y"
+      ],
+      "title": "6.2. Interpreting PID Results as Neural Information Processing",
+      "gist": "Statistical synergy is now well established in neural data, but partial information decomposition alone cannot explain which biological mechanisms, such as neurotransmitter systems, produce redundant or synergistic dynamics.",
+      "sourceHeading": "6.2. Interpreting PID Results as Neural Information Processing"
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0111",
+      "children": [],
+      "range": [
+        "spya-h6h922",
+        "spya-h6h922"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0111",
+      "children": [],
+      "range": [
+        "spya-spdx0y",
+        "spya-spdx0y"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 2,
+      "parent": "n0101",
+      "children": [
+        "n0115",
+        "n0116",
+        "n0117"
+      ],
+      "range": [
+        "spya-djfyag",
+        "spya-qa7gt2"
+      ],
+      "title": "6.3. Practical Limitations of the PID Framework",
+      "gist": "The number of distinct information components grows explosively with the number of source neurons, and finite datasets systematically bias entropy estimates, both limiting how completely and accurately PID can be applied.",
+      "sourceHeading": "6.3. Practical Limitations of the PID Framework"
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-djfyag",
+        "spya-djfyag"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-aby2dp",
+        "spya-aby2dp"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0114",
+      "children": [],
+      "range": [
+        "spya-qa7gt2",
+        "spya-qa7gt2"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0119",
+        "n0122",
+        "n0128"
+      ],
+      "range": [
+        "spya-zz5xxs",
+        "spya-cds6mm"
+      ],
+      "title": "7. Future Directions",
+      "gist": "Newer extensions of partial information decomposition allow time-resolved, local analyses and decomposition across multiple targets, opening directions beyond the classic single-target framework used throughout this review.",
+      "question": "Future directions — how might partial information decomposition be extended beyond its classic single-target form? (two emerging extensions)",
+      "sourceHeading": "7. Future Directions"
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 2,
+      "parent": "n0118",
+      "children": [
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-zz5xxs",
+        "spya-wbm9cf"
+      ],
+      "title": "Overview",
+      "gist": "Multivariate information theory remains an active research field, and while this review centered on the classic single-target decomposition, several later extensions point toward promising future directions worth briefly noting."
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-zz5xxs",
+        "spya-zz5xxs"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0119",
+      "children": [],
+      "range": [
+        "spya-wbm9cf",
+        "spya-wbm9cf"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 2,
+      "parent": "n0118",
+      "children": [
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127"
+      ],
+      "range": [
+        "spya-z39m3x",
+        "spya-ckpq7e"
+      ],
+      "title": "7.1. Local PID",
+      "gist": "Localizing partial information decomposition to individual moments rather than averages yields time-resolved informational time series, already revealing distinct computational profiles during neuronal avalanches, though few redundancy functions support this.",
+      "sourceHeading": "7.1. Local PID"
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-z39m3x",
+        "spya-z39m3x"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-j6s6fp",
+        "spya-j6s6fp"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-mgsce6",
+        "spya-mgsce6"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-mczhkp",
+        "spya-mczhkp"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ckpq7e",
+        "spya-ckpq7e"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 2,
+      "parent": "n0118",
+      "children": [
+        "n0129",
+        "n0130"
+      ],
+      "range": [
+        "spya-xn6y4f",
+        "spya-cds6mm"
+      ],
+      "title": "7.2. Multi-Target and Temporal PID",
+      "gist": "Extending decomposition to multiple targets, as in integrated information decomposition, reveals synergistic information flow changes with loss of consciousness and distinct temporal dynamics between interacting neuron pairs.",
+      "sourceHeading": "7.2. Multi-Target and Temporal PID"
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0128",
+      "children": [],
+      "range": [
+        "spya-xn6y4f",
+        "spya-xn6y4f"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0128",
+      "children": [],
+      "range": [
+        "spya-cds6mm",
+        "spya-cds6mm"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0132",
+        "n0135",
+        "n0140"
+      ],
+      "range": [
+        "spya-rc5z33",
+        "spya-gajhn8"
+      ],
+      "title": "8. Summary",
+      "gist": "Partial information decomposition shows that neurons process patterned combinations of inputs, not just summed totals, with synergy shaped by local network structure and behavioral state.",
+      "question": "Neural computation — what has this review's synergy-focused approach shown about how neurons compute? (a summary)",
+      "sourceHeading": "8. Summary"
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0133",
+        "n0134"
+      ],
+      "range": [
+        "spya-rc5z33",
+        "spya-sp50v3"
+      ],
+      "title": "Summary",
+      "gist": "Statistical synergy demonstrates that neurons respond to the specific patterns of their inputs rather than simply summing them, with this synergy's structure shaped by local network position and behavioral state."
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-rc5z33",
+        "spya-rc5z33"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0132",
+      "children": [],
+      "range": [
+        "spya-sp50v3",
+        "spya-sp50v3"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0136",
+        "n0137",
+        "n0138",
+        "n0139"
+      ],
+      "range": [
+        "spya-xxjenw",
+        "spya-pnjdke"
+      ],
+      "title": "Author contributions and funding",
+      "gist": "The authors' contributions, funding sources, data availability, and conflict-of-interest statements."
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-xxjenw",
+        "spya-xxjenw"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-r2n8q4",
+        "spya-r2n8q4"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-w58dm6",
+        "spya-w58dm6"
+      ],
+      "title": ""
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 3,
+      "parent": "n0135",
+      "children": [],
+      "range": [
+        "spya-pnjdke",
+        "spya-pnjdke"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 2,
+      "parent": "n0131",
+      "children": [
+        "n0141"
+      ],
+      "range": [
+        "spya-gajhn8",
+        "spya-gajhn8"
+      ],
+      "title": "References",
+      "gist": "The list of cited references."
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-gajhn8",
+        "spya-gajhn8"
+      ],
+      "title": ""
+    }
+  }
+}

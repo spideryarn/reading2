@@ -1,0 +1,84 @@
+{
+  "mode": "hierarchy",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "ranking": [["Y"], ["W", "X"], ["Z"]],
+      "separations": [
+        "Y over W/X: Y most cleanly separates definitions, causes, reforms, and the actual start of the see-also material while keeping its gists specific.",
+        "W/X over Z: Z ends with an awkward section that combines substantive methodological proposals with appendices and back matter."
+      ],
+      "criterionNotes": "The largest differences are in section boundaries and completeness: Y handles the sprawling article and its back matter best, while W and X make different but comparably costly grouping errors."
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "ranking": [["Y"], ["W"], ["X"], ["Z"]],
+      "separations": [
+        "Y over W: Y preserves the abstract/front matter division and explicitly accounts for the closing administrative material, whereas W leaves that material hidden beneath Summary.",
+        "W over X: W keeps the abstract distinct from the numbered introduction, while X incorrectly folds both into one Introduction section.",
+        "X over Z: X accurately identifies the final authorship and funding material, while Z's gist incorrectly describes it as author identities and workplaces."
+      ],
+      "criterionNotes": "All four track the numbered scientific sections well; they differ chiefly in completeness and boundary accuracy around the front and back matter, plus the precision of their gists."
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "ranking": [["X"], ["Z"], ["W"], ["Y"]],
+      "separations": [
+        "X over Z: X uses the same sound major divisions but gives more precise gists for the computational and ethical arguments.",
+        "Z over W: Z has sharper, rubric-compliant landmark titles and avoids W's overlong title for the opening argument.",
+        "W over Y: W preserves the credits as a separate division, while Y folds them into the substantive opening section."
+      ],
+      "criterionNotes": "The candidates mostly agree on boundaries, so titles and gist specificity decide the ranking; Y alone has a meaningful structural boundary error at the start."
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "ranking": [["Z"], ["Y"], ["W"], ["X"]],
+      "separations": [
+        "Z over Y: Z preserves every major argumentative turn, including visual diagnosis, formal proof, induction, mathematical counterexamples, and practical programming.",
+        "Y over W: Y correctly separates the cellular-automaton example and formal-proof discussion, which W absorbs into broader neighboring sections.",
+        "W over X: W retains the article's main conceptual progression, while X merges several distinct turns into catch-all sections."
+      ],
+      "criterionNotes": "Section boundaries and completeness differ most: Z mirrors the article's real sequence without sacrificing specific titles or accurate gists, while increasingly broad mergers weaken Y, W, and especially X."
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "ranking": [["Z"], ["W"], ["X"], ["Y"]],
+      "separations": [
+        "Z over W: Z follows the paper's actual headings throughout, while W collapses anesthesia, the hybrid framework, theory comparison, and conclusion into one catch-all.",
+        "W over X: W keeps oscillatory organization and Spatial Computing distinct and labels its closing synthesis more accurately than X.",
+        "X over Y: X preserves the abstract, introduction, and classical-model setup, whereas Y compresses nearly all of that foundation into one oversized section."
+      ],
+      "criterionNotes": "The decisive criterion is structural completeness: Z captures each substantive division with specific, accurate gists, while the others progressively flatten or merge the paper's argument."
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "ranking": [["Y"], ["Z"], ["X"], ["W"]],
+      "separations": [
+        "Y over Z: Y gives the notes their own clean section instead of nesting them beneath the concluding argument, while retaining all of the essay's major case-study divisions.",
+        "Z over X: Z more clearly separates the article metadata from the relational-future thesis and gives especially specific gists for the historical cases.",
+        "X over W: X describes the aristocratic case as a contrast with work, while W inaccurately suggests those lives lacked meaning rather than locating meaning in relational status."
+      ],
+      "criterionNotes": "All four recognize the essay's five-part argument, but nesting of the notes, the opening boundary, and gist accuracy distinguish them."
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "ranking": [["Y"], ["W", "Z"], ["X"]],
+      "separations": [
+        "Y over W/Z: Y combines the shared clean structure with the most specific and comprehensive gists, especially for silk types, artificial production, and human applications.",
+        "W/Z over X: W and Z preserve more discriminating scientific and historical detail, while X's gists are consistently more generic."
+      ],
+      "criterionNotes": "The section boundaries and completeness are essentially identical, so the ranking turns chiefly on title usefulness and gist specificity."
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "ranking": [["Z"], ["X"], ["W"], ["Y"]],
+      "separations": [
+        "Z over X: Z preserves X's coherent argumentative grouping while giving Feynman's final wish its own proper closing section.",
+        "X over W: X places the cargo-cult metaphor together with the integrity principle it introduces, whereas W leaves the defining metaphor in the preceding pseudoscience survey.",
+        "W over Y: W provides a complete, usable hierarchy, while Y produced no usable output."
+      ],
+      "criterionNotes": "The main difference is where the central conceptual turn occurs: Z and X place it at the definition of Cargo Cult Science, while W delays the boundary until the explanation of scientific integrity."
+    }
+  ]
+}
