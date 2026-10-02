@@ -552,6 +552,11 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.readingTime.length) {
     at("reading-time.json", { blocks: rows.readingTime.map((row) => rowJson(row)) });
   }
+  if (rows.glossaryHiddenEntries.length) {
+    at("glossary-hidden.json", {
+      entries: rows.glossaryHiddenEntries.map((row) => rowJson(row)),
+    });
+  }
   return out;
 }
 
@@ -605,6 +610,7 @@ one thing that will make the rest of these files make sense.
                            each node carries its own gist at each level of granularity.
       glossary.json        Terms the article assumes you know, and what they mean here.
       glossary-lookups.json Web lookups you asked for on a glossary term.
+      glossary-hidden.json The glossary terms you hid from your own view of the article.
       citation-finds.json  Pages found on the web for cited works you asked about.
       citation-investigations.json
                            What the Dig deeper action wrote about cited works you asked it to look into,
@@ -791,6 +797,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/tree.json": "The tree and the summaries — one nested structure, a gist on every node.",
   "augmentations/glossary.json": "Terms the article assumes you know, and what they mean here.",
   "augmentations/glossary-lookups.json": "Web lookups you asked for on a glossary term.",
+  "augmentations/glossary-hidden.json": "The glossary terms you hid from your own view of the article.",
   "augmentations/citation-finds.json": "Pages found on the web for cited works you asked about.",
   "augmentations/citation-investigations.json":
     "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
@@ -946,6 +953,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works found on the web", n: rows.citationFinds.length },
     { label: "cited works investigated", n: rows.citationInvestigations.length },
     { label: "blocks with reading time", n: rows.readingTime.length },
+    { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

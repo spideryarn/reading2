@@ -601,6 +601,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/reading-time/w1"],
   },
   {
+    /* Hide a glossary entry for the owner, and show it again — plan 261002c § 2. */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/glossary\\/([\\w.%-]+)\\/hidden\\/([\\w.%-]+)$",
+      flags: "",
+    },
+    methods: ["PUT", "DELETE"],
+    witnesses: ["/api/glossary/w1/hidden/w2"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/sketch\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/sketch/w1"],
@@ -856,8 +866,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 83;
-const EXPECTED_GUARD_COUNT = 101;
+const EXPECTED_MATCHER_COUNT = 84;
+const EXPECTED_GUARD_COUNT = 103;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2047,6 +2057,9 @@ describe("the authenticated API's route contract", () => {
         // reading time, 260916c
         "GET regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
+        // hiding a glossary entry, 261002c
+        "PUT regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/hidden\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/hidden\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/quiz\\/([\\w.%-]+)\\/mark$/",
         // sketch to the two paid pictures, 260911c
         "GET regex /^\\/api\\/sketch\\/([\\w.%-]+)$/",

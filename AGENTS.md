@@ -93,7 +93,7 @@ listed here; the names under each are files in `docs/project/`.
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
   `loading-spinner.md` (the wordmark for a whole page waiting, `LoaderCircle` for the rest) ·
-  `design-logo.md` (the thirteen animations the wordmark plays when you point at it) ·
+  `design-logo.md` (the fourteen animations the wordmark plays when you point at it) ·
   `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
   claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted

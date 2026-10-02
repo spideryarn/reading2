@@ -342,9 +342,17 @@ const READING_TIME_SENTINEL = "2718.281828";
 /** A second sentinel, in `citation_finds`' lookup columns — the ones `export.ts` lists by hand. */
 const LOOKUP_SENTINEL = "sentinel-3f9c1e-citation-finds-lookup quote";
 
+/**
+ * A hidden glossary entry's id — `glossary_hidden_entries` has no column but
+ * the id (format-checked) and the article, so its sentinel is a well-formed id
+ * nothing else in this file uses. Plan 261002c § 2.
+ */
+const HIDDEN_ENTRY_SENTINEL = "spya-cvh234";
+
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
+  if (table === "glossary_hidden_entries") return HIDDEN_ENTRY_SENTINEL;
   return `sentinel-3f9c1e-${table}`;
 }
 
@@ -547,6 +555,14 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         seconds: Number(sentinel("reading_time")),
       });
     },
+    /* Straight into the table: the store's `hide` would refuse an id the
+       glossary does not have, and this file is about the export. */
+    glossary_hidden_entries: async () => {
+      await db.insert(schema.glossaryHiddenEntries).values({
+        articleId: ARTICLE_ID,
+        entryId: sentinel("glossary_hidden_entries"),
+      });
+    },
   };
 }
 
@@ -648,6 +664,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   citation_finds: {},
   citation_investigations: {},
   reading_time: {},
+  glossary_hidden_entries: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -686,6 +703,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   citation_finds: (parsed) => listAt(parsed, "finds"),
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
+  glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
 };
 
 /** Every key any of these rows carries. */
@@ -726,6 +744,7 @@ await pgReady({
     "spideryarn.citation_finds",
     "spideryarn.citation_investigations",
     "spideryarn.reading_time",
+    "spideryarn.glossary_hidden_entries",
   ],
 });
 

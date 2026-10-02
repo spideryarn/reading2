@@ -100,6 +100,13 @@ const READ: GlossaryRead = {
   reload: async () => {},
   refresh: async () => {},
   patchEntry: () => {},
+  look: async () => false,
+  looking: null,
+  lookFailed: null,
+  lookDraft: null,
+  lookKept: null,
+  setHidden: async () => {},
+  hiding: new Set<string>(),
 };
 
 /** The same, for the quotes — `OwnedReader`'s read, posed. src/web/useQuotes.ts. */

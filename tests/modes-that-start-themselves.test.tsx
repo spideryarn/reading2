@@ -350,6 +350,13 @@ const SETTLED_EMPTY_READ = {
   refresh: async () => {},
   clear: () => {},
   patchEntry: () => {},
+  look: async () => false,
+  looking: null,
+  lookFailed: null,
+  lookDraft: null,
+  lookKept: null,
+  setHidden: async () => {},
+  hiding: new Set<string>(),
 };
 
 /**
