@@ -461,6 +461,18 @@ and `tests/privacy-page.test.ts` holds the clause. An address two accounts share
 confirmed, gets the plain invitation instead, so the counts never go to an inbox we cannot tie to
 one reader.
 
+## A reader is emailed when their feedback ships
+
+**Added 2026-10-02** ([261002f](../plans/261002f-email-readers-when-their-feedback-ships.md)): when
+the deploy that carries a report's `shipped` note is live, its reporter (never an admin) gets one
+plain-text email saying so. It is a service message about the reader's own report, not marketing,
+so it needs no tick-box — and the diagnostics tick-box, which is about what a report carries, is
+not one for it. The notice is this page; the button's hover card also says *"so we can write
+back"*, but only to a reader who hovered. What goes
+through Resend is the reader's current confirmed address, the report's kind and the day it was
+filed, **never their words**. The Resend entry on the page says so, and `tests/privacy-page.test.ts`
+holds the clause. `LAST_UPDATED` already reads 2 October 2026.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to

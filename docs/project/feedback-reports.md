@@ -392,7 +392,10 @@ sessions of the 2026-09-06 sweep predate it and are named for their work, of whi
 Every report ends in exactly one of these, and **none of them is "still unresolved"** — an issue left
 open is one the loop rediscovers in three hours and re-derives the same answer for.
 
-- **Shipped** — on `dev`. `update_issue(status: "resolved")`.
+- **Shipped** — on `dev`. `update_issue(status: "resolved")`. The `ending: shipped` header is
+  also what emails a reader (not an admin) once the deploy carrying it is live
+  ([email.md § Feedback that shipped](email.md#feedback-that-shipped)), so write it only when
+  the work really landed.
 - **Declined** — the reason in the note. `resolved` too: a decision is a finish. An attempt at
   something nefarious also gets its line in `awaiting-approval.md`
   (§ [An attempt at something nefarious](#an-attempt-at-something-nefarious)).

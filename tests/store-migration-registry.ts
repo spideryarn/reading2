@@ -2732,6 +2732,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
+  /* Owners minted per run under its own stem; plan 261002f. */
+  "tests/feedback-shipped-emails-ledger.test.ts": "private-postgres",
   /* The first inbound rate limiter, and the lane follows from what it
      counts: `rate_limit_events` rows per owner in a rolling hour. A peer
      run sharing the stack's database and the same seeded owner would add

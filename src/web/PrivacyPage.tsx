@@ -293,7 +293,8 @@ export function PrivacyPage() {
             a gift of free articles to an email address, and that address is sent one email saying
             so, with a short note from whoever gave it, if they wrote one — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
-            it. Ireland (eu-west-1).
+            it. If you send us feedback through the Feedback button and we act on it, we email you once the change is live;
+            that email does not quote what you wrote. Ireland (eu-west-1).
           </Third>
           <Third name="Vercel" href="https://vercel.com/legal/privacy-policy">
             hosting. The code that answers your requests runs in London; their request logs are kept

@@ -7,7 +7,9 @@ email**, which Supabase sends over SMTP, and **the server's own**, which goes th
 [`src/email.ts`](../../src/email.ts) — notices to us about sign-ups and upgrades
 ([§ Mail the server sends itself](#mail-the-server-sends-itself)), and since 2026-10-01 the two
 emails a gift voucher sends, the first we send to somebody who is not yet a reader
-([§ Gift voucher emails](#gift-voucher-emails)). Anything new that sends mail
+([§ Gift voucher emails](#gift-voucher-emails)), and since 2026-10-02 a note to a reader that
+their feedback is live, sent by the deploy rather than the server
+([§ Feedback that shipped](#feedback-that-shipped)). Anything new that sends mail
 should go through `src/email.ts` rather than add a second way or a second provider.
 
 **Auth email — sign-up confirmations, password resets, magic links — goes out through
@@ -229,6 +231,39 @@ spideryarn.com → Configuration).
 **Proved once for real** on 2026-10-01: both messages, built by the code above, were sent through
 `sendEmail` with `SPIDERYARN_EMAIL_SEND=1` to `hello@spideryarn.com` only, and Resend accepted both
 (ids `01a0f8db-5dcd…` and `01a0f8db-5e8c…`). Arrival in the inbox was not checked from here.
+
+## Feedback that shipped
+
+> When someone (other than an admin - I will already be aware) has submitted a Feedback report that
+> gets shipped & deployed, send them an email to let them know their feedback is now live!
+>
+> — Greg, 2026-10-02
+
+**The last step of `npm run deploy`**, and only when the code is live and verified:
+[`scripts/feedback-shipped-emails.ts`](../../scripts/feedback-shipped-emails.ts) reads the reports
+whose note says `shipped` in `src/feedback-endings.generated.ts` at the commit just deployed, and
+emails each one from a reader that the ledger `spideryarn.feedback_shipped_emails` has not already
+emailed — one email per report. That is the same moment the Feedback dialog's Earlier tab starts
+saying *shipped* ([feedback.md § Shipped or not](feedback.md)). It **reconciles rather than diffs**,
+so a deploy whose step did not run, or died part way, is caught up by the next. Plan:
+[261002f](../plans/261002f-email-readers-when-their-feedback-ships.md).
+
+- **Never an admin**, never a report id two owners share, and only to the account's **current,
+  confirmed** address (not deleted, not banned), read from `auth.users` at send time. The ledger
+  stores no address, and cascades with its `feedback` row.
+- **Plain text, and no word of the report**: its kind and the day it was filed. `/privacy` names
+  this email; the button's hover card says *"so we can write back"*.
+- **The ledger's three states.** `sent` is never sent again. `failed` (Resend refused, or no key) is
+  retried by the next deploy. `sending` is in flight, or a send that may have gone (the request
+  threw), or a crash mid-send; every deploy lists it as needing a person, who checks Resend's log
+  and then runs `--retry <owner_id>/<report_id> --send` or marks the row `sent`. Resend's
+  `Idempotency-Key` (`feedback-shipped/<owner>/<report>`) makes a retry within a day safe.
+- **More than 20 letters in one run sends none** unless a person passes `--cap`, and a map line it
+  cannot parse is an error, not "nothing shipped" — the two ways a bug could become a mass mailing.
+- **A failure is an after-the-fact check** (`AFTER_THE_FACT_CHECKS`): the deploy goes red, says the
+  code is live, and never offers a rollback for it.
+- **To look**, `npx tsx scripts/feedback-shipped-emails.ts` is a read-only dry run against
+  production and `origin/main`; `--sha` names another commit, `--send` sends.
 
 ## See also
 

@@ -928,6 +928,9 @@ export const AFTER_THE_FACT_CHECKS = [
   "errors in the log",
   "read this deployment's logs",
   "the log contains the request this script made",
+  /* `STEP_NAME` in scripts/feedback-shipped-emails.ts: the code is live, only a
+     letter to a reader is missing (plan 261002f). */
+  "feedback shipped emails",
 ] as const;
 
 export function codeMayNotHaveShipped(failed: readonly string[]): boolean {
