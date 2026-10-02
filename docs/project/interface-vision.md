@@ -75,8 +75,8 @@ anchored, so placing it costs layout, not a model call.
 | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
 | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |
 | Ideas (assumes / introduces) | block ids | right: a stamp at first occurrence | **in the margin**, once Ideas has run; marked in the prose only while Ideas' band is open (`selectPassages`, `src/web/reader/passages.ts`) |
-| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: only the `disputes` rows (the filter is a decision), collapsed, opening the replies | data yes, placement no |
-| FAQ answers | the passages that answer | right, or a mark | data yes; marked nowhere, not even in its own band (open report 82) |
+| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first (narrowing to `disputes` is open question 2) |
+| FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
 | Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **no** — a new model pass (the relation words in [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) stage 2) |
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
@@ -158,9 +158,11 @@ Each step is useful on its own, and none commits us to the next.
 
 1. **Rename Annotations to Marginalia** — done, 2026-10-01
    ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md)).
-2. **One small trial of a note from data already stored** — Debate's `disputes` rows, or FAQ's
-   answers — collapsed by default, one line each, opening to the stored content. No model call.
-   (Report 82 asks for this.)
+2. **Notes from data already stored** — done, 2026-10-02, wider than the trial this step proposed:
+   report 82 asked for FAQ, Citations, Debate and comments, shut by default, and that is what
+   [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md)
+   built: one line per kind per block, opening to the stored content, no model call.
+   [marginalia.md](marginalia.md).
 3. **Every mark explains itself on hover and on tap** — the app-side version of the playground's
    check, before adding marks.
 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
@@ -181,9 +183,12 @@ question comes off this list.
 1. **For now, is the left still today's band?** (A) yes — one mode at a time, chosen as now, and the
    structural change waits until the right and middle have moved; (B) no — design a left column that
    holds several unanchored things at once, stacked or tabbed, now. *Recommended: A.*
-2. **Which stored content goes into the margin first, as one small trial?** (A) Debate's rows that
-   *dispute* a claim (not those that qualify, extend or corroborate it); (B) FAQ's answers, beside
-   the passages that answer them; (C) both at once. *Recommended: A, then B.*
+2. **Debate in the margin: every relation, or only disputes?** Report 82 answered the first half of
+   this question (which stored content goes in: FAQ, Citations, Debate and comments, all shut).
+   What is left is the filter: (A) every claim row, with its relation word first — "disputes",
+   "qualifies", "extends", "agrees" — as built in 261002b; (B) only the rows that *dispute* a
+   claim, so the margin flags disagreement and nothing else. Changing to B is one line in
+   `src/web/marginalia/notes.ts`. *Recommended: A until a real article shows it is too busy.*
 3. **May opening Marginalia ever spend money to make what it is missing?** (A) no — it shows only
    what is already stored, as now; (B) yes, for some modes, under a policy Greg sets.
    *Recommended: A until Greg sets that policy.*

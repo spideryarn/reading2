@@ -5,8 +5,15 @@
  */
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
-import type { Arc, Block, Idea, Tree, TreeNode } from "../src/types.js";
-import { marginaliaNotes, arcAt, headPath, layoutNotes } from "../src/web/marginalia/notes.js";
+import type { Arc, Block, CitedWork, FaqQuestion, Idea, Tree, TreeNode } from "../src/types.js";
+import {
+  type MarginClaim,
+  type MarginComment,
+  marginaliaNotes,
+  arcAt,
+  headPath,
+  layoutNotes,
+} from "../src/web/marginalia/notes.js";
 
 const ids = ["spya-aaaaa1", "spya-aaaaa2", "spya-aaaaa3", "spya-aaaaa4", "spya-aaaaa5", "spya-aaaaa6"];
 /* The first block is a heading, as a part's first block usually is. */
@@ -193,5 +200,111 @@ describe("the head", () => {
     expect(arcAt(arc, index, "spya-aaaaa6")).toBe("Turning it round.");
     expect(arcAt(arc, index, "spya-zzzzzz")).toBe(null);
     expect(arcAt(null, index, "spya-aaaaa2")).toBe(null);
+  });
+});
+
+/* ------------------------------------------------------------------------
+   Report 82: FAQ, Debate, Citations and comments, beside their blocks, one
+   shut line per kind per block. Nothing here generates; these are the items
+   other modes have already stored.
+   docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md. */
+
+/* Blocks whose text a quote can be checked against. */
+const quoted = ids.map((id, i) => ({
+  id,
+  text: `Paragraph ${i} says something particular about topic ${i}.`,
+  html: "",
+  kind: "text",
+  gistable: true,
+  words: 40,
+})) as unknown as Block[];
+const say = (i: number) => `something particular about topic ${i}`;
+
+function faqQ(id: string, passages: { blockId: string; quote: string }[]): FaqQuestion {
+  return { id, question: `Question ${id}?`, passages: passages.map((p) => ({ ...p, start: 0 })) } as FaqQuestion;
+}
+function claim(url: string, blockId: string, claimQuote: string): MarginClaim {
+  return { url, blockId, claimQuote, relation: "disputes", sourceQuote: "s", applies: "a" } as unknown as MarginClaim;
+}
+function work(id: string, citedAt: string[]): CitedWork {
+  return { id, title: `Work ${id}`, why: "w", citedAt, firstCited: citedAt[0], mentions: [] } as unknown as CitedWork;
+}
+
+describe("marginaliaNotes, other modes' items (report 82)", () => {
+  it("puts an FAQ question beside its earliest answering passage by block position, not passages[0]", () => {
+    const q = faqQ("f1", [
+      { blockId: "spya-aaaaa5", quote: say(4) },
+      { blockId: "spya-aaaaa3", quote: say(2) },
+    ]);
+    const notes = marginaliaNotes(null, quoted, null, { faq: [q] });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
+    expect(notes.get("spya-aaaaa3")).toEqual([{ kind: "faq", items: [{ question: q, quote: say(2) }] }]);
+  });
+
+  it("passes over an FAQ passage whose block is gone, or whose words are no longer in it", () => {
+    const q = faqQ("f2", [
+      { blockId: "spya-zzzzzz", quote: say(0) },
+      { blockId: "spya-aaaaa2", quote: "words this block never said" },
+      { blockId: "spya-aaaaa4", quote: say(3) },
+    ]);
+    expect([...marginaliaNotes(null, quoted, null, { faq: [q] }).keys()]).toEqual(["spya-aaaaa4"]);
+    const none = faqQ("f3", [{ blockId: "spya-aaaaa2", quote: "nothing like it" }]);
+    expect(marginaliaNotes(null, quoted, null, { faq: [none] }).size).toBe(0);
+  });
+
+  it("groups several of one kind in one block into one note", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      citations: [work("c1", ["spya-aaaaa2"]), work("c2", ["spya-aaaaa2", "spya-aaaaa5"])],
+    });
+    const here = notes.get("spya-aaaaa2") ?? [];
+    expect(here).toHaveLength(1);
+    expect(here[0]?.kind).toBe("citation");
+    expect(here[0]?.kind === "citation" && here[0].items.map((w) => w.id)).toEqual(["c1", "c2"]);
+    expect(notes.has("spya-aaaaa5")).toBe(false);
+  });
+
+  it("places a citation at its earliest surviving citing block", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      citations: [work("c3", ["spya-zzzzzz", "spya-aaaaa6", "spya-aaaaa4"])],
+    });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
+  });
+
+  it("places a Debate claim row only where its claim's words still are", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      claims: [claim("https://a.example", "spya-aaaaa3", say(2)), claim("https://b.example", "spya-aaaaa4", "not said")],
+    });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
+  });
+
+  it("leaves referee notes out of the reader's comments, and keeps bookmarks", () => {
+    const comments = [
+      { id: "m1", blockId: "spya-aaaaa2", createdAt: "t", body: "mine", status: "none" },
+      { id: "m2", blockId: "spya-aaaaa2", createdAt: "t", status: "none" },
+      { id: "m3", blockId: "spya-aaaaa2", createdAt: "t", body: "a referee note", status: "none", criterionId: "k" },
+    ] as unknown as MarginComment[];
+    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
+    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1", "m2"]);
+  });
+
+  it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {
+    const tree2 = {
+      ...tree,
+      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
+    } as Tree;
+    const here = idea({
+      id: "i9",
+      name: "Here",
+      occurrences: [{ blockId: "spya-aaaaa2", quote: "q", reasoning: "r" }],
+    } as Partial<Idea> & Pick<Idea, "id" | "name">);
+    const kinds = (
+      marginaliaNotes(tree2, quoted, [here], {
+        comments: [{ id: "m", blockId: "spya-aaaaa2", createdAt: "t", status: "none" }] as unknown as MarginComment[],
+        citations: [work("c", ["spya-aaaaa2"])],
+        claims: [claim("https://c.example", "spya-aaaaa2", say(1))],
+        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
+      }).get("spya-aaaaa2") ?? []
+    ).map((n) => n.kind);
+    expect(kinds).toEqual(["question", "idea", "faq", "debate", "citation", "comment"]);
   });
 });

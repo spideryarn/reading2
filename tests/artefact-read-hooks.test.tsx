@@ -3,7 +3,8 @@
  * **A read hook reads, and that is all it does** — `useIdeasRead` and
  * `useTimelineRead`, split out of their mode hooks for Skim's stop
  * card (Sol F22, docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
- * § Revised after GPT Sol's stage-3 plan review).
+ * § Revised after GPT Sol's stage-3 plan review), and `useFaqRead` and
+ * `useDebateRead`, split out for Marginalia's notes (plan 261002b).
  *
  * The card promises that nothing on it starts a run. With the mode hooks that
  * was true only because `useAutoRun` happened not to fire for another mode's
@@ -57,6 +58,18 @@ const BODIES: Record<string, unknown> = {
     stale: false,
     outdated: true,
   },
+  debate: {
+    debate: {
+      version: "debate/t",
+      generator: "t",
+      slug: "read-hooks",
+      sourceHash: "h",
+      direct: { rows: [] },
+      claims: { rows: [] },
+    },
+    stale: false,
+    outdated: false,
+  },
   timeline: {
     timeline: {
       version: "timeline/t",
@@ -78,7 +91,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   const apiFetch = async (url: string, init?: RequestInit) => {
     asked.push({ url, method: init?.method ?? "GET" });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
-    const kind = /^\/api\/(ideas|faq|timeline)\//.exec(url)?.[1];
+    const kind = /^\/api\/(ideas|faq|debate|timeline)\//.exec(url)?.[1];
     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
     return new Response(null, { status: 404 });
   };
@@ -87,7 +100,8 @@ vi.mock("../src/web/lib/api.js", async () => {
 
 const { useIdeas, useIdeasRead } = await import("../src/web/useIdeas.js");
 const faqHooks = await import("../src/web/useFaq.js");
-const { useFaq } = faqHooks;
+const { useFaq, useFaqRead } = faqHooks;
+const { useDebate, useDebateRead } = await import("../src/web/useDebate.js");
 const { useTimeline, useTimelineRead } = await import("../src/web/useTimeline.js");
 
 let host: HTMLDivElement;
@@ -122,8 +136,13 @@ async function mount(use: (slug: string) => unknown, name: string): Promise<void
 
 const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
 
+/* FAQ and Debate since 2026-10-02: Marginalia reads both and must never
+   spend (plan 261002b, GPT Sol's F1 on it). Debate is the dearest step in the
+   app to start by accident. */
 const READS = [
   ["ideas", useIdeasRead],
+  ["faq", useFaqRead],
+  ["debate", useDebateRead],
   ["timeline", useTimelineRead],
 ] as const;
 
@@ -153,6 +172,8 @@ describe("the read hooks start no job", () => {
 describe("the positive control: a mode hook can reach the queue, and a read hook has no way to", () => {
   const MODES = [
     ["ideas", useIdeas, useIdeasRead],
+    ["faq", useFaq, useFaqRead],
+    ["debate", useDebate, useDebateRead],
     ["timeline", useTimeline, useTimelineRead],
   ] as const;
   for (const [kind, useMode, useRead] of MODES) {
@@ -170,7 +191,7 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
     });
   }
 
-  it("FAQ keeps its mode hook, but not the read-only hook that existed only for Skim's removed snippets", async () => {
+  it("FAQ's mode hook still reads through its read half, freshness and all", async () => {
     present = new Set(["faq"]);
     await mount(useFaq, "faq");
     const mode = seen.faq as ReturnType<typeof useFaq>;
@@ -184,6 +205,5 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
       await mode.ensure().catch(() => undefined);
     });
     expect(jobRequests().some((r) => r.method === "POST")).toBe(true);
-    expect(faqHooks).not.toHaveProperty("useFaqRead");
   });
 });

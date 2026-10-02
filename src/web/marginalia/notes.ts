@@ -14,8 +14,25 @@
  * Ranges are resolved by block position, never by comparing id strings
  * (docs/project/block-ids.md).
  */
-import type { Arc, Block, BlockId, Idea, IdeaProvenance, Tree } from "../../types.js";
+import type {
+  Arc,
+  Block,
+  BlockId,
+  CitedWork,
+  Comment,
+  FaqQuestion,
+  Idea,
+  IdeaProvenance,
+  Tree,
+} from "../../types.js";
+import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
+import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
+
+/** A Debate claim row, the owner's or a visitor's — every owner row is one. */
+export type MarginClaim = PublicClaimDebateRow;
+/** A comment or bookmark, the owner's or a visitor's. */
+export type MarginComment = Comment | PublicComment;
 
 export type MarginaliaNote =
   /** The question a part — or, at `depth` 0, the whole article — answers. */
@@ -27,7 +44,33 @@ export type MarginaliaNote =
       name: string;
       statement: string;
       provenance: IdeaProvenance;
-    };
+    }
+  /* **Other modes' items, one shut line per kind per block** — report 82,
+     docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
+     `items` is never empty. */
+  /** FAQ questions this block answers, each with the words here that do. */
+  | { kind: "faq"; items: { question: FaqQuestion; quote: string }[] }
+  /** Pages on the web that answer a claim made in this block. */
+  | { kind: "debate"; items: MarginClaim[] }
+  /** Works first cited in this block. Owner only — the caller's rule. */
+  | { kind: "citation"; items: CitedWork[] }
+  /** The reader's own comments and bookmarks on this block. */
+  | { kind: "comment"; items: MarginComment[] };
+
+/**
+ * **What other modes have already stored**, each already filtered by the caller
+ * for whether it may be shown at all (owner, fresh). Absent or null is "none".
+ */
+export type MarginSources = {
+  faq?: readonly FaqQuestion[] | null;
+  claims?: readonly MarginClaim[] | null;
+  citations?: readonly CitedWork[] | null;
+  comments?: readonly MarginComment[] | null;
+};
+
+type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
+/** The order the kinds are drawn in below the question and the stamps. */
+const GROUPED_ORDER = ["faq", "debate", "citation", "comment"] as const;
 
 /** A sentence's worth: fewer words than this is a heading, a date or a byline. */
 export const PARAGRAPH_MIN_WORDS = 12;
@@ -44,6 +87,7 @@ export function marginaliaNotes(
   tree: Tree | null | undefined,
   blocks: readonly Block[],
   ideas: readonly Idea[] | null | undefined,
+  more: MarginSources = {},
 ): Map<BlockId, MarginaliaNote[]> {
   const index = blockIndex(blocks);
   const out = new Map<BlockId, MarginaliaNote[]>();
@@ -117,6 +161,96 @@ export function marginaliaNotes(
       statement: idea.statement,
       provenance: idea.provenance,
     });
+  }
+
+  for (const [blockId, notes] of groupedNotes(index, blocks, more)) {
+    for (const note of notes) add(blockId, note);
+  }
+  return out;
+}
+
+/**
+ * **Other modes' items** (report 82): each placed at its earliest block *by
+ * position* that still holds it, and grouped per kind per block, so a block
+ * carries at most one line of each kind however many items land there. In
+ * `GROUPED_ORDER` within a block; `marginaliaNotes` appends them after the
+ * question and the stamps.
+ */
+function groupedNotes(
+  index: ReadonlyMap<string, number>,
+  blocks: readonly Block[],
+  more: MarginSources,
+): Map<BlockId, GroupedKind[]> {
+  const grouped = new Map<BlockId, Partial<{ [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"] }>>();
+  const put = <K extends GroupedKind["kind"]>(
+    blockId: BlockId,
+    kind: K,
+    item: Extract<GroupedKind, { kind: K }>["items"][number],
+  ) => {
+    let byKind = grouped.get(blockId);
+    if (!byKind) {
+      byKind = {};
+      grouped.set(blockId, byKind);
+    }
+    const list = (byKind[kind] ?? []) as unknown[];
+    list.push(item);
+    byKind[kind] = list as never;
+  };
+  /* **A quote is checked against the block it names, every time.** A
+     visitor's payload carries no freshness verdict (src/store/public-reader.ts),
+     so an artefact written against an earlier version of a block whose id
+     survived could otherwise sit confidently beside prose that no longer says
+     it. The forgiving pass, as every browser-side check against a block uses
+     (quote-match.ts § `findQuote`); `start` only picks between repeats. */
+  const holds = (blockId: BlockId, quote: string, near?: number): boolean => {
+    const at = index.get(blockId);
+    const block = at === undefined ? undefined : blocks[at];
+    return block !== undefined && quote.trim() !== "" && findQuote(block.text, quote, near) !== null;
+  };
+  const earliest = <T>(candidates: readonly T[], blockOf: (c: T) => BlockId, ok: (c: T) => boolean): T | null => {
+    let best: T | null = null;
+    let bestAt = Number.POSITIVE_INFINITY;
+    for (const c of candidates) {
+      const at = index.get(blockOf(c));
+      if (at !== undefined && at < bestAt && ok(c)) {
+        best = c;
+        bestAt = at;
+      }
+    }
+    return best;
+  };
+
+  for (const question of more.faq ?? []) {
+    const passage = earliest(
+      question.passages,
+      (p) => p.blockId,
+      (p) => holds(p.blockId, p.quote, p.start),
+    );
+    if (passage) put(passage.blockId, "faq", { question, quote: passage.quote });
+  }
+  for (const row of more.claims ?? []) {
+    if (holds(row.blockId, row.claimQuote)) put(row.blockId, "debate", row);
+  }
+  for (const work of more.citations ?? []) {
+    const first = earliest(work.citedAt, (id) => id, () => true);
+    if (first !== null) put(first, "citation", work);
+  }
+  /* **Referee notes are not reading notes**: a comment with a `criterionId` is
+     a peer-review placement (referee-mode.md), meaningless here without its
+     criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan. */
+  for (const comment of more.comments ?? []) {
+    if ("criterionId" in comment && comment.criterionId !== undefined) continue;
+    if (index.has(comment.blockId)) put(comment.blockId, "comment", comment);
+  }
+
+  const out = new Map<BlockId, GroupedKind[]>();
+  for (const [blockId, byKind] of grouped) {
+    const list: GroupedKind[] = [];
+    for (const kind of GROUPED_ORDER) {
+      const items = byKind[kind];
+      if (items && items.length > 0) list.push({ kind, items } as GroupedKind);
+    }
+    if (list.length > 0) out.set(blockId, list);
   }
   return out;
 }
