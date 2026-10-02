@@ -375,7 +375,7 @@ describe("Marginalia's old name", () => {
     expect(listed()).toEqual(["Marginalia", "Comments"]);
     expect(selected()).toBe("Marginalia");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("marginalia");
+    expect(onMode).toHaveBeenCalledWith("marginalia", undefined, false);
   });
 });
 
@@ -390,7 +390,7 @@ describe("Skim's old name", () => {
 
     expect(selected()).toBe("Skim");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("skim");
+    expect(onMode).toHaveBeenCalledWith("skim", undefined, false);
   });
 });
 
@@ -479,7 +479,7 @@ describe("the keyboard contract", () => {
     /* Structure leads; its two views (Fisheye, Expanded) follow since 2026-10-01. */
     expect(listed()[0]).toBe(MODE_LABEL.structure);
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("structure");
+    expect(onMode).toHaveBeenCalledWith("structure", undefined, false);
     expect(dialog().open).toBe(false);
     /* The draft does not survive a close — 260906h § Deliberately deferred. */
     openBar();
@@ -492,7 +492,7 @@ describe("the keyboard contract", () => {
     openBar();
     type("structure");
     act(() => rows()[0]?.click());
-    expect(onMode).toHaveBeenCalledWith("structure");
+    expect(onMode).toHaveBeenCalledWith("structure", undefined, false);
     expect(dialog().open).toBe(false);
   });
 });
@@ -1148,7 +1148,7 @@ describe("the rows that are not modes", () => {
     expect(rows()[0]?.dataset.kind).toBe("mode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("tweets");
+    expect(onMode).toHaveBeenCalledWith("tweets", undefined, false);
     expect(wentTo()).toBeNull();
   });
 
@@ -1321,7 +1321,7 @@ describe("off the reading view", () => {
       );
       expect(button, `${mode}: a bar button`).toBeDefined();
       act(() => button?.click());
-      expect(onMode).toHaveBeenCalledWith(mode);
+      expect(onMode).toHaveBeenCalledWith(mode, undefined, true);
     }
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
     expect(pendingActivation("a-piece", "simple")).toBeNull();
