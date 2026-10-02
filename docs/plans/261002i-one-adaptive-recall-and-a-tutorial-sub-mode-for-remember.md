@@ -93,6 +93,17 @@ nudge), *"I don't remember"* (expect: the gap filled, then an easy nudge), and a
 nudge that got nothing (expect: no third question in a row without telling). Run it, and read every
 answer; the counters (length, ids per reply, banned phrases, ends-in-question) are prompts to look.
 
+**Landed** (stage 2): the prompt rewritten as above, with Socratic's two hard limits kept for the
+nudge (*ask only where you could have told*, *never put a disputed conclusion inside a question*);
+the picker, its card, the answer tag and their CSS gone; stance out of `Turn`, `ConverseRequest`,
+`buildConverseMessages`, the client's send and optimistic rows, `withRetry` and `withEdit`; the
+route validating-and-dropping a stale stance on a Remember send only; Help and the Features page
+rewritten; the eval renamed and grown to thirteen cases. Two eval runs:
+`evals/results/remember-recall.261002i-run-1.md` (quotes pasted in unmarked and uncited, verdict
+openers, two questions in a reply) and `remember-recall.md` after tightening (every reply cited, all
+under 160 words, the stuck readers told first). Still imperfect: `unclear` corrected rather than
+clarified, `disagreement` asked two questions. remember-mode.md § One adaptive voice has the detail.
+
 ### Stage 3 — Tutorial (98)
 
 **Research first**, written up in
@@ -183,3 +194,20 @@ retry/edit regression test; "every **substantive** reply cites a block, a pure c
 cite none, and an id attaches only to an article claim or quote", with eval cases for each; Help
 (`help-modes.tsx`) and the Features page in the same commit; package script, evals README and cost
 fixture follow the eval's rename. Stage 3 is split into 3a backend, 3b client, 3c eval.
+
+### Code review of stages 1–2 — GPT Sol, 2026-10-02 ([answer](261002i-stage-1-2-code-review-sol.md))
+
+No P0s; Sol fixed in the tree, and I read the diff. P1: a retry of a **legacy** answer cleared the
+stance in memory but not in Postgres (`stance: null` in `pg-chat.ts`'s retry update, with a test
+that seeds a real old stance); and the prompt was tightened against the second eval run (60–100
+words with 120 as a ceiling, exactly one question, no verdict opener, clarify a vague reference
+before correcting, move away from a failed nudge). P2s: `mode-catalog.ts` still described four
+stances; the `expert` eval case wrongly said the piece had three arguments; an optimistic-retry test
+still expected the stance; an invalid id in a route test. Sol also reworded the stance comments in
+`schema.ts`, `modes.ts`, `types.ts` and four client files. Its Postgres tests could not reach the
+database from the sandbox, so I ran them: 93 green across six files.
+
+Sol's verdict was "not ready until a fresh eval shows it", so a third run followed — see
+remember-mode.md § What the one-voice runs showed. It found one real fault (an "the article never
+mentions X" claim about something in a footnote), now forbidden by an entitlement rule.
+

@@ -3467,18 +3467,10 @@ export const chatMessages = spideryarn.table(
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
     /**
-     * Which stance produced this answer — review threads, assistant rows only.
-     *
-     * **Written with the PENDING row, never on finish**, which is the whole
-     * rule and the reason it is a column rather than something derived. An
-     * answer that crashed, errored, was stopped, or was buried by the sweep
-     * still has to say which instruction produced the words that did arrive,
-     * and a retry of that row inherits this field by name. Writing it on finish
-     * would leave every one of those blank.
-     *
-     * Null on every chat answer and every user turn, matching the filesystem
-     * store, which omits the key — `tests/store-roundtrip.test.ts` compares the
-     * two byte for byte, which is how `tools` was caught going missing.
+     * Which stance produced this answer — **legacy, read-only**. Remember
+     * answers written before 2026-10-02 may carry one; new turns and retries
+     * write null now that Recall has one adaptive voice. The column remains so
+     * exports preserve real historic rows without a destructive migration.
      */
     stance: text("stance"),
     /**
@@ -3538,10 +3530,8 @@ export const chatMessages = spideryarn.table(
       "chat_messages_stance",
       sql`${t.stance} is null or ${t.stance} in ('balanced','respond','socratic','signposts')`,
     ),
-    /* A stance is an instruction to the model, so only the model's own rows may
-       carry one. Without this, a bug that wrote it onto the reader's message
-       would be invisible: nothing reads it there, and the transcript would look
-       right. */
+    /* Historic stances described model answers, so only assistant rows may carry
+       one. The constraint stays with the legacy column. */
     check(
       "chat_messages_stance_assistant_only",
       sql`${t.stance} is null or ${t.role} = 'assistant'`,

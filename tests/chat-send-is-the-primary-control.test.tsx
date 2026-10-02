@@ -155,4 +155,10 @@ describe("the send button", () => {
       ".chat-send.stop",
     ]);
   });
+
+  it("keeps Remember's send control on the far right after the stance picker is gone", () => {
+    const remember = rule(".remember .chat-send");
+    expect(remember).toMatch(/order:\s*4/);
+    expect(remember).toMatch(/margin-left:\s*auto/);
+  });
 });

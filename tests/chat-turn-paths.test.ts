@@ -150,7 +150,7 @@ describe("retry", () => {
     ],
   };
 
-  it("blanks the replaced answer's fields, carrying only stance across", async () => {
+  it("blanks every field from the replaced answer, including a legacy stance", async () => {
     const post = deferred<Response>();
     answer = (_url, init) =>
       (init?.method ?? "GET") === "GET" ? Promise.resolve(json({ threads: [stored] })) : post.promise;
@@ -168,7 +168,7 @@ describe("retry", () => {
     expect(row?.searches).toBeUndefined();
     expect(row?.tools).toBeUndefined();
     expect(row?.error).toBeUndefined();
-    expect(row?.stance).toBe("socratic");
+    expect(row?.stance).toBeUndefined();
   });
 });
 

@@ -81,10 +81,9 @@ export const MODES = [
      the model helps them find where that comes apart. It cost this list one
      word, like the five before it. docs/plans/260827ah-review-mode.md.
 
-     There is deliberately no `?stance=` beside `?thread=` below. The stance
-     governs the next answer and changes nothing on screen, which is the rule
-     this file keeps. It therefore belongs to the composer session rather than
-     to a shareable address.
+     There was deliberately no `?stance=` beside `?thread=` when Recall had four
+     voices: it governed only the next answer, not a shareable screen. Recall has
+     had one adaptive voice since 2026-10-02, so the control is gone too.
 
      Renamed `review` → `remember` on 2026-09-01, at Greg's request, and the
      reason is worth keeping straight because it is *not* the reason he gave.

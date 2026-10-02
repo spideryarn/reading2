@@ -96,8 +96,6 @@ function paint(live?: LiveApi, threadId: string | null = THREAD.id, threads = [T
       createElement(ChatPanel, {
         slug: "a-piece",
         kind: "chat" as const,
-        stance: "balanced" as const,
-        onStance: () => {},
         loaded: true,
         loadFailed: false,
         threads,

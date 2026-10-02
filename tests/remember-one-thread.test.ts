@@ -41,7 +41,7 @@ describe("a typed Remember turn on an article that already has a Remember thread
     const before = article();
     const { threads, thread, user, reply } = withTurn(
       before,
-      { threadId: "spya-fresh2", question: "And another thing", kind: "remember", stance: "socratic" },
+      { threadId: "spya-fresh2", question: "And another thing", kind: "remember" },
       LATER,
     );
     expect(thread.id).toBe("spya-remem2");
@@ -53,7 +53,6 @@ describe("a typed Remember turn on an article that already has a Remember thread
     expect(thread.title).toBe("What I took from it");
     expect(thread.createdAt).toBe(AT);
     expect(thread.updatedAt).toBe(LATER);
-    expect(reply.stance).toBe("socratic");
   });
 
   it("still behaves as before when it names the existing thread", () => {

@@ -58,8 +58,6 @@ function paint(
         /* Chat rather than review — the panel gained a second kind while this
            was being written, and the loading state is the same for both. */
         kind: "chat" as const,
-        stance: "balanced" as const,
-        onStance: () => {},
         threads,
         threadId,
         onThread: () => {},

@@ -21,8 +21,8 @@
    and one rule putting placeholders in reader inputs back in the app's face.
    Most already existed; narrow wrappers split mixed-provenance text so nearby
    UI copy can stay Geist. The two exceptions live in their own sheets because
-   they undo an inheritance rather than set a voice: `.chat-stance-tag`
-   (mode-band.css) and "Whole paragraph" in a quote (`.passage-whole`).
+   they undo an inheritance rather than set a voice: "Whole paragraph" in a
+   quote (`.passage-whole`), in annotations.css and dock.css.
    `:root .x` outranks the plain `.x` it overrides, and this file
    is imported late (after every sheet but the logo animations). It sits in
    `@layer app` like its neighbours, so a `tw:font-*` utility on an element
