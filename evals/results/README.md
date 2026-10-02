@@ -170,3 +170,16 @@ the inversion list are all that survive of it.
 
 [`summaries/trailing-comma/`](summaries/trailing-comma/) is three raw model answers from the same
 eval, kept for a different reason — its own README says which.
+
+## `dig-deeper/` — which model should write a *Dig deeper* answer, 2026-10-02
+
+[`dig-deeper/2026-10-02-main-report.md`](dig-deeper/2026-10-02-main-report.md) is the promoted
+`report.md` of run `main` of `npm run eval:dig-deeper`: twelve answer arms on six frozen presses,
+judged blind by Opus, GPT-6.1 Sol and Grok 4.7. The plain-words reading, the caveats and what
+changed mid-run are in
+[docs/plans/261001s-dig-deeper-answer-model-eval.md](../../docs/plans/261001s-dig-deeper-answer-model-eval.md)
+§ Result. The run itself — captures with web excerpts and library passages, answers, judgements —
+lived under gitignored `output/dig-deeper-runs/` for the same reason as `summaries/` above, and only
+this report is kept. When its worktree was removed the run directory was copied, uncommitted, to the
+Hetzner box's primary checkout, `/home/greg/code/spideryarn2/output/dig-deeper-runs/` — the
+production-shaped finalist run, if Greg asks for it, resumes from there (`--run main`).
